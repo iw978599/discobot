@@ -4,6 +4,7 @@ import { WebSocketServer } from 'ws';
 import * as http from 'http';
 import dotenv from 'dotenv';
 import { Synthesizer, Sequencer, SamplePlayer, Pattern, SynthParameters } from '@discord-synth/engine';
+import { DiscordAudioStreamer } from '@discord-synth/engine/Streaming';
 
 dotenv.config();
 
@@ -18,7 +19,15 @@ app.use(express.json());
 let synth: Synthesizer | null = null;
 let sequencer: Sequencer | null = null;
 let samplePlayer: SamplePlayer | null = null;
+let discordStreamer: DiscordAudioStreamer | null = null;
 const patterns = new Map<string, Pattern>();
+const streamingState = {
+  isStreamingToDiscord: false,
+  currentStream: null as AudioBuffer | null,
+  streamQueue: [] as AudioBuffer[],
+  streamPosition: 0,
+  lastUpdate: 0
+};
 
 // Initialize audio engine
 function initAudioEngine() {
@@ -26,6 +35,7 @@ function initAudioEngine() {
     synth = new Synthesizer();
     sequencer = new Sequencer(synth);
     samplePlayer = new SamplePlayer();
+    discordStreamer = new DiscordAudioStreamer();
 
     // Create default pattern
     const defaultPattern = sequencer.createEmptyPattern('Default');
@@ -33,7 +43,166 @@ function initAudioEngine() {
   }
 }
 
-// REST API Routes
+// Discord streaming endpoints
+app.post('/discord/stream/start', async (req, res) => {
+  try {
+    initAudioEngine();
+    
+    const patternId = req.body.patternId;
+    const pattern = patterns.get(patternId);
+    
+    if (!pattern) {
+      return res.status(404).json({ error: 'Pattern not found' });
+    }
+
+    // Prepare audio for Discord streaming
+    const audioBuffers = await discordStreamer?.prepareForDiscordStreaming() || [];
+    
+    if (audioBuffers.length === 0) {
+      return res.status(400).json({ error: 'Failed to prepare audio buffers' });
+    }
+
+    // Update streaming state
+    streamingState.isStreamingToDiscord = true;
+    streamingState.currentStream = audioBuffers[0];
+    streamingState.streamQueue = audioBuffers;
+    streamingState.streamPosition = 0;
+    streamingState.lastUpdate = Date.now();
+
+    // Trigger streaming to Discord via WebSocket
+    wss.clients.forEach((client) => {
+      if (client.readyState === 1) {
+        client.send(JSON.stringify({
+          type: 'discordStreamingStart',
+          data: {
+            patternId,
+            timestamp: Date.now(),
+            bufferCount: audioBuffers.length,
+            sampleRate: audioBuffers[0].sampleRate,
+            channelCount: audioBuffers[0].numberOfChannels
+          }
+        }));
+      }
+    });
+
+    res.json({ 
+      success: true, 
+      message: 'Discord streaming started',
+      patternId,
+      bufferCount: audioBuffers.length,
+      duration: audioBuffers.reduce((sum, buffer) => sum + buffer.duration, 0)
+    });
+  } catch (error) {
+    console.error('Error starting Discord streaming:', error);
+    res.status(500).json({ error: 'Failed to start Discord streaming' });
+  }
+});
+
+app.post('/discord/stream/stop', async (req, res) => {
+  try {
+    // Update streaming state
+    streamingState.isStreamingToDiscord = false;
+    streamingState.currentStream = null;
+    streamingState.streamQueue = [];
+    streamingState.streamPosition = 0;
+
+    // Notify bots to stop streaming
+    wss.clients.forEach((client) => {
+      if (client.readyState === 1) {
+        client.send(JSON.stringify({
+          type: 'discordStreamingStop',
+          data: {
+            timestamp: Date.now(),
+            reason: 'manual_stop'
+          }
+        }));
+      }
+    });
+
+    res.json({ success: true, message: 'Discord streaming stopped' });
+  } catch (error) {
+    console.error('Error stopping Discord streaming:', error);
+    res.status(500).json({ error: 'Failed to stop Discord streaming' });
+  }
+});
+
+app.post('/discord/stream/sync', async (req, res) => {
+  try {
+    // Send current streaming state to connected bots
+    wss.clients.forEach((client) => {
+      if (client.readyState === 1) {
+        client.send(JSON.stringify({
+          type: 'discordStreamingSync',
+          data: {
+            timestamp: Date.now(),
+            isStreaming: streamingState.isStreamingToDiscord,
+            currentStream: streamingState.currentStream,
+            streamPosition: streamingState.streamPosition,
+            queueLength: streamingState.streamQueue.length,
+            patterns: Array.from(patterns.values()),
+            samples: samplePlayer?.getSamples() || []
+          }
+        }));
+      }
+    });
+
+    res.json({ success: true, message: 'Discord streaming sync sent' });
+  } catch (error) {
+    console.error('Error syncing Discord streaming:', error);
+    res.status(500).json({ error: 'Failed to sync Discord streaming' });
+  }
+});
+
+app.post('/discord/stream/pattern', async (req, res) => {
+  try {
+    initAudioEngine();
+    
+    const { pattern, action } = req.body;
+    
+    if (action === 'create') {
+      const newPattern: Pattern = {
+        id: `pattern-${Date.now()}`,
+        name: pattern.name || 'New Pattern',
+        steps: pattern.steps || sequencer?.createEmptyPattern().steps || [],
+        tempo: pattern.tempo || 120,
+      };
+      patterns.set(newPattern.id, newPattern);
+      console.log('Created new pattern:', newPattern);
+    } else if (action === 'update') {
+      const existingPattern = patterns.get(pattern.id);
+      if (!existingPattern) {
+        return res.status(404).json({ error: 'Pattern not found' });
+      }
+      
+      patterns.set(pattern.id, { ...existingPattern, ...pattern });
+      console.log('Updated pattern:', pattern.id);
+    } else if (action === 'delete') {
+      patterns.delete(pattern.id);
+      console.log('Deleted pattern:', pattern.id);
+    }
+
+    // Notify all connected clients of pattern change
+    wss.clients.forEach((client) => {
+      if (client.readyState === 1) {
+        client.send(JSON.stringify({
+          type: 'patternUpdated',
+          data: {
+            pattern: action === 'delete' ? { id: pattern.id } : patterns.get(pattern.id),
+            action,
+            timestamp: Date.now()
+          }
+        }));
+      }
+    });
+
+    res.json({ success: true, message: `Pattern ${action} completed` });
+  } catch (error) {
+    console.error(`Error ${req.body.action} pattern:`, error);
+    res.status(500).json({ error: `Failed to ${req.body.action} pattern` });
+  }
+});
+
+// Original REST API Routes
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
@@ -193,6 +362,7 @@ wss.on('connection', (ws) => {
       synthParameters: synth!.getParameters(),
       patterns: Array.from(patterns.values()),
       samples: samplePlayer!.getSamples(),
+      streamingState: streamingState,
     },
   }));
 
