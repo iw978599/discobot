@@ -6,9 +6,11 @@ interface SequencerProps {
   patterns: Pattern[];
   isPlaying: boolean;
   currentStep: number;
+  selectedStep: number | null;
   onPlayStop: () => void;
   onPatternChange: (pattern: Pattern) => void;
   onStepChange: (stepIndex: number, active: boolean, note?: string) => void;
+  onSelectStep: (stepIndex: number | null) => void;
 }
 
 const NOTES = ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'C5'];
@@ -18,9 +20,11 @@ export default function Sequencer({
   patterns,
   isPlaying,
   currentStep,
+  selectedStep,
   onPlayStop,
   onPatternChange,
   onStepChange,
+  onSelectStep,
 }: SequencerProps) {
   if (!pattern) {
     return <div className="sequencer">Loading...</div>;
@@ -54,14 +58,19 @@ export default function Sequencer({
         {pattern.steps.map((step, index) => (
           <div key={index} className="sequencer-column">
             <div className="step-indicator">
-              <span className={currentStep === index && isPlaying ? 'active' : ''}>
+              <span
+                className={`${currentStep === index && isPlaying ? 'active' : ''} ${
+                  selectedStep === index ? 'selected' : ''
+                }`}
+                onClick={() => onSelectStep(selectedStep === index ? null : index)}
+              >
                 {index + 1}
               </span>
             </div>
             <button
               className={`step-button ${step.active ? 'active' : ''} ${
                 currentStep === index && isPlaying ? 'playing' : ''
-              }`}
+              } ${selectedStep === index ? 'selected' : ''}`}
               onClick={() => {
                 if (step.active) {
                   onStepChange(index, false);
@@ -78,6 +87,9 @@ export default function Sequencer({
 
       <div className="sequencer-info">
         <span>Tempo: {pattern.tempo} BPM</span>
+        {selectedStep !== null && (
+          <span>Selected step: {selectedStep + 1} — click a piano key to set its note</span>
+        )}
       </div>
     </div>
   );

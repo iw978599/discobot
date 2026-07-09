@@ -71,6 +71,21 @@
   font-weight: bold;
 }
 
+.step-indicator span.selected {
+  color: #f59e0b;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.step-indicator span {
+  cursor: pointer;
+}
+
+.step-button.selected {
+  border-color: #f59e0b;
+  box-shadow: 0 0 8px #f59e0b;
+}
+
 .step-button {
   aspect-ratio: 1;
   background: #3a3a3a;

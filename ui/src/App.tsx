@@ -12,6 +12,7 @@ function App() {
   const [synthParams, setSynthParams] = useState<SynthParameters | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
+  const [selectedStep, setSelectedStep] = useState<number | null>(null);
 
   const handleMessage = useCallback((message: any) => {
     switch (message.type) {
@@ -86,6 +87,22 @@ function App() {
   };
 
   const handleNotePlay = async (note: string) => {
+    if (selectedStep !== null && currentPattern) {
+      const updatedPattern = { ...currentPattern };
+      updatedPattern.steps[selectedStep] = {
+        ...updatedPattern.steps[selectedStep],
+        active: true,
+        note,
+      };
+
+      await fetch(`http://localhost:3001/patterns/${currentPattern.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedPattern),
+      });
+      setCurrentPattern(updatedPattern);
+    }
+
     await fetch('http://localhost:3001/synth/note-on', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -126,9 +143,11 @@ function App() {
             patterns={patterns}
             isPlaying={isPlaying}
             currentStep={currentStep}
+            selectedStep={selectedStep}
             onPlayStop={handlePlayStop}
             onPatternChange={handlePatternChange}
             onStepChange={handleStepChange}
+            onSelectStep={setSelectedStep}
           />
 
           <Keyboard onNotePlay={handleNotePlay} onNoteRelease={handleNoteRelease} />
