@@ -1,0 +1,86 @@
+import { useState } from 'react';
+import './Keyboard.css';
+
+interface KeyboardProps {
+  onNotePlay: (note: string) => void;
+  onNoteRelease: (note: string) => void;
+}
+
+const OCTAVES = [3, 4, 5]; // 3 octaves
+const WHITE_KEYS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+const BLACK_KEYS = [
+  { note: 'C#', offset: 0.7 },
+  { note: 'D#', offset: 1.7 },
+  null,
+  { note: 'F#', offset: 3.7 },
+  { note: 'G#', offset: 4.7 },
+  { note: 'A#', offset: 5.7 },
+  null,
+];
+
+export default function Keyboard({ onNotePlay, onNoteRelease }: KeyboardProps) {
+  const [activeNotes, setActiveNotes] = useState<Set<string>>(new Set());
+
+  const handleNoteDown = (note: string) => {
+    if (activeNotes.has(note)) return;
+    setActiveNotes((prev) => new Set(prev).add(note));
+    onNotePlay(note);
+  };
+
+  const handleNoteUp = (note: string) => {
+    setActiveNotes((prev) => {
+      const next = new Set(prev);
+      next.delete(note);
+      return next;
+    });
+    onNoteRelease(note);
+  };
+
+  return (
+    <div className="keyboard-container">
+      <h2>Keyboard</h2>
+      <div className="keyboard">
+        {OCTAVES.map((octave) => (
+          <div key={octave} className="octave">
+            <div className="white-keys">
+              {WHITE_KEYS.map((note) => {
+                const fullNote = `${note}${octave}`;
+                return (
+                  <button
+                    key={fullNote}
+                    className={`key white ${
+                      activeNotes.has(fullNote) ? 'active' : ''
+                    }`}
+                    onMouseDown={() => handleNoteDown(fullNote)}
+                    onMouseUp={() => handleNoteUp(fullNote)}
+                    onMouseLeave={() => handleNoteUp(fullNote)}
+                  >
+                    <span className="key-label">{note}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="black-keys">
+              {BLACK_KEYS.map((black, index) => {
+                if (!black) return <div key={index} className="black-spacer" />;
+                const fullNote = `${black.note}${octave}`;
+                return (
+                  <button
+                    key={fullNote}
+                    className={`key black ${
+                      activeNotes.has(fullNote) ? 'active' : ''
+                    }`}
+                    style={{ left: `${black.offset * 14.28}%` }}
+                    onMouseDown={() => handleNoteDown(fullNote)}
+                    onMouseUp={() => handleNoteUp(fullNote)}
+                    onMouseLeave={() => handleNoteUp(fullNote)}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

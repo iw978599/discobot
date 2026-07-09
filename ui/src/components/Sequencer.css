@@ -1,0 +1,111 @@
+.sequencer {
+  background: #2a2a2a;
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+.sequencer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.sequencer-header h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.sequencer-controls {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.sequencer-controls select {
+  padding: 0.5rem;
+  background: #3a3a3a;
+  border: 1px solid #4a4a4a;
+  border-radius: 4px;
+  color: white;
+  font-size: 0.875rem;
+}
+
+.play-button {
+  padding: 0.5rem 1.5rem;
+  background: #3b82f6;
+  border: none;
+  border-radius: 4px;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.play-button:hover {
+  background: #2563eb;
+}
+
+.sequencer-grid {
+  display: grid;
+  grid-template-columns: repeat(16, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.sequencer-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.step-indicator {
+  text-align: center;
+  font-size: 0.75rem;
+  color: #888;
+  height: 20px;
+}
+
+.step-indicator span.active {
+  color: #3b82f6;
+  font-weight: bold;
+}
+
+.step-button {
+  aspect-ratio: 1;
+  background: #3a3a3a;
+  border: 2px solid #4a4a4a;
+  border-radius: 4px;
+  color: #888;
+  font-size: 0.7rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.step-button:hover {
+  background: #4a4a4a;
+  border-color: #5a5a5a;
+}
+
+.step-button.active {
+  background: #3b82f6;
+  border-color: #2563eb;
+  color: white;
+}
+
+.step-button.playing {
+  box-shadow: 0 0 12px #3b82f6;
+  transform: scale(1.05);
+}
+
+.sequencer-info {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 1rem;
+  border-top: 1px solid #3a3a3a;
+  font-size: 0.875rem;
+  color: #888;
+}
