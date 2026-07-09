@@ -22,12 +22,15 @@ import WebSocket from 'ws';
 dotenv.config();
 
 const TOKEN = process.env.DISCORD_TOKEN;
-const CLIENT_ID = process.env.DISCORD_CLIENT_ID;
+const CLIENT_ID = process.env.DISCORD_CLIENT_ID!;
 const WEB_API_URL = process.env.WEB_API_URL || 'http://localhost:3001';
 const WS_URL = process.env.WS_URL || 'ws://localhost:8080';
 
-if (!TOKEN || !CLIENT_ID) {
-  throw new Error('Missing DISCORD_TOKEN or DISCORD_CLIENT_ID in .env');
+if (!TOKEN) {
+  throw new Error('Missing DISCORD_TOKEN in .env');
+}
+if (!CLIENT_ID) {
+  throw new Error('Missing DISCORD_CLIENT_ID in .env');
 }
 
 const client = new Client({
@@ -194,7 +197,7 @@ async function handlePlay(interaction: ChatInputCommandInteraction) {
   try {
     // Get patterns from API
     const response = await fetch(`${WEB_API_URL}/patterns`);
-    const patterns = await response.json();
+    const patterns: any[] = await response.json();
 
     let pattern = patterns[0]; // Default to first pattern
     if (patternId) {

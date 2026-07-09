@@ -5,19 +5,19 @@ import * as Tone from 'tone';
 import { SynthParameters, OscillatorType, Pattern } from './types';
 
 export class DiscordAudioStreamer {
-  private synth: Tone.PolySynth;
-  private filter: Tone.Filter;
-  private reverb: Tone.Reverb;
-  private delay: Tone.FeedbackDelay;
-  private reverbSend: Tone.Gain;
-  private delaySend: Tone.Gain;
-  private parameters: SynthParameters;
+  private synth!: Tone.PolySynth;
+  private filter!: Tone.Filter;
+  private reverb!: Tone.Reverb;
+  private delay!: Tone.FeedbackDelay;
+  private reverbSend!: Tone.Gain;
+  private delaySend!: Tone.Gain;
+  private parameters!: SynthParameters;
   private audioContext: AudioContext | null = null;
   
   // Discord voice connection management
   private discordConnection: any = null;
   private audioStream: any = null;
-  private isStreaming: boolean = false;
+  private _isStreaming: boolean = false;
   
   // Audio buffer management
   private audioQueue: AudioBuffer[] = [];
@@ -26,6 +26,18 @@ export class DiscordAudioStreamer {
   
   constructor() {
     this.initializeAudioEngine();
+  }
+
+  private getDefaultParameters(): SynthParameters {
+    return {
+      oscillator: { type: 'sine', detune: 0 },
+      filter: { frequency: 20000, q: 1, type: 'lowpass' },
+      envelope: { attack: 0.1, decay: 0.2, sustain: 0.5, release: 1.0 },
+      effects: {
+        reverb: { enabled: false, wet: 0.3, decay: 1.5 },
+        delay: { enabled: false, wet: 0.2, time: 0.25, feedback: 0.5 },
+      },
+    };
   }
 
   private initializeAudioEngine() {
@@ -37,7 +49,7 @@ export class DiscordAudioStreamer {
         type: this.parameters.oscillator.type,
       },
       envelope: this.parameters.envelope,
-    });
+    } as any);
 
     this.filter = new Tone.Filter({
       frequency: this.parameters.filter.frequency,
@@ -81,7 +93,7 @@ export class DiscordAudioStreamer {
     this.parameters = { ...this.parameters, ...params };
 
     if (params.oscillator) {
-      this.synth.set({
+      (this.synth as any).set({
         oscillator: {
           type: params.oscillator.type,
           detune: params.oscillator.detune,
@@ -169,8 +181,10 @@ export class DiscordAudioStreamer {
       return;
     }
     
-    this.audioContext = new (window as any).AudioContext || new AudioContext();
-    await this.audioContext.resume();
+    this.audioContext = new AudioContext();
+    if (this.audioContext.state === 'suspended') {
+      await this.audioContext.resume();
+    }
   }
 
   private getPatternDuration(): number {
@@ -198,7 +212,7 @@ export class DiscordAudioStreamer {
           type: this.parameters.oscillator.type,
         },
         envelope: this.parameters.envelope,
-      });
+      } as any);
 
       const segmentFilter = new Tone.Filter({
         frequency: this.parameters.filter.frequency,
@@ -283,7 +297,7 @@ export class DiscordAudioStreamer {
   }
 
   public async createDiscordCompatibleStream(pattern: Pattern): Promise<AudioBuffer> {
-    const audioContext = new (window as any).AudioContext || new AudioContext();
+    const audioContext = new AudioContext();
     
     const destination = audioContext.createGain();
     this.synth.output.connect(destination);
@@ -326,11 +340,11 @@ export class DiscordAudioStreamer {
   }
 
   public isStreaming(): boolean {
-    return this.isStreaming;
+    return this._isStreaming;
   }
 
   public setStreamingStatus(status: boolean): void {
-    this.isStreaming = status;
+    this._isStreaming = status;
   }
 }
 

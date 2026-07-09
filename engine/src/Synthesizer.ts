@@ -4,14 +4,14 @@
 import * as Tone from 'tone';
 import { SynthParameters, OscillatorType, Pattern } from './types';
 
-export class AudioStreamingService {
-  private synth: Tone.PolySynth;
-  private filter: Tone.Filter;
-  private reverb: Tone.Reverb;
-  private delay: Tone.FeedbackDelay;
-  private reverbSend: Tone.Gain;
-  private delaySend: Tone.Gain;
-  private parameters: SynthParameters;
+export class Synthesizer {
+  private synth!: Tone.PolySynth;
+  private filter!: Tone.Filter;
+  private reverb!: Tone.Reverb;
+  private delay!: Tone.FeedbackDelay;
+  private reverbSend!: Tone.Gain;
+  private delaySend!: Tone.Gain;
+  private parameters!: SynthParameters;
   private audioContext: AudioContext | null = null;
   
   // Discord streaming state
@@ -33,6 +33,18 @@ export class AudioStreamingService {
     this.setupDiscordStreamingCapabilities();
   }
 
+  private getDefaultParameters(): SynthParameters {
+    return {
+      oscillator: { type: 'sine', detune: 0 },
+      filter: { frequency: 20000, q: 1, type: 'lowpass' },
+      envelope: { attack: 0.1, decay: 0.2, sustain: 0.5, release: 1.0 },
+      effects: {
+        reverb: { enabled: false, wet: 0.3, decay: 1.5 },
+        delay: { enabled: false, wet: 0.2, time: 0.25, feedback: 0.5 },
+      },
+    };
+  }
+
   private initializeAudioEngine() {
     this.parameters = this.getDefaultParameters();
 
@@ -42,7 +54,7 @@ export class AudioStreamingService {
         type: this.parameters.oscillator.type,
       },
       envelope: this.parameters.envelope,
-    });
+    } as any);
 
     this.filter = new Tone.Filter({
       frequency: this.parameters.filter.frequency,
@@ -100,7 +112,7 @@ export class AudioStreamingService {
       console.log(`Starting Discord streaming for guild ${guildId}, channel ${channelId}`);
       
       // Create AudioContext for Discord audio processing
-      this.audioContext = new (window as any).AudioContext || new AudioContext();
+      this.audioContext = new AudioContext();
       await this.audioContext.resume();
 
       // Connect Tone.js output to Discord audio node
@@ -180,7 +192,7 @@ export class AudioStreamingService {
           type: this.parameters.oscillator.type,
         },
         envelope: this.parameters.envelope,
-      });
+      } as any);
 
       const offlineFilter = new Tone.Filter({
         frequency: this.parameters.filter.frequency,
@@ -232,7 +244,7 @@ export class AudioStreamingService {
       name: 'Discord Streaming Test Pattern',
       tempo: 120,
       steps: Array.from({ length: 16 }, (_, index) => {
-        const note = index % 4 === 0 ? ['C4', 'E4', 'G4'][Math.floor(index / 4) % 3] || 'C4' : null;
+        const note = index % 4 === 0 ? ['C4', 'E4', 'G4'][Math.floor(index / 4) % 3] || 'C4' : undefined;
         return {
           active: !!note,
           note: note,
@@ -328,7 +340,7 @@ export class AudioStreamingService {
       const pcmData = await this.convertAudioBufferToPCM(buffer);
       
       // Queue processing happens here - would be handled by Discord bot
-      console.log(`Processed audio buffer: duration=${buffer.duration}s, channels=${buffer.numberOfChannels}, samples=${buffer.length}
+      console.log(`Processed audio buffer: duration=${buffer.duration}s, channels=${buffer.numberOfChannels}, samples=${buffer.length}`);
       
       setTimeout(() => this.processStreamingQueue(), buffer.duration * 1000);
       
@@ -367,7 +379,7 @@ export class AudioStreamingService {
     this.parameters = { ...this.parameters, ...params };
 
     if (params.oscillator) {
-      this.synth.set({
+      (this.synth as any).set({
         oscillator: {
           type: params.oscillator.type,
           detune: params.oscillator.detune,
@@ -432,7 +444,8 @@ export class AudioStreamingService {
     this.cleanupAudioConnections();
     this.synth.dispose();
     this.filter.dispose();
-    this.reverb.dispose();n    this.delay.dispose();
+    this.reverb.dispose();
+    this.delay.dispose();
     this.reverbSend.dispose();
     this.delaySend.dispose();
   }

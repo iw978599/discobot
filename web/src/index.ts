@@ -3,8 +3,7 @@ import cors from 'cors';
 import { WebSocketServer } from 'ws';
 import * as http from 'http';
 import dotenv from 'dotenv';
-import { Synthesizer, Sequencer, SamplePlayer, Pattern, SynthParameters } from '@discord-synth/engine';
-import { DiscordAudioStreamer } from '@discord-synth/engine/Streaming';
+import { Synthesizer, Sequencer, SamplePlayer, Pattern, SynthParameters, DiscordAudioStreamer } from '@discord-synth/engine';
 
 dotenv.config();
 
@@ -56,7 +55,7 @@ app.post('/discord/stream/start', async (req, res) => {
     }
 
     // Prepare audio for Discord streaming
-    const audioBuffers = await discordStreamer?.prepareForDiscordStreaming() || [];
+    const audioBuffers: AudioBuffer[] = await discordStreamer?.prepareForDiscordStreaming() || [];
     
     if (audioBuffers.length === 0) {
       return res.status(400).json({ error: 'Failed to prepare audio buffers' });
