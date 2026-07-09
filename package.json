@@ -1,0 +1,32 @@
+{
+  "name": "discord-synth-bot",
+  "version": "1.0.0",
+  "description": "Discord synthesizer/sequencer bot with web UI",
+  "private": true,
+  "workspaces": [
+    "bot",
+    "engine",
+    "web",
+    "ui"
+  ],
+  "scripts": {
+    "dev:bot": "npm run dev --workspace=bot",
+    "dev:web": "npm run dev --workspace=web",
+    "dev:ui": "npm run dev --workspace=ui",
+    "dev": "concurrently \"npm run dev:bot\" \"npm run dev:web\" \"npm run dev:ui\"",
+    "build": "npm run build --workspaces",
+    "build:ui": "npm run build --workspace=ui",
+    "start": "npm run start --workspaces --if-present",
+    "start:bot": "node bot/dist/index.js",
+    "start:web": "node web/dist/index.js",
+    "start:prod": "concurrently \"npm run start:bot\" \"npm run start:web\"",
+    "install:all": "npm install && npm install --workspaces"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.env
+*.log
+.DS_Store
+*.wav
+*.mp3
+samples/
+
+# Docker
+certbot/
+
+# Logs
+logs/
+
+# PM2
+.pm2/

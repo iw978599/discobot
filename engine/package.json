@@ -1,0 +1,19 @@
+{
+  "name": "@discord-synth/engine",
+  "version": "1.0.0",
+  "description": "Audio synthesis and sequencer engine",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "tone": "^14.7.77",
+    "audiobuffer-to-wav": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.5",
+    "typescript": "^5.3.3"
+  }
+}
