@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import Sequencer from './components/Sequencer';
 import Keyboard from './components/Keyboard';
 import SynthControls from './components/SynthControls';
@@ -13,49 +13,43 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
 
-  const ws = useWebSocket('ws://localhost:8080');
+  const handleMessage = useCallback((message: any) => {
+    switch (message.type) {
+      case 'init':
+        setSynthParams(message.data.synthParameters);
+        setPatterns(message.data.patterns);
+        if (message.data.patterns.length > 0) {
+          setCurrentPattern(message.data.patterns[0]);
+        }
+        break;
+      case 'synthUpdate':
+        setSynthParams(message.data);
+        break;
+      case 'patternCreated':
+        setPatterns((prev: Pattern[]) => [...prev, message.data]);
+        break;
+      case 'patternUpdated':
+        setPatterns((prev: Pattern[]) =>
+          prev.map((p: Pattern) => (p.id === message.data.id ? message.data : p))
+        );
+        setCurrentPattern((prev: Pattern | null) =>
+          prev?.id === message.data.id ? message.data : prev
+        );
+        break;
+      case 'sequencerPlay':
+        setIsPlaying(true);
+        break;
+      case 'sequencerStop':
+        setIsPlaying(false);
+        setCurrentStep(0);
+        break;
+      case 'sequencerStep':
+        setCurrentStep(message.data.step);
+        break;
+    }
+  }, []);
 
-  useEffect(() => {
-    if (!ws) return;
-
-    ws.onmessage = (event) => {
-      const message = JSON.parse(event.data);
-
-      switch (message.type) {
-        case 'init':
-          setSynthParams(message.data.synthParameters);
-          setPatterns(message.data.patterns);
-          if (message.data.patterns.length > 0) {
-            setCurrentPattern(message.data.patterns[0]);
-          }
-          break;
-        case 'synthUpdate':
-          setSynthParams(message.data);
-          break;
-        case 'patternCreated':
-          setPatterns((prev) => [...prev, message.data]);
-          break;
-        case 'patternUpdated':
-          setPatterns((prev) =>
-            prev.map((p) => (p.id === message.data.id ? message.data : p))
-          );
-          if (currentPattern?.id === message.data.id) {
-            setCurrentPattern(message.data);
-          }
-          break;
-        case 'sequencerPlay':
-          setIsPlaying(true);
-          break;
-        case 'sequencerStop':
-          setIsPlaying(false);
-          setCurrentStep(0);
-          break;
-        case 'sequencerStep':
-          setCurrentStep(message.data.step);
-          break;
-      }
-    };
-  }, [ws, currentPattern]);
+  const connected = useWebSocket('ws://localhost:8080', handleMessage);
 
   const handlePlayStop = async () => {
     if (!currentPattern) return;
@@ -120,8 +114,8 @@ function App() {
       <header className="app-header">
         <h1>Discord Synth Bot</h1>
         <div className="status">
-          <span className={`status-indicator ${ws ? 'connected' : 'disconnected'}`} />
-          {ws ? 'Connected' : 'Disconnected'}
+          <span className={`status-indicator ${connected ? 'connected' : 'disconnected'}`} />
+          {connected ? 'Connected' : 'Disconnected'}
         </div>
       </header>
 

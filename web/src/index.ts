@@ -353,6 +353,8 @@ wss.on('connection', (ws) => {
   clients.add(ws);
   console.log('WebSocket client connected');
 
+  initAudioEngine();
+
   // Send current state
   ws.send(JSON.stringify({
     type: 'init',

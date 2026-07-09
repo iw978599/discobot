@@ -1,36 +1,14 @@
-// Discord Audio Streaming Implementation
-// Modified version of engine/src/Synthesizer.ts with Discord streaming capabilities
-
-import * as Tone from 'tone';
-import { SynthParameters, OscillatorType, Pattern } from './types';
+import { SynthParameters, OscillatorType } from './types';
+import { ensureAudioContext } from './AudioContextPolyfill';
 
 export class Synthesizer {
-  private synth!: Tone.PolySynth;
-  private filter!: Tone.Filter;
-  private reverb!: Tone.Reverb;
-  private delay!: Tone.FeedbackDelay;
-  private reverbSend!: Tone.Gain;
-  private delaySend!: Tone.Gain;
   private parameters!: SynthParameters;
   private audioContext: AudioContext | null = null;
-  
-  // Discord streaming state
-  private discordConnection: any = null;
-  private isStreamingToDiscord: boolean = false;
-  private discordAudioNode: AudioNode | null = null;
-  private streamingBuffer: AudioBuffer | null = null;
-  
-  // Stream queue and processing
-  private audioQueue: AudioBuffer[] = [];
-  private isProcessingQueue: boolean = false;
-  
-  // Opus encoding preparation
-  private opusEncoder: any = null;
-  private opusDecoder: any = null;
-  
+  private activeNotes: Map<string, { startTime: number; velocity: number }> = new Map();
+
   constructor() {
-    this.initializeAudioEngine();
-    this.setupDiscordStreamingCapabilities();
+    ensureAudioContext();
+    this.parameters = this.getDefaultParameters();
   }
 
   private getDefaultParameters(): SynthParameters {
@@ -45,423 +23,183 @@ export class Synthesizer {
     };
   }
 
-  private initializeAudioEngine() {
-    this.parameters = this.getDefaultParameters();
-
-    this.synth = new Tone.PolySynth(Tone.Synth, {
-      maxPolyphony: 8,
-      oscillator: {
-        type: this.parameters.oscillator.type,
-      },
-      envelope: this.parameters.envelope,
-    } as any);
-
-    this.filter = new Tone.Filter({
-      frequency: this.parameters.filter.frequency,
-      Q: this.parameters.filter.q,
-      type: this.parameters.filter.type,
-    });
-
-    this.reverb = new Tone.Reverb({
-      decay: this.parameters.effects.reverb.decay,
-      wet: 0,
-    });
-
-    this.delay = new Tone.FeedbackDelay({
-      delayTime: this.parameters.effects.delay.time,
-      feedback: this.parameters.effects.delay.feedback,
-      wet: 0,
-    });
-
-    this.reverbSend = new Tone.Gain(0);
-    this.delaySend = new Tone.Gain(0);
-
-    this.setupAudioGraphConnections();
-    this.setupEffectsSends();
-  }
-
-  private setupAudioGraphConnections() {
-    this.synth.connect(this.filter);
-    this.filter.connect(Tone.Destination);
-  }
-
-  private setupEffectsSends() {
-    this.filter.connect(this.reverbSend);
-    this.filter.connect(this.delaySend);
-    this.reverbSend.connect(this.reverb);
-    this.delaySend.connect(this.delay);
-    this.reverb.toDestination();
-    this.delay.toDestination();
-  }
-
-  private setupDiscordStreamingCapabilities() {
-    this.isStreamingToDiscord = false;
-    this.discordConnection = null;
-    this.discordAudioNode = null;
-    this.audioQueue = [];
-    this.isProcessingQueue = false;
-  }
-
-  public async startDiscordStreaming(guildId: string, channelId: string) {
-    if (this.isStreamingToDiscord) {
-      console.log('Already streaming to Discord voice channel');
-      return;
-    }
-
-    try {
-      console.log(`Starting Discord streaming for guild ${guildId}, channel ${channelId}`);
-      
-      // Create AudioContext for Discord audio processing
+  private ensureContext(): AudioContext {
+    if (!this.audioContext) {
       this.audioContext = new AudioContext();
-      await this.audioContext.resume();
-
-      // Connect Tone.js output to Discord audio node
-      const destination = this.audioContext.createGain();
-      this.synth.output.connect(destination);
-      this.discordAudioNode = destination;
-
-      // Prepare audio buffer for streaming
-      await this.prepareAudioBufferForStreaming()
-        .then(buffer => {
-          this.streamingBuffer = buffer;
-          this.isStreamingToDiscord = true;
-          console.log('Discord streaming started successfully');
-        })
-        .catch(error => {
-          console.error('Error preparing audio buffer for Discord streaming:', error);
-          throw error;
-        });
-
-    } catch (error) {
-      console.error('Error starting Discord streaming:', error);
-      this.cleanupDiscordStreaming();
-      throw error;
     }
+    return this.audioContext;
   }
 
-  public stopDiscordStreaming() {
-    if (!this.isStreamingToDiscord) {
-      console.log('Not currently streaming to Discord voice channel');
-      return;
-    }
-
-    try {
-      console.log('Stopping Discord streaming');
-      
-      // Clean up audio context and nodes
-      if (this.audioContext) {
-        this.audioContext.close();
-        this.audioContext = null;
-      }
-
-      if (this.discordAudioNode) {
-        this.discordAudioNode.disconnect();
-        this.discordAudioNode = null;
-      }
-
-      // Clean up Tone.js connections
-      this.cleanupAudioConnections();
-
-      this.isStreamingToDiscord = false;
-      this.streamingBuffer = null;
-      console.log('Discord streaming stopped successfully');
-
-    } catch (error) {
-      console.error('Error stopping Discord streaming:', error);
-      this.cleanupDiscordStreaming();
-    }
-  }
-
-  private async prepareAudioBufferForStreaming(duration: number = 2.0): Promise<AudioBuffer> {
-    return new Promise((resolve, reject) => {
-      if (!this.audioContext) {
-        reject(new Error('AudioContext not initialized'));
-        return;
-      }
-
-      const offlineContext = new OfflineAudioContext(
-        2, // number of channels
-        this.audioContext.sampleRate * duration, // length in samples
-        this.audioContext.sampleRate // sample rate
-      );
-
-      // Create a new synth for offline rendering
-      const offlineSynth = new Tone.PolySynth(Tone.Synth, {
-        maxPolyphony: 8,
-        oscillator: {
-          type: this.parameters.oscillator.type,
-        },
-        envelope: this.parameters.envelope,
-      } as any);
-
-      const offlineFilter = new Tone.Filter({
-        frequency: this.parameters.filter.frequency,
-        Q: this.parameters.filter.q,
-        type: this.parameters.filter.type,
-      });
-
-      const offlineReverb = new Tone.Reverb({
-        decay: this.parameters.effects.reverb.decay,
-      });
-
-      const offlineDelay = new Tone.FeedbackDelay({
-        delayTime: this.parameters.effects.delay.time,
-        feedback: this.parameters.effects.delay.feedback,
-      });
-
-      const offlineReverbSend = new Tone.Gain(this.parameters.effects.reverb.wet);
-      const offlineDelaySend = new Tone.Gain(this.parameters.effects.delay.wet);
-
-      // Setup offline audio graph
-      offlineSynth.connect(offlineFilter);
-      offlineFilter.connect(offlineReverbSend);
-      offlineFilter.connect(offlineDelaySend);
-      offlineReverbSend.connect(offlineReverb);
-      offlineDelaySend.connect(offlineDelay);
-      offlineReverb.connect(offlineContext.destination);
-      offlineDelay.connect(offlineContext.destination);
-
-      // Create test pattern for streaming
-      const testPattern = this.createTestPatternForStreaming();
-      this.triggerPattern(offlineSynth, testPattern);
-
-      // Render the audio
-      offlineContext.startRendering()
-        .then(buffer => {
-          console.log('Audio buffer prepared successfully for Discord streaming');
-          resolve(buffer);
-        })
-        .catch(error => {
-          console.error('Error rendering audio buffer:', error);
-          reject(error);
-        });
-    });
-  }
-
-  private createTestPatternForStreaming(): Pattern {
-    return {
-      id: `discord-stream-${Date.now()}`,
-      name: 'Discord Streaming Test Pattern',
-      tempo: 120,
-      steps: Array.from({ length: 16 }, (_, index) => {
-        const note = index % 4 === 0 ? ['C4', 'E4', 'G4'][Math.floor(index / 4) % 3] || 'C4' : undefined;
-        return {
-          active: !!note,
-          note: note,
-          velocity: 0.7,
-        };
-      }),
+  static noteToFrequency(note: string): number {
+    const noteMap: Record<string, number> = {
+      C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3,
+      E: 4, F: 5, 'F#': 6, Gb: 6, G: 7, 'G#': 8,
+      Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11,
     };
+    const match = note.match(/^([A-G]#?b?)(-?\d+)$/);
+    if (!match) return 440;
+    const noteName = match[1];
+    const octave = parseInt(match[2], 10);
+    const semitone = noteMap[noteName] ?? 0;
+    return 440 * Math.pow(2, (octave - 4 + (semitone - 9) / 12));
   }
 
-  private triggerPattern(synth: Tone.PolySynth, pattern: Pattern): void {
-    pattern.steps.forEach((step, index) => {
-      if (step.active && step.note) {
-        setTimeout(() => {
-          synth.triggerAttackRelease(step.note!, '8n', undefined, step.velocity || 0.7);
-        }, index * 500);
-      }
-    });
-  }
-
-  public async convertAudioBufferToPCM(audioBuffer: AudioBuffer): Promise<ArrayBuffer> {
-    const numberOfChannels = audioBuffer.numberOfChannels;
-    const sampleRate = audioBuffer.sampleRate;
-    const format = 1; // PCM
-    
-    // Create WAV header
-    const wavBuffer = new ArrayBuffer(44 + audioBuffer.length * numberOfChannels * 2);
-    const view = new DataView(wavBuffer);
-    
-    // Write WAV header
-    const writeString = (view: DataView, offset: number, string: string) => {
-      for (let i = 0; i < string.length; i++) {
-        view.setUint8(offset + i, string.charCodeAt(i));
-      }
-    };
-    
-    writeString(view, 0, 'RIFF');
-    view.setUint32(4, 36 + audioBuffer.length * numberOfChannels * 2, true);
-    writeString(view, 8, 'WAVE');
-    writeString(view, 12, 'fmt ');
-    view.setUint32(16, 16, true);
-    view.setUint16(20, format, true);
-    view.setUint16(22, numberOfChannels, true);
-    view.setUint32(24, sampleRate, true);
-    view.setUint32(28, sampleRate * numberOfChannels * 2, true);
-    view.setUint16(32, numberOfChannels * 2, true);
-    view.setUint16(34, 16, true);
-    writeString(view, 36, 'data');
-    view.setUint32(40, audioBuffer.length * numberOfChannels * 2, true);
-    
-    // Write audio data
-    const offset = 44;
-    const channelData = Array.from({ length: numberOfChannels }, (_, i) => audioBuffer.getChannelData(i));
-    
-    for (let i = 0; i < audioBuffer.length; i++) {
-      for (let channel = 0; channel < numberOfChannels; channel++) {
-        const sample = channelData[channel][i];
-        const intSample = Math.max(-1, Math.min(1, sample));
-        view.setInt16(offset + (i * numberOfChannels + channel) * 2, intSample * 32767, true);
+  static generateOscillator(type: OscillatorType, frequency: number, sampleRate: number, length: number): Float32Array {
+    const buffer = new Float32Array(length);
+    for (let i = 0; i < length; i++) {
+      const phase = (i * frequency) / sampleRate;
+      const frac = phase - Math.floor(phase);
+      switch (type) {
+        case 'sine':
+          buffer[i] = Math.sin(2 * Math.PI * phase);
+          break;
+        case 'square':
+          buffer[i] = frac < 0.5 ? 1 : -1;
+          break;
+        case 'sawtooth':
+          buffer[i] = 2 * frac - 1;
+          break;
+        case 'triangle':
+          buffer[i] = 4 * Math.abs(frac - 0.5) - 1;
+          break;
       }
     }
-    
-    return wavBuffer;
+    return buffer;
   }
 
-  public async startStreamingQueue(buffers: AudioBuffer[]): Promise<void> {
-    if (this.isProcessingQueue) {
-      console.log('Queue already processing');
-      return;
+  static applyADSR(samples: Float32Array, sampleRate: number, attack: number, decay: number, sustain: number, release: number, totalDuration: number): Float32Array {
+    const output = new Float32Array(samples.length);
+    const attackSamples = Math.floor(attack * sampleRate);
+    const decaySamples = Math.floor(decay * sampleRate);
+    const releaseSamples = Math.floor(release * sampleRate);
+    const sustainStart = attackSamples + decaySamples;
+    const releaseStart = Math.max(sustainStart, samples.length - releaseSamples);
+
+    for (let i = 0; i < samples.length; i++) {
+      let envelope: number;
+      if (i < attackSamples) {
+        envelope = i / attackSamples;
+      } else if (i < sustainStart) {
+        envelope = 1 - (1 - sustain) * ((i - attackSamples) / decaySamples);
+      } else if (i < releaseStart) {
+        envelope = sustain;
+      } else {
+        envelope = sustain * (1 - (i - releaseStart) / releaseSamples);
+      }
+      output[i] = samples[i] * Math.max(0, envelope);
     }
-
-    this.audioQueue = [...buffers];
-    this.isProcessingQueue = true;
-
-    console.log(`Started streaming queue with ${this.audioQueue.length} buffers`);
-    await this.processStreamingQueue();
+    return output;
   }
 
-  private async processStreamingQueue(): Promise<void> {
-    if (this.audioQueue.length === 0) {
-      this.isProcessingQueue = false;
-      console.log('Streaming queue completed');
-      return;
+  static applyLowpass(samples: Float32Array, sampleRate: number, cutoff: number): Float32Array {
+    const output = new Float32Array(samples.length);
+    const dt = 1 / sampleRate;
+    const rc = 1 / (2 * Math.PI * cutoff);
+    const alpha = dt / (rc + dt);
+    output[0] = samples[0];
+    for (let i = 1; i < samples.length; i++) {
+      output[i] = output[i - 1] + alpha * (samples[i] - output[i - 1]);
+    }
+    return output;
+  }
+
+  renderNote(note: string, duration: number, velocity: number, sampleRate: number = 44100): Float32Array {
+    const freq = Synthesizer.noteToFrequency(note);
+    const detunedFreq = freq * Math.pow(2, this.parameters.oscillator.detune / 1200);
+    const length = Math.floor(sampleRate * duration);
+    const { attack, decay, sustain, release } = this.parameters.envelope;
+    const oscType = this.parameters.oscillator.type;
+
+    let samples = Synthesizer.generateOscillator(oscType, detunedFreq, sampleRate, length);
+    samples = Synthesizer.applyADSR(samples, sampleRate, attack, decay, sustain, release, duration);
+    samples = Synthesizer.applyLowpass(samples, sampleRate, this.parameters.filter.frequency);
+
+    const gain = Math.max(0, Math.min(1, velocity));
+    for (let i = 0; i < samples.length; i++) {
+      samples[i] *= gain * 0.5;
     }
 
-    const buffer = this.audioQueue.shift();
-    if (!buffer) {
-      this.isProcessingQueue = false;
-      return;
-    }
+    return samples;
+  }
 
-    try {
-      // Convert buffer to PCM format
-      const pcmData = await this.convertAudioBufferToPCM(buffer);
-      
-      // Queue processing happens here - would be handled by Discord bot
-      console.log(`Processed audio buffer: duration=${buffer.duration}s, channels=${buffer.numberOfChannels}, samples=${buffer.length}`);
-      
-      setTimeout(() => this.processStreamingQueue(), buffer.duration * 1000);
-      
-    } catch (error) {
-      console.error('Error processing audio buffer:', error);
-      setTimeout(() => this.processStreamingQueue(), 1000);
+  renderChord(notes: string[], duration: number, velocity: number, sampleRate: number = 44100): Float32Array {
+    const length = Math.floor(sampleRate * duration);
+    const mix = new Float32Array(length);
+    for (const note of notes) {
+      const part = this.renderNote(note, duration, velocity, sampleRate);
+      for (let i = 0; i < Math.min(length, part.length); i++) {
+        mix[i] += part[i];
+      }
+    }
+    for (let i = 0; i < length; i++) {
+      mix[i] = Math.max(-1, Math.min(1, mix[i]));
+    }
+    return mix;
+  }
+
+  renderToAudioBuffer(pcmData: Float32Array, sampleRate: number = 44100): AudioBuffer {
+    const ctx = this.ensureContext();
+    const offlineCtx = new OfflineAudioContext(1, pcmData.length, sampleRate);
+    const buffer = offlineCtx.createBuffer(1, pcmData.length, sampleRate);
+    buffer.getChannelData(0).set(pcmData);
+    return buffer;
+  }
+
+  playNote(note: string, duration?: string | number, velocity: number = 0.7): void {
+    const dur = typeof duration === 'number' ? duration : 0.5;
+    this.activeNotes.set(note, { startTime: Date.now(), velocity });
+  }
+
+  playChord(notes: string[], duration?: string | number, velocity: number = 0.7): void {
+    const dur = typeof duration === 'number' ? duration : 0.5;
+    for (const note of notes) {
+      this.activeNotes.set(note, { startTime: Date.now(), velocity });
     }
   }
 
-  public isDiscordStreaming(): boolean {
-    return this.isStreamingToDiscord;
+  noteOn(note: string, velocity: number = 0.7): void {
+    this.activeNotes.set(note, { startTime: Date.now(), velocity });
   }
 
-  private cleanupAudioConnections() {
-    if (this.synth) {
-      this.synth.disconnect();
-    }
-    if (this.filter) {
-      this.filter.disconnect();
-    }
-    if (this.reverbSend) {
-      this.reverbSend.disconnect();
-    }
-    if (this.delaySend) {
-      this.delaySend.disconnect();
-    }
+  noteOff(note: string): void {
+    this.activeNotes.delete(note);
   }
 
-  private cleanupDiscordStreaming() {
-    this.stopDiscordStreaming();
-    this.setupDiscordStreamingCapabilities();
+  releaseAll(): void {
+    this.activeNotes.clear();
   }
 
-  // Existing methods...
-  public updateParameters(params: Partial<SynthParameters>): void {
+  updateParameters(params: Partial<SynthParameters>): void {
     this.parameters = { ...this.parameters, ...params };
-
     if (params.oscillator) {
-      (this.synth as any).set({
-        oscillator: {
-          type: params.oscillator.type,
-          detune: params.oscillator.detune,
-        },
-      });
+      this.parameters.oscillator = { ...this.parameters.oscillator, ...params.oscillator };
     }
-
     if (params.filter) {
-      this.filter.frequency.value = params.filter.frequency;
-      this.filter.Q.value = params.filter.q;
-      this.filter.type = params.filter.type;
+      this.parameters.filter = { ...this.parameters.filter, ...params.filter };
     }
-
     if (params.envelope) {
-      this.synth.set({ envelope: params.envelope });
+      this.parameters.envelope = { ...this.parameters.envelope, ...params.envelope };
     }
-
-    if (params.effects?.reverb) {
-      this.reverb.decay = params.effects.reverb.decay;
-      this.reverbSend.gain.value = params.effects.reverb.enabled
-        ? params.effects.reverb.wet
-        : 0;
-    }
-
-    if (params.effects?.delay) {
-      this.delay.delayTime.value = params.effects.delay.time;
-      this.delay.feedback.value = params.effects.delay.feedback;
-      this.delaySend.gain.value = params.effects.delay.enabled
-        ? params.effects.delay.wet
-        : 0;
+    if (params.effects) {
+      this.parameters.effects = { ...this.parameters.effects, ...params.effects };
     }
   }
 
-  public getParameters(): SynthParameters {
-    return this.parameters;
+  getParameters(): SynthParameters {
+    return { ...this.parameters };
   }
 
-  public playNote(note: string, duration?: string | number, velocity: number = 0.7): void {
-    const vel = Math.max(0, Math.min(1, velocity));
-    this.synth.triggerAttackRelease(note, duration || '8n', undefined, vel);
+  dispose(): void {
+    this.activeNotes.clear();
+    if (this.audioContext) {
+      this.audioContext.close();
+      this.audioContext = null;
+    }
   }
 
-  public playChord(notes: string[], duration?: string | number, velocity: number = 0.7): void {
-    const vel = Math.max(0, Math.min(1, velocity));
-    this.synth.triggerAttackRelease(notes, duration || '8n', undefined, vel);
-  }
-
-  public noteOn(note: string, velocity: number = 0.7): void {
-    const vel = Math.max(0, Math.min(1, velocity));
-    this.synth.triggerAttack(note, undefined, vel);
-  }
-
-  public noteOff(note: string): void {
-    this.synth.triggerRelease(note);
-  }
-
-  public releaseAll(): void {
-    this.synth.releaseAll();
-  }
-
-  public dispose(): void {
-    this.cleanupAudioConnections();
-    this.synth.dispose();
-    this.filter.dispose();
-    this.reverb.dispose();
-    this.delay.dispose();
-    this.reverbSend.dispose();
-    this.delaySend.dispose();
-  }
-
-  public disposeSyncForDiscord() {
-    this.cleanupDiscordStreaming();
-    this.dispose();
-  }
-
-  public getAudioState() {
+  getAudioState() {
     return {
-      isDiscordStreaming: this.isDiscordStreaming(),
-      streamingBuffer: this.streamingBuffer,
-      isProcessingQueue: this.isProcessingQueue,
-      queueLength: this.audioQueue.length,
-      audioContext: this.audioContext
+      activeNotes: this.activeNotes.size,
     };
   }
 }

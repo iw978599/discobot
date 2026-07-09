@@ -1,14 +1,15 @@
-import * as Tone from 'tone';
 import { Pattern, SequencerStep } from './types';
 import { Synthesizer } from './Synthesizer';
 
 export class Sequencer {
   private synth: Synthesizer;
-  private sequence: Tone.Sequence | null = null;
   private currentPattern: Pattern | null = null;
   private isPlaying: boolean = false;
   private currentStep: number = 0;
   private onStepCallback?: (step: number) => void;
+  private timerId: ReturnType<typeof setTimeout> | null = null;
+  private tempo: number = 120;
+  private stepInterval: number = 125;
 
   constructor(synth: Synthesizer) {
     this.synth = synth;
@@ -17,7 +18,8 @@ export class Sequencer {
   loadPattern(pattern: Pattern): void {
     this.stop();
     this.currentPattern = pattern;
-    Tone.Transport.bpm.value = pattern.tempo;
+    this.tempo = pattern.tempo;
+    this.stepInterval = (60 / this.tempo / 4) * 1000;
   }
 
   play(): void {
@@ -25,47 +27,33 @@ export class Sequencer {
 
     this.isPlaying = true;
     this.currentStep = 0;
+    this.scheduleStep();
+  }
 
-    const steps = this.currentPattern.steps;
+  private scheduleStep(): void {
+    if (!this.isPlaying || !this.currentPattern) return;
 
-    this.sequence = new Tone.Sequence(
-      (time, step) => {
-        this.currentStep = step;
+    const step = this.currentPattern.steps[this.currentStep];
+    if (step && step.active && step.note) {
+      this.synth.playNote(step.note, '16n', step.velocity);
+    }
 
-        const sequencerStep = steps[step];
-        if (sequencerStep && sequencerStep.active && sequencerStep.note) {
-          this.synth.playNote(
-            sequencerStep.note,
-            '16n',
-            sequencerStep.velocity
-          );
-        }
+    if (this.onStepCallback) {
+      this.onStepCallback(this.currentStep);
+    }
 
-        // Callback for UI updates
-        if (this.onStepCallback) {
-          Tone.Draw.schedule(() => {
-            this.onStepCallback!(step);
-          }, time);
-        }
-      },
-      Array.from({ length: 16 }, (_, i) => i),
-      '16n'
-    );
+    this.currentStep = (this.currentStep + 1) % (this.currentPattern?.steps.length || 16);
 
-    this.sequence.start(0);
-    Tone.Transport.start();
+    this.timerId = setTimeout(() => this.scheduleStep(), this.stepInterval);
   }
 
   stop(): void {
     if (!this.isPlaying) return;
 
     this.isPlaying = false;
-    Tone.Transport.stop();
-
-    if (this.sequence) {
-      this.sequence.stop();
-      this.sequence.dispose();
-      this.sequence = null;
+    if (this.timerId !== null) {
+      clearTimeout(this.timerId);
+      this.timerId = null;
     }
 
     this.synth.releaseAll();
@@ -74,23 +62,29 @@ export class Sequencer {
 
   pause(): void {
     if (!this.isPlaying) return;
-    Tone.Transport.pause();
+    this.isPlaying = false;
+    if (this.timerId !== null) {
+      clearTimeout(this.timerId);
+      this.timerId = null;
+    }
   }
 
   resume(): void {
-    if (!this.isPlaying) return;
-    Tone.Transport.start();
+    if (this.isPlaying || !this.currentPattern) return;
+    this.isPlaying = true;
+    this.scheduleStep();
   }
 
   setTempo(bpm: number): void {
-    Tone.Transport.bpm.value = bpm;
+    this.tempo = bpm;
+    this.stepInterval = (60 / bpm / 4) * 1000;
     if (this.currentPattern) {
       this.currentPattern.tempo = bpm;
     }
   }
 
   getTempo(): number {
-    return Tone.Transport.bpm.value;
+    return this.tempo;
   }
 
   updateStep(stepIndex: number, step: Partial<SequencerStep>): void {
