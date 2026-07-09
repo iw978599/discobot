@@ -354,7 +354,6 @@ wss.on('connection', (ws) => {
   console.log('WebSocket client connected');
 
   // Send current state
-  initAudioEngine();
   ws.send(JSON.stringify({
     type: 'init',
     data: {
@@ -384,12 +383,6 @@ function broadcastToClients(message: any) {
     }
   });
 }
-
-// Setup sequencer step callback for real-time updates
-initAudioEngine();
-sequencer!.onStep((step) => {
-  broadcastToClients({ type: 'sequencerStep', data: { step } });
-});
 
 // Start server
 server.listen(PORT, () => {
