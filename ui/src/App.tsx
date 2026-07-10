@@ -4,6 +4,7 @@ import Keyboard from './components/Keyboard';
 import SynthControls from './components/SynthControls';
 import DrumMachine from './components/DrumMachine';
 import { useWebSocket } from './hooks/useWebSocket';
+import { apiUrl, getWebSocketUrl } from './config';
 import { Pattern, SynthParameters, SavedPatternFull, DrumState, DrumInstrument, DrumSettings } from './types';
 import './App.css';
 
@@ -435,7 +436,7 @@ function App() {
     }
   }, []);
 
-  const connected = useWebSocket('ws://localhost:8080', handleMessage);
+  const connected = useWebSocket(getWebSocketUrl(), handleMessage);
 
   const handleTempoChange = async (bpm: number) => {
     if (!currentPattern) return;
@@ -444,12 +445,12 @@ function App() {
     setCurrentPattern(updatedPattern);
 
     await Promise.all([
-      fetch(`http://localhost:3001/patterns/${currentPattern.id}`, {
+      fetch(apiUrl(`/patterns/${currentPattern.id}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedPattern),
       }),
-      fetch('http://localhost:3001/sequencer/tempo', {
+      fetch(apiUrl('/sequencer/tempo'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tempo: bpm }),
@@ -463,7 +464,7 @@ function App() {
     const endpoint = isPlaying ? '/sequencer/stop' : '/sequencer/play';
     const body = isPlaying ? {} : { patternId: currentPattern.id };
 
-    await fetch(`http://localhost:3001${endpoint}`, {
+    await fetch(apiUrl(endpoint), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -494,7 +495,7 @@ function App() {
     setPatterns((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
     setCurrentPattern(updated);
 
-    fetch(`http://localhost:3001/patterns/${pattern.id}`, {
+    fetch(apiUrl(`/patterns/${pattern.id}`), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updated),
@@ -506,7 +507,7 @@ function App() {
   const handleNoteRelease = async (note: string) => {
     stopBrowserNote(note);
 
-    await fetch('http://localhost:3001/synth/note-off', {
+    await fetch(apiUrl('/synth/note-off'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ note }),
@@ -514,7 +515,7 @@ function App() {
   };
 
   const handleSynthParamChange = async (params: Partial<SynthParameters>) => {
-    await fetch('http://localhost:3001/synth/parameters', {
+    await fetch(apiUrl('/synth/parameters'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params),
@@ -529,7 +530,7 @@ function App() {
       next[instrument].steps[step] = active;
       return next;
     });
-    fetch('http://localhost:3001/drum/step', {
+    fetch(apiUrl('/drum/step'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ instrument, step, active }),
@@ -545,7 +546,7 @@ function App() {
       };
       return next;
     });
-    fetch('http://localhost:3001/drum/settings', {
+    fetch(apiUrl('/drum/settings'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ instrument, settings }),
@@ -554,12 +555,12 @@ function App() {
 
   const handleDrumReset = useCallback(() => {
     setDrumState(defaultDrumState());
-    fetch('http://localhost:3001/drum/reset', { method: 'POST' }).catch(() => {});
+    fetch(apiUrl('/drum/reset'), { method: 'POST' }).catch(() => {});
   }, []);
 
   const handleDrumMasterVolumeChange = useCallback((volume: number) => {
     setDrumMasterVolume(volume);
-    fetch('http://localhost:3001/drum/master-volume', {
+    fetch(apiUrl('/drum/master-volume'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ volume }),
@@ -570,7 +571,7 @@ function App() {
     const pattern = currentPatternRef.current;
     if (!pattern || !synthParamsRef.current) return;
     try {
-      await fetch('http://localhost:3001/patterns/save', {
+      await fetch(apiUrl('/patterns/save'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -594,7 +595,7 @@ function App() {
     setSelectedStep(null);
     if (data.drumState && typeof data.drumState === 'object') {
       setDrumState(data.drumState);
-      await fetch('http://localhost:3001/drum/state', {
+      await fetch(apiUrl('/drum/state'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ state: data.drumState }),
@@ -602,7 +603,7 @@ function App() {
     }
     if (data.drumMasterVolume !== undefined) {
       setDrumMasterVolume(data.drumMasterVolume);
-      await fetch('http://localhost:3001/drum/master-volume', {
+      await fetch(apiUrl('/drum/master-volume'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ volume: data.drumMasterVolume }),
@@ -610,18 +611,18 @@ function App() {
     }
     if (data.synthParams) {
       setSynthParams(data.synthParams);
-      await fetch('http://localhost:3001/synth/parameters', {
+      await fetch(apiUrl('/synth/parameters'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data.synthParams),
       }).catch(() => {});
     }
-    await fetch(`http://localhost:3001/patterns/${pattern.id}`, {
+    await fetch(apiUrl(`/patterns/${pattern.id}`), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updated),
     }).catch(() => {});
-    await fetch('http://localhost:3001/sequencer/tempo', {
+    await fetch(apiUrl('/sequencer/tempo'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tempo: data.tempo }),
@@ -641,19 +642,19 @@ function App() {
       setIsPlaying(false);
       setCurrentStep(0);
 
-      fetch(`http://localhost:3001/patterns/${pattern.id}`, {
+      fetch(apiUrl(`/patterns/${pattern.id}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(cleared),
       }).catch(() => {});
-      fetch('http://localhost:3001/synth/parameters', {
+      fetch(apiUrl('/synth/parameters'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(DEFAULT_PARAMS),
       }).catch(() => {});
 
       if (isPlaying) {
-        fetch('http://localhost:3001/sequencer/stop', { method: 'POST' }).catch(() => {});
+        fetch(apiUrl('/sequencer/stop'), { method: 'POST' }).catch(() => {});
       }
     }
   };
