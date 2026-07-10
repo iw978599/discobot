@@ -1,60 +1,60 @@
-# Multi-stage build for Discord Synth Bot
+# syntax=docker/dockerfile:1.7
 
-FROM node:18-alpine AS builder
+# ---------- FRONTEND BUILD ----------
+FROM node:20-bookworm-slim AS frontend-build
+WORKDIR /src/ui
 
-WORKDIR /app
+# Install deps first for layer caching
+COPY ui/package*.json ./
+RUN npm ci
 
-# Copy package files for all workspaces
-COPY package*.json ./
-COPY tsconfig.json ./
-COPY bot/package*.json ./bot/
-COPY engine/package*.json ./engine/
-COPY web/package*.json ./web/
-COPY ui/package*.json ./ui/
-
-# Install dependencies
-RUN npm install
-
-# Copy source code
-COPY bot/ ./bot/
-COPY engine/ ./engine/
-COPY web/ ./web/
-COPY ui/ ./ui/
-
-# Build all packages
+# Build UI
+COPY ui/ ./
 RUN npm run build
 
-# Production image
-FROM node:18-alpine
+# ---------- APP RUNTIME ----------
+FROM python:3.11-slim-bookworm
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# System deps: nginx + supervisor + ffmpeg + build tooling for any wheels
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    nginx \
+    supervisor \
+    ffmpeg \
+    curl \
+    ca-certificates \
+    build-essential \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create runtime dirs
+RUN mkdir -p /app /var/log/supervisor /var/log/nginx /run/nginx
 
 WORKDIR /app
 
-# Install PM2 for process management
-RUN npm install -g pm2
+# Python deps first for layer caching
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# Copy built files from builder
-COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/bot/dist ./bot/dist
-COPY --from=builder /app/bot/package.json ./bot/
-COPY --from=builder /app/engine/dist ./engine/dist
-COPY --from=builder /app/engine/package.json ./engine/
-COPY --from=builder /app/web/dist ./web/dist
-COPY --from=builder /app/web/package.json ./web/
-COPY --from=builder /app/ui/dist ./ui/dist
+# Copy backend/service code
+COPY . /app
 
-# Copy PM2 ecosystem file
-COPY ecosystem.config.js ./
+# Copy built frontend into nginx web root
+COPY --from=frontend-build /src/ui/dist /usr/share/nginx/html
 
-# Create logs directory
-RUN mkdir -p logs
+# Nginx + Supervisor configs (expected in repo root)
+COPY nginx-docker.conf /etc/nginx/conf.d/default.conf
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Expose ports
-EXPOSE 3001 8080
+# Expose HTTP
+EXPOSE 80
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3001/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+# Optional healthcheck
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD curl -fsS http://127.0.0.1/ || exit 1
 
-# Start with PM2
-CMD ["pm2-runtime", "start", "ecosystem.config.js"]
+# Start both services
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
