@@ -17,7 +17,6 @@ interface SynthUnitProps {
   onPlayStop: () => void;
   onPatternChange: (pattern: Pattern) => void;
   onStepChange: (stepIndex: number) => void;
-  onTempoChange: (bpm: number) => void;
   onSavePattern: (name: string) => Promise<boolean>;
   onLoadSavedPattern: (data: SavedPatternFull) => void;
   onParameterChange: (params: Partial<SynthParameters>) => void;
@@ -40,7 +39,6 @@ export default function SynthUnit({
   onPlayStop,
   onPatternChange,
   onStepChange,
-  onTempoChange,
   onSavePattern,
   onLoadSavedPattern,
   onParameterChange,
@@ -71,7 +69,6 @@ export default function SynthUnit({
             onPlayStop={onPlayStop}
             onPatternChange={onPatternChange}
             onStepChange={onStepChange}
-            onTempoChange={onTempoChange}
             onSavePattern={onSavePattern}
             onLoadSavedPattern={onLoadSavedPattern}
           />

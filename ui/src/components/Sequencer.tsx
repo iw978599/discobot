@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Pattern, SavedPatternInfo, SavedPatternFull } from '../types';
 import { apiUrl } from '../config';
 import './Sequencer.css';
@@ -12,58 +12,8 @@ interface SequencerProps {
   onPlayStop: () => void;
   onPatternChange: (pattern: Pattern) => void;
   onStepChange: (stepIndex: number) => void;
-  onTempoChange: (bpm: number) => void;
   onSavePattern: (name: string) => Promise<boolean>;
   onLoadSavedPattern: (data: SavedPatternFull) => void;
-}
-
-function TempoDisplay({ tempo, onChange }: { tempo: number; onChange: (bpm: number) => void }) {
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(String(tempo));
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (!editing) setValue(String(tempo));
-  }, [tempo, editing]);
-
-  useEffect(() => {
-    if (editing && inputRef.current) {
-      inputRef.current.select();
-    }
-  }, [editing]);
-
-  const commit = () => {
-    const bpm = parseInt(value, 10);
-    if (!isNaN(bpm) && bpm >= 20 && bpm <= 400) {
-      onChange(bpm);
-    }
-    setEditing(false);
-  };
-
-  if (editing) {
-    return (
-      <input
-        ref={inputRef}
-        className="tempo-led-input"
-        type="text"
-        value={value}
-        onChange={(e) => setValue(e.target.value.replace(/\D/g, ''))}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') commit();
-          if (e.key === 'Escape') setEditing(false);
-        }}
-        autoFocus
-      />
-    );
-  }
-
-  return (
-    <div className="tempo-led" onClick={() => setEditing(true)}>
-      <span className="tempo-led-label">BPM</span>
-      <span className="tempo-led-value">{String(tempo).padStart(3, ' ')}</span>
-    </div>
-  );
 }
 
 function PatternManager({
@@ -114,16 +64,11 @@ export default function Sequencer({
   onPlayStop,
   onPatternChange,
   onStepChange,
-  onTempoChange,
-  onSavePattern,
   onLoadSavedPattern,
 }: SequencerProps) {
   const [savedPatterns, setSavedPatterns] = useState<SavedPatternInfo[]>([]);
   const [showAll, setShowAll] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saveName, setSaveName] = useState('');
   const [showManager, setShowManager] = useState(false);
-  const [savedFeedback, setSavedFeedback] = useState(false);
 
   const fetchSaved = async () => {
     try {
@@ -152,23 +97,6 @@ export default function Sequencer({
       await fetch(apiUrl(`/patterns/saved/${id}`), { method: 'DELETE' });
       fetchSaved();
     } catch { /* ignore */ }
-  };
-
-  const handleSaveClick = () => {
-    setSaving(true);
-    setSaveName('');
-  };
-
-  const handleSaveCommit = async () => {
-    const name = saveName.trim();
-    if (!name) { setSaving(false); return; }
-    const saved = await onSavePattern(name);
-    setSaving(false);
-    if (saved) {
-      setSavedFeedback(true);
-      setTimeout(() => setSavedFeedback(false), 2000);
-      setTimeout(fetchSaved, 200);
-    }
   };
 
   if (!pattern) {
@@ -224,30 +152,6 @@ export default function Sequencer({
 
       <div className="sequencer-info">
         <div className="saved-patterns-bar">
-          {savedFeedback ? (
-            <span className="save-feedback">&#10003; Saved!</span>
-          ) : saving ? (
-            <div className="save-inline">
-              <input
-                autoFocus
-                className="save-name-input"
-                placeholder="Pattern name..."
-                value={saveName}
-                onChange={(e) => setSaveName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') void handleSaveCommit();
-                  if (e.key === 'Escape') setSaving(false);
-                }}
-              />
-              <button className="save-confirm-btn" onClick={() => void handleSaveCommit()}>&#10003;</button>
-              <button className="save-cancel-btn" onClick={() => setSaving(false)}>&#10005;</button>
-            </div>
-          ) : (
-            <button className="save-button" onClick={handleSaveClick}>
-              + Save
-            </button>
-          )}
-
           {savedPatterns.length > 0 && (
             <div className="saved-select-wrapper">
               <select
@@ -284,7 +188,6 @@ export default function Sequencer({
         </div>
 
         <div className="info-right">
-          <TempoDisplay tempo={pattern.tempo} onChange={onTempoChange} />
           {selectedStep !== null && (
             <span className="step-hint">Step {selectedStep + 1} selected</span>
           )}

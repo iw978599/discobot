@@ -69,6 +69,7 @@ function createDefaultDrumState(): DrumState {
 
 let drumState: DrumState = createDefaultDrumState();
 let drumMasterVolume = 1.0;
+let globalTempo = 120;
 
 interface SavedPatternData {
   id: string;
@@ -117,7 +118,9 @@ function initSynth(synthId: number) {
 
   const synth = new Synthesizer();
   const sequencer = new Sequencer(synth);
+  sequencer.setTempo(globalTempo);
   const pattern = sequencer.createEmptyPattern(`Synth ${synthId}`);
+  pattern.tempo = globalTempo;
   const patterns: Pattern[] = [pattern];
 
   sequencer.onStep((step: number) => {
@@ -254,18 +257,20 @@ app.post('/synth/:synthId/note-off', (req, res) => {
 
 app.post('/synth/:synthId/tempo', (req, res) => {
   initAudioEngine();
-  const synthId = parseInt(req.params.synthId);
-  const synthData = synths.get(synthId);
-  if (!synthData) return res.status(404).json({ error: 'Synth not found' });
 
   const { tempo } = req.body;
   if (typeof tempo !== 'number' || isNaN(tempo) || tempo < 20 || tempo > 400) {
     return res.status(400).json({ error: 'Invalid tempo', message: 'Tempo must be between 20 and 400 BPM' });
   }
 
-  synthData.sequencer.setTempo(tempo);
-  synthData.pattern = { ...synthData.pattern, tempo };
-  broadcastToClients({ type: 'tempoChange', data: { synthId, tempo } });
+  globalTempo = tempo;
+
+  for (const [id, data] of synths) {
+    data.sequencer.setTempo(tempo);
+    data.pattern = { ...data.pattern, tempo };
+  }
+
+  broadcastToClients({ type: 'tempoChange', data: { tempo } });
   res.json({ success: true });
 });
 
@@ -484,6 +489,30 @@ app.post('/sequencer/stop', (req, res) => {
   res.json({ success: true });
 });
 
+// Global tempo
+app.get('/tempo', (req, res) => {
+  res.json({ tempo: globalTempo });
+});
+
+app.post('/tempo', (req, res) => {
+  initAudioEngine();
+
+  const { tempo } = req.body;
+  if (typeof tempo !== 'number' || isNaN(tempo) || tempo < 20 || tempo > 400) {
+    return res.status(400).json({ error: 'Invalid tempo', message: 'Tempo must be between 20 and 400 BPM' });
+  }
+
+  globalTempo = tempo;
+
+  for (const [id, data] of synths) {
+    data.sequencer.setTempo(tempo);
+    data.pattern = { ...data.pattern, tempo };
+  }
+
+  broadcastToClients({ type: 'tempoChange', data: { tempo } });
+  res.json({ success: true });
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({
@@ -580,6 +609,7 @@ wss.on('connection', (ws) => {
       samples: samplePlayer!.getSamples(),
       streamingState,
       drumState,
+      tempo: globalTempo,
     },
   }));
 

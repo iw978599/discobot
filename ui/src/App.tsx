@@ -43,6 +43,98 @@ function createDefaultDrumState(): DrumState {
   };
 }
 
+function TempoDisplay({ tempo, onChange }: { tempo: number; onChange: (bpm: number) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(String(tempo));
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!editing) setValue(String(tempo));
+  }, [tempo, editing]);
+
+  useEffect(() => {
+    if (editing && inputRef.current) inputRef.current.select();
+  }, [editing]);
+
+  const commit = () => {
+    const bpm = parseInt(value, 10);
+    if (!isNaN(bpm) && bpm >= 20 && bpm <= 400) onChange(bpm);
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        className="tempo-led-input"
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value.replace(/\D/g, ''))}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
+        autoFocus
+      />
+    );
+  }
+
+  return (
+    <div className="tempo-led" onClick={() => setEditing(true)}>
+      <span className="tempo-led-label">BPM</span>
+      <span className="tempo-led-value">{String(tempo).padStart(3, ' ')}</span>
+    </div>
+  );
+}
+
+function SavePattern({
+  saving, setSaving, saveName, setSaveName, savedFeedback, setSavedFeedback, onSave,
+}: {
+  saving: boolean;
+  setSaving: (v: boolean) => void;
+  saveName: string;
+  setSaveName: (v: string) => void;
+  savedFeedback: boolean;
+  setSavedFeedback: (v: boolean) => void;
+  onSave: (name: string) => Promise<boolean>;
+}) {
+  const handleSaveCommit = async () => {
+    const name = saveName.trim();
+    if (!name) { setSaving(false); return; }
+    const saved = await onSave(name);
+    setSaving(false);
+    if (saved) {
+      setSavedFeedback(true);
+      setTimeout(() => setSavedFeedback(false), 2000);
+    }
+  };
+
+  if (savedFeedback) {
+    return <span className="save-feedback">&#10003; Saved!</span>;
+  }
+
+  if (saving) {
+    return (
+      <div className="save-inline">
+        <input
+          autoFocus
+          className="save-name-input"
+          placeholder="Pattern name..."
+          value={saveName}
+          onChange={(e) => setSaveName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') void handleSaveCommit(); if (e.key === 'Escape') setSaving(false); }}
+        />
+        <button className="save-confirm-btn" onClick={() => void handleSaveCommit()}>&#10003;</button>
+        <button className="save-cancel-btn" onClick={() => setSaving(false)}>&#10005;</button>
+      </div>
+    );
+  }
+
+  return (
+    <button className="save-button" onClick={() => { setSaving(true); setSaveName(''); }}>
+      + Save
+    </button>
+  );
+}
+
 function App() {
   const synthAudio = useSynthAudio();
   const drumAudio = useDrumAudio();
@@ -50,6 +142,7 @@ function App() {
   const [drumState, setDrumState] = useState<DrumState>(createDefaultDrumState);
   const [drumMasterVolume, setDrumMasterVolume] = useState(1.0);
   const [browserMuted, setBrowserMuted] = useState(false);
+  const [globalTempo, setGlobalTempo] = useState(120);
   const browserMutedRef = useRef(browserMuted);
   browserMutedRef.current = browserMuted;
 
@@ -92,6 +185,7 @@ function App() {
           }]);
         }
         if (message.data.drumState) setDrumState(message.data.drumState);
+        if (message.data.tempo) setGlobalTempo(message.data.tempo);
         break;
       }
       case 'synthUpdate': {
@@ -130,6 +224,11 @@ function App() {
         setSynths(prev => prev.map(s =>
           s.id === synthId ? { ...s, isPlaying: false, currentStep: 0 } : s
         ));
+        break;
+      }
+      case 'tempoChange': {
+        const { tempo } = message.data;
+        setGlobalTempo(tempo);
         break;
       }
       case 'sequencerStep': {
@@ -239,15 +338,13 @@ function App() {
     }));
   }, []);
 
-  const handleTempoChange = useCallback(async (synthId: number, bpm: number) => {
-    const synth = synthsRef.current.find(s => s.id === synthId);
-    if (!synth?.pattern) return;
-
+  const handleTempoChange = useCallback(async (bpm: number) => {
+    setGlobalTempo(bpm);
     setSynths(prev => prev.map(s =>
-      s.id === synthId ? { ...s, pattern: { ...s.pattern!, tempo: bpm } } : s
+      s.pattern ? { ...s, pattern: { ...s.pattern, tempo: bpm } } : s
     ));
 
-    await fetch(apiUrl(`/synth/${synthId}/tempo`), {
+    await fetch(apiUrl('/tempo'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tempo: bpm }),
@@ -349,6 +446,13 @@ function App() {
       return false;
     }
   }, [drumMasterVolume]);
+
+  const handleSaveGlobal = useCallback(async (name: string): Promise<boolean> => {
+    const firstSynth = synthsRef.current[0];
+    if (!firstSynth?.pattern || !firstSynth.synthParams) return false;
+
+    return handleSavePattern(firstSynth.id, name);
+  }, [handleSavePattern]);
 
   const handleLoadSavedPattern = useCallback(async (synthId: number, data: SavedPatternFull) => {
     const synth = synthsRef.current.find(s => s.id === synthId);
@@ -473,11 +577,27 @@ function App() {
 
   const memoizedDrumState = useMemo(() => drumState, [drumState]);
 
+  const [saving, setSaving] = useState(false);
+  const [saveName, setSaveName] = useState('');
+  const [savedFeedback, setSavedFeedback] = useState(false);
+
   return (
     <div className="app">
       <header className="app-header">
-        <h1>Discord Synth Bot</h1>
+        <h1>Discobot</h1>
         <div className="header-controls">
+          <TempoDisplay tempo={globalTempo} onChange={handleTempoChange} />
+          
+          <SavePattern
+            saving={saving}
+            setSaving={setSaving}
+            saveName={saveName}
+            setSaveName={setSaveName}
+            savedFeedback={savedFeedback}
+            setSavedFeedback={setSavedFeedback}
+            onSave={handleSaveGlobal}
+          />
+
           <button className="reset-button" onClick={handleReset} title="Reset all synths and drums">
             &#8634;
           </button>
@@ -512,7 +632,6 @@ function App() {
               onPlayStop={() => handlePlayStop(synth.id)}
               onPatternChange={(p) => handlePatternChange(synth.id, p)}
               onStepChange={(step) => handleStepChange(synth.id, step)}
-              onTempoChange={(bpm) => handleTempoChange(synth.id, bpm)}
               onSavePattern={(name) => handleSavePattern(synth.id, name)}
               onLoadSavedPattern={(data) => handleLoadSavedPattern(synth.id, data)}
               onParameterChange={(params) => handleParameterChange(synth.id, params)}
