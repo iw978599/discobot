@@ -64,7 +64,7 @@
   min-width: 0;
 }
 
-.synth-unit-keyboard-container .keyboard {
+.synth-unit-keyboard-container .keyboard-container {
   flex: 1;
   min-width: 0;
 }
