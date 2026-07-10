@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import Sequencer from './components/Sequencer';
 import Keyboard from './components/Keyboard';
 import SynthControls from './components/SynthControls';
@@ -155,7 +155,8 @@ function App() {
 
   const connected = useWebSocket(getWebSocketUrl(), handleMessage);
 
-  const handleTempoChange = async (bpm: number) => {
+  // Memoize callbacks to prevent unnecessary re-renders
+  const handleTempoChange = useCallback(async (bpm: number) => {
     if (!currentPattern) return;
 
     const updatedPattern = { ...currentPattern, tempo: bpm };
@@ -173,9 +174,9 @@ function App() {
         body: JSON.stringify({ tempo: bpm }),
       }),
     ]);
-  };
+  }, [currentPattern]);
 
-  const handlePlayStop = async () => {
+  const handlePlayStop = useCallback(async () => {
     if (!currentPattern) return;
 
     const endpoint = isPlaying ? '/sequencer/stop' : '/sequencer/play';
@@ -186,18 +187,18 @@ function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-  };
+  }, [currentPattern, isPlaying]);
 
-  const handlePatternChange = (pattern: Pattern) => {
+  const handlePatternChange = useCallback((pattern: Pattern) => {
     setCurrentPattern(pattern);
-  };
+  }, []);
 
-  const handleStepChange = async (stepIndex: number) => {
+  const handleStepChange = useCallback(async (stepIndex: number) => {
     if (!currentPattern) return;
     setSelectedStep((prev) => (prev === stepIndex ? null : stepIndex));
-  };
+  }, [currentPattern]);
 
-  const handleNotePlay = (note: string) => {
+  const handleNotePlay = useCallback((note: string) => {
     synthAudio.playNote(note, synthParamsRef.current, undefined, browserMutedRef.current);
 
     const step = selectedStepRef.current;
@@ -217,9 +218,9 @@ function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updated),
     }).catch(() => {});
-  };
+  }, [synthAudio, browserMutedRef, synthParamsRef]);
 
-  const handleNoteRelease = async (note: string) => {
+  const handleNoteRelease = useCallback(async (note: string) => {
     synthAudio.stopNote(note, synthParamsRef.current);
 
     await fetch(apiUrl('/synth/note-off'), {
@@ -227,15 +228,15 @@ function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ note }),
     });
-  };
+  }, [synthAudio, synthParamsRef]);
 
-  const handleSynthParamChange = async (params: Partial<SynthParameters>) => {
+  const handleSynthParamChange = useCallback(async (params: Partial<SynthParameters>) => {
     await fetch(apiUrl('/synth/parameters'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params),
     });
-  };
+  }, []);
 
   const handleDrumStepToggle = useCallback((instrument: DrumInstrument, step: number, active: boolean) => {
     drumAudio.playDrumHit(instrument, drumStateRef.current[instrument].settings, browserMutedRef.current);
@@ -344,7 +345,7 @@ function App() {
     }).catch(() => {});
   };
 
-  const handleReset = () => {
+  const handleReset = useCallback(() => {
     setSynthParams(DEFAULT_PARAMS);
     handleDrumReset();
     if (currentPatternRef.current) {
@@ -372,7 +373,11 @@ function App() {
         fetch(apiUrl('/sequencer/stop'), { method: 'POST' }).catch(() => {});
       }
     }
-  };
+  }, [currentPatternRef, handleDrumReset, isPlaying]);
+
+  // Memoize frequently accessed values
+  const memoizedDrumState = useMemo(() => drumState, [drumState]);
+  const memoizedSynthParams = useMemo(() => synthParams, [synthParams]);
 
   return (
     <div className="app">
@@ -415,7 +420,7 @@ function App() {
           <Keyboard onNotePlay={handleNotePlay} onNoteRelease={handleNoteRelease} />
 
           <DrumMachine
-            drumState={drumState}
+            drumState={memoizedDrumState}
             isPlaying={isPlaying}
             currentStep={currentStep}
             onStepToggle={handleDrumStepToggle}
@@ -427,9 +432,9 @@ function App() {
         </div>
 
         <div className="right-panel">
-          {synthParams && (
+          {memoizedSynthParams && (
             <SynthControls
-              parameters={synthParams}
+              parameters={memoizedSynthParams}
               onParameterChange={handleSynthParamChange}
             />
           )}
