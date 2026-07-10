@@ -28,5 +28,5 @@ export const getWebSocketUrl = (): string => {
     return `${protocol}//${window.location.hostname}:8080`;
   }
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${protocol}//${window.location.host}/ws`;
+  return `${protocol}//${window.location.host}/ws/`;
 };
