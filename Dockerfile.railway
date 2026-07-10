@@ -11,6 +11,10 @@ COPY engine/package.json ./engine/package.json
 COPY web/package.json ./web/package.json
 COPY ui/package.json ./ui/package.json
 
+# Cache bust to force clean install (increment when needed)
+ARG CACHE_BUST_INSTALL=2026-07-10-v1
+RUN echo "Cache bust install: $CACHE_BUST_INSTALL"
+
 # Install dependencies
 RUN npm ci
 
@@ -45,14 +49,11 @@ COPY engine/package.json ./engine/package.json
 COPY web/package.json ./web/package.json
 COPY ui/package.json ./ui/package.json
 
-# Copy built files
+# Copy built files (workspace node_modules are symlinked to root, so only copy root)
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/bot/dist ./bot/dist
-COPY --from=build /app/bot/node_modules ./bot/node_modules
 COPY --from=build /app/engine/dist ./engine/dist
-COPY --from=build /app/engine/node_modules ./engine/node_modules
 COPY --from=build /app/web/dist ./web/dist
-COPY --from=build /app/web/node_modules ./web/node_modules
 COPY --from=build /app/ui/dist ./ui/dist
 
 # Railway provides PORT env var
