@@ -9,9 +9,7 @@
     "dev": "tsc --watch"
   },
   "dependencies": {
-    "audiobuffer-to-wav": "^1.0.0",
-    "node-web-audio-api": "^2.0.0",
-    "tone": "^14.9.17"
+    "node-web-audio-api": "^2.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

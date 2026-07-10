@@ -67,7 +67,7 @@
 }
 
 .step-indicator span.active {
-  color: #3b82f6;
+  color: #f59e0b;
   font-weight: bold;
 }
 
@@ -78,12 +78,7 @@
 }
 
 .step-indicator span {
-  cursor: pointer;
-}
-
-.step-button.selected {
-  border-color: #f59e0b;
-  box-shadow: 0 0 8px #f59e0b;
+  cursor: default;
 }
 
 .step-button {
@@ -105,22 +100,343 @@
   border-color: #5a5a5a;
 }
 
-.step-button.active {
+.step-button.has-note {
   background: #3b82f6;
   border-color: #2563eb;
   color: white;
 }
 
-.step-button.playing {
-  box-shadow: 0 0 12px #3b82f6;
-  transform: scale(1.05);
+.step-button.selected {
+  border-color: #f59e0b;
+  box-shadow: 0 0 8px #f59e0b;
+}
+
+.step-button.selected.has-note {
+  background: #d97706;
+  border-color: #f59e0b;
+  color: white;
+}
+
+.step-light {
+  height: 4px;
+  border-radius: 2px;
+  background: #3a3a3a;
+  transition: background 0.1s, box-shadow 0.1s;
+}
+
+.step-light.on {
+  background: #22c55e;
+  box-shadow: 0 0 6px #22c55e88;
+}
+
+.tempo-led {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #111;
+  border: 2px solid #333;
+  border-radius: 4px;
+  padding: 0.3rem 0.75rem;
+  cursor: pointer;
+  user-select: none;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+.tempo-led:hover {
+  border-color: #ff4444;
+}
+
+.tempo-led-label {
+  font-size: 0.65rem;
+  color: #ff4444;
+  opacity: 0.8;
+  letter-spacing: 1px;
+}
+
+.tempo-led-value {
+  font-size: 1.4rem;
+  font-weight: bold;
+  color: #ff2222;
+  text-shadow: 0 0 6px #ff000088, 0 0 12px #ff000044;
+  letter-spacing: 3px;
+  line-height: 1;
+}
+
+.tempo-led-input {
+  background: #111;
+  border: 2px solid #ff4444;
+  border-radius: 4px;
+  color: #ff2222;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 1.4rem;
+  font-weight: bold;
+  text-shadow: 0 0 6px #ff000088;
+  letter-spacing: 3px;
+  padding: 0.3rem 0.75rem;
+  width: 100px;
+  outline: none;
+  text-align: center;
 }
 
 .sequencer-info {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   padding-top: 1rem;
   border-top: 1px solid #3a3a3a;
   font-size: 0.875rem;
   color: #888;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.saved-patterns-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.info-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.save-button {
+  background: #22c55e;
+  border: none;
+  border-radius: 4px;
+  padding: 0.3rem 0.75rem;
+  color: white;
+  font-weight: 600;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.save-button:hover {
+  background: #16a34a;
+}
+
+.save-feedback {
+  color: #22c55e;
+  font-weight: 600;
+  font-size: 0.8rem;
+  animation: fadeInOut 2s ease;
+}
+
+@keyframes fadeInOut {
+  0% { opacity: 0; }
+  15% { opacity: 1; }
+  75% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.save-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.save-name-input {
+  background: #3a3a3a;
+  border: 2px solid #22c55e;
+  border-radius: 4px;
+  color: white;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.8rem;
+  outline: none;
+  width: 140px;
+}
+
+.save-confirm-btn {
+  background: #22c55e;
+  border: none;
+  border-radius: 4px;
+  padding: 0.2rem 0.5rem;
+  color: white;
+  font-size: 0.85rem;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.save-confirm-btn:hover {
+  background: #16a34a;
+}
+
+.save-cancel-btn {
+  background: none;
+  border: 1px solid #666;
+  border-radius: 4px;
+  padding: 0.2rem 0.5rem;
+  color: #aaa;
+  font-size: 0.85rem;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.save-cancel-btn:hover {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.saved-select-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.saved-select {
+  padding: 0.3rem 0.5rem;
+  background: #3a3a3a;
+  border: 1px solid #4a4a4a;
+  border-radius: 4px;
+  color: white;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.show-more-btn {
+  background: none;
+  border: 1px solid #4a4a4a;
+  border-radius: 4px;
+  padding: 0.2rem 0.5rem;
+  color: #888;
+  font-size: 0.75rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.show-more-btn:hover {
+  border-color: #888;
+  color: #ccc;
+}
+
+.manage-btn {
+  background: none;
+  border: 1px solid #4a4a4a;
+  border-radius: 4px;
+  padding: 0.3rem 0.5rem;
+  color: #888;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.manage-btn:hover {
+  border-color: #f59e0b;
+  color: #f59e0b;
+}
+
+.step-hint {
+  color: #f59e0b;
+  font-size: 0.8rem;
+}
+
+/* Pattern Manager Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal-content {
+  background: #2a2a2a;
+  border: 1px solid #4a4a4a;
+  border-radius: 8px;
+  padding: 1.5rem;
+  min-width: 360px;
+  max-width: 500px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.modal-header h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 1.4rem;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.modal-close:hover {
+  color: white;
+}
+
+.modal-body {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.empty-msg {
+  color: #666;
+  text-align: center;
+  padding: 1rem;
+}
+
+.saved-pattern-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  background: #3a3a3a;
+  border-radius: 4px;
+}
+
+.saved-pattern-name {
+  font-size: 0.9rem;
+  color: #ddd;
+}
+
+.saved-pattern-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-small {
+  border: none;
+  border-radius: 3px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.btn-load {
+  background: #3b82f6;
+  color: white;
+}
+
+.btn-load:hover {
+  background: #2563eb;
+}
+
+.btn-delete {
+  background: #ef4444;
+  color: white;
+}
+
+.btn-delete:hover {
+  background: #dc2626;
 }

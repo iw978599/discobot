@@ -1,3 +1,19 @@
+export interface SavedPatternInfo {
+  id: string;
+  name: string;
+  updatedAt: number;
+}
+
+export interface SavedPatternFull {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  steps: SequencerStep[];
+  synthParams: SynthParameters;
+  tempo: number;
+}
+
 export type OscillatorType = 'sine' | 'square' | 'sawtooth' | 'triangle';
 
 export interface SynthParameters {

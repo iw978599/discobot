@@ -34,7 +34,7 @@ export class Sequencer {
     if (!this.isPlaying || !this.currentPattern) return;
 
     const step = this.currentPattern.steps[this.currentStep];
-    if (step && step.active && step.note) {
+    if (step && step.note) {
       this.synth.playNote(step.note, '16n', step.velocity);
     }
 

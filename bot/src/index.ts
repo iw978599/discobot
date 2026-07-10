@@ -13,10 +13,11 @@ import {
   AudioPlayerStatus,
   VoiceConnectionStatus,
   entersState,
+  NoSubscriberBehavior,
+  StreamType,
 } from '@discordjs/voice';
+import { Readable } from 'stream';
 import dotenv from 'dotenv';
-import * as fs from 'fs';
-import * as path from 'path';
 import WebSocket from 'ws';
 
 dotenv.config();
@@ -43,6 +44,8 @@ const client = new Client({
 
 // Voice connection storage
 const connections = new Map<string, any>();
+const audioPlayers = new Map<string, any>();
+const audioLoopFlags = new Map<string, boolean>();
 let ws: WebSocket | null = null;
 
 // Connect to WebSocket for real-time updates
@@ -72,9 +75,58 @@ function connectWebSocket() {
   });
 }
 
+function playPatternOnDiscord(guildId: string, audioBase64: string, sampleRate: number) {
+  const player = audioPlayers.get(guildId);
+  if (!player) {
+    console.log('No player for guild', guildId);
+    return;
+  }
+  console.log('Playing audio on guild', guildId, 'buffer size:', audioBase64.length);
+
+  audioLoopFlags.set(guildId, false);
+  player.removeAllListeners(AudioPlayerStatus.Idle);
+  player.stop();
+
+  audioLoopFlags.set(guildId, true);
+  const pcmBuffer = Buffer.from(audioBase64, 'base64');
+
+  const playOnce = () => {
+    if (!audioLoopFlags.get(guildId)) {
+      console.log('Loop stopped for guild', guildId);
+      return;
+    }
+    const stream = new Readable({ read() { this.push(pcmBuffer); this.push(null); } });
+    const resource = createAudioResource(stream, { inputType: StreamType.Raw });
+    player.play(resource);
+    player.once(AudioPlayerStatus.Idle, playOnce);
+  };
+
+  playOnce();
+}
+
 function handleWebSocketMessage(message: any) {
-  // Handle real-time updates from web server
-  console.log('WebSocket message:', message.type);
+  switch (message.type) {
+    case 'patternAudio': {
+      console.log('Received patternAudio, length:', message.data.audio.length);
+      const { audio, sampleRate } = message.data;
+      for (const guildId of connections.keys()) {
+        playPatternOnDiscord(guildId, audio, sampleRate);
+      }
+      break;
+    }
+    case 'sequencerStop': {
+      console.log('Received sequencerStop');
+      for (const guildId of connections.keys()) {
+        audioLoopFlags.set(guildId, false);
+        const player = audioPlayers.get(guildId);
+        if (player) {
+          player.removeAllListeners(AudioPlayerStatus.Idle);
+          player.stop();
+        }
+      }
+      break;
+    }
+  }
 }
 
 // Commands
@@ -172,6 +224,12 @@ async function handleJoin(interaction: ChatInputCommandInteraction) {
     await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
     connections.set(interaction.guildId!, connection);
 
+    const player = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Play } });
+    player.on('error', (err) => console.error('Audio player error:', err));
+    connection.subscribe(player);
+    audioPlayers.set(interaction.guildId!, player);
+    audioLoopFlags.set(interaction.guildId!, false);
+
     await interaction.reply(`Joined ${voiceChannel.name}!`);
   } catch (error) {
     console.error('Error joining voice channel:', error);
@@ -186,6 +244,15 @@ async function handleLeave(interaction: ChatInputCommandInteraction) {
     return interaction.reply('Not in a voice channel');
   }
 
+  audioLoopFlags.set(interaction.guildId!, false);
+  const player = audioPlayers.get(interaction.guildId!);
+  if (player) {
+    player.removeAllListeners(AudioPlayerStatus.Idle);
+    player.stop();
+    audioPlayers.delete(interaction.guildId!);
+  }
+
+  audioLoopFlags.delete(interaction.guildId!);
   connection.destroy();
   connections.delete(interaction.guildId!);
   await interaction.reply('Left voice channel');

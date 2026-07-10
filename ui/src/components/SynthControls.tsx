@@ -6,6 +6,35 @@ interface SynthControlsProps {
   onParameterChange: (params: Partial<SynthParameters>) => void;
 }
 
+const TOOLTIPS: Record<string, string> = {
+  'osc-type': 'The waveform shape of the oscillator. Sine = smooth, Square = harsh, Sawtooth = bright, Triangle = soft.',
+  'osc-detune': 'Fine pitch adjustment in cents (±100 = ±1 semitone). Positive = sharper, negative = flatter.',
+  'filter-freq': 'Cutoff frequency of the low-pass filter. Higher = brighter, lower = muffled.',
+  'filter-res': 'Filter resonance (emphasis at cutoff frequency). High values create a whistling/ringing effect.',
+  'env-attack': 'Time for the note to reach full volume after pressing a key (0.001s–2s).',
+  'env-decay': 'Time for the volume to drop from peak to the sustain level after the attack phase.',
+  'env-sustain': 'Volume level held while a key is pressed (0 = silent, 1 = full volume).',
+  'env-release': 'Time for the note to fade out after releasing a key (0.001s–5s).',
+  'reverb-enabled': 'Enable or disable the reverb effect.',
+  'reverb-wet': 'Mix level of the reverb effect (0 = dry, 1 = fully wet).',
+  'reverb-decay': 'How long the reverb tail lasts in seconds (0.1s–10s).',
+  'delay-enabled': 'Enable or disable the delay (echo) effect.',
+  'delay-wet': 'Mix level of the delay effect (0 = dry, 1 = fully wet).',
+  'delay-time': 'Time between each echo repeat (0.001s–2s).',
+  'delay-feedback': 'How much of the delayed signal feeds back into the delay (0 = single echo, 0.95 = many repeats).',
+};
+
+function InfoTip({ id }: { id: string }) {
+  const text = TOOLTIPS[id];
+  if (!text) return null;
+  return (
+    <span className="info-tip-wrapper">
+      <span className="info-tip-icon">&#9432;</span>
+      <span className="info-tip-popup">{text}</span>
+    </span>
+  );
+}
+
 export default function SynthControls({
   parameters,
   onParameterChange,
@@ -53,7 +82,7 @@ export default function SynthControls({
       <section className="control-section">
         <h3>Oscillator</h3>
         <div className="control">
-          <label>Type</label>
+          <label>Type <InfoTip id="osc-type" /></label>
           <select
             value={parameters.oscillator.type}
             onChange={(e) =>
@@ -67,7 +96,7 @@ export default function SynthControls({
           </select>
         </div>
         <div className="control">
-          <label>Detune: {parameters.oscillator.detune}</label>
+          <label>Detune: {parameters.oscillator.detune} <InfoTip id="osc-detune" /></label>
           <input
             type="range"
             min="-100"
@@ -81,7 +110,7 @@ export default function SynthControls({
       <section className="control-section">
         <h3>Filter</h3>
         <div className="control">
-          <label>Frequency: {parameters.filter.frequency}Hz</label>
+          <label>Frequency: {parameters.filter.frequency}Hz <InfoTip id="filter-freq" /></label>
           <input
             type="range"
             min="20"
@@ -91,7 +120,7 @@ export default function SynthControls({
           />
         </div>
         <div className="control">
-          <label>Resonance: {parameters.filter.q.toFixed(2)}</label>
+          <label>Resonance: {parameters.filter.q.toFixed(2)} <InfoTip id="filter-res" /></label>
           <input
             type="range"
             min="0.1"
@@ -106,7 +135,7 @@ export default function SynthControls({
       <section className="control-section">
         <h3>Envelope</h3>
         <div className="control">
-          <label>Attack: {parameters.envelope.attack.toFixed(3)}s</label>
+          <label>Attack: {parameters.envelope.attack.toFixed(3)}s <InfoTip id="env-attack" /></label>
           <input
             type="range"
             min="0.001"
@@ -117,7 +146,7 @@ export default function SynthControls({
           />
         </div>
         <div className="control">
-          <label>Decay: {parameters.envelope.decay.toFixed(3)}s</label>
+          <label>Decay: {parameters.envelope.decay.toFixed(3)}s <InfoTip id="env-decay" /></label>
           <input
             type="range"
             min="0.001"
@@ -128,7 +157,7 @@ export default function SynthControls({
           />
         </div>
         <div className="control">
-          <label>Sustain: {parameters.envelope.sustain.toFixed(2)}</label>
+          <label>Sustain: {parameters.envelope.sustain.toFixed(2)} <InfoTip id="env-sustain" /></label>
           <input
             type="range"
             min="0"
@@ -139,7 +168,7 @@ export default function SynthControls({
           />
         </div>
         <div className="control">
-          <label>Release: {parameters.envelope.release.toFixed(3)}s</label>
+          <label>Release: {parameters.envelope.release.toFixed(3)}s <InfoTip id="env-release" /></label>
           <input
             type="range"
             min="0.001"
@@ -160,11 +189,11 @@ export default function SynthControls({
               checked={parameters.effects.reverb.enabled}
               onChange={(e) => updateReverb({ enabled: e.target.checked })}
             />
-            Enabled
+            Enabled <InfoTip id="reverb-enabled" />
           </label>
         </div>
         <div className="control">
-          <label>Wet: {parameters.effects.reverb.wet.toFixed(2)}</label>
+          <label>Wet: {parameters.effects.reverb.wet.toFixed(2)} <InfoTip id="reverb-wet" /></label>
           <input
             type="range"
             min="0"
@@ -176,7 +205,7 @@ export default function SynthControls({
           />
         </div>
         <div className="control">
-          <label>Decay: {parameters.effects.reverb.decay.toFixed(2)}s</label>
+          <label>Decay: {parameters.effects.reverb.decay.toFixed(2)}s <InfoTip id="reverb-decay" /></label>
           <input
             type="range"
             min="0.1"
@@ -198,11 +227,11 @@ export default function SynthControls({
               checked={parameters.effects.delay.enabled}
               onChange={(e) => updateDelay({ enabled: e.target.checked })}
             />
-            Enabled
+            Enabled <InfoTip id="delay-enabled" />
           </label>
         </div>
         <div className="control">
-          <label>Wet: {parameters.effects.delay.wet.toFixed(2)}</label>
+          <label>Wet: {parameters.effects.delay.wet.toFixed(2)} <InfoTip id="delay-wet" /></label>
           <input
             type="range"
             min="0"
@@ -214,7 +243,7 @@ export default function SynthControls({
           />
         </div>
         <div className="control">
-          <label>Time: {parameters.effects.delay.time.toFixed(3)}s</label>
+          <label>Time: {parameters.effects.delay.time.toFixed(3)}s <InfoTip id="delay-time" /></label>
           <input
             type="range"
             min="0.001"
@@ -226,7 +255,7 @@ export default function SynthControls({
           />
         </div>
         <div className="control">
-          <label>Feedback: {parameters.effects.delay.feedback.toFixed(2)}</label>
+          <label>Feedback: {parameters.effects.delay.feedback.toFixed(2)} <InfoTip id="delay-feedback" /></label>
           <input
             type="range"
             min="0"

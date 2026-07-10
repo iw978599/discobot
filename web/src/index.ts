@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import { WebSocketServer } from 'ws';
 import * as http from 'http';
+import * as fs from 'fs';
+import * as path from 'path';
 import dotenv from 'dotenv';
 import { Synthesizer, Sequencer, SamplePlayer, Pattern, SynthParameters, DiscordAudioStreamer } from '@discord-synth/engine';
 
@@ -19,6 +21,7 @@ let synth: Synthesizer | null = null;
 let sequencer: Sequencer | null = null;
 let samplePlayer: SamplePlayer | null = null;
 let discordStreamer: DiscordAudioStreamer | null = null;
+let hasActiveSession = false;
 const patterns = new Map<string, Pattern>();
 const streamingState = {
   isStreamingToDiscord: false,
@@ -28,6 +31,32 @@ const streamingState = {
   lastUpdate: 0
 };
 
+interface SavedPatternData {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  steps: Array<{ active: boolean; note?: string; velocity: number }>;
+  synthParams: SynthParameters;
+  tempo: number;
+}
+
+const SAVED_PATTERNS_FILE = path.join(__dirname, '..', 'saved-patterns.json');
+
+function loadSavedPatterns(): SavedPatternData[] {
+  try {
+    if (fs.existsSync(SAVED_PATTERNS_FILE)) {
+      const raw = fs.readFileSync(SAVED_PATTERNS_FILE, 'utf-8');
+      return JSON.parse(raw);
+    }
+  } catch { /* ignore */ }
+  return [];
+}
+
+function saveSavedPatterns(data: SavedPatternData[]) {
+  fs.writeFileSync(SAVED_PATTERNS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+}
+
 // Initialize audio engine
 function initAudioEngine() {
   if (!synth) {
@@ -35,6 +64,11 @@ function initAudioEngine() {
     sequencer = new Sequencer(synth);
     samplePlayer = new SamplePlayer();
     discordStreamer = new DiscordAudioStreamer();
+
+    // Broadcast step changes to all clients
+    sequencer.onStep((step: number) => {
+      broadcastToClients({ type: 'sequencerStep', data: { step } });
+    });
 
     // Create default pattern
     const defaultPattern = sequencer.createEmptyPattern('Default');
@@ -215,8 +249,12 @@ app.get('/synth/parameters', (req, res) => {
 
 app.post('/synth/parameters', (req, res) => {
   initAudioEngine();
+  hasActiveSession = true;
   synth!.updateParameters(req.body as Partial<SynthParameters>);
   broadcastToClients({ type: 'synthUpdate', data: synth!.getParameters() });
+  if (sequencer && sequencer.getIsPlaying()) {
+    schedulePatternAudio();
+  }
   res.json({ success: true });
 });
 
@@ -241,6 +279,53 @@ app.post('/synth/note-off', (req, res) => {
   res.json({ success: true });
 });
 
+// Saved patterns (persistent storage) - must be before generic :id routes
+app.post('/patterns/save', (req, res) => {
+  const { name, steps, synthParams, tempo } = req.body;
+  if (!name || !steps) {
+    return res.status(400).json({ error: 'name and steps are required' });
+  }
+
+  const saved = loadSavedPatterns();
+  const entry: SavedPatternData = {
+    id: `saved-${Date.now()}`,
+    name: String(name),
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    steps,
+    synthParams: synthParams || null,
+    tempo: tempo || 120,
+  };
+  saved.push(entry);
+  saveSavedPatterns(saved);
+
+  res.json({ id: entry.id, name: entry.name, updatedAt: entry.updatedAt });
+});
+
+app.get('/patterns/saved', (req, res) => {
+  const saved = loadSavedPatterns();
+  const list = saved
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .map(({ id, name, updatedAt }) => ({ id, name, updatedAt }));
+  res.json(list);
+});
+
+app.get('/patterns/saved/:id', (req, res) => {
+  const saved = loadSavedPatterns();
+  const entry = saved.find((p) => p.id === req.params.id);
+  if (!entry) return res.status(404).json({ error: 'Saved pattern not found' });
+  res.json(entry);
+});
+
+app.delete('/patterns/saved/:id', (req, res) => {
+  let saved = loadSavedPatterns();
+  const idx = saved.findIndex((p) => p.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Saved pattern not found' });
+  saved.splice(idx, 1);
+  saveSavedPatterns(saved);
+  res.json({ success: true });
+});
+
 // Patterns
 app.get('/patterns', (req, res) => {
   res.json(Array.from(patterns.values()));
@@ -256,6 +341,7 @@ app.get('/patterns/:id', (req, res) => {
 
 app.post('/patterns', (req, res) => {
   initAudioEngine();
+  hasActiveSession = true;
   const pattern: Pattern = req.body;
   patterns.set(pattern.id, pattern);
   broadcastToClients({ type: 'patternCreated', data: pattern });
@@ -263,13 +349,19 @@ app.post('/patterns', (req, res) => {
 });
 
 app.put('/patterns/:id', (req, res) => {
+  hasActiveSession = true;
   const pattern: Pattern = req.body;
   patterns.set(req.params.id, pattern);
   broadcastToClients({ type: 'patternUpdated', data: pattern });
+  if (sequencer && sequencer.getIsPlaying()) {
+    sequencer.loadPattern(pattern);
+    schedulePatternAudio();
+  }
   res.json(pattern);
 });
 
 app.delete('/patterns/:id', (req, res) => {
+  hasActiveSession = true;
   patterns.delete(req.params.id);
   broadcastToClients({ type: 'patternDeleted', data: { id: req.params.id } });
   res.json({ success: true });
@@ -278,6 +370,7 @@ app.delete('/patterns/:id', (req, res) => {
 // Sequencer
 app.post('/sequencer/play', (req, res) => {
   initAudioEngine();
+  hasActiveSession = true;
   const { patternId } = req.body;
   const pattern = patterns.get(patternId);
 
@@ -287,6 +380,8 @@ app.post('/sequencer/play', (req, res) => {
 
   sequencer!.loadPattern(pattern);
   sequencer!.play();
+
+  broadcastPatternAudio();
   broadcastToClients({ type: 'sequencerPlay', data: { patternId } });
   res.json({ success: true });
 });
@@ -300,9 +395,13 @@ app.post('/sequencer/stop', (req, res) => {
 
 app.post('/sequencer/tempo', (req, res) => {
   initAudioEngine();
+  hasActiveSession = true;
   const { tempo } = req.body;
   sequencer!.setTempo(tempo);
   broadcastToClients({ type: 'tempoChange', data: { tempo } });
+  if (sequencer && sequencer.getIsPlaying()) {
+    schedulePatternAudio();
+  }
   res.json({ success: true });
 });
 
@@ -359,6 +458,7 @@ wss.on('connection', (ws) => {
   ws.send(JSON.stringify({
     type: 'init',
     data: {
+      hasActiveSession,
       synthParameters: synth!.getParameters(),
       patterns: Array.from(patterns.values()),
       samples: samplePlayer!.getSamples(),
@@ -376,6 +476,71 @@ wss.on('connection', (ws) => {
     clients.delete(ws);
   });
 });
+
+function renderPatternAudio(pattern: Pattern): string | null {
+  try {
+    const sampleRate = 48000;
+    const beatsPerStep = 60 / pattern.tempo / 4;
+    const stepDuration = beatsPerStep;
+    const totalSamples = Math.floor(16 * stepDuration * sampleRate);
+    const fullPCM = new Float32Array(totalSamples);
+
+    for (let i = 0; i < 16; i++) {
+      const step = pattern.steps[i];
+      if (step.note) {
+        const noteDur = Math.max(stepDuration - 0.01, 0.05);
+        const notePCM = synth!.renderNote(step.note, noteDur, step.velocity, sampleRate);
+        const offset = Math.floor(i * stepDuration * sampleRate);
+        for (let j = 0; j < notePCM.length && offset + j < totalSamples; j++) {
+          fullPCM[offset + j] += notePCM[j];
+        }
+      }
+    }
+
+    let maxAmp = 0;
+    for (let i = 0; i < fullPCM.length; i++) {
+      const abs = Math.abs(fullPCM[i]);
+      if (abs > maxAmp) maxAmp = abs;
+    }
+    const normScale = maxAmp > 0 ? Math.min(0.95 / maxAmp, 3) : 1;
+
+    const stereoLen = fullPCM.length * 2;
+    const int16 = new Int16Array(stereoLen);
+    for (let i = 0; i < fullPCM.length; i++) {
+      const val = Math.max(-32768, Math.min(32767, Math.round(fullPCM[i] * 32768 * normScale)));
+      int16[i * 2] = val;
+      int16[i * 2 + 1] = val;
+    }
+
+    return Buffer.from(int16.buffer).toString('base64');
+  } catch (err) {
+    console.error('Failed to render pattern audio:', err);
+    return null;
+  }
+}
+
+function broadcastPatternAudio() {
+  if (!sequencer || !sequencer.getIsPlaying()) return;
+  const pattern = sequencer.getCurrentPattern();
+  if (!pattern) return;
+  const audioBase64 = renderPatternAudio(pattern);
+  if (audioBase64) {
+    broadcastToClients({ type: 'patternAudio', data: { audio: audioBase64, sampleRate: 48000, tempo: pattern.tempo } });
+  }
+}
+
+const schedulePatternAudio = throttleify(broadcastPatternAudio, 300);
+
+function throttleify(fn: () => void, ms: number) {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  return () => {
+    if (timer) return;
+    timer = setTimeout(() => {
+      timer = null;
+      fn();
+    }, ms);
+  };
+}
 
 function broadcastToClients(message: any) {
   const payload = JSON.stringify(message);

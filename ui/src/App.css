@@ -19,6 +19,49 @@
   font-weight: 600;
 }
 
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.reset-button {
+  background: none;
+  border: 1px solid #4a4a4a;
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  font-size: 1.2rem;
+  cursor: pointer;
+  line-height: 1;
+  transition: border-color 0.2s;
+  color: #aaa;
+}
+
+.reset-button:hover {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.mute-button {
+  background: none;
+  border: 1px solid #4a4a4a;
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  font-size: 1.25rem;
+  cursor: pointer;
+  line-height: 1;
+  transition: border-color 0.2s;
+}
+
+.mute-button:hover {
+  border-color: #888;
+}
+
+.mute-button.muted {
+  border-color: #ef4444;
+  opacity: 0.7;
+}
+
 .status {
   display: flex;
   align-items: center;

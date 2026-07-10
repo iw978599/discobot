@@ -1,4 +1,4 @@
-import { SynthParameters, Pattern } from './types';
+import { SynthParameters } from './types';
 import { Synthesizer } from './Synthesizer';
 import { ensureAudioContext } from './AudioContextPolyfill';
 
