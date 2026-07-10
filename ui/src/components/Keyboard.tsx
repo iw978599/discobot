@@ -18,10 +18,6 @@ const BLACK_KEYS = [
   null,
 ];
 
-function generateOctaveNotes(octave: number): string[] {
-  return WHITE_KEYS.map(note => `${note}${octave}`);
-}
-
 export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0 }: KeyboardProps) {
   const [activeNotes, setActiveNotes] = useState<Set<string>>(new Set());
 
