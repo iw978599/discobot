@@ -1,6 +1,8 @@
 import { SynthParameters, OscillatorType } from './types';
 import { ensureAudioContext } from './AudioContextPolyfill';
 
+const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
+
 export class Synthesizer {
   private parameters!: SynthParameters;
   private audioContext: AudioContext | null = null;
@@ -115,8 +117,8 @@ export class Synthesizer {
     samples = Synthesizer.applyADSR(samples, sampleRate, attack, decay, sustain, release, duration);
     samples = Synthesizer.applyLowpass(samples, sampleRate, this.parameters.filter.frequency);
 
-    const master = Math.max(0, Math.min(2, this.parameters.gain));
-    const vol = Math.max(0, Math.min(1, velocity));
+    const master = clamp(this.parameters.gain, 0, 2);
+    const vol = clamp(velocity, 0, 1);
     for (let i = 0; i < samples.length; i++) {
       samples[i] *= vol * master * 0.5;
     }
@@ -134,26 +136,24 @@ export class Synthesizer {
       }
     }
     for (let i = 0; i < length; i++) {
-      mix[i] = Math.max(-1, Math.min(1, mix[i]));
+      mix[i] = clamp(mix[i], -1, 1);
     }
     return mix;
   }
 
   renderToAudioBuffer(pcmData: Float32Array, sampleRate: number = 44100): AudioBuffer {
-    const ctx = this.ensureContext();
+    this.ensureContext();
     const offlineCtx = new OfflineAudioContext(1, pcmData.length, sampleRate);
     const buffer = offlineCtx.createBuffer(1, pcmData.length, sampleRate);
     buffer.getChannelData(0).set(pcmData);
     return buffer;
   }
 
-  playNote(note: string, duration?: string | number, velocity: number = 0.7): void {
-    const dur = typeof duration === 'number' ? duration : 0.5;
+  playNote(note: string, _duration?: string | number, velocity: number = 0.7): void {
     this.activeNotes.set(note, { startTime: Date.now(), velocity });
   }
 
-  playChord(notes: string[], duration?: string | number, velocity: number = 0.7): void {
-    const dur = typeof duration === 'number' ? duration : 0.5;
+  playChord(notes: string[], _duration?: string | number, velocity: number = 0.7): void {
     for (const note of notes) {
       this.activeNotes.set(note, { startTime: Date.now(), velocity });
     }

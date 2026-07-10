@@ -19,7 +19,7 @@ export class DiscordAudioStreamer {
     return this.audioContext;
   }
 
-  async prepareForDiscordStreaming(concurrency: number = 1): Promise<AudioBuffer[]> {
+  async prepareForDiscordStreaming(_concurrency: number = 1): Promise<AudioBuffer[]> {
     const ctx = this.ensureContext();
     const bufferDuration = 0.1;
     const totalDuration = 16;

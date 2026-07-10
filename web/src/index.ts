@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { WebSocketServer } from 'ws';
+import WebSocket, { WebSocketServer } from 'ws';
 import * as http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -45,6 +45,8 @@ const streamingState = {
 };
 
 const DRUM_INSTRUMENTS: DrumInstrument[] = ['kick', 'snare', 'openHH', 'closedHH', 'ride', 'crash', 'snare2', 'clap'];
+const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
+const isWebSocketOpen = (client: WebSocket): boolean => client.readyState === WebSocket.OPEN;
 
 function createDefaultDrumState(): DrumState {
   const state = {} as DrumState;
@@ -135,7 +137,7 @@ app.post('/discord/stream/start', async (req, res) => {
 
     // Trigger streaming to Discord via WebSocket
     wss.clients.forEach((client) => {
-      if (client.readyState === 1) {
+      if (isWebSocketOpen(client)) {
         client.send(JSON.stringify({
           type: 'discordStreamingStart',
           data: {
@@ -172,7 +174,7 @@ app.post('/discord/stream/stop', async (req, res) => {
 
     // Notify bots to stop streaming
     wss.clients.forEach((client) => {
-      if (client.readyState === 1) {
+      if (isWebSocketOpen(client)) {
         client.send(JSON.stringify({
           type: 'discordStreamingStop',
           data: {
@@ -194,7 +196,7 @@ app.post('/discord/stream/sync', async (req, res) => {
   try {
     // Send current streaming state to connected bots
     wss.clients.forEach((client) => {
-      if (client.readyState === 1) {
+      if (isWebSocketOpen(client)) {
         client.send(JSON.stringify({
           type: 'discordStreamingSync',
           data: {
@@ -247,7 +249,7 @@ app.post('/discord/stream/pattern', async (req, res) => {
 
     // Notify all connected clients of pattern change
     wss.clients.forEach((client) => {
-      if (client.readyState === 1) {
+      if (isWebSocketOpen(client)) {
         client.send(JSON.stringify({
           type: 'patternUpdated',
           data: {
@@ -338,9 +340,9 @@ app.post('/drum/settings', (req, res) => {
     return res.status(400).json({ error: 'Invalid instrument' });
   }
   const s = drumState[instrument].settings;
-  if (settings.volume !== undefined) s.volume = Math.max(0, Math.min(1, settings.volume));
-  if (settings.tone !== undefined) s.tone = Math.max(0, Math.min(1, settings.tone));
-  if (settings.extra !== undefined) s.extra = Math.max(0, Math.min(1, settings.extra));
+  if (settings.volume !== undefined) s.volume = clamp(settings.volume, 0, 1);
+  if (settings.tone !== undefined) s.tone = clamp(settings.tone, 0, 1);
+  if (settings.extra !== undefined) s.extra = clamp(settings.extra, 0, 1);
   broadcastToClients({ type: 'drumSettings', data: { instrument, settings: { ...s } } });
   if (sequencer && sequencer.getIsPlaying()) {
     schedulePatternAudio();
@@ -370,7 +372,7 @@ app.post('/drum/reset', (req, res) => {
 
 app.post('/drum/master-volume', (req, res) => {
   const { volume } = req.body as { volume: number };
-  drumMasterVolume = Math.max(0, Math.min(2, volume));
+  drumMasterVolume = clamp(volume, 0, 2);
   if (sequencer && sequencer.getIsPlaying()) {
     schedulePatternAudio();
   }
@@ -548,7 +550,7 @@ app.delete('/samples/:id', (req, res) => {
 const server = http.createServer(app);
 const wss = new WebSocketServer({ port: Number(WS_PORT) });
 
-const clients = new Set<any>();
+const clients = new Set<WebSocket>();
 
 wss.on('connection', (ws) => {
   clients.add(ws);
@@ -589,7 +591,7 @@ const debugLog = (msg: string) => {
 function renderPatternAudio(pattern: Pattern): string | null {
   try {
     const sampleRate = 48000;
-    const tempo = Math.max(20, Math.min(400, pattern.tempo || 120));
+    const tempo = clamp(pattern.tempo || 120, 20, 400);
     const drumActiveSteps = DRUM_INSTRUMENTS.reduce((sum, inst) => {
       const track = drumState[inst];
       if (!track || !track.steps) return sum;
@@ -631,7 +633,7 @@ function renderPatternAudio(pattern: Pattern): string | null {
     const stereoLen = fullPCM.length * 2;
     const int16 = new Int16Array(stereoLen);
     for (let i = 0; i < fullPCM.length; i++) {
-      const val = Math.max(-32768, Math.min(32767, Math.round(fullPCM[i] * 60000)));
+      const val = clamp(Math.round(fullPCM[i] * 60000), -32768, 32767);
       int16[i * 2] = val;
       int16[i * 2 + 1] = val;
     }
@@ -666,10 +668,10 @@ function throttleify(fn: () => void, ms: number) {
   };
 }
 
-function broadcastToClients(message: any) {
+function broadcastToClients(message: unknown) {
   const payload = JSON.stringify(message);
   clients.forEach((client) => {
-    if (client.readyState === 1) { // OPEN
+    if (isWebSocketOpen(client)) {
       client.send(payload);
     }
   });

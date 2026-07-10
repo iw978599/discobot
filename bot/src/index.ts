@@ -10,7 +10,9 @@ import {
   joinVoiceChannel,
   createAudioPlayer,
   createAudioResource,
+  AudioPlayer,
   AudioPlayerStatus,
+  VoiceConnection,
   VoiceConnectionStatus,
   entersState,
   NoSubscriberBehavior,
@@ -43,8 +45,8 @@ const client = new Client({
 });
 
 // Voice connection storage
-const connections = new Map<string, any>();
-const audioPlayers = new Map<string, any>();
+const connections = new Map<string, VoiceConnection>();
+const audioPlayers = new Map<string, AudioPlayer>();
 const audioLoopFlags = new Map<string, boolean>();
 let ws: WebSocket | null = null;
 
@@ -75,7 +77,7 @@ function connectWebSocket() {
   });
 }
 
-function playPatternOnDiscord(guildId: string, audioBase64: string, sampleRate: number) {
+function playPatternOnDiscord(guildId: string, audioBase64: string, _sampleRate: number) {
   const player = audioPlayers.get(guildId);
   if (!player) {
     console.log('No player for guild', guildId);
