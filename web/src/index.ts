@@ -10,7 +10,7 @@ import { Synthesizer, Sequencer, SamplePlayer, Pattern, SynthParameters, DrumSta
 dotenv.config();
 
 const app = express();
-const PORT = process.env.WEB_PORT || 3001;
+const PORT = process.env.PORT || process.env.WEB_PORT || 3001;
 
 app.use(cors());
 app.use((req, res, next) => {
@@ -549,6 +549,17 @@ app.post('/sequencer/tempo', (req, res) => {
   res.json({ success: true });
 });
 
+// Health check endpoint (for Railway/Docker)
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    uptime: process.uptime(),
+    timestamp: Date.now(),
+    environment: process.env.NODE_ENV || 'development',
+    port: PORT,
+  });
+});
+
 // Samples
 app.get('/samples', (req, res) => {
   initAudioEngine();
@@ -728,8 +739,9 @@ function broadcastToClients(message: unknown) {
   });
 }
 
-// Start server
-server.listen(PORT, () => {
-  console.log(`Web API server running on http://localhost:${PORT}`);
-  console.log(`WebSocket server running on ws://localhost:${PORT}/ws`);
+// Start server - bind to 0.0.0.0 for Railway/Docker
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`Web API server running on http://0.0.0.0:${PORT}`);
+  console.log(`WebSocket server running on ws://0.0.0.0:${PORT}/ws`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });

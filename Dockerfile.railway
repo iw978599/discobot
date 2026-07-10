@@ -1,0 +1,66 @@
+# Railway-optimized Dockerfile
+# Simpler than the full Dockerfile - no nginx, Railway handles routing
+
+FROM node:20-bookworm-slim AS build
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+COPY bot/package.json ./bot/package.json
+COPY engine/package.json ./engine/package.json
+COPY web/package.json ./web/package.json
+COPY ui/package.json ./ui/package.json
+
+# Install dependencies
+RUN npm ci
+
+# Copy source
+COPY tsconfig.json ./tsconfig.json
+COPY bot/ ./bot/
+COPY engine/ ./engine/
+COPY web/ ./web/
+COPY ui/ ./ui/
+
+# Build all packages
+RUN npm run build
+
+# Production stage
+FROM node:20-bookworm-slim
+
+ENV NODE_ENV=production
+
+# Install curl for healthchecks
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+COPY bot/package.json ./bot/package.json
+COPY engine/package.json ./engine/package.json
+COPY web/package.json ./web/package.json
+COPY ui/package.json ./ui/package.json
+
+# Copy built files
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/bot/dist ./bot/dist
+COPY --from=build /app/bot/node_modules ./bot/node_modules
+COPY --from=build /app/engine/dist ./engine/dist
+COPY --from=build /app/engine/node_modules ./engine/node_modules
+COPY --from=build /app/web/dist ./web/dist
+COPY --from=build /app/web/node_modules ./web/node_modules
+COPY --from=build /app/ui/dist ./ui/dist
+
+# Railway provides PORT env var
+ENV WEB_PORT=${PORT:-3001}
+
+# Expose port (Railway will map this)
+EXPOSE ${PORT:-3001}
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:${PORT:-3001}/health || exit 1
+
+# Start both bot and web server
+# Use a simple shell script to run both
+CMD ["sh", "-c", "node web/dist/index.js & node bot/dist/index.js & wait"]
