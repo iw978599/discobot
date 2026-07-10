@@ -78,13 +78,6 @@ export default function DrumMachine({
     onStepToggle(selectedInstrument, step, !current);
   }, [drumState, selectedInstrument, onStepToggle]);
 
-  const handleKnobChange = useCallback((key: 'volume' | 'tone' | 'extra', val: number) => {
-    onSettingsChange(selectedInstrument, { [key]: val });
-  }, [selectedInstrument, onSettingsChange]);
-
-  const selectedTrack = drumState[selectedInstrument];
-  const extraLabel = EXTRA_LABELS[selectedInstrument];
-
   return (
     <div className="drum-machine">
       <div className="drum-machine-header">
@@ -99,6 +92,41 @@ export default function DrumMachine({
         <div className="drum-sequencer-panel">
           <div className="drum-instrument-select">
             <div className="drum-section-title">Instrument Select</div>
+            <div className="drum-instrument-control-grid">
+              <div className="drum-instrument-control-row">
+                {INSTRUMENTS.map((inst) => (
+                  <DrumKnob
+                    key={`${inst}-volume`}
+                    label="Volume"
+                    value={drumState[inst].settings.volume}
+                    displayValue={Math.round(drumState[inst].settings.volume * 100) + '%'}
+                    onChange={(v) => onSettingsChange(inst, { volume: v })}
+                  />
+                ))}
+              </div>
+              <div className="drum-instrument-control-row">
+                {INSTRUMENTS.map((inst) => (
+                  <DrumKnob
+                    key={`${inst}-tone`}
+                    label="Tone"
+                    value={drumState[inst].settings.tone}
+                    displayValue={drumState[inst].settings.tone.toFixed(2)}
+                    onChange={(v) => onSettingsChange(inst, { tone: v })}
+                  />
+                ))}
+              </div>
+              <div className="drum-instrument-control-row">
+                {INSTRUMENTS.map((inst) => (
+                  <DrumKnob
+                    key={`${inst}-extra`}
+                    label={EXTRA_LABELS[inst].knob}
+                    value={drumState[inst].settings.extra}
+                    displayValue={EXTRA_LABELS[inst].display(drumState[inst].settings.extra)}
+                    onChange={(v) => onSettingsChange(inst, { extra: v })}
+                  />
+                ))}
+              </div>
+            </div>
             <div className="drum-instrument-buttons">
               {INSTRUMENTS.map((inst) => (
                 <button
@@ -164,34 +192,6 @@ export default function DrumMachine({
             displayValue={Math.round(drumMasterVolume * 100) + '%'}
             onChange={onMasterVolumeChange}
           />
-          <div className="drum-controls-divider" />
-          <div className="drum-controls-header">
-            <span
-              style={{ color: INSTRUMENT_COLORS[selectedInstrument], fontWeight: 600 }}
-            >
-              {INSTRUMENT_LABELS[selectedInstrument]}
-            </span>
-          </div>
-          <div className="drum-knobs">
-            <DrumKnob
-              label="Volume"
-              value={selectedTrack.settings.volume}
-              displayValue={Math.round(selectedTrack.settings.volume * 100) + '%'}
-              onChange={(v) => handleKnobChange('volume', v)}
-            />
-            <DrumKnob
-              label="Tone"
-              value={selectedTrack.settings.tone}
-              displayValue={selectedTrack.settings.tone.toFixed(2)}
-              onChange={(v) => handleKnobChange('tone', v)}
-            />
-            <DrumKnob
-              label={extraLabel.knob}
-              value={selectedTrack.settings.extra}
-              displayValue={extraLabel.display(selectedTrack.settings.extra)}
-              onChange={(v) => handleKnobChange('extra', v)}
-            />
-          </div>
         </div>
       </div>
     </div>

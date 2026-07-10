@@ -72,7 +72,21 @@
   display: grid;
   grid-template-columns: repeat(8, minmax(0, 1fr));
   gap: 0.35rem;
+  margin-top: 0.4rem;
   margin-bottom: 0.8rem;
+}
+
+.drum-instrument-control-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.drum-instrument-control-row {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 0.35rem;
+  justify-items: center;
 }
 
 .drum-instrument-btn {
@@ -223,13 +237,6 @@
   height: 1px;
   background: #454b53;
   margin: 0.6rem 0;
-}
-
-.drum-knobs {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.85rem;
 }
 
 @media (max-width: 1100px) {
