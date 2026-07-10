@@ -47,6 +47,7 @@ COPY --from=build /app/bot/dist ./bot/dist
 COPY --from=build /app/engine/dist ./engine/dist
 COPY --from=build /app/web/dist ./web/dist
 COPY --from=build /app/ui/dist /usr/share/nginx/html
+COPY --from=build /app/ui/dist /app/ui/dist
 
 COPY nginx-docker.conf /etc/nginx/conf.d/default.conf
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
