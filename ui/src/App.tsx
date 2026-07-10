@@ -603,11 +603,11 @@ function App() {
     }).catch(() => {});
   }, []);
 
-  const handleSavePattern = async (name: string) => {
+  const handleSavePattern = async (name: string): Promise<boolean> => {
     const pattern = currentPatternRef.current;
-    if (!pattern || !synthParamsRef.current) return;
+    if (!pattern || !synthParamsRef.current) return false;
     try {
-      await fetch(apiUrl('/patterns/save'), {
+      const res = await fetch(apiUrl('/patterns/save'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -619,7 +619,9 @@ function App() {
           drumMasterVolume,
         }),
       });
+      return res.ok;
     } catch { /* ignore */ }
+    return false;
   };
 
   const handleLoadSavedPattern = async (data: SavedPatternFull) => {
