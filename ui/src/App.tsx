@@ -2,11 +2,13 @@ import { useState, useCallback, useRef } from 'react';
 import Sequencer from './components/Sequencer';
 import Keyboard from './components/Keyboard';
 import SynthControls from './components/SynthControls';
+import DrumMachine from './components/DrumMachine';
 import { useWebSocket } from './hooks/useWebSocket';
-import { Pattern, SynthParameters, SavedPatternFull } from './types';
+import { Pattern, SynthParameters, SavedPatternFull, DrumState, DrumInstrument, DrumSettings } from './types';
 import './App.css';
 
 const DEFAULT_PARAMS: SynthParameters = {
+  gain: 1.0,
   oscillator: { type: 'sine', detune: 0 },
   filter: { frequency: 20000, q: 1, type: 'lowpass' },
   envelope: { attack: 0.01, decay: 0.1, sustain: 0.7, release: 0.3 },
@@ -91,23 +93,211 @@ function App() {
       const decay = p?.envelope.decay ?? 0.1;
       const sustainLvl = p?.envelope.sustain ?? 0.7;
       const release = p?.envelope.release ?? 0.3;
-      const volume = 0.15;
+      const vol = (p?.gain ?? 1.0) * 0.3;
 
       gain.gain.setValueAtTime(0, now);
-      gain.gain.linearRampToValueAtTime(volume, now + attack);
-      gain.gain.linearRampToValueAtTime(volume * sustainLvl, now + attack + decay);
+      gain.gain.linearRampToValueAtTime(vol, now + attack);
+      gain.gain.linearRampToValueAtTime(vol * sustainLvl, now + attack + decay);
 
       osc.start(now);
 
       if (duration) {
         const end = now + Math.max(duration, attack + decay + 0.01);
-        gain.gain.setValueAtTime(volume * sustainLvl, end - release);
+        gain.gain.setValueAtTime(vol * sustainLvl, end - release);
         gain.gain.exponentialRampToValueAtTime(0.001, end);
         osc.stop(end);
       } else {
         activeVoices.current.set(note, { osc, gain });
       }
     } catch {}
+  }
+
+  function playDrumHit(instrument: DrumInstrument, settings: DrumSettings) {
+    if (browserMutedRef.current) return;
+    try {
+      const ctx = getAudioContext();
+      if (ctx.state === 'suspended') ctx.resume();
+      const sampleRate = ctx.sampleRate;
+      const pcm = generateDrumPCM(instrument, settings, sampleRate);
+      let maxVal = 0;
+      for (let i = 0; i < pcm.length; i++) { const a = Math.abs(pcm[i]); if (a > maxVal) maxVal = a; }
+      console.log(`playDrumHit: ${instrument}, len=${pcm.length}, max=${maxVal.toFixed(4)}`);
+      if (maxVal < 0.01) { console.warn('Drum PCM too quiet, boosting'); for (let i = 0; i < pcm.length; i++) pcm[i] *= 10; }
+      const buffer = ctx.createBuffer(1, pcm.length, sampleRate);
+      buffer.getChannelData(0).set(pcm);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      const gainNode = ctx.createGain();
+      gainNode.gain.value = 1.0;
+      source.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      source.start();
+      console.log('playDrumHit: started');
+    } catch (e) {
+      console.error('playDrumHit error:', e);
+    }
+  }
+
+  function generateDrumPCM(instrument: DrumInstrument, settings: DrumSettings, sampleRate: number): Float32Array {
+    const vol = Math.max(0, Math.min(1, settings.volume));
+    const tone = Math.max(0, Math.min(1, settings.tone));
+    const extra = Math.max(0, Math.min(1, settings.extra));
+    switch (instrument) {
+      case 'kick': return genKick(vol, tone, extra, sampleRate);
+      case 'snare': return genSnare(vol, tone, extra, sampleRate);
+      case 'openHH': return genOpenHH(vol, tone, extra, sampleRate);
+      case 'closedHH': return genClosedHH(vol, tone, extra, sampleRate);
+      case 'ride': return genRide(vol, tone, extra, sampleRate);
+      case 'crash': return genCrash(vol, tone, extra, sampleRate);
+      case 'snare2': return genSnare2(vol, tone, extra, sampleRate);
+      case 'clap': return genClap(vol, tone, extra, sampleRate);
+    }
+  }
+
+  function genKick(volume: number, tone: number, extra: number, sr: number): Float32Array {
+    const startFreq = 60 + tone * 180;
+    const dur = 0.08 + extra * 0.42;
+    const len = Math.floor(sr * dur);
+    const out = new Float32Array(len);
+    let phase = 0;
+    const ratio = 30 / startFreq;
+    for (let i = 0; i < len; i++) {
+      const t = i / sr;
+      const freq = startFreq * Math.pow(ratio, t / dur);
+      phase += freq / sr;
+      const env = Math.exp(-t * 4 / dur);
+      out[i] = Math.sin(2 * Math.PI * phase) * env * volume;
+    }
+    return out;
+  }
+
+  function genSnare(volume: number, tone: number, extra: number, sr: number): Float32Array {
+    const bodyFreq = 150 + tone * 150;
+    const snappy = extra;
+    const dur = 0.12;
+    const len = Math.floor(sr * dur);
+    const out = new Float32Array(len);
+    let phase = 0;
+    for (let i = 0; i < len; i++) {
+      const t = i / sr;
+      phase += bodyFreq / sr;
+      const body = Math.sin(2 * Math.PI * phase);
+      const noise = Math.random() * 2 - 1;
+      const nd = Math.exp(-t * (5 + snappy * 20));
+      const bd = Math.exp(-t * 8);
+      out[i] = (body * bd * 0.4 + noise * nd * snappy) * volume;
+    }
+    return out;
+  }
+
+  function genOpenHH(volume: number, tone: number, extra: number, sr: number): Float32Array {
+    const dur = 0.05 + extra * 0.45;
+    const len = Math.floor(sr * dur);
+    const out = new Float32Array(len);
+    let prevNoise = 0;
+    for (let i = 0; i < len; i++) {
+      const t = i / sr;
+      const noise = Math.random() * 2 - 1;
+      const hpNoise = noise - prevNoise;
+      prevNoise = noise;
+      const env = Math.exp(-t * 5 / dur);
+      const brightness = 0.3 + tone * 0.7;
+      out[i] = hpNoise * env * volume * brightness * 1.5;
+    }
+    return out;
+  }
+
+  function genClosedHH(volume: number, tone: number, extra: number, sr: number): Float32Array {
+    const dur = 0.015 + (1 - extra) * 0.085;
+    const len = Math.floor(sr * dur);
+    const out = new Float32Array(len);
+    let prevNoise = 0;
+    for (let i = 0; i < len; i++) {
+      const t = i / sr;
+      const noise = Math.random() * 2 - 1;
+      const hpNoise = noise - prevNoise;
+      prevNoise = noise;
+      const env = Math.exp(-t * 12 / dur);
+      const brightness = 0.4 + tone * 0.6;
+      out[i] = hpNoise * env * volume * brightness * 1.5;
+    }
+    return out;
+  }
+
+  function genRide(volume: number, tone: number, extra: number, sr: number): Float32Array {
+    const fund = 800 + tone * 3200;
+    const brightness = extra;
+    const dur = 0.2;
+    const len = Math.floor(sr * dur);
+    const out = new Float32Array(len);
+    let p = 0, p3 = 0, p5 = 0;
+    for (let i = 0; i < len; i++) {
+      const t = i / sr;
+      p += fund / sr;
+      p3 += fund * 2.76 / sr;
+      p5 += fund * 4.51 / sr;
+      const a1 = Math.sin(2 * Math.PI * p);
+      const a2 = Math.sin(2 * Math.PI * p3) * 0.5 * brightness;
+      const a3 = Math.sin(2 * Math.PI * p5) * 0.25 * brightness * brightness;
+      const env = Math.exp(-t * 6);
+      out[i] = (a1 + a2 + a3) * env * volume * 0.6;
+    }
+    return out;
+  }
+
+  function genCrash(volume: number, tone: number, extra: number, sr: number): Float32Array {
+    const dur = 0.2 + extra * 1.0;
+    const len = Math.floor(sr * dur);
+    const out = new Float32Array(len);
+    let prevNoise = 0;
+    for (let i = 0; i < len; i++) {
+      const t = i / sr;
+      const noise = Math.random() * 2 - 1;
+      const hpNoise = noise - prevNoise;
+      prevNoise = noise;
+      const env = Math.exp(-t * 3 / dur);
+      const brightness = 0.2 + tone * 0.8;
+      out[i] = hpNoise * env * volume * brightness;
+    }
+    return out;
+  }
+
+  function genSnare2(volume: number, tone: number, extra: number, sr: number): Float32Array {
+    const bodyFreq = 200 + tone * 200;
+    const snappy = extra;
+    const dur = 0.12;
+    const len = Math.floor(sr * dur);
+    const out = new Float32Array(len);
+    let phase = 0;
+    for (let i = 0; i < len; i++) {
+      const t = i / sr;
+      phase += bodyFreq / sr;
+      const body = Math.sin(2 * Math.PI * phase);
+      const noise = Math.random() * 2 - 1;
+      const nd = Math.exp(-t * (5 + snappy * 20));
+      const bd = Math.exp(-t * 8);
+      out[i] = (body * bd * 0.35 + noise * nd * snappy) * volume;
+    }
+    return out;
+  }
+
+  function genClap(volume: number, _tone: number, extra: number, sr: number): Float32Array {
+    const dur = 0.25;
+    const len = Math.floor(sr * dur);
+    const out = new Float32Array(len);
+    const roomSamples = Math.floor((10 + extra * 80) * sr / 1000);
+    const numLayers = 5;
+    for (let layer = 0; layer < numLayers; layer++) {
+      const delay = layer * roomSamples;
+      for (let i = delay; i < len; i++) {
+        const t = (i - delay) / sr;
+        const noise = Math.random() * 2 - 1;
+        const env = Math.exp(-t * 25);
+        out[i] += noise * env * (1 / numLayers);
+      }
+    }
+    for (let i = 0; i < len; i++) out[i] *= volume * 0.8;
+    return out;
   }
 
   function stopBrowserNote(note: string) {
@@ -131,6 +321,20 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [selectedStep, setSelectedStep] = useState<number | null>(null);
+  const defaultDrumState = (): DrumState => ({
+    kick: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 } },
+    snare: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 } },
+    openHH: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 } },
+    closedHH: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 } },
+    ride: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 } },
+    crash: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 } },
+    snare2: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 } },
+    clap: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 } },
+  });
+  const [drumState, setDrumState] = useState<DrumState>(defaultDrumState);
+  const drumStateRef = useRef(drumState);
+  drumStateRef.current = drumState;
+  const [drumMasterVolume, setDrumMasterVolume] = useState(1.0);
   const currentPatternRef = useRef(currentPattern);
   currentPatternRef.current = currentPattern;
   const selectedStepRef = useRef(selectedStep);
@@ -146,6 +350,7 @@ function App() {
       case 'init':
         setSynthParams(message.data.synthParameters);
         setPatterns(message.data.patterns);
+        if (message.data.drumState) setDrumState(message.data.drumState);
         if (message.data.patterns.length > 0) {
           setCurrentPattern(message.data.patterns[0]);
         }
@@ -182,6 +387,49 @@ function App() {
         if (cur && cur.steps[stepIndex]?.note) {
           playBrowserNote(cur.steps[stepIndex].note!, 0.15);
         }
+        const ds = drumStateRef.current;
+        if (ds) {
+          for (const inst of Object.keys(ds) as DrumInstrument[]) {
+            const track = ds[inst];
+            if (track.steps[stepIndex]) {
+              playDrumHit(inst, track.settings);
+            }
+          }
+        }
+        break;
+      }
+      case 'drumStep': {
+        const { instrument: di, step: ds, active: da } = message.data;
+        setDrumState((prev) => {
+          const next = { ...prev };
+          next[di as DrumInstrument] = {
+            ...next[di as DrumInstrument],
+            steps: [...next[di as DrumInstrument].steps],
+          };
+          next[di as DrumInstrument].steps[ds as number] = da as boolean;
+          return next;
+        });
+        break;
+      }
+      case 'drumSettings': {
+        const { instrument: dsi, settings: dss } = message.data;
+        setDrumState((prev) => {
+          const next = { ...prev };
+          const inst = dsi as DrumInstrument;
+          next[inst] = {
+            ...next[inst],
+            settings: { ...next[inst].settings, ...dss },
+          };
+          return next;
+        });
+        break;
+      }
+      case 'drumReset': {
+        setDrumState(defaultDrumState());
+        break;
+      }
+      case 'drumFullState': {
+        if (message.data.drumState) setDrumState(message.data.drumState);
         break;
       }
     }
@@ -273,6 +521,51 @@ function App() {
     });
   };
 
+  const handleDrumStepToggle = useCallback((instrument: DrumInstrument, step: number, active: boolean) => {
+    playDrumHit(instrument, drumStateRef.current[instrument].settings);
+    setDrumState((prev) => {
+      const next = { ...prev };
+      next[instrument] = { ...next[instrument], steps: [...next[instrument].steps] };
+      next[instrument].steps[step] = active;
+      return next;
+    });
+    fetch('http://localhost:3001/drum/step', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instrument, step, active }),
+    }).catch(() => {});
+  }, []);
+
+  const handleDrumSettingsChange = useCallback((instrument: DrumInstrument, settings: Partial<DrumSettings>) => {
+    setDrumState((prev) => {
+      const next = { ...prev };
+      next[instrument] = {
+        ...next[instrument],
+        settings: { ...next[instrument].settings, ...settings },
+      };
+      return next;
+    });
+    fetch('http://localhost:3001/drum/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instrument, settings }),
+    }).catch(() => {});
+  }, []);
+
+  const handleDrumReset = useCallback(() => {
+    setDrumState(defaultDrumState());
+    fetch('http://localhost:3001/drum/reset', { method: 'POST' }).catch(() => {});
+  }, []);
+
+  const handleDrumMasterVolumeChange = useCallback((volume: number) => {
+    setDrumMasterVolume(volume);
+    fetch('http://localhost:3001/drum/master-volume', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ volume }),
+    }).catch(() => {});
+  }, []);
+
   const handleSavePattern = async (name: string) => {
     const pattern = currentPatternRef.current;
     if (!pattern || !synthParamsRef.current) return;
@@ -285,6 +578,8 @@ function App() {
           steps: pattern.steps,
           synthParams: synthParamsRef.current,
           tempo: pattern.tempo,
+          drumState: drumStateRef.current,
+          drumMasterVolume,
         }),
       });
     } catch { /* ignore */ }
@@ -297,28 +592,45 @@ function App() {
     setCurrentPattern(updated);
     setPatterns((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
     setSelectedStep(null);
+    if (data.drumState && typeof data.drumState === 'object') {
+      setDrumState(data.drumState);
+      await fetch('http://localhost:3001/drum/state', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state: data.drumState }),
+      }).catch(() => {});
+    }
+    if (data.drumMasterVolume !== undefined) {
+      setDrumMasterVolume(data.drumMasterVolume);
+      await fetch('http://localhost:3001/drum/master-volume', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ volume: data.drumMasterVolume }),
+      }).catch(() => {});
+    }
     if (data.synthParams) {
       setSynthParams(data.synthParams);
       await fetch('http://localhost:3001/synth/parameters', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data.synthParams),
-      });
+      }).catch(() => {});
     }
     await fetch(`http://localhost:3001/patterns/${pattern.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updated),
-    });
+    }).catch(() => {});
     await fetch('http://localhost:3001/sequencer/tempo', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tempo: data.tempo }),
-    });
+    }).catch(() => {});
   };
 
   const handleReset = () => {
     setSynthParams(DEFAULT_PARAMS);
+    handleDrumReset();
     if (currentPatternRef.current) {
       const pattern = currentPatternRef.current;
       const cleared = { ...pattern };
@@ -385,6 +697,17 @@ function App() {
           />
 
           <Keyboard onNotePlay={handleNotePlay} onNoteRelease={handleNoteRelease} />
+
+          <DrumMachine
+            drumState={drumState}
+            isPlaying={isPlaying}
+            currentStep={currentStep}
+            onStepToggle={handleDrumStepToggle}
+            onSettingsChange={handleDrumSettingsChange}
+            onReset={handleDrumReset}
+            drumMasterVolume={drumMasterVolume}
+            onMasterVolumeChange={handleDrumMasterVolumeChange}
+          />
         </div>
 
         <div className="right-panel">

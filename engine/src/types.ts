@@ -1,6 +1,7 @@
 export type OscillatorType = 'sine' | 'square' | 'sawtooth' | 'triangle';
 
 export interface SynthParameters {
+  gain: number;
   oscillator: {
     type: OscillatorType;
     detune: number;
@@ -43,6 +44,21 @@ export interface Pattern {
   steps: SequencerStep[];
   tempo: number;
 }
+
+export type DrumInstrument = 'kick' | 'snare' | 'openHH' | 'closedHH' | 'ride' | 'crash' | 'snare2' | 'clap';
+
+export interface DrumSettings {
+  volume: number;
+  tone: number;
+  extra: number;
+}
+
+export interface DrumTrack {
+  steps: boolean[];
+  settings: DrumSettings;
+}
+
+export type DrumState = Record<DrumInstrument, DrumTrack>;
 
 export interface Sample {
   id: string;

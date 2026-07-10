@@ -13,6 +13,7 @@ export class Synthesizer {
 
   private getDefaultParameters(): SynthParameters {
     return {
+      gain: 1.0,
       oscillator: { type: 'sine', detune: 0 },
       filter: { frequency: 20000, q: 1, type: 'lowpass' },
       envelope: { attack: 0.1, decay: 0.2, sustain: 0.5, release: 1.0 },
@@ -114,9 +115,10 @@ export class Synthesizer {
     samples = Synthesizer.applyADSR(samples, sampleRate, attack, decay, sustain, release, duration);
     samples = Synthesizer.applyLowpass(samples, sampleRate, this.parameters.filter.frequency);
 
-    const gain = Math.max(0, Math.min(1, velocity));
+    const master = Math.max(0, Math.min(2, this.parameters.gain));
+    const vol = Math.max(0, Math.min(1, velocity));
     for (let i = 0; i < samples.length; i++) {
-      samples[i] *= gain * 0.5;
+      samples[i] *= vol * master * 0.5;
     }
 
     return samples;

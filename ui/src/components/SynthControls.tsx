@@ -80,6 +80,21 @@ export default function SynthControls({
       <h2>Synth Controls</h2>
 
       <section className="control-section">
+        <h3>Master</h3>
+        <div className="control">
+          <label>Gain: {parameters.gain.toFixed(2)}</label>
+          <input
+            type="range"
+            min="0"
+            max="2"
+            step="0.01"
+            value={parameters.gain}
+            onChange={(e) => onParameterChange({ gain: Number(e.target.value) })}
+          />
+        </div>
+      </section>
+
+      <section className="control-section">
         <h3>Oscillator</h3>
         <div className="control">
           <label>Type <InfoTip id="osc-type" /></label>

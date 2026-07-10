@@ -5,7 +5,7 @@ import * as http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
 import dotenv from 'dotenv';
-import { Synthesizer, Sequencer, SamplePlayer, Pattern, SynthParameters, DiscordAudioStreamer } from '@discord-synth/engine';
+import { Synthesizer, Sequencer, SamplePlayer, Pattern, SynthParameters, DrumState, DrumInstrument, DiscordAudioStreamer, DrumSynthesizer } from '@discord-synth/engine';
 
 dotenv.config();
 
@@ -31,6 +31,22 @@ const streamingState = {
   lastUpdate: 0
 };
 
+const DRUM_INSTRUMENTS: DrumInstrument[] = ['kick', 'snare', 'openHH', 'closedHH', 'ride', 'crash', 'snare2', 'clap'];
+
+function createDefaultDrumState(): DrumState {
+  const state = {} as DrumState;
+  for (const inst of DRUM_INSTRUMENTS) {
+    state[inst] = {
+      steps: new Array(16).fill(false),
+      settings: { volume: 1.0, tone: 0.5, extra: 0.5 },
+    };
+  }
+  return state;
+}
+
+let drumState: DrumState = createDefaultDrumState();
+let drumMasterVolume = 1.0;
+
 interface SavedPatternData {
   id: string;
   name: string;
@@ -39,6 +55,8 @@ interface SavedPatternData {
   steps: Array<{ active: boolean; note?: string; velocity: number }>;
   synthParams: SynthParameters;
   tempo: number;
+  drumState: DrumState;
+  drumMasterVolume: number;
 }
 
 const SAVED_PATTERNS_FILE = path.join(__dirname, '..', 'saved-patterns.json');
@@ -279,9 +297,76 @@ app.post('/synth/note-off', (req, res) => {
   res.json({ success: true });
 });
 
+// Drum machine
+app.get('/drum/state', (req, res) => {
+  res.json(drumState);
+});
+
+app.post('/drum/step', (req, res) => {
+  initAudioEngine();
+  const { instrument, step, active } = req.body as { instrument: DrumInstrument; step: number; active: boolean };
+  if (!DRUM_INSTRUMENTS.includes(instrument) || step < 0 || step > 15) {
+    return res.status(400).json({ error: 'Invalid instrument or step' });
+  }
+  drumState[instrument].steps[step] = active;
+  const activeCount = DRUM_INSTRUMENTS.reduce((sum, inst) => sum + drumState[inst].steps.filter(Boolean).length, 0);
+  debugLog(`POST /drum/step: ${instrument}[${step}] = ${active}, totalActive=${activeCount}`);
+  broadcastToClients({ type: 'drumStep', data: { instrument, step, active } });
+  if (sequencer && sequencer.getIsPlaying()) {
+    schedulePatternAudio();
+  }
+  res.json({ success: true });
+});
+
+app.post('/drum/settings', (req, res) => {
+  initAudioEngine();
+  const { instrument, settings } = req.body as { instrument: DrumInstrument; settings: { volume?: number; tone?: number; extra?: number } };
+  if (!DRUM_INSTRUMENTS.includes(instrument)) {
+    return res.status(400).json({ error: 'Invalid instrument' });
+  }
+  const s = drumState[instrument].settings;
+  if (settings.volume !== undefined) s.volume = Math.max(0, Math.min(1, settings.volume));
+  if (settings.tone !== undefined) s.tone = Math.max(0, Math.min(1, settings.tone));
+  if (settings.extra !== undefined) s.extra = Math.max(0, Math.min(1, settings.extra));
+  broadcastToClients({ type: 'drumSettings', data: { instrument, settings: { ...s } } });
+  if (sequencer && sequencer.getIsPlaying()) {
+    schedulePatternAudio();
+  }
+  res.json({ success: true });
+});
+
+app.put('/drum/state', (req, res) => {
+  const { state } = req.body as { state: DrumState };
+  if (!state) return res.status(400).json({ error: 'state is required' });
+  drumState = state;
+  broadcastToClients({ type: 'drumFullState', data: { drumState: state } });
+  if (sequencer && sequencer.getIsPlaying()) {
+    schedulePatternAudio();
+  }
+  res.json({ success: true });
+});
+
+app.post('/drum/reset', (req, res) => {
+  drumState = createDefaultDrumState();
+  broadcastToClients({ type: 'drumReset' });
+  if (sequencer && sequencer.getIsPlaying()) {
+    schedulePatternAudio();
+  }
+  res.json({ success: true });
+});
+
+app.post('/drum/master-volume', (req, res) => {
+  const { volume } = req.body as { volume: number };
+  drumMasterVolume = Math.max(0, Math.min(2, volume));
+  if (sequencer && sequencer.getIsPlaying()) {
+    schedulePatternAudio();
+  }
+  res.json({ success: true });
+});
+
 // Saved patterns (persistent storage) - must be before generic :id routes
 app.post('/patterns/save', (req, res) => {
-  const { name, steps, synthParams, tempo } = req.body;
+  const { name, steps, synthParams, tempo, drumState: ds, drumMasterVolume: dmv } = req.body;
   if (!name || !steps) {
     return res.status(400).json({ error: 'name and steps are required' });
   }
@@ -295,6 +380,8 @@ app.post('/patterns/save', (req, res) => {
     steps,
     synthParams: synthParams || null,
     tempo: tempo || 120,
+    drumState: ds || drumState,
+    drumMasterVolume: dmv !== undefined ? dmv : drumMasterVolume,
   };
   saved.push(entry);
   saveSavedPatterns(saved);
@@ -381,6 +468,8 @@ app.post('/sequencer/play', (req, res) => {
   sequencer!.loadPattern(pattern);
   sequencer!.play();
 
+  const drumCount = DRUM_INSTRUMENTS.reduce((sum, inst) => sum + drumState[inst].steps.filter(Boolean).length, 0);
+  debugLog(`POST /sequencer/play: patternId=${patternId}, drumActiveSteps=${drumCount}`);
   broadcastPatternAudio();
   broadcastToClients({ type: 'sequencerPlay', data: { patternId } });
   res.json({ success: true });
@@ -463,6 +552,7 @@ wss.on('connection', (ws) => {
       patterns: Array.from(patterns.values()),
       samples: samplePlayer!.getSamples(),
       streamingState: streamingState,
+      drumState,
     },
   }));
 
@@ -477,10 +567,23 @@ wss.on('connection', (ws) => {
   });
 });
 
+const debugLog = (msg: string) => {
+  const line = `[${new Date().toISOString()}] ${msg}`;
+  console.log(line);
+  try { fs.appendFileSync(path.join(__dirname, '..', 'debug.log'), line + '\n'); } catch {}
+};
+
 function renderPatternAudio(pattern: Pattern): string | null {
   try {
     const sampleRate = 48000;
-    const beatsPerStep = 60 / pattern.tempo / 4;
+    const tempo = Math.max(20, Math.min(400, pattern.tempo || 120));
+    const drumActiveSteps = DRUM_INSTRUMENTS.reduce((sum, inst) => {
+      const track = drumState[inst];
+      if (!track || !track.steps) return sum;
+      return sum + track.steps.filter(Boolean).length;
+    }, 0);
+    debugLog(`renderPatternAudio: tempo=${tempo}, drumActiveSteps=${drumActiveSteps}`);
+    const beatsPerStep = 60 / tempo / 4;
     const stepDuration = beatsPerStep;
     const totalSamples = Math.floor(16 * stepDuration * sampleRate);
     const fullPCM = new Float32Array(totalSamples);
@@ -497,17 +600,25 @@ function renderPatternAudio(pattern: Pattern): string | null {
       }
     }
 
-    let maxAmp = 0;
-    for (let i = 0; i < fullPCM.length; i++) {
-      const abs = Math.abs(fullPCM[i]);
-      if (abs > maxAmp) maxAmp = abs;
+    // Mix in drum audio (4x boost, then soft-clip master)
+    const drumPCM = DrumSynthesizer.renderPattern(drumState, pattern.tempo, sampleRate);
+    let drumMax = 0;
+    for (let i = 0; i < drumPCM.length; i++) { const a = Math.abs(drumPCM[i]); if (a > drumMax) drumMax = a; }
+    debugLog(`renderPatternAudio: drumPCM max=${drumMax.toFixed(4)}, length=${drumPCM.length}`);
+    for (let i = 0; i < drumPCM.length && i < totalSamples; i++) {
+      fullPCM[i] += drumPCM[i] * 4 * drumMasterVolume;
     }
-    const normScale = maxAmp > 0 ? Math.min(0.95 / maxAmp, 3) : 1;
+
+    // Soft-clip master instead of hard normalization
+    for (let i = 0; i < fullPCM.length; i++) {
+      if (fullPCM[i] > 0.85) fullPCM[i] = 0.85 + (fullPCM[i] - 0.85) * 0.15;
+      if (fullPCM[i] < -0.85) fullPCM[i] = -0.85 + (fullPCM[i] + 0.85) * 0.15;
+    }
 
     const stereoLen = fullPCM.length * 2;
     const int16 = new Int16Array(stereoLen);
     for (let i = 0; i < fullPCM.length; i++) {
-      const val = Math.max(-32768, Math.min(32767, Math.round(fullPCM[i] * 32768 * normScale)));
+      const val = Math.max(-32768, Math.min(32767, Math.round(fullPCM[i] * 60000)));
       int16[i * 2] = val;
       int16[i * 2 + 1] = val;
     }

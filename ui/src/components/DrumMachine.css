@@ -1,0 +1,159 @@
+.drum-machine {
+  background: #2a2a2a;
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+.drum-machine-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.drum-machine-header h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.drum-reset-btn {
+  background: none;
+  border: 1px solid #4a4a4a;
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  font-size: 1.2rem;
+  cursor: pointer;
+  line-height: 1;
+  color: #aaa;
+  transition: border-color 0.2s;
+}
+
+.drum-reset-btn:hover {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.drum-machine-body {
+  display: flex;
+  gap: 1.5rem;
+  align-items: stretch;
+}
+
+.drum-grid-wrapper {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.drum-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  flex: 1;
+}
+
+.drum-row {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.15s;
+  flex: 1;
+  min-height: 0;
+}
+
+.drum-row.selected {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.drum-row-header {
+  cursor: default;
+  margin-bottom: 4px;
+  flex: 0 0 auto;
+}
+
+.drum-label-cell {
+  width: 80px;
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-align: right;
+  padding-right: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #888;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drum-step-indicator {
+  flex: 1;
+  min-width: 20px;
+  min-height: 22px;
+  text-align: center;
+  font-size: 0.65rem;
+  color: #555;
+  line-height: 22px;
+}
+
+.drum-step-indicator.active {
+  color: #22c55e;
+  font-weight: bold;
+}
+
+.drum-cell {
+  flex: 1;
+  min-width: 20px;
+  min-height: 22px;
+  border: 1px solid #3a3a3a;
+  border-radius: 3px;
+  background: #1e1e1e;
+  cursor: pointer;
+  transition: all 0.15s;
+  padding: 0;
+}
+
+.drum-cell.active {
+  opacity: 0.85;
+  border-color: transparent;
+}
+
+.drum-cell:hover {
+  border-color: #666;
+  opacity: 0.7;
+}
+
+.drum-cell.current {
+  box-shadow: 0 0 6px #22c55e88;
+  border-color: #22c55e;
+}
+
+.drum-controls {
+  flex-shrink: 0;
+  padding: 1rem;
+  background: #1e1e1e;
+  border-radius: 8px;
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.drum-controls-header {
+  margin-bottom: 0.75rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.drum-knobs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}

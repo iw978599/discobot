@@ -1,14 +1,15 @@
 # Discord Synth Bot
 
-A Discord bot with a web-based UI for creating music using synthesis and sequencing. Control a 16-step sequencer and synthesizer from a web interface or Discord slash commands. Audio plays through the Discord voice channel in real time.
+A Discord bot with a web-based UI for creating music using synthesis, sequencing, and drums. Control a 16-step sequencer, synthesizer, and drum machine from a web interface or Discord slash commands. Audio plays through the Discord voice channel in real time.
 
 ## Features
 
 - **16-step Sequencer**: Step grid with note assignment via piano keyboard, monophonic mode
-- **Synthesizer**: 4 waveforms (sine, square, sawtooth, triangle), detune, resonant lowpass filter, ADSR envelope, delay effect
-- **Browser Audio**: Web Audio API feedback that respects synth parameters, independent mute toggle
-- **Discord Audio Streaming**: Pattern rendered to 48kHz PCM, sent over WebSocket, played through bot voice connection with loop
-- **Pattern Persistence**: Save/load/delete patterns with name, stored in `saved-patterns.json`
+- **Synthesizer**: 4 waveforms (sine, square, sawtooth, triangle), detune, resonant lowpass filter, ADSR envelope, delay effect, master gain
+- **Drum Machine**: 8 instruments (kick, snare, open/closed hi-hat, ride, crash, snare 2, clap), 16-step toggle grid with per-instrument volume/tone/extra controls, master volume
+- **Browser Audio**: Web Audio API feedback for synth and drums that respects parameters, independent mute toggle
+- **Discord Audio Streaming**: Pattern rendered to 48kHz PCM with soft-clipped master mix, sent over WebSocket, played through bot voice connection with loop
+- **Pattern Persistence**: Save/load/delete patterns with name, stores all synth params, drum state, and master volumes in `saved-patterns.json`
 - **Real-time Sync**: All connected clients stay synchronized via WebSocket
 - **Tempo Control**: LED-style BPM display, click-to-edit, live updates to sequencer
 - **Hybrid Control**: Web UI or Discord slash commands
@@ -98,12 +99,13 @@ Starts:
 ## Web UI
 
 - **Sequencer grid**: 16 steps, click to select (amber), piano key assigns note (blue)
-- **Piano keyboard**: 3 octaves (C3–F5), click to assign note to selected step
-- **Synth controls**: Oscillator, filter, envelope, delay — all with hover info tooltips
+- **Piano keyboard**: 3 octaves (C3–F5), responsive width (keys scale to container)
+- **Synth controls**: Oscillator, filter, envelope, delay, master gain — all with hover info tooltips
+- **Drum machine**: 8×16 toggle grid with instrument selection, per-instrument volume/tone/extra knobs, master volume knob
 - **Save/Load/Manage**: Save patterns with name confirmation, load from dropdown (5 recent + show all), delete from modal
 - **Tempo**: Red LED display, click to edit
 - **Browser mute**: Toggle browser audio without affecting Discord
-- **Reset**: Clear pattern + reset synth to defaults
+- **Reset**: Clear pattern + reset synth + reset drums
 
 ## Tech Stack
 
@@ -128,13 +130,16 @@ npm run dev:ui       # Web UI only (Vite)
 
 ### Working
 - Step sequencer with visual indicator lights
-- Piano keyboard note assignment to steps
-- Synth controls with real-time parameter updates
-- Pattern save/load/delete (JSON persistence)
-- Discord voice playback (full pattern rendered, looped)
+- Piano keyboard note assignment to steps, responsive scaling
+- Synth controls with real-time parameter updates and master gain
+- Drum machine with 8 instruments, 16-step toggle grid, per-instrument controls, master volume
+- Drum browser preview on cell click
+- Drum playback during sequencer playback in both browser and Discord
+- Pattern save/load/delete (JSON persistence) — stores all synth params, drum state, and master volumes
+- Discord voice playback (full pattern rendered, soft-clipped master mix, looped)
 - Stop in UI stops bot playback
 - Tempo control with live BPM updates
-- Browser audio with synth parameter respect
+- Browser audio with synth and drum parameter respect
 - Multi-client WebSocket sync
 - Reset button
 
