@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# Node
+ui/node_modules/
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# Git
+.git/
+.gitignore
+
+# OS / editors
+.DS_Store
+.vscode/
+.idea/
+
+# Build outputs
+ui/dist/
+dist/
+build/
+
+# Env / secrets
+.env
+.env.*
+
+# Tests / coverage
+.coverage
+.pytest_cache/
+htmlcov/
+coverage/
+
+# Docker
+Dockerfile*
+docker-compose*.yml
