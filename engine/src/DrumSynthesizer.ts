@@ -172,38 +172,39 @@ export class DrumSynthesizer {
   }
 
   private static renderRide(volume: number, tone: number, extra: number, sampleRate: number): Float32Array {
-    const base = 520 + tone * 420;
-    const dur = 0.8 + extra * 2.2;
+    const base = 420 + tone * 260;
+    const dur = 0.9 + extra * 1.9;
     const length = Math.floor(sampleRate * dur);
     const out = new Float32Array(length);
-    let p1 = 0, p2 = 0, p3 = 0, p4 = 0, p5 = 0;
+    let p1 = 0, p2 = 0, p3 = 0, p4 = 0;
+    let lpNoise = 0;
     let prevNoise = 0;
-    const bellAmt = 0.18 + tone * 0.32;
-    const shimmerAmt = 0.35 + extra * 0.55;
+    const bellAmt = 0.08 + tone * 0.14;
+    const shimmerAmt = 0.42 + tone * 0.32;
     for (let i = 0; i < length; i++) {
       const t = i / sampleRate;
       p1 += base / sampleRate;
-      p2 += base * 1.37 / sampleRate;
-      p3 += base * 1.83 / sampleRate;
-      p4 += base * 2.91 / sampleRate;
-      p5 += base * 4.07 / sampleRate;
+      p2 += base * 1.51 / sampleRate;
+      p3 += base * 2.17 / sampleRate;
+      p4 += base * 2.89 / sampleRate;
       const partials = (
-        Math.sin(2 * Math.PI * p1) * 0.26 +
-        Math.sin(2 * Math.PI * p2) * 0.22 +
+        Math.sin(2 * Math.PI * p1) * 0.3 +
+        Math.sin(2 * Math.PI * p2) * 0.24 +
         Math.sin(2 * Math.PI * p3) * 0.2 +
-        Math.sin(2 * Math.PI * p4) * 0.16 +
-        Math.sin(2 * Math.PI * p5) * 0.12
+        Math.sin(2 * Math.PI * p4) * 0.14
       );
       const noise = Math.random() * 2 - 1;
+      lpNoise = lpNoise * 0.9 + noise * 0.1;
       const hpNoise = noise - prevNoise;
       prevNoise = noise;
-      const stickEnv = Math.exp(-t * 55);
-      const bodyEnv = Math.exp(-t * (1.9 / dur));
-      const tailEnv = Math.exp(-t * (0.95 / dur));
-      const bell = Math.sin(2 * Math.PI * p1 * 0.5) * Math.exp(-t * 3.4) * bellAmt;
-      const stick = hpNoise * stickEnv * (0.42 + tone * 0.28);
-      const shimmer = (partials * bodyEnv + hpNoise * tailEnv * 0.45) * shimmerAmt;
-      out[i] = Math.tanh((stick + shimmer + bell) * 1.25) * volume * 0.82;
+      const stickEnv = Math.exp(-t * 72);
+      const bodyEnv = Math.exp(-t * (1.45 / dur));
+      const tailEnv = Math.exp(-t * (0.72 / dur));
+      const bell = Math.sin(2 * Math.PI * p4) * Math.exp(-t * 4.2) * bellAmt;
+      const stick = hpNoise * stickEnv * (0.22 + tone * 0.16);
+      const shimmer = partials * bodyEnv * shimmerAmt;
+      const wash = lpNoise * tailEnv * (0.2 + extra * 0.25);
+      out[i] = Math.tanh((stick + shimmer + wash + bell) * 1.08) * volume * 0.78;
     }
     return out;
   }
@@ -264,21 +265,21 @@ export class DrumSynthesizer {
   }
 
   private static renderClap(volume: number, tone: number, extra: number, sampleRate: number): Float32Array {
-    const dur = 0.24;
+    const dur = 0.17 + extra * 0.16;
     const length = Math.floor(sampleRate * dur);
     const out = new Float32Array(length);
-    const spreadMs = 8 + extra * 55;
-    const delays = [0, 0.008, 0.017, 0.03].map((base) => Math.floor((base + spreadMs / 1000 * base) * sampleRate));
-    for (const delay of delays) {
-      for (let i = delay; i < length; i++) {
-        const t = (i - delay) / sampleRate;
-        const noise = Math.random() * 2 - 1;
-        const env = Math.exp(-t * (26 + tone * 10));
-        out[i] += noise * env * 0.28;
-      }
-    }
+    let lpNoise = 0;
+    const bodyFreq = 170 + tone * 130;
+    const decay = 26 - extra * 10;
     for (let i = 0; i < length; i++) {
-      out[i] = Math.tanh(out[i] * 1.4) * volume * 0.72;
+      const t = i / sampleRate;
+      const noise = Math.random() * 2 - 1;
+      lpNoise = lpNoise * 0.82 + noise * 0.18;
+      const hpNoise = noise - lpNoise;
+      const attack = Math.min(t / 0.0018, 1);
+      const env = attack * Math.exp(-t * decay);
+      const body = Math.sin(2 * Math.PI * bodyFreq * t) * Math.exp(-t * 42) * 0.08;
+      out[i] = Math.tanh((hpNoise * 0.95 + noise * 0.18) * env + body) * volume * 0.82;
     }
     return out;
   }
