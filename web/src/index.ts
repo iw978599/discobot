@@ -138,6 +138,14 @@ function initAudioEngine() {
   }
 }
 
+function schedulePatternAudioForPlayingSynths() {
+  for (const [id, synthData] of synths) {
+    if (synthData?.sequencer?.getIsPlaying()) {
+      schedulePatternAudio(id);
+    }
+  }
+}
+
 const debugLog = (msg: string) => {
   const line = `[${new Date().toISOString()}] ${msg}`;
   console.log(line);
@@ -327,13 +335,7 @@ app.post('/drum/step', (req, res) => {
   const activeCount = DRUM_INSTRUMENTS.reduce((sum, inst) => sum + drumState[inst].steps.filter(Boolean).length, 0);
   debugLog(`POST /drum/step: ${instrument}[${step}] = ${active}, totalActive=${activeCount}`);
   broadcastToClients({ type: 'drumStep', data: { instrument, step, active } });
-  for (const [id] of synths) {
-    const synthData = synths.get(id);
-    if (synthData?.sequencer?.getIsPlaying()) {
-      schedulePatternAudio(id);
-      break;
-    }
-  }
+  schedulePatternAudioForPlayingSynths();
   res.json({ success: true });
 });
 
@@ -348,13 +350,7 @@ app.post('/drum/settings', (req, res) => {
   if (settings.tone !== undefined) s.tone = clamp(settings.tone, 0, 1);
   if (settings.extra !== undefined) s.extra = clamp(settings.extra, 0, 1);
   broadcastToClients({ type: 'drumSettings', data: { instrument, settings: { ...s } } });
-  for (const [id] of synths) {
-    const synthData = synths.get(id);
-    if (synthData?.sequencer?.getIsPlaying()) {
-      schedulePatternAudio(id);
-      break;
-    }
-  }
+  schedulePatternAudioForPlayingSynths();
   res.json({ success: true });
 });
 
@@ -363,39 +359,21 @@ app.put('/drum/state', (req, res) => {
   if (!state) return res.status(400).json({ error: 'state is required' });
   drumState = state;
   broadcastToClients({ type: 'drumFullState', data: { drumState: state } });
-  for (const [id] of synths) {
-    const synthData = synths.get(id);
-    if (synthData?.sequencer?.getIsPlaying()) {
-      schedulePatternAudio(id);
-      break;
-    }
-  }
+  schedulePatternAudioForPlayingSynths();
   res.json({ success: true });
 });
 
 app.post('/drum/reset', (req, res) => {
   drumState = createDefaultDrumState();
   broadcastToClients({ type: 'drumReset' });
-  for (const [id] of synths) {
-    const synthData = synths.get(id);
-    if (synthData?.sequencer?.getIsPlaying()) {
-      schedulePatternAudio(id);
-      break;
-    }
-  }
+  schedulePatternAudioForPlayingSynths();
   res.json({ success: true });
 });
 
 app.post('/drum/master-volume', (req, res) => {
   const { volume } = req.body as { volume: number };
   drumMasterVolume = clamp(volume, 0, 2);
-  for (const [id] of synths) {
-    const synthData = synths.get(id);
-    if (synthData?.sequencer?.getIsPlaying()) {
-      schedulePatternAudio(id);
-      break;
-    }
-  }
+  schedulePatternAudioForPlayingSynths();
   res.json({ success: true });
 });
 

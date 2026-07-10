@@ -212,6 +212,28 @@ function App() {
         }));
         break;
       }
+      case 'synthCreated': {
+        const { synthId, pattern, synthParams } = message.data;
+        setSynths(prev => {
+          if (prev.some(s => s.id === synthId)) return prev;
+          return [...prev, {
+            id: synthId,
+            pattern,
+            patterns: pattern ? [pattern] : [],
+            synthParams,
+            isPlaying: false,
+            currentStep: 0,
+            selectedStep: null,
+            octaveShift: 0,
+          }];
+        });
+        break;
+      }
+      case 'synthRemoved': {
+        const { synthId } = message.data;
+        setSynths(prev => prev.filter(s => s.id !== synthId));
+        break;
+      }
       case 'sequencerPlay': {
         const { synthId } = message.data;
         setSynths(prev => prev.map(s =>
@@ -303,16 +325,19 @@ function App() {
       });
       if (res.ok) {
         const data = await res.json();
-        setSynths(prev => [...prev, {
-          id: 2,
-          pattern: data.pattern,
-          patterns: data.patterns || [],
-          synthParams: data.synthParams,
-          isPlaying: false,
-          currentStep: 0,
-          selectedStep: null,
-          octaveShift: 0,
-        }]);
+        setSynths(prev => {
+          if (prev.some(s => s.id === 2)) return prev;
+          return [...prev, {
+            id: 2,
+            pattern: data.pattern,
+            patterns: data.patterns || [],
+            synthParams: data.synthParams,
+            isPlaying: false,
+            currentStep: 0,
+            selectedStep: null,
+            octaveShift: 0,
+          }];
+        });
       }
     } catch (error) {
       console.error('Failed to add synth:', error);
@@ -405,7 +430,9 @@ function App() {
   }, [synthAudio]);
 
   const handleNoteRelease = useCallback(async (synthId: number, note: string) => {
-    synthAudio.stopNote(note, synthsRef.current.find(s => s.id === synthId)?.synthParams!);
+    const synthParams = synthsRef.current.find(s => s.id === synthId)?.synthParams;
+    if (!synthParams) return;
+    synthAudio.stopNote(note, synthParams);
 
     await fetch(apiUrl(`/synth/${synthId}/note-off`), {
       method: 'POST',

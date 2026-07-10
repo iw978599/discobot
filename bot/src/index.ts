@@ -364,16 +364,15 @@ async function handleNote(interaction: ChatInputCommandInteraction) {
 
 async function handleTempo(interaction: ChatInputCommandInteraction) {
   const bpm = interaction.options.getNumber('bpm', true);
-  const synthId = interaction.options.getInteger('synth') || 1;
 
   try {
-    await fetch(`${WEB_API_URL}/synth/${synthId}/tempo`, {
+    await fetch(`${WEB_API_URL}/tempo`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tempo: bpm }),
     });
 
-    await interaction.reply(`Set Synth ${synthId} tempo to ${bpm} BPM`);
+    await interaction.reply(`Set global tempo to ${bpm} BPM`);
   } catch (error) {
     console.error('Error setting tempo:', error);
     await interaction.reply('Failed to set tempo');
