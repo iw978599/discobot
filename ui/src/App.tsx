@@ -286,8 +286,9 @@ function App() {
   const handleSavePattern = async (name: string) => {
     const pattern = currentPatternRef.current;
     if (!pattern || !synthParamsRef.current) return;
+
     try {
-      await fetch(apiUrl('/patterns/save'), {
+      const response = await fetch(apiUrl('/patterns/save'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -299,7 +300,22 @@ function App() {
           drumMasterVolume,
         }),
       });
-    } catch { /* ignore */ }
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('Failed to save pattern:', {
+          status: response.status,
+          error,
+        });
+        // TODO: Show user notification
+      }
+    } catch (error) {
+      console.error('Pattern save error:', {
+        error: error instanceof Error ? error.message : String(error),
+        patternName: name,
+      });
+      // TODO: Show user notification
+    }
   };
 
   const handleLoadSavedPattern = async (data: SavedPatternFull) => {

@@ -133,7 +133,12 @@ export function useSynthAudio() {
         activeVoices.current.set(note, { osc, gain });
       }
     } catch (error) {
-      console.error(`Error playing note ${note}:`, error);
+      console.error('Synth playback error:', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        note,
+        duration,
+      });
     }
   }
 
@@ -153,7 +158,10 @@ export function useSynthAudio() {
 
       activeVoices.current.delete(note);
     } catch (error) {
-      console.error(`Error stopping note ${note}:`, error);
+      console.error('Note release error:', {
+        error: error instanceof Error ? error.message : String(error),
+        note,
+      });
     }
   }
 

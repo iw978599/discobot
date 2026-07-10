@@ -11,3 +11,4 @@ export { audioContextManager, ensureAudioContext } from './AudioContextManager';
 export * from './types';
 export * from './utils';
 export * from './constants';
+export * from './errors';

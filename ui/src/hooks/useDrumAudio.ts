@@ -23,7 +23,13 @@ export function useDrumAudio() {
     try {
       const ctx = getAudioContext();
       if (ctx.state === 'suspended') {
-        ctx.resume().catch((err) => console.error('Failed to resume AudioContext:', err));
+        ctx.resume().catch((err) => {
+          console.error('Failed to resume AudioContext:', {
+            error: err,
+            state: ctx.state,
+            instrument,
+          });
+        });
       }
 
       const sampleRate = ctx.sampleRate;
@@ -31,7 +37,7 @@ export function useDrumAudio() {
       // Use DrumSynthesizer from engine (no code duplication!)
       const pcm = DrumSynthesizer.renderHit(instrument, settings, sampleRate);
 
-      // Debug: Check audio levels
+      // Validate audio output
       let maxVal = 0;
       for (let i = 0; i < pcm.length; i++) {
         const a = Math.abs(pcm[i]);
@@ -39,7 +45,12 @@ export function useDrumAudio() {
       }
 
       if (maxVal < 0.001) {
-        console.warn(`Drum ${instrument} PCM too quiet (max=${maxVal.toFixed(4)}), skipping playback`);
+        console.warn('Drum PCM output too quiet', {
+          instrument,
+          maxLevel: maxVal,
+          settings,
+          bufferLength: pcm.length,
+        });
         return;
       }
 
@@ -57,7 +68,12 @@ export function useDrumAudio() {
       gainNode.connect(ctx.destination);
       source.start();
     } catch (error) {
-      console.error(`Error playing drum hit ${instrument}:`, error);
+      console.error('Drum playback error:', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        instrument,
+        settings,
+      });
     }
   }
 

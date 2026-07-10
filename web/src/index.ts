@@ -80,12 +80,26 @@ function loadSavedPatterns(): SavedPatternData[] {
       const raw = fs.readFileSync(SAVED_PATTERNS_FILE, 'utf-8');
       return JSON.parse(raw);
     }
-  } catch { /* ignore */ }
+  } catch (error) {
+    console.error('Failed to load saved patterns:', {
+      error: error instanceof Error ? error.message : String(error),
+      file: SAVED_PATTERNS_FILE,
+    });
+  }
   return [];
 }
 
 function saveSavedPatterns(data: SavedPatternData[]) {
-  fs.writeFileSync(SAVED_PATTERNS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  try {
+    fs.writeFileSync(SAVED_PATTERNS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (error) {
+    console.error('Failed to save patterns:', {
+      error: error instanceof Error ? error.message : String(error),
+      file: SAVED_PATTERNS_FILE,
+      patternCount: data.length,
+    });
+    throw error; // Re-throw so caller knows it failed
+  }
 }
 
 // Initialize audio engine
@@ -281,12 +295,24 @@ app.get('/synth/parameters', (req, res) => {
 app.post('/synth/parameters', (req, res) => {
   initAudioEngine();
   hasActiveSession = true;
-  synth!.updateParameters(req.body as Partial<SynthParameters>);
-  broadcastToClients({ type: 'synthUpdate', data: synth!.getParameters() });
-  if (sequencer && sequencer.getIsPlaying()) {
-    schedulePatternAudio();
+
+  try {
+    synth!.updateParameters(req.body as Partial<SynthParameters>);
+    broadcastToClients({ type: 'synthUpdate', data: synth!.getParameters() });
+    if (sequencer && sequencer.getIsPlaying()) {
+      schedulePatternAudio();
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Failed to update synth parameters:', {
+      error: error instanceof Error ? error.message : String(error),
+      params: req.body,
+    });
+    res.status(400).json({
+      error: 'Invalid parameters',
+      message: error instanceof Error ? error.message : 'Failed to update parameters',
+    });
   }
-  res.json({ success: true });
 });
 
 app.post('/synth/note', (req, res) => {
@@ -499,6 +525,16 @@ app.post('/sequencer/tempo', (req, res) => {
   initAudioEngine();
   hasActiveSession = true;
   const { tempo } = req.body;
+
+  // Validate tempo
+  if (typeof tempo !== 'number' || isNaN(tempo) || tempo < 20 || tempo > 400) {
+    return res.status(400).json({
+      error: 'Invalid tempo',
+      message: 'Tempo must be a number between 20 and 400 BPM',
+      received: tempo,
+    });
+  }
+
   sequencer!.setTempo(tempo);
   broadcastToClients({ type: 'tempoChange', data: { tempo } });
   if (sequencer && sequencer.getIsPlaying()) {
