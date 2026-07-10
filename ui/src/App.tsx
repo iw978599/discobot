@@ -239,7 +239,8 @@ function App() {
   }, []);
 
   const handleDrumStepToggle = useCallback((instrument: DrumInstrument, step: number, active: boolean) => {
-    drumAudio.playDrumHit(instrument, drumStateRef.current[instrument].settings, browserMutedRef.current);
+    // Note: Sound is played in DrumMachine component for immediate feedback
+    // Don't play here to avoid duplicate sound
     setDrumState((prev) => {
       const next = { ...prev };
       next[instrument] = { ...next[instrument], steps: [...next[instrument].steps] };
@@ -251,7 +252,7 @@ function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ instrument, step, active }),
     }).catch(() => {});
-  }, [drumAudio, browserMutedRef]);
+  }, []);
 
   const handleDrumSettingsChange = useCallback((instrument: DrumInstrument, settings: Partial<DrumSettings>) => {
     setDrumState((prev) => {

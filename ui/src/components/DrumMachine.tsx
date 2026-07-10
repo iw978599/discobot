@@ -77,13 +77,15 @@ export default function DrumMachine({
 
   const handleStepClick = useCallback((step: number) => {
     console.log('Step clicked:', selectedInstrument, 'step:', step);
-    const current = drumState[selectedInstrument].steps[step];
-    onStepToggle(selectedInstrument, step, !current);
 
-    // Play drum hit whenever clicking a step (ON or OFF)
+    // Play drum hit immediately for instant feedback (before WebSocket roundtrip)
     const settings = drumState[selectedInstrument].settings;
     console.log('Playing drum hit for step:', selectedInstrument, settings);
     drumAudio.playDrumHit(selectedInstrument, settings);
+
+    // Then update state (which will send to server)
+    const current = drumState[selectedInstrument].steps[step];
+    onStepToggle(selectedInstrument, step, !current);
   }, [drumState, selectedInstrument, onStepToggle, drumAudio]);
 
   const handleInstrumentSelect = useCallback((instrument: DrumInstrument) => {
