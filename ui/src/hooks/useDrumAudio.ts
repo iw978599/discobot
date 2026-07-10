@@ -19,10 +19,13 @@ export function useDrumAudio() {
   }
 
   async function playDrumHit(instrument: DrumInstrument, settings: DrumSettings, muted: boolean = false) {
+    console.log('playDrumHit called:', instrument, settings, 'muted:', muted);
     if (muted) return;
 
     try {
+      console.log('Getting AudioContext...');
       const ctx = getAudioContext();
+      console.log('AudioContext state:', ctx.state);
 
       // Ensure AudioContext is running before playing (required for first interaction)
       if (ctx.state === 'suspended') {
@@ -48,12 +51,16 @@ export function useDrumAudio() {
       // Use DrumSynthesizer from engine (no code duplication!)
       const pcm = DrumSynthesizer.renderHit(instrument, settings, sampleRate);
 
+      console.log('PCM buffer generated, length:', pcm.length);
+
       // Validate audio output
       let maxVal = 0;
       for (let i = 0; i < pcm.length; i++) {
         const a = Math.abs(pcm[i]);
         if (a > maxVal) maxVal = a;
       }
+
+      console.log('PCM max value:', maxVal);
 
       if (maxVal < 0.001) {
         console.warn('Drum PCM output too quiet', {
@@ -78,6 +85,7 @@ export function useDrumAudio() {
       source.connect(gainNode);
       gainNode.connect(ctx.destination);
       source.start();
+      console.log('Audio source started successfully');
     } catch (error) {
       console.error('Drum playback error:', {
         error: error instanceof Error ? error.message : String(error),
