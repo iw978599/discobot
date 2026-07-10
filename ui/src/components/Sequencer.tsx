@@ -13,7 +13,7 @@ interface SequencerProps {
   onPatternChange: (pattern: Pattern) => void;
   onStepChange: (stepIndex: number) => void;
   onTempoChange: (bpm: number) => void;
-  onSavePattern: (name: string) => void;
+  onSavePattern: (name: string) => Promise<boolean>;
   onLoadSavedPattern: (data: SavedPatternFull) => void;
 }
 
@@ -159,14 +159,16 @@ export default function Sequencer({
     setSaveName('');
   };
 
-  const handleSaveCommit = () => {
+  const handleSaveCommit = async () => {
     const name = saveName.trim();
     if (!name) { setSaving(false); return; }
-    onSavePattern(name);
+    const saved = await onSavePattern(name);
     setSaving(false);
-    setSavedFeedback(true);
-    setTimeout(() => setSavedFeedback(false), 2000);
-    setTimeout(fetchSaved, 200);
+    if (saved) {
+      setSavedFeedback(true);
+      setTimeout(() => setSavedFeedback(false), 2000);
+      setTimeout(fetchSaved, 200);
+    }
   };
 
   if (!pattern) {
@@ -233,11 +235,11 @@ export default function Sequencer({
                 value={saveName}
                 onChange={(e) => setSaveName(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSaveCommit();
+                  if (e.key === 'Enter') void handleSaveCommit();
                   if (e.key === 'Escape') setSaving(false);
                 }}
               />
-              <button className="save-confirm-btn" onClick={handleSaveCommit}>&#10003;</button>
+              <button className="save-confirm-btn" onClick={() => void handleSaveCommit()}>&#10003;</button>
               <button className="save-cancel-btn" onClick={() => setSaving(false)}>&#10005;</button>
             </div>
           ) : (

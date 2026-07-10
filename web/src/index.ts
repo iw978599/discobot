@@ -18,6 +18,12 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.json());
+app.use((req, _res, next) => {
+  if (req.url === '/api' || req.url.startsWith('/api/')) {
+    req.url = req.url.slice(4) || '/';
+  }
+  next();
+});
 
 const uiDistPath = path.resolve(__dirname, '..', '..', 'ui', 'dist');
 const uiIndexPath = path.join(uiDistPath, 'index.html');
