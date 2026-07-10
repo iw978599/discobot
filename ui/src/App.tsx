@@ -380,6 +380,13 @@ function App() {
     const synth = synthsRef.current.find(s => s.id === synthId);
     if (!synth?.pattern) return;
 
+    if (!synth.isPlaying) {
+      await Promise.all([
+        synthAudio.ensureAudioReady(),
+        drumAudio.ensureAudioReady(),
+      ]);
+    }
+
     const endpoint = synth.isPlaying ? '/sequencer/stop' : '/sequencer/play';
     const body = synth.isPlaying ? { synthId } : { synthId, patternId: synth.pattern.id };
 
@@ -388,7 +395,7 @@ function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-  }, []);
+  }, [synthAudio, drumAudio]);
 
   const handlePatternChange = useCallback(async (synthId: number, pattern: Pattern) => {
     setSynths(prev => prev.map(s =>
@@ -407,7 +414,8 @@ function App() {
     const synth = synthsRef.current.find(s => s.id === synthId);
     if (!synth?.synthParams) return;
 
-    synthAudio.playNote(note, synth.synthParams, undefined, browserMutedRef.current);
+    await synthAudio.ensureAudioReady();
+    await synthAudio.playNote(note, synth.synthParams, undefined, browserMutedRef.current);
 
     const step = synth.selectedStep;
     const pattern = synth.pattern;

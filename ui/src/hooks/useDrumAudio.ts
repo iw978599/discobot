@@ -18,33 +18,38 @@ export function useDrumAudio() {
     return audioCtxRef.current;
   }
 
+  async function ensureAudioReady(): Promise<boolean> {
+    const ctx = getAudioContext();
+    if (ctx.state === 'running') return true;
+
+    if (ctx.state !== 'suspended') return false;
+
+    if (!isResumingRef.current) {
+      isResumingRef.current = true;
+      try {
+        await ctx.resume();
+      } finally {
+        isResumingRef.current = false;
+      }
+    } else {
+      while (ctx.state === 'suspended' && isResumingRef.current) {
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+    }
+
+    return ctx.state !== 'suspended';
+  }
+
   async function playDrumHit(instrument: DrumInstrument, settings: DrumSettings, muted: boolean = false) {
     console.log('playDrumHit called:', instrument, settings, 'muted:', muted);
     if (muted) return;
 
     try {
       console.log('Getting AudioContext...');
+      const ready = await ensureAudioReady();
+      if (!ready) return;
       const ctx = getAudioContext();
       console.log('AudioContext state:', ctx.state);
-
-      // Ensure AudioContext is running before playing (required for first interaction)
-      if (ctx.state === 'suspended') {
-        // Prevent multiple simultaneous resume attempts
-        if (!isResumingRef.current) {
-          isResumingRef.current = true;
-          try {
-            await ctx.resume();
-            console.log('AudioContext resumed successfully');
-          } finally {
-            isResumingRef.current = false;
-          }
-        } else {
-          // Wait for resume to complete
-          while (ctx.state === 'suspended' && isResumingRef.current) {
-            await new Promise(resolve => setTimeout(resolve, 10));
-          }
-        }
-      }
 
       const sampleRate = ctx.sampleRate;
 
@@ -108,6 +113,7 @@ export function useDrumAudio() {
   }
 
   return {
+    ensureAudioReady,
     playDrumHit,
     dispose,
   };

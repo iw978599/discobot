@@ -39,6 +39,7 @@ interface ActiveVoice {
 export function useSynthAudio() {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const activeVoices = useRef<Map<string, ActiveVoice>>(new Map());
+  const isResumingRef = useRef<boolean>(false);
 
   function getAudioContext(): AudioContext {
     if (!audioCtxRef.current) {
@@ -47,7 +48,31 @@ export function useSynthAudio() {
     return audioCtxRef.current;
   }
 
-  function playNote(
+  async function ensureAudioReady(): Promise<boolean> {
+    const ctx = getAudioContext();
+    if (ctx.state === 'running') return true;
+
+    if (ctx.state !== 'suspended') return false;
+
+    if (!isResumingRef.current) {
+      isResumingRef.current = true;
+      try {
+        await ctx.resume();
+      } catch (err) {
+        console.error('Failed to resume AudioContext:', err);
+      } finally {
+        isResumingRef.current = false;
+      }
+    } else {
+      while (ctx.state === 'suspended' && isResumingRef.current) {
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+    }
+
+    return ctx.state !== 'suspended';
+  }
+
+  async function playNote(
     note: string,
     synthParams: SynthParameters | null,
     duration?: number,
@@ -56,10 +81,9 @@ export function useSynthAudio() {
     if (muted) return;
 
     try {
+      const ready = await ensureAudioReady();
+      if (!ready) return;
       const ctx = getAudioContext();
-      if (ctx.state === 'suspended') {
-        ctx.resume().catch((err) => console.error('Failed to resume AudioContext:', err));
-      }
 
       const freq = noteToFrequency(note);
       const p = synthParams;
@@ -189,6 +213,7 @@ export function useSynthAudio() {
   }
 
   return {
+    ensureAudioReady,
     playNote,
     stopNote,
     dispose,
