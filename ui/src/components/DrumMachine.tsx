@@ -15,6 +15,7 @@ export interface DrumMachineProps {
 }
 
 const INSTRUMENTS: DrumInstrument[] = ['kick', 'snare', 'openHH', 'closedHH', 'ride', 'crash', 'snare2', 'clap'];
+const STEPS = Array.from({ length: 16 }, (_, i) => i);
 
 const INSTRUMENT_LABELS: Record<DrumInstrument, string> = {
   kick: 'Kick',
@@ -123,7 +124,7 @@ export default function DrumMachine({
                 <span>{INSTRUMENT_LABELS[selectedInstrument]}</span>
               </div>
               <div className="drum-step-indicators">
-                {Array.from({ length: 16 }, (_, i) => (
+                {STEPS.map((i) => (
                   <div key={i} className={`drum-step-indicator ${isPlaying && currentStep === i ? 'active' : ''}`}>
                     {i + 1}
                   </div>
@@ -131,7 +132,7 @@ export default function DrumMachine({
               </div>
             </div>
             <div className="drum-step-row">
-              {Array.from({ length: 16 }, (_, step) => {
+              {STEPS.map((step) => {
                 const active = drumState[selectedInstrument].steps[step];
                 const stepBand = step < 4 ? 'band-a' : step < 8 ? 'band-b' : step < 12 ? 'band-c' : 'band-d';
                 return (
