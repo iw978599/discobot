@@ -56,15 +56,12 @@ COPY --from=build /app/engine/dist ./engine/dist
 COPY --from=build /app/web/dist ./web/dist
 COPY --from=build /app/ui/dist ./ui/dist
 
-# Railway provides PORT env var
-ENV WEB_PORT=${PORT:-3001}
+# Expose port (Railway will map this - Railway sets PORT at runtime)
+EXPOSE 3001
 
-# Expose port (Railway will map this)
-EXPOSE ${PORT:-3001}
-
-# Health check
+# Health check (Railway sets PORT at runtime, so use it dynamically)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD curl -fsS http://127.0.0.1:${PORT:-3001}/health || exit 1
+  CMD curl -fsS http://127.0.0.1:${PORT}/health || exit 1
 
 # Start both bot and web server
 # Use a simple shell script to run both
