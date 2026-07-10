@@ -22,11 +22,25 @@ Monorepo using npm workspaces with 4 packages:
 discord-synth-bot/
 ├── bot/       # Discord bot (Discord.js, @discordjs/voice)
 ├── engine/    # Custom math-based audio synthesis (no Tone.js)
+│   ├── Synthesizer           # Oscillator, filter, ADSR envelope
+│   ├── DrumSynthesizer       # 8 drum instruments (physical modeling)
+│   ├── Sequencer             # 16-step pattern playback
+│   ├── AudioContextManager   # Singleton context management
+│   ├── utils.ts              # Shared utilities (clamp, noteToFreq, deepMerge)
+│   └── constants.ts          # Audio parameters (no magic numbers)
 ├── web/       # Express API + WebSocket server
 └── ui/        # React web interface (Vite)
 ```
 
 **Audio Flow**: Engine renders PCM → Web Server base64-encodes → WebSocket → Bot plays through Discord voice (48kHz stereo 16-bit raw PCM)
+
+### Code Quality Features
+
+- **Singleton AudioContext**: Prevents memory leaks and "Too many contexts" errors
+- **Shared Utilities**: Single source of truth for audio calculations
+- **Named Constants**: All magic numbers replaced with descriptive constants
+- **Deep Merge**: Proper nested parameter updates
+- **Type Safety**: Comprehensive TypeScript coverage across all packages
 
 ## Quick Start
 

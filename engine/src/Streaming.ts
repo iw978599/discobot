@@ -1,26 +1,17 @@
 import { SynthParameters } from './types';
 import { Synthesizer } from './Synthesizer';
-import { ensureAudioContext } from './AudioContextPolyfill';
+import { audioContextManager } from './AudioContextManager';
 
 export class DiscordAudioStreamer {
   private synth: Synthesizer;
-  private audioContext: AudioContext | null = null;
   private _isStreaming: boolean = false;
 
   constructor() {
-    ensureAudioContext();
     this.synth = new Synthesizer();
   }
 
-  private ensureContext(): AudioContext {
-    if (!this.audioContext) {
-      this.audioContext = new AudioContext();
-    }
-    return this.audioContext;
-  }
-
-  async prepareForDiscordStreaming(_concurrency: number = 1): Promise<AudioBuffer[]> {
-    const ctx = this.ensureContext();
+  async prepareForDiscordStreaming(): Promise<AudioBuffer[]> {
+    const ctx = audioContextManager.getContext();
     const bufferDuration = 0.1;
     const totalDuration = 16;
     const bufferCount = Math.ceil(totalDuration / bufferDuration);
@@ -33,7 +24,7 @@ export class DiscordAudioStreamer {
       const chunkDuration = endTime - startTime;
 
       const pcm = this.renderSegment(startTime, chunkDuration, sampleRate);
-      const offlineCtx = new OfflineAudioContext(1, pcm.length, sampleRate);
+      const offlineCtx = audioContextManager.createOfflineContext(1, pcm.length, sampleRate);
       const buffer = offlineCtx.createBuffer(1, pcm.length, sampleRate);
       buffer.getChannelData(0).set(pcm);
       buffers.push(buffer);
@@ -94,9 +85,5 @@ export class DiscordAudioStreamer {
 
   dispose(): void {
     this.synth.dispose();
-    if (this.audioContext) {
-      this.audioContext.close();
-      this.audioContext = null;
-    }
   }
 }
