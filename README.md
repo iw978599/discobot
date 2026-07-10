@@ -1,17 +1,20 @@
-# Discord Synth Bot
+# Discobot
 
-A Discord bot with a web-based UI for creating music using synthesis, sequencing, and drums. Control a 16-step sequencer, synthesizer, and drum machine from a web interface or Discord slash commands. Audio plays through the Discord voice channel in real time.
+A Discord bot with a web-based UI for creating music using synthesis, sequencing, and drums. Control up to 2 independent synthesizers, a 16-step sequencer, and drum machine from a web interface or Discord slash commands. Audio plays through the Discord voice channel in real time.
 
 ## Features
 
+- **Multi-Synth**: Up to 2 independent synthesizers, each with own sequencer, keyboard, and parameter controls
 - **16-step Sequencer**: Step grid with note assignment via piano keyboard, monophonic mode
 - **Synthesizer**: 4 waveforms (sine, square, sawtooth, triangle), detune, resonant lowpass filter, ADSR envelope, delay effect, master gain
+- **Octave Shift**: -1 to +1 octave range per synth with range display
 - **Drum Machine**: 8 instruments (kick, snare, open/closed hi-hat, ride, crash, snare 2, clap), 16-step toggle grid with per-instrument volume/tone/extra controls, master volume
 - **Browser Audio**: Web Audio API feedback for synth and drums that respects parameters, independent mute toggle
 - **Discord Audio Streaming**: Pattern rendered to 48kHz PCM with soft-clipped master mix, sent over WebSocket, played through bot voice connection with loop
 - **Pattern Persistence**: Save/load/delete patterns with name, stores all synth params, drum state, and master volumes in `saved-patterns.json`
 - **Real-time Sync**: All connected clients stay synchronized via WebSocket
-- **Tempo Control**: LED-style BPM display, click-to-edit, live updates to sequencer
+- **Global Tempo**: Single BPM shared across all synths, editable LED display in header
+- **Header Controls**: "Discobot" title, tempo LED, inline save, mute, connection status
 - **Hybrid Control**: Web UI or Discord slash commands
 
 ## Architecture
@@ -19,7 +22,7 @@ A Discord bot with a web-based UI for creating music using synthesis, sequencing
 Monorepo using npm workspaces with 4 packages:
 
 ```
-discord-synth-bot/
+discobot/
 ├── bot/       # Discord bot (Discord.js, @discordjs/voice)
 ├── engine/    # Custom math-based audio synthesis (no Tone.js)
 │   ├── Synthesizer           # Oscillator, filter, ADSR envelope
@@ -28,8 +31,8 @@ discord-synth-bot/
 │   ├── AudioContextManager   # Singleton context management
 │   ├── utils.ts              # Shared utilities (clamp, noteToFreq, deepMerge)
 │   └── constants.ts          # Audio parameters (no magic numbers)
-├── web/       # Express API + WebSocket server
-└── ui/        # React web interface (Vite)
+├── web/       # Express API + WebSocket server, multi-synth backend
+└── ui/        # React web interface (Vite), SynthUnit components
 ```
 
 **Audio Flow**: Engine renders PCM → Web Server base64-encodes → WebSocket → Bot plays through Discord voice (48kHz stereo 16-bit raw PCM)
@@ -105,19 +108,20 @@ Starts:
 |---------|-------------|
 | `/join` | Join your current voice channel |
 | `/leave` | Leave voice channel |
-| `/play` | Start sequencer playback |
-| `/stop` | Stop playback |
-| `/note <note>` | Play a single note (e.g., C4, A#3) |
-| `/tempo <bpm>` | Set tempo |
+| `/play [synth]` | Start sequencer playback (optional synth: 1 or 2) |
+| `/stop [synth]` | Stop playback (optional synth: 1 or 2) |
+| `/note <note> [synth]` | Play a single note (optional synth: 1 or 2) |
+| `/tempo <bpm> [synth]` | Set global tempo |
 
 ## Web UI
 
+- **Header**: "Discobot" title, editable BPM LED, save button, mute toggle, connection status
+- **Synth Units**: Each contains sequencer + synth controls + keyboard, stacked vertically
 - **Sequencer grid**: 16 steps, click to select (amber), piano key assigns note (blue)
-- **Piano keyboard**: 3 octaves (C3–F5), responsive width (keys scale to container)
+- **Piano keyboard**: 3 octaves with octave shift (-1 to +1), range display (e.g., C3–B5)
 - **Synth controls**: Oscillator, filter, envelope, delay, master gain — all with hover info tooltips
 - **Drum machine**: 8×16 toggle grid with instrument selection, per-instrument volume/tone/extra knobs, master volume knob
-- **Save/Load/Manage**: Save patterns with name confirmation, load from dropdown (5 recent + show all), delete from modal
-- **Tempo**: Red LED display, click to edit
+- **Save/Load/Manage**: Save from header, load from dropdown (5 recent + show all), delete from modal
 - **Browser mute**: Toggle browser audio without affecting Discord
 - **Reset**: Clear pattern + reset synth + reset drums
 
@@ -126,7 +130,7 @@ Starts:
 | Layer | Technology |
 |-------|------------|
 | Bot | Discord.js v14, @discordjs/voice |
-| Engine | Custom synthesis (no Tone.js) |
+| Engine | Custom math synthesis (no Tone.js) |
 | API | Express, WebSocket (ws) |
 | UI | React, Vite, TypeScript |
 | Language | TypeScript across entire stack |
@@ -143,16 +147,18 @@ npm run dev:ui       # Web UI only (Vite)
 ## Status
 
 ### Working
+- Multi-synth support (up to 2 independent units)
 - Step sequencer with visual indicator lights
-- Piano keyboard note assignment to steps, responsive scaling
+- Piano keyboard with octave shift, responsive scaling
 - Synth controls with real-time parameter updates and master gain
 - Drum machine with 8 instruments, 16-step toggle grid, per-instrument controls, master volume
 - Drum browser preview on cell click
 - Drum playback during sequencer playback in both browser and Discord
 - Pattern save/load/delete (JSON persistence) — stores all synth params, drum state, and master volumes
 - Discord voice playback (full pattern rendered, soft-clipped master mix, looped)
+- Discord bot synth selection (/play, /stop, /note, /tempo accept synth option)
 - Stop in UI stops bot playback
-- Tempo control with live BPM updates
+- Global tempo with live BPM updates across all synths
 - Browser audio with synth and drum parameter respect
 - Multi-client WebSocket sync
 - Reset button
