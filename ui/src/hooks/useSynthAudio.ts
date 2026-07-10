@@ -125,7 +125,8 @@ export function useSynthAudio() {
       if (duration) {
         // Note with fixed duration
         const end = now + Math.max(duration, attack + decay + 0.01);
-        gain.gain.setValueAtTime(vol * sustainLvl, end - release);
+        const releaseStart = Math.max(now + attack + decay, end - release, now);
+        gain.gain.setValueAtTime(vol * sustainLvl, releaseStart);
         gain.gain.exponentialRampToValueAtTime(0.001, end);
         osc.stop(end);
       } else {
