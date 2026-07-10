@@ -5,7 +5,7 @@ import * as http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
 import dotenv from 'dotenv';
-import { Synthesizer, Sequencer, SamplePlayer, Pattern, SynthParameters, DrumState, DrumInstrument, DiscordAudioStreamer, DrumSynthesizer } from '@discord-synth/engine';
+import { Synthesizer, Sequencer, SamplePlayer, Pattern, SynthParameters, DrumState, DrumInstrument, DiscordAudioStreamer, DrumSynthesizer, clamp, throttle, AUDIO_MIXING, AUDIO_CONTEXT } from '@discord-synth/engine';
 
 dotenv.config();
 
@@ -50,7 +50,6 @@ const streamingState = {
 };
 
 const DRUM_INSTRUMENTS: DrumInstrument[] = ['kick', 'snare', 'openHH', 'closedHH', 'ride', 'crash', 'snare2', 'clap'];
-const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
 const isWebSocketOpen = (client: WebSocket): boolean => client.readyState === WebSocket.OPEN;
 
 function createDefaultDrumState(): DrumState {
@@ -87,12 +86,26 @@ function loadSavedPatterns(): SavedPatternData[] {
       const raw = fs.readFileSync(SAVED_PATTERNS_FILE, 'utf-8');
       return JSON.parse(raw);
     }
-  } catch { /* ignore */ }
+  } catch (error) {
+    console.error('Failed to load saved patterns:', {
+      error: error instanceof Error ? error.message : String(error),
+      file: SAVED_PATTERNS_FILE,
+    });
+  }
   return [];
 }
 
 function saveSavedPatterns(data: SavedPatternData[]) {
-  fs.writeFileSync(SAVED_PATTERNS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  try {
+    fs.writeFileSync(SAVED_PATTERNS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (error) {
+    console.error('Failed to save patterns:', {
+      error: error instanceof Error ? error.message : String(error),
+      file: SAVED_PATTERNS_FILE,
+      patternCount: data.length,
+    });
+    throw error; // Re-throw so caller knows it failed
+  }
 }
 
 // Initialize audio engine
@@ -288,12 +301,24 @@ app.get('/synth/parameters', (req, res) => {
 app.post('/synth/parameters', (req, res) => {
   initAudioEngine();
   hasActiveSession = true;
-  synth!.updateParameters(req.body as Partial<SynthParameters>);
-  broadcastToClients({ type: 'synthUpdate', data: synth!.getParameters() });
-  if (sequencer && sequencer.getIsPlaying()) {
-    schedulePatternAudio();
+
+  try {
+    synth!.updateParameters(req.body as Partial<SynthParameters>);
+    broadcastToClients({ type: 'synthUpdate', data: synth!.getParameters() });
+    if (sequencer && sequencer.getIsPlaying()) {
+      schedulePatternAudio();
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Failed to update synth parameters:', {
+      error: error instanceof Error ? error.message : String(error),
+      params: req.body,
+    });
+    res.status(400).json({
+      error: 'Invalid parameters',
+      message: error instanceof Error ? error.message : 'Failed to update parameters',
+    });
   }
-  res.json({ success: true });
 });
 
 app.post('/synth/note', (req, res) => {
@@ -506,6 +531,16 @@ app.post('/sequencer/tempo', (req, res) => {
   initAudioEngine();
   hasActiveSession = true;
   const { tempo } = req.body;
+
+  // Validate tempo
+  if (typeof tempo !== 'number' || isNaN(tempo) || tempo < 20 || tempo > 400) {
+    return res.status(400).json({
+      error: 'Invalid tempo',
+      message: 'Tempo must be a number between 20 and 400 BPM',
+      received: tempo,
+    });
+  }
+
   sequencer!.setTempo(tempo);
   broadcastToClients({ type: 'tempoChange', data: { tempo } });
   if (sequencer && sequencer.getIsPlaying()) {
@@ -615,7 +650,7 @@ const debugLog = (msg: string) => {
 
 function renderPatternAudio(pattern: Pattern): string | null {
   try {
-    const sampleRate = 48000;
+    const sampleRate = AUDIO_CONTEXT.RENDER_SAMPLE_RATE;
     const tempo = clamp(pattern.tempo || 120, 20, 400);
     const drumActiveSteps = DRUM_INSTRUMENTS.reduce((sum, inst) => {
       const track = drumState[inst];
@@ -640,25 +675,27 @@ function renderPatternAudio(pattern: Pattern): string | null {
       }
     }
 
-    // Mix in drum audio (4x boost, then soft-clip master)
+    // Mix in drum audio with boost factor, then soft-clip master
     const drumPCM = DrumSynthesizer.renderPattern(drumState, pattern.tempo, sampleRate);
     let drumMax = 0;
     for (let i = 0; i < drumPCM.length; i++) { const a = Math.abs(drumPCM[i]); if (a > drumMax) drumMax = a; }
     debugLog(`renderPatternAudio: drumPCM max=${drumMax.toFixed(4)}, length=${drumPCM.length}`);
     for (let i = 0; i < drumPCM.length && i < totalSamples; i++) {
-      fullPCM[i] += drumPCM[i] * 4 * drumMasterVolume;
+      fullPCM[i] += drumPCM[i] * AUDIO_MIXING.DRUM_BOOST_FACTOR * drumMasterVolume;
     }
 
-    // Soft-clip master instead of hard normalization
+    // Soft-clip master to prevent clipping
+    const threshold = AUDIO_MIXING.SOFT_CLIP_THRESHOLD;
+    const factor = AUDIO_MIXING.SOFT_CLIP_FACTOR;
     for (let i = 0; i < fullPCM.length; i++) {
-      if (fullPCM[i] > 0.85) fullPCM[i] = 0.85 + (fullPCM[i] - 0.85) * 0.15;
-      if (fullPCM[i] < -0.85) fullPCM[i] = -0.85 + (fullPCM[i] + 0.85) * 0.15;
+      if (fullPCM[i] > threshold) fullPCM[i] = threshold + (fullPCM[i] - threshold) * factor;
+      if (fullPCM[i] < -threshold) fullPCM[i] = -threshold + (fullPCM[i] + threshold) * factor;
     }
 
     const stereoLen = fullPCM.length * 2;
     const int16 = new Int16Array(stereoLen);
     for (let i = 0; i < fullPCM.length; i++) {
-      const val = clamp(Math.round(fullPCM[i] * 60000), -32768, 32767);
+      const val = clamp(Math.round(fullPCM[i] * AUDIO_MIXING.MAX_PCM_VALUE), -32768, 32767);
       int16[i * 2] = val;
       int16[i * 2 + 1] = val;
     }
@@ -680,18 +717,7 @@ function broadcastPatternAudio() {
   }
 }
 
-const schedulePatternAudio = throttleify(broadcastPatternAudio, 300);
-
-function throttleify(fn: () => void, ms: number) {
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  return () => {
-    if (timer) return;
-    timer = setTimeout(() => {
-      timer = null;
-      fn();
-    }, ms);
-  };
-}
+const schedulePatternAudio = throttle(broadcastPatternAudio, 300);
 
 function broadcastToClients(message: unknown) {
   const payload = JSON.stringify(message);

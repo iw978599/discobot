@@ -72,3 +72,24 @@ export interface AudioExportOptions {
   duration: number;
   pattern?: Pattern;
 }
+
+/**
+ * UI-specific types for pattern persistence
+ */
+export interface SavedPatternInfo {
+  id: string;
+  name: string;
+  updatedAt: number;
+}
+
+export interface SavedPatternFull {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  steps: SequencerStep[];
+  synthParams: SynthParameters;
+  tempo: number;
+  drumState: DrumState;
+  drumMasterVolume?: number;
+}

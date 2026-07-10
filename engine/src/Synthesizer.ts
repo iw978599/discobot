@@ -1,15 +1,13 @@
 import { SynthParameters, OscillatorType } from './types';
-import { ensureAudioContext } from './AudioContextPolyfill';
-
-const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
+import { audioContextManager } from './AudioContextManager';
+import { clamp, noteToFrequency as utilNoteToFrequency, deepMerge } from './utils';
+import { AUDIO_MIXING } from './constants';
 
 export class Synthesizer {
   private parameters!: SynthParameters;
-  private audioContext: AudioContext | null = null;
   private activeNotes: Map<string, { startTime: number; velocity: number }> = new Map();
 
   constructor() {
-    ensureAudioContext();
     this.parameters = this.getDefaultParameters();
   }
 
@@ -26,25 +24,8 @@ export class Synthesizer {
     };
   }
 
-  private ensureContext(): AudioContext {
-    if (!this.audioContext) {
-      this.audioContext = new AudioContext();
-    }
-    return this.audioContext;
-  }
-
   static noteToFrequency(note: string): number {
-    const noteMap: Record<string, number> = {
-      C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3,
-      E: 4, F: 5, 'F#': 6, Gb: 6, G: 7, 'G#': 8,
-      Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11,
-    };
-    const match = note.match(/^([A-G]#?b?)(-?\d+)$/);
-    if (!match) return 440;
-    const noteName = match[1];
-    const octave = parseInt(match[2], 10);
-    const semitone = noteMap[noteName] ?? 0;
-    return 440 * Math.pow(2, (octave - 4 + (semitone - 9) / 12));
+    return utilNoteToFrequency(note);
   }
 
   static generateOscillator(type: OscillatorType, frequency: number, sampleRate: number, length: number): Float32Array {
@@ -120,7 +101,7 @@ export class Synthesizer {
     const master = clamp(this.parameters.gain, 0, 2);
     const vol = clamp(velocity, 0, 1);
     for (let i = 0; i < samples.length; i++) {
-      samples[i] *= vol * master * 0.5;
+      samples[i] *= vol * master * AUDIO_MIXING.SYNTH_MASTER_VOLUME;
     }
 
     return samples;
@@ -142,8 +123,7 @@ export class Synthesizer {
   }
 
   renderToAudioBuffer(pcmData: Float32Array, sampleRate: number = 44100): AudioBuffer {
-    this.ensureContext();
-    const offlineCtx = new OfflineAudioContext(1, pcmData.length, sampleRate);
+    const offlineCtx = audioContextManager.createOfflineContext(1, pcmData.length, sampleRate);
     const buffer = offlineCtx.createBuffer(1, pcmData.length, sampleRate);
     buffer.getChannelData(0).set(pcmData);
     return buffer;
@@ -172,19 +152,7 @@ export class Synthesizer {
   }
 
   updateParameters(params: Partial<SynthParameters>): void {
-    this.parameters = { ...this.parameters, ...params };
-    if (params.oscillator) {
-      this.parameters.oscillator = { ...this.parameters.oscillator, ...params.oscillator };
-    }
-    if (params.filter) {
-      this.parameters.filter = { ...this.parameters.filter, ...params.filter };
-    }
-    if (params.envelope) {
-      this.parameters.envelope = { ...this.parameters.envelope, ...params.envelope };
-    }
-    if (params.effects) {
-      this.parameters.effects = { ...this.parameters.effects, ...params.effects };
-    }
+    this.parameters = deepMerge(this.parameters, params);
   }
 
   getParameters(): SynthParameters {
@@ -193,10 +161,6 @@ export class Synthesizer {
 
   dispose(): void {
     this.activeNotes.clear();
-    if (this.audioContext) {
-      this.audioContext.close();
-      this.audioContext = null;
-    }
   }
 
   getAudioState() {

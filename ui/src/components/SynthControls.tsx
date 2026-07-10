@@ -1,4 +1,10 @@
+/**
+ * Synthesizer Controls with hardware-style knob layout
+ * Organized like a classic analog synthesizer panel
+ */
+
 import { SynthParameters, OscillatorType } from '../types';
+import Knob from './Knob';
 import './SynthControls.css';
 
 interface SynthControlsProps {
@@ -6,34 +12,22 @@ interface SynthControlsProps {
   onParameterChange: (params: Partial<SynthParameters>) => void;
 }
 
-const TOOLTIPS: Record<string, string> = {
-  'osc-type': 'The waveform shape of the oscillator. Sine = smooth, Square = harsh, Sawtooth = bright, Triangle = soft.',
-  'osc-detune': 'Fine pitch adjustment in cents (±100 = ±1 semitone). Positive = sharper, negative = flatter.',
-  'filter-freq': 'Cutoff frequency of the low-pass filter. Higher = brighter, lower = muffled.',
-  'filter-res': 'Filter resonance (emphasis at cutoff frequency). High values create a whistling/ringing effect.',
-  'env-attack': 'Time for the note to reach full volume after pressing a key (0.001s–2s).',
-  'env-decay': 'Time for the volume to drop from peak to the sustain level after the attack phase.',
-  'env-sustain': 'Volume level held while a key is pressed (0 = silent, 1 = full volume).',
-  'env-release': 'Time for the note to fade out after releasing a key (0.001s–5s).',
-  'reverb-enabled': 'Enable or disable the reverb effect.',
-  'reverb-wet': 'Mix level of the reverb effect (0 = dry, 1 = fully wet).',
-  'reverb-decay': 'How long the reverb tail lasts in seconds (0.1s–10s).',
-  'delay-enabled': 'Enable or disable the delay (echo) effect.',
-  'delay-wet': 'Mix level of the delay effect (0 = dry, 1 = fully wet).',
-  'delay-time': 'Time between each echo repeat (0.001s–2s).',
-  'delay-feedback': 'How much of the delayed signal feeds back into the delay (0 = single echo, 0.95 = many repeats).',
+const TOOLTIPS = {
+  gain: 'Master output volume',
+  oscType: 'Waveform shape: Sine (smooth), Square (harsh), Sawtooth (bright), Triangle (soft)',
+  detune: 'Fine pitch adjustment in cents (±100 = ±1 semitone)',
+  filterFreq: 'Cutoff frequency - Higher = brighter, lower = darker',
+  filterQ: 'Resonance - emphasis at cutoff frequency',
+  attack: 'Time to reach full volume after key press',
+  decay: 'Time to drop from peak to sustain level',
+  sustain: 'Volume level held while key is pressed',
+  release: 'Time to fade out after key release',
+  reverbWet: 'Reverb mix level (0 = dry, 1 = wet)',
+  reverbDecay: 'Reverb tail length in seconds',
+  delayWet: 'Delay mix level (0 = dry, 1 = wet)',
+  delayTime: 'Time between echo repeats',
+  delayFeedback: 'Echo repeats (0 = single, 0.95 = many)',
 };
-
-function InfoTip({ id }: { id: string }) {
-  const text = TOOLTIPS[id];
-  if (!text) return null;
-  return (
-    <span className="info-tip-wrapper">
-      <span className="info-tip-icon">&#9432;</span>
-      <span className="info-tip-popup">{text}</span>
-    </span>
-  );
-}
 
 export default function SynthControls({
   parameters,
@@ -76,212 +70,248 @@ export default function SynthControls({
   };
 
   return (
-    <div className="synth-controls">
-      <h2>Synth Controls</h2>
+    <div className="synth-controls-panel">
+      <div className="synth-header">
+        <h2>SYNTHESIZER</h2>
+      </div>
 
-      <section className="control-section">
-        <h3>Master</h3>
-        <div className="control">
-          <label>Gain: {parameters.gain.toFixed(2)}</label>
-          <input
-            type="range"
-            min="0"
-            max="2"
-            step="0.01"
-            value={parameters.gain}
-            onChange={(e) => onParameterChange({ gain: Number(e.target.value) })}
-          />
-        </div>
-      </section>
+      <div className="synth-sections">
+        {/* Row 1: Oscillator & Filter */}
+        <div className="synth-row">
+          <div className="synth-section">
+            <h3>OSCILLATOR</h3>
+            <div className="synth-knobs">
+              <div className="synth-waveform-selector">
+                <label>WAVE</label>
+                <select
+                  value={parameters.oscillator.type}
+                  onChange={(e) =>
+                    updateOscillator({ type: e.target.value as OscillatorType })
+                  }
+                  className="synth-select"
+                >
+                  <option value="sine">~</option>
+                  <option value="square">⎍</option>
+                  <option value="sawtooth">/|</option>
+                  <option value="triangle">/\</option>
+                </select>
+              </div>
+              <Knob
+                label="Detune"
+                value={parameters.oscillator.detune}
+                min={-100}
+                max={100}
+                step={1}
+                displayValue={`${parameters.oscillator.detune > 0 ? '+' : ''}${parameters.oscillator.detune}`}
+                onChange={(v) => updateOscillator({ detune: v })}
+                color="#3b82f6"
+                tooltip={TOOLTIPS.detune}
+              />
+            </div>
+          </div>
 
-      <section className="control-section">
-        <h3>Oscillator</h3>
-        <div className="control">
-          <label>Type <InfoTip id="osc-type" /></label>
-          <select
-            value={parameters.oscillator.type}
-            onChange={(e) =>
-              updateOscillator({ type: e.target.value as OscillatorType })
-            }
-          >
-            <option value="sine">Sine</option>
-            <option value="square">Square</option>
-            <option value="sawtooth">Sawtooth</option>
-            <option value="triangle">Triangle</option>
-          </select>
+          <div className="synth-section">
+            <h3>FILTER</h3>
+            <div className="synth-knobs">
+              <Knob
+                label="Cutoff"
+                value={parameters.filter.frequency}
+                min={20}
+                max={20000}
+                step={10}
+                displayValue={parameters.filter.frequency >= 1000
+                  ? `${(parameters.filter.frequency / 1000).toFixed(1)}k`
+                  : `${parameters.filter.frequency}`
+                }
+                onChange={(v) => updateFilter({ frequency: v })}
+                size="large"
+                color="#10b981"
+                tooltip={TOOLTIPS.filterFreq}
+              />
+              <Knob
+                label="Resonance"
+                value={parameters.filter.q}
+                min={0.1}
+                max={20}
+                step={0.1}
+                onChange={(v) => updateFilter({ q: v })}
+                size="large"
+                color="#10b981"
+                tooltip={TOOLTIPS.filterQ}
+              />
+            </div>
+          </div>
         </div>
-        <div className="control">
-          <label>Detune: {parameters.oscillator.detune} <InfoTip id="osc-detune" /></label>
-          <input
-            type="range"
-            min="-100"
-            max="100"
-            value={parameters.oscillator.detune}
-            onChange={(e) => updateOscillator({ detune: Number(e.target.value) })}
-          />
-        </div>
-      </section>
 
-      <section className="control-section">
-        <h3>Filter</h3>
-        <div className="control">
-          <label>Frequency: {parameters.filter.frequency}Hz <InfoTip id="filter-freq" /></label>
-          <input
-            type="range"
-            min="20"
-            max="20000"
-            value={parameters.filter.frequency}
-            onChange={(e) => updateFilter({ frequency: Number(e.target.value) })}
-          />
+        {/* Row 2: Envelope */}
+        <div className="synth-row">
+          <div className="synth-section synth-section-wide">
+            <h3>ENVELOPE (ADSR)</h3>
+            <div className="synth-knobs">
+              <Knob
+                label="Attack"
+                value={parameters.envelope.attack}
+                min={0.001}
+                max={2}
+                step={0.001}
+                displayValue={`${(parameters.envelope.attack * 1000).toFixed(0)}ms`}
+                onChange={(v) => updateEnvelope({ attack: v })}
+                color="#f59e0b"
+                tooltip={TOOLTIPS.attack}
+              />
+              <Knob
+                label="Decay"
+                value={parameters.envelope.decay}
+                min={0.001}
+                max={2}
+                step={0.001}
+                displayValue={`${(parameters.envelope.decay * 1000).toFixed(0)}ms`}
+                onChange={(v) => updateEnvelope({ decay: v })}
+                color="#f59e0b"
+                tooltip={TOOLTIPS.decay}
+              />
+              <Knob
+                label="Sustain"
+                value={parameters.envelope.sustain}
+                min={0}
+                max={1}
+                step={0.01}
+                displayValue={`${(parameters.envelope.sustain * 100).toFixed(0)}%`}
+                onChange={(v) => updateEnvelope({ sustain: v })}
+                color="#f59e0b"
+                tooltip={TOOLTIPS.sustain}
+              />
+              <Knob
+                label="Release"
+                value={parameters.envelope.release}
+                min={0.001}
+                max={5}
+                step={0.001}
+                displayValue={`${(parameters.envelope.release * 1000).toFixed(0)}ms`}
+                onChange={(v) => updateEnvelope({ release: v })}
+                color="#f59e0b"
+                tooltip={TOOLTIPS.release}
+              />
+            </div>
+          </div>
         </div>
-        <div className="control">
-          <label>Resonance: {parameters.filter.q.toFixed(2)} <InfoTip id="filter-res" /></label>
-          <input
-            type="range"
-            min="0.1"
-            max="20"
-            step="0.1"
-            value={parameters.filter.q}
-            onChange={(e) => updateFilter({ q: Number(e.target.value) })}
-          />
-        </div>
-      </section>
 
-      <section className="control-section">
-        <h3>Envelope</h3>
-        <div className="control">
-          <label>Attack: {parameters.envelope.attack.toFixed(3)}s <InfoTip id="env-attack" /></label>
-          <input
-            type="range"
-            min="0.001"
-            max="2"
-            step="0.001"
-            value={parameters.envelope.attack}
-            onChange={(e) => updateEnvelope({ attack: Number(e.target.value) })}
-          />
-        </div>
-        <div className="control">
-          <label>Decay: {parameters.envelope.decay.toFixed(3)}s <InfoTip id="env-decay" /></label>
-          <input
-            type="range"
-            min="0.001"
-            max="2"
-            step="0.001"
-            value={parameters.envelope.decay}
-            onChange={(e) => updateEnvelope({ decay: Number(e.target.value) })}
-          />
-        </div>
-        <div className="control">
-          <label>Sustain: {parameters.envelope.sustain.toFixed(2)} <InfoTip id="env-sustain" /></label>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={parameters.envelope.sustain}
-            onChange={(e) => updateEnvelope({ sustain: Number(e.target.value) })}
-          />
-        </div>
-        <div className="control">
-          <label>Release: {parameters.envelope.release.toFixed(3)}s <InfoTip id="env-release" /></label>
-          <input
-            type="range"
-            min="0.001"
-            max="5"
-            step="0.001"
-            value={parameters.envelope.release}
-            onChange={(e) => updateEnvelope({ release: Number(e.target.value) })}
-          />
-        </div>
-      </section>
+        {/* Row 3: Effects */}
+        <div className="synth-row">
+          <div className="synth-section">
+            <div className="synth-section-header">
+              <h3>REVERB</h3>
+              <label className="synth-toggle">
+                <input
+                  type="checkbox"
+                  checked={parameters.effects.reverb.enabled}
+                  onChange={(e) => updateReverb({ enabled: e.target.checked })}
+                />
+                <span className="synth-toggle-slider" />
+              </label>
+            </div>
+            <div className="synth-knobs">
+              <Knob
+                label="Mix"
+                value={parameters.effects.reverb.wet}
+                min={0}
+                max={1}
+                step={0.01}
+                displayValue={`${(parameters.effects.reverb.wet * 100).toFixed(0)}%`}
+                onChange={(v) => updateReverb({ wet: v })}
+                disabled={!parameters.effects.reverb.enabled}
+                color="#8b5cf6"
+                tooltip={TOOLTIPS.reverbWet}
+              />
+              <Knob
+                label="Decay"
+                value={parameters.effects.reverb.decay}
+                min={0.1}
+                max={10}
+                step={0.1}
+                displayValue={`${parameters.effects.reverb.decay.toFixed(1)}s`}
+                onChange={(v) => updateReverb({ decay: v })}
+                disabled={!parameters.effects.reverb.enabled}
+                color="#8b5cf6"
+                tooltip={TOOLTIPS.reverbDecay}
+              />
+            </div>
+          </div>
 
-      <section className="control-section">
-        <h3>Reverb</h3>
-        <div className="control checkbox">
-          <label>
-            <input
-              type="checkbox"
-              checked={parameters.effects.reverb.enabled}
-              onChange={(e) => updateReverb({ enabled: e.target.checked })}
-            />
-            Enabled <InfoTip id="reverb-enabled" />
-          </label>
+          <div className="synth-section">
+            <div className="synth-section-header">
+              <h3>DELAY</h3>
+              <label className="synth-toggle">
+                <input
+                  type="checkbox"
+                  checked={parameters.effects.delay.enabled}
+                  onChange={(e) => updateDelay({ enabled: e.target.checked })}
+                />
+                <span className="synth-toggle-slider" />
+              </label>
+            </div>
+            <div className="synth-knobs">
+              <Knob
+                label="Mix"
+                value={parameters.effects.delay.wet}
+                min={0}
+                max={1}
+                step={0.01}
+                displayValue={`${(parameters.effects.delay.wet * 100).toFixed(0)}%`}
+                onChange={(v) => updateDelay({ wet: v })}
+                disabled={!parameters.effects.delay.enabled}
+                color="#ec4899"
+                tooltip={TOOLTIPS.delayWet}
+              />
+              <Knob
+                label="Time"
+                value={parameters.effects.delay.time}
+                min={0.001}
+                max={2}
+                step={0.001}
+                displayValue={`${(parameters.effects.delay.time * 1000).toFixed(0)}ms`}
+                onChange={(v) => updateDelay({ time: v })}
+                disabled={!parameters.effects.delay.enabled}
+                color="#ec4899"
+                tooltip={TOOLTIPS.delayTime}
+              />
+              <Knob
+                label="Feedback"
+                value={parameters.effects.delay.feedback}
+                min={0}
+                max={0.95}
+                step={0.01}
+                displayValue={`${(parameters.effects.delay.feedback * 100).toFixed(0)}%`}
+                onChange={(v) => updateDelay({ feedback: v })}
+                disabled={!parameters.effects.delay.enabled}
+                color="#ec4899"
+                tooltip={TOOLTIPS.delayFeedback}
+              />
+            </div>
+          </div>
         </div>
-        <div className="control">
-          <label>Wet: {parameters.effects.reverb.wet.toFixed(2)} <InfoTip id="reverb-wet" /></label>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={parameters.effects.reverb.wet}
-            onChange={(e) => updateReverb({ wet: Number(e.target.value) })}
-            disabled={!parameters.effects.reverb.enabled}
-          />
-        </div>
-        <div className="control">
-          <label>Decay: {parameters.effects.reverb.decay.toFixed(2)}s <InfoTip id="reverb-decay" /></label>
-          <input
-            type="range"
-            min="0.1"
-            max="10"
-            step="0.1"
-            value={parameters.effects.reverb.decay}
-            onChange={(e) => updateReverb({ decay: Number(e.target.value) })}
-            disabled={!parameters.effects.reverb.enabled}
-          />
-        </div>
-      </section>
 
-      <section className="control-section">
-        <h3>Delay</h3>
-        <div className="control checkbox">
-          <label>
-            <input
-              type="checkbox"
-              checked={parameters.effects.delay.enabled}
-              onChange={(e) => updateDelay({ enabled: e.target.checked })}
-            />
-            Enabled <InfoTip id="delay-enabled" />
-          </label>
+        {/* Row 4: Master */}
+        <div className="synth-row">
+          <div className="synth-section synth-section-center">
+            <h3>MASTER</h3>
+            <div className="synth-knobs">
+              <Knob
+                label="Gain"
+                value={parameters.gain}
+                min={0}
+                max={2}
+                step={0.01}
+                displayValue={`${(parameters.gain * 100).toFixed(0)}%`}
+                onChange={(v) => onParameterChange({ gain: v })}
+                size="large"
+                color="#ef4444"
+                tooltip={TOOLTIPS.gain}
+              />
+            </div>
+          </div>
         </div>
-        <div className="control">
-          <label>Wet: {parameters.effects.delay.wet.toFixed(2)} <InfoTip id="delay-wet" /></label>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={parameters.effects.delay.wet}
-            onChange={(e) => updateDelay({ wet: Number(e.target.value) })}
-            disabled={!parameters.effects.delay.enabled}
-          />
-        </div>
-        <div className="control">
-          <label>Time: {parameters.effects.delay.time.toFixed(3)}s <InfoTip id="delay-time" /></label>
-          <input
-            type="range"
-            min="0.001"
-            max="2"
-            step="0.001"
-            value={parameters.effects.delay.time}
-            onChange={(e) => updateDelay({ time: Number(e.target.value) })}
-            disabled={!parameters.effects.delay.enabled}
-          />
-        </div>
-        <div className="control">
-          <label>Feedback: {parameters.effects.delay.feedback.toFixed(2)} <InfoTip id="delay-feedback" /></label>
-          <input
-            type="range"
-            min="0"
-            max="0.95"
-            step="0.01"
-            value={parameters.effects.delay.feedback}
-            onChange={(e) => updateDelay({ feedback: Number(e.target.value) })}
-            disabled={!parameters.effects.delay.enabled}
-          />
-        </div>
-      </section>
+      </div>
     </div>
   );
 }
