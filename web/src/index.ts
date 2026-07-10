@@ -34,13 +34,17 @@ if (fs.existsSync(uiIndexPath)) {
   });
 }
 
-// Shared audio engine state
-let synth: Synthesizer | null = null;
-let sequencer: Sequencer | null = null;
+interface SynthData {
+  synth: Synthesizer;
+  sequencer: Sequencer;
+  pattern: Pattern;
+  patterns: Pattern[];
+}
+
+const synths = new Map<number, SynthData>();
 let samplePlayer: SamplePlayer | null = null;
 let discordStreamer: DiscordAudioStreamer | null = null;
 let hasActiveSession = false;
-const patterns = new Map<string, Pattern>();
 const streamingState = {
   isStreamingToDiscord: false,
   currentStream: null as AudioBuffer | null,
@@ -104,209 +108,103 @@ function saveSavedPatterns(data: SavedPatternData[]) {
       file: SAVED_PATTERNS_FILE,
       patternCount: data.length,
     });
-    throw error; // Re-throw so caller knows it failed
+    throw error;
   }
 }
 
-// Initialize audio engine
+function initSynth(synthId: number) {
+  if (synths.has(synthId)) return;
+
+  const synth = new Synthesizer();
+  const sequencer = new Sequencer(synth);
+  const pattern = sequencer.createEmptyPattern(`Synth ${synthId}`);
+  const patterns: Pattern[] = [pattern];
+
+  sequencer.onStep((step: number) => {
+    broadcastToClients({ type: 'sequencerStep', data: { synthId, step } });
+  });
+
+  synths.set(synthId, { synth, sequencer, pattern, patterns });
+}
+
 function initAudioEngine() {
-  if (!synth) {
-    synth = new Synthesizer();
-    sequencer = new Sequencer(synth);
+  if (synths.size === 0) {
+    initSynth(1);
     samplePlayer = new SamplePlayer();
     discordStreamer = new DiscordAudioStreamer();
-
-    // Broadcast step changes to all clients
-    sequencer.onStep((step: number) => {
-      broadcastToClients({ type: 'sequencerStep', data: { step } });
-    });
-
-    // Create default pattern
-    const defaultPattern = sequencer.createEmptyPattern('Default');
-    patterns.set(defaultPattern.id, defaultPattern);
   }
 }
 
-// Discord streaming endpoints
-app.post('/discord/stream/start', async (req, res) => {
-  try {
-    initAudioEngine();
-    
-    const patternId = req.body.patternId;
-    const pattern = patterns.get(patternId);
-    
-    if (!pattern) {
-      return res.status(404).json({ error: 'Pattern not found' });
-    }
+const debugLog = (msg: string) => {
+  const line = `[${new Date().toISOString()}] ${msg}`;
+  console.log(line);
+  try { fs.appendFileSync(path.join(__dirname, '..', 'debug.log'), line + '\n'); } catch {}
+};
 
-    // Prepare audio for Discord streaming
-    const audioBuffers: AudioBuffer[] = await discordStreamer?.prepareForDiscordStreaming() || [];
-    
-    if (audioBuffers.length === 0) {
-      return res.status(400).json({ error: 'Failed to prepare audio buffers' });
-    }
+// Synth CRUD endpoints
+app.post('/synth/create', (req, res) => {
+  initAudioEngine();
+  const { synthId } = req.body;
 
-    // Update streaming state
-    streamingState.isStreamingToDiscord = true;
-    streamingState.currentStream = audioBuffers[0];
-    streamingState.streamQueue = audioBuffers;
-    streamingState.streamPosition = 0;
-    streamingState.lastUpdate = Date.now();
-
-    // Trigger streaming to Discord via WebSocket
-    wss.clients.forEach((client) => {
-      if (isWebSocketOpen(client)) {
-        client.send(JSON.stringify({
-          type: 'discordStreamingStart',
-          data: {
-            patternId,
-            timestamp: Date.now(),
-            bufferCount: audioBuffers.length,
-            sampleRate: audioBuffers[0].sampleRate,
-            channelCount: audioBuffers[0].numberOfChannels
-          }
-        }));
-      }
-    });
-
-    res.json({ 
-      success: true, 
-      message: 'Discord streaming started',
-      patternId,
-      bufferCount: audioBuffers.length,
-      duration: audioBuffers.reduce((sum, buffer) => sum + buffer.duration, 0)
-    });
-  } catch (error) {
-    console.error('Error starting Discord streaming:', error);
-    res.status(500).json({ error: 'Failed to start Discord streaming' });
+  if (!synthId || synthId < 1 || synthId > 2 || synths.has(synthId)) {
+    return res.status(400).json({ error: 'Invalid synthId' });
   }
+
+  initSynth(synthId);
+  const synthData = synths.get(synthId)!;
+
+  broadcastToClients({
+    type: 'synthCreated',
+    data: { synthId, pattern: synthData.pattern, synthParams: synthData.synth.getParameters() },
+  });
+
+  res.json({
+    synthId,
+    pattern: synthData.pattern,
+    patterns: synthData.patterns,
+    synthParams: synthData.synth.getParameters(),
+  });
 });
 
-app.post('/discord/stream/stop', async (req, res) => {
-  try {
-    // Update streaming state
-    streamingState.isStreamingToDiscord = false;
-    streamingState.currentStream = null;
-    streamingState.streamQueue = [];
-    streamingState.streamPosition = 0;
+app.delete('/synth/:synthId', (req, res) => {
+  const synthId = parseInt(req.params.synthId);
 
-    // Notify bots to stop streaming
-    wss.clients.forEach((client) => {
-      if (isWebSocketOpen(client)) {
-        client.send(JSON.stringify({
-          type: 'discordStreamingStop',
-          data: {
-            timestamp: Date.now(),
-            reason: 'manual_stop'
-          }
-        }));
-      }
-    });
-
-    res.json({ success: true, message: 'Discord streaming stopped' });
-  } catch (error) {
-    console.error('Error stopping Discord streaming:', error);
-    res.status(500).json({ error: 'Failed to stop Discord streaming' });
+  if (synthId === 1) {
+    return res.status(400).json({ error: 'Cannot remove synth 1' });
   }
-});
 
-app.post('/discord/stream/sync', async (req, res) => {
-  try {
-    // Send current streaming state to connected bots
-    wss.clients.forEach((client) => {
-      if (isWebSocketOpen(client)) {
-        client.send(JSON.stringify({
-          type: 'discordStreamingSync',
-          data: {
-            timestamp: Date.now(),
-            isStreaming: streamingState.isStreamingToDiscord,
-            currentStream: streamingState.currentStream,
-            streamPosition: streamingState.streamPosition,
-            queueLength: streamingState.streamQueue.length,
-            patterns: Array.from(patterns.values()),
-            samples: samplePlayer?.getSamples() || []
-          }
-        }));
-      }
-    });
-
-    res.json({ success: true, message: 'Discord streaming sync sent' });
-  } catch (error) {
-    console.error('Error syncing Discord streaming:', error);
-    res.status(500).json({ error: 'Failed to sync Discord streaming' });
+  const synthData = synths.get(synthId);
+  if (synthData) {
+    synthData.sequencer.stop();
+    synths.delete(synthId);
   }
-});
 
-app.post('/discord/stream/pattern', async (req, res) => {
-  try {
-    initAudioEngine();
-    
-    const { pattern, action } = req.body;
-    
-    if (action === 'create') {
-      const newPattern: Pattern = {
-        id: `pattern-${Date.now()}`,
-        name: pattern.name || 'New Pattern',
-        steps: pattern.steps || sequencer?.createEmptyPattern().steps || [],
-        tempo: pattern.tempo || 120,
-      };
-      patterns.set(newPattern.id, newPattern);
-      console.log('Created new pattern:', newPattern);
-    } else if (action === 'update') {
-      const existingPattern = patterns.get(pattern.id);
-      if (!existingPattern) {
-        return res.status(404).json({ error: 'Pattern not found' });
-      }
-      
-      patterns.set(pattern.id, { ...existingPattern, ...pattern });
-      console.log('Updated pattern:', pattern.id);
-    } else if (action === 'delete') {
-      patterns.delete(pattern.id);
-      console.log('Deleted pattern:', pattern.id);
-    }
-
-    // Notify all connected clients of pattern change
-    wss.clients.forEach((client) => {
-      if (isWebSocketOpen(client)) {
-        client.send(JSON.stringify({
-          type: 'patternUpdated',
-          data: {
-            pattern: action === 'delete' ? { id: pattern.id } : patterns.get(pattern.id),
-            action,
-            timestamp: Date.now()
-          }
-        }));
-      }
-    });
-
-    res.json({ success: true, message: `Pattern ${action} completed` });
-  } catch (error) {
-    console.error(`Error ${req.body.action} pattern:`, error);
-    res.status(500).json({ error: `Failed to ${req.body.action} pattern` });
-  }
-});
-
-// Original REST API Routes
-
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
+  broadcastToClients({ type: 'synthRemoved', data: { synthId } });
+  res.json({ success: true });
 });
 
 // Synth parameters
-app.get('/synth/parameters', (req, res) => {
+app.get('/synth/:synthId/parameters', (req, res) => {
   initAudioEngine();
-  res.json(synth!.getParameters());
+  const synthId = parseInt(req.params.synthId);
+  const synthData = synths.get(synthId);
+  if (!synthData) return res.status(404).json({ error: 'Synth not found' });
+  res.json(synthData.synth.getParameters());
 });
 
-app.post('/synth/parameters', (req, res) => {
+app.post('/synth/:synthId/parameters', (req, res) => {
   initAudioEngine();
+  const synthId = parseInt(req.params.synthId);
+  const synthData = synths.get(synthId);
+  if (!synthData) return res.status(404).json({ error: 'Synth not found' });
+
   hasActiveSession = true;
 
   try {
-    synth!.updateParameters(req.body as Partial<SynthParameters>);
-    broadcastToClients({ type: 'synthUpdate', data: synth!.getParameters() });
-    if (sequencer && sequencer.getIsPlaying()) {
-      schedulePatternAudio();
+    synthData.synth.updateParameters(req.body as Partial<SynthParameters>);
+    broadcastToClients({ type: 'synthUpdate', data: { synthId, parameters: synthData.synth.getParameters() } });
+    if (synthData.sequencer && synthData.sequencer.getIsPlaying()) {
+      schedulePatternAudio(synthId);
     }
     res.json({ success: true });
   } catch (error) {
@@ -321,25 +219,92 @@ app.post('/synth/parameters', (req, res) => {
   }
 });
 
-app.post('/synth/note', (req, res) => {
+app.post('/synth/:synthId/note', (req, res) => {
   initAudioEngine();
+  const synthId = parseInt(req.params.synthId);
+  const synthData = synths.get(synthId);
+  if (!synthData) return res.status(404).json({ error: 'Synth not found' });
+
   const { note, duration, velocity } = req.body;
-  synth!.playNote(note, duration, velocity);
+  synthData.synth.playNote(note, duration, velocity);
   res.json({ success: true });
 });
 
-app.post('/synth/note-on', (req, res) => {
+app.post('/synth/:synthId/note-on', (req, res) => {
   initAudioEngine();
+  const synthId = parseInt(req.params.synthId);
+  const synthData = synths.get(synthId);
+  if (!synthData) return res.status(404).json({ error: 'Synth not found' });
+
   const { note, velocity } = req.body;
-  synth!.noteOn(note, velocity);
+  synthData.synth.noteOn(note, velocity);
   res.json({ success: true });
 });
 
-app.post('/synth/note-off', (req, res) => {
+app.post('/synth/:synthId/note-off', (req, res) => {
   initAudioEngine();
+  const synthId = parseInt(req.params.synthId);
+  const synthData = synths.get(synthId);
+  if (!synthData) return res.status(404).json({ error: 'Synth not found' });
+
   const { note } = req.body;
-  synth!.noteOff(note);
+  synthData.synth.noteOff(note);
   res.json({ success: true });
+});
+
+app.post('/synth/:synthId/tempo', (req, res) => {
+  initAudioEngine();
+  const synthId = parseInt(req.params.synthId);
+  const synthData = synths.get(synthId);
+  if (!synthData) return res.status(404).json({ error: 'Synth not found' });
+
+  const { tempo } = req.body;
+  if (typeof tempo !== 'number' || isNaN(tempo) || tempo < 20 || tempo > 400) {
+    return res.status(400).json({ error: 'Invalid tempo', message: 'Tempo must be between 20 and 400 BPM' });
+  }
+
+  synthData.sequencer.setTempo(tempo);
+  synthData.pattern = { ...synthData.pattern, tempo };
+  broadcastToClients({ type: 'tempoChange', data: { synthId, tempo } });
+  res.json({ success: true });
+});
+
+// Patterns per synth
+app.get('/synth/:synthId/patterns', (req, res) => {
+  const synthId = parseInt(req.params.synthId);
+  const synthData = synths.get(synthId);
+  if (!synthData) return res.status(404).json({ error: 'Synth not found' });
+  res.json(synthData.patterns);
+});
+
+app.put('/synth/:synthId/patterns/:patternId', (req, res) => {
+  const synthId = parseInt(req.params.synthId);
+  const synthData = synths.get(synthId);
+  if (!synthData) return res.status(404).json({ error: 'Synth not found' });
+
+  const pattern: Pattern = req.body;
+  synthData.pattern = pattern;
+  synthData.patterns = synthData.patterns.map(p => p.id === pattern.id ? pattern : p);
+
+  broadcastToClients({ type: 'patternUpdated', data: { synthId, pattern } });
+  if (synthData.sequencer && synthData.sequencer.getIsPlaying()) {
+    synthData.sequencer.loadPattern(pattern);
+    schedulePatternAudio(synthId);
+  }
+  res.json(pattern);
+});
+
+app.post('/synth/:synthId/patterns', (req, res) => {
+  const synthId = parseInt(req.params.synthId);
+  const synthData = synths.get(synthId);
+  if (!synthData) return res.status(404).json({ error: 'Synth not found' });
+
+  hasActiveSession = true;
+  const pattern = synthData.sequencer.createEmptyPattern(req.body.name || 'New Pattern');
+  synthData.patterns.push(pattern);
+
+  broadcastToClients({ type: 'patternCreated', data: { synthId, pattern } });
+  res.json(pattern);
 });
 
 // Drum machine
@@ -357,8 +322,12 @@ app.post('/drum/step', (req, res) => {
   const activeCount = DRUM_INSTRUMENTS.reduce((sum, inst) => sum + drumState[inst].steps.filter(Boolean).length, 0);
   debugLog(`POST /drum/step: ${instrument}[${step}] = ${active}, totalActive=${activeCount}`);
   broadcastToClients({ type: 'drumStep', data: { instrument, step, active } });
-  if (sequencer && sequencer.getIsPlaying()) {
-    schedulePatternAudio();
+  for (const [id] of synths) {
+    const synthData = synths.get(id);
+    if (synthData?.sequencer?.getIsPlaying()) {
+      schedulePatternAudio(id);
+      break;
+    }
   }
   res.json({ success: true });
 });
@@ -374,8 +343,12 @@ app.post('/drum/settings', (req, res) => {
   if (settings.tone !== undefined) s.tone = clamp(settings.tone, 0, 1);
   if (settings.extra !== undefined) s.extra = clamp(settings.extra, 0, 1);
   broadcastToClients({ type: 'drumSettings', data: { instrument, settings: { ...s } } });
-  if (sequencer && sequencer.getIsPlaying()) {
-    schedulePatternAudio();
+  for (const [id] of synths) {
+    const synthData = synths.get(id);
+    if (synthData?.sequencer?.getIsPlaying()) {
+      schedulePatternAudio(id);
+      break;
+    }
   }
   res.json({ success: true });
 });
@@ -385,8 +358,12 @@ app.put('/drum/state', (req, res) => {
   if (!state) return res.status(400).json({ error: 'state is required' });
   drumState = state;
   broadcastToClients({ type: 'drumFullState', data: { drumState: state } });
-  if (sequencer && sequencer.getIsPlaying()) {
-    schedulePatternAudio();
+  for (const [id] of synths) {
+    const synthData = synths.get(id);
+    if (synthData?.sequencer?.getIsPlaying()) {
+      schedulePatternAudio(id);
+      break;
+    }
   }
   res.json({ success: true });
 });
@@ -394,8 +371,12 @@ app.put('/drum/state', (req, res) => {
 app.post('/drum/reset', (req, res) => {
   drumState = createDefaultDrumState();
   broadcastToClients({ type: 'drumReset' });
-  if (sequencer && sequencer.getIsPlaying()) {
-    schedulePatternAudio();
+  for (const [id] of synths) {
+    const synthData = synths.get(id);
+    if (synthData?.sequencer?.getIsPlaying()) {
+      schedulePatternAudio(id);
+      break;
+    }
   }
   res.json({ success: true });
 });
@@ -403,15 +384,19 @@ app.post('/drum/reset', (req, res) => {
 app.post('/drum/master-volume', (req, res) => {
   const { volume } = req.body as { volume: number };
   drumMasterVolume = clamp(volume, 0, 2);
-  if (sequencer && sequencer.getIsPlaying()) {
-    schedulePatternAudio();
+  for (const [id] of synths) {
+    const synthData = synths.get(id);
+    if (synthData?.sequencer?.getIsPlaying()) {
+      schedulePatternAudio(id);
+      break;
+    }
   }
   res.json({ success: true });
 });
 
-// Saved patterns (persistent storage) - must be before generic :id routes
+// Saved patterns
 app.post('/patterns/save', (req, res) => {
-  const { name, steps, synthParams, tempo, drumState: ds, drumMasterVolume: dmv } = req.body;
+  const { name, steps, synthParams, tempo, drumState: ds, drumMasterVolume: dmv, synthId } = req.body;
   if (!name || !steps) {
     return res.status(400).json({ error: 'name and steps are required' });
   }
@@ -458,98 +443,48 @@ app.delete('/patterns/saved/:id', (req, res) => {
   res.json({ success: true });
 });
 
-// Patterns
-app.get('/patterns', (req, res) => {
-  res.json(Array.from(patterns.values()));
-});
-
-app.get('/patterns/:id', (req, res) => {
-  const pattern = patterns.get(req.params.id);
-  if (!pattern) {
-    return res.status(404).json({ error: 'Pattern not found' });
-  }
-  res.json(pattern);
-});
-
-app.post('/patterns', (req, res) => {
-  initAudioEngine();
-  hasActiveSession = true;
-  const pattern: Pattern = req.body;
-  patterns.set(pattern.id, pattern);
-  broadcastToClients({ type: 'patternCreated', data: pattern });
-  res.json(pattern);
-});
-
-app.put('/patterns/:id', (req, res) => {
-  hasActiveSession = true;
-  const pattern: Pattern = req.body;
-  patterns.set(req.params.id, pattern);
-  broadcastToClients({ type: 'patternUpdated', data: pattern });
-  if (sequencer && sequencer.getIsPlaying()) {
-    sequencer.loadPattern(pattern);
-    schedulePatternAudio();
-  }
-  res.json(pattern);
-});
-
-app.delete('/patterns/:id', (req, res) => {
-  hasActiveSession = true;
-  patterns.delete(req.params.id);
-  broadcastToClients({ type: 'patternDeleted', data: { id: req.params.id } });
-  res.json({ success: true });
-});
-
 // Sequencer
 app.post('/sequencer/play', (req, res) => {
   initAudioEngine();
   hasActiveSession = true;
-  const { patternId } = req.body;
-  const pattern = patterns.get(patternId);
+  const { synthId = 1, patternId } = req.body;
+  const synthData = synths.get(synthId);
 
+  if (!synthData) {
+    return res.status(404).json({ error: 'Synth not found' });
+  }
+
+  const pattern = patternId ? synthData.patterns.find(p => p.id === patternId) : synthData.pattern;
   if (!pattern) {
     return res.status(404).json({ error: 'Pattern not found' });
   }
 
-  sequencer!.loadPattern(pattern);
-  sequencer!.play();
+  synthData.sequencer.loadPattern(pattern);
+  synthData.sequencer.play();
+  synthData.pattern = pattern;
 
   const drumCount = DRUM_INSTRUMENTS.reduce((sum, inst) => sum + drumState[inst].steps.filter(Boolean).length, 0);
-  debugLog(`POST /sequencer/play: patternId=${patternId}, drumActiveSteps=${drumCount}`);
-  broadcastPatternAudio();
-  broadcastToClients({ type: 'sequencerPlay', data: { patternId } });
+  debugLog(`POST /sequencer/play: synthId=${synthId}, patternId=${pattern.id}, drumActiveSteps=${drumCount}`);
+  broadcastPatternAudio(synthId);
+  broadcastToClients({ type: 'sequencerPlay', data: { synthId, patternId: pattern.id } });
   res.json({ success: true });
 });
 
 app.post('/sequencer/stop', (req, res) => {
   initAudioEngine();
-  sequencer!.stop();
-  broadcastToClients({ type: 'sequencerStop' });
+  const { synthId = 1 } = req.body;
+  const synthData = synths.get(synthId);
+
+  if (!synthData) {
+    return res.status(404).json({ error: 'Synth not found' });
+  }
+
+  synthData.sequencer.stop();
+  broadcastToClients({ type: 'sequencerStop', data: { synthId } });
   res.json({ success: true });
 });
 
-app.post('/sequencer/tempo', (req, res) => {
-  initAudioEngine();
-  hasActiveSession = true;
-  const { tempo } = req.body;
-
-  // Validate tempo
-  if (typeof tempo !== 'number' || isNaN(tempo) || tempo < 20 || tempo > 400) {
-    return res.status(400).json({
-      error: 'Invalid tempo',
-      message: 'Tempo must be a number between 20 and 400 BPM',
-      received: tempo,
-    });
-  }
-
-  sequencer!.setTempo(tempo);
-  broadcastToClients({ type: 'tempoChange', data: { tempo } });
-  if (sequencer && sequencer.getIsPlaying()) {
-    schedulePatternAudio();
-  }
-  res.json({ success: true });
-});
-
-// Health check endpoint (for Railway/Docker)
+// Health check endpoint
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -629,15 +564,21 @@ wss.on('connection', (ws) => {
 
   initAudioEngine();
 
-  // Send current state
+  const synthsData = Array.from(synths.entries()).map(([id, data]) => ({
+    synthId: id,
+    pattern: data.pattern,
+    patterns: data.patterns,
+    synthParams: data.synth.getParameters(),
+    isPlaying: data.sequencer.getIsPlaying(),
+  }));
+
   ws.send(JSON.stringify({
     type: 'init',
     data: {
       hasActiveSession,
-      synthParameters: synth!.getParameters(),
-      patterns: Array.from(patterns.values()),
+      synths: synthsData,
       samples: samplePlayer!.getSamples(),
-      streamingState: streamingState,
+      streamingState,
       drumState,
     },
   }));
@@ -653,32 +594,29 @@ wss.on('connection', (ws) => {
   });
 });
 
-const debugLog = (msg: string) => {
-  const line = `[${new Date().toISOString()}] ${msg}`;
-  console.log(line);
-  try { fs.appendFileSync(path.join(__dirname, '..', 'debug.log'), line + '\n'); } catch {}
-};
-
-function renderPatternAudio(pattern: Pattern): string | null {
+function renderPatternAudio(synthId: number): string | null {
   try {
+    const synthData = synths.get(synthId);
+    if (!synthData) return null;
+
     const sampleRate = AUDIO_CONTEXT.RENDER_SAMPLE_RATE;
-    const tempo = clamp(pattern.tempo || 120, 20, 400);
+    const tempo = clamp(synthData.pattern.tempo || 120, 20, 400);
     const drumActiveSteps = DRUM_INSTRUMENTS.reduce((sum, inst) => {
       const track = drumState[inst];
       if (!track || !track.steps) return sum;
       return sum + track.steps.filter(Boolean).length;
     }, 0);
-    debugLog(`renderPatternAudio: tempo=${tempo}, drumActiveSteps=${drumActiveSteps}`);
+    debugLog(`renderPatternAudio synth=${synthId}: tempo=${tempo}, drumActiveSteps=${drumActiveSteps}`);
     const beatsPerStep = 60 / tempo / 4;
     const stepDuration = beatsPerStep;
     const totalSamples = Math.floor(16 * stepDuration * sampleRate);
     const fullPCM = new Float32Array(totalSamples);
 
     for (let i = 0; i < 16; i++) {
-      const step = pattern.steps[i];
+      const step = synthData.pattern.steps[i];
       if (step.note) {
         const noteDur = Math.max(stepDuration - 0.01, 0.05);
-        const notePCM = synth!.renderNote(step.note, noteDur, step.velocity, sampleRate);
+        const notePCM = synthData.synth.renderNote(step.note, noteDur, step.velocity, sampleRate);
         const offset = Math.floor(i * stepDuration * sampleRate);
         for (let j = 0; j < notePCM.length && offset + j < totalSamples; j++) {
           fullPCM[offset + j] += notePCM[j];
@@ -686,16 +624,14 @@ function renderPatternAudio(pattern: Pattern): string | null {
       }
     }
 
-    // Mix in drum audio with boost factor, then soft-clip master
-    const drumPCM = DrumSynthesizer.renderPattern(drumState, pattern.tempo, sampleRate);
+    const drumPCM = DrumSynthesizer.renderPattern(drumState, synthData.pattern.tempo, sampleRate);
     let drumMax = 0;
     for (let i = 0; i < drumPCM.length; i++) { const a = Math.abs(drumPCM[i]); if (a > drumMax) drumMax = a; }
-    debugLog(`renderPatternAudio: drumPCM max=${drumMax.toFixed(4)}, length=${drumPCM.length}`);
+    debugLog(`renderPatternAudio synth=${synthId}: drumPCM max=${drumMax.toFixed(4)}, length=${drumPCM.length}`);
     for (let i = 0; i < drumPCM.length && i < totalSamples; i++) {
       fullPCM[i] += drumPCM[i] * AUDIO_MIXING.DRUM_BOOST_FACTOR * drumMasterVolume;
     }
 
-    // Soft-clip master to prevent clipping
     const threshold = AUDIO_MIXING.SOFT_CLIP_THRESHOLD;
     const factor = AUDIO_MIXING.SOFT_CLIP_FACTOR;
     for (let i = 0; i < fullPCM.length; i++) {
@@ -718,17 +654,23 @@ function renderPatternAudio(pattern: Pattern): string | null {
   }
 }
 
-function broadcastPatternAudio() {
-  if (!sequencer || !sequencer.getIsPlaying()) return;
-  const pattern = sequencer.getCurrentPattern();
-  if (!pattern) return;
-  const audioBase64 = renderPatternAudio(pattern);
+function broadcastPatternAudio(synthId: number) {
+  const synthData = synths.get(synthId);
+  if (!synthData || !synthData.sequencer.getIsPlaying()) return;
+  const audioBase64 = renderPatternAudio(synthId);
   if (audioBase64) {
-    broadcastToClients({ type: 'patternAudio', data: { audio: audioBase64, sampleRate: 48000, tempo: pattern.tempo } });
+    broadcastToClients({ type: 'patternAudio', data: { synthId, audio: audioBase64, sampleRate: 48000, tempo: synthData.pattern.tempo } });
   }
 }
 
-const schedulePatternAudio = throttle(broadcastPatternAudio, 300);
+const schedulePatternAudioMap = new Map<number, ReturnType<typeof throttle>>();
+
+function schedulePatternAudio(synthId: number) {
+  if (!schedulePatternAudioMap.has(synthId)) {
+    schedulePatternAudioMap.set(synthId, throttle(() => broadcastPatternAudio(synthId), 300));
+  }
+  schedulePatternAudioMap.get(synthId)!();
+}
 
 function broadcastToClients(message: unknown) {
   const payload = JSON.stringify(message);
@@ -739,7 +681,7 @@ function broadcastToClients(message: unknown) {
   });
 }
 
-// Start server - bind to 0.0.0.0 for Railway/Docker
+// Start server
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Web API server running on http://0.0.0.0:${PORT}`);
   console.log(`WebSocket server running on ws://0.0.0.0:${PORT}/ws`);
