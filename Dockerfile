@@ -6,7 +6,7 @@ WORKDIR /src/ui
 
 # Install deps first for layer caching
 COPY ui/package*.json ./
-RUN npm ci
+RUN npm install
 
 # Build UI
 COPY ui/ ./
