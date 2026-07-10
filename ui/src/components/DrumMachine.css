@@ -81,6 +81,12 @@
   margin-bottom: 0.8rem;
 }
 
+.drum-instrument-button-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
 .drum-instrument-control-grid {
   display: flex;
   flex-direction: column;
@@ -109,6 +115,29 @@
   border-color: var(--drum-color);
   box-shadow: 0 0 0 1px var(--drum-color), inset 0 0 10px color-mix(in srgb, var(--drum-color) 35%, transparent);
   color: #fff;
+}
+
+.drum-instrument-mix {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.2rem;
+}
+
+.drum-instrument-mix-btn {
+  border: 1px solid #5e646d;
+  border-radius: 3px;
+  background: #2a2d32;
+  color: #cfd6df;
+  font-size: 0.62rem;
+  height: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.drum-instrument-mix-btn.active {
+  border-color: #f59e0b;
+  color: #f59e0b;
 }
 
 .drum-step-header {

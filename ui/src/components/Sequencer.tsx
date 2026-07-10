@@ -9,7 +9,6 @@ interface SequencerProps {
   isPlaying: boolean;
   currentStep: number;
   selectedStep: number | null;
-  onPlayStop: () => void;
   onPatternChange: (pattern: Pattern) => void;
   onStepChange: (stepIndex: number) => void;
   onSavePattern: (name: string) => Promise<boolean>;
@@ -61,7 +60,6 @@ export default function Sequencer({
   isPlaying,
   currentStep,
   selectedStep,
-  onPlayStop,
   onPatternChange,
   onStepChange,
   onLoadSavedPattern,
@@ -121,9 +119,6 @@ export default function Sequencer({
               </option>
             ))}
           </select>
-          <button onClick={onPlayStop} className="play-button">
-            {isPlaying ? '⏸ Pause' : '▶ Play'}
-          </button>
         </div>
       </div>
 

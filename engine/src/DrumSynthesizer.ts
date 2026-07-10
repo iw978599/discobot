@@ -33,9 +33,15 @@ export class DrumSynthesizer {
     const mix = new Float32Array(totalSamples);
 
     const instruments = Object.keys(drumState) as DrumInstrument[];
+    const hasSolo = instruments.some((inst) => {
+      const track = drumState[inst];
+      return Boolean(track?.solo);
+    });
     for (const inst of instruments) {
       const track = drumState[inst];
       if (!track || !track.steps || !track.settings) continue;
+      if (track.muted) continue;
+      if (hasSolo && !track.solo) continue;
       for (let step = 0; step < Math.min(track.steps.length, 16); step++) {
         if (track.steps[step]) {
           const pcm = this.renderHit(inst, track.settings, sampleRate);

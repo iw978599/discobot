@@ -9,6 +9,7 @@ export interface DrumMachineProps {
   currentStep: number;
   onStepToggle: (instrument: DrumInstrument, step: number, active: boolean) => void;
   onSettingsChange: (instrument: DrumInstrument, settings: { volume?: number; tone?: number; extra?: number }) => void;
+  onMixChange: (instrument: DrumInstrument, mix: { muted?: boolean; solo?: boolean }) => void;
   onReset: () => void;
   drumMasterVolume: number;
   onMasterVolumeChange: (volume: number) => void;
@@ -68,6 +69,7 @@ export default function DrumMachine({
   currentStep,
   onStepToggle,
   onSettingsChange,
+  onMixChange,
   onReset,
   drumMasterVolume,
   onMasterVolumeChange,
@@ -78,10 +80,16 @@ export default function DrumMachine({
   const handleStepClick = useCallback((step: number) => {
     console.log('Step clicked:', selectedInstrument, 'step:', step);
 
+    const hasSolo = INSTRUMENTS.some((inst) => drumState[inst].solo);
+    const selectedTrack = drumState[selectedInstrument];
+    const canPreview = !selectedTrack.muted && (!hasSolo || selectedTrack.solo);
+
     // Play drum hit immediately for instant feedback (before WebSocket roundtrip)
-    const settings = drumState[selectedInstrument].settings;
-    console.log('Playing drum hit for step:', selectedInstrument, settings);
-    drumAudio.playDrumHit(selectedInstrument, settings);
+    if (canPreview) {
+      const settings = selectedTrack.settings;
+      console.log('Playing drum hit for step:', selectedInstrument, settings);
+      drumAudio.playDrumHit(selectedInstrument, settings);
+    }
 
     // Then update state (which will send to server)
     const current = drumState[selectedInstrument].steps[step];
@@ -92,10 +100,16 @@ export default function DrumMachine({
     console.log('Instrument selected:', instrument);
     setSelectedInstrument(instrument);
 
+    const hasSolo = INSTRUMENTS.some((inst) => drumState[inst].solo);
+    const selectedTrack = drumState[instrument];
+    const canPreview = !selectedTrack.muted && (!hasSolo || selectedTrack.solo);
+
     // Play drum hit preview when selecting instrument
-    const settings = drumState[instrument].settings;
-    console.log('Playing drum hit for instrument:', instrument, settings);
-    drumAudio.playDrumHit(instrument, settings);
+    if (canPreview) {
+      const settings = selectedTrack.settings;
+      console.log('Playing drum hit for instrument:', instrument, settings);
+      drumAudio.playDrumHit(instrument, settings);
+    }
   }, [drumState, drumAudio]);
 
   return (
@@ -164,15 +178,30 @@ export default function DrumMachine({
             </div>
             <div className="drum-instrument-buttons">
               {INSTRUMENTS.map((inst) => (
-                <button
-                  key={inst}
-                  className={`drum-instrument-btn ${selectedInstrument === inst ? 'selected' : ''}`}
-                  style={{ '--drum-color': INSTRUMENT_COLORS[inst] } as React.CSSProperties}
-                  onClick={() => handleInstrumentSelect(inst)}
-                  title={INSTRUMENT_LABELS[inst]}
-                >
-                  <span>{INSTRUMENT_SHORT_LABELS[inst]}</span>
-                </button>
+                <div key={inst} className="drum-instrument-button-stack">
+                  <button
+                    className={`drum-instrument-btn ${selectedInstrument === inst ? 'selected' : ''}`}
+                    style={{ '--drum-color': INSTRUMENT_COLORS[inst] } as React.CSSProperties}
+                    onClick={() => handleInstrumentSelect(inst)}
+                    title={INSTRUMENT_LABELS[inst]}
+                  >
+                    <span>{INSTRUMENT_SHORT_LABELS[inst]}</span>
+                  </button>
+                  <div className="drum-instrument-mix">
+                    <button
+                      className={`drum-instrument-mix-btn ${drumState[inst].muted ? 'active' : ''}`}
+                      onClick={() => onMixChange(inst, { muted: !drumState[inst].muted })}
+                    >
+                      M
+                    </button>
+                    <button
+                      className={`drum-instrument-mix-btn ${drumState[inst].solo ? 'active' : ''}`}
+                      onClick={() => onMixChange(inst, { solo: !drumState[inst].solo })}
+                    >
+                      S
+                    </button>
+                  </div>
+                </div>
               ))}
             </div>
           </div>

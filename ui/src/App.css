@@ -62,6 +62,20 @@
   opacity: 0.7;
 }
 
+.play-all-button {
+  background: #3b82f6;
+  border: none;
+  border-radius: 4px;
+  padding: 0.35rem 0.7rem;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.play-all-button:hover {
+  background: #2563eb;
+}
+
 .status {
   display: flex;
   align-items: center;

@@ -56,6 +56,8 @@ export interface DrumSettings {
 export interface DrumTrack {
   steps: boolean[];
   settings: DrumSettings;
+  muted?: boolean;
+  solo?: boolean;
 }
 
 export type DrumState = Record<DrumInstrument, DrumTrack>;
