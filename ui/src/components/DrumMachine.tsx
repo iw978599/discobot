@@ -97,6 +97,51 @@ export default function DrumMachine({
 
       <div className="drum-machine-body">
         <div className="drum-sequencer-panel">
+          <div className="drum-top-controls">
+            <div className="drum-controls">
+              <div className="drum-controls-header">
+                <span className="drum-controls-subtle">Master</span>
+                <span>Volume</span>
+              </div>
+              <DrumKnob
+                label="Master"
+                value={drumMasterVolume}
+                displayValue={Math.round(drumMasterVolume * 100) + '%'}
+                onChange={onMasterVolumeChange}
+              />
+            </div>
+
+            <div className="drum-controls">
+              <div className="drum-controls-header">
+                <span
+                  style={{ color: INSTRUMENT_COLORS[selectedInstrument], fontWeight: 600 }}
+                >
+                  {INSTRUMENT_LABELS[selectedInstrument]}
+                </span>
+              </div>
+              <div className="drum-knobs">
+                <DrumKnob
+                  label="Volume"
+                  value={selectedTrack.settings.volume}
+                  displayValue={Math.round(selectedTrack.settings.volume * 100) + '%'}
+                  onChange={(v) => handleKnobChange('volume', v)}
+                />
+                <DrumKnob
+                  label="Tone"
+                  value={selectedTrack.settings.tone}
+                  displayValue={selectedTrack.settings.tone.toFixed(2)}
+                  onChange={(v) => handleKnobChange('tone', v)}
+                />
+                <DrumKnob
+                  label={extraLabel.knob}
+                  value={selectedTrack.settings.extra}
+                  displayValue={extraLabel.display(selectedTrack.settings.extra)}
+                  onChange={(v) => handleKnobChange('extra', v)}
+                />
+              </div>
+            </div>
+          </div>
+
           <div className="drum-instrument-select">
             <div className="drum-section-title">Instrument Select</div>
             <div className="drum-instrument-buttons">
@@ -150,47 +195,6 @@ export default function DrumMachine({
             <div className="drum-step-note">
               Select an instrument, then program its 16 steps.
             </div>
-          </div>
-        </div>
-
-        <div className="drum-controls">
-          <div className="drum-controls-header">
-            <span className="drum-controls-subtle">Master</span>
-            <span>Volume</span>
-          </div>
-          <DrumKnob
-            label="Master"
-            value={drumMasterVolume}
-            displayValue={Math.round(drumMasterVolume * 100) + '%'}
-            onChange={onMasterVolumeChange}
-          />
-          <div className="drum-controls-divider" />
-          <div className="drum-controls-header">
-            <span
-              style={{ color: INSTRUMENT_COLORS[selectedInstrument], fontWeight: 600 }}
-            >
-              {INSTRUMENT_LABELS[selectedInstrument]}
-            </span>
-          </div>
-          <div className="drum-knobs">
-            <DrumKnob
-              label="Volume"
-              value={selectedTrack.settings.volume}
-              displayValue={Math.round(selectedTrack.settings.volume * 100) + '%'}
-              onChange={(v) => handleKnobChange('volume', v)}
-            />
-            <DrumKnob
-              label="Tone"
-              value={selectedTrack.settings.tone}
-              displayValue={selectedTrack.settings.tone.toFixed(2)}
-              onChange={(v) => handleKnobChange('tone', v)}
-            />
-            <DrumKnob
-              label={extraLabel.knob}
-              value={selectedTrack.settings.extra}
-              displayValue={extraLabel.display(selectedTrack.settings.extra)}
-              onChange={(v) => handleKnobChange('extra', v)}
-            />
           </div>
         </div>
       </div>
