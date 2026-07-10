@@ -547,7 +547,27 @@ app.delete('/samples/:id', (req, res) => {
 
 // WebSocket Server
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server });
+const WS_PATHS = new Set(['/ws', '/ws/']);
+const wss = new WebSocketServer({ noServer: true });
+
+server.on('upgrade', (req, socket, head) => {
+  const requestPath = req.url?.split('?')[0] ?? '';
+  if (!WS_PATHS.has(requestPath)) {
+    socket.destroy();
+    return;
+  }
+
+  wss.handleUpgrade(req, socket, head, (ws) => {
+    wss.emit('connection', ws, req);
+  });
+});
+
+app.get(['/ws', '/ws/'], (_req, res) => {
+  res.status(426).json({
+    error: 'WebSocket Upgrade Required',
+    message: 'Use a WebSocket client with ws:// or wss:// protocol.',
+  });
+});
 
 const clients = new Set<WebSocket>();
 
