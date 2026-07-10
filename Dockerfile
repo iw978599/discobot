@@ -6,11 +6,25 @@ WORKDIR /src/ui
 
 # Install deps first for layer caching
 COPY ui/package*.json ./
-RUN npm install
+RUN npm ci
 
 # Build UI
 COPY ui/ ./
 RUN npm run build
+
+# ---------- PYTHON DEPS BUILD ----------
+FROM python:3.11-slim-bookworm AS python-deps
+WORKDIR /tmp
+
+# Build tooling for wheels
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --upgrade pip && \
+    pip wheel --no-cache-dir --wheel-dir /tmp/wheels -r /tmp/requirements.txt
 
 # ---------- APP RUNTIME ----------
 FROM python:3.11-slim-bookworm
@@ -19,15 +33,13 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-# System deps: nginx + supervisor + ffmpeg + build tooling for any wheels
+# System deps: nginx + supervisor + ffmpeg + curl for healthcheck
 RUN apt-get update && apt-get install -y --no-install-recommends \
     nginx \
     supervisor \
     ffmpeg \
     curl \
     ca-certificates \
-    build-essential \
-    gcc \
     && rm -rf /var/lib/apt/lists/*
 
 # Create runtime dirs
@@ -35,9 +47,11 @@ RUN mkdir -p /app /var/log/supervisor /var/log/nginx /run/nginx
 
 WORKDIR /app
 
-# No Python dependency manifest is currently present in this repository.
-# Skip pip install for now so image build succeeds; install step can be restored
-# once requirements/pyproject is added.
+# Install Python dependencies from prebuilt wheels
+COPY --from=python-deps /tmp/wheels /tmp/wheels
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir --no-index --find-links=/tmp/wheels -r /tmp/requirements.txt && \
+    rm -rf /tmp/wheels /tmp/requirements.txt
 
 # Copy backend/service code
 COPY . /app
