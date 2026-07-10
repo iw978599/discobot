@@ -4,6 +4,7 @@ import Keyboard from './components/Keyboard';
 import SynthControls from './components/SynthControls';
 import DrumMachine from './components/DrumMachine';
 import { useWebSocket } from './hooks/useWebSocket';
+import { apiUrl, getWebSocketUrl } from './config';
 import { Pattern, SynthParameters, SavedPatternFull, DrumState, DrumInstrument, DrumSettings } from './types';
 import './App.css';
 
@@ -172,20 +173,31 @@ function App() {
   }
 
   function genSnare(volume: number, tone: number, extra: number, sr: number): Float32Array {
-    const bodyFreq = 150 + tone * 150;
-    const snappy = extra;
-    const dur = 0.12;
+    const bodyStart = 260 + tone * 140;
+    const bodyEnd = 140 + tone * 50;
+    const snappy = 0.35 + extra * 0.65;
+    const dur = 0.16;
     const len = Math.floor(sr * dur);
     const out = new Float32Array(len);
-    let phase = 0;
+    let bodyPhase1 = 0;
+    let bodyPhase2 = 0;
+    let prevNoise = 0;
+    const sweepDur = 0.032;
+    const bodySweep = bodyEnd / bodyStart;
     for (let i = 0; i < len; i++) {
       const t = i / sr;
-      phase += bodyFreq / sr;
-      const body = Math.sin(2 * Math.PI * phase);
       const noise = Math.random() * 2 - 1;
-      const nd = Math.exp(-t * (5 + snappy * 20));
-      const bd = Math.exp(-t * 8);
-      out[i] = (body * bd * 0.4 + noise * nd * snappy) * volume;
+      const hpNoise = noise - prevNoise;
+      prevNoise = noise;
+      const sweepPos = Math.min(t / sweepDur, 1);
+      const bodyFreq = bodyStart * Math.pow(bodySweep, sweepPos);
+      bodyPhase1 += bodyFreq / sr;
+      bodyPhase2 += (bodyFreq * 1.43) / sr;
+      const bodyEnv = Math.exp(-t * (26 + (1 - extra) * 12));
+      const body = (Math.sin(2 * Math.PI * bodyPhase1) * 0.65 + Math.sin(2 * Math.PI * bodyPhase2) * 0.35) * bodyEnv * 0.18;
+      const noiseEnv = Math.exp(-t * (10 + snappy * 22));
+      const snap = hpNoise * (0.75 + tone * 0.25) + noise * 0.35;
+      out[i] = (snap * noiseEnv * snappy + body) * volume;
     }
     return out;
   }
@@ -225,22 +237,39 @@ function App() {
   }
 
   function genRide(volume: number, tone: number, extra: number, sr: number): Float32Array {
-    const fund = 800 + tone * 3200;
-    const brightness = extra;
-    const dur = 0.2;
+    const base = 300 + tone * 180;
+    const dur = 0.9 + extra * 1.9;
     const len = Math.floor(sr * dur);
     const out = new Float32Array(len);
-    let p = 0, p3 = 0, p5 = 0;
+    let p1 = 0, p2 = 0, p3 = 0, p4 = 0;
+    let lpNoise = 0;
+    let prevNoise = 0;
+    const bellAmt = 0.015 + tone * 0.045;
+    const shimmerAmt = 0.24 + tone * 0.2;
     for (let i = 0; i < len; i++) {
       const t = i / sr;
-      p += fund / sr;
-      p3 += fund * 2.76 / sr;
-      p5 += fund * 4.51 / sr;
-      const a1 = Math.sin(2 * Math.PI * p);
-      const a2 = Math.sin(2 * Math.PI * p3) * 0.5 * brightness;
-      const a3 = Math.sin(2 * Math.PI * p5) * 0.25 * brightness * brightness;
-      const env = Math.exp(-t * 6);
-      out[i] = (a1 + a2 + a3) * env * volume * 0.6;
+      p1 += base / sr;
+      p2 += base * 1.47 / sr;
+      p3 += base * 1.93 / sr;
+      p4 += base * 2.37 / sr;
+      const partials = (
+        Math.sin(2 * Math.PI * p1) * 0.2 +
+        Math.sin(2 * Math.PI * p2) * 0.17 +
+        Math.sin(2 * Math.PI * p3) * 0.12 +
+        Math.sin(2 * Math.PI * p4) * 0.08
+      );
+      const noise = Math.random() * 2 - 1;
+      lpNoise = lpNoise * 0.82 + noise * 0.18;
+      const hpNoise = noise - prevNoise;
+      prevNoise = noise;
+      const stickEnv = Math.exp(-t * 78);
+      const bodyEnv = Math.exp(-t * (1.75 / dur));
+      const tailEnv = Math.exp(-t * (0.9 / dur));
+      const bell = Math.sin(2 * Math.PI * p4) * Math.exp(-t * 7.2) * bellAmt;
+      const stick = hpNoise * stickEnv * (0.28 + tone * 0.12);
+      const shimmer = partials * bodyEnv * shimmerAmt;
+      const wash = lpNoise * tailEnv * (0.34 + extra * 0.26);
+      out[i] = Math.tanh((stick + shimmer + wash + bell) * 0.95) * volume * 0.74;
     }
     return out;
   }
@@ -263,40 +292,48 @@ function App() {
   }
 
   function genSnare2(volume: number, tone: number, extra: number, sr: number): Float32Array {
-    const bodyFreq = 200 + tone * 200;
-    const snappy = extra;
-    const dur = 0.12;
+    const bodyStart = 320 + tone * 180;
+    const bodyEnd = 180 + tone * 80;
+    const snappy = 0.45 + extra * 0.55;
+    const dur = 0.14;
     const len = Math.floor(sr * dur);
     const out = new Float32Array(len);
-    let phase = 0;
+    let bodyPhase = 0;
+    let prevNoise = 0;
+    const sweepDur = 0.02;
+    const bodySweep = bodyEnd / bodyStart;
     for (let i = 0; i < len; i++) {
       const t = i / sr;
-      phase += bodyFreq / sr;
-      const body = Math.sin(2 * Math.PI * phase);
       const noise = Math.random() * 2 - 1;
-      const nd = Math.exp(-t * (5 + snappy * 20));
-      const bd = Math.exp(-t * 8);
-      out[i] = (body * bd * 0.35 + noise * nd * snappy) * volume;
+      const hpNoise = noise - prevNoise;
+      prevNoise = noise;
+      const sweepPos = Math.min(t / sweepDur, 1);
+      const bodyFreq = bodyStart * Math.pow(bodySweep, sweepPos);
+      bodyPhase += bodyFreq / sr;
+      const body = Math.sin(2 * Math.PI * bodyPhase) * Math.exp(-t * 34) * 0.14;
+      const noiseEnv = Math.exp(-t * (14 + snappy * 16));
+      out[i] = ((hpNoise * (0.85 + tone * 0.2) + noise * 0.2) * noiseEnv * snappy + body) * volume;
     }
     return out;
   }
 
-  function genClap(volume: number, _tone: number, extra: number, sr: number): Float32Array {
-    const dur = 0.25;
+  function genClap(volume: number, tone: number, extra: number, sr: number): Float32Array {
+    const dur = 0.17 + extra * 0.16;
     const len = Math.floor(sr * dur);
     const out = new Float32Array(len);
-    const roomSamples = Math.floor((10 + extra * 80) * sr / 1000);
-    const numLayers = 5;
-    for (let layer = 0; layer < numLayers; layer++) {
-      const delay = layer * roomSamples;
-      for (let i = delay; i < len; i++) {
-        const t = (i - delay) / sr;
-        const noise = Math.random() * 2 - 1;
-        const env = Math.exp(-t * 25);
-        out[i] += noise * env * (1 / numLayers);
-      }
+    let lpNoise = 0;
+    const bodyFreq = 170 + tone * 130;
+    const decay = 26 - extra * 10;
+    for (let i = 0; i < len; i++) {
+      const t = i / sr;
+      const noise = Math.random() * 2 - 1;
+      lpNoise = lpNoise * 0.82 + noise * 0.18;
+      const hpNoise = noise - lpNoise;
+      const attack = Math.min(t / 0.0018, 1);
+      const env = attack * Math.exp(-t * decay);
+      const body = Math.sin(2 * Math.PI * bodyFreq * t) * Math.exp(-t * 42) * 0.08;
+      out[i] = Math.tanh((hpNoise * 0.95 + noise * 0.18) * env + body) * volume * 0.82;
     }
-    for (let i = 0; i < len; i++) out[i] *= volume * 0.8;
     return out;
   }
 
@@ -435,7 +472,7 @@ function App() {
     }
   }, []);
 
-  const connected = useWebSocket('ws://localhost:8080', handleMessage);
+  const connected = useWebSocket(getWebSocketUrl(), handleMessage);
 
   const handleTempoChange = async (bpm: number) => {
     if (!currentPattern) return;
@@ -444,12 +481,12 @@ function App() {
     setCurrentPattern(updatedPattern);
 
     await Promise.all([
-      fetch(`http://localhost:3001/patterns/${currentPattern.id}`, {
+      fetch(apiUrl(`/patterns/${currentPattern.id}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedPattern),
       }),
-      fetch('http://localhost:3001/sequencer/tempo', {
+      fetch(apiUrl('/sequencer/tempo'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tempo: bpm }),
@@ -463,7 +500,7 @@ function App() {
     const endpoint = isPlaying ? '/sequencer/stop' : '/sequencer/play';
     const body = isPlaying ? {} : { patternId: currentPattern.id };
 
-    await fetch(`http://localhost:3001${endpoint}`, {
+    await fetch(apiUrl(endpoint), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -494,7 +531,7 @@ function App() {
     setPatterns((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
     setCurrentPattern(updated);
 
-    fetch(`http://localhost:3001/patterns/${pattern.id}`, {
+    fetch(apiUrl(`/patterns/${pattern.id}`), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updated),
@@ -506,7 +543,7 @@ function App() {
   const handleNoteRelease = async (note: string) => {
     stopBrowserNote(note);
 
-    await fetch('http://localhost:3001/synth/note-off', {
+    await fetch(apiUrl('/synth/note-off'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ note }),
@@ -514,7 +551,7 @@ function App() {
   };
 
   const handleSynthParamChange = async (params: Partial<SynthParameters>) => {
-    await fetch('http://localhost:3001/synth/parameters', {
+    await fetch(apiUrl('/synth/parameters'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params),
@@ -529,7 +566,7 @@ function App() {
       next[instrument].steps[step] = active;
       return next;
     });
-    fetch('http://localhost:3001/drum/step', {
+    fetch(apiUrl('/drum/step'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ instrument, step, active }),
@@ -545,7 +582,7 @@ function App() {
       };
       return next;
     });
-    fetch('http://localhost:3001/drum/settings', {
+    fetch(apiUrl('/drum/settings'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ instrument, settings }),
@@ -554,12 +591,12 @@ function App() {
 
   const handleDrumReset = useCallback(() => {
     setDrumState(defaultDrumState());
-    fetch('http://localhost:3001/drum/reset', { method: 'POST' }).catch(() => {});
+    fetch(apiUrl('/drum/reset'), { method: 'POST' }).catch(() => {});
   }, []);
 
   const handleDrumMasterVolumeChange = useCallback((volume: number) => {
     setDrumMasterVolume(volume);
-    fetch('http://localhost:3001/drum/master-volume', {
+    fetch(apiUrl('/drum/master-volume'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ volume }),
@@ -570,7 +607,7 @@ function App() {
     const pattern = currentPatternRef.current;
     if (!pattern || !synthParamsRef.current) return;
     try {
-      await fetch('http://localhost:3001/patterns/save', {
+      await fetch(apiUrl('/patterns/save'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -594,7 +631,7 @@ function App() {
     setSelectedStep(null);
     if (data.drumState && typeof data.drumState === 'object') {
       setDrumState(data.drumState);
-      await fetch('http://localhost:3001/drum/state', {
+      await fetch(apiUrl('/drum/state'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ state: data.drumState }),
@@ -602,7 +639,7 @@ function App() {
     }
     if (data.drumMasterVolume !== undefined) {
       setDrumMasterVolume(data.drumMasterVolume);
-      await fetch('http://localhost:3001/drum/master-volume', {
+      await fetch(apiUrl('/drum/master-volume'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ volume: data.drumMasterVolume }),
@@ -610,18 +647,18 @@ function App() {
     }
     if (data.synthParams) {
       setSynthParams(data.synthParams);
-      await fetch('http://localhost:3001/synth/parameters', {
+      await fetch(apiUrl('/synth/parameters'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data.synthParams),
       }).catch(() => {});
     }
-    await fetch(`http://localhost:3001/patterns/${pattern.id}`, {
+    await fetch(apiUrl(`/patterns/${pattern.id}`), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updated),
     }).catch(() => {});
-    await fetch('http://localhost:3001/sequencer/tempo', {
+    await fetch(apiUrl('/sequencer/tempo'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tempo: data.tempo }),
@@ -641,19 +678,19 @@ function App() {
       setIsPlaying(false);
       setCurrentStep(0);
 
-      fetch(`http://localhost:3001/patterns/${pattern.id}`, {
+      fetch(apiUrl(`/patterns/${pattern.id}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(cleared),
       }).catch(() => {});
-      fetch('http://localhost:3001/synth/parameters', {
+      fetch(apiUrl('/synth/parameters'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(DEFAULT_PARAMS),
       }).catch(() => {});
 
       if (isPlaying) {
-        fetch('http://localhost:3001/sequencer/stop', { method: 'POST' }).catch(() => {});
+        fetch(apiUrl('/sequencer/stop'), { method: 'POST' }).catch(() => {});
       }
     }
   };

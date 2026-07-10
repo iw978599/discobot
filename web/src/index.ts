@@ -11,11 +11,10 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.WEB_PORT || 3001;
-const WS_PORT = process.env.WS_PORT || 8080;
 
 app.use(cors());
 app.use((req, res, next) => {
-  res.setHeader('Content-Security-Policy', "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data: blob: https:; font-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; style-src-elem 'self' 'unsafe-inline' https:; style-src-attr 'self' 'unsafe-inline' https:; script-src 'self' https:; connect-src 'self' https: wss:; manifest-src 'self'; worker-src 'self' blob:; upgrade-insecure-requests");
+  res.setHeader('Content-Security-Policy', "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data: blob: https:; font-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; style-src-elem 'self' 'unsafe-inline' https:; style-src-attr 'self' 'unsafe-inline' https:; script-src 'self' https:; connect-src 'self' https: ws: wss:; manifest-src 'self'; worker-src 'self' blob:; upgrade-insecure-requests");
   next();
 });
 app.use(express.json());
@@ -548,7 +547,7 @@ app.delete('/samples/:id', (req, res) => {
 
 // WebSocket Server
 const server = http.createServer(app);
-const wss = new WebSocketServer({ port: Number(WS_PORT) });
+const wss = new WebSocketServer({ server });
 
 const clients = new Set<WebSocket>();
 
@@ -680,5 +679,5 @@ function broadcastToClients(message: unknown) {
 // Start server
 server.listen(PORT, () => {
   console.log(`Web API server running on http://localhost:${PORT}`);
-  console.log(`WebSocket server running on ws://localhost:${WS_PORT}`);
+  console.log(`WebSocket server running on ws://localhost:${PORT}/ws`);
 });

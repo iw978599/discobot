@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 export function useWebSocket(url: string, onMessage: (data: any) => void) {
   const [connected, setConnected] = useState(false);
   const reconnectRef = useRef<ReturnType<typeof setTimeout>>();
+  const socketRef = useRef<WebSocket | null>(null);
   const onMessageRef = useRef(onMessage);
   onMessageRef.current = onMessage;
 
@@ -10,7 +11,9 @@ export function useWebSocket(url: string, onMessage: (data: any) => void) {
     let mounted = true;
 
     function connect() {
+      if (reconnectRef.current) clearTimeout(reconnectRef.current);
       const socket = new WebSocket(url);
+      socketRef.current = socket;
 
       socket.onopen = () => {
         if (mounted) {
@@ -36,7 +39,8 @@ export function useWebSocket(url: string, onMessage: (data: any) => void) {
         }
       };
 
-      socket.onerror = () => {
+      socket.onerror = (error) => {
+        console.error('WebSocket error:', error);
       };
     }
 
@@ -45,6 +49,11 @@ export function useWebSocket(url: string, onMessage: (data: any) => void) {
     return () => {
       mounted = false;
       if (reconnectRef.current) clearTimeout(reconnectRef.current);
+      if (socketRef.current) {
+        socketRef.current.onclose = null;
+        socketRef.current.close();
+        socketRef.current = null;
+      }
       setConnected(false);
     };
   }, [url]);

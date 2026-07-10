@@ -90,6 +90,21 @@ export default function DrumMachine({
 
       <div className="drum-machine-body">
         <div className="drum-sequencer-panel">
+          <div className="drum-top-controls">
+            <div className="drum-controls">
+              <div className="drum-controls-header">
+                <span className="drum-controls-subtle">Master</span>
+                <span>Volume</span>
+              </div>
+              <DrumKnob
+                label="Master"
+                value={drumMasterVolume}
+                displayValue={Math.round(drumMasterVolume * 100) + '%'}
+                onChange={onMasterVolumeChange}
+              />
+            </div>
+          </div>
+
           <div className="drum-instrument-select">
             <div className="drum-section-title">Instrument Select</div>
             <div className="drum-instrument-control-grid">
@@ -179,19 +194,6 @@ export default function DrumMachine({
               Select an instrument, then program its 16 steps.
             </div>
           </div>
-        </div>
-
-        <div className="drum-controls">
-          <div className="drum-controls-header">
-            <span className="drum-controls-subtle">Master</span>
-            <span>Volume</span>
-          </div>
-          <DrumKnob
-            label="Master"
-            value={drumMasterVolume}
-            displayValue={Math.round(drumMasterVolume * 100) + '%'}
-            onChange={onMasterVolumeChange}
-          />
         </div>
       </div>
     </div>
