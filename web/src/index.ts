@@ -14,6 +14,10 @@ const PORT = process.env.WEB_PORT || 3001;
 const WS_PORT = process.env.WS_PORT || 8080;
 
 app.use(cors());
+app.use((req, res, next) => {
+  res.setHeader('Content-Security-Policy', "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data: blob: https:; font-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; script-src 'self' https:; connect-src 'self' https: wss:; manifest-src 'self'; worker-src 'self' blob:; upgrade-insecure-requests");
+  next();
+});
 app.use(express.json());
 
 // Shared audio engine state
