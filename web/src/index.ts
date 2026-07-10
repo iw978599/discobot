@@ -10,7 +10,7 @@ import { Synthesizer, Sequencer, SamplePlayer, Pattern, SynthParameters, DrumSta
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || process.env.WEB_PORT || 3001;
+const PORT = parseInt(process.env.PORT || process.env.WEB_PORT || '3001', 10);
 
 app.use(cors());
 app.use((req, res, next) => {
