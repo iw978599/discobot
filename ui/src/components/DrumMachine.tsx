@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { DrumState, DrumInstrument } from '../types';
 import DrumKnob from './DrumKnob';
+import { useDrumAudio } from '../hooks/useDrumAudio';
 import './DrumMachine.css';
 
 export interface DrumMachineProps {
@@ -72,11 +73,31 @@ export default function DrumMachine({
   onMasterVolumeChange,
 }: DrumMachineProps) {
   const [selectedInstrument, setSelectedInstrument] = useState<DrumInstrument>('kick');
+  const drumAudio = useDrumAudio();
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => drumAudio.dispose();
+  }, [drumAudio]);
 
   const handleStepClick = useCallback((step: number) => {
     const current = drumState[selectedInstrument].steps[step];
     onStepToggle(selectedInstrument, step, !current);
-  }, [drumState, selectedInstrument, onStepToggle]);
+
+    // Play drum hit when toggling step ON
+    if (!current) {
+      const settings = drumState[selectedInstrument].settings;
+      drumAudio.playDrumHit(selectedInstrument, settings);
+    }
+  }, [drumState, selectedInstrument, onStepToggle, drumAudio]);
+
+  const handleInstrumentSelect = useCallback((instrument: DrumInstrument) => {
+    setSelectedInstrument(instrument);
+
+    // Play drum hit preview when selecting instrument
+    const settings = drumState[instrument].settings;
+    drumAudio.playDrumHit(instrument, settings);
+  }, [drumState, drumAudio]);
 
   return (
     <div className="drum-machine">
@@ -148,7 +169,7 @@ export default function DrumMachine({
                   key={inst}
                   className={`drum-instrument-btn ${selectedInstrument === inst ? 'selected' : ''}`}
                   style={{ '--drum-color': INSTRUMENT_COLORS[inst] } as React.CSSProperties}
-                  onClick={() => setSelectedInstrument(inst)}
+                  onClick={() => handleInstrumentSelect(inst)}
                   title={INSTRUMENT_LABELS[inst]}
                 >
                   <span>{INSTRUMENT_SHORT_LABELS[inst]}</span>
