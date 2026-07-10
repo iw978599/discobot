@@ -26,8 +26,10 @@ dotenv.config();
 
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID!;
-const WEB_API_URL = process.env.WEB_API_URL || 'http://localhost:3001';
-const WS_URL = process.env.WS_URL || 'ws://localhost:3001/ws';
+// In Railway, bot and web server run in same container, so connect via localhost on Railway's PORT
+const PORT = process.env.PORT || '3001';
+const WEB_API_URL = process.env.WEB_API_URL || `http://localhost:${PORT}`;
+const WS_URL = process.env.WS_URL || `ws://localhost:${PORT}/ws`;
 
 if (!TOKEN) {
   throw new Error('Missing DISCORD_TOKEN in .env');
