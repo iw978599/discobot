@@ -21,6 +21,10 @@ COPY engine/ ./engine/
 COPY web/ ./web/
 COPY ui/ ./ui/
 
+# Cache bust to force rebuild (increment when needed)
+ARG CACHE_BUST=2026-07-10-v3
+RUN echo "Cache bust: $CACHE_BUST"
+
 # Build all packages
 RUN npm run build
 
@@ -28,7 +32,6 @@ RUN npm run build
 FROM node:20-bookworm-slim
 
 ENV NODE_ENV=production
-ENV CACHE_BUST=2026-07-10-v2
 
 # Install curl for healthchecks
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
