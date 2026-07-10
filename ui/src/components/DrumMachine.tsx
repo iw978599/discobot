@@ -84,11 +84,9 @@ export default function DrumMachine({
     const current = drumState[selectedInstrument].steps[step];
     onStepToggle(selectedInstrument, step, !current);
 
-    // Play drum hit when toggling step ON
-    if (!current) {
-      const settings = drumState[selectedInstrument].settings;
-      drumAudio.playDrumHit(selectedInstrument, settings);
-    }
+    // Play drum hit whenever clicking a step (ON or OFF)
+    const settings = drumState[selectedInstrument].settings;
+    drumAudio.playDrumHit(selectedInstrument, settings);
   }, [drumState, selectedInstrument, onStepToggle, drumAudio]);
 
   const handleInstrumentSelect = useCallback((instrument: DrumInstrument) => {
