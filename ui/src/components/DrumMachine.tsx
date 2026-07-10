@@ -27,6 +27,17 @@ const INSTRUMENT_LABELS: Record<DrumInstrument, string> = {
   clap: 'Clap',
 };
 
+const INSTRUMENT_SHORT_LABELS: Record<DrumInstrument, string> = {
+  kick: 'BD',
+  snare: 'SD',
+  openHH: 'OH',
+  closedHH: 'CH',
+  ride: 'RD',
+  crash: 'CR',
+  snare2: 'SD2',
+  clap: 'CP',
+};
+
 const INSTRUMENT_COLORS: Record<DrumInstrument, string> = {
   kick: '#ef4444',
   snare: '#f59e0b',
@@ -61,11 +72,10 @@ export default function DrumMachine({
 }: DrumMachineProps) {
   const [selectedInstrument, setSelectedInstrument] = useState<DrumInstrument>('kick');
 
-  const handleCellClick = useCallback((instrument: DrumInstrument, step: number) => {
-    const current = drumState[instrument].steps[step];
-    onStepToggle(instrument, step, !current);
-    setSelectedInstrument(instrument);
-  }, [drumState, onStepToggle]);
+  const handleStepClick = useCallback((step: number) => {
+    const current = drumState[selectedInstrument].steps[step];
+    onStepToggle(selectedInstrument, step, !current);
+  }, [drumState, selectedInstrument, onStepToggle]);
 
   const handleKnobChange = useCallback((key: 'volume' | 'tone' | 'extra', val: number) => {
     onSettingsChange(selectedInstrument, { [key]: val });
@@ -77,57 +87,75 @@ export default function DrumMachine({
   return (
     <div className="drum-machine">
       <div className="drum-machine-header">
-        <h2>Drum Machine</h2>
+        <h2>Rhythm Composer</h2>
+        <span className="drum-machine-model">TR-808 style</span>
         <button className="drum-reset-btn" onClick={onReset} title="Reset drum pattern and settings">
           &#8634;
         </button>
       </div>
 
       <div className="drum-machine-body">
-        <div className="drum-grid-wrapper">
-          <div className="drum-grid">
-            <div className="drum-row drum-row-header">
-              <div className="drum-label-cell" />
-              {Array.from({ length: 16 }, (_, i) => (
-                <div key={i} className={`drum-step-indicator ${isPlaying && currentStep === i ? 'active' : ''}`}>
-                  {i + 1}
-                </div>
+        <div className="drum-sequencer-panel">
+          <div className="drum-instrument-select">
+            <div className="drum-section-title">Instrument Select</div>
+            <div className="drum-instrument-buttons">
+              {INSTRUMENTS.map((inst) => (
+                <button
+                  key={inst}
+                  className={`drum-instrument-btn ${selectedInstrument === inst ? 'selected' : ''}`}
+                  style={{ '--drum-color': INSTRUMENT_COLORS[inst] } as React.CSSProperties}
+                  onClick={() => setSelectedInstrument(inst)}
+                  title={INSTRUMENT_LABELS[inst]}
+                >
+                  <span>{INSTRUMENT_SHORT_LABELS[inst]}</span>
+                </button>
               ))}
             </div>
-            {INSTRUMENTS.map((inst) => (
-              <div
-                key={inst}
-                className={`drum-row ${selectedInstrument === inst ? 'selected' : ''}`}
-                onClick={() => setSelectedInstrument(inst)}
-              >
-                <div
-                  className="drum-label-cell"
-                  style={{ color: INSTRUMENT_COLORS[inst] }}
-                >
-                  {INSTRUMENT_LABELS[inst]}
-                </div>
-                {Array.from({ length: 16 }, (_, step) => {
-                  const active = drumState[inst].steps[step];
-                  return (
-                    <button
-                      key={step}
-                      className={`drum-cell ${active ? 'active' : ''} ${isPlaying && currentStep === step ? 'current' : ''}`}
-                      style={{
-                        '--drum-color': INSTRUMENT_COLORS[inst],
-                        backgroundColor: active ? INSTRUMENT_COLORS[inst] : undefined,
-                      } as React.CSSProperties}
-                      onClick={(e) => { e.stopPropagation(); handleCellClick(inst, step); }}
-                    />
-                  );
-                })}
+          </div>
+
+          <div className="drum-step-programmer">
+            <div className="drum-step-header">
+              <div className="drum-selected-instrument">
+                <span
+                  className="drum-selected-dot"
+                  style={{ backgroundColor: INSTRUMENT_COLORS[selectedInstrument] }}
+                />
+                <span>{INSTRUMENT_LABELS[selectedInstrument]}</span>
               </div>
-            ))}
+              <div className="drum-step-indicators">
+                {Array.from({ length: 16 }, (_, i) => (
+                  <div key={i} className={`drum-step-indicator ${isPlaying && currentStep === i ? 'active' : ''}`}>
+                    {i + 1}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="drum-step-row">
+              {Array.from({ length: 16 }, (_, step) => {
+                const active = drumState[selectedInstrument].steps[step];
+                const stepBand = step < 4 ? 'band-a' : step < 8 ? 'band-b' : step < 12 ? 'band-c' : 'band-d';
+                return (
+                  <button
+                    key={step}
+                    className={`drum-step-btn ${stepBand} ${active ? 'active' : ''} ${isPlaying && currentStep === step ? 'current' : ''}`}
+                    style={{ '--drum-color': INSTRUMENT_COLORS[selectedInstrument] } as React.CSSProperties}
+                    onClick={() => handleStepClick(step)}
+                  >
+                    <span className="drum-step-led" />
+                  </button>
+                );
+              })}
+            </div>
+            <div className="drum-step-note">
+              Select an instrument, then program its 16 steps.
+            </div>
           </div>
         </div>
 
         <div className="drum-controls">
           <div className="drum-controls-header">
-            Master Vol
+            <span className="drum-controls-subtle">Master</span>
+            <span>Volume</span>
           </div>
           <DrumKnob
             label="Master"
@@ -135,9 +163,11 @@ export default function DrumMachine({
             displayValue={Math.round(drumMasterVolume * 100) + '%'}
             onChange={onMasterVolumeChange}
           />
-          <div style={{ width: '100%', height: 1, background: '#3a3a3a', margin: '0.5rem 0' }} />
+          <div className="drum-controls-divider" />
           <div className="drum-controls-header">
-            <span style={{ color: INSTRUMENT_COLORS[selectedInstrument], fontWeight: 600 }}>
+            <span
+              style={{ color: INSTRUMENT_COLORS[selectedInstrument], fontWeight: 600 }}
+            >
               {INSTRUMENT_LABELS[selectedInstrument]}
             </span>
           </div>
