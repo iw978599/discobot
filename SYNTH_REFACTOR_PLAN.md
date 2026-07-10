@@ -44,6 +44,7 @@ Refactor the synthesizer UI to support multiple independent synth units (max 2),
 **Branch**: `synth-refactor`
 **Commits**:
 ```
+6015513 Move tempo and save to header, rename app to Discobot
 b1effea Add synthId option to Discord bot commands
 46e7aaf Fix unused function in Keyboard.tsx
 c1d6169 Refactor backend for multi-synth support with synthId-based routing
@@ -256,11 +257,13 @@ The hook is already stateless - accepts `synthParams` as parameter. Each SynthUn
 - [x] `ui/src/components/SynthUnit.css`
 
 ### Modified Files ✅
-- [x] `ui/src/App.tsx` (major refactor - state management)
-- [x] `ui/src/App.css` (layout updates)
+- [x] `ui/src/App.tsx` (major refactor - state management, header with tempo/save)
+- [x] `ui/src/App.css` (layout updates, tempo LED, save button styles)
 - [x] `ui/src/components/Keyboard.tsx` (octave shift)
 - [x] `ui/src/components/Keyboard.css` (octave buttons + header)
-- [x] `web/src/index.ts` (multi-synth backend)
+- [x] `ui/src/components/Sequencer.tsx` (removed tempo/save UI, kept load/manager)
+- [x] `ui/src/components/SynthUnit.tsx` (removed onTempoChange prop)
+- [x] `web/src/index.ts` (multi-synth backend, global tempo endpoints)
 - [x] `bot/src/index.ts` (synthId commands)
 
 ### Files Reviewed (no changes needed)
@@ -285,8 +288,10 @@ The hook is already stateless - accepts `synthParams` as parameter. Each SynthUn
 9. ✅ Update WebSocket messages for multi-synth
 10. ✅ Update CSS for final layout
 11. ✅ Update Discord bot commands with synthId
-12. ✅ Build and verify all changes
-13. ✅ Push branch and create PR
+12. ✅ Global tempo (shared BPM across all synths)
+13. ✅ Move tempo and save to header, rename to "Discobot"
+14. ✅ Build and verify all changes
+15. ✅ Push branch and create PR
 
 ---
 
@@ -304,8 +309,10 @@ The hook is already stateless - accepts `synthParams` as parameter. Each SynthUn
 ## Questions Resolved
 
 1. **Should octave shift state persist across page refresh?** → No, defaults to 0
-2. **Should both synths share the same tempo/BPM?** → No, each synth has independent tempo
+2. **Should both synths share the same tempo/BPM?** → Yes, global tempo shared across all synths (edited via header LED)
 3. **What happens if user creates Synth 2, removes it, then adds it again?** → Fresh state from server
+4. **Where should tempo control live?** → App header (global), not per-synth in Sequencer
+5. **Where should save button live?** → App header (saves first synth's current state)
 
 ---
 

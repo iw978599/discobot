@@ -1,14 +1,15 @@
-# Discord Synth Bot - AI Development Guide
+# Discobot - AI Development Guide
 
 This document is for AI assistants who will be working on this project in the future.
 
 ## Project Overview
 
-A Discord bot with a web-based UI for creating music using synthesis and sequencing. Users can:
+A Discord bot with a web-based UI for creating music using custom math-based synthesis and sequencing. Users can:
 - Program 16-step sequences in a web interface
-- Play notes on a 3-octave virtual keyboard
+- Play notes on a 3-octave virtual keyboard with octave shift
 - Adjust synthesizer parameters (oscillators, filters, reverb, delay)
 - Control the bot via Discord slash commands
+- Use up to 2 independent synth units with shared global tempo
 - Stream audio to Discord voice channels (partially implemented)
 - Export patterns to WAV files (planned)
 
@@ -17,15 +18,14 @@ A Discord bot with a web-based UI for creating music using synthesis and sequenc
 ### Monorepo Structure (npm workspaces)
 
 ```
-discord-synth-bot/
+discobot/
 ├── bot/          # Discord bot (TypeScript)
 │   └── src/
-│       └── index.ts          # Main bot file, Discord.js, slash commands
-├── engine/       # Audio synthesis & sequencer engine (TypeScript)
+│       └── index.ts          # Main bot file, Discord.js, slash commands (synthId option)
+├── engine/       # Custom math-based audio synthesis (TypeScript)
 │   └── src/
-│       ├── Synthesizer.ts         # Tone.js-based synth with oscillators, filter, effects
-│       ├── Sequencer.ts           # 16-step sequencer with Tone.Transport
-│       ├── SequencerV2.ts         # Web Audio API sequencer (precise timing)
+│       ├── Synthesizer.ts         # Math-based synth with oscillators, filter, ADSR
+│       ├── Sequencer.ts           # 16-step sequencer with callback-based timing
 │       ├── DrumSynthesizer.ts     # 8-channel drum synthesis
 │       ├── SamplePlayer.ts        # Sample loading and playback
 │       ├── AudioExporter.ts       # WAV export using offline rendering
@@ -36,19 +36,21 @@ discord-synth-bot/
 │       └── constants.ts           # Named constants (drum params, audio mixing, etc)
 ├── web/          # Express API server + WebSocket (TypeScript)
 │   └── src/
-│       └── index.ts          # REST API + WebSocket + input validation
+│       └── index.ts          # REST API + WebSocket + multi-synth backend
 └── ui/           # React frontend with Vite (TypeScript)
     └── src/
-        ├── App.tsx           # Main app component (optimized with useCallback/useMemo)
+        ├── App.tsx           # Main app, multi-synth state, header (tempo/save)
         ├── components/
-        │   ├── Sequencer.tsx      # 16-step grid
-        │   ├── Keyboard.tsx       # 3-octave piano keyboard
+        │   ├── SynthUnit.tsx      # Wrapper: Sequencer + SynthControls + Keyboard
+        │   ├── Sequencer.tsx      # 16-step grid (load/manage only)
+        │   ├── Keyboard.tsx       # 3-octave piano keyboard with octave shift
         │   ├── SynthControls.tsx  # Hardware-style knobs (not sliders)
         │   ├── Knob.tsx           # Reusable knob component
-        │   └── DrumMachine.tsx    # 8-track drum sequencer
+        │   ├── DrumMachine.tsx    # 8-track drum sequencer
+        │   └── DrumKnob.tsx       # SVG rotary knob (click-drag vertical)
         ├── hooks/
         │   ├── useWebSocket.ts    # WebSocket connection
-        │   ├── useSynthAudio.ts   # Browser synth playback
+        │   ├── useSynthAudio.ts   # Browser synth playback (stateless)
         │   └── useDrumAudio.ts    # Browser drum playback
         └── types.ts          # Re-exports from engine (no duplication)
 
@@ -57,15 +59,17 @@ discord-synth-bot/
 ### Data Flow
 
 1. **User interacts with Web UI** → HTTP/WebSocket to Web Server
-2. **Web Server** updates audio engine state, broadcasts to all clients via WebSocket
-3. **Discord Bot** receives commands → HTTP requests to Web Server
-4. **Audio Engine** (Tone.js) generates audio in Web Server process
+2. **Web Server** updates audio engine state (multi-synth Map), broadcasts to all clients via WebSocket
+3. **Discord Bot** receives commands → HTTP requests to Web Server (with synthId)
+4. **Audio Engine** (custom math synthesis) generates audio in Web Server process
 5. **Real-time updates** flow from Web Server → WebSocket → all connected clients
+6. **Global tempo** shared across all synths via `globalTempo` variable
 
 ### Key Technologies
 
 - **Discord.js v14**: Discord bot framework
-- **Tone.js**: Web Audio API wrapper for synthesis
+- **@discordjs/voice**: Voice channel support
+- **Custom math synthesis**: No Tone.js — direct math-based oscillator generation
 - **Express**: REST API server
 - **WebSocket (ws)**: Real-time bidirectional communication
 - **React**: Frontend UI
@@ -74,41 +78,43 @@ discord-synth-bot/
 
 ## Important Concepts
 
-### Audio Engine (Tone.js + Web Audio API)
+### Audio Engine (Custom Math Synthesis)
 
 The audio engine runs in the **web server**, not the browser or Discord bot. This is intentional:
-- Tone.js uses Web Audio API, which works in Node.js
+- Custom math-based oscillator generation (no Tone.js)
 - Centralized audio state allows multiple clients to stay in sync
 - Discord bot can trigger audio without running a browser
 
-**Performance Optimization** (as of 2024 refactoring):
+**Performance Optimization**:
 - `AudioContextManager`: Singleton pattern prevents multiple AudioContext instances (saves ~20MB memory)
-- `SequencerV2`: Web Audio API scheduling for sample-accurate timing (99.98% improvement vs setTimeout)
 - Browser audio playback uses custom hooks (`useSynthAudio`, `useDrumAudio`) to avoid code duplication
 - All magic numbers replaced with named constants in `constants.ts`
 
 ### State Management
 
 State is stored in the web server (`web/src/index.ts`):
-- `patterns` Map: All sequencer patterns
-- `synth`: Current Synthesizer instance
-- `sequencer`: Current Sequencer instance (or SequencerV2 for precise timing)
+- `synths` Map: All synth instances (key: synthId, value: SynthData)
+  - Each SynthData: `{ synth, sequencer, pattern, patterns }`
+- `globalTempo`: Single BPM shared across all synths
 - `drumState`: 8-track drum machine state (kick, snare, hi-hats, ride, crash, clap)
+- `drumMasterVolume`: Drum master volume
 - `samplePlayer`: Sample management
 
 Changes propagate via WebSocket to all connected clients (UI, bots).
+Backend synth CRUD: `POST /synth/create`, `DELETE /synth/:synthId`
 
 ### WebSocket Messages
 
 Format: `{ type: string, data: any }`
 
 Message types:
-- `init`: Initial state on connection (includes patterns, synthParams, drumState)
-- `synthUpdate`: Synth parameters changed
-- `patternCreated/Updated/Deleted`: Pattern CRUD
-- `sequencerPlay/Stop`: Playback control
-- `sequencerStep`: Current step update (for visualization)
-- `tempoChange`: BPM update
+- `init`: Initial state on connection (includes synths array, drumState, tempo)
+- `synthUpdate`: Synth parameters changed (`{ synthId, parameters }`)
+- `patternCreated/Updated/Deleted`: Pattern CRUD (includes synthId)
+- `sequencerPlay/Stop`: Playback control (includes synthId)
+- `sequencerStep`: Current step update (includes synthId, step)
+- `tempoChange`: BPM update (`{ tempo }` — global, applies to all synths)
+- `patternAudio`: Full pattern audio for Discord playback (includes synthId)
 - `drumStep`: Drum step toggled (instrument, step, active)
 - `drumSettings`: Drum instrument settings changed (volume, tone, extra)
 - `drumReset`: All drum tracks cleared
@@ -218,24 +224,13 @@ WS_URL=ws://localhost:8080            # For bot to connect to WebSocket
 
 ### Pattern Persistence
 
-**Current Status**: Patterns stored in memory only (lost on restart).
-
-**Implementation Path**:
-1. Choose database (SQLite, PostgreSQL, MongoDB)
-2. Add persistence layer to web server
-3. Load patterns on startup
-4. Save on create/update/delete
-5. Add pattern import/export
+**Status**: ✅ Completed — Patterns saved to `saved-patterns.json` with full state (synth params, drum state, master volumes).
 
 ### Multiple Tracks
 
-**Current Status**: Single pattern/track only.
+**Status**: ✅ Completed (synth-refactor branch)
 
-**Future Enhancement**:
-- Multiple sequencer tracks playing simultaneously
-- Per-track synth/sample assignment
-- Track mute/solo
-- Mixer with volume/pan per track
+Support for up to 2 independent synth units, each with own sequencer, keyboard, and controls. Global tempo shared across all synths.
 
 ## Code Patterns
 
@@ -457,32 +452,25 @@ For production deployment:
 
 ISC (see package.json)
 
-## Recent Improvements (2024 Refactoring)
+## Recent Improvements (synth-refactor branch)
 
 ### Completed ✅
-- **AudioContext Management**: Singleton pattern to prevent memory leaks
-- **Timing Precision**: SequencerV2 with Web Audio API scheduling
-- **Code Organization**: Shared utilities, constants, and error handling
-- **Type Safety**: Consolidated types in engine (single source of truth)
-- **Error Handling**: Result<T,E> pattern, structured logging, zero empty catch blocks
-- **React Performance**: useCallback/useMemo optimizations
-- **UI/UX**: Hardware-style knob interface instead of sliders
-- **Drum Machine**: 8-track drum synthesizer with per-instrument settings
-- **Code Deduplication**: Eliminated 321 lines of duplicate code
+- **Multi-synth support**: Up to 2 independent synths with own sequencer/keyboard/controls
+- **Global tempo**: Single BPM shared across all synths, editable LED in header
+- **Header UI**: App renamed to "Discobot", tempo LED, inline save, mute button
+- **Octave shift**: -1 to +1 range per synth with range display
+- **Backend synth routing**: Map<number, SynthData>, synthId on all REST + WebSocket messages
+- **Discord bot synth option**: /play, /stop, /note, /tempo accept synth integer choice
+- **Pattern persistence**: Full state saved (synth params, drum state, master volumes)
+- **Code Quality**: 15+ empty catch blocks eliminated, 100% input validation coverage
 
 ### Performance Metrics
 - Memory: ~20MB saved (AudioContext singleton)
-- Timing: 99.98% improvement (Web Audio scheduling vs setTimeout)
-- Bundle Size: Maintained despite added features
 - Code Quality: 15+ empty catch blocks eliminated, 100% input validation coverage
 
 ### Documentation
-- `CODE_REVIEW.md`: Initial analysis and recommendations
-- `REFACTORING_SUMMARY.md`: Implementation details
-- `PERFORMANCE_IMPROVEMENTS.md`: Performance metrics
-- `SEQUENCER_TIMING_IMPROVEMENTS.md`: Timing optimization details
-- `ERROR_HANDLING_IMPROVEMENTS.md`: Error handling patterns
-- `HIGH_PRIORITY_WORK_COMPLETE.md`: Completed high-priority tasks
+- `SYNTH_REFACTOR_PLAN.md`: Multi-synth implementation plan and status
+- `AGENTS.md`: AI context and project overview
 
 ---
 

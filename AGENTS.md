@@ -22,10 +22,12 @@ Engine renders PCM → Web server base64-encodes → WebSocket → Bot broadcast
 | File | Purpose |
 |------|---------|
 | `web/src/index.ts` | Express + WebSocket server, REST endpoints, drum/synth state, audio rendering |
-| `ui/src/App.tsx` | Main React component, WebSocket client, browser audio gen functions |
+| `ui/src/App.tsx` | Main React component, multi-synth state management, header with tempo/save, WebSocket client |
+| `ui/src/components/SynthUnit.tsx` | Wrapper combining Sequencer + SynthControls + Keyboard per synth |
 | `ui/src/components/DrumMachine.tsx` | 8×16 drum grid, per-instrument knobs, master volume |
 | `ui/src/components/DrumKnob.tsx` | SVG rotary knob (click-drag vertical) |
-| `ui/src/components/Sequencer.tsx` | Step grid, save/load/manage patterns |
+| `ui/src/components/Sequencer.tsx` | Step grid, load/manage patterns (save moved to header) |
+| `ui/src/components/Keyboard.tsx` | 3-octave keyboard with octave shift (-1 to +1) |
 | `ui/src/components/SynthControls.tsx` | Synth parameters panel — oscillator, filter, envelope, effects, gain |
 | `ui/src/types.ts` | Shared TypeScript types (DrumState, SynthParameters, SavedPatternFull, etc.) |
 | `engine/src/DrumSynthesizer.ts` | PCM generation for 8 drum sounds, `renderPattern()` |
@@ -33,8 +35,12 @@ Engine renders PCM → Web server base64-encodes → WebSocket → Bot broadcast
 | `engine/src/types.ts` | Engine-side type definitions (mirrors ui/types.ts) |
 
 ## Features Complete
+- **Multi-synth support**: Up to 2 independent synths, each with own sequencer/keyboard/controls, Synth 1 cannot be removed
 - **16-step sequencer**: monophonic, piano key assignment, amber selection, blue fills
 - **Synthesizer**: sine/square/sawtooth/triangle, detune, resonant lowpass, ADSR envelope, delay/reverb, master gain (0-2)
+- **Octave shift**: -1 to +1 range per synth, disabled at limits
+- **Global tempo**: shared BPM across all synths, editable LED in header
+- **Header controls**: app title "Discobot", tempo LED, save button, mute, connection status
 - **Drum machine**: 8 instruments (kick, snare, openHH, closedHH, ride, crash, snare2, clap), 16-step toggle grid, colored rows, per-instrument volume/tone/extra knobs, drum master volume
 - **Browser audio preview**: synth notes (via OscillatorNode) + drum hits (via BufferSource from gen* functions) during both cell click and sequencer playback
 - **Discord playback**: server renders full pattern PCM, sends via WebSocket, bot loops
@@ -73,14 +79,14 @@ npm run build:ui     # Build UI only (tsc + vite build)
 - REST for data ops, WebSocket for real-time sync
 - Browser gen* functions in App.tsx match engine DrumSynthesizer methods
 
-## Recent Changes (commit 0a68867)
-- Added drum machine with 8 instruments, toggle grid, per-instrument knobs
-- Added synth master gain control to SynthParameters
-- Added drum master volume knob
-- Save/load drums + master volumes with patterns
-- Soft-clipper master mix + 4x drum boost
-- Responsive drum grid and keyboard layout
-- Fixed browser drum playback during sequencer steps
+## Recent Changes (commits b1effea..6015513)
+- Multi-synth refactor: SynthUnit wrapper, backend Map<number, SynthData>, add/remove synth endpoints
+- Keyboard octave shift with range display (C2-B4 / C3-B5 / C4-B6)
+- Backend synthId routing for all REST + WebSocket messages
+- Discord bot synthId option on /play, /stop, /note, /tempo
+- Global tempo: single BPM shared across all synths, GET/POST /tempo endpoints
+- Header UI: "Discobot" title, TempoDisplay LED, SavePattern inline save
+- Moved tempo and save controls out of Sequencer into app header
 
 ## Potential Next Steps
 - Real-time streaming (step-by-step instead of full pattern render)
