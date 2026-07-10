@@ -58,7 +58,7 @@ export default function SynthUnit({
         )}
       </div>
 
-      <div className="synth-unit-top">
+      <div className="synth-unit-layout">
         <div className="synth-unit-sequencer">
           <Sequencer
             pattern={pattern}
@@ -74,6 +74,32 @@ export default function SynthUnit({
           />
         </div>
 
+        <div className="synth-unit-keyboard-container">
+          <button
+            className="octave-shift-btn"
+            onClick={() => onOctaveShift('down')}
+            disabled={octaveShift <= -1}
+            title="Shift octave down"
+          >
+            Oct -
+          </button>
+
+          <Keyboard
+            onNotePlay={onPlayNote}
+            onNoteRelease={onNoteRelease}
+            octaveShift={octaveShift}
+          />
+
+          <button
+            className="octave-shift-btn"
+            onClick={() => onOctaveShift('up')}
+            disabled={octaveShift >= 1}
+            title="Shift octave up"
+          >
+            Oct +
+          </button>
+        </div>
+
         <div className="synth-unit-controls">
           {synthParams && (
             <SynthControls
@@ -82,32 +108,6 @@ export default function SynthUnit({
             />
           )}
         </div>
-      </div>
-
-      <div className="synth-unit-keyboard-container">
-        <button
-          className="octave-shift-btn"
-          onClick={() => onOctaveShift('down')}
-          disabled={octaveShift <= -1}
-          title="Shift octave down"
-        >
-          Oct -
-        </button>
-
-        <Keyboard
-          onNotePlay={onPlayNote}
-          onNoteRelease={onNoteRelease}
-          octaveShift={octaveShift}
-        />
-
-        <button
-          className="octave-shift-btn"
-          onClick={() => onOctaveShift('up')}
-          disabled={octaveShift >= 1}
-          title="Shift octave up"
-        >
-          Oct +
-        </button>
       </div>
     </div>
   );
