@@ -1,12 +1,12 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import './Keyboard.css';
 
 interface KeyboardProps {
   onNotePlay: (note: string) => void;
   onNoteRelease: (note: string) => void;
+  octaveShift?: number;
 }
 
-const OCTAVES = [3, 4, 5]; // 3 octaves
 const WHITE_KEYS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
 const BLACK_KEYS = [
   { note: 'C#', offset: 0.7 },
@@ -18,8 +18,16 @@ const BLACK_KEYS = [
   null,
 ];
 
-export default function Keyboard({ onNotePlay, onNoteRelease }: KeyboardProps) {
+function generateOctaveNotes(octave: number): string[] {
+  return WHITE_KEYS.map(note => `${note}${octave}`);
+}
+
+export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0 }: KeyboardProps) {
   const [activeNotes, setActiveNotes] = useState<Set<string>>(new Set());
+
+  const baseOctave = 3 + octaveShift;
+
+  const octaves = useMemo(() => [baseOctave, baseOctave + 1, baseOctave + 2], [baseOctave]);
 
   const handleNoteDown = (note: string) => {
     if (activeNotes.has(note)) return;
@@ -36,11 +44,16 @@ export default function Keyboard({ onNotePlay, onNoteRelease }: KeyboardProps) {
     onNoteRelease(note);
   };
 
+  const rangeLabel = `${WHITE_KEYS[0]}${baseOctave} - ${WHITE_KEYS[WHITE_KEYS.length - 1]}${baseOctave + 2}`;
+
   return (
     <div className="keyboard-container">
-      <h2>Keyboard</h2>
+      <div className="keyboard-header">
+        <h2>Keyboard</h2>
+        <span className="keyboard-range">{rangeLabel}</span>
+      </div>
       <div className="keyboard">
-        {OCTAVES.map((octave) => (
+        {octaves.map((octave) => (
           <div key={octave} className="octave">
             <div className="white-keys">
               {WHITE_KEYS.map((note) => {
