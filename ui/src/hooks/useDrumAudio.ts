@@ -9,6 +9,7 @@ import { DrumSynthesizer } from '@discord-synth/engine';
 
 export function useDrumAudio() {
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const isResumingRef = useRef<boolean>(false);
 
   function getAudioContext(): AudioContext {
     if (!audioCtxRef.current) {
@@ -25,7 +26,21 @@ export function useDrumAudio() {
 
       // Ensure AudioContext is running before playing (required for first interaction)
       if (ctx.state === 'suspended') {
-        await ctx.resume();
+        // Prevent multiple simultaneous resume attempts
+        if (!isResumingRef.current) {
+          isResumingRef.current = true;
+          try {
+            await ctx.resume();
+            console.log('AudioContext resumed successfully');
+          } finally {
+            isResumingRef.current = false;
+          }
+        } else {
+          // Wait for resume to complete
+          while (ctx.state === 'suspended' && isResumingRef.current) {
+            await new Promise(resolve => setTimeout(resolve, 10));
+          }
+        }
       }
 
       const sampleRate = ctx.sampleRate;
