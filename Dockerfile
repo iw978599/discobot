@@ -35,9 +35,9 @@ RUN mkdir -p /app /var/log/supervisor /var/log/nginx /run/nginx
 
 WORKDIR /app
 
-# Python deps first for layer caching
-COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+# No Python dependency manifest is currently present in this repository.
+# Skip pip install for now so image build succeeds; install step can be restored
+# once requirements/pyproject is added.
 
 # Copy backend/service code
 COPY . /app
