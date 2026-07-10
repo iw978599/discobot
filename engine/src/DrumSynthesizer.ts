@@ -69,20 +69,31 @@ export class DrumSynthesizer {
   }
 
   private static renderSnare(volume: number, tone: number, extra: number, sampleRate: number): Float32Array {
-    const bodyFreq = 150 + tone * 150;
-    const snappy = extra;
-    const dur = 0.12;
+    const bodyStart = 260 + tone * 140;
+    const bodyEnd = 140 + tone * 50;
+    const snappy = 0.35 + extra * 0.65;
+    const dur = 0.16;
     const length = Math.floor(sampleRate * dur);
     const out = new Float32Array(length);
-    let phase = 0;
+    let bodyPhase1 = 0;
+    let bodyPhase2 = 0;
+    let prevNoise = 0;
+    const sweepDur = 0.032;
+    const bodySweep = bodyEnd / bodyStart;
     for (let i = 0; i < length; i++) {
       const t = i / sampleRate;
-      phase += bodyFreq / sampleRate;
-      const body = Math.sin(2 * Math.PI * phase);
       const noise = Math.random() * 2 - 1;
-      const nd = Math.exp(-t * (5 + snappy * 20));
-      const bd = Math.exp(-t * 8);
-      out[i] = (body * bd * 0.4 + noise * nd * snappy) * volume;
+      const hpNoise = noise - prevNoise;
+      prevNoise = noise;
+      const sweepPos = Math.min(t / sweepDur, 1);
+      const bodyFreq = bodyStart * Math.pow(bodySweep, sweepPos);
+      bodyPhase1 += bodyFreq / sampleRate;
+      bodyPhase2 += (bodyFreq * 1.43) / sampleRate;
+      const bodyEnv = Math.exp(-t * (26 + (1 - extra) * 12));
+      const body = (Math.sin(2 * Math.PI * bodyPhase1) * 0.65 + Math.sin(2 * Math.PI * bodyPhase2) * 0.35) * bodyEnv * 0.18;
+      const noiseEnv = Math.exp(-t * (10 + snappy * 22));
+      const snap = hpNoise * (0.75 + tone * 0.25) + noise * 0.35;
+      out[i] = (snap * noiseEnv * snappy + body) * volume;
     }
     return out;
   }
@@ -160,20 +171,27 @@ export class DrumSynthesizer {
   }
 
   private static renderSnare2(volume: number, tone: number, extra: number, sampleRate: number): Float32Array {
-    const bodyFreq = 200 + tone * 200;
-    const snappy = extra;
-    const dur = 0.12;
+    const bodyStart = 320 + tone * 180;
+    const bodyEnd = 180 + tone * 80;
+    const snappy = 0.45 + extra * 0.55;
+    const dur = 0.14;
     const length = Math.floor(sampleRate * dur);
     const out = new Float32Array(length);
-    let phase = 0;
+    let bodyPhase = 0;
+    let prevNoise = 0;
+    const sweepDur = 0.02;
+    const bodySweep = bodyEnd / bodyStart;
     for (let i = 0; i < length; i++) {
       const t = i / sampleRate;
-      phase += bodyFreq / sampleRate;
-      const body = Math.sin(2 * Math.PI * phase);
       const noise = Math.random() * 2 - 1;
-      const nd = Math.exp(-t * (5 + snappy * 20));
-      const bd = Math.exp(-t * 8);
-      out[i] = (body * bd * 0.35 + noise * nd * snappy) * volume;
+      const hpNoise = noise - prevNoise;
+      prevNoise = noise;
+      const sweepPos = Math.min(t / sweepDur, 1);
+      const bodyFreq = bodyStart * Math.pow(bodySweep, sweepPos);
+      bodyPhase += bodyFreq / sampleRate;
+      const body = Math.sin(2 * Math.PI * bodyPhase) * Math.exp(-t * 34) * 0.14;
+      const noiseEnv = Math.exp(-t * (14 + snappy * 16));
+      out[i] = ((hpNoise * (0.85 + tone * 0.2) + noise * 0.2) * noiseEnv * snappy + body) * volume;
     }
     return out;
   }

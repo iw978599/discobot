@@ -10,7 +10,7 @@ const isLocalDevUi = (): boolean =>
   window.location.port === '3000';
 
 export const getApiBaseUrl = (): string => {
-  const envBase = import.meta.env.VITE_API_BASE_URL;
+  const envBase = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_API_BASE_URL;
   if (envBase) return trimTrailingSlash(envBase);
   if (isLocalDevUi()) return 'http://localhost:3001';
   if (window.location.port === '3001' || isLocalhost()) return window.location.origin;
@@ -20,7 +20,7 @@ export const getApiBaseUrl = (): string => {
 export const apiUrl = (path: string): string => `${getApiBaseUrl()}${path.startsWith('/') ? path : `/${path}`}`;
 
 export const getWebSocketUrl = (): string => {
-  const envWs = import.meta.env.VITE_WS_URL;
+  const envWs = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_WS_URL;
   if (envWs) return trimTrailingSlash(envWs);
   if (isLocalDevUi()) return 'ws://localhost:8080';
   if (window.location.port === '3001' || isLocalhost()) {
