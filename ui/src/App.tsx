@@ -237,22 +237,39 @@ function App() {
   }
 
   function genRide(volume: number, tone: number, extra: number, sr: number): Float32Array {
-    const fund = 800 + tone * 3200;
-    const brightness = extra;
-    const dur = 0.2;
+    const base = 420 + tone * 260;
+    const dur = 0.9 + extra * 1.9;
     const len = Math.floor(sr * dur);
     const out = new Float32Array(len);
-    let p = 0, p3 = 0, p5 = 0;
+    let p1 = 0, p2 = 0, p3 = 0, p4 = 0;
+    let lpNoise = 0;
+    let prevNoise = 0;
+    const bellAmt = 0.08 + tone * 0.14;
+    const shimmerAmt = 0.42 + tone * 0.32;
     for (let i = 0; i < len; i++) {
       const t = i / sr;
-      p += fund / sr;
-      p3 += fund * 2.76 / sr;
-      p5 += fund * 4.51 / sr;
-      const a1 = Math.sin(2 * Math.PI * p);
-      const a2 = Math.sin(2 * Math.PI * p3) * 0.5 * brightness;
-      const a3 = Math.sin(2 * Math.PI * p5) * 0.25 * brightness * brightness;
-      const env = Math.exp(-t * 6);
-      out[i] = (a1 + a2 + a3) * env * volume * 0.6;
+      p1 += base / sr;
+      p2 += base * 1.51 / sr;
+      p3 += base * 2.17 / sr;
+      p4 += base * 2.89 / sr;
+      const partials = (
+        Math.sin(2 * Math.PI * p1) * 0.3 +
+        Math.sin(2 * Math.PI * p2) * 0.24 +
+        Math.sin(2 * Math.PI * p3) * 0.2 +
+        Math.sin(2 * Math.PI * p4) * 0.14
+      );
+      const noise = Math.random() * 2 - 1;
+      lpNoise = lpNoise * 0.9 + noise * 0.1;
+      const hpNoise = noise - prevNoise;
+      prevNoise = noise;
+      const stickEnv = Math.exp(-t * 72);
+      const bodyEnv = Math.exp(-t * (1.45 / dur));
+      const tailEnv = Math.exp(-t * (0.72 / dur));
+      const bell = Math.sin(2 * Math.PI * p4) * Math.exp(-t * 4.2) * bellAmt;
+      const stick = hpNoise * stickEnv * (0.22 + tone * 0.16);
+      const shimmer = partials * bodyEnv * shimmerAmt;
+      const wash = lpNoise * tailEnv * (0.2 + extra * 0.25);
+      out[i] = Math.tanh((stick + shimmer + wash + bell) * 1.08) * volume * 0.78;
     }
     return out;
   }
@@ -300,22 +317,23 @@ function App() {
     return out;
   }
 
-  function genClap(volume: number, _tone: number, extra: number, sr: number): Float32Array {
-    const dur = 0.25;
+  function genClap(volume: number, tone: number, extra: number, sr: number): Float32Array {
+    const dur = 0.17 + extra * 0.16;
     const len = Math.floor(sr * dur);
     const out = new Float32Array(len);
-    const roomSamples = Math.floor((10 + extra * 80) * sr / 1000);
-    const numLayers = 5;
-    for (let layer = 0; layer < numLayers; layer++) {
-      const delay = layer * roomSamples;
-      for (let i = delay; i < len; i++) {
-        const t = (i - delay) / sr;
-        const noise = Math.random() * 2 - 1;
-        const env = Math.exp(-t * 25);
-        out[i] += noise * env * (1 / numLayers);
-      }
+    let lpNoise = 0;
+    const bodyFreq = 170 + tone * 130;
+    const decay = 26 - extra * 10;
+    for (let i = 0; i < len; i++) {
+      const t = i / sr;
+      const noise = Math.random() * 2 - 1;
+      lpNoise = lpNoise * 0.82 + noise * 0.18;
+      const hpNoise = noise - lpNoise;
+      const attack = Math.min(t / 0.0018, 1);
+      const env = attack * Math.exp(-t * decay);
+      const body = Math.sin(2 * Math.PI * bodyFreq * t) * Math.exp(-t * 42) * 0.08;
+      out[i] = Math.tanh((hpNoise * 0.95 + noise * 0.18) * env + body) * volume * 0.82;
     }
-    for (let i = 0; i < len; i++) out[i] *= volume * 0.8;
     return out;
   }
 
