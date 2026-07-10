@@ -48,7 +48,36 @@ const client = new Client({
 const connections = new Map<string, VoiceConnection>();
 const audioPlayers = new Map<string, AudioPlayer>();
 const audioLoopFlags = new Map<string, boolean>();
+const audioStreams = new Map<string, Readable>();
 let ws: WebSocket | null = null;
+
+function createLoopingPCMStream(guildId: string, pcmBuffer: Buffer): Readable {
+  let offset = 0;
+  const chunkSize = 3840;
+
+  return new Readable({
+    read(size) {
+      if (!audioLoopFlags.get(guildId) || pcmBuffer.length === 0) {
+        this.push(null);
+        return;
+      }
+
+      const targetSize = Math.max(chunkSize, size || 0);
+      const chunk = Buffer.allocUnsafe(targetSize);
+      let written = 0;
+
+      while (written < targetSize) {
+        const remaining = pcmBuffer.length - offset;
+        const copySize = Math.min(targetSize - written, remaining);
+        pcmBuffer.copy(chunk, written, offset, offset + copySize);
+        written += copySize;
+        offset = (offset + copySize) % pcmBuffer.length;
+      }
+
+      this.push(chunk);
+    },
+  });
+}
 
 function connectWebSocket() {
   ws = new WebSocket(WS_URL);
@@ -87,22 +116,18 @@ function playPatternOnDiscord(guildId: string, audioBase64: string, _sampleRate:
   audioLoopFlags.set(guildId, false);
   player.removeAllListeners(AudioPlayerStatus.Idle);
   player.stop();
+  const previousStream = audioStreams.get(guildId);
+  if (previousStream) {
+    previousStream.destroy();
+    audioStreams.delete(guildId);
+  }
 
   audioLoopFlags.set(guildId, true);
   const pcmBuffer = Buffer.from(audioBase64, 'base64');
-
-  const playOnce = () => {
-    if (!audioLoopFlags.get(guildId)) {
-      console.log('Loop stopped for guild', guildId);
-      return;
-    }
-    const stream = new Readable({ read() { this.push(pcmBuffer); this.push(null); } });
-    const resource = createAudioResource(stream, { inputType: StreamType.Raw });
-    player.play(resource);
-    player.once(AudioPlayerStatus.Idle, playOnce);
-  };
-
-  playOnce();
+  const stream = createLoopingPCMStream(guildId, pcmBuffer);
+  audioStreams.set(guildId, stream);
+  const resource = createAudioResource(stream, { inputType: StreamType.Raw });
+  player.play(resource);
 }
 
 function handleWebSocketMessage(message: any) {
@@ -120,6 +145,11 @@ function handleWebSocketMessage(message: any) {
       for (const guildId of connections.keys()) {
         audioLoopFlags.set(guildId, false);
         const player = audioPlayers.get(guildId);
+        const stream = audioStreams.get(guildId);
+        if (stream) {
+          stream.destroy();
+          audioStreams.delete(guildId);
+        }
         if (player) {
           player.removeAllListeners(AudioPlayerStatus.Idle);
           player.stop();
@@ -290,6 +320,11 @@ async function handleLeave(interaction: ChatInputCommandInteraction) {
     player.removeAllListeners(AudioPlayerStatus.Idle);
     player.stop();
     audioPlayers.delete(interaction.guildId!);
+  }
+  const stream = audioStreams.get(interaction.guildId!);
+  if (stream) {
+    stream.destroy();
+    audioStreams.delete(interaction.guildId!);
   }
 
   audioLoopFlags.delete(interaction.guildId!);
