@@ -13,8 +13,11 @@ interface SynthUnitProps {
   currentStep: number;
   selectedStep: number | null;
   octaveShift: number;
+  muted: boolean;
+  solo: boolean;
   showRemoveButton: boolean;
-  onPlayStop: () => void;
+  onToggleMute: () => void;
+  onToggleSolo: () => void;
   onPatternChange: (pattern: Pattern) => void;
   onStepChange: (stepIndex: number) => void;
   onSavePattern: (name: string) => Promise<boolean>;
@@ -35,8 +38,11 @@ export default function SynthUnit({
   currentStep,
   selectedStep,
   octaveShift,
+  muted,
+  solo,
   showRemoveButton,
-  onPlayStop,
+  onToggleMute,
+  onToggleSolo,
   onPatternChange,
   onStepChange,
   onSavePattern,
@@ -51,11 +57,19 @@ export default function SynthUnit({
     <div className="synth-unit">
       <div className="synth-unit-header">
         <h2>Synth {synthId}</h2>
-        {showRemoveButton && onRemove && (
-          <button className="remove-synth-btn" onClick={onRemove}>
-            × Remove
+        <div className="synth-unit-header-actions">
+          <button className={`synth-mix-btn ${muted ? 'active' : ''}`} onClick={onToggleMute}>
+            Mute
           </button>
-        )}
+          <button className={`synth-mix-btn ${solo ? 'active' : ''}`} onClick={onToggleSolo}>
+            Solo
+          </button>
+          {showRemoveButton && onRemove && (
+            <button className="remove-synth-btn" onClick={onRemove}>
+              × Remove
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="synth-unit-layout">
@@ -66,7 +80,6 @@ export default function SynthUnit({
             isPlaying={isPlaying}
             currentStep={currentStep}
             selectedStep={selectedStep}
-            onPlayStop={onPlayStop}
             onPatternChange={onPatternChange}
             onStepChange={onStepChange}
             onSavePattern={onSavePattern}

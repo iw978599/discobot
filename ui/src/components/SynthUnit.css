@@ -11,12 +11,36 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
+  gap: 12px;
 }
 
 .synth-unit-header h2 {
   margin: 0;
   color: #00d4ff;
   font-size: 1.5rem;
+}
+
+.synth-unit-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.synth-mix-btn {
+  background: #2b2b2b;
+  color: #ddd;
+  border: 1px solid #4a4a4a;
+  border-radius: 4px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.synth-mix-btn.active {
+  border-color: #f59e0b;
+  color: #f59e0b;
 }
 
 .remove-synth-btn {
@@ -35,7 +59,7 @@
 
 .synth-unit-layout {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+  grid-template-columns: minmax(0, 2.3fr) minmax(240px, 0.8fr);
   grid-template-rows: auto auto;
   gap: 20px;
   align-items: start;
@@ -51,7 +75,7 @@
 .synth-unit-controls {
   grid-column: 2;
   grid-row: 1 / span 2;
-  min-width: 300px;
+  min-width: 240px;
 }
 
 .synth-unit-keyboard-container {

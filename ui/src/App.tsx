@@ -28,18 +28,20 @@ interface SynthState {
   currentStep: number;
   selectedStep: number | null;
   octaveShift: number;
+  muted: boolean;
+  solo: boolean;
 }
 
 function createDefaultDrumState(): DrumState {
   return {
-    kick: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 } },
-    snare: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 } },
-    openHH: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 } },
-    closedHH: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 } },
-    ride: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 } },
-    crash: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 } },
-    snare2: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 } },
-    clap: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 } },
+    kick: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
+    snare: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
+    openHH: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
+    closedHH: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
+    ride: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
+    crash: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
+    snare2: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
+    clap: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
   };
 }
 
@@ -171,6 +173,8 @@ function App() {
             currentStep: 0,
             selectedStep: null,
             octaveShift: 0,
+            muted: Boolean(s.muted),
+            solo: Boolean(s.solo),
           })));
         } else if (message.data.synthParameters) {
           setSynths([{
@@ -182,6 +186,8 @@ function App() {
             currentStep: 0,
             selectedStep: null,
             octaveShift: 0,
+            muted: false,
+            solo: false,
           }]);
         }
         if (message.data.drumState) setDrumState(message.data.drumState);
@@ -225,8 +231,17 @@ function App() {
             currentStep: 0,
             selectedStep: null,
             octaveShift: 0,
+            muted: Boolean(message.data.muted),
+            solo: Boolean(message.data.solo),
           }];
         });
+        break;
+      }
+      case 'synthMix': {
+        const { synthId, muted, solo } = message.data;
+        setSynths(prev => prev.map(s =>
+          s.id === synthId ? { ...s, muted: Boolean(muted), solo: Boolean(solo) } : s
+        ));
         break;
       }
       case 'synthRemoved': {
@@ -255,22 +270,28 @@ function App() {
       }
       case 'sequencerStep': {
         const { synthId, step } = message.data;
-        setSynths(prev => prev.map(s => {
-          if (s.id !== synthId) return s;
-          if (s.pattern?.steps[step]?.note) {
-            synthAudio.playNote(
-              s.pattern.steps[step].note!,
-              s.synthParams!,
-              0.15,
-              browserMutedRef.current
-            );
-          }
-          return { ...s, currentStep: step };
-        }));
+        const synthSnapshot = synthsRef.current;
+        const targetSynth = synthSnapshot.find(s => s.id === synthId);
+        const hasSynthSolo = synthSnapshot.some(s => s.solo);
+        const canPlaySynth = Boolean(targetSynth && !targetSynth.muted && (!hasSynthSolo || targetSynth.solo));
+        if (canPlaySynth && targetSynth?.pattern?.steps[step]?.note) {
+          synthAudio.playNote(
+            targetSynth.pattern.steps[step].note!,
+            targetSynth.synthParams!,
+            0.15,
+            browserMutedRef.current
+          );
+        }
+        setSynths(prev => prev.map(s =>
+          s.id === synthId ? { ...s, currentStep: step } : s
+        ));
         const ds = drumStateRef.current;
-        if (ds) {
+        if (ds && synthId === 1) {
+          const hasDrumSolo = (Object.keys(ds) as DrumInstrument[]).some(inst => Boolean(ds[inst].solo));
           for (const inst of Object.keys(ds) as DrumInstrument[]) {
-            if (ds[inst].steps[step]) {
+            const track = ds[inst];
+            const canPlayDrum = !track.muted && (!hasDrumSolo || track.solo);
+            if (track.steps[step] && canPlayDrum) {
               drumAudio.playDrumHit(inst, ds[inst].settings, browserMutedRef.current);
             }
           }
@@ -296,6 +317,20 @@ function App() {
           const next = { ...prev };
           const inst = dsi as DrumInstrument;
           next[inst] = { ...next[inst], settings: { ...next[inst].settings, ...dss } };
+          return next;
+        });
+        break;
+      }
+      case 'drumMix': {
+        const { instrument, muted, solo } = message.data;
+        setDrumState(prev => {
+          const next = { ...prev };
+          const inst = instrument as DrumInstrument;
+          next[inst] = {
+            ...next[inst],
+            muted: Boolean(muted),
+            solo: Boolean(solo),
+          };
           return next;
         });
         break;
@@ -336,6 +371,8 @@ function App() {
             currentStep: 0,
             selectedStep: null,
             octaveShift: 0,
+            muted: Boolean(data.muted),
+            solo: Boolean(data.solo),
           }];
         });
       }
@@ -376,25 +413,33 @@ function App() {
     });
   }, []);
 
-  const handlePlayStop = useCallback(async (synthId: number) => {
-    const synth = synthsRef.current.find(s => s.id === synthId);
-    if (!synth?.pattern) return;
+  const handleGlobalPlayStop = useCallback(async () => {
+    const currentSynths = synthsRef.current;
+    const isAnyPlaying = currentSynths.some(s => s.isPlaying);
+    const playableSynths = currentSynths.filter(s => s.pattern);
 
-    if (!synth.isPlaying) {
+    if (!isAnyPlaying) {
       await Promise.all([
         synthAudio.ensureAudioReady(),
         drumAudio.ensureAudioReady(),
       ]);
+      await Promise.all(playableSynths.map(s =>
+        fetch(apiUrl('/sequencer/play'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ synthId: s.id, patternId: s.pattern!.id }),
+        })
+      ));
+      return;
     }
 
-    const endpoint = synth.isPlaying ? '/sequencer/stop' : '/sequencer/play';
-    const body = synth.isPlaying ? { synthId } : { synthId, patternId: synth.pattern.id };
-
-    await fetch(apiUrl(endpoint), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    await Promise.all(currentSynths.filter(s => s.isPlaying).map(s =>
+      fetch(apiUrl('/sequencer/stop'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ synthId: s.id }),
+      })
+    ));
   }, [synthAudio, drumAudio]);
 
   const handlePatternChange = useCallback(async (synthId: number, pattern: Pattern) => {
@@ -448,6 +493,17 @@ function App() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params),
+    });
+  }, []);
+
+  const handleSynthMixChange = useCallback(async (synthId: number, mix: { muted?: boolean; solo?: boolean }) => {
+    setSynths(prev => prev.map(s =>
+      s.id === synthId ? { ...s, ...mix } : s
+    ));
+    await fetch(apiUrl(`/synth/${synthId}/mix`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(mix),
     });
   }, []);
 
@@ -549,6 +605,19 @@ function App() {
     });
   }, []);
 
+  const handleDrumMixChange = useCallback((instrument: DrumInstrument, mix: { muted?: boolean; solo?: boolean }) => {
+    setDrumState(prev => {
+      const next = { ...prev };
+      next[instrument] = { ...next[instrument], ...mix };
+      return next;
+    });
+    fetch(apiUrl('/drum/mix'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instrument, ...mix }),
+    });
+  }, []);
+
   const handleDrumReset = useCallback(() => {
     setDrumState(createDefaultDrumState());
     fetch(apiUrl('/drum/reset'), { method: 'POST' });
@@ -570,6 +639,11 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(DEFAULT_PARAMS),
+      });
+      await fetch(apiUrl(`/synth/${synth.id}/mix`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ muted: false, solo: false }),
       });
       if (synth.pattern) {
         const cleared = {
@@ -600,6 +674,8 @@ function App() {
       isPlaying: false,
       currentStep: 0,
       selectedStep: null,
+      muted: false,
+      solo: false,
     })));
     handleDrumReset();
   }, [handleDrumReset]);
@@ -609,6 +685,7 @@ function App() {
   const [saving, setSaving] = useState(false);
   const [saveName, setSaveName] = useState('');
   const [savedFeedback, setSavedFeedback] = useState(false);
+  const isAnyPlaying = synths.some(s => s.isPlaying);
 
   return (
     <div className="app">
@@ -626,6 +703,9 @@ function App() {
             setSavedFeedback={setSavedFeedback}
             onSave={handleSaveGlobal}
           />
+          <button className="play-all-button" onClick={handleGlobalPlayStop}>
+            {isAnyPlaying ? '⏹ Stop All' : '▶ Play All'}
+          </button>
 
           <button className="reset-button" onClick={handleReset} title="Reset all synths and drums">
             &#8634;
@@ -657,8 +737,11 @@ function App() {
               currentStep={synth.currentStep}
               selectedStep={synth.selectedStep}
               octaveShift={synth.octaveShift}
+              muted={synth.muted}
+              solo={synth.solo}
               showRemoveButton={synth.id === 2}
-              onPlayStop={() => handlePlayStop(synth.id)}
+              onToggleMute={() => handleSynthMixChange(synth.id, { muted: !synth.muted })}
+              onToggleSolo={() => handleSynthMixChange(synth.id, { solo: !synth.solo })}
               onPatternChange={(p) => handlePatternChange(synth.id, p)}
               onStepChange={(step) => handleStepChange(synth.id, step)}
               onSavePattern={(name) => handleSavePattern(synth.id, name)}
@@ -684,6 +767,7 @@ function App() {
           currentStep={synths[0]?.currentStep || 0}
           onStepToggle={handleDrumStepToggle}
           onSettingsChange={handleDrumSettingsChange}
+          onMixChange={handleDrumMixChange}
           onReset={handleDrumReset}
           drumMasterVolume={drumMasterVolume}
           onMasterVolumeChange={handleDrumMasterVolumeChange}
