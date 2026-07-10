@@ -81,19 +81,23 @@ export default function DrumMachine({
   }, [drumAudio]);
 
   const handleStepClick = useCallback((step: number) => {
+    console.log('Step clicked:', selectedInstrument, 'step:', step);
     const current = drumState[selectedInstrument].steps[step];
     onStepToggle(selectedInstrument, step, !current);
 
     // Play drum hit whenever clicking a step (ON or OFF)
     const settings = drumState[selectedInstrument].settings;
+    console.log('Playing drum hit for step:', selectedInstrument, settings);
     drumAudio.playDrumHit(selectedInstrument, settings);
   }, [drumState, selectedInstrument, onStepToggle, drumAudio]);
 
   const handleInstrumentSelect = useCallback((instrument: DrumInstrument) => {
+    console.log('Instrument selected:', instrument);
     setSelectedInstrument(instrument);
 
     // Play drum hit preview when selecting instrument
     const settings = drumState[instrument].settings;
+    console.log('Playing drum hit for instrument:', instrument, settings);
     drumAudio.playDrumHit(instrument, settings);
   }, [drumState, drumAudio]);
 
