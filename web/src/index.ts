@@ -20,6 +20,15 @@ app.use((req, res, next) => {
 });
 app.use(express.json());
 
+const uiDistPath = path.resolve(__dirname, '..', '..', 'ui', 'dist');
+const uiIndexPath = path.join(uiDistPath, 'index.html');
+if (fs.existsSync(uiIndexPath)) {
+  app.use(express.static(uiDistPath));
+  app.get('/', (_req, res) => {
+    res.sendFile(uiIndexPath);
+  });
+}
+
 // Shared audio engine state
 let synth: Synthesizer | null = null;
 let sequencer: Sequencer | null = null;
