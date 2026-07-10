@@ -75,29 +75,11 @@ export default function SynthUnit({
         </div>
 
         <div className="synth-unit-keyboard-container">
-          <button
-            className="octave-shift-btn"
-            onClick={() => onOctaveShift('down')}
-            disabled={octaveShift <= -1}
-            title="Shift octave down"
-          >
-            Oct -
-          </button>
-
           <Keyboard
             onNotePlay={onPlayNote}
             onNoteRelease={onNoteRelease}
             octaveShift={octaveShift}
           />
-
-          <button
-            className="octave-shift-btn"
-            onClick={() => onOctaveShift('up')}
-            disabled={octaveShift >= 1}
-            title="Shift octave up"
-          >
-            Oct +
-          </button>
         </div>
 
         <div className="synth-unit-controls">
@@ -105,6 +87,8 @@ export default function SynthUnit({
             <SynthControls
               parameters={synthParams}
               onParameterChange={onParameterChange}
+              octaveShift={octaveShift}
+              onOctaveShift={onOctaveShift}
             />
           )}
         </div>

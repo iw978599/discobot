@@ -156,7 +156,7 @@ function App() {
       synthAudio.dispose();
       drumAudio.dispose();
     };
-  }, [synthAudio, drumAudio]);
+  }, []);
 
   const handleMessage = useCallback((message: any) => {
     switch (message.type) {
@@ -441,12 +441,6 @@ function App() {
     const synthParams = synthsRef.current.find(s => s.id === synthId)?.synthParams;
     if (!synthParams) return;
     synthAudio.stopNote(note, synthParams);
-
-    await fetch(apiUrl(`/synth/${synthId}/note-off`), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ note }),
-    });
   }, [synthAudio]);
 
   const handleParameterChange = useCallback(async (synthId: number, params: Partial<SynthParameters>) => {

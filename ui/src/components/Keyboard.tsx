@@ -33,11 +33,12 @@ export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0 }:
 
   const handleNoteUp = (note: string) => {
     setActiveNotes((prev) => {
+      if (!prev.has(note)) return prev;
       const next = new Set(prev);
       next.delete(note);
+      onNoteRelease(note);
       return next;
     });
-    onNoteRelease(note);
   };
 
   const rangeLabel = `${WHITE_KEYS[0]}${baseOctave} - ${WHITE_KEYS[WHITE_KEYS.length - 1]}${baseOctave + 2}`;

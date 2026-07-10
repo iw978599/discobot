@@ -257,6 +257,9 @@ app.post('/synth/:synthId/note-off', (req, res) => {
   const synthId = parseInt(req.params.synthId);
   const synthData = synths.get(synthId);
   if (!synthData) return res.status(404).json({ error: 'Synth not found' });
+  if (synthData.sequencer.getIsPlaying()) {
+    return res.json({ success: true });
+  }
 
   const { note } = req.body;
   synthData.synth.noteOff(note);

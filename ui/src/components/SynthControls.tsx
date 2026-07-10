@@ -10,6 +10,8 @@ import './SynthControls.css';
 interface SynthControlsProps {
   parameters: SynthParameters;
   onParameterChange: (params: Partial<SynthParameters>) => void;
+  octaveShift: number;
+  onOctaveShift: (direction: 'up' | 'down') => void;
 }
 
 const TOOLTIPS = {
@@ -32,6 +34,8 @@ const TOOLTIPS = {
 export default function SynthControls({
   parameters,
   onParameterChange,
+  octaveShift,
+  onOctaveShift,
 }: SynthControlsProps) {
   const updateOscillator = (updates: Partial<SynthParameters['oscillator']>) => {
     onParameterChange({
@@ -73,6 +77,27 @@ export default function SynthControls({
     <div className="synth-controls-panel">
       <div className="synth-header">
         <h2>SYNTHESIZER</h2>
+        <div className="synth-octave-controls">
+          <button
+            className="octave-shift-btn"
+            onClick={() => onOctaveShift('down')}
+            disabled={octaveShift <= -1}
+            title="Shift octave down"
+          >
+            Oct -
+          </button>
+          <span className="octave-shift-value">
+            {octaveShift > 0 ? `+${octaveShift}` : octaveShift}
+          </span>
+          <button
+            className="octave-shift-btn"
+            onClick={() => onOctaveShift('up')}
+            disabled={octaveShift >= 1}
+            title="Shift octave up"
+          >
+            Oct +
+          </button>
+        </div>
       </div>
 
       <div className="synth-sections">
