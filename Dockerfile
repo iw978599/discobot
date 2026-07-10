@@ -2,15 +2,16 @@
 
 # ---------- FRONTEND BUILD ----------
 FROM node:20-bookworm-slim AS frontend-build
-WORKDIR /src/ui
+WORKDIR /src
 
-# Install deps first for layer caching
-COPY ui/package*.json ./
-RUN npm ci
+# Install UI deps using workspace lockfile for layer caching
+COPY package*.json ./
+COPY ui/package.json ./ui/package.json
+RUN npm ci --workspace=ui
 
 # Build UI
-COPY ui/ ./
-RUN npm run build
+COPY ui/ ./ui/
+RUN npm run build --workspace=ui
 
 # ---------- PYTHON DEPS BUILD ----------
 FROM python:3.11-slim-bookworm AS python-deps
