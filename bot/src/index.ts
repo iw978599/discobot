@@ -26,7 +26,6 @@ dotenv.config();
 
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID!;
-// In Railway, bot and web server run in same container, so connect via localhost on Railway's PORT
 const PORT = process.env.PORT || '3001';
 const WEB_API_URL = process.env.WEB_API_URL || `http://localhost:${PORT}`;
 const WS_URL = process.env.WS_URL || `ws://localhost:${PORT}/ws`;
@@ -46,13 +45,11 @@ const client = new Client({
   ],
 });
 
-// Voice connection storage
 const connections = new Map<string, VoiceConnection>();
 const audioPlayers = new Map<string, AudioPlayer>();
 const audioLoopFlags = new Map<string, boolean>();
 let ws: WebSocket | null = null;
 
-// Connect to WebSocket for real-time updates
 function connectWebSocket() {
   ws = new WebSocket(WS_URL);
 
@@ -133,7 +130,6 @@ function handleWebSocketMessage(message: any) {
   }
 }
 
-// Commands
 const commands = [
   new SlashCommandBuilder()
     .setName('join')
@@ -146,6 +142,16 @@ const commands = [
   new SlashCommandBuilder()
     .setName('play')
     .setDescription('Play a pattern')
+    .addIntegerOption((option) =>
+      option
+        .setName('synth')
+        .setDescription('Synth number (1 or 2)')
+        .setRequired(false)
+        .addChoices(
+          { name: 'Synth 1', value: 1 },
+          { name: 'Synth 2', value: 2 },
+        )
+    )
     .addStringOption((option) =>
       option
         .setName('pattern')
@@ -155,7 +161,17 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('stop')
-    .setDescription('Stop playback'),
+    .setDescription('Stop playback')
+    .addIntegerOption((option) =>
+      option
+        .setName('synth')
+        .setDescription('Synth number (1 or 2)')
+        .setRequired(false)
+        .addChoices(
+          { name: 'Synth 1', value: 1 },
+          { name: 'Synth 2', value: 2 },
+        )
+    ),
 
   new SlashCommandBuilder()
     .setName('note')
@@ -171,6 +187,16 @@ const commands = [
         .setName('duration')
         .setDescription('Duration in seconds')
         .setRequired(false)
+    )
+    .addIntegerOption((option) =>
+      option
+        .setName('synth')
+        .setDescription('Synth number (1 or 2)')
+        .setRequired(false)
+        .addChoices(
+          { name: 'Synth 1', value: 1 },
+          { name: 'Synth 2', value: 2 },
+        )
     ),
 
   new SlashCommandBuilder()
@@ -181,6 +207,16 @@ const commands = [
         .setName('bpm')
         .setDescription('Tempo in BPM')
         .setRequired(true)
+    )
+    .addIntegerOption((option) =>
+      option
+        .setName('synth')
+        .setDescription('Synth number (1 or 2)')
+        .setRequired(false)
+        .addChoices(
+          { name: 'Synth 1', value: 1 },
+          { name: 'Synth 2', value: 2 },
+        )
     ),
 
   new SlashCommandBuilder()
@@ -194,7 +230,6 @@ const commands = [
     ),
 ].map((command) => command.toJSON());
 
-// Register commands
 const rest = new REST({ version: '10' }).setToken(TOKEN);
 
 async function registerCommands() {
@@ -209,7 +244,6 @@ async function registerCommands() {
   }
 }
 
-// Command handlers
 async function handleJoin(interaction: ChatInputCommandInteraction) {
   const member = interaction.member as any;
   const voiceChannel = member?.voice?.channel;
@@ -218,6 +252,8 @@ async function handleJoin(interaction: ChatInputCommandInteraction) {
     return interaction.reply('You need to be in a voice channel!');
   }
 
+  await interaction.deferReply();
+
   try {
     const connection = joinVoiceChannel({
       channelId: voiceChannel.id,
@@ -225,7 +261,7 @@ async function handleJoin(interaction: ChatInputCommandInteraction) {
       adapterCreator: interaction.guild!.voiceAdapterCreator as any,
     });
 
-    await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
+    await entersState(connection, VoiceConnectionStatus.Ready, 10_000);
     connections.set(interaction.guildId!, connection);
 
     const player = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Play } });
@@ -234,10 +270,10 @@ async function handleJoin(interaction: ChatInputCommandInteraction) {
     audioPlayers.set(interaction.guildId!, player);
     audioLoopFlags.set(interaction.guildId!, false);
 
-    await interaction.reply(`Joined ${voiceChannel.name}!`);
+    await interaction.editReply(`Joined ${voiceChannel.name}!`);
   } catch (error) {
     console.error('Error joining voice channel:', error);
-    await interaction.reply('Failed to join voice channel');
+    await interaction.editReply('Failed to join voice channel');
   }
 }
 
@@ -263,14 +299,14 @@ async function handleLeave(interaction: ChatInputCommandInteraction) {
 }
 
 async function handlePlay(interaction: ChatInputCommandInteraction) {
+  const synthId = interaction.options.getInteger('synth') || 1;
   const patternId = interaction.options.getString('pattern');
 
   try {
-    // Get patterns from API
-    const response = await fetch(`${WEB_API_URL}/patterns`);
+    const response = await fetch(`${WEB_API_URL}/synth/${synthId}/patterns`);
     const patterns: any[] = await response.json();
 
-    let pattern = patterns[0]; // Default to first pattern
+    let pattern = patterns[0];
     if (patternId) {
       pattern = patterns.find((p: any) => p.id === patternId);
       if (!pattern) {
@@ -278,14 +314,13 @@ async function handlePlay(interaction: ChatInputCommandInteraction) {
       }
     }
 
-    // Trigger playback via API
     await fetch(`${WEB_API_URL}/sequencer/play`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ patternId: pattern.id }),
+      body: JSON.stringify({ synthId, patternId: pattern.id }),
     });
 
-    await interaction.reply(`Playing pattern: ${pattern.name}`);
+    await interaction.reply(`Playing pattern: ${pattern.name} on Synth ${synthId}`);
   } catch (error) {
     console.error('Error playing pattern:', error);
     await interaction.reply('Failed to play pattern');
@@ -293,11 +328,15 @@ async function handlePlay(interaction: ChatInputCommandInteraction) {
 }
 
 async function handleStop(interaction: ChatInputCommandInteraction) {
+  const synthId = interaction.options.getInteger('synth') || 1;
+
   try {
     await fetch(`${WEB_API_URL}/sequencer/stop`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ synthId }),
     });
-    await interaction.reply('Stopped playback');
+    await interaction.reply(`Stopped Synth ${synthId}`);
   } catch (error) {
     console.error('Error stopping:', error);
     await interaction.reply('Failed to stop playback');
@@ -307,15 +346,16 @@ async function handleStop(interaction: ChatInputCommandInteraction) {
 async function handleNote(interaction: ChatInputCommandInteraction) {
   const note = interaction.options.getString('note', true);
   const duration = interaction.options.getNumber('duration') || 0.5;
+  const synthId = interaction.options.getInteger('synth') || 1;
 
   try {
-    await fetch(`${WEB_API_URL}/synth/note`, {
+    await fetch(`${WEB_API_URL}/synth/${synthId}/note`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ note, duration: `${duration}n`, velocity: 0.7 }),
     });
 
-    await interaction.reply(`Playing note: ${note}`);
+    await interaction.reply(`Playing note: ${note} on Synth ${synthId}`);
   } catch (error) {
     console.error('Error playing note:', error);
     await interaction.reply('Failed to play note');
@@ -324,15 +364,16 @@ async function handleNote(interaction: ChatInputCommandInteraction) {
 
 async function handleTempo(interaction: ChatInputCommandInteraction) {
   const bpm = interaction.options.getNumber('bpm', true);
+  const synthId = interaction.options.getInteger('synth') || 1;
 
   try {
-    await fetch(`${WEB_API_URL}/sequencer/tempo`, {
+    await fetch(`${WEB_API_URL}/synth/${synthId}/tempo`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tempo: bpm }),
     });
 
-    await interaction.reply(`Set tempo to ${bpm} BPM`);
+    await interaction.reply(`Set Synth ${synthId} tempo to ${bpm} BPM`);
   } catch (error) {
     console.error('Error setting tempo:', error);
     await interaction.reply('Failed to set tempo');
@@ -341,12 +382,9 @@ async function handleTempo(interaction: ChatInputCommandInteraction) {
 
 async function handleExport(interaction: ChatInputCommandInteraction) {
   await interaction.deferReply();
-
   const patternId = interaction.options.getString('pattern', true);
 
   try {
-    // TODO: Implement export endpoint in web API
-    // For now, just acknowledge
     await interaction.editReply('Export feature coming soon!');
   } catch (error) {
     console.error('Error exporting:', error);
@@ -354,7 +392,6 @@ async function handleExport(interaction: ChatInputCommandInteraction) {
   }
 }
 
-// Bot events
 client.once('ready', () => {
   console.log(`Logged in as ${client.user?.tag}`);
   registerCommands();
