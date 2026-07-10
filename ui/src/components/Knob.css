@@ -1,0 +1,130 @@
+.knob {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+  padding: 8px;
+  user-select: none;
+}
+
+.knob-rotary {
+  cursor: pointer;
+  transition: transform 0.05s;
+}
+
+.knob-rotary:hover {
+  transform: scale(1.05);
+}
+
+.knob-rotary:active {
+  transform: scale(0.98);
+}
+
+.knob-disabled .knob-rotary {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.knob-disabled .knob-rotary:hover {
+  transform: none;
+}
+
+.knob-svg {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+/* Size variants */
+.knob-small .knob-svg {
+  width: 36px;
+  height: 36px;
+}
+
+.knob-medium .knob-svg {
+  width: 50px;
+  height: 50px;
+}
+
+.knob-large .knob-svg {
+  width: 64px;
+  height: 64px;
+}
+
+.knob-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #e5e5e5;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-align: center;
+  max-width: 80px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.knob-value {
+  font-size: 10px;
+  color: #f59e0b;
+  font-weight: 500;
+  font-family: 'Courier New', monospace;
+  background: rgba(245, 158, 11, 0.1);
+  padding: 2px 6px;
+  border-radius: 3px;
+  min-width: 45px;
+  text-align: center;
+}
+
+.knob-disabled .knob-value {
+  color: #666;
+  background: rgba(102, 102, 102, 0.1);
+}
+
+.knob-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.95);
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: normal;
+  max-width: 200px;
+  text-align: center;
+  z-index: 1000;
+  pointer-events: none;
+  margin-bottom: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  line-height: 1.4;
+}
+
+.knob-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: rgba(0, 0, 0, 0.95);
+}
+
+/* Responsive sizing */
+@media (max-width: 768px) {
+  .knob {
+    padding: 6px;
+  }
+
+  .knob-label {
+    font-size: 10px;
+  }
+
+  .knob-value {
+    font-size: 9px;
+    padding: 1px 4px;
+    min-width: 40px;
+  }
+}
