@@ -17,19 +17,15 @@ export function useDrumAudio() {
     return audioCtxRef.current;
   }
 
-  function playDrumHit(instrument: DrumInstrument, settings: DrumSettings, muted: boolean = false) {
+  async function playDrumHit(instrument: DrumInstrument, settings: DrumSettings, muted: boolean = false) {
     if (muted) return;
 
     try {
       const ctx = getAudioContext();
+
+      // Ensure AudioContext is running before playing (required for first interaction)
       if (ctx.state === 'suspended') {
-        ctx.resume().catch((err) => {
-          console.error('Failed to resume AudioContext:', {
-            error: err,
-            state: ctx.state,
-            instrument,
-          });
-        });
+        await ctx.resume();
       }
 
       const sampleRate = ctx.sampleRate;
