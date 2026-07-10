@@ -11,7 +11,6 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.WEB_PORT || 3001;
-const WS_PORT = process.env.WS_PORT || 8080;
 
 app.use(cors());
 app.use((req, res, next) => {
@@ -548,7 +547,7 @@ app.delete('/samples/:id', (req, res) => {
 
 // WebSocket Server
 const server = http.createServer(app);
-const wss = new WebSocketServer({ port: Number(WS_PORT) });
+const wss = new WebSocketServer({ server });
 
 const clients = new Set<WebSocket>();
 
@@ -680,5 +679,5 @@ function broadcastToClients(message: unknown) {
 // Start server
 server.listen(PORT, () => {
   console.log(`Web API server running on http://localhost:${PORT}`);
-  console.log(`WebSocket server running on ws://localhost:${WS_PORT}`);
+  console.log(`WebSocket server running on ws://localhost:${PORT}/ws`);
 });
