@@ -37,7 +37,7 @@ export function useDrumAudio() {
       }
     }
 
-    return ctx.state === 'running';
+    return ctx.state !== 'suspended';
   }
 
   async function playDrumHit(instrument: DrumInstrument, settings: DrumSettings, muted: boolean = false) {

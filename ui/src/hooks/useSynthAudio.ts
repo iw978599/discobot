@@ -69,7 +69,7 @@ export function useSynthAudio() {
       }
     }
 
-    return ctx.state === 'running';
+    return ctx.state !== 'suspended';
   }
 
   async function playNote(
