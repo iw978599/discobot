@@ -84,6 +84,8 @@ export function useDrumAudio() {
 
       source.connect(gainNode);
       gainNode.connect(ctx.destination);
+      console.log('Connected to destination:', ctx.destination);
+      console.log('Destination max channels:', ctx.destination.maxChannelCount);
       source.start();
       console.log('Audio source started successfully');
     } catch (error) {

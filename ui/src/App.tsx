@@ -447,6 +447,7 @@ function App() {
             onReset={handleDrumReset}
             drumMasterVolume={drumMasterVolume}
             onMasterVolumeChange={handleDrumMasterVolumeChange}
+            drumAudio={drumAudio}
           />
         </div>
 

@@ -1,7 +1,6 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { DrumState, DrumInstrument } from '../types';
 import DrumKnob from './DrumKnob';
-import { useDrumAudio } from '../hooks/useDrumAudio';
 import './DrumMachine.css';
 
 export interface DrumMachineProps {
@@ -13,6 +12,7 @@ export interface DrumMachineProps {
   onReset: () => void;
   drumMasterVolume: number;
   onMasterVolumeChange: (volume: number) => void;
+  drumAudio: ReturnType<typeof import('../hooks/useDrumAudio').useDrumAudio>;
 }
 
 const INSTRUMENTS: DrumInstrument[] = ['kick', 'snare', 'openHH', 'closedHH', 'ride', 'crash', 'snare2', 'clap'];
@@ -71,14 +71,9 @@ export default function DrumMachine({
   onReset,
   drumMasterVolume,
   onMasterVolumeChange,
+  drumAudio,
 }: DrumMachineProps) {
   const [selectedInstrument, setSelectedInstrument] = useState<DrumInstrument>('kick');
-  const drumAudio = useDrumAudio();
-
-  // Cleanup audio on unmount
-  useEffect(() => {
-    return () => drumAudio.dispose();
-  }, [drumAudio]);
 
   const handleStepClick = useCallback((step: number) => {
     console.log('Step clicked:', selectedInstrument, 'step:', step);
