@@ -535,7 +535,7 @@ function renderPatternAudio(state: GuildRuntimeState): string | null {
 function getPatternAudioPayload(state: GuildRuntimeState): { audio: string; sampleRate: number; tempo: number } | null {
   const audioBase64 = renderPatternAudio(state);
   if (!audioBase64) return null;
-  return { audio: audioBase64, sampleRate: 48000, tempo: state.globalTempo };
+  return { audio: audioBase64, sampleRate: AUDIO_CONTEXT.RENDER_SAMPLE_RATE, tempo: state.globalTempo };
 }
 
 function broadcastToClients(message: unknown, guildId: string) {
