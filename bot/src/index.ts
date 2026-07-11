@@ -130,14 +130,18 @@ function playPatternOnDiscord(guildId: string, audioBase64: string, _sampleRate:
   player.play(resource);
 }
 
+function playPatternOnAllGuilds(audioBase64: string, sampleRate: number) {
+  for (const guildId of connections.keys()) {
+    playPatternOnDiscord(guildId, audioBase64, sampleRate);
+  }
+}
+
 function handleWebSocketMessage(message: any) {
   switch (message.type) {
     case 'patternAudio': {
       console.log('Received patternAudio, length:', message.data.audio.length);
       const { audio, sampleRate } = message.data;
-      for (const guildId of connections.keys()) {
-        playPatternOnDiscord(guildId, audio, sampleRate);
-      }
+      playPatternOnAllGuilds(audio, sampleRate);
       break;
     }
     case 'sequencerStop': {
@@ -353,11 +357,18 @@ async function handlePlay(interaction: ChatInputCommandInteraction) {
       }
     }
 
-    await fetch(`${WEB_API_URL}/sequencer/play`, {
+    const playResponse = await fetch(`${WEB_API_URL}/sequencer/play`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ synthId, patternId: pattern.id }),
     });
+    if (playResponse.ok) {
+      const playResult = await playResponse.json().catch(() => null);
+      const patternAudio = playResult?.patternAudio;
+      if (patternAudio?.audio && patternAudio?.sampleRate) {
+        playPatternOnAllGuilds(patternAudio.audio, patternAudio.sampleRate);
+      }
+    }
 
     await interaction.reply(`Playing pattern: ${pattern.name} on Synth ${synthId}`);
   } catch (error) {

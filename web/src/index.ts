@@ -523,9 +523,12 @@ app.post('/sequencer/play', (req, res) => {
 
   const drumCount = DRUM_INSTRUMENTS.reduce((sum, inst) => sum + drumState[inst].steps.filter(Boolean).length, 0);
   debugLog(`POST /sequencer/play: synthId=${synthId}, patternId=${pattern.id}, drumActiveSteps=${drumCount}`);
-  broadcastPatternAudio();
+  const patternAudioPayload = getPatternAudioPayload();
+  if (patternAudioPayload) {
+    broadcastToClients({ type: 'patternAudio', data: { synthId: 0, ...patternAudioPayload } });
+  }
   broadcastToClients({ type: 'sequencerPlay', data: { synthId, patternId: pattern.id } });
-  res.json({ success: true });
+  res.json({ success: true, patternAudio: patternAudioPayload });
 });
 
 app.post('/sequencer/stop', (req, res) => {
@@ -746,12 +749,18 @@ function renderPatternAudio(): string | null {
   }
 }
 
+function getPatternAudioPayload(): { audio: string; sampleRate: number; tempo: number } | null {
+  const audioBase64 = renderPatternAudio();
+  if (!audioBase64) return null;
+  return { audio: audioBase64, sampleRate: 48000, tempo: globalTempo };
+}
+
 function broadcastPatternAudio() {
   const anyPlaying = Array.from(synths.values()).some((data) => data.sequencer.getIsPlaying());
   if (!anyPlaying) return;
-  const audioBase64 = renderPatternAudio();
-  if (audioBase64) {
-    broadcastToClients({ type: 'patternAudio', data: { synthId: 0, audio: audioBase64, sampleRate: 48000, tempo: globalTempo } });
+  const patternAudioPayload = getPatternAudioPayload();
+  if (patternAudioPayload) {
+    broadcastToClients({ type: 'patternAudio', data: { synthId: 0, ...patternAudioPayload } });
   }
 }
 
