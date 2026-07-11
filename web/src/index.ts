@@ -208,6 +208,12 @@ function randomToken(): string {
   return crypto.randomBytes(24).toString('hex');
 }
 
+function sanitizeId(value: string | undefined): string | null {
+  if (!value) return null;
+  if (!/^[A-Za-z0-9_-]{2,64}$/.test(value)) return null;
+  return value;
+}
+
 function signPayload(payload: object): string {
   const raw = Buffer.from(JSON.stringify(payload)).toString('base64url');
   const sig = crypto.createHmac('sha256', TOKEN_SECRET).update(raw).digest('base64url');
@@ -554,18 +560,31 @@ function broadcastPatternAudio(state: GuildRuntimeState) {
   }
 }
 
-const schedulePatternAudio = throttle((guildId: string) => broadcastPatternAudio(getGuildState(guildId)), 300);
+const schedulePatternAudioThrottles = new Map<string, () => void>();
+
+function schedulePatternAudio(guildId: string) {
+  let throttled = schedulePatternAudioThrottles.get(guildId);
+  if (!throttled) {
+    throttled = throttle(() => broadcastPatternAudio(getGuildState(guildId)), 300);
+    schedulePatternAudioThrottles.set(guildId, throttled);
+  }
+  if (typeof throttled === 'function') throttled();
+}
 
 function schedulePatternAudioForPlayingSynths(guildId: string) {
   schedulePatternAudio(guildId);
 }
+
+app.use('/auth', applyRateLimit(120, 60_000));
 
 app.post('/auth/discord/token', applyRateLimit(30, 60_000), (req, res) => {
   if (!verifyBotSignature(req)) {
     return res.status(401).json({ error: 'Invalid bot signature' });
   }
 
-  const { guildId, userId, username } = req.body as { guildId?: string; userId?: string; username?: string };
+  const { guildId: rawGuildId, userId: rawUserId, username } = req.body as { guildId?: string; userId?: string; username?: string };
+  const guildId = sanitizeId(rawGuildId);
+  const userId = sanitizeId(rawUserId);
   if (!guildId || !userId || !username) {
     return res.status(400).json({ error: 'guildId, userId, username are required' });
   }
@@ -597,7 +616,7 @@ app.post('/auth/bot/session', applyRateLimit(60, 60_000), (req, res) => {
     return res.status(401).json({ error: 'Invalid bot signature' });
   }
 
-  const { guildId } = req.body as { guildId?: string };
+  const guildId = sanitizeId((req.body as { guildId?: string }).guildId);
   if (!guildId) return res.status(400).json({ error: 'guildId is required' });
   const sessionToken = randomToken();
   const csrfToken = randomToken();
@@ -624,6 +643,11 @@ app.post('/auth/exchange', applyRateLimit(60, 60_000), (req, res) => {
   if (!payload?.jti || payload.exp < Date.now()) {
     return res.status(401).json({ error: 'Login token expired or invalid' });
   }
+  const guildId = sanitizeId(payload.guildId);
+  const userId = sanitizeId(payload.userId);
+  if (!guildId || !userId || typeof payload.username !== 'string') {
+    return res.status(401).json({ error: 'Login token payload is invalid' });
+  }
 
   const tracked = loginTokens.get(payload.jti);
   if (!tracked || tracked.expiresAt < Date.now()) {
@@ -631,13 +655,13 @@ app.post('/auth/exchange', applyRateLimit(60, 60_000), (req, res) => {
   }
   loginTokens.delete(payload.jti);
 
-  const role = upsertGuildMember(payload.guildId, payload.userId, payload.username);
+  const role = upsertGuildMember(guildId, userId, payload.username);
   const sessionToken = randomToken();
   const csrfToken = randomToken();
   const session: AuthSession = {
     token: sessionToken,
-    guildId: payload.guildId,
-    userId: payload.userId,
+    guildId,
+    userId,
     username: payload.username,
     role,
     csrfToken,
@@ -647,7 +671,7 @@ app.post('/auth/exchange', applyRateLimit(60, 60_000), (req, res) => {
   };
   authSessions.set(sessionToken, session);
 
-  const guild = getPersistedGuild(payload.guildId);
+  const guild = getPersistedGuild(guildId);
   savePersistedGuild({ ...guild, updatedAt: Date.now() });
 
   res.json({
