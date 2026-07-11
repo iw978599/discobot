@@ -73,6 +73,17 @@ export default function SynthUnit({
       </div>
 
       <div className="synth-unit-layout">
+        <div className="synth-unit-controls">
+          {synthParams && (
+            <SynthControls
+              parameters={synthParams}
+              onParameterChange={onParameterChange}
+              octaveShift={octaveShift}
+              onOctaveShift={onOctaveShift}
+            />
+          )}
+        </div>
+
         <div className="synth-unit-sequencer">
           <Sequencer
             pattern={pattern}
@@ -93,17 +104,6 @@ export default function SynthUnit({
             onNoteRelease={onNoteRelease}
             octaveShift={octaveShift}
           />
-        </div>
-
-        <div className="synth-unit-controls">
-          {synthParams && (
-            <SynthControls
-              parameters={synthParams}
-              onParameterChange={onParameterChange}
-              octaveShift={octaveShift}
-              onOctaveShift={onOctaveShift}
-            />
-          )}
         </div>
       </div>
     </div>

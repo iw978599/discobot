@@ -175,11 +175,12 @@ const commands = [
     .addIntegerOption((option) =>
       option
         .setName('synth')
-        .setDescription('Synth number (1 or 2)')
+        .setDescription('Synth number (1, 2, or 3)')
         .setRequired(false)
         .addChoices(
           { name: 'Synth 1', value: 1 },
           { name: 'Synth 2', value: 2 },
+          { name: 'Synth 3', value: 3 },
         )
     )
     .addStringOption((option) =>
@@ -195,11 +196,12 @@ const commands = [
     .addIntegerOption((option) =>
       option
         .setName('synth')
-        .setDescription('Synth number (1 or 2)')
+        .setDescription('Synth number (1, 2, or 3)')
         .setRequired(false)
         .addChoices(
           { name: 'Synth 1', value: 1 },
           { name: 'Synth 2', value: 2 },
+          { name: 'Synth 3', value: 3 },
         )
     ),
 
@@ -221,11 +223,12 @@ const commands = [
     .addIntegerOption((option) =>
       option
         .setName('synth')
-        .setDescription('Synth number (1 or 2)')
+        .setDescription('Synth number (1, 2, or 3)')
         .setRequired(false)
         .addChoices(
           { name: 'Synth 1', value: 1 },
           { name: 'Synth 2', value: 2 },
+          { name: 'Synth 3', value: 3 },
         )
     ),
 
@@ -241,11 +244,12 @@ const commands = [
     .addIntegerOption((option) =>
       option
         .setName('synth')
-        .setDescription('Synth number (1 or 2)')
+        .setDescription('Synth number (1, 2, or 3)')
         .setRequired(false)
         .addChoices(
           { name: 'Synth 1', value: 1 },
           { name: 'Synth 2', value: 2 },
+          { name: 'Synth 3', value: 3 },
         )
     ),
 

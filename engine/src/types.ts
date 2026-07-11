@@ -6,6 +6,20 @@ export interface SynthParameters {
     type: OscillatorType;
     detune: number;
   };
+  lfo1: {
+    enabled: boolean;
+    target: 'pitch' | 'filter';
+    waveform: OscillatorType;
+    rate: number;
+    depth: number;
+  };
+  lfo2: {
+    enabled: boolean;
+    target: 'pitch' | 'filter';
+    waveform: OscillatorType;
+    rate: number;
+    depth: number;
+  };
   filter: {
     frequency: number;
     q: number;

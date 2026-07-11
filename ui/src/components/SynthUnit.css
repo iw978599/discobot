@@ -58,29 +58,24 @@
 }
 
 .synth-unit-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 2.3fr) minmax(240px, 0.8fr);
-  grid-template-rows: auto auto;
+  display: flex;
+  flex-direction: column;
   gap: 20px;
-  align-items: start;
 }
 
 .synth-unit-sequencer {
-  grid-column: 1;
-  grid-row: 1;
   min-width: 0;
-  align-self: start;
 }
 
 .synth-unit-controls {
-  grid-column: 2;
-  grid-row: 1 / span 2;
-  min-width: 240px;
+  width: 100%;
+}
+
+.synth-unit-controls .synth-controls-panel {
+  max-width: none;
 }
 
 .synth-unit-keyboard-container {
-  grid-column: 1;
-  grid-row: 2;
   display: flex;
   align-items: stretch;
   gap: 16px;
@@ -93,30 +88,4 @@
 .synth-unit-keyboard-container .keyboard-container {
   flex: 1;
   min-width: 0;
-}
-
-@media (max-width: 1200px) {
-  .synth-unit-layout {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto;
-  }
-
-  .synth-unit-sequencer,
-  .synth-unit-keyboard-container,
-  .synth-unit-controls {
-    grid-column: 1;
-  }
-
-  .synth-unit-sequencer {
-    grid-row: 1;
-  }
-
-  .synth-unit-keyboard-container {
-    grid-row: 2;
-  }
-
-  .synth-unit-controls {
-    grid-row: 3;
-    min-width: 0;
-  }
 }

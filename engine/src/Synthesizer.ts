@@ -15,6 +15,8 @@ export class Synthesizer {
     return {
       gain: 1.0,
       oscillator: { type: 'sine', detune: 0 },
+      lfo1: { enabled: false, target: 'pitch', waveform: 'sine', rate: 5, depth: 0.2 },
+      lfo2: { enabled: false, target: 'filter', waveform: 'triangle', rate: 0.8, depth: 0.25 },
       filter: { frequency: 20000, q: 1, type: 'lowpass' },
       envelope: { attack: 0.1, decay: 0.2, sustain: 0.5, release: 1.0 },
       effects: {
@@ -87,24 +89,79 @@ export class Synthesizer {
     return output;
   }
 
+  private static lfoValue(type: OscillatorType, phase: number): number {
+    const frac = phase - Math.floor(phase);
+    switch (type) {
+      case 'sine':
+        return Math.sin(2 * Math.PI * phase);
+      case 'square':
+        return frac < 0.5 ? 1 : -1;
+      case 'sawtooth':
+        return 2 * frac - 1;
+      case 'triangle':
+        return 1 - 4 * Math.abs(frac - 0.5);
+      default:
+        return 0;
+    }
+  }
+
   renderNote(note: string, duration: number, velocity: number, sampleRate: number = 44100): Float32Array {
     const freq = Synthesizer.noteToFrequency(note);
     const detunedFreq = freq * Math.pow(2, this.parameters.oscillator.detune / 1200);
     const length = Math.floor(sampleRate * duration);
     const { attack, decay, sustain, release } = this.parameters.envelope;
     const oscType = this.parameters.oscillator.type;
-
-    let samples = Synthesizer.generateOscillator(oscType, detunedFreq, sampleRate, length);
+    const lfos = [this.parameters.lfo1, this.parameters.lfo2];
+    let phase = 0;
+    let lfo1Phase = 0;
+    let lfo2Phase = 0;
+    let samples = new Float32Array(length);
+    for (let i = 0; i < length; i++) {
+      const lfoValues = [
+        lfos[0].enabled ? Synthesizer.lfoValue(lfos[0].waveform, lfo1Phase) : 0,
+        lfos[1].enabled ? Synthesizer.lfoValue(lfos[1].waveform, lfo2Phase) : 0,
+      ];
+      const pitchMod = lfoValues.reduce((sum, val, idx) => (
+        lfos[idx].enabled && lfos[idx].target === 'pitch' ? sum + val * lfos[idx].depth : sum
+      ), 0);
+      const pitchCents = pitchMod * 50;
+      const currentFreq = detunedFreq * Math.pow(2, pitchCents / 1200);
+      phase += currentFreq / sampleRate;
+      samples[i] = Synthesizer.lfoValue(oscType, phase);
+      lfo1Phase += lfos[0].rate / sampleRate;
+      lfo2Phase += lfos[1].rate / sampleRate;
+    }
     samples = Synthesizer.applyADSR(samples, sampleRate, attack, decay, sustain, release, duration);
-    samples = Synthesizer.applyLowpass(samples, sampleRate, this.parameters.filter.frequency);
+    const output = new Float32Array(samples.length);
+    const lfoState = [0, 0];
+    let filtered = 0;
+    for (let i = 0; i < samples.length; i++) {
+      lfoState[0] += lfos[0].rate / sampleRate;
+      lfoState[1] += lfos[1].rate / sampleRate;
+      const filterMod = lfos.reduce((sum, lfo, idx) => (
+        lfo.enabled && lfo.target === 'filter'
+          ? sum + Synthesizer.lfoValue(lfo.waveform, lfoState[idx]) * lfo.depth
+          : sum
+      ), 0);
+      const modulatedCutoff = clamp(
+        this.parameters.filter.frequency * (1 + filterMod * 0.7),
+        20,
+        20000
+      );
+      const dt = 1 / sampleRate;
+      const rc = 1 / (2 * Math.PI * modulatedCutoff);
+      const alpha = dt / (rc + dt);
+      filtered = filtered + alpha * (samples[i] - filtered);
+      output[i] = filtered;
+    }
 
     const master = clamp(this.parameters.gain, 0, 2);
     const vol = clamp(velocity, 0, 1);
-    for (let i = 0; i < samples.length; i++) {
-      samples[i] *= vol * master * AUDIO_MIXING.SYNTH_MASTER_VOLUME;
+    for (let i = 0; i < output.length; i++) {
+      output[i] *= vol * master * AUDIO_MIXING.SYNTH_MASTER_VOLUME;
     }
 
-    return samples;
+    return output;
   }
 
   renderChord(notes: string[], duration: number, velocity: number, sampleRate: number = 44100): Float32Array {

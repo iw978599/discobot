@@ -34,6 +34,8 @@ function noteToFrequency(note: string): number {
 interface ActiveVoice {
   osc: OscillatorNode;
   gain: GainNode;
+  nodes: AudioNode[];
+  lfos: OscillatorNode[];
 }
 
 export function useSynthAudio() {
@@ -90,22 +92,47 @@ export function useSynthAudio() {
 
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
+      const nodes: AudioNode[] = [osc, gain];
+      const lfos: OscillatorNode[] = [];
 
       osc.type = p?.oscillator.type || 'sine';
       osc.frequency.value = freq;
       osc.detune.value = p?.oscillator.detune || 0;
 
       // Apply filter if parameters exist
+      let filterNode: BiquadFilterNode | null = null;
       if (p) {
-        const filter = ctx.createBiquadFilter();
-        filter.type = (p.filter.type || 'lowpass') as BiquadFilterType;
-        filter.frequency.value = p.filter.frequency;
-        filter.Q.value = p.filter.q;
-        osc.connect(filter);
-        filter.connect(gain);
+        filterNode = ctx.createBiquadFilter();
+        filterNode.type = (p.filter.type || 'lowpass') as BiquadFilterType;
+        filterNode.frequency.value = p.filter.frequency;
+        filterNode.Q.value = p.filter.q;
+        osc.connect(filterNode);
+        filterNode.connect(gain);
+        nodes.push(filterNode);
       } else {
         osc.connect(gain);
       }
+
+      const lfoConfig = [p?.lfo1, p?.lfo2].filter(Boolean) as NonNullable<SynthParameters['lfo1']>[];
+      lfoConfig.forEach((lfo) => {
+        if (!lfo.enabled) return;
+        const lfoOsc = ctx.createOscillator();
+        lfoOsc.type = lfo.waveform;
+        lfoOsc.frequency.value = lfo.rate;
+        const lfoGain = ctx.createGain();
+        if (lfo.target === 'pitch') {
+          lfoGain.gain.value = lfo.depth * 50;
+          lfoOsc.connect(lfoGain);
+          lfoGain.connect(osc.detune);
+        } else if (filterNode) {
+          lfoGain.gain.value = filterNode.frequency.value * lfo.depth * 0.7;
+          lfoOsc.connect(lfoGain);
+          lfoGain.connect(filterNode.frequency);
+        }
+        lfoOsc.start(ctx.currentTime);
+        lfos.push(lfoOsc);
+        nodes.push(lfoOsc, lfoGain);
+      });
 
       // Apply delay effect if enabled
       if (p?.effects.delay.enabled && p.effects.delay.wet > 0) {
@@ -153,9 +180,10 @@ export function useSynthAudio() {
         gain.gain.setValueAtTime(vol * sustainLvl, releaseStart);
         gain.gain.exponentialRampToValueAtTime(0.001, end);
         osc.stop(end);
+        lfos.forEach((lfo) => lfo.stop(end));
       } else {
         // Sustained note (store for later release)
-        activeVoices.current.set(note, { osc, gain });
+        activeVoices.current.set(note, { osc, gain, nodes, lfos });
       }
     } catch (error) {
       console.error('Synth playback error:', {
@@ -180,6 +208,7 @@ export function useSynthAudio() {
       voice.gain.gain.setValueAtTime(voice.gain.gain.value, now);
       voice.gain.gain.exponentialRampToValueAtTime(0.001, now + release);
       voice.osc.stop(now + release);
+      voice.lfos.forEach(lfo => lfo.stop(now + release));
 
       activeVoices.current.delete(note);
     } catch (error) {
@@ -195,8 +224,8 @@ export function useSynthAudio() {
     activeVoices.current.forEach((voice, note) => {
       try {
         voice.osc.stop();
-        voice.gain.disconnect();
-        voice.osc.disconnect();
+        voice.lfos.forEach(lfo => lfo.stop());
+        voice.nodes.forEach(node => node.disconnect());
       } catch (error) {
         console.error(`Error disposing voice ${note}:`, error);
       }

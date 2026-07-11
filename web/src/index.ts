@@ -67,7 +67,7 @@ function createDefaultDrumState(): DrumState {
   for (const inst of DRUM_INSTRUMENTS) {
     state[inst] = {
       steps: new Array(16).fill(false),
-      settings: { volume: 1.0, tone: 0.5, extra: 0.5 },
+      settings: { volume: 0.5, tone: 0.5, extra: 0.5 },
       muted: false,
       solo: false,
     };
@@ -182,7 +182,7 @@ app.post('/synth/create', (req, res) => {
   initAudioEngine();
   const { synthId } = req.body;
 
-  if (!synthId || synthId < 1 || synthId > 2 || synths.has(synthId)) {
+  if (!synthId || synthId < 1 || synthId > 3 || synths.has(synthId)) {
     return res.status(400).json({ error: 'Invalid synthId' });
   }
 
