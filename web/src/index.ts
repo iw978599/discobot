@@ -20,6 +20,11 @@ const TOKEN_TTL_MS = 15 * 60 * 1000;
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const SIGNATURE_MAX_SKEW_MS = 60_000;
 
+if (AUTH_MODE === 'strict') {
+  if (TOKEN_SECRET === 'discobot-dev-secret') throw new Error('AUTH_TOKEN_SECRET must be set in strict mode');
+  if (BOT_SHARED_SECRET === 'discobot-bot-secret') throw new Error('BOT_SHARED_SECRET must be set in strict mode');
+}
+
 app.use(cors());
 app.use((req, res, next) => {
   res.setHeader('Content-Security-Policy', "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data: blob: https:; font-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; style-src-elem 'self' 'unsafe-inline' https:; style-src-attr 'self' 'unsafe-inline' https:; script-src 'self' https:; connect-src 'self' https: ws: wss:; manifest-src 'self'; worker-src 'self' blob:; upgrade-insecure-requests");
