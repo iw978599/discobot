@@ -448,7 +448,34 @@ function App() {
     ));
   }, []);
 
-  const handleStepChange = useCallback((synthId: number, stepIndex: number) => {
+  const handleStepChange = useCallback(async (synthId: number, stepIndex: number) => {
+    const synth = synthsRef.current.find(s => s.id === synthId);
+    const pattern = synth?.pattern;
+    if (!synth || !pattern) return;
+
+    const sameSelectedStep = synth.selectedStep === stepIndex;
+    const step = pattern.steps[stepIndex];
+
+    if (sameSelectedStep && step?.note) {
+      const updatedPattern = {
+        ...pattern,
+        steps: pattern.steps.map((s, i) => (
+          i === stepIndex ? { ...s, note: undefined, active: false } : s
+        )),
+      };
+
+      setSynths(prev => prev.map(s => (
+        s.id === synthId ? { ...s, pattern: updatedPattern, selectedStep: null } : s
+      )));
+
+      await fetch(apiUrl(`/synth/${synthId}/patterns/${pattern.id}`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedPattern),
+      });
+      return;
+    }
+
     setSynths(prev => prev.map(s => {
       if (s.id !== synthId) return s;
       return { ...s, selectedStep: s.selectedStep === stepIndex ? null : stepIndex };
