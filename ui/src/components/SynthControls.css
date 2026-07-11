@@ -6,12 +6,12 @@
   background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
   border: 2px solid #3a3a3a;
   border-radius: 12px;
-  padding: 14px;
+  padding: 12px;
   box-shadow:
     0 8px 24px rgba(0, 0, 0, 0.4),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  min-width: 240px;
-  max-width: 480px;
+  min-width: 220px;
+  max-width: 420px;
   height: auto;
 }
 
@@ -34,41 +34,22 @@
   text-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
 }
 
-.synth-sections {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.synth-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
 }
 
-.synth-row {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.synth-section {
-  flex: 1;
-  min-width: 120px;
+.synth-column {
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid #2a2a2a;
   border-radius: 8px;
-  padding: 10px;
+  padding: 8px;
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
-.synth-section-wide {
-  flex: 1 1 100%;
-}
-
-.synth-section-center {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-.synth-section h3 {
-  margin: 0 0 8px 0;
+.synth-column h3 {
+  margin: 0 0 6px 0;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 1.5px;
@@ -87,11 +68,11 @@
   margin: 0;
 }
 
-.synth-knobs {
+.synth-column-controls {
   display: flex;
-  gap: 8px;
-  justify-content: center;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
 }
 
 .synth-octave-controls {
@@ -136,7 +117,7 @@
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  padding: 8px;
+  padding: 6px;
 }
 
 .synth-waveform-selector label {
@@ -152,13 +133,13 @@
   border: 2px solid #4a4a4a;
   border-radius: 6px;
   color: #3b82f6;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: bold;
-  padding: 8px 12px;
+  padding: 6px 10px;
   cursor: pointer;
   transition: all 0.2s;
   text-align: center;
-  min-width: 60px;
+  min-width: 56px;
 }
 
 .synth-select:hover {
@@ -237,21 +218,8 @@
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .synth-controls-panel {
-    padding: 15px;
-    max-width: 100%;
-  }
-
-  .synth-row {
-    gap: 15px;
-  }
-
-  .synth-section {
-    min-width: 120px;
     padding: 10px;
-  }
-
-  .synth-knobs {
-    gap: 6px;
+    max-width: 100%;
   }
 
   .synth-header h2 {
@@ -262,19 +230,6 @@
 
 @media (max-width: 480px) {
   .synth-controls-panel {
-    padding: 12px;
-  }
-
-  .synth-row {
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .synth-section {
-    min-width: 100%;
-  }
-
-  .synth-knobs {
-    justify-content: space-around;
+    padding: 8px;
   }
 }

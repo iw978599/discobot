@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Pattern, SavedPatternInfo, SavedPatternFull } from '../types';
-import { apiUrl } from '../config';
+import { authFetch } from '../authClient';
 import './Sequencer.css';
 
 interface SequencerProps {
@@ -70,7 +70,7 @@ export default function Sequencer({
 
   const fetchSaved = async () => {
     try {
-      const res = await fetch(apiUrl('/patterns/saved'));
+      const res = await authFetch('/patterns/saved');
       if (res.ok) setSavedPatterns(await res.json());
     } catch { /* ignore */ }
   };
@@ -82,7 +82,7 @@ export default function Sequencer({
   const handleSelectSaved = async (id: string) => {
     if (!id) return;
     try {
-      const res = await fetch(apiUrl(`/patterns/saved/${id}`));
+      const res = await authFetch(`/patterns/saved/${id}`);
       if (res.ok) {
         const data: SavedPatternFull = await res.json();
         onLoadSavedPattern(data);
@@ -92,7 +92,7 @@ export default function Sequencer({
 
   const handleDeleteSaved = async (id: string) => {
     try {
-      await fetch(apiUrl(`/patterns/saved/${id}`), { method: 'DELETE' });
+      await authFetch(`/patterns/saved/${id}`, { method: 'DELETE' });
       fetchSaved();
     } catch { /* ignore */ }
   };

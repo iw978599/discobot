@@ -11,7 +11,6 @@ import {
   createAudioPlayer,
   createAudioResource,
   AudioPlayer,
-  AudioPlayerStatus,
   VoiceConnection,
   VoiceConnectionStatus,
   entersState,
@@ -21,6 +20,7 @@ import {
 import { Readable } from 'stream';
 import dotenv from 'dotenv';
 import WebSocket from 'ws';
+import crypto from 'crypto';
 
 dotenv.config();
 
@@ -28,14 +28,12 @@ const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID!;
 const PORT = process.env.PORT || '3001';
 const WEB_API_URL = process.env.WEB_API_URL || `http://localhost:${PORT}`;
-const WS_URL = process.env.WS_URL || `ws://localhost:${PORT}/ws`;
+const WS_URL = process.env.WS_URL || `ws://localhost:${PORT}/ws/bot`;
+const BOT_SHARED_SECRET = process.env.BOT_SHARED_SECRET || process.env.DISCORD_TOKEN || 'discobot-bot-secret';
+const WEB_LOGIN_URL = process.env.WEB_LOGIN_URL || (process.env.UI_URL ? `${process.env.UI_URL}` : 'http://localhost:3000');
 
-if (!TOKEN) {
-  throw new Error('Missing DISCORD_TOKEN in .env');
-}
-if (!CLIENT_ID) {
-  throw new Error('Missing DISCORD_CLIENT_ID in .env');
-}
+if (!TOKEN) throw new Error('Missing DISCORD_TOKEN in .env');
+if (!CLIENT_ID) throw new Error('Missing DISCORD_CLIENT_ID in .env');
 
 const client = new Client({
   intents: [
@@ -49,7 +47,63 @@ const connections = new Map<string, VoiceConnection>();
 const audioPlayers = new Map<string, AudioPlayer>();
 const audioLoopFlags = new Map<string, boolean>();
 const audioStreams = new Map<string, Readable>();
+const guildAuth = new Map<string, { sessionToken: string; csrfToken: string; expiresAt: number }>();
 let ws: WebSocket | null = null;
+
+function signBotPayload(body: string) {
+  const timestamp = Date.now().toString();
+  const signature = crypto.createHmac('sha256', BOT_SHARED_SECRET).update(`${timestamp}.${body}`).digest('hex');
+  return { timestamp, signature };
+}
+
+async function botSignedFetch(path: string, init: RequestInit & { bodyObj?: unknown } = {}) {
+  const rawBody = init.bodyObj ? JSON.stringify(init.bodyObj) : (typeof init.body === 'string' ? init.body : '');
+  const { timestamp, signature } = signBotPayload(rawBody);
+  return fetch(`${WEB_API_URL}${path}`, {
+    ...init,
+    body: rawBody || undefined,
+    headers: {
+      'Content-Type': 'application/json',
+      'x-bot-timestamp': timestamp,
+      'x-bot-signature': signature,
+      ...(init.headers || {}),
+    },
+  });
+}
+
+async function ensureGuildAuth(guildId: string) {
+  const current = guildAuth.get(guildId);
+  if (current && current.expiresAt > Date.now() + 60_000) return current;
+
+  const response = await botSignedFetch('/auth/bot/session', {
+    method: 'POST',
+    bodyObj: { guildId },
+  });
+  if (!response.ok) throw new Error('Failed to obtain bot session');
+  const data = await response.json();
+  const entry = {
+    sessionToken: data.sessionToken as string,
+    csrfToken: data.csrfToken as string,
+    expiresAt: data.expiresAt as number,
+  };
+  guildAuth.set(guildId, entry);
+  return entry;
+}
+
+async function guildFetch(guildId: string, path: string, init: RequestInit & { bodyObj?: unknown } = {}) {
+  const auth = await ensureGuildAuth(guildId);
+  const rawBody = init.bodyObj ? JSON.stringify(init.bodyObj) : (typeof init.body === 'string' ? init.body : '');
+  return fetch(`${WEB_API_URL}${path}`, {
+    ...init,
+    body: rawBody || undefined,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + auth.sessionToken,
+      'x-csrf-token': auth.csrfToken,
+      ...(init.headers || {}),
+    },
+  });
+}
 
 function createLoopingPCMStream(guildId: string, pcmBuffer: Buffer): Readable {
   let offset = 0;
@@ -80,10 +134,16 @@ function createLoopingPCMStream(guildId: string, pcmBuffer: Buffer): Readable {
 }
 
 function connectWebSocket() {
-  ws = new WebSocket(WS_URL);
+  const { timestamp, signature } = signBotPayload('');
+  ws = new WebSocket(WS_URL, {
+    headers: {
+      'x-bot-timestamp': timestamp,
+      'x-bot-signature': signature,
+    },
+  });
 
   ws.on('open', () => {
-    console.log('Connected to WebSocket server');
+    console.log('Connected to bot WebSocket channel');
   });
 
   ws.on('message', (data) => {
@@ -96,7 +156,7 @@ function connectWebSocket() {
   });
 
   ws.on('close', () => {
-    console.log('WebSocket disconnected, reconnecting in 5s...');
+    console.log('Bot WebSocket disconnected, reconnecting in 5s...');
     setTimeout(connectWebSocket, 5000);
   });
 
@@ -105,16 +165,11 @@ function connectWebSocket() {
   });
 }
 
-function playPatternOnDiscord(guildId: string, audioBase64: string, _sampleRate: number) {
+function playPatternOnDiscord(guildId: string, audioBase64: string) {
   const player = audioPlayers.get(guildId);
-  if (!player) {
-    console.log('No player for guild', guildId);
-    return;
-  }
-  console.log('Playing audio on guild', guildId, 'buffer size:', audioBase64.length);
+  if (!player) return;
 
   audioLoopFlags.set(guildId, false);
-  player.removeAllListeners(AudioPlayerStatus.Idle);
   player.stop();
   const previousStream = audioStreams.get(guildId);
   if (previousStream) {
@@ -133,28 +188,22 @@ function playPatternOnDiscord(guildId: string, audioBase64: string, _sampleRate:
 function handleWebSocketMessage(message: any) {
   switch (message.type) {
     case 'patternAudio': {
-      console.log('Received patternAudio, length:', message.data.audio.length);
-      const { audio, sampleRate } = message.data;
-      for (const guildId of connections.keys()) {
-        playPatternOnDiscord(guildId, audio, sampleRate);
-      }
+      const { guildId, audio } = message.data;
+      if (!guildId || !audio) return;
+      playPatternOnDiscord(guildId, audio);
       break;
     }
     case 'sequencerStop': {
-      console.log('Received sequencerStop');
-      for (const guildId of connections.keys()) {
-        audioLoopFlags.set(guildId, false);
-        const player = audioPlayers.get(guildId);
-        const stream = audioStreams.get(guildId);
-        if (stream) {
-          stream.destroy();
-          audioStreams.delete(guildId);
-        }
-        if (player) {
-          player.removeAllListeners(AudioPlayerStatus.Idle);
-          player.stop();
-        }
+      const { guildId } = message.data;
+      if (!guildId) return;
+      audioLoopFlags.set(guildId, false);
+      const player = audioPlayers.get(guildId);
+      const stream = audioStreams.get(guildId);
+      if (stream) {
+        stream.destroy();
+        audioStreams.delete(guildId);
       }
+      player?.stop();
       break;
     }
   }
@@ -168,6 +217,10 @@ const commands = [
   new SlashCommandBuilder()
     .setName('leave')
     .setDescription('Leave voice channel'),
+
+  new SlashCommandBuilder()
+    .setName('login')
+    .setDescription('Generate a secure login link for the web UI'),
 
   new SlashCommandBuilder()
     .setName('play')
@@ -240,51 +293,19 @@ const commands = [
         .setName('bpm')
         .setDescription('Tempo in BPM')
         .setRequired(true)
-    )
-    .addIntegerOption((option) =>
-      option
-        .setName('synth')
-        .setDescription('Synth number (1, 2, or 3)')
-        .setRequired(false)
-        .addChoices(
-          { name: 'Synth 1', value: 1 },
-          { name: 'Synth 2', value: 2 },
-          { name: 'Synth 3', value: 3 },
-        )
-    ),
-
-  new SlashCommandBuilder()
-    .setName('export')
-    .setDescription('Export pattern as WAV file')
-    .addStringOption((option) =>
-      option
-        .setName('pattern')
-        .setDescription('Pattern ID to export')
-        .setRequired(true)
     ),
 ].map((command) => command.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(TOKEN);
 
 async function registerCommands() {
-  try {
-    console.log('Registering slash commands...');
-    await rest.put(Routes.applicationCommands(CLIENT_ID), {
-      body: commands,
-    });
-    console.log('Successfully registered slash commands');
-  } catch (error) {
-    console.error('Error registering commands:', error);
-  }
+  await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
 }
 
 async function handleJoin(interaction: ChatInputCommandInteraction) {
   const member = interaction.member as any;
   const voiceChannel = member?.voice?.channel;
-
-  if (!voiceChannel) {
-    return interaction.reply('You need to be in a voice channel!');
-  }
+  if (!voiceChannel) return interaction.reply('You need to be in a voice channel!');
 
   await interaction.deferReply();
 
@@ -299,140 +320,147 @@ async function handleJoin(interaction: ChatInputCommandInteraction) {
     connections.set(interaction.guildId!, connection);
 
     const player = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Play } });
-    player.on('error', (err) => console.error('Audio player error:', err));
     connection.subscribe(player);
     audioPlayers.set(interaction.guildId!, player);
     audioLoopFlags.set(interaction.guildId!, false);
 
     await interaction.editReply(`Joined ${voiceChannel.name}!`);
-  } catch (error) {
-    console.error('Error joining voice channel:', error);
+  } catch {
     await interaction.editReply('Failed to join voice channel');
   }
 }
 
 async function handleLeave(interaction: ChatInputCommandInteraction) {
-  const connection = connections.get(interaction.guildId!);
+  const guildId = interaction.guildId!;
+  const connection = connections.get(guildId);
+  if (!connection) return interaction.reply('Not in a voice channel');
 
-  if (!connection) {
-    return interaction.reply('Not in a voice channel');
-  }
-
-  audioLoopFlags.set(interaction.guildId!, false);
-  const player = audioPlayers.get(interaction.guildId!);
-  if (player) {
-    player.removeAllListeners(AudioPlayerStatus.Idle);
-    player.stop();
-    audioPlayers.delete(interaction.guildId!);
-  }
-  const stream = audioStreams.get(interaction.guildId!);
-  if (stream) {
-    stream.destroy();
-    audioStreams.delete(interaction.guildId!);
-  }
-
-  audioLoopFlags.delete(interaction.guildId!);
+  audioLoopFlags.set(guildId, false);
+  audioPlayers.get(guildId)?.stop();
+  audioPlayers.delete(guildId);
+  audioStreams.get(guildId)?.destroy();
+  audioStreams.delete(guildId);
+  audioLoopFlags.delete(guildId);
   connection.destroy();
-  connections.delete(interaction.guildId!);
+  connections.delete(guildId);
   await interaction.reply('Left voice channel');
 }
 
+async function handleLogin(interaction: ChatInputCommandInteraction) {
+  const guildId = interaction.guildId;
+  if (!guildId || !interaction.user) {
+    await interaction.reply({ content: 'Login is only available inside a Discord server.', ephemeral: true });
+    return;
+  }
+
+  const response = await botSignedFetch('/auth/discord/token', {
+    method: 'POST',
+    bodyObj: {
+      guildId,
+      userId: interaction.user.id,
+      username: interaction.user.username,
+    },
+  });
+
+  if (!response.ok) {
+    await interaction.reply({ content: 'Failed to generate login token.', ephemeral: true });
+    return;
+  }
+
+  const data = await response.json();
+  const loginUrl = `${WEB_LOGIN_URL.replace(/\/+$/, '')}/?loginToken=${encodeURIComponent(data.loginToken)}`;
+  await interaction.reply({
+    content: `Use this secure link (expires soon): ${loginUrl}`,
+    ephemeral: true,
+  });
+}
+
 async function handlePlay(interaction: ChatInputCommandInteraction) {
+  const guildId = interaction.guildId!;
   const synthId = interaction.options.getInteger('synth') || 1;
   const patternId = interaction.options.getString('pattern');
 
   try {
-    const response = await fetch(`${WEB_API_URL}/synth/${synthId}/patterns`);
+    const response = await guildFetch(guildId, `/synth/${synthId}/patterns`);
     const patterns: any[] = await response.json();
 
     let pattern = patterns[0];
     if (patternId) {
       pattern = patterns.find((p: any) => p.id === patternId);
-      if (!pattern) {
-        return interaction.reply('Pattern not found');
+      if (!pattern) return interaction.reply('Pattern not found');
+    }
+
+    const playResponse = await guildFetch(guildId, '/sequencer/play', {
+      method: 'POST',
+      bodyObj: { synthId, patternId: pattern.id },
+    });
+
+    if (playResponse.ok) {
+      const playResult = await playResponse.json().catch(() => null);
+      const patternAudio = playResult?.patternAudio;
+      if (patternAudio?.audio) {
+        playPatternOnDiscord(guildId, patternAudio.audio);
       }
     }
 
-    await fetch(`${WEB_API_URL}/sequencer/play`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ synthId, patternId: pattern.id }),
-    });
-
     await interaction.reply(`Playing pattern: ${pattern.name} on Synth ${synthId}`);
-  } catch (error) {
-    console.error('Error playing pattern:', error);
+  } catch {
     await interaction.reply('Failed to play pattern');
   }
 }
 
 async function handleStop(interaction: ChatInputCommandInteraction) {
+  const guildId = interaction.guildId!;
   const synthId = interaction.options.getInteger('synth') || 1;
 
   try {
-    await fetch(`${WEB_API_URL}/sequencer/stop`, {
+    await guildFetch(guildId, '/sequencer/stop', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ synthId }),
+      bodyObj: { synthId },
     });
     await interaction.reply(`Stopped Synth ${synthId}`);
-  } catch (error) {
-    console.error('Error stopping:', error);
+  } catch {
     await interaction.reply('Failed to stop playback');
   }
 }
 
 async function handleNote(interaction: ChatInputCommandInteraction) {
+  const guildId = interaction.guildId!;
   const note = interaction.options.getString('note', true);
   const duration = interaction.options.getNumber('duration') || 0.5;
   const synthId = interaction.options.getInteger('synth') || 1;
 
   try {
-    await fetch(`${WEB_API_URL}/synth/${synthId}/note`, {
+    await guildFetch(guildId, `/synth/${synthId}/note`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ note, duration: `${duration}n`, velocity: 0.7 }),
+      bodyObj: { note, duration: `${duration}n`, velocity: 0.7 },
     });
 
     await interaction.reply(`Playing note: ${note} on Synth ${synthId}`);
-  } catch (error) {
-    console.error('Error playing note:', error);
+  } catch {
     await interaction.reply('Failed to play note');
   }
 }
 
 async function handleTempo(interaction: ChatInputCommandInteraction) {
+  const guildId = interaction.guildId!;
   const bpm = interaction.options.getNumber('bpm', true);
 
   try {
-    await fetch(`${WEB_API_URL}/tempo`, {
+    await guildFetch(guildId, '/tempo', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tempo: bpm }),
+      bodyObj: { tempo: bpm },
     });
 
-    await interaction.reply(`Set global tempo to ${bpm} BPM`);
-  } catch (error) {
-    console.error('Error setting tempo:', error);
+    await interaction.reply(`Set tempo to ${bpm} BPM`);
+  } catch {
     await interaction.reply('Failed to set tempo');
   }
 }
 
-async function handleExport(interaction: ChatInputCommandInteraction) {
-  await interaction.deferReply();
-  const patternId = interaction.options.getString('pattern', true);
-
-  try {
-    await interaction.editReply('Export feature coming soon!');
-  } catch (error) {
-    console.error('Error exporting:', error);
-    await interaction.editReply('Failed to export pattern');
-  }
-}
-
-client.once('ready', () => {
+client.once('ready', async () => {
   console.log(`Logged in as ${client.user?.tag}`);
-  registerCommands();
+  await registerCommands();
   connectWebSocket();
 });
 
@@ -447,6 +475,9 @@ client.on('interactionCreate', async (interaction) => {
       case 'leave':
         await handleLeave(interaction);
         break;
+      case 'login':
+        await handleLogin(interaction);
+        break;
       case 'play':
         await handlePlay(interaction);
         break;
@@ -459,8 +490,7 @@ client.on('interactionCreate', async (interaction) => {
       case 'tempo':
         await handleTempo(interaction);
         break;
-      case 'export':
-        await handleExport(interaction);
+      default:
         break;
     }
   } catch (error) {
