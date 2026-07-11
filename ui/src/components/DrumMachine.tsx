@@ -13,6 +13,8 @@ export interface DrumMachineProps {
   onReset: () => void;
   drumMasterVolume: number;
   onMasterVolumeChange: (volume: number) => void;
+  onMuteAll: (muted: boolean) => void;
+  onSoloAll: () => void;
   drumAudio: ReturnType<typeof import('../hooks/useDrumAudio').useDrumAudio>;
 }
 
@@ -73,9 +75,13 @@ export default function DrumMachine({
   onReset,
   drumMasterVolume,
   onMasterVolumeChange,
+  onMuteAll,
+  onSoloAll,
   drumAudio,
 }: DrumMachineProps) {
   const [selectedInstrument, setSelectedInstrument] = useState<DrumInstrument>('kick');
+  const allMuted = INSTRUMENTS.every((inst) => Boolean(drumState[inst].muted));
+  const anySolo = INSTRUMENTS.some((inst) => Boolean(drumState[inst].solo));
 
   const handleStepClick = useCallback((step: number) => {
     console.log('Step clicked:', selectedInstrument, 'step:', step);
@@ -136,6 +142,20 @@ export default function DrumMachine({
                 displayValue={Math.round(drumMasterVolume * 100) + '%'}
                 onChange={onMasterVolumeChange}
               />
+              <div className="drum-global-mix">
+                <button
+                  className={`drum-global-mix-btn ${allMuted ? 'active' : ''}`}
+                  onClick={() => onMuteAll(!allMuted)}
+                >
+                  Mute All
+                </button>
+                <button
+                  className={`drum-global-mix-btn ${!anySolo ? 'active' : ''}`}
+                  onClick={onSoloAll}
+                >
+                  Solo All
+                </button>
+              </div>
             </div>
           </div>
 

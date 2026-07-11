@@ -20,6 +20,8 @@ const TOOLTIPS = {
   detune: 'Fine pitch adjustment in cents (±100 = ±1 semitone)',
   filterFreq: 'Cutoff frequency - Higher = brighter, lower = darker',
   filterQ: 'Resonance - emphasis at cutoff frequency',
+  lfoRate: 'LFO speed in cycles per second',
+  lfoDepth: 'LFO modulation amount',
   attack: 'Time to reach full volume after key press',
   decay: 'Time to drop from peak to sustain level',
   sustain: 'Volume level held while key is pressed',
@@ -47,6 +49,12 @@ export default function SynthControls({
     onParameterChange({
       filter: { ...parameters.filter, ...updates },
     });
+  };
+
+  const updateLfo = (lfo: 'lfo1' | 'lfo2', updates: Partial<SynthParameters['lfo1']>) => {
+    onParameterChange({
+      [lfo]: { ...parameters[lfo], ...updates },
+    } as Partial<SynthParameters>);
   };
 
   const updateEnvelope = (updates: Partial<SynthParameters['envelope']>) => {
@@ -168,7 +176,150 @@ export default function SynthControls({
           </div>
         </div>
 
-        {/* Row 2: Envelope */}
+        {/* Row 2: LFO */}
+        <div className="synth-row">
+          <div className="synth-section">
+            <div className="synth-section-header">
+              <h3>LFO 1</h3>
+              <label className="synth-toggle">
+                <input
+                  type="checkbox"
+                  checked={parameters.lfo1.enabled}
+                  onChange={(e) => updateLfo('lfo1', { enabled: e.target.checked })}
+                />
+                <span className="synth-toggle-slider" />
+              </label>
+            </div>
+            <div className="synth-knobs">
+              <div className="synth-waveform-selector">
+                <label>WAVE</label>
+                <select
+                  value={parameters.lfo1.waveform}
+                  onChange={(e) =>
+                    updateLfo('lfo1', { waveform: e.target.value as OscillatorType })
+                  }
+                  className="synth-select"
+                  disabled={!parameters.lfo1.enabled}
+                >
+                  <option value="sine">~</option>
+                  <option value="square">⎍</option>
+                  <option value="sawtooth">/|</option>
+                  <option value="triangle">/\</option>
+                </select>
+              </div>
+              <div className="synth-waveform-selector">
+                <label>TARGET</label>
+                <select
+                  value={parameters.lfo1.target}
+                  onChange={(e) =>
+                    updateLfo('lfo1', { target: e.target.value as 'pitch' | 'filter' })
+                  }
+                  className="synth-select"
+                  disabled={!parameters.lfo1.enabled}
+                >
+                  <option value="pitch">Pitch</option>
+                  <option value="filter">Filter</option>
+                </select>
+              </div>
+              <Knob
+                label="Rate"
+                value={parameters.lfo1.rate}
+                min={0.1}
+                max={20}
+                step={0.1}
+                displayValue={`${parameters.lfo1.rate.toFixed(1)}Hz`}
+                onChange={(v) => updateLfo('lfo1', { rate: v })}
+                disabled={!parameters.lfo1.enabled}
+                color="#06b6d4"
+                tooltip={TOOLTIPS.lfoRate}
+              />
+              <Knob
+                label="Depth"
+                value={parameters.lfo1.depth}
+                min={0}
+                max={1}
+                step={0.01}
+                displayValue={`${(parameters.lfo1.depth * 100).toFixed(0)}%`}
+                onChange={(v) => updateLfo('lfo1', { depth: v })}
+                disabled={!parameters.lfo1.enabled}
+                color="#06b6d4"
+                tooltip={TOOLTIPS.lfoDepth}
+              />
+            </div>
+          </div>
+
+          <div className="synth-section">
+            <div className="synth-section-header">
+              <h3>LFO 2</h3>
+              <label className="synth-toggle">
+                <input
+                  type="checkbox"
+                  checked={parameters.lfo2.enabled}
+                  onChange={(e) => updateLfo('lfo2', { enabled: e.target.checked })}
+                />
+                <span className="synth-toggle-slider" />
+              </label>
+            </div>
+            <div className="synth-knobs">
+              <div className="synth-waveform-selector">
+                <label>WAVE</label>
+                <select
+                  value={parameters.lfo2.waveform}
+                  onChange={(e) =>
+                    updateLfo('lfo2', { waveform: e.target.value as OscillatorType })
+                  }
+                  className="synth-select"
+                  disabled={!parameters.lfo2.enabled}
+                >
+                  <option value="sine">~</option>
+                  <option value="square">⎍</option>
+                  <option value="sawtooth">/|</option>
+                  <option value="triangle">/\</option>
+                </select>
+              </div>
+              <div className="synth-waveform-selector">
+                <label>TARGET</label>
+                <select
+                  value={parameters.lfo2.target}
+                  onChange={(e) =>
+                    updateLfo('lfo2', { target: e.target.value as 'pitch' | 'filter' })
+                  }
+                  className="synth-select"
+                  disabled={!parameters.lfo2.enabled}
+                >
+                  <option value="pitch">Pitch</option>
+                  <option value="filter">Filter</option>
+                </select>
+              </div>
+              <Knob
+                label="Rate"
+                value={parameters.lfo2.rate}
+                min={0.1}
+                max={20}
+                step={0.1}
+                displayValue={`${parameters.lfo2.rate.toFixed(1)}Hz`}
+                onChange={(v) => updateLfo('lfo2', { rate: v })}
+                disabled={!parameters.lfo2.enabled}
+                color="#0891b2"
+                tooltip={TOOLTIPS.lfoRate}
+              />
+              <Knob
+                label="Depth"
+                value={parameters.lfo2.depth}
+                min={0}
+                max={1}
+                step={0.01}
+                displayValue={`${(parameters.lfo2.depth * 100).toFixed(0)}%`}
+                onChange={(v) => updateLfo('lfo2', { depth: v })}
+                disabled={!parameters.lfo2.enabled}
+                color="#0891b2"
+                tooltip={TOOLTIPS.lfoDepth}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Row 3: Envelope */}
         <div className="synth-row">
           <div className="synth-section synth-section-wide">
             <h3>ENVELOPE (ADSR)</h3>
@@ -221,7 +372,7 @@ export default function SynthControls({
           </div>
         </div>
 
-        {/* Row 3: Effects */}
+        {/* Row 4: Effects */}
         <div className="synth-row">
           <div className="synth-section">
             <div className="synth-section-header">
@@ -316,7 +467,7 @@ export default function SynthControls({
           </div>
         </div>
 
-        {/* Row 4: Master */}
+        {/* Row 5: Master */}
         <div className="synth-row">
           <div className="synth-section synth-section-center">
             <h3>MASTER</h3>

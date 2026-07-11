@@ -11,6 +11,8 @@ import './App.css';
 const DEFAULT_PARAMS: SynthParameters = {
   gain: 1.0,
   oscillator: { type: 'sine', detune: 0 },
+  lfo1: { enabled: false, target: 'pitch', waveform: 'sine', rate: 5, depth: 0.2 },
+  lfo2: { enabled: false, target: 'filter', waveform: 'triangle', rate: 0.8, depth: 0.25 },
   filter: { frequency: 20000, q: 1, type: 'lowpass' },
   envelope: { attack: 0.01, decay: 0.1, sustain: 0.7, release: 0.3 },
   effects: {
@@ -34,14 +36,14 @@ interface SynthState {
 
 function createDefaultDrumState(): DrumState {
   return {
-    kick: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
-    snare: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
-    openHH: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
-    closedHH: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
-    ride: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
-    crash: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
-    snare2: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
-    clap: { steps: new Array(16).fill(false), settings: { volume: 1.0, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
+    kick: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
+    snare: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
+    openHH: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
+    closedHH: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
+    ride: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
+    crash: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
+    snare2: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
+    clap: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
   };
 }
 
@@ -350,20 +352,22 @@ function App() {
 
   const handleAddSynth = useCallback(async () => {
     const currentSynths = synthsRef.current;
-    if (currentSynths.length >= 2) return;
+    if (currentSynths.length >= 3) return;
+    const nextSynthId = [2, 3].find(id => !currentSynths.some(s => s.id === id));
+    if (!nextSynthId) return;
 
     try {
       const res = await fetch(apiUrl('/synth/create'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ synthId: 2 }),
+        body: JSON.stringify({ synthId: nextSynthId }),
       });
       if (res.ok) {
         const data = await res.json();
         setSynths(prev => {
-          if (prev.some(s => s.id === 2)) return prev;
+          if (prev.some(s => s.id === nextSynthId)) return prev;
           return [...prev, {
-            id: 2,
+            id: nextSynthId,
             pattern: data.pattern,
             patterns: data.patterns || [],
             synthParams: data.synthParams,
@@ -381,10 +385,11 @@ function App() {
     }
   }, []);
 
-  const handleRemoveSynth = useCallback(async () => {
+  const handleRemoveSynth = useCallback(async (synthId: number) => {
+    if (synthId === 1) return;
     try {
-      await fetch(apiUrl('/synth/2'), { method: 'DELETE' });
-      setSynths(prev => prev.filter(s => s.id !== 2));
+      await fetch(apiUrl(`/synth/${synthId}`), { method: 'DELETE' });
+      setSynths(prev => prev.filter(s => s.id !== synthId));
     } catch (error) {
       console.error('Failed to remove synth:', error);
     }
@@ -659,6 +664,36 @@ function App() {
     });
   }, []);
 
+  const handleDrumMuteAll = useCallback((muted: boolean) => {
+    const nextState = Object.fromEntries(
+      (Object.keys(drumStateRef.current) as DrumInstrument[]).map(inst => [
+        inst,
+        { ...drumStateRef.current[inst], muted },
+      ])
+    ) as DrumState;
+    setDrumState(nextState);
+    fetch(apiUrl('/drum/state'), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ state: nextState }),
+    });
+  }, []);
+
+  const handleDrumSoloAll = useCallback(() => {
+    const nextState = Object.fromEntries(
+      (Object.keys(drumStateRef.current) as DrumInstrument[]).map(inst => [
+        inst,
+        { ...drumStateRef.current[inst], solo: false },
+      ])
+    ) as DrumState;
+    setDrumState(nextState);
+    fetch(apiUrl('/drum/state'), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ state: nextState }),
+    });
+  }, []);
+
   const handleReset = useCallback(async () => {
     const currentSynths = synthsRef.current;
     for (const synth of currentSynths) {
@@ -766,7 +801,7 @@ function App() {
               octaveShift={synth.octaveShift}
               muted={synth.muted}
               solo={synth.solo}
-              showRemoveButton={synth.id === 2}
+              showRemoveButton={synth.id !== 1}
               onToggleMute={() => handleSynthMixChange(synth.id, { muted: !synth.muted })}
               onToggleSolo={() => handleSynthMixChange(synth.id, { solo: !synth.solo })}
               onPatternChange={(p) => handlePatternChange(synth.id, p)}
@@ -775,15 +810,15 @@ function App() {
               onLoadSavedPattern={(data) => handleLoadSavedPattern(synth.id, data)}
               onParameterChange={(params) => handleParameterChange(synth.id, params)}
               onOctaveShift={(dir) => handleOctaveShift(synth.id, dir)}
-              onRemove={synth.id === 2 ? handleRemoveSynth : undefined}
+              onRemove={synth.id !== 1 ? () => handleRemoveSynth(synth.id) : undefined}
               onPlayNote={(note) => handleNotePlay(synth.id, note)}
               onNoteRelease={(note) => handleNoteRelease(synth.id, note)}
             />
           ))}
 
-          {synths.length < 2 && (
+          {synths.length < 3 && (
             <button className="add-synth-btn" onClick={handleAddSynth}>
-              + Add Synth 2
+              + Add Synth {[2, 3].find(id => !synths.some(s => s.id === id)) ?? 3}
             </button>
           )}
         </div>
@@ -798,6 +833,8 @@ function App() {
           onReset={handleDrumReset}
           drumMasterVolume={drumMasterVolume}
           onMasterVolumeChange={handleDrumMasterVolumeChange}
+          onMuteAll={handleDrumMuteAll}
+          onSoloAll={handleDrumSoloAll}
           drumAudio={drumAudio}
         />
       </div>

@@ -6,20 +6,23 @@ export class DrumSynthesizer {
     settings: { volume: number; tone: number; extra: number },
     sampleRate: number
   ): Float32Array {
-    const vol = Math.max(0, Math.min(1, settings.volume));
+    const vol = Math.max(0, Math.min(1, settings.volume)) * 2;
     const tone = Math.max(0, Math.min(1, settings.tone));
     const extra = Math.max(0, Math.min(1, settings.extra));
 
+    let output: Float32Array;
     switch (instrument) {
-      case 'kick': return this.renderKick(vol, tone, extra, sampleRate);
-      case 'snare': return this.renderSnare(vol, tone, extra, sampleRate);
-      case 'openHH': return this.renderOpenHH(vol, tone, extra, sampleRate);
-      case 'closedHH': return this.renderClosedHH(vol, tone, extra, sampleRate);
-      case 'ride': return this.renderRide(vol, tone, extra, sampleRate);
-      case 'crash': return this.renderCrash(vol, tone, extra, sampleRate);
-      case 'snare2': return this.renderSnare2(vol, tone, extra, sampleRate);
-      case 'clap': return this.renderClap(vol, tone, extra, sampleRate);
+      case 'kick': output = this.renderKick(vol, tone, extra, sampleRate); break;
+      case 'snare': output = this.renderSnare(vol, tone, extra, sampleRate); break;
+      case 'openHH': output = this.renderOpenHH(vol, tone, extra, sampleRate); break;
+      case 'closedHH': output = this.renderClosedHH(vol, tone, extra, sampleRate); break;
+      case 'ride': output = this.renderRide(vol, tone, extra, sampleRate); break;
+      case 'crash': output = this.renderCrash(vol, tone, extra, sampleRate); break;
+      case 'snare2': output = this.renderSnare2(vol, tone, extra, sampleRate); break;
+      case 'clap': output = this.renderClap(vol, tone, extra, sampleRate); break;
+      default: output = new Float32Array(0); break;
     }
+    return this.polishHit(output);
   }
 
   static renderPattern(
@@ -114,7 +117,20 @@ export class DrumSynthesizer {
       const crack = hpNoise * crackEnv;
       const wires = bandNoise * wireEnv * (0.9 + snappy * 0.5);
 
-      out[i] = Math.tanh((body + wires + crack) * 1.18) * volume * 0.95;
+      out[i] = Math.tanh((body + wires + crack) * 1.22) * volume * 1.15;
+    }
+    return out;
+  }
+
+  private static polishHit(samples: Float32Array): Float32Array {
+    const out = new Float32Array(samples.length);
+    let prevInput = 0;
+    let prevOutput = 0;
+    for (let i = 0; i < samples.length; i++) {
+      const hp = samples[i] - prevInput + 0.995 * prevOutput;
+      prevInput = samples[i];
+      prevOutput = hp;
+      out[i] = Math.tanh((samples[i] * 0.92 + hp * 0.28) * 1.05);
     }
     return out;
   }
