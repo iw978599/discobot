@@ -19,14 +19,19 @@ export const getApiBaseUrl = (): string => {
 
 export const apiUrl = (path: string): string => `${getApiBaseUrl()}${path.startsWith('/') ? path : `/${path}`}`;
 
-export const getWebSocketUrl = (): string => {
+export const getWebSocketUrl = (sessionToken?: string | null): string => {
   const envWs = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_WS_URL;
-  if (envWs) return trimTrailingSlash(envWs);
-  if (isLocalDevUi()) return 'ws://localhost:3001/ws';
-  if (window.location.port === '3001' || isLocalhost()) {
+  const baseUrl = (() => {
+    if (envWs) return trimTrailingSlash(envWs);
+    if (isLocalDevUi()) return 'ws://localhost:3001/ws';
+    if (window.location.port === '3001' || isLocalhost()) {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      return `${protocol}//${window.location.hostname}:3001/ws`;
+    }
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    return `${protocol}//${window.location.hostname}:3001/ws`;
-  }
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${protocol}//${window.location.host}/ws`;
+    return `${protocol}//${window.location.host}/ws`;
+  })();
+  if (!sessionToken) return baseUrl;
+  const separator = baseUrl.includes('?') ? '&' : '?';
+  return `${baseUrl}${separator}sessionToken=${encodeURIComponent(sessionToken)}`;
 };

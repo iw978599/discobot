@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-export function useWebSocket(url: string, onMessage: (data: any) => void) {
+export function useWebSocket(url: string | null, onMessage: (data: any) => void) {
   const [connected, setConnected] = useState(false);
   const reconnectRef = useRef<ReturnType<typeof setTimeout>>();
   const socketRef = useRef<WebSocket | null>(null);
@@ -11,6 +11,7 @@ export function useWebSocket(url: string, onMessage: (data: any) => void) {
     let mounted = true;
 
     function connect() {
+      if (!url) return;
       if (reconnectRef.current) clearTimeout(reconnectRef.current);
       const socket = new WebSocket(url);
       socketRef.current = socket;
