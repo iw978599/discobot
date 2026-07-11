@@ -115,7 +115,7 @@ export class Synthesizer {
     let phase = 0;
     let lfo1Phase = 0;
     let lfo2Phase = 0;
-    let samples = new Float32Array(length);
+    const samples = new Float32Array(length);
     for (let i = 0; i < length; i++) {
       const lfoValues = [
         lfos[0].enabled ? Synthesizer.lfoValue(lfos[0].waveform, lfo1Phase) : 0,
@@ -131,11 +131,11 @@ export class Synthesizer {
       lfo1Phase += lfos[0].rate / sampleRate;
       lfo2Phase += lfos[1].rate / sampleRate;
     }
-    samples = Synthesizer.applyADSR(samples, sampleRate, attack, decay, sustain, release, duration);
-    const output = new Float32Array(samples.length);
+    const shapedSamples = Synthesizer.applyADSR(samples, sampleRate, attack, decay, sustain, release, duration);
+    const output = new Float32Array(shapedSamples.length);
     const lfoState = [0, 0];
     let filtered = 0;
-    for (let i = 0; i < samples.length; i++) {
+    for (let i = 0; i < shapedSamples.length; i++) {
       lfoState[0] += lfos[0].rate / sampleRate;
       lfoState[1] += lfos[1].rate / sampleRate;
       const filterMod = lfos.reduce((sum, lfo, idx) => (
@@ -151,7 +151,7 @@ export class Synthesizer {
       const dt = 1 / sampleRate;
       const rc = 1 / (2 * Math.PI * modulatedCutoff);
       const alpha = dt / (rc + dt);
-      filtered = filtered + alpha * (samples[i] - filtered);
+      filtered = filtered + alpha * (shapedSamples[i] - filtered);
       output[i] = filtered;
     }
 
