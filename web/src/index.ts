@@ -1240,9 +1240,20 @@ wssBot.on('connection', (ws, req) => {
     ws.close(1008, 'Unauthorized');
     return;
   }
+  const parsedTs = Number(ts);
+  if (!Number.isFinite(parsedTs)) {
+    ws.close(1008, 'Unauthorized');
+    return;
+  }
   const body = '';
   const expected = crypto.createHmac('sha256', BOT_SHARED_SECRET).update(`${ts}.${body}`).digest('hex');
-  if (Math.abs(Date.now() - Number(ts)) > SIGNATURE_MAX_SKEW_MS || expected !== sig) {
+  const expectedBuffer = Buffer.from(expected);
+  const signatureBuffer = Buffer.from(sig);
+  if (
+    Math.abs(Date.now() - parsedTs) > SIGNATURE_MAX_SKEW_MS ||
+    expectedBuffer.length !== signatureBuffer.length ||
+    !crypto.timingSafeEqual(expectedBuffer, signatureBuffer)
+  ) {
     ws.close(1008, 'Unauthorized');
     return;
   }
