@@ -43,7 +43,7 @@ export default function DrumKnob({
       const delta = (startY.current - me.clientY) / 150;
       const range = max - min;
       const newVal = Math.max(min, Math.min(max, startVal.current + delta * range));
-      const stepped = Math.round(newVal / step) * step;
+      const stepped = Math.round((newVal - min) / step) * step + min;
       setLocalVal(stepped);
       onChange(stepped);
     };
@@ -58,7 +58,7 @@ export default function DrumKnob({
     window.addEventListener('mouseup', handleMouseUp);
   }, [localVal, min, max, step, onChange]);
 
-  const svgDeg = 60 - pct * 300;
+  const svgDeg = -240 + pct * 300;
 
   return (
     <div className="drum-knob">

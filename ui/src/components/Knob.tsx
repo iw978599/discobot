@@ -58,7 +58,7 @@ export default function Knob({
       const delta = (startY.current - me.clientY) / 150;
       const range = max - min;
       const newVal = Math.max(min, Math.min(max, startVal.current + delta * range));
-      const stepped = Math.round(newVal / step) * step;
+      const stepped = Math.round((newVal - min) / step) * step + min;
       setLocalVal(stepped);
       onChange(stepped);
     };
@@ -73,8 +73,8 @@ export default function Knob({
     window.addEventListener('mouseup', handleMouseUp);
   }, [localVal, min, max, step, onChange, disabled]);
 
-  // Rotation: min at right (~60deg), max at left (~120deg) across 300° sweep
-  const svgDeg = 60 - pct * 300;
+  // Rotation: min at left, max at right across 300° sweep
+  const svgDeg = -240 + pct * 300;
 
   const sizes = {
     small: { svg: 36, outer: 16, inner: 12, line: 10, dot: 2 },
