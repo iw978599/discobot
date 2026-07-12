@@ -4,6 +4,8 @@ import { clamp, noteToFrequency as utilNoteToFrequency, deepMerge } from './util
 import { AUDIO_MIXING } from './constants';
 
 export class Synthesizer {
+  private static readonly PITCH_LFO_MAX_CENTS = 1200;
+  private static readonly FILTER_LFO_MAX_OCTAVES = 2;
   private parameters!: SynthParameters;
   private activeNotes: Map<string, { startTime: number; velocity: number }> = new Map();
 
@@ -166,7 +168,7 @@ export class Synthesizer {
       const pitchMod = lfoValues.reduce((sum, val, idx) => (
         lfos[idx].enabled && lfos[idx].target === 'pitch' ? sum + val * lfos[idx].depth : sum
       ), 0);
-      const pitchCents = pitchMod * 100;
+      const pitchCents = pitchMod * Synthesizer.PITCH_LFO_MAX_CENTS;
       const currentFreq = detunedFreq * Math.pow(2, pitchCents / 1200);
       phase += currentFreq / sampleRate;
       samples[i] = Synthesizer.lfoValue(oscType, phase);
@@ -180,13 +182,14 @@ export class Synthesizer {
     for (let i = 0; i < shapedSamples.length; i++) {
       lfoState[0] += lfos[0].rate / sampleRate;
       lfoState[1] += lfos[1].rate / sampleRate;
-      const filterMod = lfos.reduce((sum, lfo, idx) => (
+      const filterModRaw = lfos.reduce((sum, lfo, idx) => (
         lfo.enabled && lfo.target === 'filter'
           ? sum + Synthesizer.lfoValue(lfo.waveform, lfoState[idx]) * lfo.depth
           : sum
       ), 0);
+      const filterMod = clamp(filterModRaw, -1, 1);
       const modulatedCutoff = clamp(
-        this.parameters.filter.frequency * (1 + filterMod * 0.7),
+        this.parameters.filter.frequency * Math.pow(2, filterMod * Synthesizer.FILTER_LFO_MAX_OCTAVES),
         20,
         20000
       );

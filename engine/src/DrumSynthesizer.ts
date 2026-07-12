@@ -60,64 +60,67 @@ export class DrumSynthesizer {
   }
 
   private static renderKick(volume: number, tone: number, extra: number, sampleRate: number): Float32Array {
-    const startFreq = 130 + tone * 95;
-    const endFreq = 40 + tone * 14;
-    const dur = 0.18 + extra * 0.32;
+    const startFreq = 150 + tone * 75;
+    const endFreq = 34 + tone * 22;
+    const punch = 0.3 + extra * 0.7;
+    const dur = 0.2 + extra * 0.35;
     const length = Math.floor(sampleRate * dur);
     const out = new Float32Array(length);
     let phase = 0;
     let clickFilter = 0;
     for (let i = 0; i < length; i++) {
       const t = i / sampleRate;
-      const freqSweep = Math.exp(-t * (38 + tone * 14));
+      const freqSweep = Math.exp(-t * (42 + tone * 12));
       const freq = endFreq + (startFreq - endFreq) * freqSweep;
       phase += freq / sampleRate;
-      const bodyEnv = Math.exp(-t * (6.6 + (1 - extra) * 5.2));
-      const sub = Math.sin(2 * Math.PI * phase * 0.5) * Math.exp(-t * 8.5) * 0.2;
-      const body = (Math.sin(2 * Math.PI * phase) + sub) * bodyEnv;
+      const bodyEnv = Math.exp(-t * (6 + (1 - extra) * 6.5));
+      const sub = Math.sin(2 * Math.PI * phase * 0.5) * Math.exp(-t * 7.4) * 0.26;
+      const body = (Math.sin(2 * Math.PI * phase) * 0.9 + sub) * bodyEnv;
 
       const noise = Math.random() * 2 - 1;
-      clickFilter = clickFilter * 0.12 + noise * 0.88;
-      const click = clickFilter * Math.exp(-t * (160 + tone * 40)) * (0.22 + tone * 0.16);
+      clickFilter = clickFilter * 0.18 + noise * 0.82;
+      const click = clickFilter * Math.exp(-t * (210 + tone * 45)) * (0.16 + punch * 0.22);
 
-      out[i] = Math.tanh((body + click) * (1.55 + extra * 0.7)) * volume * 0.86;
+      out[i] = Math.tanh((body + click) * (1.5 + punch * 0.85)) * volume * 0.9;
     }
     return out;
   }
 
   private static renderSnare(volume: number, tone: number, extra: number, sampleRate: number): Float32Array {
-    const bodyStart = 260 + tone * 120;
-    const bodyEnd = 160 + tone * 60;
-    const snappy = 0.3 + extra * 0.7;
-    const dur = 0.22;
+    const bodyStart = 280 + tone * 170;
+    const bodyEnd = 170 + tone * 90;
+    const snap = 0.25 + extra * 0.75;
+    const dur = 0.24;
     const length = Math.floor(sampleRate * dur);
     const out = new Float32Array(length);
     let bodyPhase = 0;
-    let ringPhase = 0;
+    let ringPhase1 = 0;
+    let ringPhase2 = 0;
     let prevNoise = 0;
     let lpNoise = 0;
     for (let i = 0; i < length; i++) {
       const t = i / sampleRate;
-      const bodyFreq = bodyEnd + (bodyStart - bodyEnd) * Math.exp(-t * 65);
+      const bodyFreq = bodyEnd + (bodyStart - bodyEnd) * Math.exp(-t * 52);
       bodyPhase += bodyFreq / sampleRate;
-      ringPhase += (bodyFreq * 1.91) / sampleRate;
-      const bodyEnv = Math.exp(-t * (22 + (1 - extra) * 6));
+      ringPhase1 += (bodyFreq * 1.78) / sampleRate;
+      ringPhase2 += (bodyFreq * 2.34) / sampleRate;
+      const bodyEnv = Math.exp(-t * (20 + (1 - extra) * 7));
       const body = (
-        Math.sin(2 * Math.PI * bodyPhase) * 0.58 +
-        Math.sin(2 * Math.PI * ringPhase) * 0.28
-      ) * bodyEnv * 0.26;
+        Math.sin(2 * Math.PI * bodyPhase) * 0.54 +
+        Math.sin(2 * Math.PI * ringPhase1) * 0.27 +
+        Math.sin(2 * Math.PI * ringPhase2) * 0.15
+      ) * bodyEnv * 0.3;
 
       const noise = Math.random() * 2 - 1;
       const hpNoise = noise - prevNoise;
       prevNoise = noise;
-      lpNoise = lpNoise * 0.84 + noise * 0.16;
-      const bandNoise = hpNoise - lpNoise * (0.2 + tone * 0.45);
-      const wireEnv = Math.exp(-t * (16 + snappy * 18));
-      const crackEnv = Math.exp(-t * 260) * (0.2 + tone * 0.22);
-      const crack = hpNoise * crackEnv;
-      const wires = bandNoise * wireEnv * (0.9 + snappy * 0.5);
+      lpNoise = lpNoise * 0.82 + noise * 0.18;
+      const noisyBand = hpNoise - lpNoise * (0.18 + tone * 0.5);
+      const wireEnv = Math.exp(-t * (14 + snap * 20));
+      const crack = hpNoise * Math.exp(-t * 280) * (0.18 + tone * 0.2);
+      const wire = noisyBand * wireEnv * (0.92 + snap * 0.55);
 
-      out[i] = Math.tanh((body + wires + crack) * 1.22) * volume * 1.15;
+      out[i] = Math.tanh((body + wire + crack) * 1.2) * volume * 1.05;
     }
     return out;
   }
@@ -136,13 +139,13 @@ export class DrumSynthesizer {
   }
 
   private static renderOpenHH(volume: number, tone: number, extra: number, sampleRate: number): Float32Array {
-    const dur = 0.28 + extra * 0.72;
+    const dur = 0.22 + extra * 0.85;
     const length = Math.floor(sampleRate * dur);
     const out = new Float32Array(length);
     let prevNoise = 0;
     let hpBand = 0;
     let phase1 = 0, phase2 = 0, phase3 = 0, phase4 = 0, phase5 = 0;
-    const base = 2600 + tone * 2800;
+    const base = 3000 + tone * 3200;
     for (let i = 0; i < length; i++) {
       const t = i / sampleRate;
       const noise = Math.random() * 2 - 1;
@@ -161,23 +164,23 @@ export class DrumSynthesizer {
         Math.sin(2 * Math.PI * phase4) * 0.47 +
         Math.sin(2 * Math.PI * phase5) * 0.34
       ) * 0.33;
-      const env = Math.exp(-t * (3.4 / dur));
-      const shimmerEnv = Math.exp(-t * (1.25 / dur));
-      const brightness = 0.48 + tone * 0.52;
-      const body = metallic * shimmerEnv + hpBand * 0.58;
-      out[i] = Math.tanh(body * 1.1) * env * volume * brightness;
+      const env = Math.exp(-t * (3.2 / dur));
+      const shimmerEnv = Math.exp(-t * (0.95 / dur));
+      const brightness = 0.42 + tone * 0.58;
+      const body = metallic * shimmerEnv + hpBand * 0.66;
+      out[i] = Math.tanh(body * 1.2) * env * volume * brightness;
     }
     return out;
   }
 
   private static renderClosedHH(volume: number, tone: number, extra: number, sampleRate: number): Float32Array {
-    const dur = 0.018 + (1 - extra) * 0.14;
+    const dur = 0.015 + (1 - extra) * 0.13;
     const length = Math.floor(sampleRate * dur);
     const out = new Float32Array(length);
     let prevNoise = 0;
     let hpBand = 0;
     let phase1 = 0, phase2 = 0, phase3 = 0, phase4 = 0;
-    const base = 3900 + tone * 3600;
+    const base = 4200 + tone * 3700;
     for (let i = 0; i < length; i++) {
       const t = i / sampleRate;
       const noise = Math.random() * 2 - 1;
@@ -194,62 +197,50 @@ export class DrumSynthesizer {
         Math.sin(2 * Math.PI * phase3) * 0.52 +
         Math.sin(2 * Math.PI * phase4) * 0.31
       ) * 0.38;
-      const env = Math.exp(-t * (14.5 / dur));
+      const env = Math.exp(-t * (16.5 / dur));
       const brightness = 0.42 + tone * 0.58;
-      const stick = hpNoise * Math.exp(-t * 320) * 0.24;
-      out[i] = (metallic + hpBand * 0.45 + stick) * env * volume * brightness;
+      const stick = hpNoise * Math.exp(-t * 380) * 0.22;
+      out[i] = Math.tanh((metallic + hpBand * 0.48 + stick) * 1.1) * env * volume * brightness;
     }
     return out;
   }
 
   private static renderRide(volume: number, tone: number, extra: number, sampleRate: number): Float32Array {
-    const base = 520 + tone * 380;
-    const dur = 1.1 + extra * 2.1;
+    const startFreq = 300 + tone * 210;
+    const endFreq = 170 + tone * 110;
+    const bend = 0.25 + extra * 0.75;
+    const dur = 0.22 + extra * 0.38;
     const length = Math.floor(sampleRate * dur);
     const out = new Float32Array(length);
-    let p1 = 0, p2 = 0, p3 = 0, p4 = 0, p5 = 0;
-    let lpNoise = 0;
-    let prevNoise = 0;
-    const bellAmt = 0.15 + tone * 0.18;
-    const shimmerAmt = 0.36 + tone * 0.34;
+    let phaseA = 0;
+    let phaseB = 0;
+    let noiseLp = 0;
     for (let i = 0; i < length; i++) {
       const t = i / sampleRate;
-      p1 += base / sampleRate;
-      p2 += base * 1.47 / sampleRate;
-      p3 += base * 2.11 / sampleRate;
-      p4 += base * 2.73 / sampleRate;
-      p5 += base * 3.39 / sampleRate;
-      const partials = (
-        Math.sin(2 * Math.PI * p1) * 0.26 +
-        Math.sin(2 * Math.PI * p2) * 0.24 +
-        Math.sin(2 * Math.PI * p3) * 0.2 +
-        Math.sin(2 * Math.PI * p4) * 0.16 +
-        Math.sin(2 * Math.PI * p5) * 0.11
-      );
+      const glide = Math.exp(-t * (44 + bend * 28));
+      const freq = endFreq + (startFreq - endFreq) * glide;
+      phaseA += freq / sampleRate;
+      phaseB += (freq * 1.6) / sampleRate;
+      const body = (
+        Math.sin(2 * Math.PI * phaseA) * 0.75 +
+        Math.sin(2 * Math.PI * phaseB) * 0.25
+      ) * Math.exp(-t * (9.5 - extra * 2.2));
       const noise = Math.random() * 2 - 1;
-      lpNoise = lpNoise * 0.92 + noise * 0.08;
-      const hpNoise = noise - prevNoise;
-      prevNoise = noise;
-      const stickEnv = Math.exp(-t * 85);
-      const bodyEnv = Math.exp(-t * (1.2 / dur));
-      const tailEnv = Math.exp(-t * (0.58 / dur));
-      const bell = (Math.sin(2 * Math.PI * p4) + Math.sin(2 * Math.PI * p5) * 0.5) * Math.exp(-t * 5.2) * bellAmt;
-      const stick = hpNoise * stickEnv * (0.2 + tone * 0.14);
-      const shimmer = partials * bodyEnv * shimmerAmt;
-      const wash = lpNoise * tailEnv * (0.23 + extra * 0.26);
-      out[i] = Math.tanh((stick + shimmer + wash + bell) * 1.06) * volume * 0.76;
+      noiseLp = noiseLp * 0.82 + noise * 0.18;
+      const attack = (noise - noiseLp) * Math.exp(-t * 120) * (0.17 + tone * 0.15);
+      out[i] = Math.tanh((body + attack) * 1.3) * volume * 0.9;
     }
     return out;
   }
 
   private static renderCrash(volume: number, tone: number, extra: number, sampleRate: number): Float32Array {
-    const dur = 0.5 + extra * 1.8;
+    const dur = 0.8 + extra * 2.1;
     const length = Math.floor(sampleRate * dur);
     const out = new Float32Array(length);
     let prevNoise = 0;
     let lpNoise = 0;
     let phase1 = 0, phase2 = 0, phase3 = 0, phase4 = 0, phase5 = 0;
-    const base = 1500 + tone * 2200;
+    const base = 1800 + tone * 2600;
     for (let i = 0; i < length; i++) {
       const t = i / sampleRate;
       const noise = Math.random() * 2 - 1;
@@ -268,57 +259,54 @@ export class DrumSynthesizer {
         Math.sin(2 * Math.PI * phase4) * 0.16 +
         Math.sin(2 * Math.PI * phase5) * 0.11
       );
-      const env = Math.exp(-t * (1.9 / dur));
-      const attack = Math.exp(-t * 190);
-      const brightness = 0.34 + tone * 0.66;
-      const burst = hpNoise * attack * (0.55 + tone * 0.25);
-      const wash = (hpNoise * 0.62 + (noise - lpNoise) * 0.4 + metallic) * env;
-      out[i] = Math.tanh((burst + wash) * 0.98) * volume * brightness;
+      const env = Math.exp(-t * (1.45 / dur));
+      const attack = Math.exp(-t * 170);
+      const brightness = 0.3 + tone * 0.7;
+      const burst = hpNoise * attack * (0.5 + tone * 0.24);
+      const wash = (hpNoise * 0.5 + (noise - lpNoise) * 0.52 + metallic) * env;
+      out[i] = Math.tanh((burst + wash) * 1.02) * volume * brightness;
     }
     return out;
   }
 
   private static renderSnare2(volume: number, tone: number, extra: number, sampleRate: number): Float32Array {
-    const bodyStart = 360 + tone * 210;
-    const bodyEnd = 210 + tone * 90;
-    const snappy = 0.4 + extra * 0.6;
-    const dur = 0.16;
+    const startFreq = 220 + tone * 150;
+    const endFreq = 95 + tone * 80;
+    const bend = 0.2 + extra * 0.8;
+    const dur = 0.26 + extra * 0.34;
     const length = Math.floor(sampleRate * dur);
     const out = new Float32Array(length);
-    let bodyPhase1 = 0;
-    let bodyPhase2 = 0;
-    let prevNoise = 0;
-    let lpNoise = 0;
+    let phaseA = 0;
+    let phaseB = 0;
+    let noiseLp = 0;
     for (let i = 0; i < length; i++) {
       const t = i / sampleRate;
-      const bodyFreq = bodyEnd + (bodyStart - bodyEnd) * Math.exp(-t * 90);
-      bodyPhase1 += bodyFreq / sampleRate;
-      bodyPhase2 += (bodyFreq * 1.65) / sampleRate;
-      const bodyEnv = Math.exp(-t * (31 + (1 - extra) * 9));
+      const glide = Math.exp(-t * (36 + bend * 34));
+      const bodyFreq = endFreq + (startFreq - endFreq) * glide;
+      phaseA += bodyFreq / sampleRate;
+      phaseB += (bodyFreq * 1.52) / sampleRate;
+      const bodyEnv = Math.exp(-t * (8.5 - extra * 2.1));
       const body = (
-        Math.sin(2 * Math.PI * bodyPhase1) * 0.5 +
-        Math.sin(2 * Math.PI * bodyPhase2) * 0.26
-      ) * bodyEnv * 0.2;
+        Math.sin(2 * Math.PI * phaseA) * 0.8 +
+        Math.sin(2 * Math.PI * phaseB) * 0.22
+      ) * bodyEnv * 0.8;
 
       const noise = Math.random() * 2 - 1;
-      const hpNoise = noise - prevNoise;
-      prevNoise = noise;
-      lpNoise = lpNoise * 0.82 + noise * 0.18;
-      const air = hpNoise - lpNoise * (0.3 + tone * 0.3);
-      const noiseEnv = Math.exp(-t * (18 + snappy * 15));
-      out[i] = Math.tanh((air * noiseEnv * (0.95 + snappy * 0.4) + body) * 1.16) * volume;
+      noiseLp = noiseLp * 0.88 + noise * 0.12;
+      const beater = (noise - noiseLp) * Math.exp(-t * 140) * (0.12 + tone * 0.12);
+      out[i] = Math.tanh((body + beater) * 1.18) * volume * 0.9;
     }
     return out;
   }
 
   private static renderClap(volume: number, tone: number, extra: number, sampleRate: number): Float32Array {
-    const dur = 0.15 + extra * 0.22;
+    const dur = 0.16 + extra * 0.24;
     const length = Math.floor(sampleRate * dur);
     const out = new Float32Array(length);
     let lpNoise = 0;
     let prevNoise = 0;
-    const bodyFreq = 190 + tone * 150;
-    const burstSpacing = 0.012 + (1 - extra) * 0.03;
+    const bodyFreq = 210 + tone * 180;
+    const burstSpacing = 0.009 + (1 - extra) * 0.028;
     const burstCount = 4;
     for (let i = 0; i < length; i++) {
       const t = i / sampleRate;
@@ -336,10 +324,10 @@ export class DrumSynthesizer {
           burstEnv += Math.exp(-dt * (120 + b * 36));
         }
       }
-      const tailEnv = Math.exp(-t * (18 - extra * 5));
-      const body = Math.sin(2 * Math.PI * bodyFreq * t) * Math.exp(-t * 36) * 0.09;
-      const clapNoise = edge * burstEnv * (0.75 + tone * 0.2) + hpNoise * tailEnv * 0.35;
-      out[i] = Math.tanh((clapNoise + body) * 1.08) * volume * 0.84;
+      const tailEnv = Math.exp(-t * (16 - extra * 5));
+      const body = Math.sin(2 * Math.PI * bodyFreq * t) * Math.exp(-t * 31) * 0.11;
+      const clapNoise = edge * burstEnv * (0.74 + tone * 0.22) + hpNoise * tailEnv * 0.42;
+      out[i] = Math.tanh((clapNoise + body) * 1.1) * volume * 0.86;
     }
     return out;
   }

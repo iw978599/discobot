@@ -122,13 +122,13 @@ export function useSynthAudio() {
         lfoOsc.frequency.value = lfo.rate;
         const lfoGain = ctx.createGain();
         if (lfo.target === 'pitch') {
-          lfoGain.gain.value = lfo.depth * 100;
+          lfoGain.gain.value = lfo.depth * 1200;
           lfoOsc.connect(lfoGain);
           lfoGain.connect(osc.detune);
         } else if (filterNode) {
-          lfoGain.gain.value = filterNode.frequency.value * lfo.depth * 0.7;
+          lfoGain.gain.value = lfo.depth * 2400;
           lfoOsc.connect(lfoGain);
-          lfoGain.connect(filterNode.frequency);
+          lfoGain.connect(filterNode.detune);
         }
         lfoOsc.start(ctx.currentTime);
         lfos.push(lfoOsc);

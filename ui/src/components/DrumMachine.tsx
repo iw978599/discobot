@@ -18,51 +18,51 @@ export interface DrumMachineProps {
   drumAudio: ReturnType<typeof import('../hooks/useDrumAudio').useDrumAudio>;
 }
 
-const INSTRUMENTS: DrumInstrument[] = ['kick', 'snare', 'openHH', 'closedHH', 'ride', 'crash', 'snare2', 'clap'];
+const INSTRUMENTS: DrumInstrument[] = ['kick', 'snare', 'clap', 'closedHH', 'openHH', 'snare2', 'ride', 'crash'];
 const STEPS = Array.from({ length: 16 }, (_, i) => i);
 
 const INSTRUMENT_LABELS: Record<DrumInstrument, string> = {
   kick: 'Kick',
   snare: 'Snare',
-  openHH: 'Open HH',
-  closedHH: 'Closed HH',
-  ride: 'Ride',
-  crash: 'Crash',
-  snare2: 'Snare 2',
   clap: 'Clap',
+  closedHH: 'Closed Hat',
+  openHH: 'Open Hat',
+  snare2: 'Low Tom',
+  ride: 'High Tom',
+  crash: 'Cymbal',
 };
 
 const INSTRUMENT_SHORT_LABELS: Record<DrumInstrument, string> = {
   kick: 'BD',
   snare: 'SD',
-  openHH: 'OH',
-  closedHH: 'CH',
-  ride: 'RD',
-  crash: 'CR',
-  snare2: 'SD2',
   clap: 'CP',
+  closedHH: 'CH',
+  openHH: 'OH',
+  snare2: 'LT',
+  ride: 'HT',
+  crash: 'CY',
 };
 
 const INSTRUMENT_COLORS: Record<DrumInstrument, string> = {
   kick: '#ef4444',
   snare: '#f59e0b',
-  openHH: '#22c55e',
+  clap: '#f97316',
   closedHH: '#3b82f6',
+  openHH: '#22c55e',
+  snare2: '#14b8a6',
   ride: '#8b5cf6',
   crash: '#ec4899',
-  snare2: '#14b8a6',
-  clap: '#f97316',
 };
 
 const EXTRA_LABELS: Record<DrumInstrument, { knob: string; display: (v: number) => string }> = {
-  kick: { knob: 'Decay', display: (v) => `${((0.08 + v * 0.52) * 1000).toFixed(0)}ms` },
-  snare: { knob: 'Snappy', display: (v) => v.toFixed(2) },
-  openHH: { knob: 'Decay', display: (v) => `${((0.1 + v * 0.6) * 1000).toFixed(0)}ms` },
-  closedHH: { knob: 'Tight', display: (v) => v.toFixed(2) },
-  ride: { knob: 'Bright', display: (v) => v.toFixed(2) },
-  crash: { knob: 'Decay', display: (v) => `${((0.3 + v * 1.5) * 1000).toFixed(0)}ms` },
-  snare2: { knob: 'Snappy', display: (v) => v.toFixed(2) },
-  clap: { knob: 'Room', display: (v) => `${(10 + v * 80).toFixed(0)}ms` },
+  kick: { knob: 'Punch', display: (v) => `${(20 + v * 80).toFixed(0)}%` },
+  snare: { knob: 'Snap', display: (v) => `${(10 + v * 90).toFixed(0)}%` },
+  clap: { knob: 'Spread', display: (v) => `${(8 + (1 - v) * 28).toFixed(0)}ms` },
+  closedHH: { knob: 'Tight', display: (v) => `${(15 + (1 - v) * 130).toFixed(0)}ms` },
+  openHH: { knob: 'Decay', display: (v) => `${((0.22 + v * 0.85) * 1000).toFixed(0)}ms` },
+  snare2: { knob: 'Bend', display: (v) => `${(20 + v * 80).toFixed(0)}%` },
+  ride: { knob: 'Bend', display: (v) => `${(25 + v * 75).toFixed(0)}%` },
+  crash: { knob: 'Wash', display: (v) => `${((0.8 + v * 2.1) * 1000).toFixed(0)}ms` },
 };
 
 export default function DrumMachine({
@@ -122,7 +122,7 @@ export default function DrumMachine({
     <div className="drum-machine">
       <div className="drum-machine-header">
         <h2>Rhythm Composer</h2>
-        <span className="drum-machine-model">TR-808 style</span>
+        <span className="drum-machine-model">Hybrid analog model</span>
         <button className="drum-reset-btn" onClick={onReset} title="Reset drum pattern and settings">
           &#8634;
         </button>
