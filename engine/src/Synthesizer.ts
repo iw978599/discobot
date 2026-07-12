@@ -197,7 +197,7 @@ export class Synthesizer {
       output[i] = filtered;
     }
 
-    let effected = output;
+    let effected: Float32Array<ArrayBufferLike> = output;
 
     if (this.parameters.effects.delay.enabled && this.parameters.effects.delay.wet > 0) {
       effected = Synthesizer.applyDelay(
@@ -224,7 +224,7 @@ export class Synthesizer {
       effected[i] *= vol * master * AUDIO_MIXING.SYNTH_MASTER_VOLUME;
     }
 
-    return effected;
+    return effected as Float32Array;
   }
 
   renderChord(notes: string[], duration: number, velocity: number, sampleRate: number = 44100): Float32Array {

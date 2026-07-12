@@ -110,40 +110,6 @@ function SavePattern({
       setSavedFeedback(true);
       setTimeout(() => setSavedFeedback(false), 2000);
     }
-
-    function LoadPattern({
-      loading,
-      savedPatterns,
-      onLoad,
-      onRefresh,
-    }: {
-      loading: boolean;
-      savedPatterns: SavedPatternInfo[];
-      onLoad: (id: string) => void;
-      onRefresh: () => void;
-    }) {
-      return (
-        <div className="load-inline">
-          <select
-            className="load-select"
-            defaultValue=""
-            onFocus={onRefresh}
-            onChange={(e) => {
-              if (!e.target.value) return;
-              onLoad(e.target.value);
-              e.target.value = '';
-            }}
-          >
-            <option value="" disabled>{loading ? 'Loading...' : 'Load'}</option>
-            {savedPatterns.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      );
-    }
   };
 
   if (savedFeedback) {
@@ -171,6 +137,40 @@ function SavePattern({
     <button className="save-button" onClick={() => { setSaving(true); setSaveName(''); }}>
       + Save
     </button>
+  );
+}
+
+function LoadPattern({
+  loading,
+  savedPatterns,
+  onLoad,
+  onRefresh,
+}: {
+  loading: boolean;
+  savedPatterns: SavedPatternInfo[];
+  onLoad: (id: string) => void;
+  onRefresh: () => void;
+}) {
+  return (
+    <div className="load-inline">
+      <select
+        className="load-select"
+        defaultValue=""
+        onFocus={onRefresh}
+        onChange={(e) => {
+          if (!e.target.value) return;
+          onLoad(e.target.value);
+          e.target.value = '';
+        }}
+      >
+        <option value="" disabled>{loading ? 'Loading...' : 'Load'}</option>
+        {savedPatterns.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }
 
