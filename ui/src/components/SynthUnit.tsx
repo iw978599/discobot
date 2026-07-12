@@ -20,6 +20,7 @@ interface SynthUnitProps {
   onToggleSolo: () => void;
   onPatternChange: (pattern: Pattern) => void;
   onStepChange: (stepIndex: number) => void;
+  onStepCountChange: (stepCount: 16 | 32) => void;
   onSavePattern: (name: string) => Promise<boolean>;
   onLoadSavedPattern: (data: SavedPatternFull) => void;
   onParameterChange: (params: Partial<SynthParameters>) => void;
@@ -45,6 +46,7 @@ export default function SynthUnit({
   onToggleSolo,
   onPatternChange,
   onStepChange,
+  onStepCountChange,
   onSavePattern,
   onLoadSavedPattern,
   onParameterChange,
@@ -93,6 +95,7 @@ export default function SynthUnit({
             selectedStep={selectedStep}
             onPatternChange={onPatternChange}
             onStepChange={onStepChange}
+            onStepCountChange={onStepCountChange}
             onSavePattern={onSavePattern}
             onLoadSavedPattern={onLoadSavedPattern}
           />
@@ -102,6 +105,7 @@ export default function SynthUnit({
           <Keyboard
             onNotePlay={onPlayNote}
             onNoteRelease={onNoteRelease}
+            holdEnabled={Boolean(synthParams?.hold)}
             octaveShift={octaveShift}
           />
         </div>

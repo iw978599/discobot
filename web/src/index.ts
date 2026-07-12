@@ -483,7 +483,8 @@ function renderPatternAudio(state: GuildRuntimeState): string | null {
     const tempo = clamp(state.globalTempo || 120, 20, 400);
     const beatsPerStep = 60 / tempo / 4;
     const stepDuration = beatsPerStep;
-    const totalSamples = Math.floor(16 * stepDuration * sampleRate);
+    const totalSteps = Math.max(16, ...playingSynths.map(([, data]) => Math.max(1, data.pattern.steps.length)));
+    const totalSamples = Math.floor(totalSteps * stepDuration * sampleRate);
     const fullPCM = new Float32Array(totalSamples);
 
     const hasSynthSolo = playingSynths.some(([id]) => Boolean(state.synthMixState.get(id)?.solo));
@@ -492,7 +493,7 @@ function renderPatternAudio(state: GuildRuntimeState): string | null {
       const mix = state.synthMixState.get(id) || { muted: false, solo: false };
       if (mix.muted) continue;
       if (hasSynthSolo && !mix.solo) continue;
-      for (let i = 0; i < 16; i++) {
+      for (let i = 0; i < synthData.pattern.steps.length; i++) {
         const step = synthData.pattern.steps[i];
         if (step.note) {
           const noteDur = Math.max(stepDuration - 0.01, 0.05);
@@ -506,8 +507,8 @@ function renderPatternAudio(state: GuildRuntimeState): string | null {
     }
 
     const drumPCM = DrumSynthesizer.renderPattern(state.drumState, tempo, sampleRate);
-    for (let i = 0; i < drumPCM.length && i < totalSamples; i++) {
-      fullPCM[i] += drumPCM[i] * AUDIO_MIXING.DRUM_BOOST_FACTOR * state.drumMasterVolume;
+    for (let i = 0; i < totalSamples; i++) {
+      fullPCM[i] += drumPCM[i % drumPCM.length] * AUDIO_MIXING.DRUM_BOOST_FACTOR * state.drumMasterVolume;
     }
 
     const threshold = AUDIO_MIXING.SOFT_CLIP_THRESHOLD;

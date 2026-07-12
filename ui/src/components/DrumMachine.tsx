@@ -65,6 +65,52 @@ const EXTRA_LABELS: Record<DrumInstrument, { knob: string; display: (v: number) 
   crash: { knob: 'Wash', display: (v) => `${((0.8 + v * 2.1) * 1000).toFixed(0)}ms` },
 };
 
+const parseNumber = (input: string): number | null => {
+  const n = Number.parseFloat(input.replace(/[^0-9+-.]/g, ''));
+  return Number.isFinite(n) ? n : null;
+};
+
+const parsePercent = (input: string): number | null => {
+  const n = parseNumber(input);
+  if (n === null) return null;
+  return n / 100;
+};
+
+const parseExtraByInstrument: Record<DrumInstrument, (input: string) => number | null> = {
+  kick: (input) => {
+    const n = parseNumber(input);
+    return n === null ? null : (n - 20) / 80;
+  },
+  snare: (input) => {
+    const n = parseNumber(input);
+    return n === null ? null : (n - 10) / 90;
+  },
+  clap: (input) => {
+    const n = parseNumber(input);
+    return n === null ? null : (36 - n) / 28;
+  },
+  closedHH: (input) => {
+    const n = parseNumber(input);
+    return n === null ? null : (145 - n) / 130;
+  },
+  openHH: (input) => {
+    const n = parseNumber(input);
+    return n === null ? null : (n / 1000 - 0.22) / 0.85;
+  },
+  snare2: (input) => {
+    const n = parseNumber(input);
+    return n === null ? null : (n - 20) / 80;
+  },
+  ride: (input) => {
+    const n = parseNumber(input);
+    return n === null ? null : (n - 25) / 75;
+  },
+  crash: (input) => {
+    const n = parseNumber(input);
+    return n === null ? null : (n / 1000 - 0.8) / 2.1;
+  },
+};
+
 export default function DrumMachine({
   drumState,
   isPlaying,
@@ -140,6 +186,7 @@ export default function DrumMachine({
                 label="Master"
                 value={drumMasterVolume}
                 displayValue={Math.round(drumMasterVolume * 100) + '%'}
+                parseInputValue={parsePercent}
                 onChange={onMasterVolumeChange}
               />
               <div className="drum-global-mix">
@@ -169,6 +216,7 @@ export default function DrumMachine({
                     label="Volume"
                     value={drumState[inst].settings.volume}
                     displayValue={Math.round(drumState[inst].settings.volume * 100) + '%'}
+                    parseInputValue={parsePercent}
                     onChange={(v) => onSettingsChange(inst, { volume: v })}
                   />
                 ))}
@@ -180,6 +228,7 @@ export default function DrumMachine({
                     label="Tone"
                     value={drumState[inst].settings.tone}
                     displayValue={drumState[inst].settings.tone.toFixed(2)}
+                    parseInputValue={parseNumber}
                     onChange={(v) => onSettingsChange(inst, { tone: v })}
                   />
                 ))}
@@ -191,6 +240,7 @@ export default function DrumMachine({
                     label={EXTRA_LABELS[inst].knob}
                     value={drumState[inst].settings.extra}
                     displayValue={EXTRA_LABELS[inst].display(drumState[inst].settings.extra)}
+                    parseInputValue={parseExtraByInstrument[inst]}
                     onChange={(v) => onSettingsChange(inst, { extra: v })}
                   />
                 ))}

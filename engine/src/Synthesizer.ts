@@ -15,6 +15,7 @@ export class Synthesizer {
 
   private getDefaultParameters(): SynthParameters {
     return {
+      hold: false,
       gain: 1.0,
       oscillator: { type: 'sine', detune: 0 },
       lfo1: { enabled: false, target: 'pitch', waveform: 'sine', rate: 5, depth: 0.2 },

@@ -11,6 +11,7 @@ interface SequencerProps {
   selectedStep: number | null;
   onPatternChange: (pattern: Pattern) => void;
   onStepChange: (stepIndex: number) => void;
+  onStepCountChange: (stepCount: 16 | 32) => void;
   onSavePattern: (name: string) => Promise<boolean>;
   onLoadSavedPattern: (data: SavedPatternFull) => void;
 }
@@ -62,6 +63,7 @@ export default function Sequencer({
   selectedStep,
   onPatternChange,
   onStepChange,
+  onStepCountChange,
   onLoadSavedPattern,
 }: SequencerProps) {
   const [savedPatterns, setSavedPatterns] = useState<SavedPatternInfo[]>([]);
@@ -119,10 +121,20 @@ export default function Sequencer({
               </option>
             ))}
           </select>
+          <select
+            value={pattern.steps.length}
+            onChange={(e) => onStepCountChange(parseInt(e.target.value, 10) as 16 | 32)}
+          >
+            <option value={16}>16 steps</option>
+            <option value={32}>32 steps</option>
+          </select>
         </div>
       </div>
 
-      <div className="sequencer-grid">
+      <div
+        className="sequencer-grid"
+        style={{ gridTemplateColumns: `repeat(${pattern.steps.length}, minmax(0, 1fr))` }}
+      >
         {pattern.steps.map((step, index) => (
           <div key={index} className="sequencer-column">
             <div className="step-indicator">

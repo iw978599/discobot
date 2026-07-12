@@ -1,5 +1,15 @@
 # Effects Loop Migration Implementation Plan
 
+## Status Update (Implemented Now vs Remaining)
+- ✅ Implemented now:
+  - 16/32 step toggle for synth sequences (UI + pattern data flow + render path support)
+  - Editable knob value displays with Enter/blur commit behavior (synth + drum knobs)
+  - Synth hold mode control and keyboard latch/release behavior
+- ⏳ Remaining (not implemented yet):
+  - Shared/global effects loop migration (move per-synth delay/reverb to send/return bus)
+  - Global FX API/socket/state and persistence migration for loop settings
+  - UI migration to global FX panel and per-synth send controls
+
 ## Goal
 Move reverb and delay from per-synth embedded effects to a shared effects loop (send/return bus) while keeping each synth’s core voice controls and both LFOs intact.
 

@@ -1,6 +1,7 @@
 export type OscillatorType = 'sine' | 'square' | 'sawtooth' | 'triangle';
 
 export interface SynthParameters {
+  hold: boolean;
   gain: number;
   oscillator: {
     type: OscillatorType;

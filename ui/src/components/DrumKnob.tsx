@@ -9,6 +9,7 @@ interface DrumKnobProps {
   step?: number;
   displayValue?: string;
   onChange: (value: number) => void;
+  parseInputValue?: (input: string) => number | null;
 }
 
 export default function DrumKnob({
@@ -19,16 +20,22 @@ export default function DrumKnob({
   step = 0.01,
   displayValue,
   onChange,
+  parseInputValue,
 }: DrumKnobProps) {
   const knobRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
   const startY = useRef(0);
   const startVal = useRef(0);
   const [localVal, setLocalVal] = useState(value);
+  const [isEditing, setIsEditing] = useState(false);
+  const [inputValue, setInputValue] = useState('');
+
+  const computedDisplay = displayValue ?? localVal.toFixed(2);
 
   useEffect(() => {
     setLocalVal(value);
-  }, [value]);
+    if (!isEditing) setInputValue(displayValue ?? value.toFixed(2));
+  }, [value, displayValue, isEditing]);
 
   const pct = (localVal - min) / (max - min);
 
@@ -60,6 +67,19 @@ export default function DrumKnob({
 
   const svgDeg = -240 + pct * 300;
 
+  const commitInput = useCallback(() => {
+    const parsed = parseInputValue
+      ? parseInputValue(inputValue)
+      : Number.parseFloat(inputValue.replace(/[^0-9+-.]/g, ''));
+    if (Number.isFinite(parsed)) {
+      const newVal = Math.max(min, Math.min(max, parsed as number));
+      const stepped = Math.round((newVal - min) / step) * step + min;
+      setLocalVal(stepped);
+      onChange(stepped);
+    }
+    setIsEditing(false);
+  }, [parseInputValue, inputValue, min, max, step, onChange]);
+
   return (
     <div className="drum-knob">
       <div
@@ -83,7 +103,23 @@ export default function DrumKnob({
         </svg>
       </div>
       <span className="drum-knob-label">{label}</span>
-      <span className="drum-knob-value">{displayValue ?? localVal.toFixed(2)}</span>
+      <input
+        className="drum-knob-value-input"
+        value={isEditing ? inputValue : computedDisplay}
+        onFocus={() => {
+          setIsEditing(true);
+          setInputValue(computedDisplay);
+        }}
+        onChange={(e) => setInputValue(e.target.value)}
+        onBlur={commitInput}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commitInput();
+          if (e.key === 'Escape') {
+            setIsEditing(false);
+            setInputValue(computedDisplay);
+          }
+        }}
+      />
     </div>
   );
 }
