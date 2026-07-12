@@ -31,6 +31,7 @@ const WEB_API_URL = process.env.WEB_API_URL || `http://localhost:${PORT}`;
 const WS_URL = process.env.WS_URL || `ws://localhost:${PORT}/ws/bot`;
 const BOT_SHARED_SECRET = process.env.BOT_SHARED_SECRET || process.env.DISCORD_TOKEN || 'discobot-bot-secret';
 const WEB_LOGIN_URL = process.env.WEB_LOGIN_URL || (process.env.UI_URL ? `${process.env.UI_URL}` : 'http://localhost:3000');
+const LOGIN_TOKEN_REQUEST_TIMEOUT_MS = 2500;
 
 if (!TOKEN) throw new Error('Missing DISCORD_TOKEN in .env');
 if (!CLIENT_ID) throw new Error('Missing DISCORD_CLIENT_ID in .env');
@@ -353,26 +354,31 @@ async function handleLogin(interaction: ChatInputCommandInteraction) {
     return;
   }
 
-  const response = await botSignedFetch('/auth/discord/token', {
-    method: 'POST',
-    bodyObj: {
-      guildId,
-      userId: interaction.user.id,
-      username: interaction.user.username,
-    },
-  });
+  await interaction.deferReply({ ephemeral: true });
 
-  if (!response.ok) {
-    await interaction.reply({ content: 'Failed to generate login token.', ephemeral: true });
-    return;
+  try {
+    const response = await botSignedFetch('/auth/discord/token', {
+      method: 'POST',
+      bodyObj: {
+        guildId,
+        userId: interaction.user.id,
+        username: interaction.user.username,
+      },
+      signal: AbortSignal.timeout(LOGIN_TOKEN_REQUEST_TIMEOUT_MS),
+    });
+
+    if (!response.ok) {
+      await interaction.editReply('Failed to generate login token. Please try /login again.');
+      return;
+    }
+
+    const data = await response.json();
+    const loginUrl = `${WEB_LOGIN_URL.replace(/\/+$/, '')}/?loginToken=${encodeURIComponent(data.loginToken)}`;
+    await interaction.editReply(`Use this secure link (expires soon): ${loginUrl}`);
+  } catch (error) {
+    console.error('Login token request failed:', error);
+    await interaction.editReply('Failed to generate login token. Please try /login again.');
   }
-
-  const data = await response.json();
-  const loginUrl = `${WEB_LOGIN_URL.replace(/\/+$/, '')}/?loginToken=${encodeURIComponent(data.loginToken)}`;
-  await interaction.reply({
-    content: `Use this secure link (expires soon): ${loginUrl}`,
-    ephemeral: true,
-  });
 }
 
 async function handlePlay(interaction: ChatInputCommandInteraction) {
