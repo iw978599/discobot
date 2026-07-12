@@ -233,3 +233,26 @@
   font-size: 0.85rem;
   font-weight: 600;
 }
+
+.load-inline {
+  display: flex;
+  align-items: center;
+}
+
+.load-select {
+  font-family: 'Courier New', monospace;
+  font-size: 0.8rem;
+  background: #111;
+  border: 1px solid #4a4a4a;
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  color: #aaa;
+  outline: none;
+  max-width: 160px;
+}
+
+.load-select:hover,
+.load-select:focus {
+  border-color: #00d4ff;
+  color: #00d4ff;
+}

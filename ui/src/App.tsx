@@ -5,7 +5,7 @@ import { useWebSocket } from './hooks/useWebSocket';
 import { useSynthAudio } from './hooks/useSynthAudio';
 import { useDrumAudio } from './hooks/useDrumAudio';
 import { getWebSocketUrl } from './config';
-import { Pattern, SynthParameters, SavedPatternFull, DrumState, DrumInstrument, DrumSettings } from './types';
+import { Pattern, SynthParameters, SavedPatternInfo, SavedPatternFull, DrumState, DrumInstrument, DrumSettings } from './types';
 import { authFetch, exchangeLoginToken, fetchSessionInfo, setAuthContext } from './authClient';
 import './App.css';
 
@@ -109,6 +109,40 @@ function SavePattern({
     if (saved) {
       setSavedFeedback(true);
       setTimeout(() => setSavedFeedback(false), 2000);
+    }
+
+    function LoadPattern({
+      loading,
+      savedPatterns,
+      onLoad,
+      onRefresh,
+    }: {
+      loading: boolean;
+      savedPatterns: SavedPatternInfo[];
+      onLoad: (id: string) => void;
+      onRefresh: () => void;
+    }) {
+      return (
+        <div className="load-inline">
+          <select
+            className="load-select"
+            defaultValue=""
+            onFocus={onRefresh}
+            onChange={(e) => {
+              if (!e.target.value) return;
+              onLoad(e.target.value);
+              e.target.value = '';
+            }}
+          >
+            <option value="" disabled>{loading ? 'Loading...' : 'Load'}</option>
+            {savedPatterns.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      );
     }
   };
 
@@ -285,7 +319,7 @@ function App() {
             pattern,
             patterns: pattern ? [pattern] : [],
             synthParams,
-            isPlaying: false,
+            isPlaying: Boolean(message.data.isPlaying),
             currentStep: 0,
             selectedStep: null,
             octaveShift: 0,
@@ -427,7 +461,7 @@ function App() {
             pattern: data.pattern,
             patterns: data.patterns || [],
             synthParams: data.synthParams,
-            isPlaying: false,
+            isPlaying: Boolean(data.isPlaying),
             currentStep: 0,
             selectedStep: null,
             octaveShift: 0,
@@ -620,12 +654,34 @@ function App() {
     }
   }, [drumMasterVolume]);
 
+  const refreshSavedPatterns = useCallback(async () => {
+    setLoadingSavedPatterns(true);
+    try {
+      const res = await authFetch('/patterns/saved');
+      if (res.ok) {
+        const data: SavedPatternInfo[] = await res.json();
+        setSavedPatterns(data);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingSavedPatterns(false);
+    }
+  }, []);
+
   const handleSaveGlobal = useCallback(async (name: string): Promise<boolean> => {
     const firstSynth = synthsRef.current[0];
     if (!firstSynth?.pattern || !firstSynth.synthParams) return false;
 
-    return handleSavePattern(firstSynth.id, name);
-  }, [handleSavePattern]);
+    const saved = await handleSavePattern(firstSynth.id, name);
+    if (saved) await refreshSavedPatterns();
+    return saved;
+  }, [handleSavePattern, refreshSavedPatterns]);
+
+  useEffect(() => {
+    if (!sessionToken) return;
+    void refreshSavedPatterns();
+  }, [sessionToken, refreshSavedPatterns]);
 
   const handleLoadSavedPattern = useCallback(async (synthId: number, data: SavedPatternFull) => {
     const synth = synthsRef.current.find(s => s.id === synthId);
@@ -665,6 +721,19 @@ function App() {
       body: JSON.stringify(updated),
     });
   }, []);
+
+  const handleLoadGlobal = useCallback(async (savedId: string) => {
+    const targetSynthId = synthsRef.current[0]?.id;
+    if (!targetSynthId) return;
+    try {
+      const res = await authFetch(`/patterns/saved/${savedId}`);
+      if (!res.ok) return;
+      const data: SavedPatternFull = await res.json();
+      await handleLoadSavedPattern(targetSynthId, data);
+    } catch {
+      // ignore
+    }
+  }, [handleLoadSavedPattern]);
 
   const handleDrumStepToggle = useCallback((instrument: DrumInstrument, step: number, active: boolean) => {
     setDrumState(prev => {
@@ -803,6 +872,8 @@ function App() {
   const [saving, setSaving] = useState(false);
   const [saveName, setSaveName] = useState('');
   const [savedFeedback, setSavedFeedback] = useState(false);
+  const [savedPatterns, setSavedPatterns] = useState<SavedPatternInfo[]>([]);
+  const [loadingSavedPatterns, setLoadingSavedPatterns] = useState(false);
   const isAnyPlaying = synths.some(s => s.isPlaying);
 
   return (
@@ -820,6 +891,12 @@ function App() {
             savedFeedback={savedFeedback}
             setSavedFeedback={setSavedFeedback}
             onSave={handleSaveGlobal}
+          />
+          <LoadPattern
+            loading={loadingSavedPatterns}
+            savedPatterns={savedPatterns}
+            onLoad={(id) => { void handleLoadGlobal(id); }}
+            onRefresh={() => { void refreshSavedPatterns(); }}
           />
           <button className="play-all-button" onClick={handleGlobalPlayStop}>
             {isAnyPlaying ? '⏹ Stop All' : '▶ Play All'}

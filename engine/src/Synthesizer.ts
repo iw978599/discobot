@@ -89,6 +89,48 @@ export class Synthesizer {
     return output;
   }
 
+  private static applyDelay(samples: Float32Array, sampleRate: number, time: number, feedback: number, wet: number): Float32Array {
+    const output = new Float32Array(samples.length);
+    const delaySamples = Math.max(1, Math.floor(time * sampleRate));
+    const delayBuffer = new Float32Array(delaySamples);
+    let writeIndex = 0;
+    const dry = 1 - wet;
+
+    for (let i = 0; i < samples.length; i++) {
+      const delayed = delayBuffer[writeIndex];
+      const input = samples[i] + delayed * feedback;
+      delayBuffer[writeIndex] = input;
+      writeIndex = (writeIndex + 1) % delaySamples;
+      output[i] = samples[i] * dry + delayed * wet;
+    }
+    return output;
+  }
+
+  private static applyReverb(samples: Float32Array, sampleRate: number, decay: number, wet: number): Float32Array {
+    const output = new Float32Array(samples.length);
+    const dry = 1 - wet;
+    const combDelays = [0.0297, 0.0371, 0.0411, 0.0437].map((sec) => Math.max(1, Math.floor(sec * sampleRate)));
+    const combBuffers = combDelays.map((len) => new Float32Array(len));
+    const combIndices = new Array(combDelays.length).fill(0);
+    const feedback = clamp(0.55 + decay * 0.035, 0.5, 0.92);
+
+    for (let i = 0; i < samples.length; i++) {
+      let reverbAccum = 0;
+      for (let c = 0; c < combBuffers.length; c++) {
+        const buffer = combBuffers[c];
+        const idx = combIndices[c];
+        const delayed = buffer[idx];
+        buffer[idx] = samples[i] + delayed * feedback;
+        combIndices[c] = (idx + 1) % buffer.length;
+        reverbAccum += delayed;
+      }
+      const wetSignal = reverbAccum / combBuffers.length;
+      output[i] = samples[i] * dry + wetSignal * wet;
+    }
+
+    return output;
+  }
+
   private static lfoValue(type: OscillatorType, phase: number): number {
     const frac = phase - Math.floor(phase);
     switch (type) {
@@ -124,7 +166,7 @@ export class Synthesizer {
       const pitchMod = lfoValues.reduce((sum, val, idx) => (
         lfos[idx].enabled && lfos[idx].target === 'pitch' ? sum + val * lfos[idx].depth : sum
       ), 0);
-      const pitchCents = pitchMod * 50;
+      const pitchCents = pitchMod * 100;
       const currentFreq = detunedFreq * Math.pow(2, pitchCents / 1200);
       phase += currentFreq / sampleRate;
       samples[i] = Synthesizer.lfoValue(oscType, phase);
@@ -155,13 +197,34 @@ export class Synthesizer {
       output[i] = filtered;
     }
 
-    const master = clamp(this.parameters.gain, 0, 2);
-    const vol = clamp(velocity, 0, 1);
-    for (let i = 0; i < output.length; i++) {
-      output[i] *= vol * master * AUDIO_MIXING.SYNTH_MASTER_VOLUME;
+    let effected = output;
+
+    if (this.parameters.effects.delay.enabled && this.parameters.effects.delay.wet > 0) {
+      effected = Synthesizer.applyDelay(
+        effected,
+        sampleRate,
+        this.parameters.effects.delay.time,
+        this.parameters.effects.delay.feedback,
+        clamp(this.parameters.effects.delay.wet, 0, 1)
+      );
     }
 
-    return output;
+    if (this.parameters.effects.reverb.enabled && this.parameters.effects.reverb.wet > 0) {
+      effected = Synthesizer.applyReverb(
+        effected,
+        sampleRate,
+        this.parameters.effects.reverb.decay,
+        clamp(this.parameters.effects.reverb.wet, 0, 1)
+      );
+    }
+
+    const master = clamp(this.parameters.gain, 0, 2);
+    const vol = clamp(velocity, 0, 1);
+    for (let i = 0; i < effected.length; i++) {
+      effected[i] *= vol * master * AUDIO_MIXING.SYNTH_MASTER_VOLUME;
+    }
+
+    return effected;
   }
 
   renderChord(notes: string[], duration: number, velocity: number, sampleRate: number = 44100): Float32Array {

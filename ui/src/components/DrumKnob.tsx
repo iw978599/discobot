@@ -58,7 +58,7 @@ export default function DrumKnob({
     window.addEventListener('mouseup', handleMouseUp);
   }, [localVal, min, max, step, onChange]);
 
-  const svgDeg = -240 + pct * 300;
+  const svgDeg = 60 - pct * 300;
 
   return (
     <div className="drum-knob">

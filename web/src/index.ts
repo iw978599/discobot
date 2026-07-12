@@ -728,6 +728,18 @@ app.post('/synth/create', (req, res) => {
 
   initSynth(state, synthId);
   const synthData = state.synths.get(synthId)!;
+  const referencePlaying = Array.from(state.synths.entries()).find(
+    ([id, data]) => id !== synthId && data.sequencer.getIsPlaying()
+  );
+  const shouldAutoPlay = Boolean(referencePlaying);
+
+  if (referencePlaying) {
+    const [, refSynth] = referencePlaying;
+    const startStep = refSynth.sequencer.getCurrentStep();
+    const startAt = refSynth.sequencer.getNextStepTime() ?? undefined;
+    synthData.sequencer.loadPattern(synthData.pattern);
+    synthData.sequencer.play(startStep, startAt);
+  }
 
   broadcastToClients({
     type: 'synthCreated',
@@ -738,8 +750,15 @@ app.post('/synth/create', (req, res) => {
       synthParams: synthData.synth.getParameters(),
       muted: false,
       solo: false,
+      isPlaying: shouldAutoPlay,
     },
   }, session.guildId);
+
+  if (shouldAutoPlay) {
+    broadcastToClients({ type: 'sequencerPlay', data: { guildId: session.guildId, synthId, patternId: synthData.pattern.id } }, session.guildId);
+    broadcastToBotClients({ type: 'sequencerPlay', data: { guildId: session.guildId, synthId, patternId: synthData.pattern.id } });
+    schedulePatternAudioForPlayingSynths(session.guildId);
+  }
 
   res.json({
     synthId,
@@ -748,6 +767,7 @@ app.post('/synth/create', (req, res) => {
     synthParams: synthData.synth.getParameters(),
     muted: false,
     solo: false,
+    isPlaying: shouldAutoPlay,
   });
 });
 

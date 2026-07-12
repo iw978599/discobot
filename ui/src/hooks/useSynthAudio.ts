@@ -42,6 +42,7 @@ export function useSynthAudio() {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const activeVoices = useRef<Map<string, ActiveVoice>>(new Map());
   const isResumingRef = useRef<boolean>(false);
+  const reverbImpulseCache = useRef<Map<string, AudioBuffer>>(new Map());
 
   function getAudioContext(): AudioContext {
     if (!audioCtxRef.current) {
@@ -121,7 +122,7 @@ export function useSynthAudio() {
         lfoOsc.frequency.value = lfo.rate;
         const lfoGain = ctx.createGain();
         if (lfo.target === 'pitch') {
-          lfoGain.gain.value = lfo.depth * 50;
+          lfoGain.gain.value = lfo.depth * 100;
           lfoOsc.connect(lfoGain);
           lfoGain.connect(osc.detune);
         } else if (filterNode) {
@@ -134,30 +135,68 @@ export function useSynthAudio() {
         nodes.push(lfoOsc, lfoGain);
       });
 
-      // Apply delay effect if enabled
-      if (p?.effects.delay.enabled && p.effects.delay.wet > 0) {
-        const dryGain = ctx.createGain();
-        const wetGain = ctx.createGain();
-        const delayNode = ctx.createDelay(p.effects.delay.time);
-        const feedbackGain = ctx.createGain();
-        const outputGain = ctx.createGain();
+      const finalOutput = ctx.createGain();
+      nodes.push(finalOutput);
+      const delayEnabled = Boolean(p?.effects.delay.enabled && p.effects.delay.wet > 0);
+      const reverbEnabled = Boolean(p?.effects.reverb.enabled && p.effects.reverb.wet > 0);
 
-        dryGain.gain.value = 1 - p.effects.delay.wet;
-        wetGain.gain.value = p.effects.delay.wet;
-        delayNode.delayTime.value = p.effects.delay.time;
-        feedbackGain.gain.value = p.effects.delay.feedback;
-
-        gain.connect(dryGain);
-        gain.connect(delayNode);
-        delayNode.connect(wetGain);
-        delayNode.connect(feedbackGain);
-        feedbackGain.connect(delayNode);
-        dryGain.connect(outputGain);
-        wetGain.connect(outputGain);
-        outputGain.connect(ctx.destination);
+      if (!delayEnabled && !reverbEnabled) {
+        gain.connect(finalOutput);
       } else {
-        gain.connect(ctx.destination);
+        const dryGain = ctx.createGain();
+        const maxWet = Math.max(
+          delayEnabled ? p?.effects.delay.wet ?? 0 : 0,
+          reverbEnabled ? p?.effects.reverb.wet ?? 0 : 0
+        );
+        dryGain.gain.value = Math.max(0, 1 - maxWet);
+        gain.connect(dryGain);
+        dryGain.connect(finalOutput);
+        nodes.push(dryGain);
+
+        if (delayEnabled && p) {
+          const delayNode = ctx.createDelay(Math.max(0.001, p.effects.delay.time));
+          const delayWetGain = ctx.createGain();
+          const feedbackGain = ctx.createGain();
+          delayWetGain.gain.value = p.effects.delay.wet;
+          delayNode.delayTime.value = p.effects.delay.time;
+          feedbackGain.gain.value = p.effects.delay.feedback;
+
+          gain.connect(delayNode);
+          delayNode.connect(delayWetGain);
+          delayWetGain.connect(finalOutput);
+          delayNode.connect(feedbackGain);
+          feedbackGain.connect(delayNode);
+          nodes.push(delayNode, delayWetGain, feedbackGain);
+        }
+
+        if (reverbEnabled && p) {
+          const convolver = ctx.createConvolver();
+          const reverbWetGain = ctx.createGain();
+          const decay = Math.max(0.1, p.effects.reverb.decay);
+          const decayKey = decay.toFixed(2);
+          let impulse = reverbImpulseCache.current.get(decayKey);
+          if (!impulse) {
+            const impulseLength = Math.max(1, Math.floor(ctx.sampleRate * decay));
+            impulse = ctx.createBuffer(2, impulseLength, ctx.sampleRate);
+            for (let channel = 0; channel < 2; channel++) {
+              const channelData = impulse.getChannelData(channel);
+              for (let i = 0; i < impulseLength; i++) {
+                const decayPos = 1 - i / impulseLength;
+                channelData[i] = (Math.random() * 2 - 1) * decayPos * decayPos;
+              }
+            }
+            reverbImpulseCache.current.set(decayKey, impulse);
+          }
+          convolver.buffer = impulse;
+          reverbWetGain.gain.value = p.effects.reverb.wet;
+
+          gain.connect(convolver);
+          convolver.connect(reverbWetGain);
+          reverbWetGain.connect(finalOutput);
+          nodes.push(convolver, reverbWetGain);
+        }
       }
+      finalOutput.connect(ctx.destination);
 
       // Apply ADSR envelope
       const now = ctx.currentTime;
