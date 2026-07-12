@@ -73,8 +73,8 @@ export default function Knob({
     window.addEventListener('mouseup', handleMouseUp);
   }, [localVal, min, max, step, onChange, disabled]);
 
-  // Rotation: -150deg to +150deg (300 degree range)
-  const svgDeg = -150 + pct * 300;
+  // Rotation: min at right (~60deg), max at left (~120deg) across 300° sweep
+  const svgDeg = 60 - pct * 300;
 
   const sizes = {
     small: { svg: 36, outer: 16, inner: 12, line: 10, dot: 2 },

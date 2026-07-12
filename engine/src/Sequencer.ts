@@ -10,39 +10,51 @@ export class Sequencer {
   private timerId: ReturnType<typeof setTimeout> | null = null;
   private tempo: number = 120;
   private stepInterval: number = 125;
+  private nextStepAt: number | null = null;
 
   constructor(synth: Synthesizer) {
     this.synth = synth;
   }
 
   loadPattern(pattern: Pattern): void {
-    this.stop();
     this.currentPattern = pattern;
     this.tempo = pattern.tempo;
     this.stepInterval = (60 / this.tempo / 4) * 1000;
+    const length = this.currentPattern.steps.length || 16;
+    this.currentStep = ((this.currentStep % length) + length) % length;
   }
 
-  play(): void {
+  play(startStep: number = 0, startAt?: number): void {
     if (!this.currentPattern || this.isPlaying) return;
 
+    const stepCount = this.currentPattern.steps.length || 16;
+    this.currentStep = ((Math.floor(startStep) % stepCount) + stepCount) % stepCount;
     this.isPlaying = true;
-    this.currentStep = 0;
+    const now = Date.now();
+    const delay = startAt ? Math.max(0, startAt - now) : 0;
+    if (delay > 0) {
+      this.nextStepAt = now + delay;
+      this.timerId = setTimeout(() => this.scheduleStep(), delay);
+      return;
+    }
     this.scheduleStep();
   }
 
   private scheduleStep(): void {
     if (!this.isPlaying || !this.currentPattern) return;
 
-    const step = this.currentPattern.steps[this.currentStep];
+    const stepIndex = this.currentStep;
+    const step = this.currentPattern.steps[stepIndex];
     if (step && step.note) {
       this.synth.playNote(step.note, '16n', step.velocity);
     }
 
     if (this.onStepCallback) {
-      this.onStepCallback(this.currentStep);
+      this.onStepCallback(stepIndex);
     }
 
-    this.currentStep = (this.currentStep + 1) % (this.currentPattern?.steps.length || 16);
+    this.currentStep = (stepIndex + 1) % (this.currentPattern?.steps.length || 16);
+    this.nextStepAt = Date.now() + this.stepInterval;
 
     this.timerId = setTimeout(() => this.scheduleStep(), this.stepInterval);
   }
@@ -57,6 +69,7 @@ export class Sequencer {
     }
 
     this.synth.releaseAll();
+    this.nextStepAt = null;
     this.currentStep = 0;
   }
 
@@ -67,6 +80,7 @@ export class Sequencer {
       clearTimeout(this.timerId);
       this.timerId = null;
     }
+    this.nextStepAt = null;
   }
 
   resume(): void {
@@ -103,6 +117,10 @@ export class Sequencer {
 
   getCurrentStep(): number {
     return this.currentStep;
+  }
+
+  getNextStepTime(): number | null {
+    return this.nextStepAt;
   }
 
   onStep(callback: (step: number) => void): void {
