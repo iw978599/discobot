@@ -1842,9 +1842,7 @@ wssUi.on('connection', (ws, req) => {
 
   ws.on('error', (error) => {
     console.error(`[ws] ui error: ${error instanceof Error ? error.message : 'unknown error'}`);
-    const meta = wsClients.get(ws);
-    wsClients.delete(ws);
-    if (meta) broadcastConnectedUsers(meta.guildId);
+    ws.terminate();
   });
 });
 
