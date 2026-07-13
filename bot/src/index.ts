@@ -377,7 +377,12 @@ async function handleLogin(interaction: ChatInputCommandInteraction) {
     await interaction.editReply(`Use this secure link (expires soon): ${loginUrl}`);
   } catch (error) {
     console.error('Login token request failed:', error);
-    await interaction.editReply('Failed to generate login token. Please try /login again.');
+    const msg = 'Failed to generate login token. Please try /login again.';
+    if (interaction.deferred) {
+      await interaction.editReply(msg);
+    } else if (!interaction.replied) {
+      await interaction.reply({ content: msg, ephemeral: true });
+    }
   }
 }
 
@@ -501,11 +506,15 @@ client.on('interactionCreate', async (interaction) => {
     }
   } catch (error) {
     console.error('Command error:', error);
-    const reply = { content: 'An error occurred', ephemeral: true };
-    if (interaction.replied || interaction.deferred) {
-      await interaction.followUp(reply);
-    } else {
-      await interaction.reply(reply);
+    try {
+      const reply = { content: 'An error occurred', ephemeral: true };
+      if (interaction.replied || interaction.deferred) {
+        await interaction.followUp(reply);
+      } else {
+        await interaction.reply(reply);
+      }
+    } catch {
+      // Interaction expired before we could respond
     }
   }
 });
