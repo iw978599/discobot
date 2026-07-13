@@ -1,7 +1,7 @@
-# Discord Synth Bot - Project Summary
+# Discobot - Project Summary
 
 **Status**: Beta - Core features working including Discord audio playback  
-**Location**: `C:\Users\iw978\Documents\New OpenCode Project\discobot`
+**Location**: Repository root (`discobot/`)
 
 ## What Was Built
 
@@ -26,7 +26,7 @@ A full-stack music creation application with:
 
 ### 3. **Web API Server** (`web/`)
 - Express REST API on port 3001
-- WebSocket server on port 8080 for real-time sync
+- WebSocket endpoint on `ws://localhost:3001/ws` for real-time sync
 - Centralized audio engine state (Synthesizer, Sequencer, SamplePlayer)
 - Pattern management with JSON file persistence (`saved-patterns.json`)
 - Pattern save/load/delete endpoints
@@ -71,8 +71,8 @@ A full-stack music creation application with:
 ## File Structure
 
 ```
-discord-synth-bot/
-├── PROJECT_SUMMARY.md            # This file
+discobot/
+├── docs/reports/PROJECT_SUMMARY.md # This file
 ├── README.md                     # Main docs (may be outdated)
 ├── package.json                  # Workspace config
 ├── tsconfig.json                 # Shared TS config
@@ -104,7 +104,7 @@ discord-synth-bot/
 │   ├── tsconfig.json
 │   ├── saved-patterns.json       # Persistent pattern storage
 │   └── src/
-│       └── index.ts              # All routes (~500 lines)
+│       └── index.ts              # All routes
 │
 └── ui/                           # React frontend
     ├── package.json
@@ -157,5 +157,4 @@ discord-synth-bot/
 ## Known Issues
 
 - First note may sustain after stop (bot player state race; refresh browser to clear)
-- `saved-patterns.json` should be added to `.gitignore` (contains user data)
-- No authentication/rate limiting on endpoints
+- Sample player backend remains stubbed

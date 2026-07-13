@@ -12,6 +12,7 @@ import { assignRole, canControl, SessionRole } from './sessionAuth';
 dotenv.config();
 
 const app = express();
+app.disable('x-powered-by');
 const PORT = parseInt(process.env.PORT || process.env.WEB_PORT || '3001', 10);
 const AUTH_MODE = process.env.AUTH_MODE === 'strict' ? 'strict' : 'compatibility';
 const TOKEN_SECRET = process.env.AUTH_TOKEN_SECRET || process.env.DISCORD_TOKEN || 'discobot-dev-secret';
@@ -19,18 +20,46 @@ const BOT_SHARED_SECRET = process.env.BOT_SHARED_SECRET || process.env.DISCORD_T
 const TOKEN_TTL_MS = 15 * 60 * 1000;
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const SIGNATURE_MAX_SKEW_MS = 60_000;
+const DEFAULT_ALLOWED_ORIGINS = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost:3001',
+  'http://127.0.0.1:3001',
+];
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? DEFAULT_ALLOWED_ORIGINS.join(','))
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 if (AUTH_MODE === 'strict') {
   if (TOKEN_SECRET === 'discobot-dev-secret') throw new Error('AUTH_TOKEN_SECRET must be set in strict mode');
   if (BOT_SHARED_SECRET === 'discobot-bot-secret') throw new Error('BOT_SHARED_SECRET must be set in strict mode');
 }
 
-app.use(cors());
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+    callback(null, ALLOWED_ORIGINS.includes(origin));
+  },
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-csrf-token', 'x-bot-timestamp', 'x-bot-signature'],
+}));
 app.use((req, res, next) => {
   res.setHeader('Content-Security-Policy', "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data: blob: https:; font-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; style-src-elem 'self' 'unsafe-inline' https:; style-src-attr 'self' 'unsafe-inline' https:; script-src 'self' https:; connect-src 'self' https: ws: wss:; manifest-src 'self'; worker-src 'self' blob:; upgrade-insecure-requests");
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  }
   next();
 });
 app.use(express.json({
+  limit: '1mb',
   verify: (req, _res, buf) => {
     (req as Request & { rawBody?: string }).rawBody = buf.toString('utf8');
   },
@@ -399,6 +428,37 @@ function sanitizeId(value: string | undefined): string | null {
   return value;
 }
 
+function sanitizePatternName(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.replace(/[\u0000-\u001F\u007F]/g, '').trim();
+  if (normalized.length < 1 || normalized.length > 80) return null;
+  return normalized;
+}
+
+function sanitizeOptionalText(value: unknown, maxLength: number): string | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.replace(/[\u0000-\u001F\u007F]/g, '').trim();
+  if (!normalized || normalized.length > maxLength) return null;
+  return normalized;
+}
+
+function sanitizeSampleUrl(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  if (value.length > 2048) return null;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+function isAllowedOrigin(origin: string | undefined): boolean {
+  if (!origin) return true;
+  return ALLOWED_ORIGINS.includes(origin);
+}
+
 function signPayload(payload: object): string {
   const raw = Buffer.from(JSON.stringify(payload)).toString('base64url');
   const sig = crypto.createHmac('sha256', TOKEN_SECRET).update(raw).digest('base64url');
@@ -410,7 +470,9 @@ function verifySignedPayload(token: string): any | null {
   if (parts.length !== 2) return null;
   const [raw, sig] = parts;
   const expected = crypto.createHmac('sha256', TOKEN_SECRET).update(raw).digest('base64url');
-  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+  const providedBuffer = Buffer.from(sig);
+  const expectedBuffer = Buffer.from(expected);
+  if (providedBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(providedBuffer, expectedBuffer)) return null;
   try {
     return JSON.parse(Buffer.from(raw, 'base64url').toString('utf8'));
   } catch {
@@ -1464,12 +1526,15 @@ app.post('/patterns/save', (req, res) => {
   const session = getSession(req);
   const state = getGuildState(session.guildId);
   const { name, steps, synthParams, tempo, drumState, drumMasterVolume, drumFx, effectsLoop, drumKitId } = req.body;
-  if (!name || !steps) return res.status(400).json({ error: 'name and steps are required' });
+  const patternName = sanitizePatternName(name);
+  if (!patternName || !Array.isArray(steps) || steps.length === 0 || steps.length > 64) {
+    return res.status(400).json({ error: 'Invalid pattern payload' });
+  }
 
   const guild = getPersistedGuild(session.guildId);
   const entry: SavedPatternData = {
     id: `saved-${Date.now()}`,
-    name: String(name),
+    name: patternName,
     createdAt: Date.now(),
     updatedAt: Date.now(),
     steps,
@@ -1592,10 +1657,16 @@ app.post('/samples', async (req, res) => {
   const state = getGuildState(session.guildId);
   initAudioEngine(state);
   const { id, name, url } = req.body;
+  const sampleId = sanitizeId(id);
+  const sampleName = sanitizeOptionalText(name, 80);
+  const sampleUrl = sanitizeSampleUrl(url);
+  if (!sampleId || !sampleName || !sampleUrl) {
+    return res.status(400).json({ error: 'Invalid sample payload' });
+  }
 
   try {
-    await state.samplePlayer!.loadSample(id, name, url);
-    broadcastToClients({ type: 'sampleLoaded', data: { guildId: session.guildId, id, name, url } }, session.guildId);
+    await state.samplePlayer!.loadSample(sampleId, sampleName, sampleUrl);
+    broadcastToClients({ type: 'sampleLoaded', data: { guildId: session.guildId, id: sampleId, name: sampleName, url: sampleUrl } }, session.guildId);
     res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -1641,6 +1712,11 @@ const wssUi = new WebSocketServer({ noServer: true });
 const wssBot = new WebSocketServer({ noServer: true });
 
 server.on('upgrade', (req, socket, head) => {
+  const origin = req.headers.origin;
+  if (!isAllowedOrigin(origin)) {
+    socket.destroy();
+    return;
+  }
   const requestPath = req.url?.split('?')[0] ?? '';
   if (WS_UI_PATHS.has(requestPath)) {
     wssUi.handleUpgrade(req, socket, head, (ws) => wssUi.emit('connection', ws, req));

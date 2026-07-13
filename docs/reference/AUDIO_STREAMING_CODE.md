@@ -1,4 +1,7 @@
-# Audio Streaming Implementation - Specific Code
+# Audio Streaming Implementation - Legacy Notes
+
+> This document is historical reference content from an earlier design iteration.  
+> Current implementation uses the custom engine render pipeline and WebSocket events in `web/src/index.ts` + `bot/src/index.ts`.
 
 ## Web Server Enhancements (web/src/index.ts)
 

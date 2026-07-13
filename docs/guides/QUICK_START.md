@@ -2,25 +2,25 @@
 
 ## For First Time Setup
 
-1. **Extract the zip** to your desired location
-2. **Install dependencies**:
+1. **Install dependencies**:
    ```bash
-   cd discord-synth-bot
+   cd discobot
    npm install
    ```
-3. **Setup Discord bot** (see SETUP.md for detailed steps):
+2. **Setup Discord bot** (see `docs/guides/SETUP.md` for detailed steps):
    - Create bot at https://discord.com/developers/applications
    - Copy token and client ID
-4. **Configure `.env`**:
+3. **Configure `.env`**:
    ```bash
    # Edit .env file and add your credentials
    DISCORD_TOKEN=your_token_here
    DISCORD_CLIENT_ID=your_client_id_here
    ```
-5. **Run it**:
+4. **Run it**:
    ```bash
    npm run dev
    ```
+5. **In Discord run `/login`**, then open the generated link in your browser
 6. **Access UI**: http://localhost:3000
 
 ## Essential Commands
@@ -44,10 +44,10 @@ npm run build        # Build for production
 ## File Structure
 
 ```
-discord-synth-bot/
+discobot/
 ├── README.md              # Full documentation
-├── SETUP.md              # Detailed setup instructions
-├── AI_DEVELOPMENT_GUIDE.md  # For developers/AI assistants
+├── docs/guides/SETUP.md   # Detailed setup instructions
+├── docs/reference/AI_DEVELOPMENT_GUIDE.md  # For developers/AI assistants
 ├── .env                  # Your configuration (DON'T COMMIT)
 ├── .env.example          # Template
 ├── package.json          # Root workspace config
@@ -66,8 +66,8 @@ discord-synth-bot/
 ## Next Steps
 
 - Read **README.md** for full feature list
-- Read **SETUP.md** for detailed setup
-- Read **AI_DEVELOPMENT_GUIDE.md** if you want to extend the project
+- Read **docs/guides/SETUP.md** for detailed setup
+- Read **docs/reference/AI_DEVELOPMENT_GUIDE.md** if you want to extend the project
 
 ## Support
 

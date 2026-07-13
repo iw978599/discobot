@@ -1,10 +1,10 @@
 # Discobot
 
-A Discord bot with a web-based UI for creating music using synthesis, sequencing, and drums. Control up to 2 independent synthesizers, a 16-step sequencer, and drum machine from a web interface or Discord slash commands. Audio plays through the Discord voice channel in real time.
+A Discord bot with a web-based UI for creating music using synthesis, sequencing, and drums. Control up to 3 independent synthesizers, a 16-step sequencer, and drum machine from a web interface or Discord slash commands. Audio plays through the Discord voice channel in real time.
 
 ## Features
 
-- **Multi-Synth**: Up to 2 independent synthesizers, each with own sequencer, keyboard, and parameter controls
+- **Multi-Synth**: Up to 3 independent synthesizers, each with own sequencer, keyboard, and parameter controls
 - **16-step Sequencer**: Step grid with note assignment via piano keyboard, monophonic mode
 - **Synthesizer**: 4 waveforms (sine, square, sawtooth, triangle), detune, resonant lowpass filter, ADSR envelope, delay effect, master gain
 - **Octave Shift**: -1 to +1 octave range per synth with range display
@@ -14,7 +14,7 @@ A Discord bot with a web-based UI for creating music using synthesis, sequencing
 - **Pattern Persistence**: Save/load/delete patterns with name, stores all synth params, drum state, and master volumes in `saved-patterns.json`
 - **Real-time Sync**: All connected clients stay synchronized via WebSocket
 - **Global Tempo**: Single BPM shared across all synths, editable LED display in header
-- **Header Controls**: "Discobot" title, tempo LED, inline save, mute, connection status
+- **Header Controls**: "Discobot" title, tempo LED, help modal, inline save, mute, connection status
 - **Hybrid Control**: Web UI or Discord slash commands
 
 ## Architecture
@@ -90,7 +90,7 @@ npm run dev
 
 Starts:
 - Web API on http://localhost:3001
-- WebSocket on ws://localhost:8080
+- WebSocket on ws://localhost:3001/ws
 - Web UI on http://localhost:3000
 - Discord bot (connects to Discord)
 
@@ -115,7 +115,7 @@ Starts:
 
 ## Web UI
 
-- **Header**: "Discobot" title, editable BPM LED, save button, mute toggle, connection status
+- **Header**: "Discobot" title, editable BPM LED, help button/modal, save button, mute toggle, connection status
 - **Synth Units**: Each contains sequencer + synth controls + keyboard, stacked vertically
 - **Sequencer grid**: 16 steps, click to select (amber), piano key assigns note (blue)
 - **Piano keyboard**: 3 octaves with octave shift (-1 to +1), range display (e.g., C3–B5)
@@ -144,10 +144,20 @@ npm run dev:web      # API + WebSocket server only
 npm run dev:ui       # Web UI only (Vite)
 ```
 
+## Additional Documentation
+
+- Guides: `/docs/guides`
+- Plans: `/docs/plans`
+- Reports: `/docs/reports`
+- Reviews: `/docs/reviews`
+- Reference notes: `/docs/reference`
+
+`/docs/plans` and some `/docs/reports` files are historical snapshots of previous implementation phases.
+
 ## Status
 
 ### Working
-- Multi-synth support (up to 2 independent units)
+- Multi-synth support (up to 3 independent units, Synth 1 cannot be removed)
 - Step sequencer with visual indicator lights
 - Piano keyboard with octave shift, responsive scaling
 - Synth controls with real-time parameter updates and master gain
@@ -162,9 +172,9 @@ npm run dev:ui       # Web UI only (Vite)
 - Browser audio with synth and drum parameter respect
 - Multi-client WebSocket sync
 - Reset button
+- Auth sessions + CSRF validation + request rate limiting
 
 ### Needs Work
 - Step-by-step real-time streaming (currently renders full pattern)
 - `SamplePlayer` is a stub, not functional
 - Audio export / WAV download
-- No authentication or rate limiting
