@@ -265,24 +265,24 @@ export function useSynthAudio() {
         note,
       });
     }
+  }
 
-    function stopAllNotes(release: number = 0.03) {
-      const ctx = getAudioContext();
-      const now = ctx.currentTime;
-      activeVoices.current.forEach((voice, note) => {
-        try {
-          voice.gain.gain.cancelScheduledValues(now);
-          voice.gain.gain.setValueAtTime(Math.max(voice.gain.gain.value, 0.001), now);
-          voice.gain.gain.exponentialRampToValueAtTime(0.001, now + release);
-          voice.osc.stop(now + release);
-          voice.lfos.forEach(lfo => lfo.stop(now + release));
-        } catch {
-          // ignore
-        }
-        activeVoices.current.delete(note);
-      });
-      pendingStops.current.clear();
-    }
+  function stopAllNotes(release: number = 0.03) {
+    const ctx = getAudioContext();
+    const now = ctx.currentTime;
+    activeVoices.current.forEach((voice, note) => {
+      try {
+        voice.gain.gain.cancelScheduledValues(now);
+        voice.gain.gain.setValueAtTime(Math.max(voice.gain.gain.value, 0.001), now);
+        voice.gain.gain.exponentialRampToValueAtTime(0.001, now + release);
+        voice.osc.stop(now + release);
+        voice.lfos.forEach(lfo => lfo.stop(now + release));
+      } catch {
+        // ignore
+      }
+      activeVoices.current.delete(note);
+    });
+    pendingStops.current.clear();
   }
 
   function dispose() {

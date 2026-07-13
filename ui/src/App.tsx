@@ -861,7 +861,12 @@ function App() {
     ));
 
     if (data.drumKitId) {
-      await handleDrumKitChange(data.drumKitId, false);
+      setSelectedDrumKitId(data.drumKitId);
+      await authFetch('/drum/kit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kitId: data.drumKitId, applyDefaults: false }),
+      });
     }
     if (data.drumState) {
       setDrumState(data.drumState);
@@ -909,7 +914,7 @@ function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updated),
     });
-  }, [handleDrumKitChange]);
+  }, []);
 
   const handleLoadGlobal = useCallback(async (savedId: string) => {
     const targetSynthId = synthsRef.current[0]?.id;
