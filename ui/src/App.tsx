@@ -1276,7 +1276,7 @@ function App() {
           <div className="status">
             <span className={`status-indicator ${connected ? 'connected' : 'disconnected'}`} />
             {connected ? 'Connected' : 'Disconnected'} · {sessionLabel}
-            {connectedUsers.length > 0 && (
+            {connected && connectedUsers.length > 0 && (
               <span className="connected-users"> · {connectedUsers.join(', ')}</span>
             )}
           </div>
