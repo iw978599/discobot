@@ -702,9 +702,13 @@ function initSynth(state: GuildRuntimeState, synthId: number) {
 }
 
 function initAudioEngine(state: GuildRuntimeState) {
-  if (state.synths.size === 0) {
+  if (!state.synths.has(1)) {
     initSynth(state, 1);
+  }
+  if (!state.samplePlayer) {
     state.samplePlayer = new SamplePlayer();
+  }
+  if (!state.discordStreamer) {
     state.discordStreamer = new DiscordAudioStreamer();
   }
 }
@@ -1754,7 +1758,9 @@ wssUi.on('connection', (ws, req) => {
   const state = getGuildState(guildId);
   initAudioEngine(state);
 
-  const synthsData = Array.from(state.synths.entries()).map(([id, data]) => ({
+  const synthsData = Array.from(state.synths.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([id, data]) => ({
     synthId: id,
     pattern: data.pattern,
     patterns: data.patterns,
