@@ -299,6 +299,39 @@
   color: #9ea7b3;
 }
 
+.drum-kit-row {
+  display: flex;
+  width: 100%;
+  gap: 0.3rem;
+  margin-bottom: 0.5rem;
+}
+
+.drum-kit-select {
+  flex: 1;
+  background: #111317;
+  border: 1px solid #5e646d;
+  border-radius: 4px;
+  color: #dce3ec;
+  font-size: 0.7rem;
+  padding: 0.28rem 0.35rem;
+}
+
+.drum-kit-apply-btn {
+  border: 1px solid #5e646d;
+  border-radius: 4px;
+  background: #2a2d32;
+  color: #cfd6df;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.3rem 0.5rem;
+  cursor: pointer;
+}
+
+.drum-kit-apply-btn:hover {
+  border-color: #f16f1f;
+  color: #f16f1f;
+}
+
 .drum-knobs {
   display: flex;
   flex-direction: row;

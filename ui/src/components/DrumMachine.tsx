@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { DrumState, DrumInstrument, FxSendLevels } from '../types';
+import { DrumState, DrumInstrument, DrumKitDefinition, DrumKitId, FxSendLevels } from '../types';
 import DrumKnob from './DrumKnob';
 import './DrumMachine.css';
 
@@ -11,6 +11,9 @@ export interface DrumMachineProps {
   onSettingsChange: (instrument: DrumInstrument, settings: { volume?: number; tone?: number; extra?: number }) => void;
   onMixChange: (instrument: DrumInstrument, mix: { muted?: boolean; solo?: boolean }) => void;
   onReset: () => void;
+  drumKits: DrumKitDefinition[];
+  selectedDrumKitId: DrumKitId;
+  onDrumKitChange: (kitId: DrumKitId, applyDefaults: boolean) => Promise<DrumState | undefined>;
   drumMasterVolume: number;
   onMasterVolumeChange: (volume: number) => void;
   drumFx: { sends: FxSendLevels; returnLevel: number };
@@ -121,6 +124,9 @@ export default function DrumMachine({
   onSettingsChange,
   onMixChange,
   onReset,
+  drumKits,
+  selectedDrumKitId,
+  onDrumKitChange,
   drumMasterVolume,
   onMasterVolumeChange,
   drumFx,
@@ -168,11 +174,32 @@ export default function DrumMachine({
     }
   }, [drumState, drumAudio]);
 
+  const previewInstrument = useCallback((instrument: DrumInstrument, sourceState: DrumState) => {
+    const hasSolo = INSTRUMENTS.some((inst) => sourceState[inst].solo);
+    const selectedTrack = sourceState[instrument];
+    const canPreview = !selectedTrack.muted && (!hasSolo || selectedTrack.solo);
+    if (canPreview) {
+      drumAudio.playDrumHit(instrument, selectedTrack.settings);
+    }
+  }, [drumAudio]);
+
+  const handleKitSelect = useCallback(async (kitId: DrumKitId) => {
+    const nextState = await onDrumKitChange(kitId, false);
+    previewInstrument(selectedInstrument, nextState || drumState);
+  }, [onDrumKitChange, previewInstrument, selectedInstrument, drumState]);
+
+  const handleApplyKit = useCallback(async () => {
+    const nextState = await onDrumKitChange(selectedDrumKitId, true);
+    previewInstrument(selectedInstrument, nextState || drumState);
+  }, [onDrumKitChange, selectedDrumKitId, previewInstrument, selectedInstrument, drumState]);
+
   return (
     <div className="drum-machine">
       <div className="drum-machine-header">
         <h2>Rhythm Composer</h2>
-        <span className="drum-machine-model">Hybrid analog model</span>
+        <span className="drum-machine-model">
+          {(drumKits.find((kit) => kit.id === selectedDrumKitId)?.name || 'Hybrid analog model')}
+        </span>
         <button className="drum-reset-btn" onClick={onReset} title="Reset drum pattern and settings">
           &#8634;
         </button>
@@ -185,6 +212,20 @@ export default function DrumMachine({
               <div className="drum-controls-header">
                 <span className="drum-controls-subtle">Master</span>
                 <span>Volume</span>
+              </div>
+              <div className="drum-kit-row">
+                <select
+                  className="drum-kit-select"
+                  value={selectedDrumKitId}
+                  onChange={(e) => { void handleKitSelect(e.target.value as DrumKitId); }}
+                >
+                  {drumKits.map((kit) => (
+                    <option key={kit.id} value={kit.id}>{kit.name}</option>
+                  ))}
+                </select>
+                <button className="drum-kit-apply-btn" onClick={() => { void handleApplyKit(); }}>
+                  Apply Kit
+                </button>
               </div>
               <DrumKnob
                 label="Master"

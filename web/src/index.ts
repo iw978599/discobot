@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
-import { Synthesizer, Sequencer, SamplePlayer, Pattern, SynthParameters, DrumState, DrumInstrument, DiscordAudioStreamer, DrumSynthesizer, EffectsLoopState, FxSendLevels, clamp, throttle, AUDIO_MIXING, AUDIO_CONTEXT } from '@discord-synth/engine';
+import { Synthesizer, Sequencer, SamplePlayer, Pattern, SynthParameters, DrumState, DrumInstrument, DrumKitDefinition, DrumKitId, DrumKitModelVariant, DrumInstrumentDefaults, DiscordAudioStreamer, DrumSynthesizer, EffectsLoopState, FxSendLevels, clamp, throttle, AUDIO_MIXING, AUDIO_CONTEXT } from '@discord-synth/engine';
 import { assignRole, canControl, SessionRole } from './sessionAuth';
 
 dotenv.config();
@@ -99,6 +99,7 @@ interface GuildRuntimeState {
     lastUpdate: number;
   };
   drumState: DrumState;
+  selectedDrumKitId: DrumKitId;
   drumMasterVolume: number;
   drumFx: {
     sends: FxSendLevels;
@@ -117,6 +118,7 @@ interface SavedPatternData {
   synthParams: SynthParameters;
   tempo: number;
   drumState: DrumState;
+  drumKitId?: DrumKitId;
   drumMasterVolume: number;
   drumFx?: {
     sends: FxSendLevels;
@@ -148,6 +150,57 @@ interface PersistedStore {
 }
 
 const DRUM_INSTRUMENTS: DrumInstrument[] = ['kick', 'snare', 'openHH', 'closedHH', 'ride', 'crash', 'snare2', 'clap'];
+const DEFAULT_DRUM_KIT_ID: DrumKitId = 'clean-analog';
+const DRUM_KITS: DrumKitDefinition[] = [
+  {
+    id: 'clean-analog',
+    name: 'Clean / Analog',
+    description: 'Balanced vintage-inspired kit with round transients.',
+    modelVariant: 'analog',
+    instrumentDefaults: {
+      kick: { volume: 0.62, tone: 0.48, extra: 0.52 },
+      snare: { volume: 0.56, tone: 0.5, extra: 0.5 },
+      openHH: { volume: 0.45, tone: 0.52, extra: 0.48 },
+      closedHH: { volume: 0.48, tone: 0.55, extra: 0.58 },
+      ride: { volume: 0.43, tone: 0.52, extra: 0.48 },
+      crash: { volume: 0.44, tone: 0.5, extra: 0.45 },
+      snare2: { volume: 0.52, tone: 0.45, extra: 0.5 },
+      clap: { volume: 0.5, tone: 0.5, extra: 0.5 },
+    },
+  },
+  {
+    id: 'punchy-modern',
+    name: 'Punchy / Modern',
+    description: 'Sharper transient-focused kit with tighter low-end.',
+    modelVariant: 'modern',
+    instrumentDefaults: {
+      kick: { volume: 0.7, tone: 0.6, extra: 0.68 },
+      snare: { volume: 0.62, tone: 0.58, extra: 0.72 },
+      openHH: { volume: 0.48, tone: 0.66, extra: 0.56 },
+      closedHH: { volume: 0.54, tone: 0.7, extra: 0.72 },
+      ride: { volume: 0.48, tone: 0.66, extra: 0.58 },
+      crash: { volume: 0.5, tone: 0.62, extra: 0.62 },
+      snare2: { volume: 0.6, tone: 0.62, extra: 0.62 },
+      clap: { volume: 0.56, tone: 0.6, extra: 0.66 },
+    },
+  },
+  {
+    id: 'lofi-dirty',
+    name: 'Lo-Fi / Dirty',
+    description: 'Crunchier, noisier kit with darker body and gritty tails.',
+    modelVariant: 'dirty',
+    instrumentDefaults: {
+      kick: { volume: 0.58, tone: 0.38, extra: 0.46 },
+      snare: { volume: 0.56, tone: 0.42, extra: 0.62 },
+      openHH: { volume: 0.42, tone: 0.4, extra: 0.66 },
+      closedHH: { volume: 0.44, tone: 0.36, extra: 0.48 },
+      ride: { volume: 0.4, tone: 0.34, extra: 0.5 },
+      crash: { volume: 0.42, tone: 0.35, extra: 0.7 },
+      snare2: { volume: 0.5, tone: 0.35, extra: 0.6 },
+      clap: { volume: 0.48, tone: 0.38, extra: 0.58 },
+    },
+  },
+];
 const SAVED_PATTERNS_FILE = path.join(__dirname, '..', 'saved-patterns.json');
 const guildStates = new Map<string, GuildRuntimeState>();
 const authSessions = new Map<string, AuthSession>();
@@ -158,15 +211,54 @@ const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
 function createDefaultDrumState(): DrumState {
   const state = {} as DrumState;
+  const defaults = getDrumKitDefaults(DEFAULT_DRUM_KIT_ID);
   for (const inst of DRUM_INSTRUMENTS) {
     state[inst] = {
       steps: new Array(16).fill(false),
-      settings: { volume: 0.5, tone: 0.5, extra: 0.5 },
+      settings: {
+        volume: defaults[inst].volume,
+        tone: defaults[inst].tone,
+        extra: defaults[inst].extra,
+      },
       muted: false,
       solo: false,
     };
   }
   return state;
+}
+
+function getDrumKit(kitId: DrumKitId): DrumKitDefinition | undefined {
+  return DRUM_KITS.find((kit) => kit.id === kitId);
+}
+
+function normalizeDrumKitId(kitId: unknown): DrumKitId {
+  if (typeof kitId !== 'string') return DEFAULT_DRUM_KIT_ID;
+  const found = DRUM_KITS.find((kit) => kit.id === kitId);
+  return found?.id ?? DEFAULT_DRUM_KIT_ID;
+}
+
+function getDrumKitDefaults(kitId: DrumKitId): DrumInstrumentDefaults {
+  return (getDrumKit(normalizeDrumKitId(kitId)) || DRUM_KITS[0]).instrumentDefaults;
+}
+
+function getDrumKitModelVariant(kitId: DrumKitId): DrumKitModelVariant {
+  return (getDrumKit(normalizeDrumKitId(kitId)) || DRUM_KITS[0]).modelVariant;
+}
+
+function applyKitDefaultsToDrumState(state: DrumState, kitId: DrumKitId): DrumState {
+  const defaults = getDrumKitDefaults(kitId);
+  const next = normalizeDrumState(state);
+  for (const inst of DRUM_INSTRUMENTS) {
+    next[inst] = {
+      ...next[inst],
+      settings: {
+        volume: defaults[inst].volume,
+        tone: defaults[inst].tone,
+        extra: defaults[inst].extra,
+      },
+    };
+  }
+  return next;
 }
 
 function createDefaultFxSends(): FxSendLevels {
@@ -279,6 +371,7 @@ function createGuildRuntimeState(guildId: string): GuildRuntimeState {
       lastUpdate: 0,
     },
     drumState: createDefaultDrumState(),
+    selectedDrumKitId: DEFAULT_DRUM_KIT_ID,
     drumMasterVolume: 1,
     drumFx: createDefaultDrumFx(),
     effectsLoop: createDefaultEffectsLoop(),
@@ -292,6 +385,7 @@ function getGuildState(guildId: string): GuildRuntimeState {
     state = createGuildRuntimeState(guildId);
     guildStates.set(guildId, state);
   }
+  state.selectedDrumKitId = normalizeDrumKitId(state.selectedDrumKitId);
   return state;
 }
 
@@ -659,6 +753,54 @@ function processEffectsLoopBus(input: Float32Array, sampleRate: number, loop: Ef
   return bus;
 }
 
+function applyTransientShaper(samples: Float32Array, attack: number, sustain: number): Float32Array {
+  const out = new Float32Array(samples.length);
+  let env = 0;
+  const envAttack = 0.16;
+  const envRelease = 0.0008;
+  for (let i = 0; i < samples.length; i++) {
+    const abs = Math.abs(samples[i]);
+    env += (abs - env) * (abs > env ? envAttack : envRelease);
+    const transient = samples[i] - Math.sign(samples[i]) * env;
+    out[i] = samples[i] + transient * attack + Math.sign(samples[i]) * env * sustain;
+  }
+  return out;
+}
+
+function applyBusCompressor(samples: Float32Array, threshold: number, ratio: number, makeup: number): Float32Array {
+  const out = new Float32Array(samples.length);
+  let gain = 1;
+  const attack = 0.08;
+  const release = 0.002;
+  for (let i = 0; i < samples.length; i++) {
+    const input = samples[i];
+    const level = Math.abs(input);
+    let targetGain = 1;
+    if (level > threshold) {
+      const compressed = threshold + (level - threshold) / ratio;
+      targetGain = compressed / (level + 1e-6);
+    }
+    gain += (targetGain - gain) * (targetGain < gain ? attack : release);
+    out[i] = input * gain * makeup;
+  }
+  return out;
+}
+
+function processDrumBus(input: Float32Array, modelVariant: DrumKitModelVariant): Float32Array {
+  const profile = modelVariant === 'modern'
+    ? { satMix: 0.34, satAmount: 0.26, satTone: 0.62, attack: 0.35, sustain: -0.08, threshold: 0.4, ratio: 2.8, makeup: 1.14 }
+    : modelVariant === 'dirty'
+      ? { satMix: 0.46, satAmount: 0.4, satTone: 0.42, attack: 0.24, sustain: -0.16, threshold: 0.36, ratio: 2.2, makeup: 1.08 }
+      : { satMix: 0.28, satAmount: 0.2, satTone: 0.55, attack: 0.2, sustain: -0.05, threshold: 0.42, ratio: 2.3, makeup: 1.1 };
+  const saturated = applyDrive(input, profile.satAmount, profile.satTone);
+  const parallel = new Float32Array(input.length);
+  for (let i = 0; i < input.length; i++) {
+    parallel[i] = input[i] * (1 - profile.satMix) + saturated[i] * profile.satMix;
+  }
+  const shaped = applyTransientShaper(parallel, profile.attack, profile.sustain);
+  return applyBusCompressor(shaped, profile.threshold, profile.ratio, profile.makeup);
+}
+
 function renderPatternAudio(state: GuildRuntimeState): string | null {
   try {
     const playingSynths = Array.from(state.synths.entries()).filter(([, data]) => data.sequencer.getIsPlaying());
@@ -710,10 +852,19 @@ function renderPatternAudio(state: GuildRuntimeState): string | null {
       }
     }
 
-    const drumPCM = DrumSynthesizer.renderPattern(state.drumState, tempo, sampleRate);
+    const kitVariant = getDrumKitModelVariant(state.selectedDrumKitId);
+    const drumPCM = DrumSynthesizer.renderPattern(state.drumState, tempo, sampleRate, {
+      modelVariant: kitVariant,
+      humanizeAmount: kitVariant === 'modern' ? 0.35 : kitVariant === 'dirty' ? 0.8 : 0.55,
+    });
+    const drumBusDry = new Float32Array(totalSamples);
+    for (let i = 0; i < totalSamples; i++) {
+      drumBusDry[i] = drumPCM[i % drumPCM.length] * AUDIO_MIXING.DRUM_BOOST_FACTOR * state.drumMasterVolume;
+    }
+    const processedDrumDry = processDrumBus(drumBusDry, kitVariant);
     const drumFx = normalizeDrumFx(state.drumFx);
     for (let i = 0; i < totalSamples; i++) {
-      const sample = drumPCM[i % drumPCM.length] * AUDIO_MIXING.DRUM_BOOST_FACTOR * state.drumMasterVolume;
+      const sample = processedDrumDry[i];
       dryPCM[i] += sample;
       drumSendPCM.reverb[i] += sample * drumFx.sends.reverb;
       drumSendPCM.delay[i] += sample * drumFx.sends.delay;
@@ -1166,6 +1317,40 @@ app.get('/drum/state', (req, res) => {
   res.json(getGuildState(session.guildId).drumState);
 });
 
+app.get('/drum/kits', (req, res) => {
+  getSession(req);
+  res.json({
+    kits: DRUM_KITS,
+    defaultKitId: DEFAULT_DRUM_KIT_ID,
+  });
+});
+
+app.post('/drum/kit', (req, res) => {
+  const session = getSession(req);
+  const state = getGuildState(session.guildId);
+  const { kitId, applyDefaults } = req.body as { kitId?: DrumKitId; applyDefaults?: boolean };
+  const selectedDrumKitId = normalizeDrumKitId(kitId);
+  state.selectedDrumKitId = selectedDrumKitId;
+  if (applyDefaults) {
+    state.drumState = applyKitDefaultsToDrumState(state.drumState, selectedDrumKitId);
+  }
+  broadcastToClients({
+    type: 'drumKitChanged',
+    data: {
+      guildId: session.guildId,
+      selectedDrumKitId,
+      applyDefaults: Boolean(applyDefaults),
+      drumState: applyDefaults ? state.drumState : undefined,
+    },
+  }, session.guildId);
+  schedulePatternAudioForPlayingSynths(session.guildId);
+  res.json({
+    success: true,
+    selectedDrumKitId,
+    drumState: state.drumState,
+  });
+});
+
 app.post('/drum/step', (req, res) => {
   const session = getSession(req);
   const state = getGuildState(session.guildId);
@@ -1224,7 +1409,7 @@ app.put('/drum/state', (req, res) => {
 app.post('/drum/reset', (req, res) => {
   const session = getSession(req);
   const state = getGuildState(session.guildId);
-  state.drumState = createDefaultDrumState();
+  state.drumState = applyKitDefaultsToDrumState(createDefaultDrumState(), state.selectedDrumKitId);
   broadcastToClients({ type: 'drumReset', data: { guildId: session.guildId } }, session.guildId);
   schedulePatternAudioForPlayingSynths(session.guildId);
   res.json({ success: true });
@@ -1278,7 +1463,7 @@ app.post('/drum/fx', (req, res) => {
 app.post('/patterns/save', (req, res) => {
   const session = getSession(req);
   const state = getGuildState(session.guildId);
-  const { name, steps, synthParams, tempo, drumState, drumMasterVolume, drumFx, effectsLoop } = req.body;
+  const { name, steps, synthParams, tempo, drumState, drumMasterVolume, drumFx, effectsLoop, drumKitId } = req.body;
   if (!name || !steps) return res.status(400).json({ error: 'name and steps are required' });
 
   const guild = getPersistedGuild(session.guildId);
@@ -1291,6 +1476,7 @@ app.post('/patterns/save', (req, res) => {
     synthParams: synthParams || null,
     tempo: tempo || state.globalTempo,
     drumState: drumState || state.drumState,
+    drumKitId: normalizeDrumKitId(drumKitId ?? state.selectedDrumKitId),
     drumMasterVolume: drumMasterVolume !== undefined ? drumMasterVolume : state.drumMasterVolume,
     drumFx: normalizeDrumFx(drumFx || state.drumFx),
     effectsLoop: normalizeEffectsLoop(effectsLoop || state.effectsLoop),
@@ -1313,6 +1499,7 @@ app.get('/patterns/saved/:id', (req, res) => {
   if (!entry) return res.status(404).json({ error: 'Saved pattern not found' });
   res.json({
     ...entry,
+    drumKitId: normalizeDrumKitId(entry.drumKitId),
     drumState: normalizeDrumState(entry.drumState),
     drumFx: normalizeDrumFx(entry.drumFx),
     effectsLoop: normalizeEffectsLoop(entry.effectsLoop),
@@ -1510,6 +1697,8 @@ wssUi.on('connection', (ws, req) => {
       samples: state.samplePlayer!.getSamples(),
       streamingState: state.streamingState,
       drumState: state.drumState,
+      drumKits: DRUM_KITS,
+      selectedDrumKitId: normalizeDrumKitId(state.selectedDrumKitId),
       drumFx: normalizeDrumFx(state.drumFx),
       effectsLoop: normalizeEffectsLoop(state.effectsLoop),
       tempo: state.globalTempo,

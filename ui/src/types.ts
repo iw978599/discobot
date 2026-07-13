@@ -16,6 +16,12 @@ export type {
 
   // Drum types
   DrumInstrument,
+  DrumKitId,
+  DrumKitModelVariant,
+  DrumKitMetadata,
+  DrumKitDefinition,
+  DrumKitSelectionState,
+  DrumInstrumentDefaults,
   DrumSettings,
   DrumTrack,
   DrumState,
