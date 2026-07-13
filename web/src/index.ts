@@ -8,6 +8,7 @@ import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { Synthesizer, Sequencer, SamplePlayer, Pattern, SynthParameters, DrumState, DrumInstrument, DrumKitDefinition, DrumKitId, DrumKitModelVariant, DrumInstrumentDefaults, DiscordAudioStreamer, DrumSynthesizer, EffectsLoopState, FxSendLevels, clamp, throttle, AUDIO_MIXING, AUDIO_CONTEXT } from '@discord-synth/engine';
 import { assignRole, canControl, SessionRole } from './sessionAuth';
+import { getWebSocketChannel, getWebSocketRequestPath, isAllowedUpgradeOrigin } from './wsHelpers';
 
 dotenv.config();
 
@@ -25,6 +26,9 @@ const DEFAULT_ALLOWED_ORIGINS = [
   'http://127.0.0.1:3000',
   'http://localhost:3001',
   'http://127.0.0.1:3001',
+  process.env.PUBLIC_URL,
+  process.env.UI_URL,
+  process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : undefined,
 ];
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? DEFAULT_ALLOWED_ORIGINS.join(','))
   .split(',')
@@ -452,11 +456,6 @@ function sanitizeSampleUrl(value: unknown): string | null {
   } catch {
     return null;
   }
-}
-
-function isAllowedOrigin(origin: string | undefined): boolean {
-  if (!origin) return true;
-  return ALLOWED_ORIGINS.includes(origin);
 }
 
 function signPayload(payload: object): string {
@@ -1715,25 +1714,47 @@ const WS_BOT_PATHS = new Set(['/ws/bot', '/ws/bot/']);
 const wssUi = new WebSocketServer({ noServer: true });
 const wssBot = new WebSocketServer({ noServer: true });
 
-server.on('upgrade', (req, socket, head) => {
-  const origin = req.headers.origin;
-  if (!isAllowedOrigin(origin)) {
+function rejectUpgrade(socket: any, statusCode: number, statusText: string, body: string) {
+  const message = `${body}\n`;
+  const response = [
+    `HTTP/1.1 ${statusCode} ${statusText}`,
+    'Connection: close',
+    'Content-Type: text/plain; charset=utf-8',
+    `Content-Length: ${Buffer.byteLength(message)}`,
+    '',
+    message,
+  ].join('\r\n');
+  try {
+    socket.write(response);
+  } finally {
     socket.destroy();
+  }
+}
+
+server.on('upgrade', (req, socket, head) => {
+  const requestPath = getWebSocketRequestPath(req.url);
+  const requestHost = typeof req.headers['x-forwarded-host'] === 'string' && req.headers['x-forwarded-host']
+    ? req.headers['x-forwarded-host']
+    : req.headers.host;
+  const origin = req.headers.origin;
+  const channel = getWebSocketChannel(requestPath, WS_UI_PATHS, WS_BOT_PATHS);
+
+  if (!isAllowedUpgradeOrigin(origin, requestHost, ALLOWED_ORIGINS)) {
+    console.warn(`[ws] upgrade rejected: disallowed origin path=${requestPath} origin=${origin || '-'} host=${requestHost || '-'}`);
+    rejectUpgrade(socket, 403, 'Forbidden', 'WebSocket origin not allowed');
     return;
   }
-  const requestPath = req.url?.split('?')[0] ?? '';
-  if (WS_UI_PATHS.has(requestPath)) {
-    wssUi.handleUpgrade(req, socket, head, (ws) => wssUi.emit('connection', ws, req));
+  if (!channel) {
+    console.warn(`[ws] upgrade rejected: unsupported path=${requestPath} origin=${origin || '-'} host=${requestHost || '-'}`);
+    rejectUpgrade(socket, 404, 'Not Found', 'WebSocket path not found');
     return;
   }
-  if (WS_BOT_PATHS.has(requestPath)) {
-    wssBot.handleUpgrade(req, socket, head, (ws) => wssBot.emit('connection', ws, req));
-    return;
-  }
-  socket.destroy();
+  console.log(`[ws] upgrade accepted: channel=${channel} path=${requestPath} origin=${origin || '-'} host=${requestHost || '-'}`);
+  const targetServer = channel === 'ui' ? wssUi : wssBot;
+  targetServer.handleUpgrade(req, socket, head, (ws) => targetServer.emit('connection', ws, req));
 });
 
-app.get(['/ws', '/ws/'], (_req, res) => {
+app.get(['/ws', '/ws/', '/ws/bot', '/ws/bot/'], (_req, res) => {
   res.status(426).json({
     error: 'WebSocket Upgrade Required',
     message: 'Use a WebSocket client with ws:// or wss:// protocol.',
@@ -1741,6 +1762,8 @@ app.get(['/ws', '/ws/'], (_req, res) => {
 });
 
 wssUi.on('connection', (ws, req) => {
+  const requestPath = getWebSocketRequestPath(req.url);
+  console.log(`[ws] ui connected path=${requestPath}`);
   const requestUrl = new URL(req.url || '/ws', 'http://localhost');
   const token = requestUrl.searchParams.get('sessionToken');
   if (!token) {
@@ -1795,15 +1818,19 @@ wssUi.on('connection', (ws, req) => {
   }));
 
   ws.on('close', () => {
+    console.log('[ws] ui disconnected');
     wsClients.delete(ws);
   });
 
-  ws.on('error', () => {
+  ws.on('error', (error) => {
+    console.error(`[ws] ui error: ${error instanceof Error ? error.message : 'unknown error'}`);
     wsClients.delete(ws);
   });
 });
 
 wssBot.on('connection', (ws, req) => {
+  const requestPath = getWebSocketRequestPath(req.url);
+  console.log(`[ws] bot connected path=${requestPath}`);
   const ts = req.headers['x-bot-timestamp'];
   const sig = req.headers['x-bot-signature'];
   if (typeof ts !== 'string' || typeof sig !== 'string') {
@@ -1829,8 +1856,26 @@ wssBot.on('connection', (ws, req) => {
   }
 
   botClients.add(ws);
-  ws.on('close', () => botClients.delete(ws));
-  ws.on('error', () => botClients.delete(ws));
+  ws.on('close', () => {
+    console.log('[ws] bot disconnected');
+    botClients.delete(ws);
+  });
+  ws.on('error', (error) => {
+    console.error(`[ws] bot error: ${error instanceof Error ? error.message : 'unknown error'}`);
+    botClients.delete(ws);
+  });
+});
+
+wssUi.on('error', (error) => {
+  console.error(`[ws] ui server error: ${error instanceof Error ? error.message : 'unknown error'}`);
+});
+
+wssBot.on('error', (error) => {
+  console.error(`[ws] bot server error: ${error instanceof Error ? error.message : 'unknown error'}`);
+});
+
+server.on('error', (error) => {
+  console.error(`[server] http error: ${error instanceof Error ? error.message : 'unknown error'}`);
 });
 
 server.listen(PORT, '0.0.0.0', () => {

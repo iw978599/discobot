@@ -28,7 +28,13 @@ const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID!;
 const PORT = process.env.PORT || '3001';
 const WEB_API_URL = process.env.WEB_API_URL || `http://localhost:${PORT}`;
-const WS_URL = process.env.WS_URL || `ws://localhost:${PORT}/ws/bot`;
+const normalizeWebSocketUrl = (value: string): string => {
+  if (value.startsWith('ws://') || value.startsWith('wss://')) return value;
+  if (value.startsWith('http://')) return `ws://${value.slice('http://'.length)}`;
+  if (value.startsWith('https://')) return `wss://${value.slice('https://'.length)}`;
+  return value;
+};
+const WS_URL = normalizeWebSocketUrl(process.env.WS_URL || `ws://localhost:${PORT}/ws/bot`);
 const BOT_SHARED_SECRET = process.env.BOT_SHARED_SECRET || process.env.DISCORD_TOKEN || 'discobot-bot-secret';
 const WEB_LOGIN_URL = process.env.WEB_LOGIN_URL || (process.env.UI_URL ? `${process.env.UI_URL}` : 'http://localhost:3000');
 const LOGIN_TOKEN_REQUEST_TIMEOUT_MS = 2500;

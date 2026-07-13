@@ -24,8 +24,16 @@ DISCORD_CLIENT_ID=your_discord_client_id
 # Railway provides PORT automatically - DO NOT SET IT
 # The app will use Railway's $PORT variable
 
+# Optional but recommended for explicit browser origin allow-list
+ALLOWED_ORIGINS=https://your-app-name.up.railway.app
+
 # Optional: Set NODE_ENV
 NODE_ENV=production
+
+# Optional explicit URLs
+PUBLIC_URL=https://your-app-name.up.railway.app
+UI_URL=https://your-app-name.up.railway.app
+WS_URL=wss://your-app-name.up.railway.app/ws/bot
 ```
 
 ### 3. Railway Configuration

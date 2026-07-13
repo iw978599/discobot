@@ -387,12 +387,13 @@ DISCORD_TOKEN=your_token
 DISCORD_CLIENT_ID=your_client_id
 
 # Server (adjust for your setup)
-WEB_PORT=3001
+# Railway injects PORT automatically in production.
+PORT=3001
 NODE_ENV=production
 
 # URLs (update these!)
 WEB_API_URL=https://api.your-domain.com
-WS_URL=wss://api.your-domain.com/ws
+WS_URL=wss://api.your-domain.com/ws/bot
 
 # Optional: Database (when you add persistence)
 DATABASE_URL=postgresql://user:pass@localhost:5432/discobot
@@ -402,21 +403,16 @@ DATABASE_URL=postgresql://user:pass@localhost:5432/discobot
 
 ## UI Configuration for Production
 
-Update `ui/src/App.tsx` and `ui/src/hooks/useWebSocket.ts`:
+Set build-time UI environment variables:
 
 ```typescript
-// Replace hardcoded localhost URLs with environment variables
-
-// In App.tsx
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-// In useWebSocket.ts
-const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:3001/ws';
+VITE_API_BASE_URL=https://your-domain.com/api
+VITE_WS_URL=wss://your-domain.com/ws
 ```
 
 Create `ui/.env.production`:
 ```bash
-VITE_API_URL=https://your-domain.com/api
+VITE_API_BASE_URL=https://your-domain.com/api
 VITE_WS_URL=wss://your-domain.com/ws
 ```
 
