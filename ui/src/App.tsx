@@ -1317,12 +1317,12 @@ function App() {
                 onNoteRelease={(note) => handleNoteRelease(synth.id, note)}
               />
             ))}
+            {synths.length < 3 && (
+              <button className="add-synth-btn" onClick={handleAddSynth}>
+                + Add Synth {[2, 3].find(id => !synths.some(s => s.id === id)) ?? 3}
+              </button>
+            )}
           </div>
-          {synths.length < 3 && (
-            <button className="add-synth-btn" onClick={handleAddSynth}>
-              + Add Synth {[2, 3].find(id => !synths.some(s => s.id === id)) ?? 3}
-            </button>
-          )}
         </div>
         <div className="app-main-right">
           <EffectsPanel effectsLoop={effectsLoop} onChange={handleEffectsLoopChange} />
