@@ -9,6 +9,20 @@ const isLocalDevUi = (): boolean =>
   isLocalhost() &&
   window.location.port === '3000';
 
+const normalizeWebSocketBaseUrl = (value: string): string => {
+  const trimmed = trimTrailingSlash(value.trim());
+  if (!trimmed) return trimmed;
+  if (trimmed.startsWith('ws://') || trimmed.startsWith('wss://')) return trimmed;
+  if (trimmed.startsWith('http://')) return `ws://${trimmed.slice('http://'.length)}`;
+  if (trimmed.startsWith('https://')) return `wss://${trimmed.slice('https://'.length)}`;
+  if (trimmed.startsWith('/')) {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${protocol}//${window.location.host}${trimmed}`;
+  }
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${trimmed}`;
+};
+
 export const getApiBaseUrl = (): string => {
   const envBase = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_API_BASE_URL;
   if (envBase) return trimTrailingSlash(envBase);
@@ -22,7 +36,7 @@ export const apiUrl = (path: string): string => `${getApiBaseUrl()}${path.starts
 export const getWebSocketUrl = (sessionToken?: string | null): string => {
   const envWs = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_WS_URL;
   const baseUrl = (() => {
-    if (envWs) return trimTrailingSlash(envWs);
+    if (envWs) return normalizeWebSocketBaseUrl(envWs);
     if (isLocalDevUi()) return 'ws://localhost:3001/ws';
     if (window.location.port === '3001' || isLocalhost()) {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
