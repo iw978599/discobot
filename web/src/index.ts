@@ -802,7 +802,7 @@ function applyPhaser(samples: Float32Array, sampleRate: number, rate: number, de
 }
 
 function processEffectsLoopBus(input: Float32Array, sampleRate: number, loop: EffectsLoopState): Float32Array {
-  if (!loop.enabled) return input;
+  if (!loop.enabled) return new Float32Array(input.length);
   let bus = input;
   if (loop.drive.enabled && loop.drive.amount > 0) {
     bus = applyDrive(bus, loop.drive.amount, loop.drive.tone);

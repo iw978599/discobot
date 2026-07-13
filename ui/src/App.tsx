@@ -529,7 +529,8 @@ function App() {
             targetSynth.pattern.steps[step].note!,
             targetSynth.synthParams!,
             0.15,
-            browserMutedRef.current
+            browserMutedRef.current,
+            effectsLoopRef.current
           );
         }
         setSynths(prev => prev.map(s =>
@@ -763,7 +764,7 @@ function App() {
     if (!synth?.synthParams) return;
 
     await synthAudio.ensureAudioReady();
-    await synthAudio.playNote(note, synth.synthParams, undefined, browserMutedRef.current);
+    await synthAudio.playNote(note, synth.synthParams, undefined, browserMutedRef.current, effectsLoopRef.current);
 
     const step = synth.selectedStep;
     const pattern = synth.pattern;
