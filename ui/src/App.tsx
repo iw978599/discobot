@@ -10,6 +10,36 @@ import { Pattern, SynthParameters, SavedPatternInfo, SavedPatternFull, DrumState
 import { authFetch, exchangeLoginToken, fetchSessionInfo, setAuthContext } from './authClient';
 import './App.css';
 
+const SESSION_TOKEN_STORAGE_KEY = 'discobot_session_token';
+const CSRF_TOKEN_STORAGE_KEY = 'discobot_csrf_token';
+
+function writeAuthTokens(sessionToken: string, csrfToken: string) {
+  sessionStorage.setItem(SESSION_TOKEN_STORAGE_KEY, sessionToken);
+  sessionStorage.setItem(CSRF_TOKEN_STORAGE_KEY, csrfToken);
+}
+
+function clearAuthTokens() {
+  sessionStorage.removeItem(SESSION_TOKEN_STORAGE_KEY);
+  sessionStorage.removeItem(CSRF_TOKEN_STORAGE_KEY);
+  localStorage.removeItem(SESSION_TOKEN_STORAGE_KEY);
+  localStorage.removeItem(CSRF_TOKEN_STORAGE_KEY);
+}
+
+function readAuthTokens() {
+  const sessionToken = sessionStorage.getItem(SESSION_TOKEN_STORAGE_KEY);
+  const csrfToken = sessionStorage.getItem(CSRF_TOKEN_STORAGE_KEY);
+  if (sessionToken && csrfToken) return { sessionToken, csrfToken };
+  const migratedSessionToken = localStorage.getItem(SESSION_TOKEN_STORAGE_KEY);
+  const migratedCsrfToken = localStorage.getItem(CSRF_TOKEN_STORAGE_KEY);
+  if (migratedSessionToken && migratedCsrfToken) {
+    writeAuthTokens(migratedSessionToken, migratedCsrfToken);
+    localStorage.removeItem(SESSION_TOKEN_STORAGE_KEY);
+    localStorage.removeItem(CSRF_TOKEN_STORAGE_KEY);
+    return { sessionToken: migratedSessionToken, csrfToken: migratedCsrfToken };
+  }
+  return null;
+}
+
 const DEFAULT_PARAMS: SynthParameters = {
   hold: false,
   gain: 1.0,
@@ -251,6 +281,28 @@ function LoadPattern({
   );
 }
 
+function HelpModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  if (!open) return null;
+  return (
+    <div className="help-modal-overlay" onClick={onClose} role="presentation">
+      <div className="help-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Discobot help">
+        <div className="help-modal-header">
+          <h2>How to use Discobot</h2>
+          <button className="help-close-btn" onClick={onClose} aria-label="Close help">✕</button>
+        </div>
+        <ol className="help-list">
+          <li>Run <strong>/login</strong> in Discord and open the generated link.</li>
+          <li>Use the sequencer grid: select a step, then click a keyboard note.</li>
+          <li>Press <strong>Play All</strong> to start and <strong>Stop All</strong> to stop.</li>
+          <li>Adjust synth controls, effects, and drum settings in real time.</li>
+          <li>Save patterns from the header and load them from the Load dropdown.</li>
+          <li>Use <strong>/join</strong> in Discord to route playback to your voice channel.</li>
+        </ol>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const synthAudio = useSynthAudio();
   const drumAudio = useDrumAudio();
@@ -269,6 +321,7 @@ function App() {
   const [csrfToken, setCsrfToken] = useState<string | null>(null);
   const [sessionLabel, setSessionLabel] = useState('Unauthenticated');
   const [authError, setAuthError] = useState<string | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
   const browserMutedRef = useRef(browserMuted);
   browserMutedRef.current = browserMuted;
 
@@ -295,8 +348,7 @@ function App() {
     setCsrfToken(null);
     setSessionLabel('Session expired');
     setAuthError('Session expired or unauthorized. Use /login in Discord to reconnect.');
-    localStorage.removeItem('discobot_session_token');
-    localStorage.removeItem('discobot_csrf_token');
+    clearAuthTokens();
   }, []);
 
   useEffect(() => {
@@ -315,20 +367,18 @@ function App() {
           setSessionToken(nextSessionToken);
           setCsrfToken(nextCsrfToken);
           setSessionLabel(`${data.session.username} • ${data.session.guildId} (${data.session.role})`);
-          localStorage.setItem('discobot_session_token', nextSessionToken);
-          localStorage.setItem('discobot_csrf_token', nextCsrfToken);
+          writeAuthTokens(nextSessionToken, nextCsrfToken);
           params.delete('loginToken');
           const nextUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`;
           window.history.replaceState({}, '', nextUrl);
           return;
         }
 
-        const storedSession = localStorage.getItem('discobot_session_token');
-        const storedCsrf = localStorage.getItem('discobot_csrf_token');
-        if (storedSession && storedCsrf) {
-          const data = await fetchSessionInfo(storedSession);
-          setSessionToken(storedSession);
-          setCsrfToken(storedCsrf);
+        const storedAuth = readAuthTokens();
+        if (storedAuth) {
+          const data = await fetchSessionInfo(storedAuth.sessionToken);
+          setSessionToken(storedAuth.sessionToken);
+          setCsrfToken(storedAuth.csrfToken);
           setSessionLabel(`${data.session.username} • ${data.session.guildId} (${data.session.role})`);
           return;
         }
@@ -340,6 +390,15 @@ function App() {
     };
     void initializeAuth();
   }, []);
+
+  useEffect(() => {
+    if (!helpOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setHelpOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [helpOpen]);
 
   const handleMessage = useCallback((message: any) => {
     switch (message.type) {
@@ -1175,6 +1234,9 @@ function App() {
         <h1>Discobot</h1>
         <div className="header-controls">
           <TempoDisplay tempo={globalTempo} onChange={handleTempoChange} />
+          <button className="help-button" onClick={() => setHelpOpen(true)} title="How to use Discobot">
+            Help
+          </button>
           
           <SavePattern
             saving={saving}
@@ -1211,6 +1273,7 @@ function App() {
           </div>
         </div>
       </header>
+      <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
       {authError && <div className="auth-error-banner">{authError}</div>}
 
       <div className="app-content">

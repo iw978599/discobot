@@ -14,7 +14,7 @@ A Discord bot with a web-based UI for creating music using synthesis, sequencing
 - **Pattern Persistence**: Save/load/delete patterns with name, stores all synth params, drum state, and master volumes in `saved-patterns.json`
 - **Real-time Sync**: All connected clients stay synchronized via WebSocket
 - **Global Tempo**: Single BPM shared across all synths, editable LED display in header
-- **Header Controls**: "Discobot" title, tempo LED, inline save, mute, connection status
+- **Header Controls**: "Discobot" title, tempo LED, help modal, inline save, mute, connection status
 - **Hybrid Control**: Web UI or Discord slash commands
 
 ## Architecture
@@ -115,7 +115,7 @@ Starts:
 
 ## Web UI
 
-- **Header**: "Discobot" title, editable BPM LED, save button, mute toggle, connection status
+- **Header**: "Discobot" title, editable BPM LED, help button/modal, save button, mute toggle, connection status
 - **Synth Units**: Each contains sequencer + synth controls + keyboard, stacked vertically
 - **Sequencer grid**: 16 steps, click to select (amber), piano key assigns note (blue)
 - **Piano keyboard**: 3 octaves with octave shift (-1 to +1), range display (e.g., C3–B5)
@@ -144,6 +144,14 @@ npm run dev:web      # API + WebSocket server only
 npm run dev:ui       # Web UI only (Vite)
 ```
 
+## Additional Documentation
+
+- Guides: `/docs/guides`
+- Plans: `/docs/plans`
+- Reports: `/docs/reports`
+- Reviews: `/docs/reviews`
+- Reference notes: `/docs/reference`
+
 ## Status
 
 ### Working
@@ -167,4 +175,3 @@ npm run dev:ui       # Web UI only (Vite)
 - Step-by-step real-time streaming (currently renders full pattern)
 - `SamplePlayer` is a stub, not functional
 - Audio export / WAV download
-- No authentication or rate limiting
