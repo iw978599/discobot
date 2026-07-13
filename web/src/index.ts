@@ -9,6 +9,7 @@ import dotenv from 'dotenv';
 import { Synthesizer, Sequencer, SamplePlayer, Pattern, SynthParameters, DrumState, DrumInstrument, DrumKitDefinition, DrumKitId, DrumKitModelVariant, DrumInstrumentDefaults, DiscordAudioStreamer, DrumSynthesizer, EffectsLoopState, FxSendLevels, clamp, throttle, AUDIO_MIXING, AUDIO_CONTEXT } from '@discord-synth/engine';
 import { assignRole, canControl, SessionRole } from './sessionAuth';
 import { getWebSocketChannel, getWebSocketRequestPath, isAllowedUpgradeOrigin } from './wsHelpers';
+import { shouldUseCompatibilityFallback } from './authFallback';
 
 dotenv.config();
 
@@ -575,7 +576,7 @@ function getAuthSessionFromHeader(req: Request): AuthSession | null {
 function getRequestSession(req: Request): AuthSession | null {
   const session = getAuthSessionFromHeader(req);
   if (session) return session;
-  if (AUTH_MODE === 'compatibility') {
+  if (AUTH_MODE === 'compatibility' && shouldUseCompatibilityFallback(req.headers.authorization)) {
     return {
       token: 'compatibility',
       guildId: 'legacy',
