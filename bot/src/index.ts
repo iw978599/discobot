@@ -513,8 +513,9 @@ client.on('interactionCreate', async (interaction) => {
       } else {
         await interaction.reply(reply);
       }
-    } catch {
-      // Interaction expired before we could respond
+    } catch (err) {
+      const code = (err as any)?.code ?? (err as any)?.rawError?.code;
+      if (code !== 10062) console.error('Failed to send error response:', err);
     }
   }
 });
