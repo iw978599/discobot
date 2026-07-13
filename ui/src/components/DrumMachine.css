@@ -332,6 +332,18 @@
   color: #f16f1f;
 }
 
+.drum-kit-select:disabled,
+.drum-kit-apply-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.drum-kits-status {
+  margin-bottom: 0.45rem;
+  font-size: 0.64rem;
+  color: #fca5a5;
+}
+
 .drum-knobs {
   display: flex;
   flex-direction: row;

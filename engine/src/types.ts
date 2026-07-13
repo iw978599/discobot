@@ -168,4 +168,9 @@ export interface SavedPatternFull {
   drumState: DrumState;
   drumMasterVolume?: number;
   drumKitId?: DrumKitId;
+  drumFx?: {
+    sends: FxSendLevels;
+    returnLevel: number;
+  };
+  effectsLoop?: EffectsLoopState;
 }

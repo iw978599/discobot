@@ -6,7 +6,7 @@ interface KeyboardProps {
   onNoteRelease: (note: string) => void;
   octaveShift?: number;
   holdEnabled?: boolean;
-  releaseSignal?: number;
+  releaseSignal?: boolean;
 }
 
 const WHITE_KEYS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
@@ -20,7 +20,7 @@ const BLACK_KEYS = [
   null,
 ];
 
-export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0, holdEnabled = false, releaseSignal = 0 }: KeyboardProps) {
+export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0, holdEnabled = false, releaseSignal = false }: KeyboardProps) {
   const [activeNotes, setActiveNotes] = useState<Set<string>>(new Set());
 
   const baseOctave = 3 + octaveShift;

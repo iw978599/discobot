@@ -31,7 +31,7 @@ const DEFAULT_DRUM_FX: { sends: FxSendLevels; returnLevel: number } = {
 };
 
 const DEFAULT_EFFECTS_LOOP: EffectsLoopState = {
-  enabled: true,
+  enabled: false,
   returns: { synth: 0.85, drums: 0.7 },
   drive: { enabled: true, amount: 0.18, tone: 0.65 },
   phaser: { enabled: false, rate: 0.45, depth: 0.45, feedback: 0.25, mix: 0.25 },
@@ -52,7 +52,7 @@ interface SynthState {
   octaveShift: number;
   muted: boolean;
   solo: boolean;
-  noteReleaseToken: number;
+  forceReleaseSignal: boolean;
 }
 
 function createDefaultDrumState(): DrumState {
@@ -257,6 +257,8 @@ function App() {
   const [synths, setSynths] = useState<SynthState[]>([]);
   const [drumState, setDrumState] = useState<DrumState>(createDefaultDrumState);
   const [drumKits, setDrumKits] = useState<DrumKitDefinition[]>([]);
+  const [drumKitsLoading, setDrumKitsLoading] = useState(false);
+  const [drumKitsError, setDrumKitsError] = useState<string | null>(null);
   const [selectedDrumKitId, setSelectedDrumKitId] = useState<DrumKitId>(DEFAULT_DRUM_KIT_ID);
   const [drumMasterVolume, setDrumMasterVolume] = useState(1.0);
   const [drumFx, setDrumFx] = useState(DEFAULT_DRUM_FX);
@@ -354,7 +356,7 @@ function App() {
             octaveShift: 0,
             muted: Boolean(s.muted),
             solo: Boolean(s.solo),
-            noteReleaseToken: 0,
+            forceReleaseSignal: false,
           })));
         } else if (message.data.synthParameters) {
           setSynths([{
@@ -368,7 +370,7 @@ function App() {
             octaveShift: 0,
             muted: false,
             solo: false,
-            noteReleaseToken: 0,
+            forceReleaseSignal: false,
           }]);
         }
         if (message.data.drumState) setDrumState(message.data.drumState);
@@ -418,7 +420,7 @@ function App() {
             octaveShift: 0,
             muted: Boolean(message.data.muted),
             solo: Boolean(message.data.solo),
-            noteReleaseToken: 0,
+            forceReleaseSignal: false,
           }];
         });
         break;
@@ -446,7 +448,7 @@ function App() {
         const { synthId } = message.data;
         synthAudio.stopAllNotes();
         setSynths(prev => prev.map(s =>
-          s.id === synthId ? { ...s, isPlaying: false, currentStep: 0, noteReleaseToken: s.noteReleaseToken + 1 } : s
+          s.id === synthId ? { ...s, isPlaying: false, currentStep: 0, forceReleaseSignal: !s.forceReleaseSignal } : s
         ));
         break;
       }
@@ -579,7 +581,7 @@ function App() {
             octaveShift: 0,
             muted: Boolean(data.muted),
             solo: Boolean(data.solo),
-            noteReleaseToken: 0,
+            forceReleaseSignal: false,
           }];
         });
       }
@@ -833,9 +835,14 @@ function App() {
   useEffect(() => {
     if (!sessionToken) return;
     const fetchDrumKits = async () => {
+      setDrumKitsLoading(true);
+      setDrumKitsError(null);
       try {
         const res = await authFetch('/drum/kits');
-        if (!res.ok) return;
+        if (!res.ok) {
+          setDrumKitsError('Unable to load drum kits.');
+          return;
+        }
         const data = await res.json();
         if (Array.isArray(data.kits)) {
           setDrumKits(data.kits);
@@ -845,7 +852,9 @@ function App() {
           }
         }
       } catch {
-        // ignore
+        setDrumKitsError('Unable to load drum kits.');
+      } finally {
+        setDrumKitsLoading(false);
       }
     };
     void fetchDrumKits();
@@ -884,8 +893,8 @@ function App() {
         body: JSON.stringify({ volume: data.drumMasterVolume }),
       });
     }
-    if ((data as any).drumFx) {
-      const nextDrumFx = normalizeDrumFx((data as any).drumFx);
+    if (data.drumFx) {
+      const nextDrumFx = normalizeDrumFx(data.drumFx);
       setDrumFx(nextDrumFx);
       await authFetch('/drum/fx', {
         method: 'POST',
@@ -893,8 +902,8 @@ function App() {
         body: JSON.stringify(nextDrumFx),
       });
     }
-    if ((data as any).effectsLoop) {
-      const nextEffectsLoop = normalizeEffectsLoop((data as any).effectsLoop);
+    if (data.effectsLoop) {
+      const nextEffectsLoop = normalizeEffectsLoop(data.effectsLoop);
       setEffectsLoop(nextEffectsLoop);
       await authFetch('/effects-loop', {
         method: 'POST',
@@ -1005,33 +1014,59 @@ function App() {
   }, []);
 
   const handleDrumFxChange = useCallback((next: Partial<{ sends: Partial<FxSendLevels>; returnLevel: number }>) => {
-    setDrumFx(prev => {
-      const updated = normalizeDrumFx({
-        sends: { ...prev.sends, ...(next.sends || {}) },
-        returnLevel: next.returnLevel ?? prev.returnLevel,
-      });
-      authFetch('/drum/fx', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updated),
-      });
-      return updated;
+    const previous = drumFxRef.current;
+    const updated = normalizeDrumFx({
+      sends: { ...previous.sends, ...(next.sends || {}) },
+      returnLevel: next.returnLevel ?? previous.returnLevel,
     });
+    setDrumFx(updated);
+    void (async () => {
+      try {
+        const res = await authFetch('/drum/fx', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updated),
+        });
+        if (!res.ok) {
+          setDrumFx(previous);
+          return;
+        }
+        const data = await res.json();
+        if (data.drumFx) {
+          setDrumFx(normalizeDrumFx(data.drumFx));
+        }
+      } catch {
+        setDrumFx(previous);
+      }
+    })();
   }, []);
 
   const handleEffectsLoopChange = useCallback((next: Partial<EffectsLoopState>) => {
-    setEffectsLoop(prev => {
-      const updated = normalizeEffectsLoop({
-        ...prev,
-        ...next,
-      });
-      authFetch('/effects-loop', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updated),
-      });
-      return updated;
+    const previous = effectsLoopRef.current;
+    const updated = normalizeEffectsLoop({
+      ...previous,
+      ...next,
     });
+    setEffectsLoop(updated);
+    void (async () => {
+      try {
+        const res = await authFetch('/effects-loop', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updated),
+        });
+        if (!res.ok) {
+          setEffectsLoop(previous);
+          return;
+        }
+        const data = await res.json();
+        if (data.effectsLoop) {
+          setEffectsLoop(normalizeEffectsLoop(data.effectsLoop));
+        }
+      } catch {
+        setEffectsLoop(previous);
+      }
+    })();
   }, []);
 
   const handleDrumMuteAll = useCallback((muted: boolean) => {
@@ -1108,7 +1143,7 @@ function App() {
       selectedStep: null,
       muted: false,
       solo: false,
-      noteReleaseToken: s.noteReleaseToken + 1,
+      forceReleaseSignal: !s.forceReleaseSignal,
     })));
     setDrumFx(DEFAULT_DRUM_FX);
     void authFetch('/drum/fx', {
@@ -1194,7 +1229,7 @@ function App() {
                 octaveShift={synth.octaveShift}
                 muted={synth.muted}
                 solo={synth.solo}
-                noteReleaseToken={synth.noteReleaseToken}
+                forceReleaseSignal={synth.forceReleaseSignal}
                 showRemoveButton={synth.id !== 1}
                 onToggleMute={() => handleSynthMixChange(synth.id, { muted: !synth.muted })}
                 onToggleSolo={() => handleSynthMixChange(synth.id, { solo: !synth.solo })}
@@ -1228,6 +1263,8 @@ function App() {
             onMixChange={handleDrumMixChange}
             onReset={handleDrumReset}
             drumKits={drumKits}
+            drumKitsLoading={drumKitsLoading}
+            drumKitsError={drumKitsError}
             selectedDrumKitId={selectedDrumKitId}
             onDrumKitChange={handleDrumKitChange}
             drumMasterVolume={drumMasterVolume}

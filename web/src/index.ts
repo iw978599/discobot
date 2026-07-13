@@ -274,7 +274,7 @@ function createDefaultDrumFx() {
 
 function createDefaultEffectsLoop(): EffectsLoopState {
   return {
-    enabled: true,
+    enabled: false,
     returns: { synth: 0.85, drums: 0.7 },
     drive: { enabled: true, amount: 0.18, tone: 0.65 },
     phaser: { enabled: false, rate: 0.45, depth: 0.45, feedback: 0.25, mix: 0.25 },

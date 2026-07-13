@@ -12,6 +12,8 @@ export interface DrumMachineProps {
   onMixChange: (instrument: DrumInstrument, mix: { muted?: boolean; solo?: boolean }) => void;
   onReset: () => void;
   drumKits: DrumKitDefinition[];
+  drumKitsLoading: boolean;
+  drumKitsError: string | null;
   selectedDrumKitId: DrumKitId;
   onDrumKitChange: (kitId: DrumKitId, applyDefaults: boolean) => Promise<DrumState | undefined>;
   drumMasterVolume: number;
@@ -125,6 +127,8 @@ export default function DrumMachine({
   onMixChange,
   onReset,
   drumKits,
+  drumKitsLoading,
+  drumKitsError,
   selectedDrumKitId,
   onDrumKitChange,
   drumMasterVolume,
@@ -217,16 +221,24 @@ export default function DrumMachine({
                 <select
                   className="drum-kit-select"
                   value={selectedDrumKitId}
+                  disabled={drumKitsLoading || drumKits.length === 0}
                   onChange={(e) => { void handleKitSelect(e.target.value as DrumKitId); }}
                 >
+                  {drumKitsLoading && <option value={selectedDrumKitId}>Loading kits...</option>}
+                  {!drumKitsLoading && drumKits.length === 0 && <option value={selectedDrumKitId}>No kits available</option>}
                   {drumKits.map((kit) => (
                     <option key={kit.id} value={kit.id}>{kit.name}</option>
                   ))}
                 </select>
-                <button className="drum-kit-apply-btn" onClick={() => { void handleApplyKit(); }}>
+                <button
+                  className="drum-kit-apply-btn"
+                  disabled={drumKitsLoading || drumKits.length === 0}
+                  onClick={() => { void handleApplyKit(); }}
+                >
                   Apply Kit
                 </button>
               </div>
+              {drumKitsError && <div className="drum-kits-status">{drumKitsError}</div>}
               <DrumKnob
                 label="Master"
                 value={drumMasterVolume}
