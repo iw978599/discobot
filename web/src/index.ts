@@ -808,10 +808,8 @@ function renderPatternAudio(state: GuildRuntimeState): string | null {
 
     const sampleRate = AUDIO_CONTEXT.RENDER_SAMPLE_RATE;
     const tempo = clamp(state.globalTempo || 120, 20, 400);
-    const beatsPerStep = 60 / tempo / 4;
-    const stepDuration = beatsPerStep;
-    const totalSteps = Math.max(16, ...playingSynths.map(([, data]) => Math.max(1, data.pattern.steps.length)));
-    const totalSamples = Math.floor(totalSteps * stepDuration * sampleRate);
+    const barDuration = (60 / tempo) * 4;
+    const totalSamples = Math.floor(barDuration * sampleRate);
     const dryPCM = new Float32Array(totalSamples);
     const synthSendPCM: Record<keyof FxSendLevels, Float32Array> = {
       reverb: new Float32Array(totalSamples),
@@ -833,6 +831,8 @@ function renderPatternAudio(state: GuildRuntimeState): string | null {
       if (mix.muted) continue;
       if (hasSynthSolo && !mix.solo) continue;
       const sends = normalizeFxSends(synthData.synth.getParameters().fxSends);
+      const stepCount = Math.max(1, synthData.pattern.steps.length);
+      const stepDuration = barDuration / stepCount;
       for (let i = 0; i < synthData.pattern.steps.length; i++) {
         const step = synthData.pattern.steps[i];
         if (step.note) {
