@@ -41,6 +41,7 @@ interface ActiveVoice {
 export function useSynthAudio() {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const activeVoices = useRef<Map<string, ActiveVoice>>(new Map());
+  const pendingStops = useRef<Set<string>>(new Set());
   const isResumingRef = useRef<boolean>(false);
   const reverbImpulseCache = useRef<Map<string, AudioBuffer>>(new Map());
 
@@ -223,6 +224,10 @@ export function useSynthAudio() {
       } else {
         // Sustained note (store for later release)
         activeVoices.current.set(note, { osc, gain, nodes, lfos });
+        if (pendingStops.current.has(note)) {
+          pendingStops.current.delete(note);
+          stopNote(note, p || null);
+        }
       }
     } catch (error) {
       console.error('Synth playback error:', {
@@ -236,7 +241,10 @@ export function useSynthAudio() {
 
   function stopNote(note: string, synthParams: SynthParameters | null) {
     const voice = activeVoices.current.get(note);
-    if (!voice) return;
+    if (!voice) {
+      pendingStops.current.add(note);
+      return;
+    }
 
     try {
       const ctx = getAudioContext();
@@ -250,12 +258,31 @@ export function useSynthAudio() {
       voice.lfos.forEach(lfo => lfo.stop(now + release));
 
       activeVoices.current.delete(note);
+      pendingStops.current.delete(note);
     } catch (error) {
       console.error('Note release error:', {
         error: error instanceof Error ? error.message : String(error),
         note,
       });
     }
+  }
+
+  function stopAllNotes(release: number = 0.03) {
+    const ctx = getAudioContext();
+    const now = ctx.currentTime;
+    activeVoices.current.forEach((voice, note) => {
+      try {
+        voice.gain.gain.cancelScheduledValues(now);
+        voice.gain.gain.setValueAtTime(Math.max(voice.gain.gain.value, 0.001), now);
+        voice.gain.gain.exponentialRampToValueAtTime(0.001, now + release);
+        voice.osc.stop(now + release);
+        voice.lfos.forEach(lfo => lfo.stop(now + release));
+      } catch {
+        // ignore
+      }
+      activeVoices.current.delete(note);
+    });
+    pendingStops.current.clear();
   }
 
   function dispose() {
@@ -270,6 +297,7 @@ export function useSynthAudio() {
       }
     });
     activeVoices.current.clear();
+    pendingStops.current.clear();
 
     // Close audio context
     if (audioCtxRef.current) {
@@ -284,6 +312,7 @@ export function useSynthAudio() {
     ensureAudioReady,
     playNote,
     stopNote,
+    stopAllNotes,
     dispose,
   };
 }

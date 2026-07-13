@@ -27,11 +27,7 @@ const TOOLTIPS = {
   decay: 'Time to drop from peak to sustain level',
   sustain: 'Volume level held while key is pressed',
   release: 'Time to fade out after key release',
-  reverbWet: 'Reverb mix level (0 = dry, 1 = wet)',
-  reverbDecay: 'Reverb tail length in seconds',
-  delayWet: 'Delay mix level (0 = dry, 1 = wet)',
-  delayTime: 'Time between echo repeats',
-  delayFeedback: 'Echo repeats (0 = single, 0.95 = many)',
+  fxSend: 'Send amount into shared FX loop',
 };
 
 const parseNumber = (input: string): number | null => {
@@ -87,20 +83,11 @@ export default function SynthControls({
     });
   };
 
-  const updateReverb = (updates: Partial<SynthParameters['effects']['reverb']>) => {
+  const updateFxSends = (updates: Partial<SynthParameters['fxSends']>) => {
     onParameterChange({
-      effects: {
-        ...parameters.effects,
-        reverb: { ...parameters.effects.reverb, ...updates },
-      },
-    });
-  };
-
-  const updateDelay = (updates: Partial<SynthParameters['effects']['delay']>) => {
-    onParameterChange({
-      effects: {
-        ...parameters.effects,
-        delay: { ...parameters.effects.delay, ...updates },
+      fxSends: {
+        ...parameters.fxSends,
+        ...updates,
       },
     });
   };
@@ -407,103 +394,61 @@ export default function SynthControls({
         </div>
 
         <div className="synth-column">
-          <div className="synth-section-header">
-            <h3>REVERB</h3>
-            <label className="synth-toggle">
-              <input
-                type="checkbox"
-                checked={parameters.effects.reverb.enabled}
-                onChange={(e) => updateReverb({ enabled: e.target.checked })}
-              />
-              <span className="synth-toggle-slider" />
-            </label>
-          </div>
+          <h3>FX SEND A</h3>
           <div className="synth-column-controls">
             <Knob
-              label="Mix"
-              value={parameters.effects.reverb.wet}
+              label="Reverb"
+              value={parameters.fxSends.reverb}
               min={0}
               max={1}
               step={0.01}
-              displayValue={`${(parameters.effects.reverb.wet * 100).toFixed(0)}%`}
-              onChange={(v) => updateReverb({ wet: v })}
+              displayValue={`${(parameters.fxSends.reverb * 100).toFixed(0)}%`}
+              onChange={(v) => updateFxSends({ reverb: v })}
               parseInputValue={parsePercent(0, 1)}
-              disabled={!parameters.effects.reverb.enabled}
               color="#8b5cf6"
-              tooltip={TOOLTIPS.reverbWet}
+              tooltip={TOOLTIPS.fxSend}
             />
             <Knob
-              label="Decay"
-              value={parameters.effects.reverb.decay}
-              min={0.1}
-              max={10}
-              step={0.1}
-              displayValue={`${parameters.effects.reverb.decay.toFixed(1)}s`}
-              onChange={(v) => updateReverb({ decay: v })}
-              disabled={!parameters.effects.reverb.enabled}
-              color="#8b5cf6"
-              tooltip={TOOLTIPS.reverbDecay}
+              label="Delay"
+              value={parameters.fxSends.delay}
+              min={0}
+              max={1}
+              step={0.01}
+              displayValue={`${(parameters.fxSends.delay * 100).toFixed(0)}%`}
+              onChange={(v) => updateFxSends({ delay: v })}
+              parseInputValue={parsePercent(0, 1)}
+              color="#ec4899"
+              tooltip={TOOLTIPS.fxSend}
             />
           </div>
         </div>
 
         <div className="synth-column">
-          <div className="synth-section-header">
-            <h3>DELAY</h3>
-            <label className="synth-toggle">
-              <input
-                type="checkbox"
-                checked={parameters.effects.delay.enabled}
-                onChange={(e) => updateDelay({ enabled: e.target.checked })}
-              />
-              <span className="synth-toggle-slider" />
-            </label>
-          </div>
+          <h3>FX SEND B</h3>
           <div className="synth-column-controls">
             <Knob
-              label="Mix"
-              value={parameters.effects.delay.wet}
+              label="Drive"
+              value={parameters.fxSends.drive}
               min={0}
               max={1}
               step={0.01}
-              displayValue={`${(parameters.effects.delay.wet * 100).toFixed(0)}%`}
-              onChange={(v) => updateDelay({ wet: v })}
+              displayValue={`${(parameters.fxSends.drive * 100).toFixed(0)}%`}
+              onChange={(v) => updateFxSends({ drive: v })}
               parseInputValue={parsePercent(0, 1)}
-              disabled={!parameters.effects.delay.enabled}
-              color="#ec4899"
-              tooltip={TOOLTIPS.delayWet}
+              color="#ef4444"
+              tooltip={TOOLTIPS.fxSend}
             />
             <Knob
-              label="Time"
-              value={parameters.effects.delay.time}
-              min={0.001}
-              max={2}
-              step={0.001}
-              displayValue={`${(parameters.effects.delay.time * 1000).toFixed(0)}ms`}
-              onChange={(v) => updateDelay({ time: v })}
-              parseInputValue={parseMilliseconds}
-              disabled={!parameters.effects.delay.enabled}
-              color="#ec4899"
-              tooltip={TOOLTIPS.delayTime}
-            />
-          </div>
-        </div>
-
-        <div className="synth-column">
-          <h3>DELAY FB</h3>
-          <div className="synth-column-controls">
-            <Knob
-              label="Feedback"
-              value={parameters.effects.delay.feedback}
+              label="Phaser"
+              value={parameters.fxSends.phaser}
               min={0}
-              max={0.95}
+              max={1}
               step={0.01}
-              displayValue={`${(parameters.effects.delay.feedback * 100).toFixed(0)}%`}
-              onChange={(v) => updateDelay({ feedback: v })}
-              parseInputValue={parsePercent(0, 0.95)}
-              disabled={!parameters.effects.delay.enabled}
-              color="#ec4899"
-              tooltip={TOOLTIPS.delayFeedback}
+              displayValue={`${(parameters.fxSends.phaser * 100).toFixed(0)}%`}
+              onChange={(v) => updateFxSends({ phaser: v })}
+              parseInputValue={parsePercent(0, 1)}
+              color="#3b82f6"
+              tooltip={TOOLTIPS.fxSend}
             />
           </div>
         </div>

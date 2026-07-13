@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { DrumState, DrumInstrument } from '../types';
+import { DrumState, DrumInstrument, DrumKitDefinition, DrumKitId, FxSendLevels } from '../types';
 import DrumKnob from './DrumKnob';
 import './DrumMachine.css';
 
@@ -11,8 +11,15 @@ export interface DrumMachineProps {
   onSettingsChange: (instrument: DrumInstrument, settings: { volume?: number; tone?: number; extra?: number }) => void;
   onMixChange: (instrument: DrumInstrument, mix: { muted?: boolean; solo?: boolean }) => void;
   onReset: () => void;
+  drumKits: DrumKitDefinition[];
+  drumKitsLoading: boolean;
+  drumKitsError: string | null;
+  selectedDrumKitId: DrumKitId;
+  onDrumKitChange: (kitId: DrumKitId, applyDefaults: boolean) => Promise<DrumState | undefined>;
   drumMasterVolume: number;
   onMasterVolumeChange: (volume: number) => void;
+  drumFx: { sends: FxSendLevels; returnLevel: number };
+  onDrumFxChange: (fx: Partial<{ sends: Partial<FxSendLevels>; returnLevel: number }>) => void;
   onMuteAll: (muted: boolean) => void;
   onSoloAll: () => void;
   drumAudio: ReturnType<typeof import('../hooks/useDrumAudio').useDrumAudio>;
@@ -119,8 +126,15 @@ export default function DrumMachine({
   onSettingsChange,
   onMixChange,
   onReset,
+  drumKits,
+  drumKitsLoading,
+  drumKitsError,
+  selectedDrumKitId,
+  onDrumKitChange,
   drumMasterVolume,
   onMasterVolumeChange,
+  drumFx,
+  onDrumFxChange,
   onMuteAll,
   onSoloAll,
   drumAudio,
@@ -164,11 +178,32 @@ export default function DrumMachine({
     }
   }, [drumState, drumAudio]);
 
+  const previewInstrument = useCallback((instrument: DrumInstrument, sourceState: DrumState) => {
+    const hasSolo = INSTRUMENTS.some((inst) => sourceState[inst].solo);
+    const selectedTrack = sourceState[instrument];
+    const canPreview = !selectedTrack.muted && (!hasSolo || selectedTrack.solo);
+    if (canPreview) {
+      drumAudio.playDrumHit(instrument, selectedTrack.settings);
+    }
+  }, [drumAudio]);
+
+  const handleKitSelect = useCallback(async (kitId: DrumKitId) => {
+    const nextState = await onDrumKitChange(kitId, false);
+    previewInstrument(selectedInstrument, nextState || drumState);
+  }, [onDrumKitChange, previewInstrument, selectedInstrument, drumState]);
+
+  const handleApplyKit = useCallback(async () => {
+    const nextState = await onDrumKitChange(selectedDrumKitId, true);
+    previewInstrument(selectedInstrument, nextState || drumState);
+  }, [onDrumKitChange, selectedDrumKitId, previewInstrument, selectedInstrument, drumState]);
+
   return (
     <div className="drum-machine">
       <div className="drum-machine-header">
         <h2>Rhythm Composer</h2>
-        <span className="drum-machine-model">Hybrid analog model</span>
+        <span className="drum-machine-model">
+          {(drumKits.find((kit) => kit.id === selectedDrumKitId)?.name || 'Hybrid analog model')}
+        </span>
         <button className="drum-reset-btn" onClick={onReset} title="Reset drum pattern and settings">
           &#8634;
         </button>
@@ -182,6 +217,28 @@ export default function DrumMachine({
                 <span className="drum-controls-subtle">Master</span>
                 <span>Volume</span>
               </div>
+              <div className="drum-kit-row">
+                <select
+                  className="drum-kit-select"
+                  value={selectedDrumKitId}
+                  disabled={drumKitsLoading || drumKits.length === 0}
+                  onChange={(e) => { void handleKitSelect(e.target.value as DrumKitId); }}
+                >
+                  {drumKitsLoading && <option value={selectedDrumKitId}>Loading kits...</option>}
+                  {!drumKitsLoading && drumKits.length === 0 && <option value={selectedDrumKitId}>No kits available</option>}
+                  {drumKits.map((kit) => (
+                    <option key={kit.id} value={kit.id}>{kit.name}</option>
+                  ))}
+                </select>
+                <button
+                  className="drum-kit-apply-btn"
+                  disabled={drumKitsLoading || drumKits.length === 0}
+                  onClick={() => { void handleApplyKit(); }}
+                >
+                  Apply Kit
+                </button>
+              </div>
+              {drumKitsError && <div className="drum-kits-status">{drumKitsError}</div>}
               <DrumKnob
                 label="Master"
                 value={drumMasterVolume}
@@ -189,6 +246,43 @@ export default function DrumMachine({
                 parseInputValue={parsePercent}
                 onChange={onMasterVolumeChange}
               />
+              <div className="drum-fx-sends">
+                <DrumKnob
+                  label="Rev Send"
+                  value={drumFx.sends.reverb}
+                  displayValue={Math.round(drumFx.sends.reverb * 100) + '%'}
+                  parseInputValue={parsePercent}
+                  onChange={(v) => onDrumFxChange({ sends: { reverb: v } })}
+                />
+                <DrumKnob
+                  label="Dly Send"
+                  value={drumFx.sends.delay}
+                  displayValue={Math.round(drumFx.sends.delay * 100) + '%'}
+                  parseInputValue={parsePercent}
+                  onChange={(v) => onDrumFxChange({ sends: { delay: v } })}
+                />
+                <DrumKnob
+                  label="Drv Send"
+                  value={drumFx.sends.drive}
+                  displayValue={Math.round(drumFx.sends.drive * 100) + '%'}
+                  parseInputValue={parsePercent}
+                  onChange={(v) => onDrumFxChange({ sends: { drive: v } })}
+                />
+                <DrumKnob
+                  label="Phs Send"
+                  value={drumFx.sends.phaser}
+                  displayValue={Math.round(drumFx.sends.phaser * 100) + '%'}
+                  parseInputValue={parsePercent}
+                  onChange={(v) => onDrumFxChange({ sends: { phaser: v } })}
+                />
+                <DrumKnob
+                  label="Return"
+                  value={drumFx.returnLevel}
+                  displayValue={Math.round(drumFx.returnLevel * 100) + '%'}
+                  parseInputValue={parsePercent}
+                  onChange={(v) => onDrumFxChange({ returnLevel: v })}
+                />
+              </div>
               <div className="drum-global-mix">
                 <button
                   className={`drum-global-mix-btn ${allMuted ? 'active' : ''}`}

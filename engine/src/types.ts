@@ -1,5 +1,43 @@
 export type OscillatorType = 'sine' | 'square' | 'sawtooth' | 'triangle';
 
+export interface FxSendLevels {
+  reverb: number;
+  delay: number;
+  drive: number;
+  phaser: number;
+}
+
+export interface EffectsLoopState {
+  enabled: boolean;
+  returns: {
+    synth: number;
+    drums: number;
+  };
+  drive: {
+    enabled: boolean;
+    amount: number;
+    tone: number;
+  };
+  phaser: {
+    enabled: boolean;
+    rate: number;
+    depth: number;
+    feedback: number;
+    mix: number;
+  };
+  delay: {
+    enabled: boolean;
+    time: number;
+    feedback: number;
+    mix: number;
+  };
+  reverb: {
+    enabled: boolean;
+    decay: number;
+    mix: number;
+  };
+}
+
 export interface SynthParameters {
   hold: boolean;
   gain: number;
@@ -32,6 +70,7 @@ export interface SynthParameters {
     sustain: number;
     release: number;
   };
+  fxSends: FxSendLevels;
   effects: {
     reverb: {
       enabled: boolean;
@@ -61,11 +100,30 @@ export interface Pattern {
 }
 
 export type DrumInstrument = 'kick' | 'snare' | 'openHH' | 'closedHH' | 'ride' | 'crash' | 'snare2' | 'clap';
+export type DrumKitId = 'clean-analog' | 'punchy-modern' | 'lofi-dirty';
+export type DrumKitModelVariant = 'analog' | 'modern' | 'dirty';
 
 export interface DrumSettings {
   volume: number;
   tone: number;
   extra: number;
+}
+
+export type DrumInstrumentDefaults = Record<DrumInstrument, DrumSettings>;
+
+export interface DrumKitMetadata {
+  id: DrumKitId;
+  name: string;
+  description: string;
+  modelVariant: DrumKitModelVariant;
+}
+
+export interface DrumKitDefinition extends DrumKitMetadata {
+  instrumentDefaults: DrumInstrumentDefaults;
+}
+
+export interface DrumKitSelectionState {
+  selectedKitId: DrumKitId;
 }
 
 export interface DrumTrack {
@@ -109,4 +167,10 @@ export interface SavedPatternFull {
   tempo: number;
   drumState: DrumState;
   drumMasterVolume?: number;
+  drumKitId?: DrumKitId;
+  drumFx?: {
+    sends: FxSendLevels;
+    returnLevel: number;
+  };
+  effectsLoop?: EffectsLoopState;
 }

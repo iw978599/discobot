@@ -15,6 +15,7 @@ interface SynthUnitProps {
   octaveShift: number;
   muted: boolean;
   solo: boolean;
+  forceReleaseSignal: boolean;
   showRemoveButton: boolean;
   onToggleMute: () => void;
   onToggleSolo: () => void;
@@ -41,6 +42,7 @@ export default function SynthUnit({
   octaveShift,
   muted,
   solo,
+  forceReleaseSignal,
   showRemoveButton,
   onToggleMute,
   onToggleSolo,
@@ -107,6 +109,7 @@ export default function SynthUnit({
             onNoteRelease={onNoteRelease}
             holdEnabled={Boolean(synthParams?.hold)}
             octaveShift={octaveShift}
+            releaseSignal={forceReleaseSignal}
           />
         </div>
       </div>
