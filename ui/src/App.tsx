@@ -529,7 +529,8 @@ function App() {
             targetSynth.pattern.steps[step].note!,
             targetSynth.synthParams!,
             0.15,
-            browserMutedRef.current
+            browserMutedRef.current,
+            effectsLoopRef.current
           );
         }
         setSynths(prev => prev.map(s =>
@@ -763,7 +764,7 @@ function App() {
     if (!synth?.synthParams) return;
 
     await synthAudio.ensureAudioReady();
-    await synthAudio.playNote(note, synth.synthParams, undefined, browserMutedRef.current);
+    await synthAudio.playNote(note, synth.synthParams, undefined, browserMutedRef.current, effectsLoopRef.current);
 
     const step = synth.selectedStep;
     const pattern = synth.pattern;
@@ -1317,12 +1318,12 @@ function App() {
                 onNoteRelease={(note) => handleNoteRelease(synth.id, note)}
               />
             ))}
+            {synths.length < 3 && (
+              <button className="add-synth-btn" onClick={handleAddSynth}>
+                + Add Synth {[2, 3].find(id => !synths.some(s => s.id === id)) ?? 3}
+              </button>
+            )}
           </div>
-          {synths.length < 3 && (
-            <button className="add-synth-btn" onClick={handleAddSynth}>
-              + Add Synth {[2, 3].find(id => !synths.some(s => s.id === id)) ?? 3}
-            </button>
-          )}
         </div>
         <div className="app-main-right">
           <EffectsPanel effectsLoop={effectsLoop} onChange={handleEffectsLoopChange} />

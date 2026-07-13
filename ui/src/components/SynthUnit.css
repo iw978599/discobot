@@ -61,7 +61,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
   gap: 8px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .synth-unit-sequencer {
@@ -73,6 +73,7 @@
 .synth-unit-controls {
   width: 100%;
   grid-column: 1;
+  grid-row: 1 / span 2;
 }
 
 .synth-unit-controls .synth-controls-panel {
