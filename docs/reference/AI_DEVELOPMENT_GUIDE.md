@@ -9,8 +9,8 @@ A Discord bot with a web-based UI for creating music using custom math-based syn
 - Play notes on a 3-octave virtual keyboard with octave shift
 - Adjust synthesizer parameters (oscillators, filters, reverb, delay)
 - Control the bot via Discord slash commands
-- Use up to 2 independent synth units with shared global tempo
-- Stream audio to Discord voice channels (partially implemented)
+- Use up to 3 independent synth units with shared global tempo
+- Stream rendered pattern audio to Discord voice channels via WebSocket
 - Export patterns to WAV files (planned)
 
 ## Architecture
@@ -39,7 +39,7 @@ discobot/
 │       └── index.ts          # REST API + WebSocket + multi-synth backend
 └── ui/           # React frontend with Vite (TypeScript)
     └── src/
-        ├── App.tsx           # Main app, multi-synth state, header (tempo/save)
+        ├── App.tsx           # Main app, multi-synth state, header (tempo/help/save)
         ├── components/
         │   ├── SynthUnit.tsx      # Wrapper: Sequencer + SynthControls + Keyboard
         │   ├── Sequencer.tsx      # 16-step grid (load/manage only)
@@ -151,9 +151,11 @@ DISCORD_TOKEN=your_bot_token          # From Discord Developer Portal
 DISCORD_CLIENT_ID=your_app_id         # From Discord Developer Portal
 WEB_PORT=3001                         # API server port
 UI_PORT=3000                          # Vite dev server port
-WS_PORT=8080                          # WebSocket server port
 WEB_API_URL=http://localhost:3001    # For bot to connect to API
-WS_URL=ws://localhost:8080            # For bot to connect to WebSocket
+WS_URL=ws://localhost:3001/ws/bot     # For bot to connect to WebSocket
+AUTH_MODE=strict                      # strict or compatibility
+AUTH_TOKEN_SECRET=replace_me          # required in strict mode
+BOT_SHARED_SECRET=replace_me          # required in strict mode
 ```
 
 ## Discord Bot Setup
@@ -169,22 +171,9 @@ WS_URL=ws://localhost:8080            # For bot to connect to WebSocket
 
 ### Audio Streaming to Discord
 
-**Current Status**: Partially implemented but not working yet.
+**Current Status**: ✅ Implemented.
 
-**The Problem**: 
-- Tone.js generates audio in Web Audio API format
-- Discord voice requires PCM audio stream
-- Need to bridge: Tone.js → PCM buffer → Discord voice
-
-**Implementation Path**:
-1. Create audio recorder in web server that captures Tone.js output
-2. Use `@discordjs/voice` to create audio resource from PCM stream
-3. Pipe audio to voice connection
-4. Handle timing/buffering issues
-
-**Relevant Files**:
-- `bot/src/index.ts` (lines ~175-220): Voice connection setup
-- Need to add: Audio capture from Tone.js, PCM streaming
+Pattern audio is rendered in the engine, encoded by the web server, pushed over WebSocket, and looped by the bot in Discord voice.
 
 ### Audio Export
 
@@ -230,7 +219,7 @@ WS_URL=ws://localhost:8080            # For bot to connect to WebSocket
 
 **Status**: ✅ Completed (synth-refactor branch)
 
-Support for up to 2 independent synth units, each with own sequencer, keyboard, and controls. Global tempo shared across all synths.
+Support for up to 3 independent synth units, each with own sequencer, keyboard, and controls. Global tempo shared across all synths.
 
 ## Code Patterns
 
@@ -248,8 +237,7 @@ Support for up to 2 independent synth units, each with own sequencer, keyboard, 
 
 2. **Update Synthesizer** (`engine/src/Synthesizer.ts`):
    ```typescript
-   // In constructor: create Tone.js node
-   this.newNode = new Tone.SomeEffect();
+   // Add new parameter handling in the synth's render/update flow.
    
    // In updateParameters: deepMerge handles nested updates automatically
    // No manual merging needed - just ensure your param structure matches
@@ -375,7 +363,7 @@ if (typeof tempo !== 'number' || isNaN(tempo) || tempo < 20 || tempo > 400) {
 
 ### Debug Tips
 
-1. **No audio in UI**: Check browser console, Tone.js needs user interaction to start
+1. **No audio in UI**: Check browser console and confirm browser audio is not muted in the header
 2. **WebSocket won't connect**: Check all three processes are running
 3. **Discord commands don't work**: Check bot token, client ID, intents
 4. **Synth parameters don't update**: Check WebSocket messages in browser devtools
@@ -415,7 +403,7 @@ if (typeof tempo !== 'number' || isNaN(tempo) || tempo < 20 || tempo > 400) {
 
 ### General Guidelines
 
-- Tone.js audio graph is **CPU intensive** with many effects
+- High polyphony and stacked effects can be CPU intensive
 - Keep polyphony reasonable (default: 8 voices)
 - WebSocket broadcasts can be throttled for high-frequency updates (e.g., sequencer steps)
 - Consider Web Workers for audio processing if needed
@@ -444,7 +432,7 @@ For production deployment:
 ## Getting Help
 
 - Discord.js docs: https://discord.js.org
-- Tone.js docs: https://tonejs.github.io
+- Engine source of truth: `engine/src/*`
 - React docs: https://react.dev
 - Vite docs: https://vitejs.dev
 

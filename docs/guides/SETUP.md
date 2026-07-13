@@ -1,4 +1,4 @@
-# Discord Synth Bot Setup Guide
+# Discobot Setup Guide
 
 ## Prerequisites
 
@@ -45,6 +45,9 @@
    ```
    DISCORD_TOKEN=your_bot_token_here
    DISCORD_CLIENT_ID=your_application_id_here
+   AUTH_MODE=strict
+   AUTH_TOKEN_SECRET=replace_with_long_random_secret
+   BOT_SHARED_SECRET=replace_with_long_random_secret
    ```
 
    To find your Client ID:
@@ -69,7 +72,7 @@ npm run dev
 This will start:
 - Discord Bot (connects to Discord)
 - Web API Server on http://localhost:3001
-- WebSocket Server on ws://localhost:8080
+- WebSocket Server on ws://localhost:3001/ws
 - Web UI on http://localhost:3000
 
 ## Step 4: Test It Out
@@ -77,7 +80,8 @@ This will start:
 1. Open http://localhost:3000 in your browser
 2. Join a voice channel in your Discord server
 3. In Discord, type `/join` to make the bot join your channel
-4. In the web UI:
+4. In Discord, run `/login` and open the login link in your browser
+5. In the web UI:
    - Click on the sequencer grid to activate steps
    - Press Play to hear the sequence
    - Use the keyboard to play notes
@@ -89,11 +93,10 @@ Once the bot is running and in your server:
 
 - `/join` - Bot joins your current voice channel
 - `/leave` - Bot leaves the voice channel
-- `/play [pattern]` - Play a sequencer pattern
-- `/stop` - Stop playback
-- `/note <note>` - Play a single note (e.g., C4, A#3)
+- `/play [synth]` - Play sequencer (optional synth id)
+- `/stop [synth]` - Stop playback (optional synth id)
+- `/note <note> [synth]` - Play a single note
 - `/tempo <bpm>` - Set the tempo
-- `/export <pattern>` - Export pattern as WAV (coming soon)
 
 ## Troubleshooting
 
@@ -104,13 +107,13 @@ Once the bot is running and in your server:
 
 ### Web UI won't connect
 - Make sure all services are running (`npm run dev`)
-- Check that ports 3000, 3001, and 8080 are not in use
+- Check that ports 3000 and 3001 are not in use
 - Check browser console for WebSocket connection errors
 
 ### No audio in Discord
-- Voice streaming to Discord is currently a work in progress
-- Audio playback works in the web UI
-- Real-time Discord streaming requires additional implementation
+- Ensure bot has joined voice with `/join`
+- Ensure sequencer is started from UI or `/play`
+- Check bot logs for voice connection errors
 
 ## Development
 
@@ -128,20 +131,9 @@ Build for production:
 npm run build
 ```
 
-## Next Steps
-
-Current features to implement:
-1. Real-time audio streaming to Discord voice channels
-2. Pattern save/load from database
-3. Export patterns to WAV files
-4. Sample management UI
-5. Multiple pattern tracks
-6. MIDI input support
-7. VST plugin support (future)
-
 ## Notes
 
-- The synth engine uses Tone.js for Web Audio API synthesis
+- The synth engine is custom math-based (no Tone.js)
 - Audio processing happens in the web server
 - Discord bot communicates with the web server via REST API and WebSocket
 - The UI is a real-time control surface that syncs with the engine

@@ -7,7 +7,7 @@ This guide covers hosting the Discord Synth Bot on various platforms.
 This application has 4 components that need to run:
 1. **Discord Bot** - Node.js process (needs to run 24/7)
 2. **Web API Server** - Express on port 3001
-3. **WebSocket Server** - ws on port 8080
+3. **WebSocket endpoint** - served by the web API on `/ws` (port 3001)
 4. **Web UI** - Static React app (served via nginx or Express)
 
 ## Quick Comparison
@@ -78,7 +78,6 @@ Add your environment variables:
 DISCORD_TOKEN=your_token
 DISCORD_CLIENT_ID=your_client_id
 WEB_PORT=3001
-WS_PORT=8080
 NODE_ENV=production
 ```
 
@@ -161,7 +160,7 @@ server {
 
     # WebSocket proxy
     location /ws/ {
-        proxy_pass http://localhost:8080/;
+        proxy_pass http://localhost:3001/ws/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "Upgrade";
@@ -240,7 +239,6 @@ pm2 monit
 DISCORD_TOKEN=your_token
 DISCORD_CLIENT_ID=your_client_id
 WEB_PORT=$PORT  # Railway provides this
-WS_PORT=8080
 NODE_ENV=production
 
 # Build command:
@@ -313,7 +311,7 @@ COPY . .
 RUN npm run build
 
 # Expose ports
-EXPOSE 3001 8080 3000
+EXPOSE 3001 3000
 
 # Start script
 CMD ["sh", "-c", "node bot/dist/index.js & node web/dist/index.js & wait"]
@@ -329,7 +327,6 @@ services:
     build: .
     ports:
       - "3001:3001"
-      - "8080:8080"
     env_file:
       - .env
     restart: unless-stopped
@@ -391,7 +388,6 @@ DISCORD_CLIENT_ID=your_client_id
 
 # Server (adjust for your setup)
 WEB_PORT=3001
-WS_PORT=8080
 NODE_ENV=production
 
 # URLs (update these!)
@@ -415,7 +411,7 @@ Update `ui/src/App.tsx` and `ui/src/hooks/useWebSocket.ts`:
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 // In useWebSocket.ts
-const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080';
+const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:3001/ws';
 ```
 
 Create `ui/.env.production`:
@@ -500,7 +496,7 @@ Or use logging service:
 
 ### WebSocket won't connect
 - Check nginx WebSocket proxy configuration
-- Verify WS_PORT is open in firewall
+- Verify websocket proxy points to `localhost:3001/ws`
 - Check browser console for CORS errors
 
 ### UI can't reach API
@@ -509,7 +505,7 @@ Or use logging service:
 - Test API directly: `curl https://your-domain.com/api/health`
 
 ### High memory usage
-- Tone.js can be memory-intensive
+- High polyphony and stacked effects can be memory-intensive
 - Consider limiting polyphony
 - Use server with 2GB+ RAM for production
 
@@ -523,7 +519,7 @@ Or use logging service:
 - [ ] Keep Node.js updated
 - [ ] Use strong passwords
 - [ ] Restrict SSH to key-only
-- [ ] Rate limit API endpoints
+- [x] Rate limit API endpoints
 - [ ] Setup automatic backups
 - [ ] Monitor error logs
 - [ ] Use environment variables for secrets
@@ -535,7 +531,7 @@ Or use logging service:
 1. **Setup monitoring**: UptimeRobot for health checks
 2. **Add database**: PostgreSQL for pattern persistence
 3. **Setup backups**: Automated daily backups
-4. **Add authentication**: Protect API if needed
+4. **Harden auth mode**: Use strict auth secrets in production
 5. **CDN**: Use Cloudflare for static assets
 6. **Analytics**: Track usage (optional)
 
