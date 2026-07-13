@@ -15,6 +15,7 @@ interface SynthControlsProps {
 }
 
 const TOOLTIPS = {
+  hold: 'Latch notes on the keyboard until toggled off or tapped again',
   gain: 'Master output volume',
   oscType: 'Waveform shape: Sine (smooth), Square (harsh), Sawtooth (bright), Triangle (soft)',
   detune: 'Fine pitch adjustment in cents (±100 = ±1 semitone)',
@@ -31,6 +32,29 @@ const TOOLTIPS = {
   delayWet: 'Delay mix level (0 = dry, 1 = wet)',
   delayTime: 'Time between echo repeats',
   delayFeedback: 'Echo repeats (0 = single, 0.95 = many)',
+};
+
+const parseNumber = (input: string): number | null => {
+  const n = Number.parseFloat(input.replace(/[^0-9+-.]/g, ''));
+  return Number.isFinite(n) ? n : null;
+};
+
+const parsePercent = (min: number, max: number) => (input: string): number | null => {
+  const pct = parseNumber(input);
+  if (pct === null) return null;
+  return min + ((pct / 100) * (max - min));
+};
+
+const parseMilliseconds = (input: string): number | null => {
+  const ms = parseNumber(input);
+  return ms === null ? null : ms / 1000;
+};
+
+const parseCutoff = (input: string): number | null => {
+  const trimmed = input.trim().toLowerCase();
+  const n = parseNumber(trimmed);
+  if (n === null) return null;
+  return trimmed.includes('k') ? n * 1000 : n;
 };
 
 export default function SynthControls({
@@ -86,6 +110,15 @@ export default function SynthControls({
       <div className="synth-header">
         <h2>SYNTHESIZER</h2>
         <div className="synth-octave-controls">
+          <label className="synth-toggle" title={TOOLTIPS.hold}>
+            <input
+              type="checkbox"
+              checked={Boolean(parameters.hold)}
+              onChange={(e) => onParameterChange({ hold: e.target.checked })}
+            />
+            <span className="synth-toggle-slider" />
+          </label>
+          <span className="octave-shift-value">HOLD</span>
           <button
             className="octave-shift-btn"
             onClick={() => onOctaveShift('down')}
@@ -150,6 +183,7 @@ export default function SynthControls({
               step={10}
               displayValue={parameters.filter.frequency >= 1000 ? `${(parameters.filter.frequency / 1000).toFixed(1)}k` : `${parameters.filter.frequency}`}
               onChange={(v) => updateFilter({ frequency: v })}
+              parseInputValue={parseCutoff}
               color="#10b981"
               tooltip={TOOLTIPS.filterFreq}
             />
@@ -231,6 +265,7 @@ export default function SynthControls({
               step={0.01}
               displayValue={`${(parameters.lfo1.depth * 100).toFixed(0)}%`}
               onChange={(v) => updateLfo('lfo1', { depth: v })}
+              parseInputValue={parsePercent(0, 1)}
               disabled={!parameters.lfo1.enabled}
               color="#06b6d4"
               tooltip={TOOLTIPS.lfoDepth}
@@ -303,6 +338,7 @@ export default function SynthControls({
               step={0.01}
               displayValue={`${(parameters.lfo2.depth * 100).toFixed(0)}%`}
               onChange={(v) => updateLfo('lfo2', { depth: v })}
+              parseInputValue={parsePercent(0, 1)}
               disabled={!parameters.lfo2.enabled}
               color="#0891b2"
               tooltip={TOOLTIPS.lfoDepth}
@@ -321,6 +357,7 @@ export default function SynthControls({
               step={0.001}
               displayValue={`${(parameters.envelope.attack * 1000).toFixed(0)}ms`}
               onChange={(v) => updateEnvelope({ attack: v })}
+              parseInputValue={parseMilliseconds}
               color="#f59e0b"
               tooltip={TOOLTIPS.attack}
             />
@@ -332,6 +369,7 @@ export default function SynthControls({
               step={0.001}
               displayValue={`${(parameters.envelope.decay * 1000).toFixed(0)}ms`}
               onChange={(v) => updateEnvelope({ decay: v })}
+              parseInputValue={parseMilliseconds}
               color="#f59e0b"
               tooltip={TOOLTIPS.decay}
             />
@@ -349,6 +387,7 @@ export default function SynthControls({
               step={0.01}
               displayValue={`${(parameters.envelope.sustain * 100).toFixed(0)}%`}
               onChange={(v) => updateEnvelope({ sustain: v })}
+              parseInputValue={parsePercent(0, 1)}
               color="#f59e0b"
               tooltip={TOOLTIPS.sustain}
             />
@@ -360,6 +399,7 @@ export default function SynthControls({
               step={0.001}
               displayValue={`${(parameters.envelope.release * 1000).toFixed(0)}ms`}
               onChange={(v) => updateEnvelope({ release: v })}
+              parseInputValue={parseMilliseconds}
               color="#f59e0b"
               tooltip={TOOLTIPS.release}
             />
@@ -387,6 +427,7 @@ export default function SynthControls({
               step={0.01}
               displayValue={`${(parameters.effects.reverb.wet * 100).toFixed(0)}%`}
               onChange={(v) => updateReverb({ wet: v })}
+              parseInputValue={parsePercent(0, 1)}
               disabled={!parameters.effects.reverb.enabled}
               color="#8b5cf6"
               tooltip={TOOLTIPS.reverbWet}
@@ -427,6 +468,7 @@ export default function SynthControls({
               step={0.01}
               displayValue={`${(parameters.effects.delay.wet * 100).toFixed(0)}%`}
               onChange={(v) => updateDelay({ wet: v })}
+              parseInputValue={parsePercent(0, 1)}
               disabled={!parameters.effects.delay.enabled}
               color="#ec4899"
               tooltip={TOOLTIPS.delayWet}
@@ -439,6 +481,7 @@ export default function SynthControls({
               step={0.001}
               displayValue={`${(parameters.effects.delay.time * 1000).toFixed(0)}ms`}
               onChange={(v) => updateDelay({ time: v })}
+              parseInputValue={parseMilliseconds}
               disabled={!parameters.effects.delay.enabled}
               color="#ec4899"
               tooltip={TOOLTIPS.delayTime}
@@ -457,6 +500,7 @@ export default function SynthControls({
               step={0.01}
               displayValue={`${(parameters.effects.delay.feedback * 100).toFixed(0)}%`}
               onChange={(v) => updateDelay({ feedback: v })}
+              parseInputValue={parsePercent(0, 0.95)}
               disabled={!parameters.effects.delay.enabled}
               color="#ec4899"
               tooltip={TOOLTIPS.delayFeedback}
@@ -475,6 +519,7 @@ export default function SynthControls({
               step={0.01}
               displayValue={`${(parameters.gain * 100).toFixed(0)}%`}
               onChange={(v) => onParameterChange({ gain: v })}
+              parseInputValue={parsePercent(0, 2)}
               color="#ef4444"
               tooltip={TOOLTIPS.gain}
             />

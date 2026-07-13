@@ -18,6 +18,7 @@ interface KnobProps {
   color?: string;
   disabled?: boolean;
   tooltip?: string;
+  parseInputValue?: (input: string) => number | null;
 }
 
 export default function Knob({
@@ -32,17 +33,23 @@ export default function Knob({
   color = '#f59e0b',
   disabled = false,
   tooltip,
+  parseInputValue,
 }: KnobProps) {
   const knobRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
   const startY = useRef(0);
   const startVal = useRef(0);
   const [localVal, setLocalVal] = useState(value);
+  const [isEditing, setIsEditing] = useState(false);
+  const [inputValue, setInputValue] = useState('');
   const [showTooltip, setShowTooltip] = useState(false);
+
+  const computedDisplay = displayValue ?? localVal.toFixed(step >= 1 ? 0 : step >= 0.1 ? 1 : 2);
 
   useEffect(() => {
     setLocalVal(value);
-  }, [value]);
+    if (!isEditing) setInputValue(displayValue ?? value.toFixed(step >= 1 ? 0 : step >= 0.1 ? 1 : 2));
+  }, [value, displayValue, step, isEditing]);
 
   const pct = (localVal - min) / (max - min);
 
@@ -84,6 +91,23 @@ export default function Knob({
 
   const s = sizes[size];
   const center = s.svg / 2;
+
+  const commitInput = useCallback(() => {
+    if (disabled) {
+      setIsEditing(false);
+      return;
+    }
+    const parsed = parseInputValue
+      ? parseInputValue(inputValue)
+      : Number.parseFloat(inputValue.replace(/[^0-9+-.]/g, ''));
+    if (Number.isFinite(parsed)) {
+      const newVal = Math.max(min, Math.min(max, parsed as number));
+      const stepped = Math.round((newVal - min) / step) * step + min;
+      setLocalVal(stepped);
+      onChange(stepped);
+    }
+    setIsEditing(false);
+  }, [disabled, inputValue, parseInputValue, min, max, step, onChange]);
 
   return (
     <div
@@ -139,7 +163,24 @@ export default function Knob({
       </div>
 
       <span className="knob-label">{label}</span>
-      <span className="knob-value">{displayValue ?? localVal.toFixed(step >= 1 ? 0 : step >= 0.1 ? 1 : 2)}</span>
+      <input
+        className="knob-value-input"
+        value={isEditing ? inputValue : computedDisplay}
+        onFocus={() => {
+          setIsEditing(true);
+          setInputValue(computedDisplay);
+        }}
+        onChange={(e) => setInputValue(e.target.value)}
+        onBlur={commitInput}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commitInput();
+          if (e.key === 'Escape') {
+            setIsEditing(false);
+            setInputValue(computedDisplay);
+          }
+        }}
+        disabled={disabled}
+      />
 
       {tooltip && showTooltip && (
         <div className="knob-tooltip">{tooltip}</div>

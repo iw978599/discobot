@@ -41,13 +41,14 @@ export class AudioExporter {
     durationInBars: number = 1
   ): Promise<Buffer> {
     const sampleRate = 44100;
+    const stepCount = Math.max(1, pattern.steps.length);
     const lengthInSeconds = (durationInBars * 4 * 60) / pattern.tempo;
     const totalSamples = Math.floor(sampleRate * lengthInSeconds);
     const mix = new Float32Array(totalSamples);
 
     pattern.steps.forEach((step, index) => {
       if (step.active && step.note) {
-        const time = (index / 16) * (4 * 60) / pattern.tempo;
+        const time = (index / stepCount) * (4 * 60) / pattern.tempo;
         const offset = Math.floor(time * sampleRate);
         const noteSamples = synth.renderNote(step.note, 0.25, step.velocity, sampleRate);
         for (let j = 0; j < noteSamples.length && offset + j < totalSamples; j++) {

@@ -10,6 +10,7 @@ import { authFetch, exchangeLoginToken, fetchSessionInfo, setAuthContext } from 
 import './App.css';
 
 const DEFAULT_PARAMS: SynthParameters = {
+  hold: false,
   gain: 1.0,
   oscillator: { type: 'sine', detune: 0 },
   lfo1: { enabled: false, target: 'pitch', waveform: 'sine', rate: 5, depth: 0.2 },
@@ -618,6 +619,36 @@ function App() {
     });
   }, []);
 
+  const handleStepCountChange = useCallback(async (synthId: number, stepCount: 16 | 32) => {
+    const synth = synthsRef.current.find(s => s.id === synthId);
+    if (!synth?.pattern) return;
+    if (synth.pattern.steps.length === stepCount) return;
+
+    const nextSteps = Array.from({ length: stepCount }, (_, i) => (
+      synth.pattern!.steps[i]
+        ? { ...synth.pattern!.steps[i] }
+        : { active: false, velocity: 0.7 as const }
+    ));
+    const nextPattern = { ...synth.pattern, steps: nextSteps };
+
+    setSynths(prev => prev.map(s => {
+      if (s.id !== synthId) return s;
+      const nextSelectedStep = s.selectedStep !== null && s.selectedStep >= stepCount ? null : s.selectedStep;
+      return {
+        ...s,
+        pattern: nextPattern,
+        selectedStep: nextSelectedStep,
+        currentStep: s.currentStep % stepCount,
+      };
+    }));
+
+    await authFetch(`/synth/${synthId}/patterns/${synth.pattern.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(nextPattern),
+    });
+  }, []);
+
   const handleSynthMixChange = useCallback(async (synthId: number, mix: { muted?: boolean; solo?: boolean }) => {
     setSynths(prev => prev.map(s =>
       s.id === synthId ? { ...s, ...mix } : s
@@ -940,6 +971,7 @@ function App() {
               onToggleSolo={() => handleSynthMixChange(synth.id, { solo: !synth.solo })}
               onPatternChange={(p) => handlePatternChange(synth.id, p)}
               onStepChange={(step) => handleStepChange(synth.id, step)}
+              onStepCountChange={(stepCount) => handleStepCountChange(synth.id, stepCount)}
               onSavePattern={(name) => handleSavePattern(synth.id, name)}
               onLoadSavedPattern={(data) => handleLoadSavedPattern(synth.id, data)}
               onParameterChange={(params) => handleParameterChange(synth.id, params)}
@@ -960,7 +992,7 @@ function App() {
         <DrumMachine
           drumState={memoizedDrumState}
           isPlaying={synths.some(s => s.isPlaying)}
-          currentStep={synths[0]?.currentStep || 0}
+          currentStep={(synths[0]?.currentStep || 0) % 16}
           onStepToggle={handleDrumStepToggle}
           onSettingsChange={handleDrumSettingsChange}
           onMixChange={handleDrumMixChange}

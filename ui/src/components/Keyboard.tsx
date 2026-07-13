@@ -1,10 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import './Keyboard.css';
 
 interface KeyboardProps {
   onNotePlay: (note: string) => void;
   onNoteRelease: (note: string) => void;
   octaveShift?: number;
+  holdEnabled?: boolean;
 }
 
 const WHITE_KEYS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
@@ -18,20 +19,37 @@ const BLACK_KEYS = [
   null,
 ];
 
-export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0 }: KeyboardProps) {
+export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0, holdEnabled = false }: KeyboardProps) {
   const [activeNotes, setActiveNotes] = useState<Set<string>>(new Set());
 
   const baseOctave = 3 + octaveShift;
 
   const octaves = useMemo(() => [baseOctave, baseOctave + 1, baseOctave + 2], [baseOctave]);
 
+  useEffect(() => {
+    if (holdEnabled || activeNotes.size === 0) return;
+    activeNotes.forEach((note) => onNoteRelease(note));
+    setActiveNotes(new Set());
+  }, [holdEnabled, activeNotes, onNoteRelease]);
+
   const handleNoteDown = (note: string) => {
-    if (activeNotes.has(note)) return;
+    if (activeNotes.has(note)) {
+      if (holdEnabled) {
+        setActiveNotes((prev) => {
+          const next = new Set(prev);
+          next.delete(note);
+          return next;
+        });
+        onNoteRelease(note);
+      }
+      return;
+    }
     setActiveNotes((prev) => new Set(prev).add(note));
     onNotePlay(note);
   };
 
   const handleNoteUp = (note: string) => {
+    if (holdEnabled) return;
     setActiveNotes((prev) => {
       if (!prev.has(note)) return prev;
       const next = new Set(prev);

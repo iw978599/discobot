@@ -26,9 +26,20 @@
   letter-spacing: 0.5px;
 }
 
-.drum-knob-value {
+.drum-knob-value-input {
   font-size: 0.7rem;
   color: #f59e0b;
   font-family: 'Courier New', Courier, monospace;
   font-weight: 600;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  text-align: center;
+  padding: 1px 4px;
+  min-width: 48px;
+  outline: none;
+}
+
+.drum-knob-value-input:focus {
+  border-color: rgba(245, 158, 11, 0.7);
 }
