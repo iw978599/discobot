@@ -20,7 +20,7 @@ export class Synthesizer {
       oscillator: { type: 'sine', detune: 0 },
       lfo1: { enabled: false, target: 'pitch', waveform: 'sine', rate: 5, depth: 0.2 },
       lfo2: { enabled: false, target: 'filter', waveform: 'triangle', rate: 0.8, depth: 0.25 },
-      filter: { frequency: 20000, q: 1, type: 'lowpass' },
+      filter: { frequency: 5000, q: 1, type: 'lowpass' },
       envelope: { attack: 0.1, decay: 0.2, sustain: 0.5, release: 1.0 },
       fxSends: { reverb: 0.25, delay: 0.2, drive: 0.15, phaser: 0.1 },
       effects: {
