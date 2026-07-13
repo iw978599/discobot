@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { DrumState, DrumInstrument } from '../types';
+import { DrumState, DrumInstrument, FxSendLevels } from '../types';
 import DrumKnob from './DrumKnob';
 import './DrumMachine.css';
 
@@ -13,6 +13,8 @@ export interface DrumMachineProps {
   onReset: () => void;
   drumMasterVolume: number;
   onMasterVolumeChange: (volume: number) => void;
+  drumFx: { sends: FxSendLevels; returnLevel: number };
+  onDrumFxChange: (fx: Partial<{ sends: Partial<FxSendLevels>; returnLevel: number }>) => void;
   onMuteAll: (muted: boolean) => void;
   onSoloAll: () => void;
   drumAudio: ReturnType<typeof import('../hooks/useDrumAudio').useDrumAudio>;
@@ -121,6 +123,8 @@ export default function DrumMachine({
   onReset,
   drumMasterVolume,
   onMasterVolumeChange,
+  drumFx,
+  onDrumFxChange,
   onMuteAll,
   onSoloAll,
   drumAudio,
@@ -189,6 +193,43 @@ export default function DrumMachine({
                 parseInputValue={parsePercent}
                 onChange={onMasterVolumeChange}
               />
+              <div className="drum-fx-sends">
+                <DrumKnob
+                  label="Rev Send"
+                  value={drumFx.sends.reverb}
+                  displayValue={Math.round(drumFx.sends.reverb * 100) + '%'}
+                  parseInputValue={parsePercent}
+                  onChange={(v) => onDrumFxChange({ sends: { reverb: v } })}
+                />
+                <DrumKnob
+                  label="Dly Send"
+                  value={drumFx.sends.delay}
+                  displayValue={Math.round(drumFx.sends.delay * 100) + '%'}
+                  parseInputValue={parsePercent}
+                  onChange={(v) => onDrumFxChange({ sends: { delay: v } })}
+                />
+                <DrumKnob
+                  label="Drv Send"
+                  value={drumFx.sends.drive}
+                  displayValue={Math.round(drumFx.sends.drive * 100) + '%'}
+                  parseInputValue={parsePercent}
+                  onChange={(v) => onDrumFxChange({ sends: { drive: v } })}
+                />
+                <DrumKnob
+                  label="Phs Send"
+                  value={drumFx.sends.phaser}
+                  displayValue={Math.round(drumFx.sends.phaser * 100) + '%'}
+                  parseInputValue={parsePercent}
+                  onChange={(v) => onDrumFxChange({ sends: { phaser: v } })}
+                />
+                <DrumKnob
+                  label="Return"
+                  value={drumFx.returnLevel}
+                  displayValue={Math.round(drumFx.returnLevel * 100) + '%'}
+                  parseInputValue={parsePercent}
+                  onChange={(v) => onDrumFxChange({ returnLevel: v })}
+                />
+              </div>
               <div className="drum-global-mix">
                 <button
                   className={`drum-global-mix-btn ${allMuted ? 'active' : ''}`}

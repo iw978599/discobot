@@ -1,0 +1,72 @@
+.effects-panel {
+  background: #181818;
+  border: 1px solid #353535;
+  border-radius: 10px;
+  padding: 0.6rem;
+  min-width: 0;
+}
+
+.effects-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.45rem;
+}
+
+.effects-panel-header h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #cde2ff;
+}
+
+.effects-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.effects-block {
+  border: 1px solid #2f2f2f;
+  border-radius: 8px;
+  background: #111;
+  padding: 0.35rem;
+}
+
+.effects-block h4 {
+  margin: 0 0 0.2rem 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  color: #99a4b4;
+  text-transform: uppercase;
+}
+
+.effects-row-head {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.2rem;
+}
+
+.effects-knobs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.1rem;
+}
+
+.effects-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.68rem;
+  color: #b7c0cd;
+}
+
+.effects-toggle input {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+@media (max-width: 1200px) {
+  .effects-grid {
+    grid-template-columns: 1fr;
+  }
+}

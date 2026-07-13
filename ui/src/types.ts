@@ -19,6 +19,8 @@ export type {
   DrumSettings,
   DrumTrack,
   DrumState,
+  FxSendLevels,
+  EffectsLoopState,
 
   // Persistence types
   SavedPatternInfo,

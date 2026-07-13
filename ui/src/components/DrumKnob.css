@@ -35,8 +35,10 @@
   border: 1px solid transparent;
   border-radius: 4px;
   text-align: center;
-  padding: 1px 4px;
-  min-width: 48px;
+  padding: 1px 3px;
+  width: 4.1ch;
+  min-width: 0;
+  max-width: 4.8ch;
   outline: none;
 }
 

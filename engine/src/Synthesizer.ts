@@ -22,6 +22,7 @@ export class Synthesizer {
       lfo2: { enabled: false, target: 'filter', waveform: 'triangle', rate: 0.8, depth: 0.25 },
       filter: { frequency: 20000, q: 1, type: 'lowpass' },
       envelope: { attack: 0.1, decay: 0.2, sustain: 0.5, release: 1.0 },
+      fxSends: { reverb: 0.25, delay: 0.2, drive: 0.15, phaser: 0.1 },
       effects: {
         reverb: { enabled: false, wet: 0.3, decay: 1.5 },
         delay: { enabled: false, wet: 0.2, time: 0.25, feedback: 0.5 },
@@ -150,7 +151,13 @@ export class Synthesizer {
     }
   }
 
-  renderNote(note: string, duration: number, velocity: number, sampleRate: number = 44100): Float32Array {
+  renderNote(
+    note: string,
+    duration: number,
+    velocity: number,
+    sampleRate: number = 44100,
+    options?: { applyInsertEffects?: boolean }
+  ): Float32Array {
     const freq = Synthesizer.noteToFrequency(note);
     const detunedFreq = freq * Math.pow(2, this.parameters.oscillator.detune / 1200);
     const length = Math.floor(sampleRate * duration);
@@ -203,7 +210,8 @@ export class Synthesizer {
 
     let effected: Float32Array<ArrayBufferLike> = output;
 
-    if (this.parameters.effects.delay.enabled && this.parameters.effects.delay.wet > 0) {
+    const applyInsertEffects = options?.applyInsertEffects ?? true;
+    if (applyInsertEffects && this.parameters.effects.delay.enabled && this.parameters.effects.delay.wet > 0) {
       effected = Synthesizer.applyDelay(
         effected,
         sampleRate,
@@ -213,7 +221,7 @@ export class Synthesizer {
       );
     }
 
-    if (this.parameters.effects.reverb.enabled && this.parameters.effects.reverb.wet > 0) {
+    if (applyInsertEffects && this.parameters.effects.reverb.enabled && this.parameters.effects.reverb.wet > 0) {
       effected = Synthesizer.applyReverb(
         effected,
         sampleRate,

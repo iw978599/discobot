@@ -3,14 +3,15 @@
   border-radius: 10px;
   border: 1px solid #51555c;
   box-shadow: inset 0 1px 0 #666a72, 0 6px 18px rgba(0, 0, 0, 0.35);
-  padding: 1.25rem;
+  padding: 0.8rem;
+  min-width: 0;
 }
 
 .drum-machine-header {
   display: flex;
   align-items: center;
   gap: 0.8rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.6rem;
   border-bottom: 1px solid #6b7079;
   padding-bottom: 0.6rem;
 }
@@ -54,13 +55,13 @@
   background: #202327;
   border: 1px solid #565b64;
   border-radius: 8px;
-  padding: 0.9rem;
+  padding: 0.55rem;
   box-shadow: inset 0 1px 0 #4a4e55;
 }
 
 .drum-top-controls {
   display: grid;
-  grid-template-columns: 120px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.6rem;
   margin-bottom: 0.8rem;
 }
@@ -187,7 +188,7 @@
 }
 
 .drum-step-btn {
-  height: 3.2rem;
+  height: 2.7rem;
   border-radius: 5px;
   border: 1px solid #737983;
   padding: 0.2rem 0;
@@ -244,7 +245,7 @@
   background: #171a1d;
   border: 1px solid #555b64;
   border-radius: 8px;
-  padding: 0.75rem 0.6rem;
+  padding: 0.45rem;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -254,6 +255,16 @@
   margin-top: 0.45rem;
   display: flex;
   gap: 0.35rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.drum-fx-sends {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.2rem;
+  width: 100%;
+  margin-top: 0.3rem;
 }
 
 .drum-global-mix-btn {
@@ -297,6 +308,10 @@
 @media (max-width: 1100px) {
   .drum-top-controls {
     grid-template-columns: 1fr;
+  }
+
+  .drum-fx-sends {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .drum-knobs {

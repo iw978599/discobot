@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
-import { Synthesizer, Sequencer, SamplePlayer, Pattern, SynthParameters, DrumState, DrumInstrument, DiscordAudioStreamer, DrumSynthesizer, clamp, throttle, AUDIO_MIXING, AUDIO_CONTEXT } from '@discord-synth/engine';
+import { Synthesizer, Sequencer, SamplePlayer, Pattern, SynthParameters, DrumState, DrumInstrument, DiscordAudioStreamer, DrumSynthesizer, EffectsLoopState, FxSendLevels, clamp, throttle, AUDIO_MIXING, AUDIO_CONTEXT } from '@discord-synth/engine';
 import { assignRole, canControl, SessionRole } from './sessionAuth';
 
 dotenv.config();
@@ -100,6 +100,11 @@ interface GuildRuntimeState {
   };
   drumState: DrumState;
   drumMasterVolume: number;
+  drumFx: {
+    sends: FxSendLevels;
+    returnLevel: number;
+  };
+  effectsLoop: EffectsLoopState;
   globalTempo: number;
 }
 
@@ -113,6 +118,11 @@ interface SavedPatternData {
   tempo: number;
   drumState: DrumState;
   drumMasterVolume: number;
+  drumFx?: {
+    sends: FxSendLevels;
+    returnLevel: number;
+  };
+  effectsLoop?: EffectsLoopState;
 }
 
 interface GuildMemberRecord {
@@ -159,6 +169,80 @@ function createDefaultDrumState(): DrumState {
   return state;
 }
 
+function createDefaultFxSends(): FxSendLevels {
+  return { reverb: 0.35, delay: 0.15, drive: 0.2, phaser: 0.1 };
+}
+
+function createDefaultDrumFx() {
+  return {
+    sends: createDefaultFxSends(),
+    returnLevel: 0.7,
+  };
+}
+
+function createDefaultEffectsLoop(): EffectsLoopState {
+  return {
+    enabled: true,
+    returns: { synth: 0.85, drums: 0.7 },
+    drive: { enabled: true, amount: 0.18, tone: 0.65 },
+    phaser: { enabled: false, rate: 0.45, depth: 0.45, feedback: 0.25, mix: 0.25 },
+    delay: { enabled: true, time: 0.22, feedback: 0.35, mix: 0.3 },
+    reverb: { enabled: true, decay: 2.1, mix: 0.38 },
+  };
+}
+
+function normalizeFxSends(sends: Partial<FxSendLevels> | undefined, fallback?: FxSendLevels): FxSendLevels {
+  const base = fallback ?? createDefaultFxSends();
+  return {
+    reverb: clamp(sends?.reverb ?? base.reverb, 0, 1),
+    delay: clamp(sends?.delay ?? base.delay, 0, 1),
+    drive: clamp(sends?.drive ?? base.drive, 0, 1),
+    phaser: clamp(sends?.phaser ?? base.phaser, 0, 1),
+  };
+}
+
+function normalizeDrumFx(drumFx: { sends?: Partial<FxSendLevels>; returnLevel?: number } | undefined) {
+  const defaults = createDefaultDrumFx();
+  return {
+    sends: normalizeFxSends(drumFx?.sends, defaults.sends),
+    returnLevel: clamp(drumFx?.returnLevel ?? defaults.returnLevel, 0, 1),
+  };
+}
+
+function normalizeEffectsLoop(effectsLoop: Partial<EffectsLoopState> | undefined): EffectsLoopState {
+  const defaults = createDefaultEffectsLoop();
+  return {
+    enabled: effectsLoop?.enabled ?? defaults.enabled,
+    returns: {
+      synth: clamp(effectsLoop?.returns?.synth ?? defaults.returns.synth, 0, 1),
+      drums: clamp(effectsLoop?.returns?.drums ?? defaults.returns.drums, 0, 1),
+    },
+    drive: {
+      enabled: effectsLoop?.drive?.enabled ?? defaults.drive.enabled,
+      amount: clamp(effectsLoop?.drive?.amount ?? defaults.drive.amount, 0, 1),
+      tone: clamp(effectsLoop?.drive?.tone ?? defaults.drive.tone, 0, 1),
+    },
+    phaser: {
+      enabled: effectsLoop?.phaser?.enabled ?? defaults.phaser.enabled,
+      rate: clamp(effectsLoop?.phaser?.rate ?? defaults.phaser.rate, 0.05, 8),
+      depth: clamp(effectsLoop?.phaser?.depth ?? defaults.phaser.depth, 0, 1),
+      feedback: clamp(effectsLoop?.phaser?.feedback ?? defaults.phaser.feedback, 0, 0.95),
+      mix: clamp(effectsLoop?.phaser?.mix ?? defaults.phaser.mix, 0, 1),
+    },
+    delay: {
+      enabled: effectsLoop?.delay?.enabled ?? defaults.delay.enabled,
+      time: clamp(effectsLoop?.delay?.time ?? defaults.delay.time, 0.01, 1.5),
+      feedback: clamp(effectsLoop?.delay?.feedback ?? defaults.delay.feedback, 0, 0.95),
+      mix: clamp(effectsLoop?.delay?.mix ?? defaults.delay.mix, 0, 1),
+    },
+    reverb: {
+      enabled: effectsLoop?.reverb?.enabled ?? defaults.reverb.enabled,
+      decay: clamp(effectsLoop?.reverb?.decay ?? defaults.reverb.decay, 0.2, 8),
+      mix: clamp(effectsLoop?.reverb?.mix ?? defaults.reverb.mix, 0, 1),
+    },
+  };
+}
+
 function normalizeDrumState(state: DrumState): DrumState {
   const base = createDefaultDrumState();
   for (const inst of DRUM_INSTRUMENTS) {
@@ -196,6 +280,8 @@ function createGuildRuntimeState(guildId: string): GuildRuntimeState {
     },
     drumState: createDefaultDrumState(),
     drumMasterVolume: 1,
+    drumFx: createDefaultDrumFx(),
+    effectsLoop: createDefaultEffectsLoop(),
     globalTempo: 120,
   };
 }
@@ -444,6 +530,7 @@ function getSession(req: Request): AuthSession {
 function initSynth(state: GuildRuntimeState, synthId: number) {
   if (state.synths.has(synthId)) return;
   const synth = new Synthesizer();
+  synth.updateParameters({ fxSends: createDefaultFxSends() });
   const sequencer = new Sequencer(synth);
   sequencer.setTempo(state.globalTempo);
   const pattern = sequencer.createEmptyPattern(`Synth ${synthId}`);
@@ -474,6 +561,104 @@ function debugLog(msg: string) {
   try { fs.appendFileSync(path.join(__dirname, '..', 'debug.log'), line + '\n'); } catch {}
 }
 
+function applyDrive(samples: Float32Array, amount: number, tone: number): Float32Array {
+  const out = new Float32Array(samples.length);
+  const preGain = 1 + amount * 18;
+  const postGain = 1 / (1 + amount * 3.2);
+  let toneState = 0;
+  const toneAlpha = 0.015 + tone * 0.12;
+  for (let i = 0; i < samples.length; i++) {
+    const driven = Math.tanh(samples[i] * preGain) * postGain;
+    toneState += toneAlpha * (driven - toneState);
+    out[i] = driven * (0.35 + tone * 0.65) + toneState * (1 - tone * 0.45);
+  }
+  return out;
+}
+
+function applyDelay(samples: Float32Array, sampleRate: number, time: number, feedback: number, mix: number): Float32Array {
+  const out = new Float32Array(samples.length);
+  const delaySamples = Math.max(1, Math.floor(time * sampleRate));
+  const delayBuffer = new Float32Array(delaySamples);
+  let write = 0;
+  const dry = 1 - mix;
+  for (let i = 0; i < samples.length; i++) {
+    const delayed = delayBuffer[write];
+    delayBuffer[write] = samples[i] + delayed * feedback;
+    write = (write + 1) % delaySamples;
+    out[i] = samples[i] * dry + delayed * mix;
+  }
+  return out;
+}
+
+function applyReverb(samples: Float32Array, sampleRate: number, decay: number, mix: number): Float32Array {
+  const out = new Float32Array(samples.length);
+  const dry = 1 - mix;
+  const combDelays = [0.0297, 0.0371, 0.0411, 0.0437].map((sec) => Math.max(1, Math.floor(sec * sampleRate)));
+  const combBuffers = combDelays.map((len) => new Float32Array(len));
+  const combIndices = new Array(combDelays.length).fill(0);
+  const feedback = clamp(0.55 + decay * 0.04, 0.5, 0.94);
+
+  for (let i = 0; i < samples.length; i++) {
+    let accum = 0;
+    for (let c = 0; c < combBuffers.length; c++) {
+      const buffer = combBuffers[c];
+      const idx = combIndices[c];
+      const delayed = buffer[idx];
+      buffer[idx] = samples[i] + delayed * feedback;
+      combIndices[c] = (idx + 1) % buffer.length;
+      accum += delayed;
+    }
+    out[i] = samples[i] * dry + (accum / combBuffers.length) * mix;
+  }
+  return out;
+}
+
+function applyPhaser(samples: Float32Array, sampleRate: number, rate: number, depth: number, feedback: number, mix: number): Float32Array {
+  const out = new Float32Array(samples.length);
+  const dry = 1 - mix;
+  let phase = 0;
+  let fb = 0;
+  const minDelay = 18;
+  const maxDelay = Math.max(minDelay + 1, Math.floor(minDelay + depth * 320));
+  const delayBuffer = new Float32Array(maxDelay + 2);
+  let write = 0;
+  for (let i = 0; i < samples.length; i++) {
+    phase += rate / sampleRate;
+    if (phase >= 1) phase -= 1;
+    const lfo = 0.5 + 0.5 * Math.sin(phase * Math.PI * 2);
+    const delay = minDelay + lfo * (maxDelay - minDelay);
+    const read = (write - delay + delayBuffer.length) % delayBuffer.length;
+    const idx0 = Math.floor(read);
+    const idx1 = (idx0 + 1) % delayBuffer.length;
+    const frac = read - idx0;
+    const delayed = delayBuffer[idx0] * (1 - frac) + delayBuffer[idx1] * frac;
+    const input = samples[i] + fb * feedback;
+    delayBuffer[write] = input;
+    write = (write + 1) % delayBuffer.length;
+    fb = delayed;
+    out[i] = samples[i] * dry + delayed * mix;
+  }
+  return out;
+}
+
+function processEffectsLoopBus(input: Float32Array, sampleRate: number, loop: EffectsLoopState): Float32Array {
+  if (!loop.enabled) return input;
+  let bus = input;
+  if (loop.drive.enabled && loop.drive.amount > 0) {
+    bus = applyDrive(bus, loop.drive.amount, loop.drive.tone);
+  }
+  if (loop.phaser.enabled && loop.phaser.mix > 0) {
+    bus = applyPhaser(bus, sampleRate, loop.phaser.rate, loop.phaser.depth, loop.phaser.feedback, loop.phaser.mix);
+  }
+  if (loop.delay.enabled && loop.delay.mix > 0) {
+    bus = applyDelay(bus, sampleRate, loop.delay.time, loop.delay.feedback, loop.delay.mix);
+  }
+  if (loop.reverb.enabled && loop.reverb.mix > 0) {
+    bus = applyReverb(bus, sampleRate, loop.reverb.decay, loop.reverb.mix);
+  }
+  return bus;
+}
+
 function renderPatternAudio(state: GuildRuntimeState): string | null {
   try {
     const playingSynths = Array.from(state.synths.entries()).filter(([, data]) => data.sequencer.getIsPlaying());
@@ -485,7 +670,19 @@ function renderPatternAudio(state: GuildRuntimeState): string | null {
     const stepDuration = beatsPerStep;
     const totalSteps = Math.max(16, ...playingSynths.map(([, data]) => Math.max(1, data.pattern.steps.length)));
     const totalSamples = Math.floor(totalSteps * stepDuration * sampleRate);
-    const fullPCM = new Float32Array(totalSamples);
+    const dryPCM = new Float32Array(totalSamples);
+    const synthSendPCM: Record<keyof FxSendLevels, Float32Array> = {
+      reverb: new Float32Array(totalSamples),
+      delay: new Float32Array(totalSamples),
+      drive: new Float32Array(totalSamples),
+      phaser: new Float32Array(totalSamples),
+    };
+    const drumSendPCM: Record<keyof FxSendLevels, Float32Array> = {
+      reverb: new Float32Array(totalSamples),
+      delay: new Float32Array(totalSamples),
+      drive: new Float32Array(totalSamples),
+      phaser: new Float32Array(totalSamples),
+    };
 
     const hasSynthSolo = playingSynths.some(([id]) => Boolean(state.synthMixState.get(id)?.solo));
 
@@ -493,22 +690,52 @@ function renderPatternAudio(state: GuildRuntimeState): string | null {
       const mix = state.synthMixState.get(id) || { muted: false, solo: false };
       if (mix.muted) continue;
       if (hasSynthSolo && !mix.solo) continue;
+      const sends = normalizeFxSends(synthData.synth.getParameters().fxSends);
       for (let i = 0; i < synthData.pattern.steps.length; i++) {
         const step = synthData.pattern.steps[i];
         if (step.note) {
           const noteDur = Math.max(stepDuration - 0.01, 0.05);
-          const notePCM = synthData.synth.renderNote(step.note, noteDur, step.velocity, sampleRate);
+          const notePCM = synthData.synth.renderNote(step.note, noteDur, step.velocity, sampleRate, { applyInsertEffects: false });
           const offset = Math.floor(i * stepDuration * sampleRate);
           for (let j = 0; j < notePCM.length && offset + j < totalSamples; j++) {
-            fullPCM[offset + j] += notePCM[j];
+            const idx = offset + j;
+            const sample = notePCM[j];
+            dryPCM[idx] += sample;
+            synthSendPCM.reverb[idx] += sample * sends.reverb;
+            synthSendPCM.delay[idx] += sample * sends.delay;
+            synthSendPCM.drive[idx] += sample * sends.drive;
+            synthSendPCM.phaser[idx] += sample * sends.phaser;
           }
         }
       }
     }
 
     const drumPCM = DrumSynthesizer.renderPattern(state.drumState, tempo, sampleRate);
+    const drumFx = normalizeDrumFx(state.drumFx);
     for (let i = 0; i < totalSamples; i++) {
-      fullPCM[i] += drumPCM[i % drumPCM.length] * AUDIO_MIXING.DRUM_BOOST_FACTOR * state.drumMasterVolume;
+      const sample = drumPCM[i % drumPCM.length] * AUDIO_MIXING.DRUM_BOOST_FACTOR * state.drumMasterVolume;
+      dryPCM[i] += sample;
+      drumSendPCM.reverb[i] += sample * drumFx.sends.reverb;
+      drumSendPCM.delay[i] += sample * drumFx.sends.delay;
+      drumSendPCM.drive[i] += sample * drumFx.sends.drive;
+      drumSendPCM.phaser[i] += sample * drumFx.sends.phaser;
+    }
+
+    const effectsLoop = normalizeEffectsLoop(state.effectsLoop);
+    const synthWetIn = new Float32Array(totalSamples);
+    const drumWetIn = new Float32Array(totalSamples);
+    for (let i = 0; i < totalSamples; i++) {
+      synthWetIn[i] = synthSendPCM.reverb[i] + synthSendPCM.delay[i] + synthSendPCM.drive[i] + synthSendPCM.phaser[i];
+      drumWetIn[i] = drumSendPCM.reverb[i] + drumSendPCM.delay[i] + drumSendPCM.drive[i] + drumSendPCM.phaser[i];
+    }
+    const synthWetOut = processEffectsLoopBus(synthWetIn, sampleRate, effectsLoop);
+    const drumWetOut = processEffectsLoopBus(drumWetIn, sampleRate, effectsLoop);
+
+    const fullPCM = new Float32Array(totalSamples);
+    for (let i = 0; i < totalSamples; i++) {
+      fullPCM[i] = dryPCM[i]
+        + synthWetOut[i] * effectsLoop.returns.synth
+        + drumWetOut[i] * effectsLoop.returns.drums * drumFx.returnLevel;
     }
 
     const threshold = AUDIO_MIXING.SOFT_CLIP_THRESHOLD;
@@ -808,7 +1035,12 @@ app.post('/synth/:synthId/parameters', (req, res) => {
 
   try {
     state.hasActiveSession = true;
-    synthData.synth.updateParameters(req.body as Partial<SynthParameters>);
+    const incoming = req.body as Partial<SynthParameters>;
+    const normalized: Partial<SynthParameters> = {
+      ...incoming,
+      fxSends: incoming.fxSends ? normalizeFxSends(incoming.fxSends, synthData.synth.getParameters().fxSends) : undefined,
+    };
+    synthData.synth.updateParameters(normalized);
     broadcastToClients({ type: 'synthUpdate', data: { guildId: session.guildId, synthId, parameters: synthData.synth.getParameters() } }, session.guildId);
     if (synthData.sequencer.getIsPlaying()) schedulePatternAudio(session.guildId);
     res.json({ success: true });
@@ -1006,10 +1238,47 @@ app.post('/drum/master-volume', (req, res) => {
   res.json({ success: true });
 });
 
+app.get('/effects-loop', (req, res) => {
+  const session = getSession(req);
+  const state = getGuildState(session.guildId);
+  state.effectsLoop = normalizeEffectsLoop(state.effectsLoop);
+  res.json(state.effectsLoop);
+});
+
+app.post('/effects-loop', (req, res) => {
+  const session = getSession(req);
+  const state = getGuildState(session.guildId);
+  const incoming = req.body as Partial<EffectsLoopState>;
+  state.effectsLoop = normalizeEffectsLoop({ ...state.effectsLoop, ...incoming });
+  broadcastToClients({ type: 'effectsLoopUpdate', data: { guildId: session.guildId, effectsLoop: state.effectsLoop } }, session.guildId);
+  schedulePatternAudioForPlayingSynths(session.guildId);
+  res.json({ success: true, effectsLoop: state.effectsLoop });
+});
+
+app.get('/drum/fx', (req, res) => {
+  const session = getSession(req);
+  const state = getGuildState(session.guildId);
+  state.drumFx = normalizeDrumFx(state.drumFx);
+  res.json(state.drumFx);
+});
+
+app.post('/drum/fx', (req, res) => {
+  const session = getSession(req);
+  const state = getGuildState(session.guildId);
+  const incoming = req.body as { sends?: Partial<FxSendLevels>; returnLevel?: number };
+  state.drumFx = normalizeDrumFx({
+    sends: { ...state.drumFx.sends, ...incoming.sends },
+    returnLevel: incoming.returnLevel ?? state.drumFx.returnLevel,
+  });
+  broadcastToClients({ type: 'drumFxUpdate', data: { guildId: session.guildId, drumFx: state.drumFx } }, session.guildId);
+  schedulePatternAudioForPlayingSynths(session.guildId);
+  res.json({ success: true, drumFx: state.drumFx });
+});
+
 app.post('/patterns/save', (req, res) => {
   const session = getSession(req);
   const state = getGuildState(session.guildId);
-  const { name, steps, synthParams, tempo, drumState, drumMasterVolume } = req.body;
+  const { name, steps, synthParams, tempo, drumState, drumMasterVolume, drumFx, effectsLoop } = req.body;
   if (!name || !steps) return res.status(400).json({ error: 'name and steps are required' });
 
   const guild = getPersistedGuild(session.guildId);
@@ -1023,6 +1292,8 @@ app.post('/patterns/save', (req, res) => {
     tempo: tempo || state.globalTempo,
     drumState: drumState || state.drumState,
     drumMasterVolume: drumMasterVolume !== undefined ? drumMasterVolume : state.drumMasterVolume,
+    drumFx: normalizeDrumFx(drumFx || state.drumFx),
+    effectsLoop: normalizeEffectsLoop(effectsLoop || state.effectsLoop),
   };
   guild.savedPatterns.push(entry);
   savePersistedGuild(guild);
@@ -1040,7 +1311,12 @@ app.get('/patterns/saved/:id', (req, res) => {
   const guild = getPersistedGuild(session.guildId);
   const entry = guild.savedPatterns.find((p) => p.id === req.params.id);
   if (!entry) return res.status(404).json({ error: 'Saved pattern not found' });
-  res.json({ ...entry, drumState: normalizeDrumState(entry.drumState) });
+  res.json({
+    ...entry,
+    drumState: normalizeDrumState(entry.drumState),
+    drumFx: normalizeDrumFx(entry.drumFx),
+    effectsLoop: normalizeEffectsLoop(entry.effectsLoop),
+  });
 });
 
 app.delete('/patterns/saved/:id', (req, res) => {
@@ -1234,6 +1510,8 @@ wssUi.on('connection', (ws, req) => {
       samples: state.samplePlayer!.getSamples(),
       streamingState: state.streamingState,
       drumState: state.drumState,
+      drumFx: normalizeDrumFx(state.drumFx),
+      effectsLoop: normalizeEffectsLoop(state.effectsLoop),
       tempo: state.globalTempo,
       session: {
         guildId: session.guildId,

@@ -1,5 +1,43 @@
 export type OscillatorType = 'sine' | 'square' | 'sawtooth' | 'triangle';
 
+export interface FxSendLevels {
+  reverb: number;
+  delay: number;
+  drive: number;
+  phaser: number;
+}
+
+export interface EffectsLoopState {
+  enabled: boolean;
+  returns: {
+    synth: number;
+    drums: number;
+  };
+  drive: {
+    enabled: boolean;
+    amount: number;
+    tone: number;
+  };
+  phaser: {
+    enabled: boolean;
+    rate: number;
+    depth: number;
+    feedback: number;
+    mix: number;
+  };
+  delay: {
+    enabled: boolean;
+    time: number;
+    feedback: number;
+    mix: number;
+  };
+  reverb: {
+    enabled: boolean;
+    decay: number;
+    mix: number;
+  };
+}
+
 export interface SynthParameters {
   hold: boolean;
   gain: number;
@@ -32,6 +70,7 @@ export interface SynthParameters {
     sustain: number;
     release: number;
   };
+  fxSends: FxSendLevels;
   effects: {
     reverb: {
       enabled: boolean;

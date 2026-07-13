@@ -71,9 +71,11 @@
   font-weight: 500;
   font-family: 'Courier New', monospace;
   background: rgba(245, 158, 11, 0.1);
-  padding: 2px 6px;
+  padding: 1px 4px;
   border-radius: 3px;
-  min-width: 45px;
+  width: 4.4ch;
+  min-width: 0;
+  max-width: 5.4ch;
   text-align: center;
   border: 1px solid transparent;
   outline: none;
