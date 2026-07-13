@@ -61,7 +61,7 @@ const DEFAULT_DRUM_FX: { sends: FxSendLevels; returnLevel: number } = {
 };
 
 const DEFAULT_EFFECTS_LOOP: EffectsLoopState = {
-  enabled: false,
+  enabled: true,
   returns: { synth: 0.85, drums: 0.7 },
   drive: { enabled: true, amount: 0.18, tone: 0.65 },
   phaser: { enabled: false, rate: 0.45, depth: 0.45, feedback: 0.25, mix: 0.25 },
@@ -320,6 +320,7 @@ function App() {
   const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [csrfToken, setCsrfToken] = useState<string | null>(null);
   const [sessionLabel, setSessionLabel] = useState('Unauthenticated');
+  const [connectedUsers, setConnectedUsers] = useState<string[]>([]);
   const [authError, setAuthError] = useState<string | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const browserMutedRef = useRef(browserMuted);
@@ -366,7 +367,7 @@ function App() {
           const nextCsrfToken = data.csrfToken as string;
           setSessionToken(nextSessionToken);
           setCsrfToken(nextCsrfToken);
-          setSessionLabel(`${data.session.username} • ${data.session.guildId} (${data.session.role})`);
+          setSessionLabel(`${data.session.username} (${data.session.role})`);
           writeAuthTokens(nextSessionToken, nextCsrfToken);
           params.delete('loginToken');
           const nextUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`;
@@ -379,7 +380,7 @@ function App() {
           const data = await fetchSessionInfo(storedAuth.sessionToken);
           setSessionToken(storedAuth.sessionToken);
           setCsrfToken(storedAuth.csrfToken);
-          setSessionLabel(`${data.session.username} • ${data.session.guildId} (${data.session.role})`);
+          setSessionLabel(`${data.session.username} (${data.session.role})`);
           return;
         }
 
@@ -438,6 +439,7 @@ function App() {
         if (message.data.drumFx) setDrumFx(normalizeDrumFx(message.data.drumFx));
         if (message.data.effectsLoop) setEffectsLoop(normalizeEffectsLoop(message.data.effectsLoop));
         if (message.data.tempo) setGlobalTempo(message.data.tempo);
+        if (Array.isArray(message.data.connectedUsers)) setConnectedUsers(message.data.connectedUsers);
         break;
       }
       case 'synthUpdate': {
@@ -606,6 +608,10 @@ function App() {
       }
       case 'effectsLoopUpdate': {
         if (message.data.effectsLoop) setEffectsLoop(normalizeEffectsLoop(message.data.effectsLoop));
+        break;
+      }
+      case 'connectedUsers': {
+        if (Array.isArray(message.data.users)) setConnectedUsers(message.data.users);
         break;
       }
     }
@@ -1270,6 +1276,9 @@ function App() {
           <div className="status">
             <span className={`status-indicator ${connected ? 'connected' : 'disconnected'}`} />
             {connected ? 'Connected' : 'Disconnected'} · {sessionLabel}
+            {connectedUsers.length > 0 && (
+              <span className="connected-users"> · {connectedUsers.join(', ')}</span>
+            )}
           </div>
         </div>
       </header>

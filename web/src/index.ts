@@ -239,7 +239,7 @@ const SAVED_PATTERNS_FILE = path.join(__dirname, '..', 'saved-patterns.json');
 const guildStates = new Map<string, GuildRuntimeState>();
 const authSessions = new Map<string, AuthSession>();
 const loginTokens = new Map<string, LoginToken>();
-const wsClients = new Map<WebSocket, { guildId: string; sessionToken: string }>();
+const wsClients = new Map<WebSocket, { guildId: string; sessionToken: string; username: string }>();
 const botClients = new Set<WebSocket>();
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
@@ -308,7 +308,7 @@ function createDefaultDrumFx() {
 
 function createDefaultEffectsLoop(): EffectsLoopState {
   return {
-    enabled: false,
+    enabled: true,
     returns: { synth: 0.85, drums: 0.7 },
     drive: { enabled: true, amount: 0.18, tone: 0.65 },
     phaser: { enabled: false, rate: 0.45, depth: 0.45, feedback: 0.25, mix: 0.25 },
@@ -990,6 +990,18 @@ function broadcastToClients(message: unknown, guildId: string) {
       client.send(payload);
     }
   });
+}
+
+function getConnectedUsernames(guildId: string): string[] {
+  const names = new Set<string>();
+  wsClients.forEach((meta) => {
+    if (meta.guildId === guildId) names.add(meta.username);
+  });
+  return Array.from(names).sort();
+}
+
+function broadcastConnectedUsers(guildId: string) {
+  broadcastToClients({ type: 'connectedUsers', data: { users: getConnectedUsernames(guildId) } }, guildId);
 }
 
 function broadcastToBotClients(message: unknown) {
@@ -1778,7 +1790,7 @@ wssUi.on('connection', (ws, req) => {
   }
 
   const guildId = session.guildId;
-  wsClients.set(ws, { guildId, sessionToken: session.token });
+  wsClients.set(ws, { guildId, sessionToken: session.token, username: session.username });
   const state = getGuildState(guildId);
   initAudioEngine(state);
 
@@ -1808,6 +1820,7 @@ wssUi.on('connection', (ws, req) => {
       drumFx: normalizeDrumFx(state.drumFx),
       effectsLoop: normalizeEffectsLoop(state.effectsLoop),
       tempo: state.globalTempo,
+      connectedUsers: getConnectedUsernames(guildId),
       session: {
         guildId: session.guildId,
         userId: session.userId,
@@ -1818,14 +1831,20 @@ wssUi.on('connection', (ws, req) => {
     },
   }));
 
+  broadcastConnectedUsers(guildId);
+
   ws.on('close', () => {
     console.log('[ws] ui disconnected');
+    const meta = wsClients.get(ws);
     wsClients.delete(ws);
+    if (meta) broadcastConnectedUsers(meta.guildId);
   });
 
   ws.on('error', (error) => {
     console.error(`[ws] ui error: ${error instanceof Error ? error.message : 'unknown error'}`);
+    const meta = wsClients.get(ws);
     wsClients.delete(ws);
+    if (meta) broadcastConnectedUsers(meta.guildId);
   });
 });
 
