@@ -16,11 +16,16 @@ export class Sequencer {
     this.synth = synth;
   }
 
+  private getStepIntervalMs(stepCount: number): number {
+    const normalizedSteps = Math.max(1, stepCount);
+    return ((60 / this.tempo) * 4 * 1000) / normalizedSteps;
+  }
+
   loadPattern(pattern: Pattern): void {
     this.currentPattern = pattern;
     this.tempo = pattern.tempo;
-    this.stepInterval = (60 / this.tempo / 4) * 1000;
     const length = this.currentPattern.steps.length || 16;
+    this.stepInterval = this.getStepIntervalMs(length);
     this.currentStep = ((this.currentStep % length) + length) % length;
   }
 
@@ -91,7 +96,7 @@ export class Sequencer {
 
   setTempo(bpm: number): void {
     this.tempo = bpm;
-    this.stepInterval = (60 / bpm / 4) * 1000;
+    this.stepInterval = this.getStepIntervalMs(this.currentPattern?.steps.length || 16);
     if (this.currentPattern) {
       this.currentPattern.tempo = bpm;
     }

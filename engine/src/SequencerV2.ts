@@ -25,8 +25,8 @@ export class SequencerV2 {
   }
 
   private updateStepDuration(): void {
-    // 16th note duration in seconds (4 steps per beat)
-    this.stepDuration = (60 / this.tempo) / 4;
+    const stepCount = Math.max(1, this.currentPattern?.steps.length || 16);
+    this.stepDuration = (60 / this.tempo) * 4 / stepCount;
   }
 
   loadPattern(pattern: Pattern): void {

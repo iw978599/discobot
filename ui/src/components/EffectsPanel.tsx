@@ -50,7 +50,6 @@ export default function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProp
               displayValue={`${Math.round(effectsLoop.returns.synth * 100)}%`}
               parseInputValue={parsePercent}
               onChange={(value) => onChange({ returns: { ...effectsLoop.returns, synth: value } })}
-              disabled={!effectsLoop.enabled}
               color="#22c55e"
             />
             <Knob
@@ -61,7 +60,6 @@ export default function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProp
               displayValue={`${Math.round(effectsLoop.returns.drums * 100)}%`}
               parseInputValue={parsePercent}
               onChange={(value) => onChange({ returns: { ...effectsLoop.returns, drums: value } })}
-              disabled={!effectsLoop.enabled}
               color="#f59e0b"
             />
           </div>
@@ -88,7 +86,6 @@ export default function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProp
               displayValue={`${Math.round(effectsLoop.drive.amount * 100)}%`}
               parseInputValue={parsePercent}
               onChange={(value) => onChange({ drive: { ...effectsLoop.drive, amount: value } })}
-              disabled={!effectsLoop.enabled || !effectsLoop.drive.enabled}
               color="#ef4444"
             />
             <Knob
@@ -99,7 +96,6 @@ export default function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProp
               displayValue={`${Math.round(effectsLoop.drive.tone * 100)}%`}
               parseInputValue={parsePercent}
               onChange={(value) => onChange({ drive: { ...effectsLoop.drive, tone: value } })}
-              disabled={!effectsLoop.enabled || !effectsLoop.drive.enabled}
               color="#ef4444"
             />
           </div>
@@ -126,7 +122,6 @@ export default function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProp
               step={0.01}
               displayValue={`${effectsLoop.phaser.rate.toFixed(2)}Hz`}
               onChange={(value) => onChange({ phaser: { ...effectsLoop.phaser, rate: value } })}
-              disabled={!effectsLoop.enabled || !effectsLoop.phaser.enabled}
               color="#3b82f6"
             />
             <Knob
@@ -137,7 +132,6 @@ export default function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProp
               displayValue={`${Math.round(effectsLoop.phaser.depth * 100)}%`}
               parseInputValue={parsePercent}
               onChange={(value) => onChange({ phaser: { ...effectsLoop.phaser, depth: value } })}
-              disabled={!effectsLoop.enabled || !effectsLoop.phaser.enabled}
               color="#3b82f6"
             />
             <Knob
@@ -148,7 +142,6 @@ export default function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProp
               displayValue={`${Math.round(effectsLoop.phaser.mix * 100)}%`}
               parseInputValue={parsePercent}
               onChange={(value) => onChange({ phaser: { ...effectsLoop.phaser, mix: value } })}
-              disabled={!effectsLoop.enabled || !effectsLoop.phaser.enabled}
               color="#3b82f6"
             />
           </div>
@@ -176,7 +169,6 @@ export default function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProp
               displayValue={`${Math.round(effectsLoop.delay.time * 1000)}ms`}
               parseInputValue={parseMs}
               onChange={(value) => onChange({ delay: { ...effectsLoop.delay, time: value } })}
-              disabled={!effectsLoop.enabled || !effectsLoop.delay.enabled}
               color="#ec4899"
             />
             <Knob
@@ -187,7 +179,6 @@ export default function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProp
               displayValue={`${Math.round(effectsLoop.delay.feedback * 100)}%`}
               parseInputValue={parsePercent}
               onChange={(value) => onChange({ delay: { ...effectsLoop.delay, feedback: value } })}
-              disabled={!effectsLoop.enabled || !effectsLoop.delay.enabled}
               color="#ec4899"
             />
             <Knob
@@ -198,7 +189,6 @@ export default function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProp
               displayValue={`${Math.round(effectsLoop.delay.mix * 100)}%`}
               parseInputValue={parsePercent}
               onChange={(value) => onChange({ delay: { ...effectsLoop.delay, mix: value } })}
-              disabled={!effectsLoop.enabled || !effectsLoop.delay.enabled}
               color="#ec4899"
             />
           </div>
@@ -225,7 +215,6 @@ export default function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProp
               step={0.01}
               displayValue={`${effectsLoop.reverb.decay.toFixed(2)}s`}
               onChange={(value) => onChange({ reverb: { ...effectsLoop.reverb, decay: value } })}
-              disabled={!effectsLoop.enabled || !effectsLoop.reverb.enabled}
               color="#8b5cf6"
             />
             <Knob
@@ -236,7 +225,6 @@ export default function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProp
               displayValue={`${Math.round(effectsLoop.reverb.mix * 100)}%`}
               parseInputValue={parsePercent}
               onChange={(value) => onChange({ reverb: { ...effectsLoop.reverb, mix: value } })}
-              disabled={!effectsLoop.enabled || !effectsLoop.reverb.enabled}
               color="#8b5cf6"
             />
           </div>

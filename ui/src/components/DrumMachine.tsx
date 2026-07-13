@@ -188,7 +188,7 @@ export default function DrumMachine({
   }, [drumAudio]);
 
   const handleKitSelect = useCallback(async (kitId: DrumKitId) => {
-    const nextState = await onDrumKitChange(kitId, false);
+    const nextState = await onDrumKitChange(kitId, true);
     previewInstrument(selectedInstrument, nextState || drumState);
   }, [onDrumKitChange, previewInstrument, selectedInstrument, drumState]);
 

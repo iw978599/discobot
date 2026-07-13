@@ -131,11 +131,6 @@
   min-height: 0;
 }
 
-.synth-units-container.multi {
-  overflow-y: auto;
-  padding-right: 0.3rem;
-}
-
 .add-synth-btn {
   width: 100%;
   padding: 0.5rem;
@@ -290,11 +285,6 @@
 @media (max-width: 1380px) {
   .app-content {
     grid-template-columns: minmax(0, 1fr);
-    overflow-y: auto;
-  }
-
-  .app-main-right {
-    overflow: visible;
   }
 }
 
