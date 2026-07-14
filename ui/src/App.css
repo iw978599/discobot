@@ -19,6 +19,26 @@
   font-weight: 600;
 }
 
+.app-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.active-pattern-name {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  color: #00d4ff;
+  border: 1px solid #2f5b66;
+  border-radius: 999px;
+  padding: 0.14rem 0.55rem;
+  background: #111;
+}
+
 .header-controls {
   display: flex;
   align-items: center;

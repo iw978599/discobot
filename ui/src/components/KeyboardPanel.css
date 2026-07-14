@@ -1,0 +1,24 @@
+.keyboard-panel {
+  width: 100%;
+}
+
+.keyboard-panel-toggle {
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 0.45rem;
+}
+
+.keyboard-panel-toggle button {
+  background: #1b1b1b;
+  border: 1px solid #434343;
+  border-radius: 4px;
+  color: #aaa;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0.15rem 0.4rem;
+}
+
+.keyboard-panel-toggle button.active {
+  border-color: #00d4ff;
+  color: #00d4ff;
+}

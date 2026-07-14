@@ -1,6 +1,6 @@
 import Sequencer from './Sequencer';
 import SynthControls from './SynthControls';
-import Keyboard from './Keyboard';
+import KeyboardPanel from './KeyboardPanel';
 import { Pattern, SynthParameters, SavedPatternFull } from '../types';
 import './SynthUnit.css';
 
@@ -12,6 +12,7 @@ interface SynthUnitProps {
   isPlaying: boolean;
   currentStep: number;
   selectedStep: number | null;
+  keyboardMode: 'keyboard' | 'piano-roll';
   octaveShift: number;
   muted: boolean;
   solo: boolean;
@@ -23,9 +24,12 @@ interface SynthUnitProps {
   onStepChange: (stepIndex: number) => void;
   onStepCountChange: (stepCount: 16 | 32) => void;
   onSavePattern: (name: string) => Promise<boolean>;
-  onLoadSavedPattern: (data: SavedPatternFull) => void;
+  onLoadSavedPattern: (data: SavedPatternFull, savedId?: string) => void;
   onParameterChange: (params: Partial<SynthParameters>) => void;
+  onKeyboardModeChange: (mode: 'keyboard' | 'piano-roll') => void;
   onOctaveShift: (direction: 'up' | 'down') => void;
+  onPianoRollNoteAssign: (stepIndex: number, note?: string) => void;
+  onClearPatternNotes: () => void;
   onRemove?: () => void;
   onPlayNote: (note: string) => void;
   onNoteRelease: (note: string) => void;
@@ -39,6 +43,7 @@ export default function SynthUnit({
   isPlaying,
   currentStep,
   selectedStep,
+  keyboardMode,
   octaveShift,
   muted,
   solo,
@@ -52,7 +57,10 @@ export default function SynthUnit({
   onSavePattern,
   onLoadSavedPattern,
   onParameterChange,
+  onKeyboardModeChange,
   onOctaveShift,
+  onPianoRollNoteAssign,
+  onClearPatternNotes,
   onRemove,
   onPlayNote,
   onNoteRelease,
@@ -104,12 +112,21 @@ export default function SynthUnit({
         </div>
 
         <div className="synth-unit-keyboard-container">
-          <Keyboard
+          <KeyboardPanel
+            mode={keyboardMode}
+            onModeChange={onKeyboardModeChange}
+            pattern={pattern}
+            currentStep={currentStep}
+            isPlaying={isPlaying}
+            selectedStep={selectedStep}
+            octaveShift={octaveShift}
+            holdEnabled={Boolean(synthParams?.hold)}
+            releaseSignal={forceReleaseSignal}
+            onStepSelect={onStepChange}
+            onNoteAssign={onPianoRollNoteAssign}
+            onClearPattern={onClearPatternNotes}
             onNotePlay={onPlayNote}
             onNoteRelease={onNoteRelease}
-            holdEnabled={Boolean(synthParams?.hold)}
-            octaveShift={octaveShift}
-            releaseSignal={forceReleaseSignal}
           />
         </div>
       </div>

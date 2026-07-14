@@ -11,7 +11,7 @@ A Discord bot with a web-based UI for creating music using synthesis, sequencing
 - **Drum Machine**: 8 instruments (kick, snare, open/closed hi-hat, ride, crash, snare 2, clap), 16-step toggle grid with per-instrument volume/tone/extra controls, master volume
 - **Browser Audio**: Web Audio API feedback for synth and drums that respects parameters, independent mute toggle
 - **Discord Audio Streaming**: Pattern rendered to 48kHz PCM with soft-clipped master mix, sent over WebSocket, played through bot voice connection with loop
-- **Pattern Persistence**: Save/load/delete patterns with name, stores all synth params, drum state, and master volumes in `saved-patterns.json`
+- **Pattern Persistence**: Save/load/delete patterns with name, stores all synth params, drum state, and master volumes in `saved-patterns.json` (set `PERSISTENCE_DIR` for deploy-safe storage)
 - **Real-time Sync**: All connected clients stay synchronized via WebSocket
 - **Global Tempo**: Single BPM shared across all synths, editable LED display in header
 - **Header Controls**: "Discobot" title, tempo LED, help modal, inline save, mute, connection status
