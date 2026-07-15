@@ -3,6 +3,7 @@
  * Organized like a classic analog synthesizer panel
  */
 
+import { useState } from 'react';
 import { SynthParameters, OscillatorType } from '../types';
 import Knob from './Knob';
 import './SynthControls.css';
@@ -10,6 +11,10 @@ import './SynthControls.css';
 interface SynthControlsProps {
   parameters: SynthParameters;
   onParameterChange: (params: Partial<SynthParameters>) => void;
+  presets: Array<{ id: string; name: string; builtIn?: boolean }>;
+  onSavePreset: (name: string) => void;
+  onLoadPreset: (presetId: string) => void;
+  onDeletePreset: (presetId: string) => void;
   octaveShift: number;
   onOctaveShift: (direction: 'up' | 'down') => void;
 }
@@ -56,9 +61,15 @@ const parseCutoff = (input: string): number | null => {
 export default function SynthControls({
   parameters,
   onParameterChange,
+  presets,
+  onSavePreset,
+  onLoadPreset,
+  onDeletePreset,
   octaveShift,
   onOctaveShift,
 }: SynthControlsProps) {
+  const [presetName, setPresetName] = useState('');
+  const [selectedPresetId, setSelectedPresetId] = useState('');
   const updateOscillator = (updates: Partial<SynthParameters['oscillator']>) => {
     onParameterChange({
       oscillator: { ...parameters.oscillator, ...updates },
@@ -87,6 +98,15 @@ export default function SynthControls({
     onParameterChange({
       fxSends: {
         ...parameters.fxSends,
+        ...updates,
+      },
+    });
+  };
+
+  const updateArpeggiator = (updates: Partial<SynthParameters['arpeggiator']>) => {
+    onParameterChange({
+      arpeggiator: {
+        ...parameters.arpeggiator,
         ...updates,
       },
     });
@@ -125,6 +145,99 @@ export default function SynthControls({
           >
             Oct +
           </button>
+        </div>
+        <div className="synth-header-tools">
+          <div className="preset-controls">
+            <select
+              className="synth-select preset-select"
+              value={selectedPresetId}
+              onChange={(e) => {
+                setSelectedPresetId(e.target.value);
+                if (e.target.value) onLoadPreset(e.target.value);
+              }}
+            >
+              <option value="" disabled>Preset...</option>
+              {presets.map((preset) => (
+                <option key={preset.id} value={preset.id}>
+                  {preset.name}{preset.builtIn ? ' *' : ''}
+                </option>
+              ))}
+            </select>
+            <input
+              className="preset-name-input"
+              placeholder="Save preset"
+              value={presetName}
+              onChange={(e) => setPresetName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  onSavePreset(presetName);
+                  setPresetName('');
+                }
+              }}
+            />
+            <button
+              className="octave-shift-btn"
+              onClick={() => {
+                onSavePreset(presetName);
+                setPresetName('');
+              }}
+            >
+              Save
+            </button>
+            <button
+              className="octave-shift-btn"
+              disabled={!selectedPresetId || Boolean(presets.find((preset) => preset.id === selectedPresetId)?.builtIn)}
+              onClick={() => {
+                const selected = presets.find((preset) => preset.id === selectedPresetId);
+                if (selected && !selected.builtIn) {
+                  onDeletePreset(selected.id);
+                  setSelectedPresetId('');
+                }
+              }}
+              title="Delete selected user preset"
+            >
+              Delete
+            </button>
+          </div>
+          <div className="arp-controls">
+            <label className="synth-toggle" title="Enable arpeggiator for this synth">
+              <input
+                type="checkbox"
+                checked={parameters.arpeggiator.enabled}
+                onChange={(e) => updateArpeggiator({ enabled: e.target.checked })}
+              />
+              <span className="synth-toggle-slider" />
+            </label>
+            <span className="octave-shift-value">ARP</span>
+            <select
+              className="synth-select arp-select"
+              value={parameters.arpeggiator.mode}
+              onChange={(e) => updateArpeggiator({ mode: e.target.value as SynthParameters['arpeggiator']['mode'] })}
+            >
+              <option value="up">Up</option>
+              <option value="down">Down</option>
+              <option value="random">Random</option>
+            </select>
+            <select
+              className="synth-select arp-select"
+              value={parameters.arpeggiator.rate}
+              onChange={(e) => updateArpeggiator({ rate: e.target.value as SynthParameters['arpeggiator']['rate'] })}
+            >
+              <option value="1/8">1/8</option>
+              <option value="1/16">1/16</option>
+            </select>
+            <label className="arp-gate-label">
+              Gate
+              <input
+                type="range"
+                min={0.1}
+                max={1}
+                step={0.05}
+                value={parameters.arpeggiator.gate}
+                onChange={(e) => updateArpeggiator({ gate: Number(e.target.value) })}
+              />
+            </label>
+          </div>
         </div>
       </div>
 

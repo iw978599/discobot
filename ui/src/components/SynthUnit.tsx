@@ -5,6 +5,7 @@ import { Pattern, SynthParameters, SavedPatternFull } from '../types';
 import './SynthUnit.css';
 
 interface SynthUnitProps {
+  presets: Array<{ id: string; name: string; builtIn?: boolean }>;
   synthId: number;
   pattern: Pattern | null;
   patterns: Pattern[];
@@ -22,10 +23,14 @@ interface SynthUnitProps {
   onToggleSolo: () => void;
   onPatternChange: (pattern: Pattern) => void;
   onStepChange: (stepIndex: number) => void;
+  onStepVelocityChange: (stepIndex: number, velocity: number) => void;
   onStepCountChange: (stepCount: 16 | 32) => void;
   onSavePattern: (name: string) => Promise<boolean>;
   onLoadSavedPattern: (data: SavedPatternFull, savedId?: string) => void;
   onParameterChange: (params: Partial<SynthParameters>) => void;
+  onSavePreset: (name: string) => void;
+  onLoadPreset: (presetId: string) => void;
+  onDeletePreset: (presetId: string) => void;
   onKeyboardModeChange: (mode: 'keyboard' | 'piano-roll') => void;
   onOctaveShift: (direction: 'up' | 'down') => void;
   onPianoRollNoteAssign: (stepIndex: number, note?: string) => void;
@@ -36,6 +41,7 @@ interface SynthUnitProps {
 }
 
 export default function SynthUnit({
+  presets,
   synthId,
   pattern,
   patterns,
@@ -53,10 +59,14 @@ export default function SynthUnit({
   onToggleSolo,
   onPatternChange,
   onStepChange,
+  onStepVelocityChange,
   onStepCountChange,
   onSavePattern,
   onLoadSavedPattern,
   onParameterChange,
+  onSavePreset,
+  onLoadPreset,
+  onDeletePreset,
   onKeyboardModeChange,
   onOctaveShift,
   onPianoRollNoteAssign,
@@ -90,6 +100,10 @@ export default function SynthUnit({
             <SynthControls
               parameters={synthParams}
               onParameterChange={onParameterChange}
+              presets={presets}
+              onSavePreset={onSavePreset}
+              onLoadPreset={onLoadPreset}
+              onDeletePreset={onDeletePreset}
               octaveShift={octaveShift}
               onOctaveShift={onOctaveShift}
             />
@@ -105,6 +119,7 @@ export default function SynthUnit({
             selectedStep={selectedStep}
             onPatternChange={onPatternChange}
             onStepChange={onStepChange}
+            onStepVelocityChange={onStepVelocityChange}
             onStepCountChange={onStepCountChange}
             onSavePattern={onSavePattern}
             onLoadSavedPattern={onLoadSavedPattern}

@@ -1,5 +1,47 @@
 # Improvement Ideas — Discobot
 
+## Implemented (July 2026)
+
+### Undo/Redo (per-pattern)
+- Undo/redo stack now tracks pattern edits including:
+  - note add/remove/toggle
+  - per-step velocity edits
+  - synth parameter edits
+  - drum pattern/parameter edits
+- Keyboard shortcuts:
+  - Undo: `Ctrl/Cmd + Z`
+  - Redo: `Ctrl/Cmd + Shift + Z` or `Ctrl/Cmd + Y`
+
+### MIDI Export (.mid)
+- Header includes **Export MIDI** for current state.
+- MIDI export writes a Standard MIDI File (Type 1) with:
+  - tempo meta event from project BPM
+  - one synth track per active synth lane
+  - drum track on channel 10
+- Drum note mapping (GM-style):
+  - kick: 36
+  - snare: 38
+  - snare2: 40
+  - clap: 39
+  - closedHH: 42
+  - openHH: 46
+  - crash: 49
+  - ride: 51
+- Limitation: audio-domain synth FX are not embedded in MIDI.
+
+### Arpeggiator MVP
+- Per-synth arpeggiator controls added:
+  - toggle
+  - mode: `up`, `down`, `random`
+  - rate: `1/8`, `1/16` (BPM-synced)
+  - gate control (0.1–1.0)
+- Arpeggiator settings persist with synth parameters (and therefore pattern saves).
+
+### Synth Presets (independent from pattern)
+- Presets can be saved/loaded/deleted independently from pattern save data.
+- Built-in starter presets included: **Pad, Bass, Lead, Pluck**.
+- User presets persist in browser local storage.
+
 ## Synth Features
 
 ### Missing Common Functionality
