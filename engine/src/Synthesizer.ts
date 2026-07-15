@@ -17,6 +17,7 @@ export class Synthesizer {
     return {
       hold: false,
       gain: 1.0,
+      arpeggiator: { enabled: false, mode: 'up', rate: '1/16', gate: 0.7 },
       oscillator: { type: 'sine', detune: 0 },
       lfo1: { enabled: false, target: 'pitch', waveform: 'sine', rate: 5, depth: 0.2 },
       lfo2: { enabled: false, target: 'filter', waveform: 'triangle', rate: 0.8, depth: 0.25 },

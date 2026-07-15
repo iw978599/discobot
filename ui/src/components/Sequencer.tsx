@@ -11,6 +11,7 @@ interface SequencerProps {
   selectedStep: number | null;
   onPatternChange: (pattern: Pattern) => void;
   onStepChange: (stepIndex: number) => void;
+  onStepVelocityChange: (stepIndex: number, velocity: number) => void;
   onStepCountChange: (stepCount: 16 | 32) => void;
   onSavePattern: (name: string) => Promise<boolean>;
   onLoadSavedPattern: (data: SavedPatternFull, savedId?: string) => void;
@@ -63,6 +64,7 @@ export default function Sequencer({
   selectedStep,
   onPatternChange,
   onStepChange,
+  onStepVelocityChange,
   onStepCountChange,
   onLoadSavedPattern,
 }: SequencerProps) {
@@ -196,7 +198,21 @@ export default function Sequencer({
 
         <div className="info-right">
           {selectedStep !== null && (
-            <span className="step-hint">Step {selectedStep + 1} selected</span>
+            <div className="step-edit-controls">
+              <span className="step-hint">Step {selectedStep + 1}</span>
+              <label className="step-velocity-control">
+                Vel
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={pattern.steps[selectedStep]?.velocity ?? 0.7}
+                  onChange={(event) => onStepVelocityChange(selectedStep, Number(event.target.value))}
+                />
+                <span>{Math.round((pattern.steps[selectedStep]?.velocity ?? 0.7) * 127)}</span>
+              </label>
+            </div>
           )}
         </div>
       </div>

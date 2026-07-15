@@ -302,6 +302,39 @@
   font-size: 0.9rem;
 }
 
+.help-list-plain {
+  list-style: disc;
+  margin-top: 0.5rem;
+}
+
+.help-sections {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.65rem;
+}
+
+.help-sections h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #f0f0f0;
+}
+
+.header-secondary-button {
+  background: none;
+  border: 1px solid #4a4a4a;
+  border-radius: 4px;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+  color: #aaa;
+  transition: all 0.2s;
+}
+
+.header-secondary-button:hover {
+  border-color: #00d4ff;
+  color: #00d4ff;
+}
+
 .save-button:hover {
   border-color: #22c55e;
   color: #22c55e;

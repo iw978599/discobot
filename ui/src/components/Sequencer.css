@@ -333,6 +333,24 @@
   font-size: 0.8rem;
 }
 
+.step-edit-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.step-velocity-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: #bbb;
+}
+
+.step-velocity-control input[type="range"] {
+  width: 100px;
+}
+
 /* Pattern Manager Modal */
 .modal-overlay {
   position: fixed;
