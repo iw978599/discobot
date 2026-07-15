@@ -2,9 +2,11 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import SynthUnit from './components/SynthUnit';
 import DrumMachine from './components/DrumMachine';
 import EffectsPanel from './components/EffectsPanel';
+import MidiPanel from './components/MidiPanel';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useSynthAudio } from './hooks/useSynthAudio';
 import { useDrumAudio } from './hooks/useDrumAudio';
+import { MidiMode, MidiMessage, useMidiInput } from './hooks/useMidiInput';
 import { getWebSocketUrl } from './config';
 import { Pattern, SynthParameters, SavedPatternInfo, SavedPatternFull, DrumState, DrumInstrument, DrumSettings, DrumKitDefinition, DrumKitId, EffectsLoopState, FxSendLevels } from './types';
 import { authFetch, exchangeLoginToken, fetchSessionInfo, setAuthContext } from './authClient';
@@ -79,6 +81,8 @@ interface SynthState {
   isPlaying: boolean;
   currentStep: number;
   selectedStep: number | null;
+  keyboardMode: 'keyboard' | 'piano-roll';
+  stepRecordPointer: number;
   octaveShift: number;
   muted: boolean;
   solo: boolean;
@@ -153,6 +157,13 @@ function normalizeEffectsLoop(loop: Partial<EffectsLoopState> | undefined): Effe
       mix: Math.max(0, Math.min(1, loop?.reverb?.mix ?? DEFAULT_EFFECTS_LOOP.reverb.mix)),
     },
   };
+}
+
+function midiNoteToName(midi: number): string {
+  const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  const note = notes[((midi % 12) + 12) % 12];
+  const octave = Math.floor(midi / 12) - 1;
+  return `${note}${octave}`;
 }
 
 function TempoDisplay({ tempo, onChange }: { tempo: number; onChange: (bpm: number) => void }) {
@@ -323,11 +334,21 @@ function App() {
   const [connectedUsers, setConnectedUsers] = useState<string[]>([]);
   const [authError, setAuthError] = useState<string | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [midiMode, setMidiMode] = useState<MidiMode>('live');
+  const [midiChannel, setMidiChannel] = useState(1);
+  const [midiTargetSynthId, setMidiTargetSynthId] = useState<number | null>(1);
+  const [activeSavedPattern, setActiveSavedPattern] = useState<{ id: string; name: string } | null>(null);
   const browserMutedRef = useRef(browserMuted);
   browserMutedRef.current = browserMuted;
 
   const synthsRef = useRef(synths);
   synthsRef.current = synths;
+  const midiModeRef = useRef(midiMode);
+  midiModeRef.current = midiMode;
+  const midiChannelRef = useRef(midiChannel);
+  midiChannelRef.current = midiChannel;
+  const midiTargetSynthIdRef = useRef(midiTargetSynthId);
+  midiTargetSynthIdRef.current = midiTargetSynthId;
   const drumStateRef = useRef(drumState);
   drumStateRef.current = drumState;
   const selectedDrumKitIdRef = useRef(selectedDrumKitId);
@@ -336,6 +357,12 @@ function App() {
   drumFxRef.current = drumFx;
   const effectsLoopRef = useRef(effectsLoop);
   effectsLoopRef.current = effectsLoop;
+
+  useEffect(() => {
+    if (synths.length === 0) return;
+    if (midiTargetSynthId !== null && synths.some((s) => s.id === midiTargetSynthId)) return;
+    setMidiTargetSynthId(synths[0].id);
+  }, [synths, midiTargetSynthId]);
 
   useEffect(() => {
     return () => {
@@ -413,6 +440,8 @@ function App() {
             isPlaying: s.isPlaying || false,
             currentStep: 0,
             selectedStep: null,
+            keyboardMode: 'keyboard',
+            stepRecordPointer: 0,
             octaveShift: 0,
             muted: Boolean(s.muted),
             solo: Boolean(s.solo),
@@ -427,6 +456,8 @@ function App() {
             isPlaying: false,
             currentStep: 0,
             selectedStep: null,
+            keyboardMode: 'keyboard',
+            stepRecordPointer: 0,
             octaveShift: 0,
             muted: false,
             solo: false,
@@ -478,6 +509,8 @@ function App() {
             isPlaying: Boolean(message.data.isPlaying),
             currentStep: 0,
             selectedStep: null,
+            keyboardMode: 'keyboard',
+            stepRecordPointer: 0,
             octaveShift: 0,
             muted: Boolean(message.data.muted),
             solo: Boolean(message.data.solo),
@@ -644,6 +677,8 @@ function App() {
             isPlaying: Boolean(data.isPlaying),
             currentStep: 0,
             selectedStep: null,
+            keyboardMode: 'keyboard',
+            stepRecordPointer: 0,
             octaveShift: 0,
             muted: Boolean(data.muted),
             solo: Boolean(data.solo),
@@ -719,11 +754,16 @@ function App() {
     synthAudio.stopAllNotes();
   }, [synthAudio, drumAudio]);
 
+  const clearActiveSavedPattern = useCallback(() => {
+    setActiveSavedPattern(null);
+  }, []);
+
   const handlePatternChange = useCallback(async (synthId: number, pattern: Pattern) => {
     setSynths(prev => prev.map(s =>
       s.id === synthId ? { ...s, pattern } : s
     ));
-  }, []);
+    clearActiveSavedPattern();
+  }, [clearActiveSavedPattern]);
 
   const handleStepChange = useCallback(async (synthId: number, stepIndex: number) => {
     const synth = synthsRef.current.find(s => s.id === synthId);
@@ -744,6 +784,7 @@ function App() {
       setSynths(prev => prev.map(s => (
         s.id === synthId ? { ...s, pattern: updatedPattern, selectedStep: null } : s
       )));
+      clearActiveSavedPattern();
 
       await authFetch(`/synth/${synthId}/patterns/${pattern.id}`, {
         method: 'PUT',
@@ -757,7 +798,80 @@ function App() {
       if (s.id !== synthId) return s;
       return { ...s, selectedStep: s.selectedStep === stepIndex ? null : stepIndex };
     }));
+  }, [clearActiveSavedPattern]);
+
+  const handleKeyboardModeChange = useCallback((synthId: number, mode: 'keyboard' | 'piano-roll') => {
+    setSynths(prev => prev.map(s => (
+      s.id === synthId ? { ...s, keyboardMode: mode } : s
+    )));
   }, []);
+
+  const handlePianoRollNoteAssign = useCallback(async (synthId: number, stepIndex: number, note?: string) => {
+    const synth = synthsRef.current.find(s => s.id === synthId);
+    if (!synth?.pattern) return;
+
+    const updatedPattern = {
+      ...synth.pattern,
+      steps: synth.pattern.steps.map((step, idx) => (
+        idx === stepIndex ? { ...step, note, active: Boolean(note) } : step
+      )),
+    };
+
+    setSynths(prev => prev.map(s => (
+      s.id === synthId ? { ...s, pattern: updatedPattern, selectedStep: stepIndex } : s
+    )));
+    clearActiveSavedPattern();
+
+    await authFetch(`/synth/${synthId}/patterns/${synth.pattern.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedPattern),
+    });
+  }, [clearActiveSavedPattern]);
+
+  const handleClearPatternNotes = useCallback(async (synthId: number) => {
+    const synth = synthsRef.current.find(s => s.id === synthId);
+    if (!synth?.pattern) return;
+    const updatedPattern = {
+      ...synth.pattern,
+      steps: synth.pattern.steps.map((step) => ({ ...step, note: undefined, active: false })),
+    };
+    setSynths(prev => prev.map(s => (
+      s.id === synthId ? { ...s, pattern: updatedPattern, selectedStep: null } : s
+    )));
+    clearActiveSavedPattern();
+    await authFetch(`/synth/${synthId}/patterns/${synth.pattern.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedPattern),
+    });
+  }, [clearActiveSavedPattern]);
+
+  const upsertStepNote = useCallback(async (synthId: number, stepIndex: number, note: string, velocity: number) => {
+    const synth = synthsRef.current.find(s => s.id === synthId);
+    if (!synth?.pattern) return;
+
+    const boundedVelocity = Math.max(0, Math.min(1, velocity));
+    const updatedPattern = {
+      ...synth.pattern,
+      steps: synth.pattern.steps.map((step, idx) => (
+        idx === stepIndex ? { ...step, note, active: true, velocity: boundedVelocity } : step
+      )),
+    };
+
+    setSynths(prev => prev.map(s => {
+      if (s.id !== synthId) return s;
+      const nextPointer = (stepIndex + 1) % updatedPattern.steps.length;
+      return { ...s, pattern: updatedPattern, selectedStep: stepIndex, stepRecordPointer: nextPointer };
+    }));
+    clearActiveSavedPattern();
+
+    await authFetch(`/synth/${synthId}/patterns/${synth.pattern.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedPattern),
+    });
+  }, [clearActiveSavedPattern]);
 
   const handleNotePlay = useCallback(async (synthId: number, note: string) => {
     const synth = synthsRef.current.find(s => s.id === synthId);
@@ -778,19 +892,59 @@ function App() {
     setSynths(prev => prev.map(s =>
       s.id === synthId ? { ...s, pattern: updated } : s
     ));
+    clearActiveSavedPattern();
 
     await authFetch(`/synth/${synthId}/patterns/${pattern.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updated),
     });
-  }, [synthAudio]);
+  }, [synthAudio, clearActiveSavedPattern]);
 
   const handleNoteRelease = useCallback(async (synthId: number, note: string) => {
     const synthParams = synthsRef.current.find(s => s.id === synthId)?.synthParams;
     if (!synthParams) return;
     synthAudio.stopNote(note, synthParams);
   }, [synthAudio]);
+
+  const handleMidiMessage = useCallback((message: MidiMessage) => {
+    if (message.channel !== midiChannelRef.current) return;
+
+    const synthSnapshot = synthsRef.current;
+    const targetSynth = synthSnapshot.find(s => s.id === midiTargetSynthIdRef.current) ?? synthSnapshot[0];
+    if (!targetSynth) return;
+    if (message.type === 'controlChange') return;
+    const noteName = midiNoteToName(message.note);
+
+    if (message.type === 'noteOff') {
+      void handleNoteRelease(targetSynth.id, noteName);
+      return;
+    }
+    if (message.type !== 'noteOn') return;
+
+    const velocity = message.velocity / 127;
+    const mode = midiModeRef.current;
+
+    if (mode === 'live') {
+      void synthAudio.playNote(noteName, targetSynth.synthParams, undefined, browserMutedRef.current, effectsLoopRef.current);
+      return;
+    }
+
+    const pattern = targetSynth.pattern;
+    if (!pattern || pattern.steps.length === 0) return;
+
+    if (mode === 'record') {
+      if (!targetSynth.isPlaying) return;
+      const stepIndex = targetSynth.currentStep % pattern.steps.length;
+      void upsertStepNote(targetSynth.id, stepIndex, noteName, velocity);
+      return;
+    }
+
+    const stepIndex = targetSynth.stepRecordPointer % pattern.steps.length;
+    void upsertStepNote(targetSynth.id, stepIndex, noteName, velocity);
+  }, [handleNoteRelease, upsertStepNote, synthAudio]);
+
+  const midiState = useMidiInput({ onMessage: handleMidiMessage });
 
   const handleParameterChange = useCallback(async (synthId: number, params: Partial<SynthParameters>) => {
     await authFetch(`/synth/${synthId}/parameters`, {
@@ -822,13 +976,14 @@ function App() {
         currentStep: s.currentStep % stepCount,
       };
     }));
+    clearActiveSavedPattern();
 
     await authFetch(`/synth/${synthId}/patterns/${synth.pattern.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(nextPattern),
     });
-  }, []);
+  }, [clearActiveSavedPattern]);
 
   const handleSynthMixChange = useCallback(async (synthId: number, mix: { muted?: boolean; solo?: boolean }) => {
     setSynths(prev => prev.map(s =>
@@ -862,7 +1017,12 @@ function App() {
           effectsLoop: effectsLoopRef.current,
         }),
       });
-      return response.ok;
+      if (!response.ok) return false;
+      const saved = await response.json();
+      if (saved?.id && saved?.name) {
+        setActiveSavedPattern({ id: saved.id, name: saved.name });
+      }
+      return true;
     } catch (error) {
       console.error('Pattern save error:', error);
       return false;
@@ -926,7 +1086,11 @@ function App() {
     void fetchDrumKits();
   }, [sessionToken]);
 
-  const handleLoadSavedPattern = useCallback(async (synthId: number, data: SavedPatternFull) => {
+  const handleLoadSavedPattern = useCallback(async (
+    synthId: number,
+    data: SavedPatternFull,
+    meta?: { id: string; name: string }
+  ) => {
     const synth = synthsRef.current.find(s => s.id === synthId);
     if (!synth?.pattern) return;
 
@@ -989,6 +1153,11 @@ function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updated),
     });
+    if (meta?.id && meta?.name) {
+      setActiveSavedPattern({ id: meta.id, name: meta.name });
+    } else {
+      setActiveSavedPattern(null);
+    }
   }, []);
 
   const handleLoadGlobal = useCallback(async (savedId: string) => {
@@ -998,7 +1167,7 @@ function App() {
       const res = await authFetch(`/patterns/saved/${savedId}`);
       if (!res.ok) return;
       const data: SavedPatternFull = await res.json();
-      await handleLoadSavedPattern(targetSynthId, data);
+      await handleLoadSavedPattern(targetSynthId, data, { id: savedId, name: data.name });
     } catch {
       // ignore
     }
@@ -1207,6 +1376,7 @@ function App() {
       isPlaying: false,
       currentStep: 0,
       selectedStep: null,
+      stepRecordPointer: 0,
       muted: false,
       solo: false,
       forceReleaseSignal: !s.forceReleaseSignal,
@@ -1223,6 +1393,7 @@ function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(DEFAULT_EFFECTS_LOOP),
     });
+    setActiveSavedPattern(null);
     handleDrumReset();
   }, [handleDrumReset]);
 
@@ -1238,9 +1409,33 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>Discobot</h1>
+        <div className="app-title-wrap">
+          <h1>Discobot</h1>
+          {activeSavedPattern && (
+            <span className="active-pattern-name" title={activeSavedPattern.name}>
+              {activeSavedPattern.name}
+            </span>
+          )}
+        </div>
         <div className="header-controls">
           <TempoDisplay tempo={globalTempo} onChange={handleTempoChange} />
+          <MidiPanel
+            supported={midiState.supported}
+            connected={midiState.connected}
+            devices={midiState.devices}
+            allDevicesId={midiState.allDevicesId}
+            selectedDeviceId={midiState.selectedDeviceId}
+            onDeviceChange={midiState.setSelectedDeviceId}
+            mode={midiMode}
+            onModeChange={setMidiMode}
+            channel={midiChannel}
+            onChannelChange={setMidiChannel}
+            synthIds={synths.map((s) => s.id)}
+            targetSynthId={midiTargetSynthId}
+            onTargetSynthChange={setMidiTargetSynthId}
+            lastMessage={midiState.lastMessage}
+            error={midiState.error}
+          />
           <button className="help-button" onClick={() => setHelpOpen(true)} title="How to use Discobot">
             Help
           </button>
@@ -1299,6 +1494,7 @@ function App() {
                 isPlaying={synth.isPlaying}
                 currentStep={synth.currentStep}
                 selectedStep={synth.selectedStep}
+                keyboardMode={synth.keyboardMode}
                 octaveShift={synth.octaveShift}
                 muted={synth.muted}
                 solo={synth.solo}
@@ -1310,9 +1506,16 @@ function App() {
                 onStepChange={(step) => handleStepChange(synth.id, step)}
                 onStepCountChange={(stepCount) => handleStepCountChange(synth.id, stepCount)}
                 onSavePattern={(name) => handleSavePattern(synth.id, name)}
-                onLoadSavedPattern={(data) => handleLoadSavedPattern(synth.id, data)}
+                onLoadSavedPattern={(data, savedId) => handleLoadSavedPattern(
+                  synth.id,
+                  data,
+                  savedId ? { id: savedId, name: data.name } : undefined
+                )}
                 onParameterChange={(params) => handleParameterChange(synth.id, params)}
+                onKeyboardModeChange={(mode) => handleKeyboardModeChange(synth.id, mode)}
                 onOctaveShift={(dir) => handleOctaveShift(synth.id, dir)}
+                onPianoRollNoteAssign={(stepIndex, note) => handlePianoRollNoteAssign(synth.id, stepIndex, note)}
+                onClearPatternNotes={() => { void handleClearPatternNotes(synth.id); }}
                 onRemove={synth.id !== 1 ? () => handleRemoveSynth(synth.id) : undefined}
                 onPlayNote={(note) => handleNotePlay(synth.id, note)}
                 onNoteRelease={(note) => handleNoteRelease(synth.id, note)}

@@ -13,7 +13,7 @@ interface SequencerProps {
   onStepChange: (stepIndex: number) => void;
   onStepCountChange: (stepCount: 16 | 32) => void;
   onSavePattern: (name: string) => Promise<boolean>;
-  onLoadSavedPattern: (data: SavedPatternFull) => void;
+  onLoadSavedPattern: (data: SavedPatternFull, savedId?: string) => void;
 }
 
 function PatternManager({
@@ -87,7 +87,7 @@ export default function Sequencer({
       const res = await authFetch(`/patterns/saved/${id}`);
       if (res.ok) {
         const data: SavedPatternFull = await res.json();
-        onLoadSavedPattern(data);
+        onLoadSavedPattern(data, id);
       }
     } catch { /* ignore */ }
   };

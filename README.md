@@ -1,20 +1,22 @@
 # Discobot
 
-A Discord bot with a web-based UI for creating music using synthesis, sequencing, and drums. Control up to 3 independent synthesizers, a 16-step sequencer, and drum machine from a web interface or Discord slash commands. Audio plays through the Discord voice channel in real time.
+A Discord bot with a web-based UI for creating music using synthesis, sequencing, and drums. Control up to 3 independent synthesizers, a 16-step sequencer, piano roll editor, and drum machine from a web interface or Discord slash commands. Audio plays through the Discord voice channel in real time.
 
 ## Features
 
 - **Multi-Synth**: Up to 3 independent synthesizers, each with own sequencer, keyboard, and parameter controls
 - **16-step Sequencer**: Step grid with note assignment via piano keyboard, monophonic mode
+- **Piano Roll Editor**: Per-synth keyboard/piano-roll toggle with click/drag note painting on the shared 16-step pattern
 - **Synthesizer**: 4 waveforms (sine, square, sawtooth, triangle), detune, resonant lowpass filter, ADSR envelope, delay effect, master gain
 - **Octave Shift**: -1 to +1 octave range per synth with range display
 - **Drum Machine**: 8 instruments (kick, snare, open/closed hi-hat, ride, crash, snare 2, clap), 16-step toggle grid with per-instrument volume/tone/extra controls, master volume
+- **MIDI Input**: Web MIDI device selection with `live`, `record`, and `step` routing modes per synth
 - **Browser Audio**: Web Audio API feedback for synth and drums that respects parameters, independent mute toggle
 - **Discord Audio Streaming**: Pattern rendered to 48kHz PCM with soft-clipped master mix, sent over WebSocket, played through bot voice connection with loop
-- **Pattern Persistence**: Save/load/delete patterns with name, stores all synth params, drum state, and master volumes in `saved-patterns.json`
+- **Pattern Persistence**: Save/load/delete patterns with name, stores all synth params, drum state, and master volumes in `saved-patterns.json` under `PERSISTENCE_DIR` (fallback `DATA_DIR`, then local `data/`)
 - **Real-time Sync**: All connected clients stay synchronized via WebSocket
 - **Global Tempo**: Single BPM shared across all synths, editable LED display in header
-- **Header Controls**: "Discobot" title, tempo LED, help modal, inline save, mute, connection status
+- **Header Controls**: "Discobot" title, active saved-pattern badge, tempo LED, MIDI panel, help modal, inline save, mute, connection status
 - **Hybrid Control**: Web UI or Discord slash commands
 
 ## Architecture
@@ -80,6 +82,9 @@ Edit `.env`:
 ```env
 DISCORD_TOKEN=your_bot_token
 DISCORD_CLIENT_ID=your_application_id
+
+# Optional: deploy-safe saved pattern storage directory
+PERSISTENCE_DIR=/data
 ```
 
 ### 4. Run
@@ -115,10 +120,10 @@ Starts:
 
 ## Web UI
 
-- **Header**: "Discobot" title, editable BPM LED, help button/modal, save button, mute toggle, connection status
+- **Header**: "Discobot" title, active saved-pattern badge, editable BPM LED, MIDI panel (device/mode/channel/synth routing), help button/modal, save button, mute toggle, connection status
 - **Synth Units**: Each contains sequencer + synth controls + keyboard, stacked vertically
 - **Sequencer grid**: 16 steps, click to select (amber), piano key assigns note (blue)
-- **Piano keyboard**: 3 octaves with octave shift (-1 to +1), range display (e.g., C3–B5)
+- **Keyboard/Piano Roll panel**: Per-synth mode toggle between 3-octave keyboard (with octave shift/range display) and piano roll editor on shared step data
 - **Synth controls**: Oscillator, filter, envelope, delay, master gain — all with hover info tooltips
 - **Drum machine**: 8×16 toggle grid with instrument selection, per-instrument volume/tone/extra knobs, master volume knob
 - **Save/Load/Manage**: Save from header, load from dropdown (5 recent + show all), delete from modal

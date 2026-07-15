@@ -1,0 +1,77 @@
+.midi-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid #3f3f3f;
+  border-radius: 6px;
+  background: #111;
+  min-width: 270px;
+}
+
+.midi-panel.unsupported {
+  color: #888;
+  font-size: 0.75rem;
+}
+
+.midi-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.midi-row label {
+  color: #888;
+  font-size: 0.7rem;
+}
+
+.midi-row select {
+  background: #1d1d1d;
+  border: 1px solid #444;
+  border-radius: 4px;
+  color: #ddd;
+  font-size: 0.72rem;
+  padding: 0.16rem 0.35rem;
+}
+
+.midi-status {
+  margin-left: auto;
+  font-size: 0.68rem;
+}
+
+.midi-status.connected {
+  color: #22c55e;
+}
+
+.midi-status.disconnected {
+  color: #ef4444;
+}
+
+.midi-mode-buttons {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.midi-mode-buttons button {
+  background: #1f1f1f;
+  border: 1px solid #444;
+  color: #aaa;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  padding: 0.12rem 0.35rem;
+  text-transform: capitalize;
+  cursor: pointer;
+}
+
+.midi-mode-buttons button.active {
+  border-color: #00d4ff;
+  color: #00d4ff;
+}
+
+.midi-last-message {
+  color: #777;
+  font-size: 0.68rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

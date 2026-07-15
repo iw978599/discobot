@@ -235,13 +235,29 @@ const DRUM_KITS: DrumKitDefinition[] = [
     },
   },
 ];
-const SAVED_PATTERNS_FILE = path.join(__dirname, '..', 'saved-patterns.json');
+const DEFAULT_PERSISTENCE_DIR = path.resolve(process.cwd(), 'data');
+const PERSISTENCE_DIR = process.env.PERSISTENCE_DIR || process.env.DATA_DIR || DEFAULT_PERSISTENCE_DIR;
+const SAVED_PATTERNS_FILE = path.join(PERSISTENCE_DIR, 'saved-patterns.json');
+const LEGACY_SAVED_PATTERNS_FILE = path.join(__dirname, '..', 'saved-patterns.json');
 const guildStates = new Map<string, GuildRuntimeState>();
 const authSessions = new Map<string, AuthSession>();
 const loginTokens = new Map<string, LoginToken>();
 const wsClients = new Map<WebSocket, { guildId: string; sessionToken: string; username: string }>();
 const botClients = new Set<WebSocket>();
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+function ensurePersistenceStorage() {
+  try {
+    fs.mkdirSync(PERSISTENCE_DIR, { recursive: true });
+    if (!fs.existsSync(SAVED_PATTERNS_FILE) && fs.existsSync(LEGACY_SAVED_PATTERNS_FILE)) {
+      fs.copyFileSync(LEGACY_SAVED_PATTERNS_FILE, SAVED_PATTERNS_FILE);
+    }
+  } catch (error) {
+    console.error('Failed to prepare persistence storage:', error);
+  }
+}
+
+ensurePersistenceStorage();
 
 function createDefaultDrumState(): DrumState {
   const state = {} as DrumState;
