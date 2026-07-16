@@ -93,6 +93,15 @@ export interface SynthParameters {
   };
 }
 
+export type SynthModelId = 'generic' | 'minimoog-model-d' | 'juno-106' | 'dx7' | 'tb-303' | 'prophet-5';
+
+export interface SynthModelParams {
+  macro1: number;
+  macro2: number;
+  macro3: number;
+  macro4: number;
+}
+
 export interface SequencerStep {
   active: boolean;
   note?: string;
@@ -171,6 +180,8 @@ export interface SavedPatternFull {
   updatedAt: number;
   steps: SequencerStep[];
   synthParams: SynthParameters;
+  synthModelId?: SynthModelId;
+  synthModelParams?: SynthModelParams;
   tempo: number;
   drumState: DrumState;
   drumMasterVolume?: number;

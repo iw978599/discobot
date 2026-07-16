@@ -1,7 +1,7 @@
 import Sequencer from './Sequencer';
 import SynthControls from './SynthControls';
 import KeyboardPanel from './KeyboardPanel';
-import { Pattern, SynthParameters, SavedPatternFull } from '../types';
+import { Pattern, SynthParameters, SavedPatternFull, SynthModelId, SynthModelParams } from '../types';
 import './SynthUnit.css';
 
 interface SynthUnitProps {
@@ -31,6 +31,10 @@ interface SynthUnitProps {
   onSavePreset: (name: string) => void;
   onLoadPreset: (presetId: string) => void;
   onDeletePreset: (presetId: string) => void;
+  synthModelId: SynthModelId;
+  synthModelParams: SynthModelParams;
+  onSynthModelChange: (modelId: SynthModelId) => void;
+  onSynthModelParamsChange: (params: Partial<SynthModelParams>) => void;
   onKeyboardModeChange: (mode: 'keyboard' | 'piano-roll') => void;
   onOctaveShift: (direction: 'up' | 'down') => void;
   onPianoRollNoteAssign: (stepIndex: number, note?: string) => void;
@@ -67,6 +71,10 @@ export default function SynthUnit({
   onSavePreset,
   onLoadPreset,
   onDeletePreset,
+  synthModelId,
+  synthModelParams,
+  onSynthModelChange,
+  onSynthModelParamsChange,
   onKeyboardModeChange,
   onOctaveShift,
   onPianoRollNoteAssign,
@@ -104,6 +112,10 @@ export default function SynthUnit({
               onSavePreset={onSavePreset}
               onLoadPreset={onLoadPreset}
               onDeletePreset={onDeletePreset}
+              synthModelId={synthModelId}
+              synthModelParams={synthModelParams}
+              onModelChange={onSynthModelChange}
+              onModelParamsChange={onSynthModelParamsChange}
               octaveShift={octaveShift}
               onOctaveShift={onOctaveShift}
             />

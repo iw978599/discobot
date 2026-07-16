@@ -4,7 +4,8 @@
  */
 
 import { useState } from 'react';
-import { SynthParameters, OscillatorType } from '../types';
+import { SynthParameters, OscillatorType, SynthModelId, SynthModelParams } from '../types';
+import { SYNTH_MODELS, getSynthModelDefinition } from '../synthModels';
 import Knob from './Knob';
 import './SynthControls.css';
 
@@ -15,6 +16,10 @@ interface SynthControlsProps {
   onSavePreset: (name: string) => void;
   onLoadPreset: (presetId: string) => void;
   onDeletePreset: (presetId: string) => void;
+  synthModelId: SynthModelId;
+  synthModelParams: SynthModelParams;
+  onModelChange: (modelId: SynthModelId) => void;
+  onModelParamsChange: (params: Partial<SynthModelParams>) => void;
   octaveShift: number;
   onOctaveShift: (direction: 'up' | 'down') => void;
 }
@@ -66,6 +71,10 @@ export default function SynthControls({
   onSavePreset,
   onLoadPreset,
   onDeletePreset,
+  synthModelId,
+  synthModelParams,
+  onModelChange,
+  onModelParamsChange,
   octaveShift,
   onOctaveShift,
 }: SynthControlsProps) {
@@ -113,6 +122,8 @@ export default function SynthControls({
     });
   };
 
+  const model = getSynthModelDefinition(synthModelId);
+
   return (
     <div className="synth-controls-panel">
       <div className="synth-header">
@@ -146,6 +157,20 @@ export default function SynthControls({
           >
             Oct +
           </button>
+          <div className="model-selector-wrap">
+            <label>MODEL</label>
+            <select
+              className="synth-select model-select"
+              value={synthModelId}
+              onChange={(e) => onModelChange(e.target.value as SynthModelId)}
+            >
+              {SYNTH_MODELS.map((entry) => (
+                <option key={entry.id} value={entry.id}>
+                  {entry.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         <div className="synth-header-tools">
           <div className="preset-controls">
@@ -247,6 +272,31 @@ export default function SynthControls({
           </div>
         </div>
       </div>
+
+      {model.macros.length > 0 && (
+        <div className="synth-model-macros">
+          <div className="synth-model-header">
+            <h3>{model.name}</h3>
+            <span>{model.subtitle}</span>
+          </div>
+          <div className="synth-model-macro-grid">
+            {model.macros.map((macro) => (
+              <Knob
+                key={macro.key}
+                label={macro.label}
+                value={synthModelParams[macro.key]}
+                min={0}
+                max={1}
+                step={0.01}
+                displayValue={`${Math.round(synthModelParams[macro.key] * 100)}%`}
+                onChange={(value) => onModelParamsChange({ [macro.key]: value } as Partial<SynthModelParams>)}
+                parseInputValue={parsePercent(0, 1)}
+                color="#f59e0b"
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="synth-columns">
         <div className="synth-column">

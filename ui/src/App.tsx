@@ -6,11 +6,13 @@ import MidiPanel from './components/MidiPanel';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useSynthAudio } from './hooks/useSynthAudio';
 import { useDrumAudio } from './hooks/useDrumAudio';
+import { usePatternAudio } from './hooks/usePatternAudio';
 import { MidiMode, MidiMessage, useMidiInput } from './hooks/useMidiInput';
 import { getWebSocketUrl } from './config';
-import { Pattern, SynthParameters, SavedPatternInfo, SavedPatternFull, DrumState, DrumInstrument, DrumSettings, DrumKitDefinition, DrumKitId, EffectsLoopState, FxSendLevels } from './types';
+import { Pattern, SynthParameters, SavedPatternInfo, SavedPatternFull, DrumState, DrumInstrument, DrumSettings, DrumKitDefinition, DrumKitId, EffectsLoopState, FxSendLevels, SynthModelId, SynthModelParams } from './types';
 import { authFetch, exchangeLoginToken, fetchSessionInfo, setAuthContext } from './authClient';
 import { downloadMidiFile, transposeNote } from './utils/midiExport';
+import { DEFAULT_SYNTH_MODEL_ID, createDefaultSynthModelParams, mapSynthModelToEngineParams, normalizeSynthModelId, normalizeSynthModelParams } from './synthModels';
 import './App.css';
 
 const SESSION_TOKEN_STORAGE_KEY = 'discobot_session_token';
@@ -82,12 +84,16 @@ interface SynthPreset {
   id: string;
   name: string;
   params: SynthParameters;
+  modelId: SynthModelId;
+  modelParams: SynthModelParams;
   builtIn?: boolean;
 }
 
 interface PatternSnapshot {
   pattern: Pattern;
   synthParams: SynthParameters | null;
+  synthModelId: SynthModelId;
+  synthModelParams: SynthModelParams;
   drumState: DrumState;
   tempo: number;
 }
@@ -102,6 +108,8 @@ interface SynthState {
   pattern: Pattern | null;
   patterns: Pattern[];
   synthParams: SynthParameters | null;
+  synthModelId: SynthModelId;
+  synthModelParams: SynthModelParams;
   isPlaying: boolean;
   currentStep: number;
   selectedStep: number | null;
@@ -111,6 +119,11 @@ interface SynthState {
   muted: boolean;
   solo: boolean;
   forceReleaseSignal: boolean;
+}
+
+interface PatternAudioPayload {
+  audio: string;
+  sampleRate: number;
 }
 
 function createDefaultDrumState(): DrumState {
@@ -164,12 +177,24 @@ function cloneSynthParams(params: SynthParameters | null): SynthParameters | nul
   };
 }
 
+function cloneSynthModelParams(params: SynthModelParams | null | undefined): SynthModelParams {
+  const normalized = normalizeSynthModelParams(params);
+  return {
+    macro1: normalized.macro1,
+    macro2: normalized.macro2,
+    macro3: normalized.macro3,
+    macro4: normalized.macro4,
+  };
+}
+
 function createBuiltInPresets(): SynthPreset[] {
   return [
     {
       id: 'builtin-pad',
       name: 'Pad',
       builtIn: true,
+      modelId: DEFAULT_SYNTH_MODEL_ID,
+      modelParams: createDefaultSynthModelParams(),
       params: {
         ...DEFAULT_PARAMS,
         oscillator: { type: 'triangle', detune: -4 },
@@ -183,6 +208,8 @@ function createBuiltInPresets(): SynthPreset[] {
       id: 'builtin-bass',
       name: 'Bass',
       builtIn: true,
+      modelId: 'minimoog-model-d',
+      modelParams: { macro1: 0.72, macro2: 0.64, macro3: 0.35, macro4: 0.45 },
       params: {
         ...DEFAULT_PARAMS,
         oscillator: { type: 'sawtooth', detune: -8 },
@@ -196,6 +223,8 @@ function createBuiltInPresets(): SynthPreset[] {
       id: 'builtin-lead',
       name: 'Lead',
       builtIn: true,
+      modelId: 'prophet-5',
+      modelParams: { macro1: 0.63, macro2: 0.55, macro3: 0.58, macro4: 0.44 },
       params: {
         ...DEFAULT_PARAMS,
         oscillator: { type: 'square', detune: 6 },
@@ -209,6 +238,8 @@ function createBuiltInPresets(): SynthPreset[] {
       id: 'builtin-pluck',
       name: 'Pluck',
       builtIn: true,
+      modelId: 'dx7',
+      modelParams: { macro1: 0.52, macro2: 0.68, macro3: 0.74, macro4: 0.86 },
       params: {
         ...DEFAULT_PARAMS,
         oscillator: { type: 'triangle', detune: 0 },
@@ -222,6 +253,8 @@ function createBuiltInPresets(): SynthPreset[] {
       id: 'builtin-grand-piano',
       name: 'Grand Piano',
       builtIn: true,
+      modelId: 'juno-106',
+      modelParams: { macro1: 0.46, macro2: 0.52, macro3: 0.28, macro4: 0.61 },
       params: {
         ...DEFAULT_PARAMS,
         oscillator: { type: 'triangle', detune: 2 },
@@ -238,7 +271,13 @@ function loadUserPresets(): SynthPreset[] {
   try {
     const raw = localStorage.getItem(SYNTH_PRESETS_STORAGE_KEY);
     if (!raw) return [];
-    const parsed = JSON.parse(raw) as Array<{ id: string; name: string; params: SynthParameters }>;
+    const parsed = JSON.parse(raw) as Array<{
+      id: string;
+      name: string;
+      params: SynthParameters;
+      modelId?: SynthModelId;
+      modelParams?: SynthModelParams;
+    }>;
     if (!Array.isArray(parsed)) return [];
     return parsed
       .filter((entry) => entry && typeof entry.id === 'string' && typeof entry.name === 'string' && entry.params)
@@ -246,6 +285,8 @@ function loadUserPresets(): SynthPreset[] {
         id: entry.id,
         name: entry.name,
         params: cloneSynthParams(entry.params) || DEFAULT_PARAMS,
+        modelId: normalizeSynthModelId(entry.modelId),
+        modelParams: cloneSynthModelParams(entry.modelParams),
       }));
   } catch {
     return [];
@@ -513,6 +554,7 @@ function HelpModal({ open, onClose }: { open: boolean; onClose: () => void }) {
 function App() {
   const synthAudio = useSynthAudio();
   const drumAudio = useDrumAudio();
+  const patternAudio = usePatternAudio();
   const [synths, setSynths] = useState<SynthState[]>([]);
   const [drumState, setDrumState] = useState<DrumState>(createDefaultDrumState);
   const [drumKits, setDrumKits] = useState<DrumKitDefinition[]>([]);
@@ -562,6 +604,7 @@ function App() {
   const isRestoringRef = useRef(false);
   const arpTimeoutsRef = useRef<number[]>([]);
   const lastDrumPreviewStepRef = useRef<number | null>(null);
+  const lastPatternAudioRef = useRef<PatternAudioPayload | null>(null);
 
   useEffect(() => {
     if (synths.length === 0) return;
@@ -581,10 +624,18 @@ function App() {
     return () => {
       synthAudio.dispose();
       drumAudio.dispose();
+      patternAudio.dispose();
       arpTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
       arpTimeoutsRef.current = [];
     };
   }, []);
+
+  useEffect(() => {
+    patternAudio.setMuted(browserMuted);
+    if (!browserMuted && lastPatternAudioRef.current && synthsRef.current.some((s) => s.isPlaying)) {
+      void patternAudio.playLoop(lastPatternAudioRef.current, false);
+    }
+  }, [browserMuted, patternAudio]);
 
   const getHistoryKey = useCallback((synthId: number, patternId: string) => `${synthId}:${patternId}`, []);
 
@@ -594,6 +645,8 @@ function App() {
     return {
       pattern: clonePattern(synth.pattern),
       synthParams: cloneSynthParams(synth.synthParams),
+      synthModelId: synth.synthModelId,
+      synthModelParams: cloneSynthModelParams(synth.synthModelParams),
       drumState: cloneDrumState(drumStateRef.current),
       tempo: globalTempo,
     };
@@ -615,7 +668,14 @@ function App() {
   const applySnapshot = useCallback(async (synthId: number, snapshot: PatternSnapshot) => {
     setSynths((prev) => prev.map((entry) => (
       entry.id === synthId
-        ? { ...entry, pattern: clonePattern(snapshot.pattern), synthParams: cloneSynthParams(snapshot.synthParams), selectedStep: null }
+        ? {
+          ...entry,
+          pattern: clonePattern(snapshot.pattern),
+          synthParams: cloneSynthParams(snapshot.synthParams),
+          synthModelId: snapshot.synthModelId,
+          synthModelParams: cloneSynthModelParams(snapshot.synthModelParams),
+          selectedStep: null,
+        }
         : entry
     )));
     setDrumState(cloneDrumState(snapshot.drumState));
@@ -631,6 +691,14 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(snapshot.synthParams || DEFAULT_PARAMS),
+      }),
+      authFetch(`/synth/${synthId}/model`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          modelId: snapshot.synthModelId,
+          modelParams: snapshot.synthModelParams,
+        }),
       }),
       authFetch('/drum/state', {
         method: 'PUT',
@@ -763,7 +831,13 @@ function App() {
   useEffect(() => {
     const presetsToPersist = synthPresets
       .filter((preset) => !preset.builtIn)
-      .map((preset) => ({ id: preset.id, name: preset.name, params: preset.params }));
+      .map((preset) => ({
+        id: preset.id,
+        name: preset.name,
+        params: preset.params,
+        modelId: preset.modelId,
+        modelParams: preset.modelParams,
+      }));
     localStorage.setItem(SYNTH_PRESETS_STORAGE_KEY, JSON.stringify(presetsToPersist));
   }, [synthPresets]);
 
@@ -851,6 +925,8 @@ function App() {
             pattern: s.pattern,
             patterns: s.patterns || [],
             synthParams: normalizeSynthParams(s.synthParams),
+            synthModelId: normalizeSynthModelId(s.synthModelId),
+            synthModelParams: normalizeSynthModelParams(s.synthModelParams),
             isPlaying: s.isPlaying || false,
             currentStep: 0,
             selectedStep: null,
@@ -867,6 +943,8 @@ function App() {
             pattern: message.data.patterns?.[0] || null,
             patterns: message.data.patterns || [],
             synthParams: normalizeSynthParams(message.data.synthParameters),
+            synthModelId: DEFAULT_SYNTH_MODEL_ID,
+            synthModelParams: createDefaultSynthModelParams(),
             isPlaying: false,
             currentStep: 0,
             selectedStep: null,
@@ -912,7 +990,7 @@ function App() {
         break;
       }
       case 'synthCreated': {
-        const { synthId, pattern, synthParams } = message.data;
+        const { synthId, pattern, synthParams, synthModelId, synthModelParams } = message.data;
         setSynths(prev => {
           if (prev.some(s => s.id === synthId)) return prev;
           return [...prev, {
@@ -920,6 +998,8 @@ function App() {
             pattern,
             patterns: pattern ? [pattern] : [],
             synthParams: normalizeSynthParams(synthParams),
+            synthModelId: normalizeSynthModelId(synthModelId),
+            synthModelParams: normalizeSynthModelParams(synthModelParams),
             isPlaying: Boolean(message.data.isPlaying),
             currentStep: 0,
             selectedStep: null,
@@ -931,6 +1011,19 @@ function App() {
             forceReleaseSignal: false,
           }];
         });
+        break;
+      }
+      case 'synthModelUpdate': {
+        const { synthId, modelId, modelParams } = message.data;
+        setSynths((prev) => prev.map((s) => (
+          s.id === synthId
+            ? {
+              ...s,
+              synthModelId: normalizeSynthModelId(modelId),
+              synthModelParams: normalizeSynthModelParams(modelParams),
+            }
+            : s
+        )));
         break;
       }
       case 'synthMix': {
@@ -955,11 +1048,28 @@ function App() {
       }
       case 'sequencerStop': {
         const { synthId } = message.data;
+        const hasOtherPlayingSynth = synthsRef.current.some((s) => s.id !== synthId && s.isPlaying);
+        if (!hasOtherPlayingSynth) {
+          patternAudio.stop();
+          lastPatternAudioRef.current = null;
+        }
         if (synthId === 1) lastDrumPreviewStepRef.current = null;
         synthAudio.stopAllNotes();
         setSynths(prev => prev.map(s =>
           s.id === synthId ? { ...s, isPlaying: false, currentStep: 0, forceReleaseSignal: !s.forceReleaseSignal } : s
         ));
+        break;
+      }
+      case 'patternAudio': {
+        const { audio, sampleRate } = message.data || {};
+        if (typeof audio === 'string' && audio.length > 0) {
+          const payload = {
+            audio,
+            sampleRate: typeof sampleRate === 'number' && Number.isFinite(sampleRate) && sampleRate > 1000 ? sampleRate : 48000,
+          };
+          lastPatternAudioRef.current = payload;
+          void patternAudio.playLoop(payload, browserMutedRef.current);
+        }
         break;
       }
       case 'tempoChange': {
@@ -976,7 +1086,8 @@ function App() {
         const synthStepCount = Math.max(1, targetSynth?.pattern?.steps.length || 16);
         const normalizedStep = ((step % synthStepCount) + synthStepCount) % synthStepCount;
         const targetStep = targetSynth?.pattern?.steps[normalizedStep];
-        if (canPlaySynth && targetSynth?.synthParams && targetStep?.active && targetStep.note) {
+        const hasRenderedLoopAudio = patternAudio.isActive();
+        if (!hasRenderedLoopAudio && canPlaySynth && targetSynth?.synthParams && targetStep?.active && targetStep.note) {
           const barDurationSeconds = (60 / Math.max(20, globalTempo)) * 4;
           const stepWindowSeconds = barDurationSeconds / synthStepCount;
           triggerSynthNote(targetSynth.synthParams, targetStep.note, stepWindowSeconds, targetStep.velocity);
@@ -985,7 +1096,7 @@ function App() {
           s.id === synthId ? { ...s, currentStep: step } : s
         ));
         const ds = drumStateRef.current;
-        if (ds && synthId === 1) {
+        if (!hasRenderedLoopAudio && ds && synthId === 1) {
           const drumStep = Math.floor((normalizedStep / synthStepCount) * 16) % 16;
           if (lastDrumPreviewStepRef.current === drumStep) break;
           lastDrumPreviewStepRef.current = drumStep;
@@ -1067,7 +1178,7 @@ function App() {
         break;
       }
     }
-  }, [synthAudio, drumAudio, triggerSynthNote, globalTempo]);
+  }, [synthAudio, drumAudio, triggerSynthNote, globalTempo, patternAudio]);
 
   const connected = useWebSocket(sessionToken ? getWebSocketUrl(sessionToken) : null, handleMessage);
 
@@ -1092,6 +1203,8 @@ function App() {
             pattern: data.pattern,
             patterns: data.patterns || [],
             synthParams: normalizeSynthParams(data.synthParams),
+            synthModelId: normalizeSynthModelId(data.synthModelId),
+            synthModelParams: normalizeSynthModelParams(data.synthModelParams),
             isPlaying: Boolean(data.isPlaying),
             currentStep: 0,
             selectedStep: null,
@@ -1153,6 +1266,7 @@ function App() {
       await Promise.all([
         synthAudio.ensureAudioReady(),
         drumAudio.ensureAudioReady(),
+        patternAudio.ensureAudioReady(),
       ]);
       await Promise.all(playableSynths.map(s =>
         authFetch('/sequencer/play', {
@@ -1173,8 +1287,10 @@ function App() {
     ));
     arpTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
     arpTimeoutsRef.current = [];
+    patternAudio.stop();
+    lastPatternAudioRef.current = null;
     synthAudio.stopAllNotes();
-  }, [synthAudio, drumAudio]);
+  }, [synthAudio, drumAudio, patternAudio]);
 
   const clearActiveSavedPattern = useCallback(() => {
     setActiveSavedPattern(null);
@@ -1384,6 +1500,47 @@ function App() {
     });
   }, [pushHistorySnapshot]);
 
+  const handleSynthModelChange = useCallback(async (
+    synthId: number,
+    modelId: SynthModelId,
+    modelParams?: Partial<SynthModelParams>
+  ) => {
+    const synth = synthsRef.current.find((entry) => entry.id === synthId);
+    if (!synth) return;
+    if (synth.pattern) pushHistorySnapshot(synthId, synth.pattern.id);
+    const normalizedModelId = normalizeSynthModelId(modelId);
+    const normalizedModelParams = normalizeSynthModelParams({
+      ...synth.synthModelParams,
+      ...modelParams,
+    });
+    clearActiveSavedPattern();
+    setSynths((prev) => prev.map((entry) => (
+      entry.id === synthId
+        ? {
+          ...entry,
+          synthModelId: normalizedModelId,
+          synthModelParams: normalizedModelParams,
+        }
+        : entry
+    )));
+    await authFetch(`/synth/${synthId}/model`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        modelId: normalizedModelId,
+        modelParams: normalizedModelParams,
+      }),
+    });
+    const mapped = mapSynthModelToEngineParams(normalizedModelId, normalizedModelParams);
+    if (Object.keys(mapped).length > 0) {
+      await authFetch(`/synth/${synthId}/parameters`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(mapped),
+      });
+    }
+  }, [pushHistorySnapshot, clearActiveSavedPattern]);
+
   const handleStepCountChange = useCallback(async (synthId: number, stepCount: 16 | 32) => {
     const synth = synthsRef.current.find(s => s.id === synthId);
     if (!synth?.pattern) return;
@@ -1464,6 +1621,8 @@ function App() {
         synthId,
         steps: pattern.steps,
         synthParams,
+        synthModelId: synth.synthModelId,
+        synthModelParams: synth.synthModelParams,
         tempo: pattern.tempo,
         drumState: drumStateRef.current,
         drumKitId: selectedDrumKitIdRef.current,
@@ -1518,6 +1677,8 @@ function App() {
       id: `user-${Date.now()}`,
       name: presetName,
       params: cloneSynthParams(synth.synthParams) || cloneSynthParams(DEFAULT_PARAMS)!,
+      modelId: synth.synthModelId,
+      modelParams: cloneSynthModelParams(synth.synthModelParams),
     };
     setSynthPresets((prev) => [...prev, userPreset]);
   }, []);
@@ -1525,8 +1686,9 @@ function App() {
   const handleLoadSynthPreset = useCallback(async (synthId: number, presetId: string) => {
     const preset = synthPresets.find((entry) => entry.id === presetId);
     if (!preset) return;
+    await handleSynthModelChange(synthId, preset.modelId, preset.modelParams);
     await handleParameterChange(synthId, cloneSynthParams(preset.params) || DEFAULT_PARAMS);
-  }, [synthPresets, handleParameterChange]);
+  }, [synthPresets, handleParameterChange, handleSynthModelChange]);
 
   const handleDeleteSynthPreset = useCallback((presetId: string) => {
     setSynthPresets((prev) => prev.filter((preset) => preset.id !== presetId || preset.builtIn));
@@ -1646,6 +1808,25 @@ function App() {
         body: JSON.stringify(nextEffectsLoop),
       });
     }
+    const nextModelId = normalizeSynthModelId(data.synthModelId);
+    const nextModelParams = normalizeSynthModelParams(data.synthModelParams);
+    setSynths((prev) => prev.map((entry) => (
+      entry.id === synthId
+        ? {
+          ...entry,
+          synthModelId: nextModelId,
+          synthModelParams: nextModelParams,
+        }
+        : entry
+    )));
+    await authFetch(`/synth/${synthId}/model`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        modelId: nextModelId,
+        modelParams: nextModelParams,
+      }),
+    });
     if (data.synthParams) {
       await authFetch(`/synth/${synthId}/parameters`, {
         method: 'POST',
@@ -1870,6 +2051,14 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(DEFAULT_PARAMS),
       });
+      await authFetch(`/synth/${synth.id}/model`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          modelId: DEFAULT_SYNTH_MODEL_ID,
+          modelParams: createDefaultSynthModelParams(),
+        }),
+      });
       await authFetch(`/synth/${synth.id}/mix`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1901,6 +2090,8 @@ function App() {
         steps: s.pattern.steps.map(st => ({ ...st, active: false, note: undefined })),
       } : null,
       synthParams: DEFAULT_PARAMS,
+      synthModelId: DEFAULT_SYNTH_MODEL_ID,
+      synthModelParams: createDefaultSynthModelParams(),
       isPlaying: false,
       currentStep: 0,
       selectedStep: null,
@@ -2055,6 +2246,10 @@ function App() {
                 onSavePreset={(name) => handleSaveSynthPreset(synth.id, name)}
                 onLoadPreset={(presetId) => { void handleLoadSynthPreset(synth.id, presetId); }}
                 onDeletePreset={handleDeleteSynthPreset}
+                synthModelId={synth.synthModelId}
+                synthModelParams={synth.synthModelParams}
+                onSynthModelChange={(modelId) => { void handleSynthModelChange(synth.id, modelId); }}
+                onSynthModelParamsChange={(params) => { void handleSynthModelChange(synth.id, synth.synthModelId, params); }}
                 onKeyboardModeChange={(mode) => handleKeyboardModeChange(synth.id, mode)}
                 onOctaveShift={(dir) => handleOctaveShift(synth.id, dir)}
                 onPianoRollNoteAssign={(stepIndex, note) => handlePianoRollNoteAssign(synth.id, stepIndex, note)}
