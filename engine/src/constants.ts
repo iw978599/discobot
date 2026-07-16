@@ -11,7 +11,7 @@ export const AUDIO_MIXING = {
   DRUM_BOOST_FACTOR: 4.0,
   SOFT_CLIP_THRESHOLD: 0.85,
   SOFT_CLIP_FACTOR: 0.15,
-  MAX_PCM_VALUE: 60000, // For 16-bit audio
+  MAX_PCM_VALUE: 32767,
 } as const;
 
 /**

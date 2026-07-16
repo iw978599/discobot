@@ -1013,6 +1013,17 @@ function renderPatternAudio(state: GuildRuntimeState): string | null {
       if (fullPCM[i] > threshold) fullPCM[i] = threshold + (fullPCM[i] - threshold) * factor;
       if (fullPCM[i] < -threshold) fullPCM[i] = -threshold + (fullPCM[i] + threshold) * factor;
     }
+    let peak = 0;
+    for (let i = 0; i < fullPCM.length; i++) {
+      const abs = Math.abs(fullPCM[i]);
+      if (abs > peak) peak = abs;
+    }
+    if (peak > 1) {
+      const scale = 1 / peak;
+      for (let i = 0; i < fullPCM.length; i++) {
+        fullPCM[i] *= scale;
+      }
+    }
 
     const stereoLen = fullPCM.length * 2;
     const int16 = new Int16Array(stereoLen);
