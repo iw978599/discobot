@@ -1,4 +1,4 @@
-# Feature Testing Guide (Undo/Redo, MIDI Export, Arpeggiator, Presets)
+# Feature Testing Guide (Undo/Redo, MIDI Export, Arpeggiator, Presets, Drum FX Routing)
 
 ## Prerequisites
 1. Start app: `npm run dev`
@@ -62,7 +62,16 @@
 
 ## 5) Help UI + Docs
 1. Click **Help**.
-   - Expected: expanded help content includes shortcuts, MIDI export, arpeggiator, and presets.
+   - Expected: expanded help content includes quick start, header controls, shortcuts, synth/drum workflow, and FX return notes.
 2. Verify docs updates:
-   - `docs/plans/IMPROVEMENT_IDEAS.md`
+   - `README.md`
+   - `docs/guides/QUICK_START.md`
    - `docs/guides/FEATURE_TESTING_GUIDE.md`
+
+## 6) Drum FX Return Placement
+1. Open **Effects Loop** panel.
+   - Expected: no standalone drum return knob in this panel.
+2. Open **Rhythm Composer**.
+   - Expected: controls include `FX Return` and `Loop Return` in drum controls.
+3. Adjust `Loop Return`.
+   - Expected: wet drum amount from global loop changes while synth wet return remains unchanged.

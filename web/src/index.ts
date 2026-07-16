@@ -193,7 +193,7 @@ const DRUM_KITS: DrumKitDefinition[] = [
     modelVariant: 'analog',
     instrumentDefaults: {
       kick: { volume: 0.62, tone: 0.48, extra: 0.52 },
-      snare: { volume: 0.56, tone: 0.5, extra: 0.5 },
+      snare: { volume: 0.68, tone: 0.46, extra: 0.68 },
       openHH: { volume: 0.45, tone: 0.52, extra: 0.48 },
       closedHH: { volume: 0.48, tone: 0.55, extra: 0.58 },
       ride: { volume: 0.43, tone: 0.52, extra: 0.48 },
@@ -209,7 +209,7 @@ const DRUM_KITS: DrumKitDefinition[] = [
     modelVariant: 'modern',
     instrumentDefaults: {
       kick: { volume: 0.7, tone: 0.6, extra: 0.68 },
-      snare: { volume: 0.62, tone: 0.58, extra: 0.72 },
+      snare: { volume: 0.74, tone: 0.54, extra: 0.82 },
       openHH: { volume: 0.48, tone: 0.66, extra: 0.56 },
       closedHH: { volume: 0.54, tone: 0.7, extra: 0.72 },
       ride: { volume: 0.48, tone: 0.66, extra: 0.58 },
@@ -225,7 +225,7 @@ const DRUM_KITS: DrumKitDefinition[] = [
     modelVariant: 'dirty',
     instrumentDefaults: {
       kick: { volume: 0.58, tone: 0.38, extra: 0.46 },
-      snare: { volume: 0.56, tone: 0.42, extra: 0.62 },
+      snare: { volume: 0.66, tone: 0.4, extra: 0.78 },
       openHH: { volume: 0.42, tone: 0.4, extra: 0.66 },
       closedHH: { volume: 0.44, tone: 0.36, extra: 0.48 },
       ride: { volume: 0.4, tone: 0.34, extra: 0.5 },

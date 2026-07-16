@@ -40,22 +40,6 @@ export default function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProp
 
       <div className="effects-grid">
         <div className="effects-block">
-          <h4>Returns</h4>
-          <div className="effects-knobs">
-            <Knob
-              label="Drum"
-              value={effectsLoop.returns.drums}
-              min={0}
-              max={1}
-              displayValue={`${Math.round(effectsLoop.returns.drums * 100)}%`}
-              parseInputValue={parsePercent}
-              onChange={(value) => onChange({ returns: { ...effectsLoop.returns, drums: value } })}
-              color="#f59e0b"
-            />
-          </div>
-        </div>
-
-        <div className="effects-block">
           <h4>Drive</h4>
           <div className="effects-row-head">
             <label className="effects-toggle">

@@ -20,6 +20,8 @@ export interface DrumMachineProps {
   onMasterVolumeChange: (volume: number) => void;
   drumFx: { sends: FxSendLevels; returnLevel: number };
   onDrumFxChange: (fx: Partial<{ sends: Partial<FxSendLevels>; returnLevel: number }>) => void;
+  drumEffectsReturn: number;
+  onDrumEffectsReturnChange: (value: number) => void;
   onMuteAll: (muted: boolean) => void;
   onSoloAll: () => void;
   drumAudio: ReturnType<typeof import('../hooks/useDrumAudio').useDrumAudio>;
@@ -135,6 +137,8 @@ export default function DrumMachine({
   onMasterVolumeChange,
   drumFx,
   onDrumFxChange,
+  drumEffectsReturn,
+  onDrumEffectsReturnChange,
   onMuteAll,
   onSoloAll,
   drumAudio,
@@ -276,11 +280,18 @@ export default function DrumMachine({
                   onChange={(v) => onDrumFxChange({ sends: { phaser: v } })}
                 />
                 <DrumKnob
-                  label="Return"
+                  label="FX Return"
                   value={drumFx.returnLevel}
                   displayValue={Math.round(drumFx.returnLevel * 100) + '%'}
                   parseInputValue={parsePercent}
                   onChange={(v) => onDrumFxChange({ returnLevel: v })}
+                />
+                <DrumKnob
+                  label="Loop Return"
+                  value={drumEffectsReturn}
+                  displayValue={Math.round(drumEffectsReturn * 100) + '%'}
+                  parseInputValue={parsePercent}
+                  onChange={onDrumEffectsReturnChange}
                 />
               </div>
               <div className="drum-global-mix">

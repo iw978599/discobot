@@ -116,7 +116,7 @@ interface SynthState {
 function createDefaultDrumState(): DrumState {
   return {
     kick: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
-    snare: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
+    snare: { steps: new Array(16).fill(false), settings: { volume: 0.68, tone: 0.46, extra: 0.68 }, muted: false, solo: false },
     openHH: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
     closedHH: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
     ride: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
@@ -471,10 +471,21 @@ function HelpModal({ open, onClose }: { open: boolean; onClose: () => void }) {
             <h3>Quick start</h3>
             <ol className="help-list">
               <li>Run <strong>/login</strong> in Discord and open the generated link.</li>
-              <li>Select a sequencer step, then click a keyboard note to place it.</li>
-              <li>Press <strong>Play All</strong> to start and <strong>Stop All</strong> to stop.</li>
               <li>Use <strong>/join</strong> in Discord to route playback to your voice channel.</li>
+              <li>Pick a step on a synth lane, then click a key (or paint in Piano Roll) to place notes.</li>
+              <li>Program drum hits in <strong>Rhythm Composer</strong>, choose a kit, and shape tone/volume/extra per lane.</li>
+              <li>Press <strong>Play All</strong> to start and <strong>Stop All</strong> to stop.</li>
             </ol>
+          </section>
+          <section>
+            <h3>Header controls</h3>
+            <ul className="help-list help-list-plain">
+              <li><strong>BPM:</strong> click the LED to edit global tempo (20–400).</li>
+              <li><strong>MIDI panel:</strong> choose device, mode (live/record/step), channel, and target synth.</li>
+              <li><strong>Play/Stop All:</strong> transport for all synth lanes.</li>
+              <li><strong>Save/Load:</strong> store and recall full patterns (synth + drums + FX state).</li>
+              <li><strong>Export MIDI:</strong> downloads the current arrangement as a .mid file.</li>
+            </ul>
           </section>
           <section>
             <h3>Editing safety + shortcuts</h3>
@@ -485,11 +496,12 @@ function HelpModal({ open, onClose }: { open: boolean; onClose: () => void }) {
             </ul>
           </section>
           <section>
-            <h3>New composition tools</h3>
+            <h3>Synth + drum workflow</h3>
             <ul className="help-list help-list-plain">
-              <li><strong>MIDI Export:</strong> click <strong>Export MIDI</strong> in the header for DAW import.</li>
-              <li><strong>Arpeggiator:</strong> per synth toggle with extended modes and rates (1/4 to 1/32), plus gate.</li>
-              <li><strong>Synth Presets:</strong> save/load/delete synth settings without changing saved patterns.</li>
+              <li><strong>Multi-synth:</strong> up to 3 independent synth lanes, each with its own sequencer + controls.</li>
+              <li><strong>Arpeggiator:</strong> per synth toggle with modes/rates (1/4 to 1/32) and gate.</li>
+              <li><strong>Synth presets:</strong> save/load/delete sound presets without replacing full patterns.</li>
+              <li><strong>Drum FX:</strong> set per-drum sends and control both drum <strong>FX Return</strong> and <strong>Loop Return</strong> inside Rhythm Composer.</li>
             </ul>
           </section>
         </div>
@@ -1809,6 +1821,15 @@ function App() {
     })();
   }, [pushHistorySnapshot]);
 
+  const handleDrumEffectsReturnChange = useCallback((value: number) => {
+    handleEffectsLoopChange({
+      returns: {
+        ...effectsLoopRef.current.returns,
+        drums: value,
+      },
+    });
+  }, [handleEffectsLoopChange]);
+
   const handleDrumMuteAll = useCallback((muted: boolean) => {
     const nextState = Object.fromEntries(
       (Object.keys(drumStateRef.current) as DrumInstrument[]).map(inst => [
@@ -1925,72 +1946,74 @@ function App() {
           )}
         </div>
         <div className="header-controls">
-          <TempoDisplay tempo={globalTempo} onChange={handleTempoChange} />
-          <MidiPanel
-            supported={midiState.supported}
-            connected={midiState.connected}
-            devices={midiState.devices}
-            allDevicesId={midiState.allDevicesId}
-            selectedDeviceId={midiState.selectedDeviceId}
-            onDeviceChange={midiState.setSelectedDeviceId}
-            mode={midiMode}
-            onModeChange={setMidiMode}
-            channel={midiChannel}
-            onChannelChange={setMidiChannel}
-            synthIds={synths.map((s) => s.id)}
-            targetSynthId={midiTargetSynthId}
-            onTargetSynthChange={setMidiTargetSynthId}
-            lastMessage={midiState.lastMessage}
-            error={midiState.error}
-          />
-          <button className="help-button" onClick={() => setHelpOpen(true)} title="How to use Discobot">
-            Help
-          </button>
-          <button className="header-secondary-button" onClick={() => { void handleUndo(); }} title="Undo (Ctrl/Cmd+Z)">
-            Undo
-          </button>
-          <button className="header-secondary-button" onClick={() => { void handleRedo(); }} title="Redo (Ctrl/Cmd+Shift+Z)">
-            Redo
-          </button>
-          <button className="header-secondary-button" onClick={handleExportMidi} title="Export MIDI (.mid)">
-            Export MIDI
-          </button>
-          
-          <SavePattern
-            saving={saving}
-            setSaving={setSaving}
-            saveName={saveName}
-            setSaveName={setSaveName}
-            savedFeedback={savedFeedback}
-            setSavedFeedback={setSavedFeedback}
-            onSave={handleSaveGlobal}
-          />
-          <LoadPattern
-            loading={loadingSavedPatterns}
-            savedPatterns={savedPatterns}
-            onLoad={(id) => { void handleLoadGlobal(id); }}
-            onRefresh={() => { void refreshSavedPatterns(); }}
-          />
-          <button className="play-all-button" onClick={handleGlobalPlayStop}>
-            {isAnyPlaying ? '⏹ Stop All' : '▶ Play All'}
-          </button>
-
-          <button className="reset-button" onClick={handleReset} title="Reset all synths and drums">
-            &#8634;
-          </button>
-          <button
-            className={`mute-button ${browserMuted ? 'muted' : ''}`}
-            onClick={() => setBrowserMuted(m => !m)}
-            title={browserMuted ? 'Unmute browser audio' : 'Mute browser audio'}
-          >
-            {browserMuted ? '🔇' : '🔊'}
-          </button>
-          <div className="status">
-            <span className={`status-indicator ${connected ? 'connected' : 'disconnected'}`} />
-            {connected ? 'Connected' : 'Disconnected'} · {sessionLabel}
-            {connected && connectedUsers.length > 0 && (
-              <span className="connected-users"> · {connectedUsers.join(', ')}</span>
-            )}
+          <div className="header-primary-controls">
+            <TempoDisplay tempo={globalTempo} onChange={handleTempoChange} />
+            <button className="play-all-button" onClick={handleGlobalPlayStop}>
+              {isAnyPlaying ? '⏹ Stop All' : '▶ Play All'}
+            </button>
+            <SavePattern
+              saving={saving}
+              setSaving={setSaving}
+              saveName={saveName}
+              setSaveName={setSaveName}
+              savedFeedback={savedFeedback}
+              setSavedFeedback={setSavedFeedback}
+              onSave={handleSaveGlobal}
+            />
+            <LoadPattern
+              loading={loadingSavedPatterns}
+              savedPatterns={savedPatterns}
+              onLoad={(id) => { void handleLoadGlobal(id); }}
+              onRefresh={() => { void refreshSavedPatterns(); }}
+            />
+          </div>
+          <div className="header-secondary-controls">
+            <MidiPanel
+              supported={midiState.supported}
+              connected={midiState.connected}
+              devices={midiState.devices}
+              allDevicesId={midiState.allDevicesId}
+              selectedDeviceId={midiState.selectedDeviceId}
+              onDeviceChange={midiState.setSelectedDeviceId}
+              mode={midiMode}
+              onModeChange={setMidiMode}
+              channel={midiChannel}
+              onChannelChange={setMidiChannel}
+              synthIds={synths.map((s) => s.id)}
+              targetSynthId={midiTargetSynthId}
+              onTargetSynthChange={setMidiTargetSynthId}
+              lastMessage={midiState.lastMessage}
+              error={midiState.error}
+            />
+            <button className="help-button" onClick={() => setHelpOpen(true)} title="How to use Discobot">
+              Help
+            </button>
+            <button className="header-secondary-button" onClick={() => { void handleUndo(); }} title="Undo (Ctrl/Cmd+Z)">
+              Undo
+            </button>
+            <button className="header-secondary-button" onClick={() => { void handleRedo(); }} title="Redo (Ctrl/Cmd+Shift+Z)">
+              Redo
+            </button>
+            <button className="header-secondary-button" onClick={handleExportMidi} title="Export MIDI (.mid)">
+              Export MIDI
+            </button>
+            <button className="reset-button" onClick={handleReset} title="Reset all synths and drums">
+              &#8634;
+            </button>
+            <button
+              className={`mute-button ${browserMuted ? 'muted' : ''}`}
+              onClick={() => setBrowserMuted(m => !m)}
+              title={browserMuted ? 'Unmute browser audio' : 'Mute browser audio'}
+            >
+              {browserMuted ? '🔇' : '🔊'}
+            </button>
+            <div className="status">
+              <span className={`status-indicator ${connected ? 'connected' : 'disconnected'}`} />
+              {connected ? 'Connected' : 'Disconnected'} · {sessionLabel}
+              {connected && connectedUsers.length > 0 && (
+                <span className="connected-users"> · {connectedUsers.join(', ')}</span>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -2068,6 +2091,8 @@ function App() {
             onMasterVolumeChange={handleDrumMasterVolumeChange}
             drumFx={drumFx}
             onDrumFxChange={handleDrumFxChange}
+            drumEffectsReturn={effectsLoop.returns.drums}
+            onDrumEffectsReturnChange={handleDrumEffectsReturnChange}
             onMuteAll={handleDrumMuteAll}
             onSoloAll={handleDrumSoloAll}
             drumAudio={drumAudio}
