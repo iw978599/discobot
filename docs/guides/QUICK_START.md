@@ -36,9 +36,10 @@ npm run build        # Build for production
 ## Discord Commands
 
 - `/join` - Bot joins your voice channel
-- `/play` - Start sequencer playback
-- `/stop` - Stop playback
-- `/note C4` - Play a single note
+- `/play [synth]` - Start sequencer playback (optional synth index)
+- `/stop [synth]` - Stop playback (optional synth index)
+- `/note C4 [synth]` - Play a single note (optional synth index)
+- `/tempo 128` - Set global tempo
 - `/leave` - Bot leaves channel
 
 ## File Structure
@@ -62,6 +63,7 @@ discobot/
 **Bot won't start**: Check Discord token in `.env`
 **UI won't connect**: Make sure all 3 services are running (`npm run dev`)
 **No audio**: Click anywhere in the web UI first (browser security requirement)
+**Drums feel too wet/dry**: Open Rhythm Composer and adjust Drum FX Return + Loop Return
 
 ## Next Steps
 
