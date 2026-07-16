@@ -1086,8 +1086,8 @@ function App() {
         const synthStepCount = Math.max(1, targetSynth?.pattern?.steps.length || 16);
         const normalizedStep = ((step % synthStepCount) + synthStepCount) % synthStepCount;
         const targetStep = targetSynth?.pattern?.steps[normalizedStep];
-        const hasRenderedPatternAudio = Boolean(lastPatternAudioRef.current);
-        if (!hasRenderedPatternAudio && canPlaySynth && targetSynth?.synthParams && targetStep?.active && targetStep.note) {
+        const hasRenderedLoopAudio = patternAudio.isActive();
+        if (!hasRenderedLoopAudio && canPlaySynth && targetSynth?.synthParams && targetStep?.active && targetStep.note) {
           const barDurationSeconds = (60 / Math.max(20, globalTempo)) * 4;
           const stepWindowSeconds = barDurationSeconds / synthStepCount;
           triggerSynthNote(targetSynth.synthParams, targetStep.note, stepWindowSeconds, targetStep.velocity);
@@ -1096,7 +1096,7 @@ function App() {
           s.id === synthId ? { ...s, currentStep: step } : s
         ));
         const ds = drumStateRef.current;
-        if (!hasRenderedPatternAudio && ds && synthId === 1) {
+        if (!hasRenderedLoopAudio && ds && synthId === 1) {
           const drumStep = Math.floor((normalizedStep / synthStepCount) * 16) % 16;
           if (lastDrumPreviewStepRef.current === drumStep) break;
           lastDrumPreviewStepRef.current = drumStep;
