@@ -50,7 +50,7 @@ export class Sequencer {
 
     const stepIndex = this.currentStep;
     const step = this.currentPattern.steps[stepIndex];
-    if (step && step.note) {
+    if (step?.active && step.note) {
       this.synth.playNote(step.note, '16n', step.velocity);
     }
 
