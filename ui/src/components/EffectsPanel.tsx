@@ -43,16 +43,6 @@ export default function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProp
           <h4>Returns</h4>
           <div className="effects-knobs">
             <Knob
-              label="Synth"
-              value={effectsLoop.returns.synth}
-              min={0}
-              max={1}
-              displayValue={`${Math.round(effectsLoop.returns.synth * 100)}%`}
-              parseInputValue={parsePercent}
-              onChange={(value) => onChange({ returns: { ...effectsLoop.returns, synth: value } })}
-              color="#22c55e"
-            />
-            <Knob
               label="Drum"
               value={effectsLoop.returns.drums}
               min={0}

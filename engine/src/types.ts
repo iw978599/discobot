@@ -41,10 +41,11 @@ export interface EffectsLoopState {
 export interface SynthParameters {
   hold: boolean;
   gain: number;
+  fxReturn: number;
   arpeggiator: {
     enabled: boolean;
-    mode: 'up' | 'down' | 'random';
-    rate: '1/8' | '1/16';
+    mode: 'up' | 'down' | 'updown' | 'downup' | 'random' | 'converge' | 'diverge';
+    rate: '1/4' | '1/8' | '1/16' | '1/32';
     gate: number;
   };
   oscillator: {

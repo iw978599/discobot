@@ -46,6 +46,7 @@ function readAuthTokens() {
 const DEFAULT_PARAMS: SynthParameters = {
   hold: false,
   gain: 1.0,
+  fxReturn: 0.85,
   arpeggiator: { enabled: false, mode: 'up', rate: '1/16', gate: 0.7 },
   oscillator: { type: 'sine', detune: 0 },
   lfo1: { enabled: false, target: 'pitch', waveform: 'sine', rate: 5, depth: 0.2 },
@@ -174,6 +175,7 @@ function createBuiltInPresets(): SynthPreset[] {
         oscillator: { type: 'triangle', detune: -4 },
         filter: { ...DEFAULT_PARAMS.filter, frequency: 2200, q: 1.8 },
         envelope: { attack: 0.35, decay: 0.7, sustain: 0.78, release: 1.2 },
+        fxReturn: 0.9,
         fxSends: { reverb: 0.55, delay: 0.26, drive: 0.05, phaser: 0.24 },
       },
     },
@@ -186,6 +188,7 @@ function createBuiltInPresets(): SynthPreset[] {
         oscillator: { type: 'sawtooth', detune: -8 },
         filter: { ...DEFAULT_PARAMS.filter, frequency: 420, q: 2.5 },
         envelope: { attack: 0.005, decay: 0.11, sustain: 0.48, release: 0.18 },
+        fxReturn: 0.55,
         fxSends: { reverb: 0.08, delay: 0.06, drive: 0.28, phaser: 0.05 },
       },
     },
@@ -198,6 +201,7 @@ function createBuiltInPresets(): SynthPreset[] {
         oscillator: { type: 'square', detune: 6 },
         filter: { ...DEFAULT_PARAMS.filter, frequency: 5200, q: 1.9 },
         envelope: { attack: 0.012, decay: 0.22, sustain: 0.62, release: 0.28 },
+        fxReturn: 0.72,
         fxSends: { reverb: 0.2, delay: 0.34, drive: 0.2, phaser: 0.12 },
       },
     },
@@ -210,7 +214,21 @@ function createBuiltInPresets(): SynthPreset[] {
         oscillator: { type: 'triangle', detune: 0 },
         filter: { ...DEFAULT_PARAMS.filter, frequency: 2900, q: 4.8 },
         envelope: { attack: 0.002, decay: 0.19, sustain: 0.2, release: 0.12 },
+        fxReturn: 0.62,
         fxSends: { reverb: 0.18, delay: 0.22, drive: 0.1, phaser: 0.07 },
+      },
+    },
+    {
+      id: 'builtin-grand-piano',
+      name: 'Grand Piano',
+      builtIn: true,
+      params: {
+        ...DEFAULT_PARAMS,
+        oscillator: { type: 'triangle', detune: 2 },
+        filter: { ...DEFAULT_PARAMS.filter, frequency: 6800, q: 1.35 },
+        envelope: { attack: 0.004, decay: 0.42, sustain: 0.22, release: 1.45 },
+        fxReturn: 0.82,
+        fxSends: { reverb: 0.34, delay: 0.06, drive: 0.02, phaser: 0.02 },
       },
     },
   ];
@@ -245,12 +263,21 @@ function normalizeFxSends(sends: Partial<FxSendLevels> | undefined): FxSendLevel
 
 function normalizeSynthParams(params: SynthParameters | null): SynthParameters | null {
   if (!params) return null;
+  const allowedArpModes: SynthParameters['arpeggiator']['mode'][] = ['up', 'down', 'updown', 'downup', 'random', 'converge', 'diverge'];
+  const allowedArpRates: SynthParameters['arpeggiator']['rate'][] = ['1/4', '1/8', '1/16', '1/32'];
+  const mode = allowedArpModes.includes(params.arpeggiator?.mode as SynthParameters['arpeggiator']['mode'])
+    ? params.arpeggiator.mode
+    : DEFAULT_PARAMS.arpeggiator.mode;
+  const rate = allowedArpRates.includes(params.arpeggiator?.rate as SynthParameters['arpeggiator']['rate'])
+    ? params.arpeggiator.rate
+    : DEFAULT_PARAMS.arpeggiator.rate;
   return {
     ...params,
+    fxReturn: Math.max(0, Math.min(1, params.fxReturn ?? DEFAULT_PARAMS.fxReturn)),
     arpeggiator: {
       enabled: params.arpeggiator?.enabled ?? DEFAULT_PARAMS.arpeggiator.enabled,
-      mode: params.arpeggiator?.mode ?? DEFAULT_PARAMS.arpeggiator.mode,
-      rate: params.arpeggiator?.rate ?? DEFAULT_PARAMS.arpeggiator.rate,
+      mode,
+      rate,
       gate: Math.max(0.1, Math.min(1, params.arpeggiator?.gate ?? DEFAULT_PARAMS.arpeggiator.gate)),
     },
     fxSends: normalizeFxSends(params.fxSends),
@@ -461,7 +488,7 @@ function HelpModal({ open, onClose }: { open: boolean; onClose: () => void }) {
             <h3>New composition tools</h3>
             <ul className="help-list help-list-plain">
               <li><strong>MIDI Export:</strong> click <strong>Export MIDI</strong> in the header for DAW import.</li>
-              <li><strong>Arpeggiator:</strong> per synth toggle with modes (up/down/random), rates (1/8, 1/16), and gate.</li>
+              <li><strong>Arpeggiator:</strong> per synth toggle with extended modes and rates (1/4 to 1/32), plus gate.</li>
               <li><strong>Synth Presets:</strong> save/load/delete synth settings without changing saved patterns.</li>
             </ul>
           </section>
@@ -522,6 +549,7 @@ function App() {
   const activeHistoryKeyRef = useRef<string | null>(null);
   const isRestoringRef = useRef(false);
   const arpTimeoutsRef = useRef<number[]>([]);
+  const lastDrumPreviewStepRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (synths.length === 0) return;
@@ -754,21 +782,35 @@ function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [helpOpen, handleUndo, handleRedo]);
 
-  const triggerSynthNote = useCallback((synthParams: SynthParameters, note: string, windowSeconds: number) => {
+  const triggerSynthNote = useCallback((synthParams: SynthParameters, note: string, windowSeconds: number, velocity: number = 1) => {
+    const normalizedVelocity = Math.max(0, Math.min(1, velocity));
     const arp = synthParams.arpeggiator;
     if (!arp?.enabled) {
       void synthAudio.playNote(
         note,
         synthParams,
         Math.max(0.05, windowSeconds * 0.92),
+        normalizedVelocity,
         browserMutedRef.current,
         effectsLoopRef.current
       );
       return;
     }
 
-    const semitones = arp.mode === 'down' ? [12, 7, 4, 0] : [0, 4, 7, 12];
-    const interval = arp.rate === '1/8' ? (60 / globalTempo) / 2 : (60 / globalTempo) / 4;
+    const basePattern = [0, 4, 7, 12];
+    const semitones = arp.mode === 'down'
+      ? [...basePattern].reverse()
+      : arp.mode === 'updown'
+        ? [0, 4, 7, 12, 7, 4]
+        : arp.mode === 'downup'
+          ? [12, 7, 4, 0, 4, 7]
+          : arp.mode === 'converge'
+            ? [0, 12, 4, 7]
+            : arp.mode === 'diverge'
+              ? [7, 4, 12, 0]
+              : basePattern;
+    const rateDivisor = arp.rate === '1/4' ? 1 : arp.rate === '1/8' ? 2 : arp.rate === '1/16' ? 4 : 8;
+    const interval = (60 / globalTempo) / rateDivisor;
     const noteLength = Math.max(0.03, interval * Math.max(0.1, Math.min(1, arp.gate)));
     const pulseCount = Math.max(1, Math.floor(Math.max(interval, windowSeconds) / interval));
     for (let pulse = 0; pulse < pulseCount; pulse += 1) {
@@ -778,11 +820,11 @@ function App() {
       const arpNote = transposeNote(note, offset);
       if (!arpNote) continue;
       if (pulse === 0) {
-        void synthAudio.playNote(arpNote, synthParams, noteLength, browserMutedRef.current, effectsLoopRef.current);
+        void synthAudio.playNote(arpNote, synthParams, noteLength, normalizedVelocity, browserMutedRef.current, effectsLoopRef.current);
         continue;
       }
       const timeoutId = window.setTimeout(() => {
-        void synthAudio.playNote(arpNote, synthParams, noteLength, browserMutedRef.current, effectsLoopRef.current);
+        void synthAudio.playNote(arpNote, synthParams, noteLength, normalizedVelocity, browserMutedRef.current, effectsLoopRef.current);
       }, interval * pulse * 1000);
       arpTimeoutsRef.current.push(timeoutId);
     }
@@ -893,6 +935,7 @@ function App() {
       }
       case 'sequencerPlay': {
         const { synthId } = message.data;
+        if (synthId === 1) lastDrumPreviewStepRef.current = null;
         setSynths(prev => prev.map(s =>
           s.id === synthId ? { ...s, isPlaying: true } : s
         ));
@@ -900,6 +943,7 @@ function App() {
       }
       case 'sequencerStop': {
         const { synthId } = message.data;
+        if (synthId === 1) lastDrumPreviewStepRef.current = null;
         synthAudio.stopAllNotes();
         setSynths(prev => prev.map(s =>
           s.id === synthId ? { ...s, isPlaying: false, currentStep: 0, forceReleaseSignal: !s.forceReleaseSignal } : s
@@ -917,20 +961,27 @@ function App() {
         const targetSynth = synthSnapshot.find(s => s.id === synthId);
         const hasSynthSolo = synthSnapshot.some(s => s.solo);
         const canPlaySynth = Boolean(targetSynth && !targetSynth.muted && (!hasSynthSolo || targetSynth.solo));
-        if (canPlaySynth && targetSynth?.pattern?.steps[step]?.note) {
-          const stepWindowSeconds = (60 / Math.max(20, globalTempo)) / 4;
-          triggerSynthNote(targetSynth.synthParams!, targetSynth.pattern.steps[step].note!, stepWindowSeconds);
+        const synthStepCount = Math.max(1, targetSynth?.pattern?.steps.length || 16);
+        const normalizedStep = ((step % synthStepCount) + synthStepCount) % synthStepCount;
+        const targetStep = targetSynth?.pattern?.steps[normalizedStep];
+        if (canPlaySynth && targetSynth?.synthParams && targetStep?.active && targetStep.note) {
+          const barDurationSeconds = (60 / Math.max(20, globalTempo)) * 4;
+          const stepWindowSeconds = barDurationSeconds / synthStepCount;
+          triggerSynthNote(targetSynth.synthParams, targetStep.note, stepWindowSeconds, targetStep.velocity);
         }
         setSynths(prev => prev.map(s =>
           s.id === synthId ? { ...s, currentStep: step } : s
         ));
         const ds = drumStateRef.current;
         if (ds && synthId === 1) {
+          const drumStep = Math.floor((normalizedStep / synthStepCount) * 16) % 16;
+          if (lastDrumPreviewStepRef.current === drumStep) break;
+          lastDrumPreviewStepRef.current = drumStep;
           const hasDrumSolo = (Object.keys(ds) as DrumInstrument[]).some(inst => Boolean(ds[inst].solo));
           for (const inst of Object.keys(ds) as DrumInstrument[]) {
             const track = ds[inst];
             const canPlayDrum = !track.muted && (!hasDrumSolo || track.solo);
-            if (track.steps[step] && canPlayDrum) {
+            if (track.steps[drumStep] && canPlayDrum) {
               drumAudio.playDrumHit(inst, ds[inst].settings, browserMutedRef.current);
             }
           }
@@ -1242,7 +1293,7 @@ function App() {
     if (!synth?.synthParams) return;
 
     await synthAudio.ensureAudioReady();
-    triggerSynthNote(synth.synthParams, note, 60 / globalTempo);
+    triggerSynthNote(synth.synthParams, note, 60 / globalTempo, 1);
 
     const step = synth.selectedStep;
     const pattern = synth.pattern;
@@ -1291,7 +1342,7 @@ function App() {
     const mode = midiModeRef.current;
 
     if (mode === 'live') {
-      if (targetSynth.synthParams) triggerSynthNote(targetSynth.synthParams, noteName, 60 / globalTempo);
+      if (targetSynth.synthParams) triggerSynthNote(targetSynth.synthParams, noteName, 60 / globalTempo, velocity);
       return;
     }
 
@@ -1389,24 +1440,36 @@ function App() {
   const handleSavePattern = useCallback(async (synthId: number, name: string): Promise<boolean> => {
     const synth = synthsRef.current.find(s => s.id === synthId);
     if (!synth?.pattern || !synth.synthParams) return false;
+    const pattern = synth.pattern;
+    const synthParams = synth.synthParams;
+
+    const saveRequest = async (overwriteId?: string) => authFetch('/patterns/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        overwriteId,
+        synthId,
+        steps: pattern.steps,
+        synthParams,
+        tempo: pattern.tempo,
+        drumState: drumStateRef.current,
+        drumKitId: selectedDrumKitIdRef.current,
+        drumMasterVolume,
+        drumFx: drumFxRef.current,
+        effectsLoop: effectsLoopRef.current,
+      }),
+    });
 
     try {
-      const response = await authFetch('/patterns/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          synthId,
-          steps: synth.pattern.steps,
-          synthParams: synth.synthParams,
-          tempo: synth.pattern.tempo,
-          drumState: drumStateRef.current,
-          drumKitId: selectedDrumKitIdRef.current,
-          drumMasterVolume,
-          drumFx: drumFxRef.current,
-          effectsLoop: effectsLoopRef.current,
-        }),
-      });
+      let response = await saveRequest();
+      if (response.status === 409) {
+        const conflict = await response.json().catch(() => null);
+        const conflictName = conflict?.name || name;
+        const shouldOverwrite = window.confirm(`Pattern "${conflictName}" already exists. Overwrite it?`);
+        if (!shouldOverwrite) return false;
+        response = await saveRequest(conflict?.id);
+      }
       if (!response.ok) return false;
       const saved = await response.json();
       if (saved?.id && saved?.name) {

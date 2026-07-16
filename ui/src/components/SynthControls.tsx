@@ -33,6 +33,7 @@ const TOOLTIPS = {
   sustain: 'Volume level held while key is pressed',
   release: 'Time to fade out after key release',
   fxSend: 'Send amount into shared FX loop',
+  fxReturn: 'Per-synth return level from the shared FX loop',
 };
 
 const parseNumber = (input: string): number | null => {
@@ -216,15 +217,21 @@ export default function SynthControls({
             >
               <option value="up">Up</option>
               <option value="down">Down</option>
+              <option value="updown">Up/Down</option>
+              <option value="downup">Down/Up</option>
               <option value="random">Random</option>
+              <option value="converge">Converge</option>
+              <option value="diverge">Diverge</option>
             </select>
             <select
               className="synth-select arp-select"
               value={parameters.arpeggiator.rate}
               onChange={(e) => updateArpeggiator({ rate: e.target.value as SynthParameters['arpeggiator']['rate'] })}
             >
+              <option value="1/4">1/4</option>
               <option value="1/8">1/8</option>
               <option value="1/16">1/16</option>
+              <option value="1/32">1/32</option>
             </select>
             <label className="arp-gate-label">
               Gate
@@ -580,6 +587,18 @@ export default function SynthControls({
               parseInputValue={parsePercent(0, 2)}
               color="#ef4444"
               tooltip={TOOLTIPS.gain}
+            />
+            <Knob
+              label="FX Return"
+              value={parameters.fxReturn}
+              min={0}
+              max={1}
+              step={0.01}
+              displayValue={`${(parameters.fxReturn * 100).toFixed(0)}%`}
+              onChange={(v) => onParameterChange({ fxReturn: v })}
+              parseInputValue={parsePercent(0, 1)}
+              color="#22c55e"
+              tooltip={TOOLTIPS.fxReturn}
             />
           </div>
         </div>
