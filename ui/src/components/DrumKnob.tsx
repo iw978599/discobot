@@ -10,6 +10,7 @@ interface DrumKnobProps {
   displayValue?: string;
   onChange: (value: number) => void;
   parseInputValue?: (input: string) => number | null;
+  title?: string;
 }
 
 export default function DrumKnob({
@@ -21,6 +22,7 @@ export default function DrumKnob({
   displayValue,
   onChange,
   parseInputValue,
+  title,
 }: DrumKnobProps) {
   const knobRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
@@ -102,7 +104,7 @@ export default function DrumKnob({
           <circle cx={22 + 9 * Math.cos((svgDeg * Math.PI) / 180)} cy={22 + 9 * Math.sin((svgDeg * Math.PI) / 180)} r="2.5" fill="#f59e0b" />
         </svg>
       </div>
-      <span className="drum-knob-label">{label}</span>
+      <span className="drum-knob-label" title={title}>{label}</span>
       <input
         className="drum-knob-value-input"
         value={isEditing ? inputValue : computedDisplay}

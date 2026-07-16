@@ -116,8 +116,6 @@ export default function SynthUnit({
               synthModelParams={synthModelParams}
               onModelChange={onSynthModelChange}
               onModelParamsChange={onSynthModelParamsChange}
-              octaveShift={octaveShift}
-              onOctaveShift={onOctaveShift}
             />
           )}
         </div>
@@ -139,7 +137,7 @@ export default function SynthUnit({
         </div>
 
         <div className="synth-unit-keyboard-container">
-          <KeyboardPanel
+            <KeyboardPanel
             mode={keyboardMode}
             onModeChange={onKeyboardModeChange}
             pattern={pattern}
@@ -147,6 +145,7 @@ export default function SynthUnit({
             isPlaying={isPlaying}
             selectedStep={selectedStep}
             octaveShift={octaveShift}
+            onOctaveShift={onOctaveShift}
             holdEnabled={Boolean(synthParams?.hold)}
             releaseSignal={forceReleaseSignal}
             onStepSelect={onStepChange}

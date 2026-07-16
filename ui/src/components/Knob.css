@@ -90,36 +90,6 @@
   background: rgba(102, 102, 102, 0.1);
 }
 
-.knob-tooltip {
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.95);
-  color: #fff;
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 12px;
-  white-space: normal;
-  max-width: 200px;
-  text-align: center;
-  z-index: 1000;
-  pointer-events: none;
-  margin-bottom: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-  line-height: 1.4;
-}
-
-.knob-tooltip::after {
-  content: '';
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  border: 6px solid transparent;
-  border-top-color: rgba(0, 0, 0, 0.95);
-}
-
 /* Responsive sizing */
 @media (max-width: 768px) {
   .knob {

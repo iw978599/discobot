@@ -8,7 +8,7 @@ Web-controlled Discord synth/sequencer/drum bot. Monorepo with 4 npm workspaces.
 discobot/
 ├── bot/       # Discord bot (Discord.js, @discordjs/voice)
 ├── engine/    # Custom math-based audio synthesis (no Tone.js)
-├── web/       # Express API (3001) + WebSocket server (8080)
+├── web/       # Express API (3001) + WebSocket server (3001/ws)
 └── ui/        # React web interface (Vite, port 3000)
 ```
 
@@ -48,7 +48,8 @@ Engine renders PCM → Web server base64-encodes → WebSocket → Bot broadcast
 | `ui/src/utils/midiExport.ts` | Standard MIDI File export (Type 0, PPQ=480, multi-synth lanes, drums on channel 10) |
 | `engine/src/types.ts` | All type definitions (single source of truth): `SynthParameters`, `DrumState`, `EffectsLoopState`, `FxSendLevels`, `SynthModelId`, `DrumKitId`, `Pattern`, `SavedPatternFull` |
 | `engine/src/Synthesizer.ts` | Synth PCM generation: oscillator, filter, ADSR, dual LFOs, soft-clip master mix |
-| `engine/src/DrumSynthesizer.ts` | 8 drum instruments with 3 kit variants (analog/modern/dirty), humanization, sample layer blending |
+| `engine/src/DrumSynthesizer.ts` | 8 drum instruments with 8 kit variants (3 generic + 5 drum machine clones), humanization, sample layer blending |
+| `engine/src/StreamingSynth.ts` | 8-voice poly chunk-based renderer with persistent oscillator/filter/envelope state, sample-accurate note scheduling |
 | `engine/src/Sequencer.ts` | setTimeout-based pattern scheduler |
 | `engine/src/SequencerV2.ts` | Improved scheduler using `audioContextManager.getContext().currentTime`, look-ahead, pause/resume |
 | `engine/src/Streaming.ts` | `DiscordAudioStreamer`: renders 16s segments as 0.1s chunks for Discord voice |
@@ -78,6 +79,12 @@ Engine renders PCM → Web server base64-encodes → WebSocket → Bot broadcast
 - **Soft-clipper master mix**: Replaces hard normalization for louder drums
 - **Auth system**: Discord OAuth2 login flow, session tokens with TTL, CSRF validation, HMAC-signed bot requests, role-based access (owner/collaborator/bot)
 - **Connected users**: Real-time user presence display in header
+- **Real-time streaming**: StreamingSynth renders 20ms PCM chunks, WebSocket sends to Discord, sample-accurate note scheduling
+- **WebSocket keepalive**: Ping/pong every 15s prevents idle disconnects
+- **Stereo panning**: Per-synth stereo pan control
+- **Portamento**: Per-synth glide between notes
+- **MIDI import**: Import MIDI files with track selection and tempo detection
+- **Drum machine clones**: 5 classic drum machine presets (TR-808, TR-909, LinnDrum, Oberheim DMX, TR-707)
 
 ## Drum Instrument Details
 | Instrument | Tone range | Extra knob | Engine function |
@@ -120,9 +127,44 @@ npm run build:ui     # Build UI only (tsc + vite build)
 - Firefox/Safari lack Web MIDI API support
 
 ## Potential Next Steps
-- Real-time streaming (step-by-step instead of full pattern render)
 - SamplePlayer implementation
 - WAV download / audio export (engine has `AudioExporter`, not wired to UI)
 - Song mode / pattern chaining
 - Voice polyphony
 - Per-step drum velocity
+
+<!-- AUTO_PR_CHANGELOG_START -->
+### PR #49: feat: real-time audio architecture, drum clones, streaming fixes
+
+Source branch: `feat/realtime-audio-architecture`
+Last sync: 2026-07-16T22:55:52.308Z
+
+#### Changed files
+- `.opencode/skills/discobot-dev/SKILL.md` — MODIFIED (+89/-88)
+- `AGENTS.md` — MODIFIED (+9/-3)
+- `bot/src/index.ts` — MODIFIED (+57/-1)
+- `engine/src/DrumSynthesizer.ts` — MODIFIED (+124/-91)
+- `engine/src/StreamingSynth.ts` — ADDED (+420/-0)
+- `engine/src/Synthesizer.ts` — MODIFIED (+2/-0)
+- `engine/src/index.ts` — MODIFIED (+1/-0)
+- `engine/src/types.ts` — MODIFIED (+9/-1)
+- `package-lock.json` — MODIFIED (+23/-0)
+- `ui/package.json` — MODIFIED (+1/-0)
+- `ui/public/synth-processor.js` — ADDED (+220/-0)
+- `ui/src/App.tsx` — MODIFIED (+128/-3)
+- `ui/src/authClient.ts` — MODIFIED (+9/-0)
+- `ui/src/components/DrumKnob.tsx` — MODIFIED (+3/-1)
+- `ui/src/components/DrumMachine.css` — MODIFIED (+21/-0)
+- `ui/src/components/DrumMachine.tsx` — MODIFIED (+46/-16)
+- `ui/src/components/KeyboardPanel.css` — MODIFIED (+32/-0)
+- `ui/src/components/KeyboardPanel.tsx` — MODIFIED (+19/-0)
+- `ui/src/components/Knob.css` — MODIFIED (+0/-30)
+- `ui/src/components/Knob.tsx` — MODIFIED (+2/-19)
+- `ui/src/components/PianoRoll.tsx` — MODIFIED (+0/-1)
+- `ui/src/components/SynthControls.tsx` — MODIFIED (+53/-24)
+- `ui/src/components/SynthUnit.tsx` — MODIFIED (+2/-3)
+- `ui/src/hooks/useSynthAudio.ts` — MODIFIED (+124/-293)
+- `ui/src/types.ts` — MODIFIED (+1/-0)
+- `ui/src/utils/midiImport.ts` — ADDED (+89/-0)
+- `web/src/index.ts` — MODIFIED (+469/-42)
+<!-- AUTO_PR_CHANGELOG_END -->

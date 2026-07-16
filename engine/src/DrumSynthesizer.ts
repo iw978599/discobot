@@ -47,7 +47,7 @@ function randCentered(seed: number): number {
 export class DrumSynthesizer {
   static renderHit(
     instrument: DrumInstrument,
-    settings: { volume: number; tone: number; extra: number },
+    settings: { volume: number; tone: number; extra: number; cymbalType?: string },
     sampleRate: number,
     options: DrumHitRenderOptions = {}
   ): Float32Array {
@@ -66,7 +66,10 @@ export class DrumSynthesizer {
       case 'openHH': output = this.renderOpenHH(vol, tone, extra, transientScale, sampleRate, profile); break;
       case 'closedHH': output = this.renderClosedHH(vol, tone, extra, transientScale, sampleRate, profile); break;
       case 'ride': output = this.renderRide(vol, tone, extra, transientScale, sampleRate, profile); break;
-      case 'crash': output = this.renderCrash(vol, tone, extra, transientScale, sampleRate, profile); break;
+      case 'crash': output = (settings as { cymbalType?: string }).cymbalType === 'ride'
+        ? this.renderRide(vol, tone, extra, transientScale, sampleRate, profile)
+        : this.renderCrash(vol, tone, extra, transientScale, sampleRate, profile);
+        break;
       case 'snare2': output = this.renderSnare2(vol, tone, extra, transientScale, sampleRate, profile); break;
       case 'clap': output = this.renderClap(vol, tone, extra, transientScale, sampleRate, profile); break;
       default: output = new Float32Array(0); break;
@@ -122,6 +125,19 @@ export class DrumSynthesizer {
       }
     }
 
+    let maxVal = 0;
+    for (let i = 0; i < mix.length; i++) {
+      const abs = Math.abs(mix[i]);
+      if (abs > maxVal) maxVal = abs;
+    }
+    if (maxVal > 1) {
+      const scale = 1 / maxVal;
+      for (let i = 0; i < mix.length; i++) {
+        const x = mix[i] * scale;
+        mix[i] = Math.tanh(x * 1.1) / Math.tanh(1.1);
+      }
+    }
+
     return mix;
   }
 
@@ -164,38 +180,43 @@ export class DrumSynthesizer {
   }
 
   private static renderSnare(volume: number, tone: number, extra: number, transientScale: number, sampleRate: number, profile: VariantProfile): Float32Array {
-    const bodyStart = 280 + tone * 170;
-    const bodyEnd = 170 + tone * 90;
+    const bodyStart = 150 + tone * 120;
+    const bodyEnd = 80 + tone * 70;
+    const subFreq = 55 + tone * 30;
     const snap = 0.25 + extra * 0.75;
-    const dur = 0.24;
+    const dur = 0.28;
     const length = Math.floor(sampleRate * dur);
     const out = new Float32Array(length);
     let bodyPhase = 0;
+    let subPhase = 0;
     let ringPhase1 = 0;
     let ringPhase2 = 0;
     let prevNoise = 0;
     let lpNoise = 0;
     for (let i = 0; i < length; i++) {
       const t = i / sampleRate;
-      const bodyFreq = bodyEnd + (bodyStart - bodyEnd) * Math.exp(-t * 52);
+      const bodyFreq = bodyEnd + (bodyStart - bodyEnd) * Math.exp(-t * 40);
       bodyPhase += bodyFreq / sampleRate;
+      subPhase += subFreq / sampleRate;
       ringPhase1 += (bodyFreq * 1.78) / sampleRate;
       ringPhase2 += (bodyFreq * 2.34) / sampleRate;
-      const bodyEnv = Math.exp(-t * (20 + (1 - extra) * 7));
+      const bodyEnv = Math.exp(-t * (16 + (1 - extra) * 6));
+      const subEnv = Math.exp(-t * (10 + (1 - extra) * 4));
       const body = (
-        Math.sin(2 * Math.PI * bodyPhase) * 0.54 +
-        Math.sin(2 * Math.PI * ringPhase1) * 0.27 +
-        Math.sin(2 * Math.PI * ringPhase2) * 0.15
-      ) * bodyEnv * 0.3 * profile.body;
+        Math.sin(2 * Math.PI * bodyPhase) * 0.42 +
+        Math.sin(2 * Math.PI * subPhase) * 0.28 +
+        Math.sin(2 * Math.PI * ringPhase1) * 0.18 +
+        Math.sin(2 * Math.PI * ringPhase2) * 0.1
+      ) * bodyEnv * 0.4 * profile.body;
       const noise = Math.random() * 2 - 1;
       const hpNoise = noise - prevNoise;
       prevNoise = noise;
       lpNoise = lpNoise * 0.82 + noise * 0.18;
       const noisyBand = hpNoise - lpNoise * (0.18 + tone * 0.5);
-      const wireEnv = Math.exp(-t * (14 + snap * 20));
-      const crack = hpNoise * Math.exp(-t * 280) * (0.18 + tone * 0.2) * transientScale * profile.transient;
+      const wireEnv = Math.exp(-t * (12 + snap * 18));
+      const crack = hpNoise * Math.exp(-t * 260) * (0.18 + tone * 0.2) * transientScale * profile.transient;
       const wire = noisyBand * wireEnv * (0.92 + snap * 0.55) * profile.noise;
-      out[i] = Math.tanh((body + wire + crack) * 1.2 * profile.saturation) * volume * 1.05;
+      out[i] = Math.tanh((body + wire + crack) * 1.2 * profile.saturation) * volume * 1.575;
     }
     return out;
   }
@@ -214,37 +235,38 @@ export class DrumSynthesizer {
   }
 
   private static renderOpenHH(volume: number, tone: number, extra: number, transientScale: number, sampleRate: number, profile: VariantProfile): Float32Array {
-    const dur = 0.22 + extra * 0.85;
+    const dur = 0.25 + extra * 0.95;
     const length = Math.floor(sampleRate * dur);
     const out = new Float32Array(length);
     let prevNoise = 0;
-    let hpBand = 0;
-    let phase1 = 0, phase2 = 0, phase3 = 0, phase4 = 0, phase5 = 0;
+    let hpBand1 = 0;
+    let hpBand2 = 0;
+    let lpBand = 0;
     const base = 3000 + tone * 3200;
+    const phases = [0, 0, 0, 0, 0, 0, 0, 0];
+    const ratios = [1, 1.31, 1.73, 2.37, 3.11, 3.79, 4.33, 5.17];
+    const amps = [0.18, 0.15, 0.12, 0.09, 0.07, 0.05, 0.03, 0.02];
     for (let i = 0; i < length; i++) {
       const t = i / sampleRate;
       const noise = Math.random() * 2 - 1;
-      const hpNoise = noise - prevNoise;
+      const hp1 = noise - prevNoise;
       prevNoise = noise;
-      hpBand = hpBand * 0.7 + hpNoise * 0.3;
-      phase1 += base / sampleRate;
-      phase2 += base * 1.31 / sampleRate;
-      phase3 += base * 1.73 / sampleRate;
-      phase4 += base * 2.37 / sampleRate;
-      phase5 += base * 3.11 / sampleRate;
-      const metallic = (
-        Math.sin(2 * Math.PI * phase1) +
-        Math.sin(2 * Math.PI * phase2) * 0.81 +
-        Math.sin(2 * Math.PI * phase3) * 0.66 +
-        Math.sin(2 * Math.PI * phase4) * 0.47 +
-        Math.sin(2 * Math.PI * phase5) * 0.34
-      ) * 0.33 * profile.body;
-      const env = Math.exp(-t * (3.2 / dur));
-      const shimmerEnv = Math.exp(-t * (0.95 / dur));
-      const brightness = 0.42 + tone * 0.58;
-      const transient = hpNoise * Math.exp(-t * 280) * 0.12 * transientScale * profile.transient;
-      const body = metallic * shimmerEnv + hpBand * 0.66 * profile.noise + transient;
-      out[i] = Math.tanh(body * 1.2 * profile.saturation) * env * volume * brightness;
+      hpBand1 = hpBand1 * 0.6 + hp1 * 0.4;
+      hpBand2 = hpBand2 * 0.4 + hp1 * 0.6;
+      lpBand = lpBand * 0.85 + noise * 0.15;
+      let metallic = 0;
+      for (let p = 0; p < phases.length; p++) {
+        phases[p] += (base * ratios[p]) / sampleRate;
+        metallic += Math.sin(2 * Math.PI * phases[p]) * amps[p];
+      }
+      metallic *= 0.5 * profile.body;
+      const env = Math.exp(-t * 3.5);
+      const shimmerEnv = Math.exp(-t * 0.9);
+      const bright = 0.42 + tone * 0.58;
+      const transient = hp1 * Math.exp(-t * 280) * 0.12 * transientScale * profile.transient;
+      const noiseBody = hpBand1 * 0.35 + hpBand2 * 0.25 + (noise - lpBand) * 0.2;
+      const body = metallic * shimmerEnv + noiseBody * profile.noise + transient;
+      out[i] = Math.tanh(body * 1.2 * profile.saturation) * env * volume * bright;
     }
     return out;
   }
@@ -254,93 +276,104 @@ export class DrumSynthesizer {
     const length = Math.floor(sampleRate * dur);
     const out = new Float32Array(length);
     let prevNoise = 0;
-    let hpBand = 0;
-    let phase1 = 0, phase2 = 0, phase3 = 0, phase4 = 0;
+    let hpBand1 = 0;
+    let hpBand2 = 0;
+    let lpBand = 0;
     const base = 4200 + tone * 3700;
+    const phases = [0, 0, 0, 0, 0, 0];
+    const ratios = [1, 1.43, 1.97, 2.49, 3.11, 3.78];
+    const amps = [0.2, 0.16, 0.12, 0.09, 0.06, 0.04];
     for (let i = 0; i < length; i++) {
       const t = i / sampleRate;
       const noise = Math.random() * 2 - 1;
-      const hpNoise = noise - prevNoise;
+      const hp1 = noise - prevNoise;
       prevNoise = noise;
-      hpBand = hpBand * 0.65 + hpNoise * 0.35;
-      phase1 += base / sampleRate;
-      phase2 += base * 1.43 / sampleRate;
-      phase3 += base * 1.97 / sampleRate;
-      phase4 += base * 2.49 / sampleRate;
-      const metallic = (
-        Math.sin(2 * Math.PI * phase1) +
-        Math.sin(2 * Math.PI * phase2) * 0.74 +
-        Math.sin(2 * Math.PI * phase3) * 0.52 +
-        Math.sin(2 * Math.PI * phase4) * 0.31
-      ) * 0.38 * profile.body;
-      const env = Math.exp(-t * (16.5 / dur));
-      const brightness = 0.42 + tone * 0.58;
-      const stick = hpNoise * Math.exp(-t * 380) * 0.22 * transientScale * profile.transient;
-      out[i] = Math.tanh((metallic + hpBand * 0.48 * profile.noise + stick) * 1.1 * profile.saturation) * env * volume * brightness;
+      hpBand1 = hpBand1 * 0.6 + hp1 * 0.4;
+      hpBand2 = hpBand2 * 0.4 + hp1 * 0.6;
+      lpBand = lpBand * 0.82 + noise * 0.18;
+      let metallic = 0;
+      for (let p = 0; p < phases.length; p++) {
+        phases[p] += (base * ratios[p]) / sampleRate;
+        metallic += Math.sin(2 * Math.PI * phases[p]) * amps[p];
+      }
+      metallic *= 0.55 * profile.body;
+      const env = Math.exp(-t * 20);
+      const bright = 0.42 + tone * 0.58;
+      const stick = hp1 * Math.exp(-t * 380) * 0.22 * transientScale * profile.transient;
+      const noiseBody = hpBand1 * 0.3 + hpBand2 * 0.2 + (noise - lpBand) * 0.15;
+      out[i] = Math.tanh((metallic + noiseBody * profile.noise + stick) * 1.1 * profile.saturation) * env * volume * bright;
     }
     return out;
   }
 
   private static renderRide(volume: number, tone: number, extra: number, transientScale: number, sampleRate: number, profile: VariantProfile): Float32Array {
-    const startFreq = 300 + tone * 210;
-    const endFreq = 170 + tone * 110;
-    const bend = 0.25 + extra * 0.75;
-    const dur = 0.22 + extra * 0.38;
+    const baseFreq = 3200 + tone * 3600;
+    const decay = 0.4 + extra * 1.2;
+    const dur = 0.5 + decay;
     const length = Math.floor(sampleRate * dur);
     const out = new Float32Array(length);
-    let phaseA = 0;
-    let phaseB = 0;
-    let noiseLp = 0;
+    const phases = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    const ratios = [1, 1.37, 1.73, 2.09, 2.51, 2.87, 3.24, 3.68, 4.11, 4.53];
+    const amps = [0.22, 0.18, 0.15, 0.12, 0.09, 0.07, 0.05, 0.04, 0.03, 0.02];
+    let prevNoise = 0;
+    let hpBand1 = 0;
+    let hpBand2 = 0;
+    let lpBand = 0;
     for (let i = 0; i < length; i++) {
       const t = i / sampleRate;
-      const glide = Math.exp(-t * (44 + bend * 28));
-      const freq = endFreq + (startFreq - endFreq) * glide;
-      phaseA += freq / sampleRate;
-      phaseB += (freq * 1.6) / sampleRate;
-      const body = (
-        Math.sin(2 * Math.PI * phaseA) * 0.75 +
-        Math.sin(2 * Math.PI * phaseB) * 0.25
-      ) * Math.exp(-t * (9.5 - extra * 2.2)) * profile.body;
+      let metallic = 0;
+      for (let p = 0; p < phases.length; p++) {
+        phases[p] += (baseFreq * ratios[p]) / sampleRate;
+        metallic += Math.sin(2 * Math.PI * phases[p]) * amps[p];
+      }
+      const bodyEnv = Math.exp(-t * (2.2 / decay)) * profile.body;
       const noise = Math.random() * 2 - 1;
-      noiseLp = noiseLp * 0.82 + noise * 0.18;
-      const attack = (noise - noiseLp) * Math.exp(-t * 120) * (0.17 + tone * 0.15) * transientScale * profile.transient;
-      out[i] = Math.tanh((body + attack) * 1.3 * profile.saturation) * volume * 0.9;
+      const hp = noise - prevNoise;
+      prevNoise = noise;
+      hpBand1 = hpBand1 * 0.5 + hp * 0.5;
+      hpBand2 = hpBand2 * 0.35 + hp * 0.65;
+      lpBand = lpBand * 0.88 + noise * 0.12;
+      const shimmer = hpBand1 * 0.25 + hpBand2 * 0.15 + (noise - lpBand) * 0.15;
+      const shimmerEnv = Math.exp(-t * (1.5 / decay));
+      const stick = hp * Math.exp(-t * 200) * (0.2 + tone * 0.15) * transientScale * profile.transient;
+      const bell = Math.sin(2 * Math.PI * baseFreq * 1.73 * t) * Math.exp(-t * 22) * 0.03 * profile.body;
+      const mix = metallic * bodyEnv + shimmer * shimmerEnv * profile.noise + stick + bell;
+      out[i] = Math.tanh(mix * 1.2 * profile.saturation) * volume * 0.9;
     }
     return out;
   }
 
   private static renderCrash(volume: number, tone: number, extra: number, transientScale: number, sampleRate: number, profile: VariantProfile): Float32Array {
-    const dur = 0.8 + extra * 2.1;
+    const dur = 1.2 + extra * 2.8;
     const length = Math.floor(sampleRate * dur);
     const out = new Float32Array(length);
     let prevNoise = 0;
     let lpNoise = 0;
-    let phase1 = 0, phase2 = 0, phase3 = 0, phase4 = 0, phase5 = 0;
+    let hpBand = 0;
     const base = 1800 + tone * 2600;
+    const phases = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    const ratios = [1, 1.37, 1.73, 2.09, 2.51, 2.87, 3.24, 3.68, 4.11, 4.53, 5.02, 5.47];
+    const amps = [0.16, 0.15, 0.14, 0.13, 0.11, 0.1, 0.08, 0.06, 0.04, 0.03, 0.02, 0.01];
     for (let i = 0; i < length; i++) {
       const t = i / sampleRate;
       const noise = Math.random() * 2 - 1;
       const hpNoise = noise - prevNoise;
       prevNoise = noise;
       lpNoise = lpNoise * 0.86 + noise * 0.14;
-      phase1 += base / sampleRate;
-      phase2 += base * 1.41 / sampleRate;
-      phase3 += base * 2.03 / sampleRate;
-      phase4 += base * 2.87 / sampleRate;
-      phase5 += base * 3.53 / sampleRate;
-      const metallic = (
-        Math.sin(2 * Math.PI * phase1) * 0.24 +
-        Math.sin(2 * Math.PI * phase2) * 0.23 +
-        Math.sin(2 * Math.PI * phase3) * 0.21 +
-        Math.sin(2 * Math.PI * phase4) * 0.16 +
-        Math.sin(2 * Math.PI * phase5) * 0.11
-      ) * profile.body;
-      const env = Math.exp(-t * (1.45 / dur));
+      hpBand = hpBand * 0.5 + hpNoise * 0.5;
+      let metallic = 0;
+      for (let p = 0; p < phases.length; p++) {
+        phases[p] += (base * ratios[p]) / sampleRate;
+        metallic += Math.sin(2 * Math.PI * phases[p]) * amps[p];
+      }
+      metallic *= profile.body;
+      const env = Math.exp(-t * 1.5);
+      const sustainEnv = Math.exp(-t * 0.4);
       const attack = Math.exp(-t * 170);
-      const brightness = 0.3 + tone * 0.7;
+      const bright = 0.3 + tone * 0.7;
       const burst = hpNoise * attack * (0.5 + tone * 0.24) * transientScale * profile.transient;
-      const wash = (hpNoise * 0.5 + (noise - lpNoise) * 0.52 + metallic) * env * profile.noise;
-      out[i] = Math.tanh((burst + wash) * 1.02 * profile.saturation) * volume * brightness;
+      const wash = (hpBand * 0.4 + (noise - lpNoise) * 0.35 + metallic * sustainEnv) * env * profile.noise;
+      out[i] = Math.tanh((burst + wash) * 1.02 * profile.saturation) * volume * bright;
     }
     return out;
   }

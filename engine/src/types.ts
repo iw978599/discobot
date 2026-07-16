@@ -42,6 +42,11 @@ export interface SynthParameters {
   hold: boolean;
   gain: number;
   fxReturn: number;
+  pan: number;
+  portamento: {
+    enabled: boolean;
+    glide: number;
+  };
   arpeggiator: {
     enabled: boolean;
     mode: 'up' | 'down' | 'updown' | 'downup' | 'random' | 'converge' | 'diverge';
@@ -116,13 +121,16 @@ export interface Pattern {
 }
 
 export type DrumInstrument = 'kick' | 'snare' | 'openHH' | 'closedHH' | 'ride' | 'crash' | 'snare2' | 'clap';
-export type DrumKitId = 'clean-analog' | 'punchy-modern' | 'lofi-dirty';
+export type DrumKitId = 'clean-analog' | 'punchy-modern' | 'lofi-dirty' | 'tr-808' | 'tr-909' | 'linndrum' | 'oberheim-dmx' | 'tr-707';
 export type DrumKitModelVariant = 'analog' | 'modern' | 'dirty';
+
+export type CymbalType = 'crash' | 'ride';
 
 export interface DrumSettings {
   volume: number;
   tone: number;
   extra: number;
+  cymbalType?: CymbalType;
 }
 
 export type DrumInstrumentDefaults = Record<DrumInstrument, DrumSettings>;

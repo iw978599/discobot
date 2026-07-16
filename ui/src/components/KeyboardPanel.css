@@ -6,6 +6,7 @@
   display: flex;
   gap: 0.35rem;
   margin-bottom: 0.45rem;
+  align-items: center;
 }
 
 .keyboard-panel-toggle button {
@@ -21,4 +22,35 @@
 .keyboard-panel-toggle button.active {
   border-color: #00d4ff;
   color: #00d4ff;
+}
+
+.keyboard-panel-toggle .octave-shift-value {
+  min-width: 18px;
+  text-align: center;
+  font-family: 'Courier New', Courier, monospace;
+  color: #f59e0b;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.keyboard-panel-toggle .octave-shift-btn {
+  background: #333;
+  color: #00d4ff;
+  border: 1px solid #00d4ff;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: bold;
+  transition: all 0.2s;
+}
+
+.keyboard-panel-toggle .octave-shift-btn:hover:not(:disabled) {
+  background: #00d4ff;
+  color: #000;
+}
+
+.keyboard-panel-toggle .octave-shift-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }

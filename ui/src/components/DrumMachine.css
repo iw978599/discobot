@@ -141,6 +141,27 @@
   color: #f59e0b;
 }
 
+.drum-cymbal-toggle {
+  border: 1px solid #5e646d;
+  border-radius: 3px;
+  background: #2a2d32;
+  color: #9ca3af;
+  font-size: 0.56rem;
+  height: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  width: 100%;
+  margin-top: 0.15rem;
+}
+
+.drum-cymbal-toggle:hover {
+  border-color: #8b5cf6;
+  color: #c4b5fd;
+}
+
 .drum-step-header {
   display: flex;
   flex-direction: column;

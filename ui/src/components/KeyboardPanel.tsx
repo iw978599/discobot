@@ -11,6 +11,7 @@ interface KeyboardPanelProps {
   isPlaying: boolean;
   selectedStep: number | null;
   octaveShift: number;
+  onOctaveShift: (direction: 'up' | 'down') => void;
   holdEnabled: boolean;
   releaseSignal: boolean;
   onStepSelect: (stepIndex: number) => void;
@@ -28,6 +29,7 @@ export default function KeyboardPanel({
   isPlaying,
   selectedStep,
   octaveShift,
+  onOctaveShift,
   holdEnabled,
   releaseSignal,
   onStepSelect,
@@ -52,6 +54,23 @@ export default function KeyboardPanel({
           title="Piano Roll"
         >
           📊
+        </button>
+        <span className="octave-shift-value">{octaveShift > 0 ? `+${octaveShift}` : octaveShift}</span>
+        <button
+          className="octave-shift-btn"
+          onClick={() => onOctaveShift('down')}
+          disabled={octaveShift <= -2}
+          title="Shift octave down"
+        >
+          Oct -
+        </button>
+        <button
+          className="octave-shift-btn"
+          onClick={() => onOctaveShift('up')}
+          disabled={octaveShift >= 2}
+          title="Shift octave up"
+        >
+          Oct +
         </button>
       </div>
 

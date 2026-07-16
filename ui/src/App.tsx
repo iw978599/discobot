@@ -10,8 +10,9 @@ import { usePatternAudio } from './hooks/usePatternAudio';
 import { MidiMode, MidiMessage, useMidiInput } from './hooks/useMidiInput';
 import { getWebSocketUrl } from './config';
 import { Pattern, SynthParameters, SavedPatternInfo, SavedPatternFull, DrumState, DrumInstrument, DrumSettings, DrumKitDefinition, DrumKitId, EffectsLoopState, FxSendLevels, SynthModelId, SynthModelParams } from './types';
-import { authFetch, exchangeLoginToken, fetchSessionInfo, setAuthContext } from './authClient';
+import { authFetch, exchangeLoginToken, fetchSessionInfo, setAuthContext, compatibilityLogin } from './authClient';
 import { downloadMidiFile, transposeNote } from './utils/midiExport';
+import { importMidiFile, readFileAsArrayBuffer, MidiImportResult } from './utils/midiImport';
 import { DEFAULT_SYNTH_MODEL_ID, createDefaultSynthModelParams, mapSynthModelToEngineParams, normalizeSynthModelId, normalizeSynthModelParams } from './synthModels';
 import './App.css';
 
@@ -49,6 +50,8 @@ const DEFAULT_PARAMS: SynthParameters = {
   hold: false,
   gain: 1.0,
   fxReturn: 0.85,
+  pan: 0,
+  portamento: { enabled: false, glide: 0.05 },
   arpeggiator: { enabled: false, mode: 'up', rate: '1/16', gate: 0.7 },
   oscillator: { type: 'sine', detune: 0 },
   lfo1: { enabled: false, target: 'pitch', waveform: 'sine', rate: 5, depth: 0.2 },
@@ -170,6 +173,7 @@ function cloneSynthParams(params: SynthParameters | null): SynthParameters | nul
     filter: { ...params.filter },
     envelope: { ...params.envelope },
     fxSends: { ...params.fxSends },
+    portamento: { ...params.portamento },
     effects: {
       reverb: { ...params.effects.reverb },
       delay: { ...params.effects.delay },
@@ -202,6 +206,8 @@ function createBuiltInPresets(): SynthPreset[] {
         envelope: { attack: 0.35, decay: 0.7, sustain: 0.78, release: 1.2 },
         fxReturn: 0.9,
         fxSends: { reverb: 0.55, delay: 0.26, drive: 0.05, phaser: 0.24 },
+        lfo1: { enabled: true, target: 'filter', waveform: 'triangle', rate: 0.8, depth: 0.3 },
+        lfo2: { enabled: true, target: 'pitch', waveform: 'sine', rate: 4.2, depth: 0.12 },
       },
     },
     {
@@ -217,6 +223,8 @@ function createBuiltInPresets(): SynthPreset[] {
         envelope: { attack: 0.005, decay: 0.11, sustain: 0.48, release: 0.18 },
         fxReturn: 0.55,
         fxSends: { reverb: 0.08, delay: 0.06, drive: 0.28, phaser: 0.05 },
+        lfo1: { enabled: true, target: 'filter', waveform: 'square', rate: 1.5, depth: 0.15 },
+        lfo2: { enabled: false, target: 'filter', waveform: 'sine', rate: 0.5, depth: 0.1 },
       },
     },
     {
@@ -232,6 +240,8 @@ function createBuiltInPresets(): SynthPreset[] {
         envelope: { attack: 0.012, decay: 0.22, sustain: 0.62, release: 0.28 },
         fxReturn: 0.72,
         fxSends: { reverb: 0.2, delay: 0.34, drive: 0.2, phaser: 0.12 },
+        lfo1: { enabled: true, target: 'pitch', waveform: 'sawtooth', rate: 5.5, depth: 0.22 },
+        lfo2: { enabled: true, target: 'filter', waveform: 'triangle', rate: 0.6, depth: 0.18 },
       },
     },
     {
@@ -247,6 +257,8 @@ function createBuiltInPresets(): SynthPreset[] {
         envelope: { attack: 0.002, decay: 0.19, sustain: 0.2, release: 0.12 },
         fxReturn: 0.62,
         fxSends: { reverb: 0.18, delay: 0.22, drive: 0.1, phaser: 0.07 },
+        lfo1: { enabled: true, target: 'filter', waveform: 'square', rate: 8, depth: 0.25 },
+        lfo2: { enabled: false, target: 'pitch', waveform: 'sine', rate: 3, depth: 0.1 },
       },
     },
     {
@@ -262,6 +274,8 @@ function createBuiltInPresets(): SynthPreset[] {
         envelope: { attack: 0.004, decay: 0.42, sustain: 0.22, release: 1.45 },
         fxReturn: 0.82,
         fxSends: { reverb: 0.34, delay: 0.06, drive: 0.02, phaser: 0.02 },
+        lfo1: { enabled: true, target: 'pitch', waveform: 'triangle', rate: 4.8, depth: 0.08 },
+        lfo2: { enabled: false, target: 'filter', waveform: 'sine', rate: 1, depth: 0.05 },
       },
     },
   ];
@@ -812,6 +826,16 @@ function App() {
         }
 
         setAuthError('Use /login in Discord to link this browser session.');
+        try {
+          const compatData = await compatibilityLogin();
+          setSessionToken(compatData.sessionToken);
+          setCsrfToken(compatData.csrfToken);
+          setSessionLabel('Local User (owner)');
+          writeAuthTokens(compatData.sessionToken, compatData.csrfToken);
+          setAuthError(null);
+          return;
+        } catch {
+        }
       } catch {
         setAuthError('Login token invalid or expired. Run /login in Discord again.');
       }
@@ -1236,8 +1260,8 @@ function App() {
     setSynths(prev => prev.map(s => {
       if (s.id !== synthId) return s;
       const newShift = direction === 'up'
-        ? Math.min(s.octaveShift + 1, 1)
-        : Math.max(s.octaveShift - 1, -1);
+        ? Math.min(s.octaveShift + 1, 2)
+        : Math.max(s.octaveShift - 1, -2);
       return { ...s, octaveShift: newShift };
     }));
   }, []);
@@ -1745,6 +1769,54 @@ function App() {
     );
   }, [globalTempo]);
 
+  const midiImportFileRef = useRef<HTMLInputElement>(null);
+  const [midiImportData, setMidiImportData] = useState<MidiImportResult | null>(null);
+  const [midiImportTargetSynth, setMidiImportTargetSynth] = useState<number>(1);
+
+  const handleMidiImportClick = useCallback(() => {
+    midiImportFileRef.current?.click();
+  }, []);
+
+  const handleMidiImportFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const buffer = await readFileAsArrayBuffer(file);
+      const result = importMidiFile(buffer);
+      if (result.patterns.length === 0) {
+        alert('No note tracks found in MIDI file.');
+        return;
+      }
+      setMidiImportData(result);
+    } catch (err) {
+      alert(`Failed to import MIDI: ${err instanceof Error ? err.message : err}`);
+    }
+    e.target.value = '';
+  }, []);
+
+  const handleMidiImportApply = useCallback((trackIndex: number) => {
+    if (!midiImportData) return;
+    const pattern = midiImportData.patterns[trackIndex];
+    if (!pattern) return;
+    const targetSynthId = midiImportTargetSynth;
+    const synthEntry = synthsRef.current.find(s => s.id === targetSynthId);
+    if (!synthEntry) return;
+
+    setSynths(prev => prev.map(s =>
+      s.id === targetSynthId ? { ...s, pattern } : s
+    ));
+    void authFetch(`/synth/${targetSynthId}/patterns/${pattern.id}`, {
+      method: 'PUT',
+      body: JSON.stringify(pattern),
+    });
+    setGlobalTempo(midiImportData.detectedTempo);
+    void authFetch('/tempo', {
+      method: 'PUT',
+      body: JSON.stringify({ tempo: midiImportData.detectedTempo }),
+    });
+    setMidiImportData(null);
+  }, [midiImportData, midiImportTargetSynth]);
+
   const handleSaveGlobal = useCallback(async (name: string): Promise<boolean> => {
     const firstSynth = synthsRef.current[0];
     if (!firstSynth?.pattern || !firstSynth.synthParams) return false;
@@ -2225,6 +2297,16 @@ function App() {
             <button className="header-secondary-button" onClick={handleExportMidi} title="Export MIDI (.mid)">
               Export MIDI
             </button>
+            <button className="header-secondary-button" onClick={handleMidiImportClick} title="Import MIDI file">
+              Import MIDI
+            </button>
+            <input
+              ref={midiImportFileRef}
+              type="file"
+              accept=".mid,.midi"
+              style={{ display: 'none' }}
+              onChange={handleMidiImportFile}
+            />
             <button className="reset-button" onClick={handleReset} title="Reset all synths and drums">
               &#8634;
             </button>
@@ -2331,6 +2413,49 @@ function App() {
           />
         </div>
       </div>
+
+      {midiImportData && (
+        <div className="help-modal-overlay" onClick={() => setMidiImportData(null)} role="presentation">
+          <div className="help-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Import MIDI">
+            <div className="help-modal-header">
+              <h2>Import MIDI</h2>
+              <button className="help-modal-close" onClick={() => setMidiImportData(null)}>&times;</button>
+            </div>
+            <div style={{ padding: '1rem', color: '#cfd6df', fontSize: '0.85rem' }}>
+              <div style={{ marginBottom: '0.75rem' }}>
+                Detected tempo: <strong>{midiImportData.detectedTempo} BPM</strong> &middot;
+                Step count: <strong>{midiImportData.detectedStepCount}</strong>
+              </div>
+              <div style={{ marginBottom: '0.5rem', color: '#9ca3af' }}>Select a track to import:</div>
+              {midiImportData.trackNames.map((name, i) => (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'center', gap: '0.5rem',
+                  padding: '0.4rem 0.6rem', marginBottom: '0.3rem',
+                  border: '1px solid #4a4a4a', borderRadius: '4px', background: '#1a1a1a',
+                  cursor: 'pointer',
+                }}
+                onClick={() => handleMidiImportApply(i)}
+                >
+                  <span style={{ flex: 1, color: '#cfd6df' }}>{name}</span>
+                  <span style={{ color: '#6b7280', fontSize: '0.75rem' }}>{midiImportData.trackNoteCounts[i]} notes</span>
+                </div>
+              ))}
+              <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <label style={{ color: '#9ca3af', fontSize: '0.8rem' }}>Target synth:</label>
+                <select
+                  value={midiImportTargetSynth}
+                  onChange={(e) => setMidiImportTargetSynth(Number(e.target.value))}
+                  style={{ background: '#1a1a1a', color: '#cfd6df', border: '1px solid #4a4a4a', borderRadius: '3px', padding: '0.2rem 0.4rem', fontSize: '0.8rem' }}
+                >
+                  {synths.map(s => (
+                    <option key={s.id} value={s.id}>Synth {s.id}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

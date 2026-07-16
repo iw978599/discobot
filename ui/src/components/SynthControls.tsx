@@ -20,8 +20,6 @@ interface SynthControlsProps {
   synthModelParams: SynthModelParams;
   onModelChange: (modelId: SynthModelId) => void;
   onModelParamsChange: (params: Partial<SynthModelParams>) => void;
-  octaveShift: number;
-  onOctaveShift: (direction: 'up' | 'down') => void;
 }
 
 const TOOLTIPS = {
@@ -39,6 +37,11 @@ const TOOLTIPS = {
   release: 'Time to fade out after key release',
   fxSend: 'Send amount into shared FX loop',
   fxReturn: 'Per-synth return level from the shared FX loop',
+  drive: 'Waveshaper drive - adds harmonic distortion and warmth',
+  lfo2Enable: 'Enable/disable LFO 2 modulation',
+  pan: 'Stereo position - left, center, or right',
+  portamentoEnable: 'Enable pitch glide between consecutive notes',
+  portamentoGlide: 'Glide time - how long to slide between notes',
 };
 
 const parseNumber = (input: string): number | null => {
@@ -75,8 +78,6 @@ export default function SynthControls({
   synthModelParams,
   onModelChange,
   onModelParamsChange,
-  octaveShift,
-  onOctaveShift,
 }: SynthControlsProps) {
   const [presetName, setPresetName] = useState('');
   const [selectedPresetId, setSelectedPresetId] = useState('');
@@ -113,6 +114,12 @@ export default function SynthControls({
     });
   };
 
+  const updatePortamento = (updates: Partial<SynthParameters['portamento']>) => {
+    onParameterChange({
+      portamento: { ...parameters.portamento, ...updates },
+    });
+  };
+
   const updateArpeggiator = (updates: Partial<SynthParameters['arpeggiator']>) => {
     onParameterChange({
       arpeggiator: {
@@ -138,31 +145,13 @@ export default function SynthControls({
             <span className="synth-toggle-slider" />
           </label>
           <span className="octave-shift-value">HOLD</span>
-          <button
-            className="octave-shift-btn"
-            onClick={() => onOctaveShift('down')}
-            disabled={octaveShift <= -1}
-            title="Shift octave down"
-          >
-            Oct -
-          </button>
-          <span className="octave-shift-value">
-            {octaveShift > 0 ? `+${octaveShift}` : octaveShift}
-          </span>
-          <button
-            className="octave-shift-btn"
-            onClick={() => onOctaveShift('up')}
-            disabled={octaveShift >= 1}
-            title="Shift octave up"
-          >
-            Oct +
-          </button>
           <div className="model-selector-wrap">
             <label>MODEL</label>
             <select
               className="synth-select model-select"
               value={synthModelId}
               onChange={(e) => onModelChange(e.target.value as SynthModelId)}
+              title="Synth model - changes the character and behavior of the synthesizer"
             >
               {SYNTH_MODELS.map((entry) => (
                 <option key={entry.id} value={entry.id}>
@@ -258,7 +247,7 @@ export default function SynthControls({
               <option value="1/16">1/16</option>
               <option value="1/32">1/32</option>
             </select>
-            <label className="arp-gate-label">
+            <label className="arp-gate-label" title="Arpeggiator gate length - proportion of step duration the note plays">
               Gate
               <input
                 type="range"
@@ -649,6 +638,46 @@ export default function SynthControls({
               parseInputValue={parsePercent(0, 1)}
               color="#22c55e"
               tooltip={TOOLTIPS.fxReturn}
+            />
+          </div>
+        </div>
+
+        <div className="synth-column">
+          <h3>STEREO</h3>
+          <div className="synth-column-controls">
+            <Knob
+              label="Pan"
+              value={parameters.pan}
+              min={-1}
+              max={1}
+              step={0.01}
+              displayValue={parameters.pan === 0 ? 'C' : `${parameters.pan < 0 ? 'L' : 'R'}${Math.abs(Math.round(parameters.pan * 100))}`}
+              onChange={(v) => onParameterChange({ pan: v })}
+              color="#8b5cf6"
+              tooltip={TOOLTIPS.pan}
+            />
+            <div className="synth-section-header">
+              <h3 style={{ fontSize: '10px' }}>GLIDE</h3>
+              <label className="synth-toggle" title={TOOLTIPS.portamentoEnable}>
+                <input
+                  type="checkbox"
+                  checked={parameters.portamento.enabled}
+                  onChange={(e) => updatePortamento({ enabled: e.target.checked })}
+                />
+                <span className="synth-toggle-slider" />
+              </label>
+            </div>
+            <Knob
+              label="Glide"
+              value={parameters.portamento.glide}
+              min={0.001}
+              max={0.5}
+              step={0.001}
+              displayValue={`${(parameters.portamento.glide * 1000).toFixed(0)}ms`}
+              onChange={(v) => updatePortamento({ glide: v })}
+              disabled={!parameters.portamento.enabled}
+              color="#8b5cf6"
+              tooltip={TOOLTIPS.portamentoGlide}
             />
           </div>
         </div>
