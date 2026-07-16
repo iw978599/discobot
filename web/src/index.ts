@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
-import { Synthesizer, Sequencer, SamplePlayer, Pattern, SynthParameters, DrumState, DrumInstrument, DrumKitDefinition, DrumKitId, DrumKitModelVariant, DrumInstrumentDefaults, DiscordAudioStreamer, DrumSynthesizer, EffectsLoopState, FxSendLevels, clamp, throttle, AUDIO_MIXING, AUDIO_CONTEXT } from '@discord-synth/engine';
+import { Synthesizer, Sequencer, SamplePlayer, Pattern, SynthParameters, DrumState, DrumInstrument, DrumKitDefinition, DrumKitId, DrumKitModelVariant, DrumInstrumentDefaults, DiscordAudioStreamer, DrumSynthesizer, EffectsLoopState, FxSendLevels, SynthModelId, SynthModelParams, clamp, throttle, AUDIO_MIXING, AUDIO_CONTEXT } from '@discord-synth/engine';
 import { assignRole, canControl, SessionRole } from './sessionAuth';
 import { getWebSocketChannel, getWebSocketRequestPath, isAllowedUpgradeOrigin } from './wsHelpers';
 import { shouldUseCompatibilityFallback } from './authFallback';
@@ -111,6 +111,8 @@ interface SynthData {
   sequencer: Sequencer;
   pattern: Pattern;
   patterns: Pattern[];
+  modelId: SynthModelId;
+  modelParams: SynthModelParams;
 }
 
 interface SynthMixState {
@@ -150,6 +152,8 @@ interface SavedPatternData {
   updatedAt: number;
   steps: Array<{ active: boolean; note?: string; velocity: number }>;
   synthParams: SynthParameters;
+  synthModelId?: SynthModelId;
+  synthModelParams?: SynthModelParams;
   tempo: number;
   drumState: DrumState;
   drumKitId?: DrumKitId;
@@ -185,6 +189,8 @@ interface PersistedStore {
 
 const DRUM_INSTRUMENTS: DrumInstrument[] = ['kick', 'snare', 'openHH', 'closedHH', 'ride', 'crash', 'snare2', 'clap'];
 const DEFAULT_DRUM_KIT_ID: DrumKitId = 'clean-analog';
+const SYNTH_MODEL_IDS: SynthModelId[] = ['generic', 'minimoog-model-d', 'juno-106', 'dx7', 'tb-303', 'prophet-5'];
+const DEFAULT_SYNTH_MODEL_ID: SynthModelId = 'generic';
 const DRUM_KITS: DrumKitDefinition[] = [
   {
     id: 'clean-analog',
@@ -403,6 +409,27 @@ function normalizeDrumState(state: DrumState): DrumState {
     while (base[inst].steps.length < 16) base[inst].steps.push(false);
   }
   return base;
+}
+
+function createDefaultSynthModelParams(): SynthModelParams {
+  return { macro1: 0.5, macro2: 0.5, macro3: 0.5, macro4: 0.5 };
+}
+
+function normalizeSynthModelId(modelId: unknown): SynthModelId {
+  if (typeof modelId !== 'string') return DEFAULT_SYNTH_MODEL_ID;
+  return SYNTH_MODEL_IDS.includes(modelId as SynthModelId) ? modelId as SynthModelId : DEFAULT_SYNTH_MODEL_ID;
+}
+
+function normalizeSynthModelParams(modelParams: unknown): SynthModelParams {
+  const defaults = createDefaultSynthModelParams();
+  if (!modelParams || typeof modelParams !== 'object') return defaults;
+  const params = modelParams as Partial<SynthModelParams>;
+  return {
+    macro1: clamp(params.macro1 ?? defaults.macro1, 0, 1),
+    macro2: clamp(params.macro2 ?? defaults.macro2, 0, 1),
+    macro3: clamp(params.macro3 ?? defaults.macro3, 0, 1),
+    macro4: clamp(params.macro4 ?? defaults.macro4, 0, 1),
+  };
 }
 
 function createGuildRuntimeState(guildId: string): GuildRuntimeState {
@@ -713,7 +740,14 @@ function initSynth(state: GuildRuntimeState, synthId: number) {
     broadcastToClients({ type: 'sequencerStep', data: { guildId: state.guildId, synthId, step } }, state.guildId);
   });
 
-  state.synths.set(synthId, { synth, sequencer, pattern, patterns });
+  state.synths.set(synthId, {
+    synth,
+    sequencer,
+    pattern,
+    patterns,
+    modelId: DEFAULT_SYNTH_MODEL_ID,
+    modelParams: createDefaultSynthModelParams(),
+  });
   state.synthMixState.set(synthId, { muted: false, solo: false });
 }
 
@@ -1223,6 +1257,8 @@ app.post('/synth/create', (req, res) => {
       synthId,
       pattern: synthData.pattern,
       synthParams: synthData.synth.getParameters(),
+      synthModelId: synthData.modelId,
+      synthModelParams: synthData.modelParams,
       muted: false,
       solo: false,
       isPlaying: shouldAutoPlay,
@@ -1240,6 +1276,8 @@ app.post('/synth/create', (req, res) => {
     pattern: synthData.pattern,
     patterns: synthData.patterns,
     synthParams: synthData.synth.getParameters(),
+    synthModelId: synthData.modelId,
+    synthModelParams: synthData.modelParams,
     muted: false,
     solo: false,
     isPlaying: shouldAutoPlay,
@@ -1298,6 +1336,39 @@ app.post('/synth/:synthId/parameters', (req, res) => {
       message: error instanceof Error ? error.message : 'Failed to update parameters',
     });
   }
+});
+
+app.get('/synth/:synthId/model', (req, res) => {
+  const session = getSession(req);
+  const state = getGuildState(session.guildId);
+  const synthData = state.synths.get(parseInt(req.params.synthId, 10));
+  if (!synthData) return res.status(404).json({ error: 'Synth not found' });
+  res.json({
+    modelId: synthData.modelId,
+    modelParams: synthData.modelParams,
+  });
+});
+
+app.post('/synth/:synthId/model', (req, res) => {
+  const session = getSession(req);
+  const state = getGuildState(session.guildId);
+  const synthId = parseInt(req.params.synthId, 10);
+  const synthData = state.synths.get(synthId);
+  if (!synthData) return res.status(404).json({ error: 'Synth not found' });
+  const incoming = req.body as { modelId?: SynthModelId; modelParams?: Partial<SynthModelParams> };
+  synthData.modelId = normalizeSynthModelId(incoming.modelId);
+  synthData.modelParams = normalizeSynthModelParams({
+    ...synthData.modelParams,
+    ...incoming.modelParams,
+  });
+  const data = {
+    guildId: session.guildId,
+    synthId,
+    modelId: synthData.modelId,
+    modelParams: synthData.modelParams,
+  };
+  broadcastToClients({ type: 'synthModelUpdate', data }, session.guildId);
+  res.json({ success: true, ...data });
 });
 
 app.post('/synth/:synthId/mix', (req, res) => {
@@ -1560,7 +1631,20 @@ app.post('/drum/fx', (req, res) => {
 app.post('/patterns/save', (req, res) => {
   const session = getSession(req);
   const state = getGuildState(session.guildId);
-  const { name, steps, synthParams, tempo, drumState, drumMasterVolume, drumFx, effectsLoop, drumKitId, overwriteId } = req.body;
+  const {
+    name,
+    steps,
+    synthParams,
+    synthModelId,
+    synthModelParams,
+    tempo,
+    drumState,
+    drumMasterVolume,
+    drumFx,
+    effectsLoop,
+    drumKitId,
+    overwriteId,
+  } = req.body;
   const patternName = sanitizePatternName(name);
   if (!patternName || !Array.isArray(steps) || steps.length === 0 || steps.length > 64) {
     return res.status(400).json({ error: 'Invalid pattern payload' });
@@ -1589,6 +1673,8 @@ app.post('/patterns/save', (req, res) => {
     updatedAt: now,
     steps,
     synthParams: synthParams || null,
+    synthModelId: normalizeSynthModelId(synthModelId),
+    synthModelParams: normalizeSynthModelParams(synthModelParams),
     tempo: tempo || state.globalTempo,
     drumState: drumState || state.drumState,
     drumKitId: normalizeDrumKitId(drumKitId ?? state.selectedDrumKitId),
@@ -1619,6 +1705,8 @@ app.get('/patterns/saved/:id', (req, res) => {
   if (!entry) return res.status(404).json({ error: 'Saved pattern not found' });
   res.json({
     ...entry,
+    synthModelId: normalizeSynthModelId(entry.synthModelId),
+    synthModelParams: normalizeSynthModelParams(entry.synthModelParams),
     drumKitId: normalizeDrumKitId(entry.drumKitId),
     drumState: normalizeDrumState(entry.drumState),
     drumFx: normalizeDrumFx(entry.drumFx),
@@ -1840,6 +1928,8 @@ wssUi.on('connection', (ws, req) => {
     pattern: data.pattern,
     patterns: data.patterns,
     synthParams: data.synth.getParameters(),
+    synthModelId: data.modelId,
+    synthModelParams: data.modelParams,
     isPlaying: data.sequencer.getIsPlaying(),
     muted: state.synthMixState.get(id)?.muted ?? false,
     solo: state.synthMixState.get(id)?.solo ?? false,

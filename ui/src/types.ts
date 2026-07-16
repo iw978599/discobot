@@ -11,6 +11,8 @@ export type {
   // Audio synthesis types
   OscillatorType,
   SynthParameters,
+  SynthModelId,
+  SynthModelParams,
   SequencerStep,
   Pattern,
 
