@@ -3,6 +3,7 @@
 // Let it initialize lazily when first used.
 
 export { Synthesizer } from './Synthesizer';
+export { StreamingSynth } from './StreamingSynth';
 export { DrumSynthesizer } from './DrumSynthesizer';
 export { DiscordAudioStreamer } from './Streaming';
 export { Sequencer } from './Sequencer';

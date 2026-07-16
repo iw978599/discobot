@@ -57,3 +57,12 @@ export async function fetchSessionInfo(sessionToken: string) {
   if (!response.ok) throw new Error('Session lookup failed');
   return response.json();
 }
+
+export async function compatibilityLogin() {
+  const response = await fetch(apiUrl('/auth/compatibility'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!response.ok) throw new Error('Compatibility login failed');
+  return response.json();
+}

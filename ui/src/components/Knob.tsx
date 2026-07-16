@@ -42,7 +42,6 @@ export default function Knob({
   const [localVal, setLocalVal] = useState(value);
   const [isEditing, setIsEditing] = useState(false);
   const [inputValue, setInputValue] = useState('');
-  const [showTooltip, setShowTooltip] = useState(false);
 
   const computedDisplay = displayValue ?? localVal.toFixed(step >= 1 ? 0 : step >= 0.1 ? 1 : 2);
 
@@ -80,7 +79,6 @@ export default function Knob({
     window.addEventListener('mouseup', handleMouseUp);
   }, [localVal, min, max, step, onChange, disabled]);
 
-  // Rotation: min at left, max at right across 300° sweep
   const svgDeg = -240 + pct * 300;
 
   const sizes = {
@@ -110,18 +108,13 @@ export default function Knob({
   }, [disabled, inputValue, parseInputValue, min, max, step, onChange]);
 
   return (
-    <div
-      className={`knob knob-${size} ${disabled ? 'knob-disabled' : ''}`}
-      onMouseEnter={() => setShowTooltip(true)}
-      onMouseLeave={() => setShowTooltip(false)}
-    >
+    <div className={`knob knob-${size} ${disabled ? 'knob-disabled' : ''}`}>
       <div
         ref={knobRef}
         className="knob-rotary"
         onMouseDown={handleMouseDown}
       >
         <svg viewBox={`0 0 ${s.svg} ${s.svg}`} className="knob-svg">
-          {/* Outer ring */}
           <circle
             cx={center}
             cy={center}
@@ -130,8 +123,6 @@ export default function Knob({
             stroke="#4a4a4a"
             strokeWidth="2"
           />
-
-          {/* Inner ring */}
           <circle
             cx={center}
             cy={center}
@@ -140,8 +131,6 @@ export default function Knob({
             stroke="#3a3a3a"
             strokeWidth="1"
           />
-
-          {/* Indicator line */}
           <line
             x1={center}
             y1={center}
@@ -151,8 +140,6 @@ export default function Knob({
             strokeWidth="2.5"
             strokeLinecap="round"
           />
-
-          {/* Indicator dot */}
           <circle
             cx={center + (s.line - 2) * Math.cos((svgDeg * Math.PI) / 180)}
             cy={center + (s.line - 2) * Math.sin((svgDeg * Math.PI) / 180)}
@@ -162,7 +149,7 @@ export default function Knob({
         </svg>
       </div>
 
-      <span className="knob-label">{label}</span>
+      <span className="knob-label" title={tooltip}>{label}</span>
       <input
         className="knob-value-input"
         value={isEditing ? inputValue : computedDisplay}
@@ -181,10 +168,6 @@ export default function Knob({
         }}
         disabled={disabled}
       />
-
-      {tooltip && showTooltip && (
-        <div className="knob-tooltip">{tooltip}</div>
-      )}
     </div>
   );
 }

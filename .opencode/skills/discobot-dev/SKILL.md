@@ -9,108 +9,109 @@ This skill helps with working on the Discord Synth Bot project which combines a 
 
 ## Project Overview
 
-The discobot is a monorepo with these packages:
+The discobot is a monorepo with 4 npm workspaces:
 - **bot/**: Discord bot using discord.js v14 and @discordjs/voice
-- **engine/**: Audio synthesis engine based on Tone.js 
-- **web/**: Express server with WebSocket for real-time synchronization
-- **ui/**: React web interface with Vite
+- **engine/**: Custom math-based audio synthesis (no Tone.js)
+- **web/**: Express API (port 3001) + WebSocket server (3001/ws)
+- **ui/**: React web interface with Vite (port 3000)
 
-## Key Technical Details
+## Architecture
 
-### Architecture
-- Data Flow: Web UI ↔ WebSocket ↔ Web Server ↔ REST API ↔ Discord Bot
-- Audio Engine runs in the web server, not browser or bot (centralized audio state)
-- State is stored in web server and synchronized via WebSocket to all connected clients
+### Data Flow
+- **Browser**: AudioWorkletProcessor renders synth audio in real-time
+- **Server**: StreamingSynth renders 20ms PCM chunks, sends via WebSocket
+- **Bot**: Receives PCM chunks, broadcasts to Discord voice channel (48kHz stereo 16-bit)
 
-### Main Components
-- **Synthesizer.ts**: Tone.js-based synth with oscillators, filter, effects 
-- **Sequencer.ts**: 16-step sequencer with Tone.Transport
-- **SamplePlayer.ts**: Sample loading and playback
-- **AudioExporter.ts**: WAV export functionality
+### Key Technical Details
+- Engine is single source of truth for types (`engine/src/types.ts`), UI re-exports via `ui/src/types.ts`
+- WebSocket drives real-time UI sync between all connected clients
+- Auth: Discord OAuth2 flow, session tokens with TTL, CSRF validation, HMAC-signed bot requests
+- Bot signs requests with `x-bot-timestamp` + `x-bot-signature` headers
+- UI uses Bearer + CSRF tokens for API calls
 
-### Audio Streaming Implementation
-Currently implemented but not working yet:
-- Audio capture from Tone.js output 
-- PCM streaming to Discord voice via @discordjs/voice
-- Needs PCM bridge between Tone.js audio graph and Discord voice stream
+## Running Development Server
 
-## Common Development Tasks
-
-### Setting Up Development Environment
-1. Make sure Node.js 18+ is installed (you have v24.18.0)
-2. Create a Discord application at https://discord.com/developers/applications  
-3. Add bot to your test server with proper permissions
-4. Copy `.env.example` to `.env` and update with credentials
-
-### Running Development Server
 ```bash
-# Run everything (recommended for development)
+# Run everything (bot + web + ui concurrently)
 npm run dev
 
-# Run individual services 
+# Run individual services
 npm run dev:bot    # Discord bot only
-npm run dev:web    # API + WebSocket server only  
+npm run dev:web    # API + WebSocket server only (tsx watch)
 npm run dev:ui     # Web UI only (Vite dev server)
+
+# Build for production
+npm run build
+npm run build:ui   # Build UI only (tsc + vite build)
 ```
 
-### Testing Checklist
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `web/src/index.ts` | Express + WebSocket server, REST endpoints, drum/synth state, streaming, auth |
+| `web/src/wsHelpers.ts` | WebSocket channel routing (ui/bot), origin validation |
+| `web/src/sessionAuth.ts` | Role assignment (owner/collaborator), `canControl` |
+| `ui/src/App.tsx` | Main React component, multi-synth state, header, WebSocket client, MIDI export |
+| `ui/src/config.ts` | Smart base URL detection, WebSocket URL builder with session token |
+| `ui/src/synthModels.ts` | 6 synth model definitions (generic, minimoog, juno-106, dx7, tb-303, prophet-5) |
+| `ui/src/components/SynthUnit.tsx` | Wrapper combining Sequencer + SynthControls + Keyboard per synth |
+| `ui/src/components/DrumMachine.tsx` | 8×16 grid, per-instrument knobs, kit selector (8 kits), master volume, drum FX |
+| `ui/src/hooks/useSynthAudio.ts` | Browser synth: AudioWorkletNode, shared FX bus, pan/portamento |
+| `engine/src/StreamingSynth.ts` | 8-voice poly chunk-based renderer with persistent oscillator/filter/envelope state |
+| `engine/src/DrumSynthesizer.ts` | 8 drum instruments with 8 kit variants, humanization, sample layer blending |
+
+## Features
+
+### Completed
+- Multi-synth support (up to 3, Synth 1 cannot be removed)
+- 16/32-step sequencer with per-step velocity
+- Piano roll editor with click/drag note painting
+- Synthesizer: 4 waveforms, detune, filter, ADSR, dual LFOs, arpeggiator (7 modes)
+- 6 synth model presets (Minimoog, Juno-106, DX7, TB-303, Prophet-5)
+- Shared effects loop: drive, phaser, delay, reverb
+- MIDI input/output
+- Undo/redo with keyboard shortcuts
+- Global tempo across all synths
+- Drum machine: 8 instruments with 8 kit variants (3 generic + 5 drum machine clones)
+- Browser audio preview for synth notes and drum hits
+- Real-time streaming to Discord voice
+- Pattern persistence (save/load/delete)
+- Discord OAuth2 auth with session tokens
+- Real-time user presence display
+- Stereo panning and portamento per synth
+- Import MIDI files with track selection
+
+### Audio Streaming
+- StreamingSynth: 8-voice poly, 20ms chunks at 48kHz
+- Sample-accurate note scheduling (no setTimeout drift)
+- Catch-up timing prevents audio stutter
+- WebSocket keepalive (ping/pong every 15s)
+
+## Conventions
+
+- No comments in code unless explaining non-obvious logic
+- `DrumState` always initialized with `createDefaultDrumState()` (never null)
+- `renderPatternAudio()` produces base64 Int16 stereo PCM at 48kHz
+- REST for data ops, WebSocket for real-time sync
+- Engine types are single source of truth (`engine/src/types.ts`)
+- Auth: bot signs with HMAC, UI uses Bearer + CSRF tokens
+
+## Known Issues
+
+- `SamplePlayer` is stubbed (not functional)
+- Serial effects chain causes cumulative dry attenuation
+- Firefox/Safari lack Web MIDI API support
+
+## Testing Checklist
+
 - [ ] UI connects to WebSocket (green indicator)
 - [ ] Clicking sequencer grid toggles steps
 - [ ] Play/Stop button works
 - [ ] Sequencer steps highlight during playback
 - [ ] Keyboard plays notes
 - [ ] Synth controls update in real-time
+- [ ] Drum machine kit selector shows all 8 kits
 - [ ] Discord bot responds to `/join`, `/leave`
 - [ ] Discord bot responds to `/play`, `/stop`
 - [ ] Multiple browser tabs stay in sync
-
-## Key Files to Modify
-
-### Audio Streaming (Voice Connection)
-- `bot/src/index.ts` (lines ~175-220): Voice connection setup  
-- Need to add: Audio capture from Tone.js, PCM streaming
-
-### Audio Export
-- `engine/src/AudioExporter.ts`: Export logic exists
-- `web/src/index.ts`: Add `/export` endpoint  
-- `bot/src/index.ts` (line ~280): Handle export command
-
-### Sample Management UI
-- `engine/src/SamplePlayer.ts`: Backend ready
-- `web/src/index.ts` (lines ~135-170): API endpoints exist  
-- Need: `ui/src/components/SampleManager.tsx`
-
-## Development Commands
-
-### Using npm workspaces
-```bash
-npm install
-npm run dev              # Run all services
-npm run dev:bot          # Discord bot only
-npm run dev:web          # Web server only
-npm run dev:ui           # UI only (Vite)
-npm run build            # Build for production  
-npm start                # Start production
-```
-
-## Troubleshooting
-
-### No audio in UI
-- Check browser console, Tone.js needs user interaction to start
-- Ensure audio context is correctly initialized
-
-### WebSocket won't connect  
-- Make sure all three processes are running
-- Check ports configured in environment variables
-
-### Discord commands don't work
-- Verify bot token, client ID are correct
-- Confirm required intents are enabled (Server Members, Message Content)
-
-## Future Enhancements  
-
-1. **Audio Streaming to Discord**: Bridge Tone.js output to PCM for Discord voice
-2. **Pattern Persistence**: Store patterns in database instead of memory
-3. **Sample Management UI**: File upload support and sample display 
-4. **Multiple Tracks**: Support for multiple sequencer tracks playing simultaneously
-5. **MIDI Input**: Add MIDI device support

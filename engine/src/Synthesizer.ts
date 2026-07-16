@@ -18,6 +18,8 @@ export class Synthesizer {
       hold: false,
       gain: 1.0,
       fxReturn: 0.85,
+      pan: 0,
+      portamento: { enabled: false, glide: 0.05 },
       arpeggiator: { enabled: false, mode: 'up', rate: '1/16', gate: 0.7 },
       oscillator: { type: 'sine', detune: 0 },
       lfo1: { enabled: false, target: 'pitch', waveform: 'sine', rate: 5, depth: 0.2 },

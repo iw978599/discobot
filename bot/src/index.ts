@@ -17,7 +17,7 @@ import {
   NoSubscriberBehavior,
   StreamType,
 } from '@discordjs/voice';
-import { Readable } from 'stream';
+import { Readable, PassThrough } from 'stream';
 import dotenv from 'dotenv';
 import WebSocket from 'ws';
 import crypto from 'crypto';
@@ -54,6 +54,7 @@ const connections = new Map<string, VoiceConnection>();
 const audioPlayers = new Map<string, AudioPlayer>();
 const audioLoopFlags = new Map<string, boolean>();
 const audioStreams = new Map<string, Readable>();
+const streamingReceivers = new Map<string, PassThrough>();
 const guildAuth = new Map<string, { sessionToken: string; csrfToken: string; expiresAt: number }>();
 let ws: WebSocket | null = null;
 
@@ -183,6 +184,11 @@ function playPatternOnDiscord(guildId: string, audioBase64: string) {
     previousStream.destroy();
     audioStreams.delete(guildId);
   }
+  const previousReceiver = streamingReceivers.get(guildId);
+  if (previousReceiver) {
+    previousReceiver.destroy();
+    streamingReceivers.delete(guildId);
+  }
 
   audioLoopFlags.set(guildId, true);
   const pcmBuffer = Buffer.from(audioBase64, 'base64');
@@ -190,6 +196,45 @@ function playPatternOnDiscord(guildId: string, audioBase64: string) {
   audioStreams.set(guildId, stream);
   const resource = createAudioResource(stream, { inputType: StreamType.Raw });
   player.play(resource);
+}
+
+function startStreamingOnDiscord(guildId: string) {
+  const player = audioPlayers.get(guildId);
+  if (!player) return;
+
+  audioLoopFlags.set(guildId, false);
+  player.stop();
+  const previousStream = audioStreams.get(guildId);
+  if (previousStream) {
+    previousStream.destroy();
+    audioStreams.delete(guildId);
+  }
+  const previousReceiver = streamingReceivers.get(guildId);
+  if (previousReceiver) {
+    previousReceiver.destroy();
+    streamingReceivers.delete(guildId);
+  }
+
+  audioLoopFlags.set(guildId, true);
+  const receiver = new PassThrough();
+  streamingReceivers.set(guildId, receiver);
+  audioStreams.set(guildId, receiver);
+  const resource = createAudioResource(receiver, { inputType: StreamType.Raw });
+  player.play(resource);
+}
+
+function handleStreamingChunk(guildId: string, audioBase64: string) {
+  const receiver = streamingReceivers.get(guildId);
+  if (!receiver) {
+    startStreamingOnDiscord(guildId);
+    const newReceiver = streamingReceivers.get(guildId);
+    if (!newReceiver) return;
+    const pcmBuffer = Buffer.from(audioBase64, 'base64');
+    newReceiver.write(pcmBuffer);
+    return;
+  }
+  const pcmBuffer = Buffer.from(audioBase64, 'base64');
+  receiver.write(pcmBuffer);
 }
 
 function handleWebSocketMessage(message: any) {
@@ -200,15 +245,26 @@ function handleWebSocketMessage(message: any) {
       playPatternOnDiscord(guildId, audio);
       break;
     }
+    case 'streamingAudioChunk': {
+      const { guildId, audio } = message.data;
+      if (!guildId || !audio) return;
+      handleStreamingChunk(guildId, audio);
+      break;
+    }
     case 'sequencerStop': {
       const { guildId } = message.data;
       if (!guildId) return;
       audioLoopFlags.set(guildId, false);
       const player = audioPlayers.get(guildId);
       const stream = audioStreams.get(guildId);
+      const receiver = streamingReceivers.get(guildId);
       if (stream) {
         stream.destroy();
         audioStreams.delete(guildId);
+      }
+      if (receiver) {
+        receiver.destroy();
+        streamingReceivers.delete(guildId);
       }
       player?.stop();
       break;

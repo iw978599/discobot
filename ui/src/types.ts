@@ -25,6 +25,7 @@ export type {
   DrumKitSelectionState,
   DrumInstrumentDefaults,
   DrumSettings,
+  CymbalType,
   DrumTrack,
   DrumState,
   FxSendLevels,

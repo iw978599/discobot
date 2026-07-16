@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { DrumState, DrumInstrument, DrumKitDefinition, DrumKitId, FxSendLevels } from '../types';
+import { DrumState, DrumInstrument, DrumKitDefinition, DrumKitId, FxSendLevels, CymbalType } from '../types';
 import DrumKnob from './DrumKnob';
 import './DrumMachine.css';
 
@@ -8,7 +8,7 @@ export interface DrumMachineProps {
   isPlaying: boolean;
   currentStep: number;
   onStepToggle: (instrument: DrumInstrument, step: number, active: boolean) => void;
-  onSettingsChange: (instrument: DrumInstrument, settings: { volume?: number; tone?: number; extra?: number }) => void;
+  onSettingsChange: (instrument: DrumInstrument, settings: { volume?: number; tone?: number; extra?: number; cymbalType?: CymbalType }) => void;
   onMixChange: (instrument: DrumInstrument, mix: { muted?: boolean; solo?: boolean }) => void;
   onReset: () => void;
   drumKits: DrumKitDefinition[];
@@ -70,7 +70,7 @@ const EXTRA_LABELS: Record<DrumInstrument, { knob: string; display: (v: number) 
   closedHH: { knob: 'Tight', display: (v) => `${(15 + (1 - v) * 130).toFixed(0)}ms` },
   openHH: { knob: 'Decay', display: (v) => `${((0.22 + v * 0.85) * 1000).toFixed(0)}ms` },
   snare2: { knob: 'Bend', display: (v) => `${(20 + v * 80).toFixed(0)}%` },
-  ride: { knob: 'Bend', display: (v) => `${(25 + v * 75).toFixed(0)}%` },
+  ride: { knob: 'Decay', display: (v) => `${((0.4 + v * 1.2) * 1000).toFixed(0)}ms` },
   crash: { knob: 'Wash', display: (v) => `${((0.8 + v * 2.1) * 1000).toFixed(0)}ms` },
 };
 
@@ -112,7 +112,7 @@ const parseExtraByInstrument: Record<DrumInstrument, (input: string) => number |
   },
   ride: (input) => {
     const n = parseNumber(input);
-    return n === null ? null : (n - 25) / 75;
+    return n === null ? null : (n / 1000 - 0.4) / 1.2;
   },
   crash: (input) => {
     const n = parseNumber(input);
@@ -238,6 +238,7 @@ export default function DrumMachine({
                   className="drum-kit-apply-btn"
                   disabled={drumKitsLoading || drumKits.length === 0}
                   onClick={() => { void handleApplyKit(); }}
+                  title="Apply selected kit defaults to all instruments"
                 >
                   Apply Kit
                 </button>
@@ -249,6 +250,7 @@ export default function DrumMachine({
                 displayValue={Math.round(drumMasterVolume * 100) + '%'}
                 parseInputValue={parsePercent}
                 onChange={onMasterVolumeChange}
+                title="Master volume for all drum instruments"
               />
               <div className="drum-fx-sends">
                 <DrumKnob
@@ -257,6 +259,7 @@ export default function DrumMachine({
                   displayValue={Math.round(drumFx.sends.reverb * 100) + '%'}
                   parseInputValue={parsePercent}
                   onChange={(v) => onDrumFxChange({ sends: { reverb: v } })}
+                  title="Amount of drum signal sent to reverb"
                 />
                 <DrumKnob
                   label="Dly Send"
@@ -264,6 +267,7 @@ export default function DrumMachine({
                   displayValue={Math.round(drumFx.sends.delay * 100) + '%'}
                   parseInputValue={parsePercent}
                   onChange={(v) => onDrumFxChange({ sends: { delay: v } })}
+                  title="Amount of drum signal sent to delay"
                 />
                 <DrumKnob
                   label="Drv Send"
@@ -271,6 +275,7 @@ export default function DrumMachine({
                   displayValue={Math.round(drumFx.sends.drive * 100) + '%'}
                   parseInputValue={parsePercent}
                   onChange={(v) => onDrumFxChange({ sends: { drive: v } })}
+                  title="Amount of drum signal sent to waveshaper drive"
                 />
                 <DrumKnob
                   label="Phs Send"
@@ -278,6 +283,7 @@ export default function DrumMachine({
                   displayValue={Math.round(drumFx.sends.phaser * 100) + '%'}
                   parseInputValue={parsePercent}
                   onChange={(v) => onDrumFxChange({ sends: { phaser: v } })}
+                  title="Amount of drum signal sent to phaser"
                 />
                 <DrumKnob
                   label="FX Return"
@@ -285,6 +291,7 @@ export default function DrumMachine({
                   displayValue={Math.round(drumFx.returnLevel * 100) + '%'}
                   parseInputValue={parsePercent}
                   onChange={(v) => onDrumFxChange({ returnLevel: v })}
+                  title="Master level of the effects return signal"
                 />
                 <DrumKnob
                   label="Loop Return"
@@ -292,18 +299,21 @@ export default function DrumMachine({
                   displayValue={Math.round(drumEffectsReturn * 100) + '%'}
                   parseInputValue={parsePercent}
                   onChange={onDrumEffectsReturnChange}
+                  title="Level of the drum loop return from Discord playback"
                 />
               </div>
               <div className="drum-global-mix">
                 <button
                   className={`drum-global-mix-btn ${allMuted ? 'active' : ''}`}
                   onClick={() => onMuteAll(!allMuted)}
+                  title={allMuted ? 'Unmute all drum tracks' : 'Mute all drum tracks'}
                 >
                   Mute All
                 </button>
                 <button
                   className={`drum-global-mix-btn ${!anySolo ? 'active' : ''}`}
                   onClick={onSoloAll}
+                  title="Solo the currently soloed tracks or clear all solos"
                 >
                   Solo All
                 </button>
@@ -339,16 +349,21 @@ export default function DrumMachine({
                 ))}
               </div>
               <div className="drum-instrument-control-row">
-                {INSTRUMENTS.map((inst) => (
-                  <DrumKnob
-                    key={`${inst}-extra`}
-                    label={EXTRA_LABELS[inst].knob}
-                    value={drumState[inst].settings.extra}
-                    displayValue={EXTRA_LABELS[inst].display(drumState[inst].settings.extra)}
-                    parseInputValue={parseExtraByInstrument[inst]}
-                    onChange={(v) => onSettingsChange(inst, { extra: v })}
-                  />
-                ))}
+                {INSTRUMENTS.map((inst) => {
+                  const isCrashRide = inst === 'crash' && drumState.crash.settings.cymbalType === 'ride';
+                  const labels = isCrashRide ? EXTRA_LABELS.ride : EXTRA_LABELS[inst];
+                  const parseFn = isCrashRide ? parseExtraByInstrument.ride : parseExtraByInstrument[inst];
+                  return (
+                    <DrumKnob
+                      key={`${inst}-extra`}
+                      label={labels.knob}
+                      value={drumState[inst].settings.extra}
+                      displayValue={labels.display(drumState[inst].settings.extra)}
+                      parseInputValue={parseFn}
+                      onChange={(v) => onSettingsChange(inst, { extra: v })}
+                    />
+                  );
+                })}
               </div>
             </div>
             <div className="drum-instrument-buttons">
@@ -358,24 +373,39 @@ export default function DrumMachine({
                     className={`drum-instrument-btn ${selectedInstrument === inst ? 'selected' : ''}`}
                     style={{ '--drum-color': INSTRUMENT_COLORS[inst] } as React.CSSProperties}
                     onClick={() => handleInstrumentSelect(inst)}
-                    title={INSTRUMENT_LABELS[inst]}
+                    title={`Select ${INSTRUMENT_LABELS[inst]} — click to preview sound`}
                   >
-                    <span>{INSTRUMENT_SHORT_LABELS[inst]}</span>
+                    <span>{inst === 'crash' && drumState.crash.settings.cymbalType === 'ride' ? 'RD' : INSTRUMENT_SHORT_LABELS[inst]}</span>
                   </button>
                   <div className="drum-instrument-mix">
                     <button
                       className={`drum-instrument-mix-btn ${drumState[inst].muted ? 'active' : ''}`}
                       onClick={() => onMixChange(inst, { muted: !drumState[inst].muted })}
+                      title={`${drumState[inst].muted ? 'Unmute' : 'Mute'} ${INSTRUMENT_LABELS[inst]}`}
                     >
                       M
                     </button>
                     <button
                       className={`drum-instrument-mix-btn ${drumState[inst].solo ? 'active' : ''}`}
                       onClick={() => onMixChange(inst, { solo: !drumState[inst].solo })}
+                      title={`${drumState[inst].solo ? 'Unsolo' : 'Solo'} ${INSTRUMENT_LABELS[inst]}`}
                     >
                       S
                     </button>
                   </div>
+                  {inst === 'crash' && (
+                    <button
+                      className="drum-cymbal-toggle"
+                      onClick={() => {
+                        const current = drumState.crash.settings.cymbalType || 'crash';
+                        const next: CymbalType = current === 'crash' ? 'ride' : 'crash';
+                        onSettingsChange('crash', { cymbalType: next });
+                      }}
+                      title={`Switch between ride and crash (currently: ${drumState.crash.settings.cymbalType || 'crash'})`}
+                    >
+                      {drumState.crash.settings.cymbalType === 'ride' ? 'Ride' : 'Crash'}
+                    </button>
+                  )}
                 </div>
               ))}
             </div>

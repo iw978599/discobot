@@ -99,7 +99,6 @@ export default function PianoRoll({
                   className={`piano-roll-cell ${active ? 'active' : ''} ${isPlaying && currentStep === stepIndex ? 'playing' : ''} ${selectedStep === stepIndex ? 'selected' : ''}`}
                   onMouseDown={() => handleCellDown(stepIndex, note)}
                   onMouseEnter={() => handleCellEnter(stepIndex, note)}
-                  onClick={() => onStepSelect(stepIndex)}
                   type="button"
                 />
               );
