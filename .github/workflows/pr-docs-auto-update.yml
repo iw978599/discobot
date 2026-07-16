@@ -1,0 +1,128 @@
+name: Auto Update Docs on PR
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  update-docs:
+    if: github.repository == 'iw978599/discobot' && github.actor != 'github-actions[bot]' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Build PR change summary
+        id: summary
+        uses: actions/github-script@v7
+        with:
+          result-encoding: string
+          script: |
+            const pr = context.payload.pull_request;
+            const files = await github.paginate(
+              github.rest.pulls.listFiles,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number,
+                per_page: 100
+              }
+            );
+
+            const lines = files.map((file) => {
+              const status = file.status.toUpperCase();
+              const additions = file.additions ?? 0;
+              const deletions = file.deletions ?? 0;
+              return `- \`${file.filename}\` — ${status} (+${additions}/-${deletions})`;
+            });
+
+            const changeList = lines.length > 0 ? lines.join('\n') : '- No changed files detected.';
+            const title = (pr.title || '').replace(/\r?\n/g, ' ').trim();
+            const updatedAt = new Date().toISOString();
+            return [
+              `### PR #${pr.number}: ${title}`,
+              '',
+              `Source branch: \`${pr.head.ref}\``,
+              `Last sync: ${updatedAt}`,
+              '',
+              '#### Changed files',
+              changeList
+            ].join('\n');
+
+      - name: Update markdown docs
+        env:
+          PR_SUMMARY: ${{ steps.summary.outputs.result }}
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+
+          const repoRoot = process.cwd();
+          const startMarker = '<!-- AUTO_PR_CHANGELOG_START -->';
+          const endMarker = '<!-- AUTO_PR_CHANGELOG_END -->';
+          const summary = process.env.PR_SUMMARY || 'No PR summary available.';
+          const managedSection = `${startMarker}\n${summary}\n${endMarker}`;
+
+          const ignoreDirs = new Set(['.git', 'node_modules', 'dist', 'build', '.turbo', '.next']);
+          const markdownFiles = [];
+
+          function walk(dir) {
+            const entries = fs.readdirSync(dir, { withFileTypes: true });
+            for (const entry of entries) {
+              const fullPath = path.join(dir, entry.name);
+              if (entry.isDirectory()) {
+                if (ignoreDirs.has(entry.name)) continue;
+                walk(fullPath);
+                continue;
+              }
+              if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) {
+                markdownFiles.push(fullPath);
+              }
+            }
+          }
+
+          walk(repoRoot);
+
+          for (const file of markdownFiles) {
+            const current = fs.readFileSync(file, 'utf8');
+            let next;
+
+            const startIndex = current.indexOf(startMarker);
+            const endIndex = current.indexOf(endMarker);
+            if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+              const before = current.slice(0, startIndex).replace(/\s*$/, '\n\n');
+              const after = current.slice(endIndex + endMarker.length).replace(/^\s*/, '\n\n');
+              next = `${before}${managedSection}${after}`.replace(/\n{3,}/g, '\n\n').trimEnd() + '\n';
+            } else {
+              const separator = current.endsWith('\n') ? '\n' : '\n\n';
+              next = `${current}${separator}${managedSection}\n`;
+            }
+
+            if (next !== current) {
+              fs.writeFileSync(file, next, 'utf8');
+            }
+          }
+          NODE
+
+      - name: Commit updated docs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "No documentation changes to commit."
+            exit 0
+          fi
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No markdown documentation updates detected."
+            exit 0
+          fi
+          git commit -m "docs: auto-update documentation from PR #${{ github.event.pull_request.number }}"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
