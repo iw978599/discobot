@@ -6,6 +6,7 @@ import MidiPanel from './components/MidiPanel';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useSynthAudio } from './hooks/useSynthAudio';
 import { useDrumAudio } from './hooks/useDrumAudio';
+import { usePatternAudio } from './hooks/usePatternAudio';
 import { MidiMode, MidiMessage, useMidiInput } from './hooks/useMidiInput';
 import { getWebSocketUrl } from './config';
 import { Pattern, SynthParameters, SavedPatternInfo, SavedPatternFull, DrumState, DrumInstrument, DrumSettings, DrumKitDefinition, DrumKitId, EffectsLoopState, FxSendLevels } from './types';
@@ -111,6 +112,11 @@ interface SynthState {
   muted: boolean;
   solo: boolean;
   forceReleaseSignal: boolean;
+}
+
+interface PatternAudioPayload {
+  audio: string;
+  sampleRate: number;
 }
 
 function createDefaultDrumState(): DrumState {
@@ -513,6 +519,7 @@ function HelpModal({ open, onClose }: { open: boolean; onClose: () => void }) {
 function App() {
   const synthAudio = useSynthAudio();
   const drumAudio = useDrumAudio();
+  const patternAudio = usePatternAudio();
   const [synths, setSynths] = useState<SynthState[]>([]);
   const [drumState, setDrumState] = useState<DrumState>(createDefaultDrumState);
   const [drumKits, setDrumKits] = useState<DrumKitDefinition[]>([]);
@@ -562,6 +569,7 @@ function App() {
   const isRestoringRef = useRef(false);
   const arpTimeoutsRef = useRef<number[]>([]);
   const lastDrumPreviewStepRef = useRef<number | null>(null);
+  const lastPatternAudioRef = useRef<PatternAudioPayload | null>(null);
 
   useEffect(() => {
     if (synths.length === 0) return;
@@ -581,10 +589,18 @@ function App() {
     return () => {
       synthAudio.dispose();
       drumAudio.dispose();
+      patternAudio.dispose();
       arpTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
       arpTimeoutsRef.current = [];
     };
   }, []);
+
+  useEffect(() => {
+    patternAudio.setMuted(browserMuted);
+    if (!browserMuted && lastPatternAudioRef.current && synthsRef.current.some((s) => s.isPlaying)) {
+      void patternAudio.playLoop(lastPatternAudioRef.current, false);
+    }
+  }, [browserMuted, patternAudio]);
 
   const getHistoryKey = useCallback((synthId: number, patternId: string) => `${synthId}:${patternId}`, []);
 
@@ -955,11 +971,28 @@ function App() {
       }
       case 'sequencerStop': {
         const { synthId } = message.data;
+        const hasOtherPlayingSynth = synthsRef.current.some((s) => s.id !== synthId && s.isPlaying);
+        if (!hasOtherPlayingSynth) {
+          patternAudio.stop();
+          lastPatternAudioRef.current = null;
+        }
         if (synthId === 1) lastDrumPreviewStepRef.current = null;
         synthAudio.stopAllNotes();
         setSynths(prev => prev.map(s =>
           s.id === synthId ? { ...s, isPlaying: false, currentStep: 0, forceReleaseSignal: !s.forceReleaseSignal } : s
         ));
+        break;
+      }
+      case 'patternAudio': {
+        const { audio, sampleRate } = message.data || {};
+        if (typeof audio === 'string' && audio.length > 0) {
+          const payload = {
+            audio,
+            sampleRate: typeof sampleRate === 'number' && Number.isFinite(sampleRate) && sampleRate > 1000 ? sampleRate : 48000,
+          };
+          lastPatternAudioRef.current = payload;
+          void patternAudio.playLoop(payload, browserMutedRef.current);
+        }
         break;
       }
       case 'tempoChange': {
@@ -976,7 +1009,8 @@ function App() {
         const synthStepCount = Math.max(1, targetSynth?.pattern?.steps.length || 16);
         const normalizedStep = ((step % synthStepCount) + synthStepCount) % synthStepCount;
         const targetStep = targetSynth?.pattern?.steps[normalizedStep];
-        if (canPlaySynth && targetSynth?.synthParams && targetStep?.active && targetStep.note) {
+        const hasRenderedLoopAudio = patternAudio.isActive();
+        if (!hasRenderedLoopAudio && canPlaySynth && targetSynth?.synthParams && targetStep?.active && targetStep.note) {
           const barDurationSeconds = (60 / Math.max(20, globalTempo)) * 4;
           const stepWindowSeconds = barDurationSeconds / synthStepCount;
           triggerSynthNote(targetSynth.synthParams, targetStep.note, stepWindowSeconds, targetStep.velocity);
@@ -985,7 +1019,7 @@ function App() {
           s.id === synthId ? { ...s, currentStep: step } : s
         ));
         const ds = drumStateRef.current;
-        if (ds && synthId === 1) {
+        if (!hasRenderedLoopAudio && ds && synthId === 1) {
           const drumStep = Math.floor((normalizedStep / synthStepCount) * 16) % 16;
           if (lastDrumPreviewStepRef.current === drumStep) break;
           lastDrumPreviewStepRef.current = drumStep;
@@ -1067,7 +1101,7 @@ function App() {
         break;
       }
     }
-  }, [synthAudio, drumAudio, triggerSynthNote, globalTempo]);
+  }, [synthAudio, drumAudio, triggerSynthNote, globalTempo, patternAudio]);
 
   const connected = useWebSocket(sessionToken ? getWebSocketUrl(sessionToken) : null, handleMessage);
 
@@ -1153,6 +1187,7 @@ function App() {
       await Promise.all([
         synthAudio.ensureAudioReady(),
         drumAudio.ensureAudioReady(),
+        patternAudio.ensureAudioReady(),
       ]);
       await Promise.all(playableSynths.map(s =>
         authFetch('/sequencer/play', {
@@ -1173,8 +1208,10 @@ function App() {
     ));
     arpTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
     arpTimeoutsRef.current = [];
+    patternAudio.stop();
+    lastPatternAudioRef.current = null;
     synthAudio.stopAllNotes();
-  }, [synthAudio, drumAudio]);
+  }, [synthAudio, drumAudio, patternAudio]);
 
   const clearActiveSavedPattern = useCallback(() => {
     setActiveSavedPattern(null);
