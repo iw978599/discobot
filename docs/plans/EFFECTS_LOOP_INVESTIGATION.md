@@ -2,55 +2,17 @@
 
 ## Summary
 
-The effects loop is implemented and structurally correct, but has several issues that make it appear non-functional. The primary cause is that **the browser preview never applies the effects loop** — it only applies during server-side pattern rendering for Discord playback. Additionally, there is a bug where disabling the loop doesn't actually silence the wet returns.
+The effects loop is implemented and now mostly functional. The two critical issues (browser preview ignoring the loop, and disabling the loop not silencing wet returns) have been fixed. Remaining minor issues are documented below.
 
-## Root Causes
+## Status
 
-### 1. Browser preview ignores the effects loop (PRIMARY)
-
-`ui/src/hooks/useSynthAudio.ts` only applies per-synth insert effects (delay/reverb from `SynthParameters.effects`). The shared `EffectsLoopState` is never read or applied in the browser audio chain.
-
-When a user clicks keyboard keys or hears sequencer playback in the browser, they hear **dry synth + insert effects only**. The shared effects loop (drive, phaser, delay, reverb bus) is only applied during server-side `renderPatternAudio()` which produces audio for Discord voice.
-
-**Impact**: Users testing via the web UI will never hear the effects loop unless they also play via Discord.
-
-### 2. Disabling the effects loop doesn't silence wet returns (BUG)
-
-In `web/src/index.ts`, `processEffectsLoopBus()` returns the raw input buffer when `loop.enabled === false`:
-
-```typescript
-function processEffectsLoopBus(input, sampleRate, loop) {
-  if (!loop.enabled) return input;  // returns raw send signal!
-  // ... apply effects ...
-}
-```
-
-The returned signal is then mixed into the master:
-
-```typescript
-fullPCM[i] = dryPCM[i]
-  + synthWetOut[i] * effectsLoop.returns.synth    // still nonzero!
-  + drumWetOut[i] * effectsLoop.returns.drums * drumFx.returnLevel;
-```
-
-This means even with the loop "off", the summed send signals (reverb + delay + drive + phaser sends) bleed into the master mix at full return level. The loop's `enabled` toggle only bypasses the insert effect processing, not the signal routing.
-
-### 3. Serial effects chain causes cumulative dry attenuation (MINOR)
-
-Each effect in `processEffectsLoopBus` passes dry through its own wet/dry mix. Applied in series (drive → phaser → delay → reverb), the dry signal is attenuated by each stage:
-
-- After delay (mix=0.3): dry at 0.7 amplitude
-- After reverb (mix=0.38): dry at 0.7 × 0.62 = 0.434 amplitude
-
-This is typical for serial effect chains but may cause unintended volume reduction.
-
-### 4. Synth insert effects are bypassed during pattern rendering (BY DESIGN)
-
-`renderNote()` is called with `{ applyInsertEffects: false }`. Per-synth delay/reverb settings in `SynthParameters.effects` have zero effect on rendered audio. Only the shared effects loop applies. This is intentional to avoid double-processing, but means synth-specific effect settings are ignored during playback.
-
-### 5. Drum sends carry post-processed signal (MINOR)
-
-Drum send buffers receive the signal after `processDrumBus()` (saturation, transient shaping, compression). The effects loop's drive/saturation stacks on top of the drum bus's own saturation, potentially causing double-saturation.
+| Issue | Status |
+|-------|--------|
+| Browser preview ignores effects loop | **FIXED** — `useSynthAudio.ts` now has a shared effects bus with delay, reverb (ConvolverNode), drive (WaveShaperNode), and phaser |
+| Disabling loop doesn't silence wet returns | **FIXED** — `processEffectsLoopBus` returns `new Float32Array(input.length)` when disabled |
+| Serial effects chain dry attenuation | **OPEN** — Minor, cumulative dry reduction across series stages |
+| Synth insert effects bypassed during render | **BY DESIGN** — Only shared FX loop applies during pattern rendering |
+| Drum sends carry post-processed signal | **OPEN** — Minor, potential double-saturation with drum bus |
 
 ## Architecture Overview
 
@@ -81,53 +43,37 @@ Final Mix:
   fullPCM = dryPCM + synthWetOut * returns.synth + drumWetOut * returns.drums * drumFx.returnLevel
 ```
 
-## Proposed Fixes
+## Browser Preview Effects Bus
 
-### Fix 1: Apply effects loop to browser preview (HIGH)
+`useSynthAudio.ts` now implements a shared effects bus:
 
-Add shared effects loop processing to `useSynthAudio.ts`. Options:
+- **Delay**: `DelayNode` with feedback loop, time/feedback/mix from `effectsLoop.delay`
+- **Reverb**: `ConvolverNode` with generated impulse response, decay/mix from `effectsLoop.reverb`
+- **Drive**: `WaveShaperNode` with tanh waveshaper curve, amount/tone from `effectsLoop.drive`
+- **Phaser**: Allpass filter chain with LFO-modulated frequencies, rate/depth/mix from `effectsLoop.phaser`
 
-- **Web Audio API approach**: Create parallel wet chains (delay node, convolver for reverb, waveshaper for drive, allpass for phaser) connected to a shared bus, with send gains controlled by `fxSends` levels. Mix dry + wet at the output.
-- **Simpler approach**: At minimum, apply the per-synth insert effects (delay/reverb from `SynthParameters.effects`) which are already partially wired but gated by `delayEnabled`/`reverbEnabled` checks. This would make the existing browser preview effects audible.
+Per-synth send levels (`fxSends.reverb`, `fxSends.delay`, `fxSends.drive`, `fxSends.phaser`) control how much of each synth's signal enters the shared bus. The `effectsLoop` state is passed from App.tsx via `effectsLoopRef.current` in both the sequencer step handler and the keyboard click handler.
 
-### Fix 2: Return zeros when effects loop is disabled (HIGH)
+## Remaining Issues
 
-Change `processEffectsLoopBus` to return a zero-filled array when disabled:
+### Serial effects chain dry attenuation (MINOR)
 
-```typescript
-function processEffectsLoopBus(input, sampleRate, loop) {
-  if (!loop.enabled) return new Float32Array(input.length);
-  // ... existing code ...
-}
-```
+Each effect in `processEffectsLoopBus` passes dry through its own wet/dry mix. Applied in series (drive → phaser → delay → reverb), the dry signal is attenuated by each stage:
 
-### Fix 3: Parallel effects processing (MEDIUM)
+- After delay (mix=0.3): dry at 0.7 amplitude
+- After reverb (mix=0.38): dry at 0.7 × 0.62 = 0.434 amplitude
 
-Process each effect in parallel instead of in series to avoid cumulative dry attenuation. Sum the wet outputs from each effect independently, then mix with the dry bypass:
+**Proposed fix**: Process effects in parallel instead of series — sum wet outputs from each effect independently, then mix with a dry bypass signal.
 
-```typescript
-function processEffectsLoopBus(input, sampleRate, loop) {
-  if (!loop.enabled) return new Float32Array(input.length);
-  const output = new Float32Array(input.length);
-  // dry bypass
-  for (let i = 0; i < input.length; i++) output[i] = input[i];
-  // parallel wet processing
-  if (loop.drive.enabled) output.addInPlace(applyDrive(input, ...));
-  if (loop.phaser.enabled) output.addInPlace(applyPhaser(input, ...));
-  if (loop.delay.enabled) output.addInPlace(applyDelay(input, ...));
-  if (loop.reverb.enabled) output.addInPlace(applyReverb(input, ...));
-  return output;
-}
-```
+### Drum sends carry post-processed signal (MINOR)
 
-### Fix 4: Pre-effects loop dry bypass (LOW)
+Drum send buffers receive the signal after `processDrumBus()` (saturation, transient shaping, compression). The effects loop's drive/saturation stacks on top of the drum bus's own saturation, potentially causing double-saturation.
 
-Add a dry bypass signal that goes through the effects loop untouched, ensuring the original signal level is preserved regardless of effect chain wet/dry settings.
-
-## Testing Strategy
+## Testing Checklist
 
 1. Enable effects loop, play a pattern via Discord — verify effects are audible
 2. Disable effects loop, play a pattern via Discord — verify wet returns are silenced
 3. Test each effect individually (enable only drive, only delay, etc.)
-4. Test browser preview with effects loop enabled
+4. Test browser preview with effects loop enabled — verify delay, reverb, drive, phaser are audible
 5. Test with multiple synths and drums simultaneously
+6. Verify per-synth send levels control wet amount correctly

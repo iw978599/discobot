@@ -1,5 +1,9 @@
 # Planning: Vintage/Modern Synth Clone Options
 
+## Status: ✅ IMPLEMENTED
+
+6 synth models are now available in the UI via `ui/src/synthModels.ts`: generic, minimoog-model-d, juno-106, dx7, tb-303, prophet-5. Each provides 4 macro parameters mapped to engine synth parameters via `mapSynthModelToEngineParams`. Model selection and macro values persist with pattern saves.
+
 ## Goal
 
 Add five selectable synth models to the synth panel that emulate both:

@@ -1,5 +1,9 @@
 # Planning: MIDI Controller Support
 
+## Status: ✅ BASIC IMPLEMENTATION COMPLETE
+
+MIDI input is implemented via `ui/src/hooks/useMidiInput.ts` and `ui/src/components/MidiPanel.tsx`. Supports device selection ("All devices" mode), channel filtering, noteOn/noteOff/CC parsing, and live/record/step modes. The advanced features (MIDI learn, CC mapping, pitch bend, sustain pedal) remain as future work.
+
 ## Overview
 
 Add Web MIDI API support so users can connect a MIDI keyboard (or any MIDI controller) to play synths live, record patterns in real-time, and map MIDI CC to synth parameters.

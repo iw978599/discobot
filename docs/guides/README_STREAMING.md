@@ -6,9 +6,11 @@ Discord streaming is implemented and active.
 
 ## How It Works
 
-1. Engine renders pattern audio as PCM.
+1. Engine renders pattern audio as PCM using custom math synthesis (no Tone.js).
 2. Web server mixes/encodes audio and broadcasts `patternAudio` over WebSocket.
 3. Bot receives `patternAudio` and plays the PCM loop in Discord voice.
+4. Audio is 48kHz stereo 16-bit raw PCM with soft-clipped master mix.
+5. `DiscordAudioStreamer` renders 16s segments as 0.1s chunks for smooth playback.
 
 ## Runtime Endpoints and Paths
 
@@ -18,13 +20,16 @@ Discord streaming is implemented and active.
 
 ## Relevant Files
 
-- `engine/src/Synthesizer.ts`
-- `engine/src/DrumSynthesizer.ts`
-- `engine/src/Streaming.ts`
-- `web/src/index.ts`
-- `bot/src/index.ts`
+- `engine/src/Synthesizer.ts` — Synth PCM generation with filter, ADSR, dual LFOs
+- `engine/src/DrumSynthesizer.ts` — Drum PCM generation, 3 kit variants
+- `engine/src/Streaming.ts` — `DiscordAudioStreamer` class
+- `engine/src/AudioExporter.ts` — WAV export (available, not wired to UI)
+- `web/src/index.ts` — `renderPatternAudio()`, effects loop processing, WebSocket broadcast
+- `bot/src/index.ts` — Voice connection, PCM playback loop
 
 ## Notes
 
 - Streaming is pattern-loop based (not per-step live streaming).
+- The shared effects loop (drive, phaser, delay, reverb) is applied during server-side rendering.
+- Browser preview uses Web Audio API with a parallel shared effects bus.
 - Sample-player streaming paths are still limited by the current sample stub implementation.

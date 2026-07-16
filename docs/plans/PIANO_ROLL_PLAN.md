@@ -1,5 +1,9 @@
 # Planning: Keyboard / Piano Roll Toggle
 
+## Status: ✅ IMPLEMENTED
+
+Piano roll is implemented in `ui/src/components/PianoRoll.tsx` with 3-octave × step grid, click/drag note painting, and step headers. `KeyboardPanel.tsx` provides the mode toggle between keyboard and piano roll.
+
 ## Overview
 
 Add a toggle to the keyboard panel that switches between the current on-screen keyboard and a piano roll editor. The piano roll provides a visual grid-based method for composing melodies, while the keyboard provides real-time note input.
