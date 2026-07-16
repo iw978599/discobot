@@ -1440,6 +1440,8 @@ function App() {
   const handleSavePattern = useCallback(async (synthId: number, name: string): Promise<boolean> => {
     const synth = synthsRef.current.find(s => s.id === synthId);
     if (!synth?.pattern || !synth.synthParams) return false;
+    const pattern = synth.pattern;
+    const synthParams = synth.synthParams;
 
     const saveRequest = async (overwriteId?: string) => authFetch('/patterns/save', {
       method: 'POST',
@@ -1448,9 +1450,9 @@ function App() {
         name,
         overwriteId,
         synthId,
-        steps: synth.pattern.steps,
-        synthParams: synth.synthParams,
-        tempo: synth.pattern.tempo,
+        steps: pattern.steps,
+        synthParams,
+        tempo: pattern.tempo,
         drumState: drumStateRef.current,
         drumKitId: selectedDrumKitIdRef.current,
         drumMasterVolume,
