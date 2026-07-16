@@ -46,6 +46,11 @@ interface SharedEffectsBus {
   reverbImpulse: AudioBuffer;
   driveShaper: WaveShaperNode;
   driveWet: GainNode;
+  phaserFilter: BiquadFilterNode;
+  phaserFeedback: GainNode;
+  phaserWet: GainNode;
+  phaserLfo: OscillatorNode;
+  phaserDepth: GainNode;
 }
 
 function createDriveCurve(amount: number): Float32Array<ArrayBuffer> {
@@ -134,9 +139,47 @@ export function useSynthAudio() {
     driveShaper.connect(driveWet);
     driveWet.connect(output);
 
+    // Phaser
+    const phaserFilter = ctx.createBiquadFilter();
+    phaserFilter.type = 'allpass';
+    phaserFilter.frequency.value = 720;
+    const phaserFeedback = ctx.createGain();
+    phaserFeedback.gain.value = 0.25;
+    const phaserWet = ctx.createGain();
+    phaserWet.gain.value = 0;
+    const phaserLfo = ctx.createOscillator();
+    phaserLfo.type = 'sine';
+    phaserLfo.frequency.value = 0.45;
+    const phaserDepth = ctx.createGain();
+    phaserDepth.gain.value = 520;
+    phaserLfo.connect(phaserDepth);
+    phaserDepth.connect(phaserFilter.frequency);
+    input.connect(phaserFilter);
+    phaserFilter.connect(phaserFeedback);
+    phaserFeedback.connect(phaserFilter);
+    phaserFilter.connect(phaserWet);
+    phaserWet.connect(output);
+    phaserLfo.start();
+
     output.connect(ctx.destination);
 
-    sharedBusRef.current = { input, output, delay, delayFeedback, delayWet, reverb, reverbWet, reverbImpulse: impulse, driveShaper, driveWet };
+    sharedBusRef.current = {
+      input,
+      output,
+      delay,
+      delayFeedback,
+      delayWet,
+      reverb,
+      reverbWet,
+      reverbImpulse: impulse,
+      driveShaper,
+      driveWet,
+      phaserFilter,
+      phaserFeedback,
+      phaserWet,
+      phaserLfo,
+      phaserDepth,
+    };
     return sharedBusRef.current;
   }
 
@@ -159,6 +202,12 @@ export function useSynthAudio() {
 
     bus.driveShaper.curve = createDriveCurve(loop.drive.amount);
     bus.driveWet.gain.value = loop.drive.enabled ? loop.drive.amount : 0;
+
+    bus.phaserLfo.frequency.value = loop.phaser.rate;
+    bus.phaserDepth.gain.value = loop.phaser.depth * 1200;
+    bus.phaserFeedback.gain.value = loop.phaser.enabled ? loop.phaser.feedback : 0;
+    bus.phaserWet.gain.value = loop.phaser.enabled ? loop.phaser.mix : 0;
+    bus.phaserFilter.frequency.value = 320 + loop.phaser.depth * 980;
   }
 
   async function ensureAudioReady(): Promise<boolean> {
@@ -188,6 +237,7 @@ export function useSynthAudio() {
     note: string,
     synthParams: SynthParameters | null,
     duration?: number,
+    velocity: number = 1,
     muted: boolean = false,
     effectsLoop?: EffectsLoopState
   ) {
@@ -303,7 +353,8 @@ export function useSynthAudio() {
         updateSharedBus(bus, effectsLoop, ctx);
         const sendGain = ctx.createGain();
         const sendLevel = (p.fxSends.reverb + p.fxSends.delay + p.fxSends.drive + p.fxSends.phaser) / 4;
-        sendGain.gain.value = sendLevel;
+        const returnLevel = Math.max(0, Math.min(1, p.fxReturn ?? 0.85));
+        sendGain.gain.value = sendLevel * returnLevel;
         gain.connect(sendGain);
         sendGain.connect(bus.input);
         nodes.push(sendGain);
@@ -316,7 +367,7 @@ export function useSynthAudio() {
       const decay = p?.envelope.decay ?? 0.1;
       const sustainLvl = p?.envelope.sustain ?? 0.7;
       const release = p?.envelope.release ?? 0.3;
-      const vol = (p?.gain ?? 1.0) * 0.3;
+      const vol = (p?.gain ?? 1.0) * Math.max(0, Math.min(1, velocity)) * 0.3;
 
       gain.gain.setValueAtTime(0, now);
       gain.gain.linearRampToValueAtTime(vol, now + attack);

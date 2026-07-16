@@ -912,12 +912,14 @@ function renderPatternAudio(state: GuildRuntimeState): string | null {
       const mix = state.synthMixState.get(id) || { muted: false, solo: false };
       if (mix.muted) continue;
       if (hasSynthSolo && !mix.solo) continue;
-      const sends = normalizeFxSends(synthData.synth.getParameters().fxSends);
+      const synthParams = synthData.synth.getParameters();
+      const sends = normalizeFxSends(synthParams.fxSends);
+      const returnLevel = clamp(synthParams.fxReturn ?? 0.85, 0, 1);
       const stepCount = Math.max(1, synthData.pattern.steps.length);
       const stepDuration = barDuration / stepCount;
       for (let i = 0; i < synthData.pattern.steps.length; i++) {
         const step = synthData.pattern.steps[i];
-        if (step.note) {
+        if (step.active && step.note) {
           const noteDur = Math.max(stepDuration - 0.01, 0.05);
           const notePCM = synthData.synth.renderNote(step.note, noteDur, step.velocity, sampleRate, { applyInsertEffects: false });
           const offset = Math.floor(i * stepDuration * sampleRate);
@@ -925,10 +927,10 @@ function renderPatternAudio(state: GuildRuntimeState): string | null {
             const idx = offset + j;
             const sample = notePCM[j];
             dryPCM[idx] += sample;
-            synthSendPCM.reverb[idx] += sample * sends.reverb;
-            synthSendPCM.delay[idx] += sample * sends.delay;
-            synthSendPCM.drive[idx] += sample * sends.drive;
-            synthSendPCM.phaser[idx] += sample * sends.phaser;
+            synthSendPCM.reverb[idx] += sample * sends.reverb * returnLevel;
+            synthSendPCM.delay[idx] += sample * sends.delay * returnLevel;
+            synthSendPCM.drive[idx] += sample * sends.drive * returnLevel;
+            synthSendPCM.phaser[idx] += sample * sends.phaser * returnLevel;
           }
         }
       }
@@ -1283,6 +1285,7 @@ app.post('/synth/:synthId/parameters', (req, res) => {
     const incoming = req.body as Partial<SynthParameters>;
     const normalized: Partial<SynthParameters> = {
       ...incoming,
+      fxReturn: incoming.fxReturn !== undefined ? clamp(incoming.fxReturn, 0, 1) : undefined,
       fxSends: incoming.fxSends ? normalizeFxSends(incoming.fxSends, synthData.synth.getParameters().fxSends) : undefined,
     };
     synthData.synth.updateParameters(normalized);
@@ -1557,18 +1560,33 @@ app.post('/drum/fx', (req, res) => {
 app.post('/patterns/save', (req, res) => {
   const session = getSession(req);
   const state = getGuildState(session.guildId);
-  const { name, steps, synthParams, tempo, drumState, drumMasterVolume, drumFx, effectsLoop, drumKitId } = req.body;
+  const { name, steps, synthParams, tempo, drumState, drumMasterVolume, drumFx, effectsLoop, drumKitId, overwriteId } = req.body;
   const patternName = sanitizePatternName(name);
   if (!patternName || !Array.isArray(steps) || steps.length === 0 || steps.length > 64) {
     return res.status(400).json({ error: 'Invalid pattern payload' });
   }
 
   const guild = getPersistedGuild(session.guildId);
+  const safeOverwriteId = sanitizeId(typeof overwriteId === 'string' ? overwriteId : undefined);
+  const normalizedName = patternName.toLowerCase();
+  const existingByName = guild.savedPatterns.find((entry) => entry.name.toLowerCase() === normalizedName);
+  if (existingByName && existingByName.id !== safeOverwriteId) {
+    return res.status(409).json({ error: 'Pattern name already exists', id: existingByName.id, name: existingByName.name });
+  }
+
+  const overwriteTarget = safeOverwriteId
+    ? guild.savedPatterns.find((entry) => entry.id === safeOverwriteId)
+    : null;
+  if (safeOverwriteId && !overwriteTarget) {
+    return res.status(404).json({ error: 'Pattern to overwrite not found' });
+  }
+
+  const now = Date.now();
   const entry: SavedPatternData = {
-    id: `saved-${Date.now()}`,
+    id: overwriteTarget?.id || `saved-${now}`,
     name: patternName,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
+    createdAt: overwriteTarget?.createdAt || now,
+    updatedAt: now,
     steps,
     synthParams: synthParams || null,
     tempo: tempo || state.globalTempo,
@@ -1578,7 +1596,12 @@ app.post('/patterns/save', (req, res) => {
     drumFx: normalizeDrumFx(drumFx || state.drumFx),
     effectsLoop: normalizeEffectsLoop(effectsLoop || state.effectsLoop),
   };
-  guild.savedPatterns.push(entry);
+  if (overwriteTarget) {
+    const overwriteIndex = guild.savedPatterns.findIndex((p) => p.id === overwriteTarget.id);
+    guild.savedPatterns[overwriteIndex] = entry;
+  } else {
+    guild.savedPatterns.push(entry);
+  }
   savePersistedGuild(guild);
   res.json({ id: entry.id, name: entry.name, updatedAt: entry.updatedAt });
 });
