@@ -355,6 +355,8 @@ function createDefaultDrumState(): DrumState {
         volume: defaults[inst].volume,
         tone: defaults[inst].tone,
         extra: defaults[inst].extra,
+        tune: defaults[inst].tune ?? 0,
+        humanize: defaults[inst].humanize ?? 0.35,
       },
       muted: false,
       solo: false,
@@ -391,6 +393,8 @@ function applyKitDefaultsToDrumState(state: DrumState, kitId: DrumKitId): DrumSt
         volume: defaults[inst].volume,
         tone: defaults[inst].tone,
         extra: defaults[inst].extra,
+        tune: defaults[inst].tune ?? next[inst].settings.tune ?? 0,
+        humanize: defaults[inst].humanize ?? next[inst].settings.humanize ?? 0.35,
       },
     };
   }
@@ -482,6 +486,8 @@ function normalizeDrumState(state: DrumState): DrumState {
         volume: clamp(src.settings?.volume ?? base[inst].settings.volume, 0, 1),
         tone: clamp(src.settings?.tone ?? base[inst].settings.tone, 0, 1),
         extra: clamp(src.settings?.extra ?? base[inst].settings.extra, 0, 1),
+        tune: clamp(src.settings?.tune ?? base[inst].settings.tune ?? 0, -1, 1),
+        humanize: clamp(src.settings?.humanize ?? base[inst].settings.humanize ?? 0.35, 0, 1),
         cymbalType: (src.settings?.cymbalType === 'ride' || src.settings?.cymbalType === 'crash') ? src.settings.cymbalType : undefined,
       },
       muted: Boolean(src.muted),
@@ -1961,12 +1967,14 @@ app.post('/drum/settings', (req, res) => {
   const session = getSession(req);
   const state = getGuildState(session.guildId);
   initAudioEngine(state);
-  const { instrument, settings } = req.body as { instrument: DrumInstrument; settings: { volume?: number; tone?: number; extra?: number; cymbalType?: 'ride' | 'crash' } };
+  const { instrument, settings } = req.body as { instrument: DrumInstrument; settings: { volume?: number; tone?: number; extra?: number; tune?: number; humanize?: number; cymbalType?: 'ride' | 'crash' } };
   if (!DRUM_INSTRUMENTS.includes(instrument)) return res.status(400).json({ error: 'Invalid instrument' });
   const s = state.drumState[instrument].settings;
   if (settings.volume !== undefined) s.volume = clamp(settings.volume, 0, 1);
   if (settings.tone !== undefined) s.tone = clamp(settings.tone, 0, 1);
   if (settings.extra !== undefined) s.extra = clamp(settings.extra, 0, 1);
+  if (settings.tune !== undefined) s.tune = clamp(settings.tune, -1, 1);
+  if (settings.humanize !== undefined) s.humanize = clamp(settings.humanize, 0, 1);
   if (settings.cymbalType !== undefined) s.cymbalType = settings.cymbalType;
   broadcastToClients({ type: 'drumSettings', data: { guildId: session.guildId, instrument, settings: { ...s } } }, session.guildId);
   updateStreamingEffectsLoop(session.guildId);
