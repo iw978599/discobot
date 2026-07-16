@@ -1268,16 +1268,46 @@ function App() {
         drumAudio.ensureAudioReady(),
         patternAudio.ensureAudioReady(),
       ]);
-      await Promise.all(playableSynths.map(s =>
-        authFetch('/sequencer/play', {
+      const playResponses = await Promise.all(playableSynths.map(async (s) => {
+        const response = await authFetch('/sequencer/play', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ synthId: s.id, patternId: s.pattern!.id }),
-        })
-      ));
+        });
+        let patternAudioPayload: PatternAudioPayload | null = null;
+        try {
+          const data = await response.json() as { patternAudio?: { audio?: string; sampleRate?: number } };
+          if (typeof data.patternAudio?.audio === 'string' && data.patternAudio.audio.length > 0) {
+            patternAudioPayload = {
+              audio: data.patternAudio.audio,
+              sampleRate: typeof data.patternAudio.sampleRate === 'number' && Number.isFinite(data.patternAudio.sampleRate)
+                ? data.patternAudio.sampleRate
+                : 48000,
+            };
+          }
+        } catch {
+          // ignore
+        }
+        return { synthId: s.id, ok: response.ok, patternAudioPayload };
+      }));
+
+      const startedSynthIds = playResponses.filter((entry) => entry.ok).map((entry) => entry.synthId);
+      if (startedSynthIds.length > 0) {
+        setSynths(prev => prev.map(s => (
+          startedSynthIds.includes(s.id)
+            ? { ...s, isPlaying: true, currentStep: 0 }
+            : s
+        )));
+      }
+      const latestPayload = [...playResponses].reverse().find((entry) => entry.patternAudioPayload)?.patternAudioPayload;
+      if (latestPayload) {
+        lastPatternAudioRef.current = latestPayload;
+        void patternAudio.playLoop(latestPayload, browserMutedRef.current);
+      }
       return;
     }
 
+    const playingSynthIds = currentSynths.filter(s => s.isPlaying).map((s) => s.id);
     await Promise.all(currentSynths.filter(s => s.isPlaying).map(s =>
       authFetch('/sequencer/stop', {
         method: 'POST',
@@ -1285,6 +1315,13 @@ function App() {
         body: JSON.stringify({ synthId: s.id }),
       })
     ));
+    if (playingSynthIds.length > 0) {
+      setSynths(prev => prev.map(s => (
+        playingSynthIds.includes(s.id)
+          ? { ...s, isPlaying: false, currentStep: 0, forceReleaseSignal: !s.forceReleaseSignal }
+          : s
+      )));
+    }
     arpTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
     arpTimeoutsRef.current = [];
     patternAudio.stop();
