@@ -131,14 +131,14 @@ interface PatternAudioPayload {
 
 function createDefaultDrumState(): DrumState {
   return {
-    kick: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
-    snare: { steps: new Array(16).fill(false), settings: { volume: 0.68, tone: 0.46, extra: 0.68 }, muted: false, solo: false },
-    openHH: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
-    closedHH: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
-    ride: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
-    crash: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
-    snare2: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
-    clap: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5 }, muted: false, solo: false },
+    kick: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5, tune: 0, humanize: 0.35 }, muted: false, solo: false },
+    snare: { steps: new Array(16).fill(false), settings: { volume: 0.68, tone: 0.46, extra: 0.68, tune: 0, humanize: 0.35 }, muted: false, solo: false },
+    openHH: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5, tune: 0, humanize: 0.35 }, muted: false, solo: false },
+    closedHH: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5, tune: 0, humanize: 0.35 }, muted: false, solo: false },
+    ride: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5, tune: 0, humanize: 0.35 }, muted: false, solo: false },
+    crash: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5, tune: 0, humanize: 0.35 }, muted: false, solo: false },
+    snare2: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5, tune: 0, humanize: 0.35 }, muted: false, solo: false },
+    clap: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5, tune: 0, humanize: 0.35 }, muted: false, solo: false },
   };
 }
 
@@ -2387,7 +2387,6 @@ function App() {
           </div>
         </div>
         <div className="app-main-right">
-          <EffectsPanel effectsLoop={effectsLoop} onChange={handleEffectsLoopChange} />
           <DrumMachine
             drumState={memoizedDrumState}
             isPlaying={synths.some(s => s.isPlaying)}
@@ -2411,6 +2410,7 @@ function App() {
             onSoloAll={handleDrumSoloAll}
             drumAudio={drumAudio}
           />
+          <EffectsPanel effectsLoop={effectsLoop} onChange={handleEffectsLoopChange} />
         </div>
       </div>
 

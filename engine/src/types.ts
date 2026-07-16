@@ -130,6 +130,8 @@ export interface DrumSettings {
   volume: number;
   tone: number;
   extra: number;
+  tune?: number;
+  humanize?: number;
   cymbalType?: CymbalType;
 }
 

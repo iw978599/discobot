@@ -1,4 +1,4 @@
-import { DrumState, DrumInstrument, DrumKitModelVariant } from './types';
+import { DrumState, DrumInstrument, DrumKitModelVariant, DrumSettings } from './types';
 import { clamp } from './utils';
 
 interface DrumHitRenderOptions {
@@ -47,13 +47,29 @@ function randCentered(seed: number): number {
 export class DrumSynthesizer {
   static renderHit(
     instrument: DrumInstrument,
-    settings: { volume: number; tone: number; extra: number; cymbalType?: string },
+    settings: DrumSettings,
     sampleRate: number,
     options: DrumHitRenderOptions = {}
   ): Float32Array {
     const profile = VARIANT_PROFILES[options.modelVariant || 'analog'];
     const velocity = clamp(options.velocity ?? 0.85, 0.2, 1.2);
-    const humanize = options.humanize || defaultHumanize;
+    const tune = clamp(settings.tune ?? 0, -1, 1);
+    const pitchMultiplier = Math.pow(2, tune * 0.5);
+    const userHumanize = clamp(settings.humanize ?? 0.35, 0, 1);
+    const optionHumanize = options.humanize || defaultHumanize;
+    const transientSeed = Math.random() * 10_000;
+    const transientHumanize = options.humanize
+      ? defaultHumanize
+      : {
+          pitch: randCentered(transientSeed + 1) * 0.08 * userHumanize,
+          decay: randCentered(transientSeed + 2) * 0.08 * userHumanize,
+          transient: randCentered(transientSeed + 3) * 0.08 * userHumanize,
+        };
+    const humanize = {
+      pitch: clamp((optionHumanize.pitch + transientHumanize.pitch) * userHumanize, -1, 1),
+      decay: clamp((optionHumanize.decay + transientHumanize.decay) * userHumanize, -1, 1),
+      transient: clamp((optionHumanize.transient + transientHumanize.transient) * userHumanize, -1, 1),
+    };
     const vol = Math.max(0, Math.min(1, settings.volume)) * 2 * (0.72 + velocity * 0.42);
     const tone = clamp(Math.max(0, Math.min(1, settings.tone)) + humanize.pitch * 0.18 * profile.humanize + (velocity - 0.8) * 0.12, 0, 1);
     const extra = clamp(Math.max(0, Math.min(1, settings.extra)) + humanize.decay * 0.2 * profile.humanize + (velocity - 0.8) * 0.18, 0, 1);
@@ -61,17 +77,17 @@ export class DrumSynthesizer {
 
     let output: Float32Array;
     switch (instrument) {
-      case 'kick': output = this.renderKick(vol, tone, extra, transientScale, sampleRate, profile); break;
-      case 'snare': output = this.renderSnare(vol, tone, extra, transientScale, sampleRate, profile); break;
-      case 'openHH': output = this.renderOpenHH(vol, tone, extra, transientScale, sampleRate, profile); break;
-      case 'closedHH': output = this.renderClosedHH(vol, tone, extra, transientScale, sampleRate, profile); break;
-      case 'ride': output = this.renderRide(vol, tone, extra, transientScale, sampleRate, profile); break;
+      case 'kick': output = this.renderKick(vol, tone, extra, transientScale, sampleRate, profile, pitchMultiplier); break;
+      case 'snare': output = this.renderSnare(vol, tone, extra, transientScale, sampleRate, profile, pitchMultiplier); break;
+      case 'openHH': output = this.renderOpenHH(vol, tone, extra, transientScale, sampleRate, profile, pitchMultiplier); break;
+      case 'closedHH': output = this.renderClosedHH(vol, tone, extra, transientScale, sampleRate, profile, pitchMultiplier); break;
+      case 'ride': output = this.renderRide(vol, tone, extra, transientScale, sampleRate, profile, pitchMultiplier); break;
       case 'crash': output = (settings as { cymbalType?: string }).cymbalType === 'ride'
-        ? this.renderRide(vol, tone, extra, transientScale, sampleRate, profile)
-        : this.renderCrash(vol, tone, extra, transientScale, sampleRate, profile);
+        ? this.renderRide(vol, tone, extra, transientScale, sampleRate, profile, pitchMultiplier)
+        : this.renderCrash(vol, tone, extra, transientScale, sampleRate, profile, pitchMultiplier);
         break;
-      case 'snare2': output = this.renderSnare2(vol, tone, extra, transientScale, sampleRate, profile); break;
-      case 'clap': output = this.renderClap(vol, tone, extra, transientScale, sampleRate, profile); break;
+      case 'snare2': output = this.renderSnare2(vol, tone, extra, transientScale, sampleRate, profile, pitchMultiplier); break;
+      case 'clap': output = this.renderClap(vol, tone, extra, transientScale, sampleRate, profile, pitchMultiplier); break;
       default: output = new Float32Array(0); break;
     }
     const polished = this.polishHit(output, profile.saturation);
@@ -106,9 +122,9 @@ export class DrumSynthesizer {
           const downbeatAccent = step % 4 === 0 ? 1 : 0.88;
           const velocity = clamp(downbeatAccent + randCentered(seedBase + 3) * 0.08, 0.3, 1.1);
           const humanize = {
-            pitch: randCentered(seedBase + 11) * humanizeAmount,
-            decay: randCentered(seedBase + 19) * humanizeAmount,
-            transient: randCentered(seedBase + 23) * humanizeAmount,
+            pitch: randCentered(seedBase + 11) * humanizeAmount * clamp(track.settings.humanize ?? 0.35, 0, 1),
+            decay: randCentered(seedBase + 19) * humanizeAmount * clamp(track.settings.humanize ?? 0.35, 0, 1),
+            transient: randCentered(seedBase + 23) * humanizeAmount * clamp(track.settings.humanize ?? 0.35, 0, 1),
           };
           const pcm = this.renderHit(inst, track.settings, sampleRate, {
             velocity,
@@ -152,9 +168,9 @@ export class DrumSynthesizer {
     return out;
   }
 
-  private static renderKick(volume: number, tone: number, extra: number, transientScale: number, sampleRate: number, profile: VariantProfile): Float32Array {
-    const startFreq = 150 + tone * 75;
-    const endFreq = 34 + tone * 22;
+  private static renderKick(volume: number, tone: number, extra: number, transientScale: number, sampleRate: number, profile: VariantProfile, pitchMultiplier: number): Float32Array {
+    const startFreq = (150 + tone * 75) * pitchMultiplier;
+    const endFreq = (34 + tone * 22) * pitchMultiplier;
     const punch = 0.3 + extra * 0.7;
     const dur = 0.2 + extra * 0.35;
     const length = Math.floor(sampleRate * dur);
@@ -179,10 +195,10 @@ export class DrumSynthesizer {
     return out;
   }
 
-  private static renderSnare(volume: number, tone: number, extra: number, transientScale: number, sampleRate: number, profile: VariantProfile): Float32Array {
-    const bodyStart = 150 + tone * 120;
-    const bodyEnd = 80 + tone * 70;
-    const subFreq = 55 + tone * 30;
+  private static renderSnare(volume: number, tone: number, extra: number, transientScale: number, sampleRate: number, profile: VariantProfile, pitchMultiplier: number): Float32Array {
+    const bodyStart = (150 + tone * 120) * pitchMultiplier;
+    const bodyEnd = (80 + tone * 70) * pitchMultiplier;
+    const subFreq = (55 + tone * 30) * pitchMultiplier;
     const snap = 0.25 + extra * 0.75;
     const dur = 0.28;
     const length = Math.floor(sampleRate * dur);
@@ -234,7 +250,7 @@ export class DrumSynthesizer {
     return out;
   }
 
-  private static renderOpenHH(volume: number, tone: number, extra: number, transientScale: number, sampleRate: number, profile: VariantProfile): Float32Array {
+  private static renderOpenHH(volume: number, tone: number, extra: number, transientScale: number, sampleRate: number, profile: VariantProfile, pitchMultiplier: number): Float32Array {
     const dur = 0.25 + extra * 0.95;
     const length = Math.floor(sampleRate * dur);
     const out = new Float32Array(length);
@@ -242,7 +258,7 @@ export class DrumSynthesizer {
     let hpBand1 = 0;
     let hpBand2 = 0;
     let lpBand = 0;
-    const base = 3000 + tone * 3200;
+    const base = (3000 + tone * 3200) * pitchMultiplier;
     const phases = [0, 0, 0, 0, 0, 0, 0, 0];
     const ratios = [1, 1.31, 1.73, 2.37, 3.11, 3.79, 4.33, 5.17];
     const amps = [0.18, 0.15, 0.12, 0.09, 0.07, 0.05, 0.03, 0.02];
@@ -271,7 +287,7 @@ export class DrumSynthesizer {
     return out;
   }
 
-  private static renderClosedHH(volume: number, tone: number, extra: number, transientScale: number, sampleRate: number, profile: VariantProfile): Float32Array {
+  private static renderClosedHH(volume: number, tone: number, extra: number, transientScale: number, sampleRate: number, profile: VariantProfile, pitchMultiplier: number): Float32Array {
     const dur = 0.015 + (1 - extra) * 0.13;
     const length = Math.floor(sampleRate * dur);
     const out = new Float32Array(length);
@@ -279,7 +295,7 @@ export class DrumSynthesizer {
     let hpBand1 = 0;
     let hpBand2 = 0;
     let lpBand = 0;
-    const base = 4200 + tone * 3700;
+    const base = (4200 + tone * 3700) * pitchMultiplier;
     const phases = [0, 0, 0, 0, 0, 0];
     const ratios = [1, 1.43, 1.97, 2.49, 3.11, 3.78];
     const amps = [0.2, 0.16, 0.12, 0.09, 0.06, 0.04];
@@ -306,8 +322,8 @@ export class DrumSynthesizer {
     return out;
   }
 
-  private static renderRide(volume: number, tone: number, extra: number, transientScale: number, sampleRate: number, profile: VariantProfile): Float32Array {
-    const baseFreq = 3200 + tone * 3600;
+  private static renderRide(volume: number, tone: number, extra: number, transientScale: number, sampleRate: number, profile: VariantProfile, pitchMultiplier: number): Float32Array {
+    const baseFreq = (3200 + tone * 3600) * pitchMultiplier;
     const decay = 0.4 + extra * 1.2;
     const dur = 0.5 + decay;
     const length = Math.floor(sampleRate * dur);
@@ -343,14 +359,14 @@ export class DrumSynthesizer {
     return out;
   }
 
-  private static renderCrash(volume: number, tone: number, extra: number, transientScale: number, sampleRate: number, profile: VariantProfile): Float32Array {
+  private static renderCrash(volume: number, tone: number, extra: number, transientScale: number, sampleRate: number, profile: VariantProfile, pitchMultiplier: number): Float32Array {
     const dur = 1.2 + extra * 2.8;
     const length = Math.floor(sampleRate * dur);
     const out = new Float32Array(length);
     let prevNoise = 0;
     let lpNoise = 0;
     let hpBand = 0;
-    const base = 1800 + tone * 2600;
+    const base = (1800 + tone * 2600) * pitchMultiplier;
     const phases = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
     const ratios = [1, 1.37, 1.73, 2.09, 2.51, 2.87, 3.24, 3.68, 4.11, 4.53, 5.02, 5.47];
     const amps = [0.16, 0.15, 0.14, 0.13, 0.11, 0.1, 0.08, 0.06, 0.04, 0.03, 0.02, 0.01];
@@ -378,9 +394,9 @@ export class DrumSynthesizer {
     return out;
   }
 
-  private static renderSnare2(volume: number, tone: number, extra: number, transientScale: number, sampleRate: number, profile: VariantProfile): Float32Array {
-    const startFreq = 220 + tone * 150;
-    const endFreq = 95 + tone * 80;
+  private static renderSnare2(volume: number, tone: number, extra: number, transientScale: number, sampleRate: number, profile: VariantProfile, pitchMultiplier: number): Float32Array {
+    const startFreq = (220 + tone * 150) * pitchMultiplier;
+    const endFreq = (95 + tone * 80) * pitchMultiplier;
     const bend = 0.2 + extra * 0.8;
     const dur = 0.26 + extra * 0.34;
     const length = Math.floor(sampleRate * dur);
@@ -407,13 +423,13 @@ export class DrumSynthesizer {
     return out;
   }
 
-  private static renderClap(volume: number, tone: number, extra: number, transientScale: number, sampleRate: number, profile: VariantProfile): Float32Array {
+  private static renderClap(volume: number, tone: number, extra: number, transientScale: number, sampleRate: number, profile: VariantProfile, pitchMultiplier: number): Float32Array {
     const dur = 0.16 + extra * 0.24;
     const length = Math.floor(sampleRate * dur);
     const out = new Float32Array(length);
     let lpNoise = 0;
     let prevNoise = 0;
-    const bodyFreq = 210 + tone * 180;
+    const bodyFreq = (210 + tone * 180) * pitchMultiplier;
     const burstSpacing = 0.009 + (1 - extra) * 0.028;
     const burstCount = 4;
     for (let i = 0; i < length; i++) {

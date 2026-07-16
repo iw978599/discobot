@@ -8,7 +8,7 @@ export interface DrumMachineProps {
   isPlaying: boolean;
   currentStep: number;
   onStepToggle: (instrument: DrumInstrument, step: number, active: boolean) => void;
-  onSettingsChange: (instrument: DrumInstrument, settings: { volume?: number; tone?: number; extra?: number; cymbalType?: CymbalType }) => void;
+  onSettingsChange: (instrument: DrumInstrument, settings: { volume?: number; tone?: number; extra?: number; tune?: number; humanize?: number; cymbalType?: CymbalType }) => void;
   onMixChange: (instrument: DrumInstrument, mix: { muted?: boolean; solo?: boolean }) => void;
   onReset: () => void;
   drumKits: DrumKitDefinition[];
@@ -83,6 +83,12 @@ const parsePercent = (input: string): number | null => {
   const n = parseNumber(input);
   if (n === null) return null;
   return n / 100;
+};
+
+const parseTuneSemitones = (input: string): number | null => {
+  const n = parseNumber(input);
+  if (n === null) return null;
+  return n / 12;
 };
 
 const parseExtraByInstrument: Record<DrumInstrument, (input: string) => number | null> = {
@@ -349,6 +355,20 @@ export default function DrumMachine({
                 ))}
               </div>
               <div className="drum-instrument-control-row">
+                {INSTRUMENTS.map((inst) => (
+                  <DrumKnob
+                    key={`${inst}-tune`}
+                    label="Tune"
+                    value={drumState[inst].settings.tune ?? 0}
+                    min={-1}
+                    max={1}
+                    displayValue={`${((drumState[inst].settings.tune ?? 0) * 12).toFixed(1)} st`}
+                    parseInputValue={parseTuneSemitones}
+                    onChange={(v) => onSettingsChange(inst, { tune: v })}
+                  />
+                ))}
+              </div>
+              <div className="drum-instrument-control-row">
                 {INSTRUMENTS.map((inst) => {
                   const isCrashRide = inst === 'crash' && drumState.crash.settings.cymbalType === 'ride';
                   const labels = isCrashRide ? EXTRA_LABELS.ride : EXTRA_LABELS[inst];
@@ -364,6 +384,18 @@ export default function DrumMachine({
                     />
                   );
                 })}
+              </div>
+              <div className="drum-instrument-control-row">
+                {INSTRUMENTS.map((inst) => (
+                  <DrumKnob
+                    key={`${inst}-humanize`}
+                    label="Human"
+                    value={drumState[inst].settings.humanize ?? 0.35}
+                    displayValue={Math.round((drumState[inst].settings.humanize ?? 0.35) * 100) + '%'}
+                    parseInputValue={parsePercent}
+                    onChange={(v) => onSettingsChange(inst, { humanize: v })}
+                  />
+                ))}
               </div>
             </div>
             <div className="drum-instrument-buttons">
