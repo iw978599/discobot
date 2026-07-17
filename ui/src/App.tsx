@@ -614,6 +614,7 @@ function App() {
   const effectsLoopRef = useRef(effectsLoop);
   effectsLoopRef.current = effectsLoop;
   const historyRef = useRef<Record<string, PatternHistory>>({});
+  const historyThrottleRef = useRef<Record<string, number>>({});
   const activeHistoryKeyRef = useRef<string | null>(null);
   const isRestoringRef = useRef(false);
   const arpTimeoutsRef = useRef<number[]>([]);
@@ -678,6 +679,18 @@ function App() {
     history.redo = [];
     historyRef.current[key] = history;
   }, [getHistoryKey, getSnapshot]);
+
+  const pushHistorySnapshotThrottled = useCallback(
+    (synthId: number, patternId: string, keySuffix: string, minIntervalMs = 250) => {
+      const now = performance.now();
+      const key = `${getHistoryKey(synthId, patternId)}:${keySuffix}`;
+      const lastTs = historyThrottleRef.current[key] ?? 0;
+      if (now - lastTs < minIntervalMs) return;
+      historyThrottleRef.current[key] = now;
+      pushHistorySnapshot(synthId, patternId);
+    },
+    [getHistoryKey, pushHistorySnapshot]
+  );
 
   const applySnapshot = useCallback(async (synthId: number, snapshot: PatternSnapshot) => {
     setSynths((prev) => prev.map((entry) => (
@@ -1553,13 +1566,13 @@ function App() {
 
   const handleParameterChange = useCallback(async (synthId: number, params: Partial<SynthParameters>) => {
     const synth = synthsRef.current.find((entry) => entry.id === synthId);
-    if (synth?.pattern) pushHistorySnapshot(synthId, synth.pattern.id);
+    if (synth?.pattern) pushHistorySnapshotThrottled(synthId, synth.pattern.id, `synth-params-${synthId}`);
     await authFetch(`/synth/${synthId}/parameters`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params),
     });
-  }, [pushHistorySnapshot]);
+  }, [pushHistorySnapshotThrottled]);
 
   const handleSynthModelChange = useCallback(async (
     synthId: number,
@@ -2007,7 +2020,9 @@ function App() {
 
   const handleDrumSettingsChange = useCallback((instrument: DrumInstrument, settings: Partial<DrumSettings>) => {
     const synth = synthsRef.current[0];
-    if (synth?.pattern) pushHistorySnapshot(synth.id, synth.pattern.id);
+    if (synth?.pattern) {
+      pushHistorySnapshotThrottled(synth.id, synth.pattern.id, `drum-settings-${instrument}`, 300);
+    }
     setDrumState(prev => {
       const next = { ...prev };
       next[instrument] = { ...next[instrument], settings: { ...next[instrument].settings, ...settings } };
@@ -2018,7 +2033,7 @@ function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ instrument, settings }),
     });
-  }, [pushHistorySnapshot]);
+  }, [pushHistorySnapshotThrottled]);
 
   const handleDrumMixChange = useCallback((instrument: DrumInstrument, mix: { muted?: boolean; solo?: boolean }) => {
     const synth = synthsRef.current[0];
@@ -2042,18 +2057,18 @@ function App() {
 
   const handleDrumMasterVolumeChange = useCallback((volume: number) => {
     const synth = synthsRef.current[0];
-    if (synth?.pattern) pushHistorySnapshot(synth.id, synth.pattern.id);
+    if (synth?.pattern) pushHistorySnapshotThrottled(synth.id, synth.pattern.id, 'drum-master-volume', 300);
     setDrumMasterVolume(volume);
     authFetch('/drum/master-volume', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ volume }),
     });
-  }, [pushHistorySnapshot]);
+  }, [pushHistorySnapshotThrottled]);
 
   const handleDrumFxChange = useCallback((next: Partial<{ sends: Partial<FxSendLevels>; returnLevel: number }>) => {
     const synth = synthsRef.current[0];
-    if (synth?.pattern) pushHistorySnapshot(synth.id, synth.pattern.id);
+    if (synth?.pattern) pushHistorySnapshotThrottled(synth.id, synth.pattern.id, 'drum-fx', 300);
     const previous = drumFxRef.current;
     const updated = normalizeDrumFx({
       sends: { ...previous.sends, ...(next.sends || {}) },
@@ -2079,11 +2094,11 @@ function App() {
         setDrumFx(previous);
       }
     })();
-  }, [pushHistorySnapshot]);
+  }, [pushHistorySnapshotThrottled]);
 
   const handleEffectsLoopChange = useCallback((next: Partial<EffectsLoopState>) => {
     const synth = synthsRef.current[0];
-    if (synth?.pattern) pushHistorySnapshot(synth.id, synth.pattern.id);
+    if (synth?.pattern) pushHistorySnapshotThrottled(synth.id, synth.pattern.id, 'effects-loop', 300);
     const previous = effectsLoopRef.current;
     const updated = normalizeEffectsLoop({
       ...previous,
@@ -2109,7 +2124,7 @@ function App() {
         setEffectsLoop(previous);
       }
     })();
-  }, [pushHistorySnapshot]);
+  }, [pushHistorySnapshotThrottled]);
 
   const handleDrumEffectsReturnChange = useCallback((value: number) => {
     handleEffectsLoopChange({
