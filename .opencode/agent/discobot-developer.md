@@ -69,11 +69,12 @@ You are an expert developer specializing in the Discord Synth Bot project. This 
 Always ask clarification questions if uncertain about specific technical details, and remember to check `AI_DEVELOPMENT_GUIDE.md` for detailed implementation notes.
 
 <!-- AUTO_PR_CHANGELOG_START -->
-### PR #50: Rework drum engine with per-instrument tune/humanize controls and relocate FX panel below drums
+### PR #51: Throttle live playback update paths to prevent loop drift during synth/drum parameter edits
 
-Source branch: `copilot/rework-drum-sounds`
-Last sync: 2026-07-16T23:07:58.545Z
+Source branch: `copilot/refactor-optimization-pass`
+Last sync: 2026-07-17T14:19:38.233Z
 
 #### Changed files
-- Unable to fetch changed files from API (transient error).
+- `ui/src/App.tsx` — MODIFIED (+25/-10)
+- `web/src/index.ts` — MODIFIED (+13/-1)
 <!-- AUTO_PR_CHANGELOG_END -->
