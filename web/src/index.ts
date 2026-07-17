@@ -1451,6 +1451,7 @@ function stopStreaming(guildId: string) {
     synth.allNotesOff();
   }
   guildStreamingStates.delete(guildId);
+  streamingEffectsLoopUpdateThrottles.delete(guildId);
 }
 
 function updateStreamingSynthParams(guildId: string, synthId: number, params: Partial<SynthParameters>) {
@@ -1460,7 +1461,9 @@ function updateStreamingSynthParams(guildId: string, synthId: number, params: Pa
   if (synth) synth.updateParameters(params);
 }
 
-function updateStreamingEffectsLoop(guildId: string) {
+const streamingEffectsLoopUpdateThrottles = new Map<string, () => void>();
+
+function updateStreamingEffectsLoopNow(guildId: string) {
   const streamingState = guildStreamingStates.get(guildId);
   if (!streamingState || !streamingState.isStreaming) return;
   const state = getGuildState(guildId);
@@ -1494,6 +1497,15 @@ function updateStreamingEffectsLoop(guildId: string) {
     ? patternLengths.reduce((a, b) => gcd(a, b))
     : 16;
   streamingState.stepIntervalMs = (barDuration * 1000) / Math.max(16, baseStepCount);
+}
+
+function updateStreamingEffectsLoop(guildId: string) {
+  let throttled = streamingEffectsLoopUpdateThrottles.get(guildId);
+  if (!throttled) {
+    throttled = throttle(() => updateStreamingEffectsLoopNow(guildId), 120);
+    streamingEffectsLoopUpdateThrottles.set(guildId, throttled);
+  }
+  if (typeof throttled === 'function') throttled();
 }
 
 app.use('/auth', applyRateLimit(120, 60_000));
