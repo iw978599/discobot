@@ -1,0 +1,161 @@
+name: AI PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  ai-review:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout PR branch
+        run: |
+          git fetch origin pull/${{ github.event.pull_request.number }}/head:pr-branch
+          git checkout pr-branch
+
+      - name: Get PR diff
+        id: diff
+        run: |
+          git diff origin/${{ github.event.pull_request.base.ref }}...HEAD > pr.diff
+
+          # Check if diff is too large (GitHub API has limits)
+          DIFF_SIZE=$(wc -c < pr.diff)
+          if [ $DIFF_SIZE -gt 100000 ]; then
+            echo "too_large=true" >> $GITHUB_OUTPUT
+            echo "Diff is ${DIFF_SIZE} bytes (limit: 100KB)"
+          else
+            echo "too_large=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Read review guide
+        id: guide
+        run: |
+          if [ -f "ai-pr-review-guide.md" ]; then
+            echo "guide_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "guide_exists=false" >> $GITHUB_OUTPUT
+            echo "⚠️ ai-pr-review-guide.md not found in repo"
+          fi
+
+      - name: AI Review with GitHub Models
+        if: steps.diff.outputs.too_large == 'false' && steps.guide.outputs.guide_exists == 'true'
+        id: ai_review
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Read files
+          DIFF_CONTENT=$(cat pr.diff)
+          GUIDE_CONTENT=$(cat ai-pr-review-guide.md)
+
+          # Create the prompt
+          PROMPT="Review this pull request using the comprehensive framework below.
+
+          PR Title: ${{ github.event.pull_request.title }}
+          PR Description: ${{ github.event.pull_request.body }}
+
+          Files Changed: ${{ github.event.pull_request.changed_files }}
+          Additions: +${{ github.event.pull_request.additions }}
+          Deletions: -${{ github.event.pull_request.deletions }}
+
+          Diff:
+          \`\`\`diff
+          ${DIFF_CONTENT}
+          \`\`\`
+
+          Review Framework:
+          ${GUIDE_CONTENT}
+          "
+
+          # Call GitHub Models API (using GPT-4o or similar)
+          # Note: This requires GitHub Models access (in beta as of 2024)
+          RESPONSE=$(curl -s -X POST \
+            "https://models.inference.ai.azure.com/chat/completions" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -d "{
+              \"messages\": [
+                {
+                  \"role\": \"system\",
+                  \"content\": \"You are an expert code reviewer. Follow the provided framework exactly and give thorough, actionable feedback.\"
+                },
+                {
+                  \"role\": \"user\",
+                  \"content\": $(echo "$PROMPT" | jq -Rs .)
+                }
+              ],
+              \"model\": \"gpt-4o\",
+              \"temperature\": 0.3,
+              \"max_tokens\": 4000
+            }")
+
+          # Extract the review content
+          REVIEW=$(echo "$RESPONSE" | jq -r '.choices[0].message.content')
+
+          if [ -z "$REVIEW" ] || [ "$REVIEW" = "null" ]; then
+            echo "❌ Failed to get AI response"
+            echo "$RESPONSE"
+            exit 1
+          fi
+
+          # Save review to file for next step
+          echo "$REVIEW" > review.md
+
+      - name: Post review as comment
+        if: steps.diff.outputs.too_large == 'false' && steps.guide.outputs.guide_exists == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const review = fs.readFileSync('review.md', 'utf8');
+
+            const comment = `## 🤖 AI Code Review
+
+            ${review}
+
+            ---
+            <sub>Powered by GitHub Models | [Review Guide](ai-pr-review-guide.md)</sub>`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
+            });
+
+      - name: Handle large diff
+        if: steps.diff.outputs.too_large == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: '⚠️ This PR is too large for automated AI review (>100KB diff). Please request manual review or split into smaller PRs.'
+            });
+
+      - name: Handle missing guide
+        if: steps.guide.outputs.guide_exists == 'false'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: '⚠️ AI review guide not found. Please add `ai-pr-review-guide.md` to the repository root.'
+            });
