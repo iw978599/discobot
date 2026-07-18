@@ -154,3 +154,31 @@ Post your review as a PR comment using:
 ```bash
 gh pr comment <number> --body-file review.md
 ```
+
+<!-- AUTO_PR_CHANGELOG_START -->
+### PR #56: Add LFO tempo sync, stereo spread, drum velocity per step, envelope v…
+
+Source branch: `feat/effects-mixer-improvements`
+Last sync: 2026-07-18T19:08:07.568Z
+
+#### Changed files
+- `engine/src/DrumSynthesizer.ts` — MODIFIED (+9/-2)
+- `engine/src/StreamingSynth.ts` — MODIFIED (+47/-11)
+- `engine/src/Synthesizer.ts` — MODIFIED (+52/-4)
+- `engine/src/types.ts` — MODIFIED (+5/-0)
+- `ui/public/synth-processor.js` — MODIFIED (+17/-7)
+- `ui/src/App.css` — MODIFIED (+40/-0)
+- `ui/src/App.tsx` — MODIFIED (+146/-6)
+- `ui/src/components/DrumMachine.css` — MODIFIED (+41/-0)
+- `ui/src/components/DrumMachine.tsx` — MODIFIED (+91/-8)
+- `ui/src/components/EffectsPanel.tsx` — MODIFIED (+0/-8)
+- `ui/src/components/MixerPanel.css` — ADDED (+248/-0)
+- `ui/src/components/MixerPanel.tsx` — ADDED (+196/-0)
+- `ui/src/components/Sequencer.css` — MODIFIED (+12/-0)
+- `ui/src/components/Sequencer.tsx` — MODIFIED (+6/-0)
+- `ui/src/components/SynthControls.css` — MODIFIED (+48/-0)
+- `ui/src/components/SynthControls.tsx` — MODIFIED (+92/-24)
+- `ui/src/hooks/useDrumAudio.ts` — MODIFIED (+4/-2)
+- `ui/src/hooks/useSynthAudio.ts` — MODIFIED (+16/-6)
+- `web/src/index.ts` — MODIFIED (+174/-11)
+<!-- AUTO_PR_CHANGELOG_END -->
