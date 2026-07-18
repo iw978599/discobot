@@ -1,14 +1,14 @@
 .sequencer {
   background: #2a2a2a;
   border-radius: 8px;
-  padding: 1.5rem;
+  padding: 0.6rem 0.8rem;
 }
 
 .sequencer-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.5rem;
+  margin-bottom: 0.5rem;
 }
 
 .sequencer-header h2 {
@@ -49,8 +49,8 @@
 .sequencer-grid {
   display: grid;
   grid-template-columns: repeat(16, 1fr);
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+  gap: 0.3rem;
+  margin-bottom: 0.5rem;
 }
 
 .sequencer-column {
@@ -61,9 +61,9 @@
 
 .step-indicator {
   text-align: center;
-  font-size: 0.75rem;
+  font-size: 0.65rem;
   color: #888;
-  height: 20px;
+  height: 14px;
 }
 
 .step-indicator span.active {
@@ -84,10 +84,10 @@
 .step-button {
   aspect-ratio: 1;
   background: #3a3a3a;
-  border: 2px solid #4a4a4a;
-  border-radius: 4px;
+  border: 1px solid #4a4a4a;
+  border-radius: 3px;
   color: #888;
-  font-size: 0.7rem;
+  font-size: 0.6rem;
   cursor: pointer;
   transition: all 0.2s;
   display: flex;
@@ -118,7 +118,7 @@
 }
 
 .step-light {
-  height: 4px;
+  height: 3px;
   border-radius: 2px;
   background: #3a3a3a;
   transition: background 0.1s, box-shadow 0.1s;
@@ -182,12 +182,12 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-top: 1rem;
+  padding-top: 0.4rem;
   border-top: 1px solid #3a3a3a;
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   color: #888;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: 0.4rem;
 }
 
 .saved-patterns-bar {
