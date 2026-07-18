@@ -156,8 +156,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
 }
 
 .app-main-right {
@@ -168,8 +167,7 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.55rem;
-  min-height: 0;
-  flex-shrink: 0;
+  flex: 0 0 auto;
 }
 
 .shared-sequencer-section {
@@ -177,8 +175,9 @@
   flex-direction: column;
   gap: 0.5rem;
   min-height: 0;
-  flex-shrink: 1;
-  overflow: hidden;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .synth-tabs {
