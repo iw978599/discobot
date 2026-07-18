@@ -8,7 +8,7 @@ export interface DrumMachineProps {
   isPlaying: boolean;
   currentStep: number;
   onStepToggle: (instrument: DrumInstrument, step: number, active: boolean) => void;
-  onSettingsChange: (instrument: DrumInstrument, settings: { volume?: number; tone?: number; extra?: number; tune?: number; humanize?: number; cymbalType?: CymbalType }) => void;
+  onSettingsChange: (instrument: DrumInstrument, settings: { volume?: number; tone?: number; extra?: number; tune?: number; humanize?: number; pan?: number; cymbalType?: CymbalType }) => void;
   onMixChange: (instrument: DrumInstrument, mix: { muted?: boolean; solo?: boolean }) => void;
   onReset: () => void;
   drumKits: DrumKitDefinition[];
@@ -394,6 +394,24 @@ export default function DrumMachine({
                     displayValue={Math.round((drumState[inst].settings.humanize ?? 0.35) * 100) + '%'}
                     parseInputValue={parsePercent}
                     onChange={(v) => onSettingsChange(inst, { humanize: v })}
+                  />
+                ))}
+              </div>
+              <div className="drum-instrument-control-row">
+                {INSTRUMENTS.map((inst) => (
+                  <DrumKnob
+                    key={`${inst}-pan`}
+                    label="Pan"
+                    min={-1}
+                    max={1}
+                    value={drumState[inst].settings.pan ?? 0}
+                    displayValue={(() => {
+                      const p = drumState[inst].settings.pan ?? 0;
+                      if (Math.abs(p) < 0.05) return 'C';
+                      return p < 0 ? `L${Math.round(Math.abs(p) * 50)}` : `R${Math.round(p * 50)}`;
+                    })()}
+                    parseInputValue={parseTuneSemitones}
+                    onChange={(v) => onSettingsChange(inst, { pan: v })}
                   />
                 ))}
               </div>

@@ -364,6 +364,7 @@ function createDefaultDrumState(): DrumState {
         extra: defaults[inst].extra,
         tune: defaults[inst].tune ?? 0,
         humanize: defaults[inst].humanize ?? 0.35,
+        pan: defaults[inst].pan ?? 0,
       },
       muted: false,
       solo: false,
@@ -402,6 +403,7 @@ function applyKitDefaultsToDrumState(state: DrumState, kitId: DrumKitId): DrumSt
         extra: defaults[inst].extra,
         tune: defaults[inst].tune ?? next[inst].settings.tune ?? 0,
         humanize: defaults[inst].humanize ?? next[inst].settings.humanize ?? 0.35,
+        pan: next[inst].settings.pan ?? 0,
       },
     };
   }
@@ -495,6 +497,7 @@ function normalizeDrumState(state: DrumState): DrumState {
         extra: clamp(src.settings?.extra ?? base[inst].settings.extra, 0, 1),
         tune: clamp(src.settings?.tune ?? base[inst].settings.tune ?? 0, -1, 1),
         humanize: clamp(src.settings?.humanize ?? base[inst].settings.humanize ?? 0.35, 0, 1),
+        pan: clamp(src.settings?.pan ?? 0, -1, 1),
         cymbalType: (src.settings?.cymbalType === 'ride' || src.settings?.cymbalType === 'crash') ? src.settings.cymbalType : undefined,
       },
       muted: Boolean(src.muted),

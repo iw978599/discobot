@@ -2530,33 +2530,34 @@ function App() {
           </div>
 
           <div className="synth-panels-row">
-            {[1, 2, 3].map(id => {
-              const synth = synths.find(s => s.id === id);
+            {(() => {
+              const synth = synths.find(s => s.id === selectedSynthId);
+              if (!synth) return null;
               return (
                 <SynthUnit
-                  key={id}
-                  synthId={id}
-                  synthParams={synth?.synthParams ?? null}
-                  muted={synth?.muted ?? false}
-                  solo={synth?.solo ?? false}
-                  selected={selectedSynthId === id}
-                  showRemoveButton={id !== 1}
-                  onToggleMute={() => synth && handleSynthMixChange(id, { muted: !synth.muted })}
-                  onToggleSolo={() => synth && handleSynthMixChange(id, { solo: !synth.solo })}
-                  onParameterChange={(params) => handleParameterChange(id, params)}
+                  key={synth.id}
+                  synthId={synth.id}
+                  synthParams={synth.synthParams}
+                  muted={synth.muted}
+                  solo={synth.solo}
+                  selected={true}
+                  showRemoveButton={synth.id !== 1}
+                  onToggleMute={() => handleSynthMixChange(synth.id, { muted: !synth.muted })}
+                  onToggleSolo={() => handleSynthMixChange(synth.id, { solo: !synth.solo })}
+                  onParameterChange={(params) => handleParameterChange(synth.id, params)}
                   presets={synthPresets}
-                  onSavePreset={(name) => handleSaveSynthPreset(id, name)}
-                  onLoadPreset={(presetId) => { void handleLoadSynthPreset(id, presetId); }}
+                  onSavePreset={(name) => handleSaveSynthPreset(synth.id, name)}
+                  onLoadPreset={(presetId) => { void handleLoadSynthPreset(synth.id, presetId); }}
                   onDeletePreset={handleDeleteSynthPreset}
-                  synthModelId={synth?.synthModelId ?? DEFAULT_SYNTH_MODEL_ID}
-                  synthModelParams={synth?.synthModelParams ?? createDefaultSynthModelParams()}
-                  onSynthModelChange={(modelId) => { void handleSynthModelChange(id, modelId); }}
-                  onSynthModelParamsChange={(params) => { void handleSynthModelChange(id, synth?.synthModelId ?? DEFAULT_SYNTH_MODEL_ID, params); }}
-                  onSelect={() => setSelectedSynthId(id)}
-                  onRemove={id !== 1 ? () => handleRemoveSynth(id) : undefined}
+                  synthModelId={synth.synthModelId}
+                  synthModelParams={synth.synthModelParams}
+                  onSynthModelChange={(modelId) => { void handleSynthModelChange(synth.id, modelId); }}
+                  onSynthModelParamsChange={(params) => { void handleSynthModelChange(synth.id, synth.synthModelId, params); }}
+                  onSelect={() => {}}
+                  onRemove={synth.id !== 1 ? () => handleRemoveSynth(synth.id) : undefined}
                 />
               );
-            })}
+            })()}
           </div>
         </div>
         <div className="app-main-right">

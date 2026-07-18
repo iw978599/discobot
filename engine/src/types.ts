@@ -132,6 +132,7 @@ export interface DrumSettings {
   extra: number;
   tune?: number;
   humanize?: number;
+  pan?: number;
   cymbalType?: CymbalType;
 }
 
