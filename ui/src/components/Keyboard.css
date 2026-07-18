@@ -2,6 +2,8 @@
   background: #2a2a2a;
   border-radius: 8px;
   padding: 1.5rem;
+  max-height: 220px;
+  overflow: hidden;
 }
 
 .keyboard-header {

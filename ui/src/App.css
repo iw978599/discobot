@@ -169,6 +169,7 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.55rem;
   min-height: 0;
+  flex-shrink: 0;
 }
 
 .shared-sequencer-section {
@@ -176,6 +177,8 @@
   flex-direction: column;
   gap: 0.5rem;
   min-height: 0;
+  flex-shrink: 1;
+  overflow: hidden;
 }
 
 .synth-tabs {
