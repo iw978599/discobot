@@ -91,6 +91,16 @@ const parseTuneSemitones = (input: string): number | null => {
   return n / 12;
 };
 
+const parsePan = (input: string): number | null => {
+  const trimmed = input.trim().toUpperCase();
+  const n = parseNumber(trimmed.replace(/[LR]/g, ''));
+  if (n === null) return null;
+  const pct = Math.max(0, Math.min(100, n)) / 100;
+  if (trimmed.startsWith('L')) return -pct;
+  if (trimmed.startsWith('R')) return pct;
+  return Math.max(-1, Math.min(1, n));
+};
+
 const parseExtraByInstrument: Record<DrumInstrument, (input: string) => number | null> = {
   kick: (input) => {
     const n = parseNumber(input);
@@ -410,7 +420,7 @@ export default function DrumMachine({
                       if (Math.abs(p) < 0.05) return 'C';
                       return p < 0 ? `L${Math.round(Math.abs(p) * 50)}` : `R${Math.round(p * 50)}`;
                     })()}
-                    parseInputValue={parseTuneSemitones}
+                    parseInputValue={parsePan}
                     onChange={(v) => onSettingsChange(inst, { pan: v })}
                   />
                 ))}
