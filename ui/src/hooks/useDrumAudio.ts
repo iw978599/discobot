@@ -9,6 +9,7 @@ import { DrumSynthesizer } from '@discord-synth/engine';
 
 export function useDrumAudio() {
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const masterGainRef = useRef<GainNode | null>(null);
   const isResumingRef = useRef<boolean>(false);
 
   function getAudioContext(): AudioContext {
@@ -16,6 +17,28 @@ export function useDrumAudio() {
       audioCtxRef.current = new AudioContext();
     }
     return audioCtxRef.current;
+  }
+
+  function getMasterGain(): GainNode {
+    if (masterGainRef.current) return masterGainRef.current;
+    const ctx = getAudioContext();
+    const gain = ctx.createGain();
+    gain.gain.value = 1;
+    gain.connect(ctx.destination);
+    masterGainRef.current = gain;
+    return gain;
+  }
+
+  function setVolume(volume: number): void {
+    const gain = masterGainRef.current;
+    if (gain) gain.gain.value = volume;
+  }
+
+  function tryResume(): void {
+    const ctx = audioCtxRef.current;
+    if (ctx && ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
   }
 
   async function ensureAudioReady(): Promise<boolean> {
@@ -41,32 +64,24 @@ export function useDrumAudio() {
   }
 
   async function playDrumHit(instrument: DrumInstrument, settings: DrumSettings, muted: boolean = false) {
-    console.log('playDrumHit called:', instrument, settings, 'muted:', muted);
     if (muted) return;
 
     try {
-      console.log('Getting AudioContext...');
+      tryResume();
       const ready = await ensureAudioReady();
       if (!ready) return;
       const ctx = getAudioContext();
-      console.log('AudioContext state:', ctx.state);
 
       const sampleRate = ctx.sampleRate;
 
       // Use DrumSynthesizer from engine (no code duplication!)
       const pcm = DrumSynthesizer.renderHit(instrument, settings, sampleRate);
 
-      console.log('PCM buffer generated, length:', pcm.length);
-
-      // Validate audio output
       let maxVal = 0;
       for (let i = 0; i < pcm.length; i++) {
         const a = Math.abs(pcm[i]);
         if (a > maxVal) maxVal = a;
       }
-
-      console.log('PCM max value:', maxVal);
-
       if (maxVal < 0.001) {
         console.warn('Drum PCM output too quiet', {
           instrument,
@@ -88,11 +103,8 @@ export function useDrumAudio() {
       gainNode.gain.value = 1.0;
 
       source.connect(gainNode);
-      gainNode.connect(ctx.destination);
-      console.log('Connected to destination:', ctx.destination);
-      console.log('Destination max channels:', ctx.destination.maxChannelCount);
+      gainNode.connect(getMasterGain());
       source.start();
-      console.log('Audio source started successfully');
     } catch (error) {
       console.error('Drum playback error:', {
         error: error instanceof Error ? error.message : String(error),
@@ -114,7 +126,9 @@ export function useDrumAudio() {
 
   return {
     ensureAudioReady,
+    tryResume,
     playDrumHit,
+    setVolume,
     dispose,
   };
 }

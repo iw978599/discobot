@@ -183,6 +183,14 @@ export interface SavedPatternInfo {
   updatedAt: number;
 }
 
+export interface SavedSynthData {
+  id: number;
+  steps: SequencerStep[];
+  synthParams: SynthParameters;
+  synthModelId?: SynthModelId;
+  synthModelParams?: SynthModelParams;
+}
+
 export interface SavedPatternFull {
   id: string;
   name: string;
@@ -201,4 +209,5 @@ export interface SavedPatternFull {
     returnLevel: number;
   };
   effectsLoop?: EffectsLoopState;
+  synths?: SavedSynthData[];
 }

@@ -8,6 +8,7 @@ interface PatternAudioLoopPayload {
 export function usePatternAudio() {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const outputGainRef = useRef<GainNode | null>(null);
+  const masterGainRef = useRef<GainNode | null>(null);
   const activeSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const isResumingRef = useRef(false);
   const activeLoopRef = useRef(false);
@@ -21,9 +22,22 @@ export function usePatternAudio() {
     if (outputGainRef.current) return outputGainRef.current;
     const gain = ctx.createGain();
     gain.gain.value = 1;
-    gain.connect(ctx.destination);
+    gain.connect(getMasterGain(ctx));
     outputGainRef.current = gain;
     return gain;
+  }
+
+  function getMasterGain(ctx: AudioContext): GainNode {
+    if (masterGainRef.current) return masterGainRef.current;
+    const gain = ctx.createGain();
+    gain.gain.value = 1;
+    gain.connect(ctx.destination);
+    masterGainRef.current = gain;
+    return gain;
+  }
+
+  function setVolume(volume: number): void {
+    if (masterGainRef.current) masterGainRef.current.gain.value = volume;
   }
 
   function decodeBase64Pcm(base64: string): Int16Array {
@@ -45,6 +59,13 @@ export function usePatternAudio() {
       right[i] = pcm[i * 2 + 1] / 32768;
     }
     return buffer;
+  }
+
+  function tryResume(): void {
+    const ctx = audioCtxRef.current;
+    if (ctx && ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
   }
 
   async function ensureAudioReady(): Promise<boolean> {
@@ -123,12 +144,12 @@ export function usePatternAudio() {
   function dispose() {
     stop();
     if (outputGainRef.current) {
-      try {
-        outputGainRef.current.disconnect();
-      } catch {
-        // ignore
-      }
+      try { outputGainRef.current.disconnect(); } catch { /* ignore */ }
       outputGainRef.current = null;
+    }
+    if (masterGainRef.current) {
+      try { masterGainRef.current.disconnect(); } catch { /* ignore */ }
+      masterGainRef.current = null;
     }
     if (audioCtxRef.current) {
       audioCtxRef.current.close().catch(() => {});
@@ -138,9 +159,11 @@ export function usePatternAudio() {
 
   return {
     ensureAudioReady,
+    tryResume,
     playLoop,
     stop,
     setMuted,
+    setVolume,
     isActive,
     dispose,
   };

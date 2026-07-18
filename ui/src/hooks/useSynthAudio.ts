@@ -55,6 +55,7 @@ export function useSynthAudio() {
   const reverbImpulseCache = useRef<Map<string, AudioBuffer>>(new Map());
   const isResumingRef = useRef<boolean>(false);
   const pendingParamsRef = useRef<Partial<SynthParameters> | null>(null);
+  const masterGainRef = useRef<GainNode | null>(null);
 
   function getAudioContext(): AudioContext {
     if (!audioCtxRef.current) {
@@ -160,7 +161,7 @@ export function useSynthAudio() {
     phaserWet.connect(output);
     phaserLfo.start();
 
-    output.connect(ctx.destination);
+    output.connect(getMasterGain(ctx));
 
     sharedBusRef.current = {
       input, output, delay, delayFeedback, delayWet,
@@ -168,6 +169,19 @@ export function useSynthAudio() {
       phaserFilter, phaserFeedback, phaserWet, phaserLfo, phaserDepth,
     };
     return sharedBusRef.current;
+  }
+
+  function getMasterGain(ctx: AudioContext): GainNode {
+    if (masterGainRef.current) return masterGainRef.current;
+    const gain = ctx.createGain();
+    gain.gain.value = 1;
+    gain.connect(ctx.destination);
+    masterGainRef.current = gain;
+    return gain;
+  }
+
+  function setVolume(volume: number): void {
+    if (masterGainRef.current) masterGainRef.current.gain.value = volume;
   }
 
   function updateSharedBus(bus: SharedEffectsBus, loop: EffectsLoopState, ctx: AudioContext) {
@@ -220,6 +234,13 @@ export function useSynthAudio() {
       lfo2Rate: p.lfo2.rate,
       lfo2Depth: p.lfo2.depth,
     };
+  }
+
+  function tryResume(): void {
+    const ctx = audioCtxRef.current;
+    if (ctx && ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
   }
 
   async function ensureAudioReady(): Promise<boolean> {
@@ -295,6 +316,10 @@ export function useSynthAudio() {
       try { sharedBusRef.current.input.disconnect(); sharedBusRef.current.output.disconnect(); } catch { /* ignore */ }
       sharedBusRef.current = null;
     }
+    if (masterGainRef.current) {
+      try { masterGainRef.current.disconnect(); } catch { /* ignore */ }
+      masterGainRef.current = null;
+    }
     if (audioCtxRef.current) {
       audioCtxRef.current.close().catch(() => {});
       audioCtxRef.current = null;
@@ -307,9 +332,11 @@ export function useSynthAudio() {
 
   return {
     ensureAudioReady,
+    tryResume,
     playNote,
     stopNote,
     stopAllNotes,
+    setVolume,
     dispose,
   };
 }

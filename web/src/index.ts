@@ -163,6 +163,13 @@ interface SavedPatternData {
     returnLevel: number;
   };
   effectsLoop?: EffectsLoopState;
+  synths?: Array<{
+    id: number;
+    steps: Array<{ active: boolean; note?: string; velocity: number }>;
+    synthParams: SynthParameters;
+    synthModelId?: SynthModelId;
+    synthModelParams?: SynthModelParams;
+  }>;
 }
 
 interface GuildMemberRecord {
@@ -1338,35 +1345,22 @@ function sendStreamingChunk(guildId: string, state: GuildRuntimeState, streaming
     drumRight[i] = drumSample;
   }
 
+  const threshold = AUDIO_MIXING.SOFT_CLIP_THRESHOLD;
+  const factor = AUDIO_MIXING.SOFT_CLIP_FACTOR;
+  const STREAMING_MASTER_GAIN = 0.6;
   const fullLeft = new Float32Array(chunkSamples);
   const fullRight = new Float32Array(chunkSamples);
   for (let i = 0; i < chunkSamples; i++) {
-    fullLeft[i] = synthChunk.left[i] + drumLeft[i] * effectsLoop.returns.drums * drumFx.returnLevel;
-    fullRight[i] = synthChunk.right[i] + drumRight[i] * effectsLoop.returns.drums * drumFx.returnLevel;
-  }
-
-  const threshold = AUDIO_MIXING.SOFT_CLIP_THRESHOLD;
-  const factor = AUDIO_MIXING.SOFT_CLIP_FACTOR;
-  for (let i = 0; i < chunkSamples; i++) {
-    if (fullLeft[i] > threshold) fullLeft[i] = threshold + (fullLeft[i] - threshold) * factor;
-    if (fullLeft[i] < -threshold) fullLeft[i] = -threshold + (fullLeft[i] + threshold) * factor;
-    if (fullRight[i] > threshold) fullRight[i] = threshold + (fullRight[i] - threshold) * factor;
-    if (fullRight[i] < -threshold) fullRight[i] = -threshold + (fullRight[i] + threshold) * factor;
-  }
-
-  let peak = 0;
-  for (let i = 0; i < chunkSamples; i++) {
-    const absL = Math.abs(fullLeft[i]);
-    const absR = Math.abs(fullRight[i]);
-    if (absL > peak) peak = absL;
-    if (absR > peak) peak = absR;
-  }
-  if (peak > 1) {
-    const scale = 1 / peak;
-    for (let i = 0; i < chunkSamples; i++) {
-      fullLeft[i] *= scale;
-      fullRight[i] *= scale;
-    }
+    let mixL = synthChunk.left[i] + drumLeft[i] * effectsLoop.returns.drums * drumFx.returnLevel;
+    let mixR = synthChunk.right[i] + drumRight[i] * effectsLoop.returns.drums * drumFx.returnLevel;
+    mixL *= STREAMING_MASTER_GAIN;
+    mixR *= STREAMING_MASTER_GAIN;
+    if (mixL > threshold) mixL = threshold + (mixL - threshold) * factor;
+    if (mixL < -threshold) mixL = -threshold + (mixL + threshold) * factor;
+    if (mixR > threshold) mixR = threshold + (mixR - threshold) * factor;
+    if (mixR < -threshold) mixR = -threshold + (mixR + threshold) * factor;
+    fullLeft[i] = mixL;
+    fullRight[i] = mixR;
   }
 
   const int16 = new Int16Array(chunkSamples * 2);
@@ -2086,6 +2080,7 @@ app.post('/patterns/save', (req, res) => {
     effectsLoop,
     drumKitId,
     overwriteId,
+    synths,
   } = req.body;
   const patternName = sanitizePatternName(name);
   if (!patternName || !Array.isArray(steps) || steps.length === 0 || steps.length > 64) {
@@ -2107,6 +2102,18 @@ app.post('/patterns/save', (req, res) => {
     return res.status(404).json({ error: 'Pattern to overwrite not found' });
   }
 
+  const normalizedSynths = Array.isArray(synths)
+    ? synths
+        .filter((s: { id?: number; steps?: unknown[] }) => s && typeof s.id === 'number' && Array.isArray(s.steps) && s.steps.length > 0 && s.steps.length <= 64)
+        .map((s: { id: number; steps: Array<{ active: boolean; note?: string; velocity: number }>; synthParams: SynthParameters; synthModelId?: SynthModelId; synthModelParams?: SynthModelParams }) => ({
+          id: s.id,
+          steps: s.steps,
+          synthParams: s.synthParams || null,
+          synthModelId: normalizeSynthModelId(s.synthModelId),
+          synthModelParams: normalizeSynthModelParams(s.synthModelParams),
+        }))
+    : undefined;
+
   const now = Date.now();
   const entry: SavedPatternData = {
     id: overwriteTarget?.id || `saved-${now}`,
@@ -2123,6 +2130,7 @@ app.post('/patterns/save', (req, res) => {
     drumMasterVolume: drumMasterVolume !== undefined ? drumMasterVolume : state.drumMasterVolume,
     drumFx: normalizeDrumFx(drumFx || state.drumFx),
     effectsLoop: normalizeEffectsLoop(effectsLoop || state.effectsLoop),
+    synths: normalizedSynths,
   };
   if (overwriteTarget) {
     const overwriteIndex = guild.savedPatterns.findIndex((p) => p.id === overwriteTarget.id);
@@ -2145,6 +2153,15 @@ app.get('/patterns/saved/:id', (req, res) => {
   const guild = getPersistedGuild(session.guildId);
   const entry = guild.savedPatterns.find((p) => p.id === req.params.id);
   if (!entry) return res.status(404).json({ error: 'Saved pattern not found' });
+  const normalizedSynths = Array.isArray(entry.synths)
+    ? entry.synths.map((s) => ({
+        id: s.id,
+        steps: s.steps,
+        synthParams: s.synthParams || null,
+        synthModelId: normalizeSynthModelId(s.synthModelId),
+        synthModelParams: normalizeSynthModelParams(s.synthModelParams),
+      }))
+    : undefined;
   res.json({
     ...entry,
     synthModelId: normalizeSynthModelId(entry.synthModelId),
@@ -2153,6 +2170,7 @@ app.get('/patterns/saved/:id', (req, res) => {
     drumState: normalizeDrumState(entry.drumState),
     drumFx: normalizeDrumFx(entry.drumFx),
     effectsLoop: normalizeEffectsLoop(entry.effectsLoop),
+    synths: normalizedSynths,
   });
 });
 
