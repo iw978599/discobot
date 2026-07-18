@@ -646,6 +646,20 @@ function App() {
   }, []);
 
   useEffect(() => {
+    function resumeAudioContexts() {
+      if (synthAudio) synthAudio.ensureAudioReady();
+      if (drumAudio) drumAudio.ensureAudioReady();
+      if (patternAudio) patternAudio.ensureAudioReady();
+    }
+    window.addEventListener('click', resumeAudioContexts, { once: true });
+    window.addEventListener('keydown', resumeAudioContexts, { once: true });
+    return () => {
+      window.removeEventListener('click', resumeAudioContexts);
+      window.removeEventListener('keydown', resumeAudioContexts);
+    };
+  }, [synthAudio, drumAudio, patternAudio]);
+
+  useEffect(() => {
     patternAudio.setMuted(browserMuted);
     if (!browserMuted && lastPatternAudioRef.current && synthsRef.current.some((s) => s.isPlaying)) {
       void patternAudio.playLoop(lastPatternAudioRef.current, false);
