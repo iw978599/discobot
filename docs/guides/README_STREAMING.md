@@ -35,12 +35,20 @@ Discord streaming is implemented and active.
 - Sample-player streaming paths are still limited by the current sample stub implementation.
 
 <!-- AUTO_PR_CHANGELOG_START -->
-### PR #51: Throttle live playback update paths to prevent loop drift during synth/drum parameter edits
+### PR #52: Feat/multi synth save layout redesign
 
-Source branch: `copilot/refactor-optimization-pass`
-Last sync: 2026-07-17T14:19:38.233Z
+Source branch: `feat/multi-synth-save-layout-redesign`
+Last sync: 2026-07-18T12:38:44.155Z
 
 #### Changed files
-- `ui/src/App.tsx` — MODIFIED (+25/-10)
-- `web/src/index.ts` — MODIFIED (+13/-1)
+- `engine/src/types.ts` — MODIFIED (+9/-0)
+- `ui/src/App.css` — MODIFIED (+42/-16)
+- `ui/src/App.tsx` — MODIFIED (+294/-127)
+- `ui/src/components/SynthUnit.css` — MODIFIED (+10/-45)
+- `ui/src/components/SynthUnit.tsx` — MODIFIED (+23/-99)
+- `ui/src/hooks/useDrumAudio.ts` — MODIFIED (+27/-13)
+- `ui/src/hooks/usePatternAudio.ts` — MODIFIED (+29/-6)
+- `ui/src/hooks/useSynthAudio.ts` — MODIFIED (+28/-1)
+- `ui/src/types.ts` — MODIFIED (+1/-0)
+- `web/src/index.ts` — MODIFIED (+44/-26)
 <!-- AUTO_PR_CHANGELOG_END -->
