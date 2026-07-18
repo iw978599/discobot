@@ -100,11 +100,12 @@ export class DrumSynthesizer {
     tempo: number,
     sampleRate: number,
     options: DrumPatternRenderOptions = {}
-  ): Float32Array {
+  ): { left: Float32Array; right: Float32Array } {
     const beatsPerStep = 60 / tempo / 4;
     const stepDuration = beatsPerStep;
     const totalSamples = Math.floor(16 * stepDuration * sampleRate);
-    const mix = new Float32Array(totalSamples);
+    const mixL = new Float32Array(totalSamples);
+    const mixR = new Float32Array(totalSamples);
     const modelVariant = options.modelVariant || 'analog';
     const humanizeAmount = clamp(options.humanizeAmount ?? 0.5, 0, 1);
     const swing = clamp(options.swing ?? 0, 0, 0.75);
@@ -117,6 +118,10 @@ export class DrumSynthesizer {
       if (!track || !track.steps || !track.settings) continue;
       if (track.muted) continue;
       if (hasSolo && !track.solo) continue;
+      const pan = clamp(track.settings.pan ?? 0, -1, 1);
+      const panAngle = (pan + 1) * Math.PI / 4;
+      const panL = Math.cos(panAngle);
+      const panR = Math.sin(panAngle);
       for (let step = 0; step < Math.min(track.steps.length, 16); step++) {
         if (track.steps[step]) {
           hitCount += 1;
@@ -142,26 +147,29 @@ export class DrumSynthesizer {
           const swingOffset = isOddStep ? swing * stepDuration * 0.5 : 0;
           const offset = Math.floor((step * stepDuration + swingOffset) * sampleRate);
           for (let i = 0; i < pcm.length && offset + i < totalSamples; i++) {
-            mix[offset + i] += pcm[i];
+            mixL[offset + i] += pcm[i] * panL;
+            mixR[offset + i] += pcm[i] * panR;
           }
         }
       }
     }
 
     let maxVal = 0;
-    for (let i = 0; i < mix.length; i++) {
-      const abs = Math.abs(mix[i]);
-      if (abs > maxVal) maxVal = abs;
+    for (let i = 0; i < mixL.length; i++) {
+      const absL = Math.abs(mixL[i]);
+      const absR = Math.abs(mixR[i]);
+      if (absL > maxVal) maxVal = absL;
+      if (absR > maxVal) maxVal = absR;
     }
     if (maxVal > 1) {
       const scale = 1 / maxVal;
-      for (let i = 0; i < mix.length; i++) {
-        const x = mix[i] * scale;
-        mix[i] = Math.tanh(x * 1.1) / Math.tanh(1.1);
+      for (let i = 0; i < mixL.length; i++) {
+        mixL[i] = Math.tanh(mixL[i] * scale * 1.1) / Math.tanh(1.1);
+        mixR[i] = Math.tanh(mixR[i] * scale * 1.1) / Math.tanh(1.1);
       }
     }
 
-    return mix;
+    return { left: mixL, right: mixR };
   }
 
   private static mixSampleLayer(base: Float32Array, sampleLayer: Float32Array | undefined, blend: number): Float32Array {

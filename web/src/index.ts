@@ -1092,20 +1092,24 @@ function renderPatternAudio(state: GuildRuntimeState): string | null {
       humanizeAmount: kitVariant === 'modern' ? 0.35 : kitVariant === 'dirty' ? 0.8 : 0.55,
       swing: state.drumSwing,
     });
-    const drumBusDry = new Float32Array(totalSamples);
+    const drumBusDryL = new Float32Array(totalSamples);
+    const drumBusDryR = new Float32Array(totalSamples);
     for (let i = 0; i < totalSamples; i++) {
-      drumBusDry[i] = drumPCM[i % drumPCM.length] * AUDIO_MIXING.DRUM_BOOST_FACTOR * state.drumMasterVolume;
+      drumBusDryL[i] = drumPCM.left[i % drumPCM.left.length] * AUDIO_MIXING.DRUM_BOOST_FACTOR * state.drumMasterVolume;
+      drumBusDryR[i] = drumPCM.right[i % drumPCM.right.length] * AUDIO_MIXING.DRUM_BOOST_FACTOR * state.drumMasterVolume;
     }
-    const processedDrumDry = processDrumBus(drumBusDry, kitVariant);
+    const processedDrumDryL = processDrumBus(drumBusDryL, kitVariant);
+    const processedDrumDryR = processDrumBus(drumBusDryR, kitVariant);
     const drumFx = normalizeDrumFx(state.drumFx);
     for (let i = 0; i < totalSamples; i++) {
-      const sample = processedDrumDry[i];
-      dryPCML[i] += sample;
-      dryPCMR[i] += sample;
-      drumSendPCM.reverb[i] += sample * drumFx.sends.reverb;
-      drumSendPCM.delay[i] += sample * drumFx.sends.delay;
-      drumSendPCM.drive[i] += sample * drumFx.sends.drive;
-      drumSendPCM.phaser[i] += sample * drumFx.sends.phaser;
+      const sampleL = processedDrumDryL[i];
+      const sampleR = processedDrumDryR[i];
+      dryPCML[i] += sampleL;
+      dryPCMR[i] += sampleR;
+      drumSendPCM.reverb[i] += (sampleL + sampleR) * 0.5 * drumFx.sends.reverb;
+      drumSendPCM.delay[i] += (sampleL + sampleR) * 0.5 * drumFx.sends.delay;
+      drumSendPCM.drive[i] += (sampleL + sampleR) * 0.5 * drumFx.sends.drive;
+      drumSendPCM.phaser[i] += (sampleL + sampleR) * 0.5 * drumFx.sends.phaser;
     }
 
     const effectsLoop = normalizeEffectsLoop(state.effectsLoop);
@@ -1231,7 +1235,7 @@ interface GuildStreamingState {
   currentStep: number;
   stepIntervalMs: number;
   timerId: ReturnType<typeof setTimeout> | null;
-  drumLoopPCM: Float32Array;
+  drumLoopPCM: { left: Float32Array; right: Float32Array };
   drumLoopReadOffset: number;
   isStreaming: boolean;
   lastRenderTimeMs: number;
@@ -1264,14 +1268,27 @@ function createStreamingManager(guildId: string, state: GuildRuntimeState): Guil
       : getDrumKitModelVariant(state.selectedDrumKitId) === 'dirty' ? 0.8 : 0.55,
     swing: state.drumSwing,
   });
-  const drumLoop = new Float32Array(totalSamples);
+  const drumLoopL = new Float32Array(totalSamples);
+  const drumLoopR = new Float32Array(totalSamples);
   for (let i = 0; i < totalSamples; i++) {
-    drumLoop[i] = drumPCM[i % drumPCM.length] * AUDIO_MIXING.DRUM_BOOST_FACTOR * state.drumMasterVolume;
+    drumLoopL[i] = drumPCM.left[i % drumPCM.left.length] * AUDIO_MIXING.DRUM_BOOST_FACTOR * state.drumMasterVolume;
+    drumLoopR[i] = drumPCM.right[i % drumPCM.right.length] * AUDIO_MIXING.DRUM_BOOST_FACTOR * state.drumMasterVolume;
   }
   const drumFx = normalizeDrumFx(state.drumFx);
-  const processedDrumLoop = processDrumBus(drumLoop, getDrumKitModelVariant(state.selectedDrumKitId));
+  const effectsLoop = state.effectsLoop;
+  const processedDrumLoopL = processDrumBus(drumLoopL, getDrumKitModelVariant(state.selectedDrumKitId));
+  const processedDrumLoopR = processDrumBus(drumLoopR, getDrumKitModelVariant(state.selectedDrumKitId));
+  const drumWetIn = new Float32Array(totalSamples);
   for (let i = 0; i < totalSamples; i++) {
-    drumLoop[i] = processedDrumLoop[i];
+    const mono = (processedDrumLoopL[i] + processedDrumLoopR[i]) * 0.5;
+    drumWetIn[i] = mono * (drumFx.sends.reverb + drumFx.sends.delay + drumFx.sends.drive + drumFx.sends.phaser);
+  }
+  const drumWetOut = processEffectsLoopBus(drumWetIn, sampleRate, effectsLoop);
+  const drumLoopFinalL = new Float32Array(totalSamples);
+  const drumLoopFinalR = new Float32Array(totalSamples);
+  for (let i = 0; i < totalSamples; i++) {
+    drumLoopFinalL[i] = processedDrumLoopL[i] + drumWetOut[i] * effectsLoop.returns.drums * drumFx.returnLevel;
+    drumLoopFinalR[i] = processedDrumLoopR[i] + drumWetOut[i] * effectsLoop.returns.drums * drumFx.returnLevel;
   }
 
   const patternLengths = Array.from(state.synths.entries())
@@ -1295,7 +1312,7 @@ function createStreamingManager(guildId: string, state: GuildRuntimeState): Guil
     currentStep: 0,
     stepIntervalMs,
     timerId: null,
-    drumLoopPCM: drumLoop,
+    drumLoopPCM: { left: drumLoopFinalL, right: drumLoopFinalR },
     drumLoopReadOffset: 0,
     isStreaming: false,
     lastRenderTimeMs: 0,
@@ -1356,9 +1373,8 @@ function sendStreamingChunk(guildId: string, state: GuildRuntimeState, streaming
   const drumRight = new Float32Array(chunkSamples);
   for (let i = 0; i < chunkSamples; i++) {
     const drumIdx = (streamingState.drumLoopReadOffset + i) % totalBarSamples;
-    const drumSample = streamingState.drumLoopPCM[drumIdx];
-    drumLeft[i] = drumSample;
-    drumRight[i] = drumSample;
+    drumLeft[i] = streamingState.drumLoopPCM.left[drumIdx];
+    drumRight[i] = streamingState.drumLoopPCM.right[drumIdx];
   }
 
   const threshold = AUDIO_MIXING.SOFT_CLIP_THRESHOLD;
@@ -1494,12 +1510,29 @@ function updateStreamingEffectsLoopNow(guildId: string) {
       : getDrumKitModelVariant(state.selectedDrumKitId) === 'dirty' ? 0.8 : 0.55,
     swing: state.drumSwing,
   });
-  const drumLoop = new Float32Array(totalBarSamples);
+  const drumLoopL = new Float32Array(totalBarSamples);
+  const drumLoopR = new Float32Array(totalBarSamples);
   for (let i = 0; i < totalBarSamples; i++) {
-    drumLoop[i] = drumPCM[i % drumPCM.length] * AUDIO_MIXING.DRUM_BOOST_FACTOR * state.drumMasterVolume;
+    drumLoopL[i] = drumPCM.left[i % drumPCM.left.length] * AUDIO_MIXING.DRUM_BOOST_FACTOR * state.drumMasterVolume;
+    drumLoopR[i] = drumPCM.right[i % drumPCM.right.length] * AUDIO_MIXING.DRUM_BOOST_FACTOR * state.drumMasterVolume;
   }
-  const processedDrumLoop = processDrumBus(drumLoop, getDrumKitModelVariant(state.selectedDrumKitId));
-  streamingState.drumLoopPCM = processedDrumLoop;
+  const drumFx = normalizeDrumFx(state.drumFx);
+  const effectsLoop = state.effectsLoop;
+  const processedDrumLoopL = processDrumBus(drumLoopL, getDrumKitModelVariant(state.selectedDrumKitId));
+  const processedDrumLoopR = processDrumBus(drumLoopR, getDrumKitModelVariant(state.selectedDrumKitId));
+  const drumWetIn = new Float32Array(totalBarSamples);
+  for (let i = 0; i < totalBarSamples; i++) {
+    const mono = (processedDrumLoopL[i] + processedDrumLoopR[i]) * 0.5;
+    drumWetIn[i] = mono * (drumFx.sends.reverb + drumFx.sends.delay + drumFx.sends.drive + drumFx.sends.phaser);
+  }
+  const drumWetOut = processEffectsLoopBus(drumWetIn, sampleRate, effectsLoop);
+  const drumLoopFinalL = new Float32Array(totalBarSamples);
+  const drumLoopFinalR = new Float32Array(totalBarSamples);
+  for (let i = 0; i < totalBarSamples; i++) {
+    drumLoopFinalL[i] = processedDrumLoopL[i] + drumWetOut[i] * effectsLoop.returns.drums * drumFx.returnLevel;
+    drumLoopFinalR[i] = processedDrumLoopR[i] + drumWetOut[i] * effectsLoop.returns.drums * drumFx.returnLevel;
+  }
+  streamingState.drumLoopPCM = { left: drumLoopFinalL, right: drumLoopFinalR };
 
   const gcd = (a: number, b: number): number => b === 0 ? a : gcd(b, a % b);
   const patternLengths = Array.from(state.synths.entries())
@@ -2014,7 +2047,7 @@ app.post('/drum/settings', (req, res) => {
   const session = getSession(req);
   const state = getGuildState(session.guildId);
   initAudioEngine(state);
-  const { instrument, settings } = req.body as { instrument: DrumInstrument; settings: { volume?: number; tone?: number; extra?: number; tune?: number; humanize?: number; cymbalType?: 'ride' | 'crash' } };
+  const { instrument, settings } = req.body as { instrument: DrumInstrument; settings: { volume?: number; tone?: number; extra?: number; tune?: number; humanize?: number; pan?: number; cymbalType?: 'ride' | 'crash' } };
   if (!DRUM_INSTRUMENTS.includes(instrument)) return res.status(400).json({ error: 'Invalid instrument' });
   const s = state.drumState[instrument].settings;
   if (settings.volume !== undefined) s.volume = clamp(settings.volume, 0, 1);
@@ -2022,6 +2055,7 @@ app.post('/drum/settings', (req, res) => {
   if (settings.extra !== undefined) s.extra = clamp(settings.extra, 0, 1);
   if (settings.tune !== undefined) s.tune = clamp(settings.tune, -1, 1);
   if (settings.humanize !== undefined) s.humanize = clamp(settings.humanize, 0, 1);
+  if (settings.pan !== undefined) s.pan = clamp(settings.pan, -1, 1);
   if (settings.cymbalType !== undefined) s.cymbalType = settings.cymbalType;
   broadcastToClients({ type: 'drumSettings', data: { guildId: session.guildId, instrument, settings: { ...s } } }, session.guildId);
   updateStreamingEffectsLoop(session.guildId);
@@ -2284,9 +2318,8 @@ app.get('/export/wav', (req, res) => {
       swing: state.drumSwing,
     });
     for (let i = 0; i < totalSamples; i++) {
-      const sample = drumPCM[i % drumPCM.length] * AUDIO_MIXING.DRUM_BOOST_FACTOR * state.drumMasterVolume;
-      fullPCML[i] += sample;
-      fullPCMR[i] += sample;
+      fullPCML[i] += drumPCM.left[i % drumPCM.left.length] * AUDIO_MIXING.DRUM_BOOST_FACTOR * state.drumMasterVolume;
+      fullPCMR[i] += drumPCM.right[i % drumPCM.right.length] * AUDIO_MIXING.DRUM_BOOST_FACTOR * state.drumMasterVolume;
     }
 
     const threshold = AUDIO_MIXING.SOFT_CLIP_THRESHOLD;
