@@ -102,8 +102,13 @@ export function useDrumAudio() {
       const gainNode = ctx.createGain();
       gainNode.gain.value = 1.0;
 
+      const pan = Math.max(-1, Math.min(1, settings.pan ?? 0));
+      const panNode = ctx.createStereoPanner();
+      panNode.pan.value = pan;
+
       source.connect(gainNode);
-      gainNode.connect(getMasterGain());
+      gainNode.connect(panNode);
+      panNode.connect(getMasterGain());
       source.start();
     } catch (error) {
       console.error('Drum playback error:', {
