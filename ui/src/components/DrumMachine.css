@@ -168,6 +168,35 @@
   gap: 0.35rem;
 }
 
+.drum-fill-tools {
+  display: flex;
+  gap: 0.2rem;
+}
+
+.drum-fill-btn {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 4px;
+  color: #888;
+  font-size: 0.6rem;
+  font-weight: 600;
+  padding: 0.15rem 0.35rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  line-height: 1;
+}
+
+.drum-fill-btn:hover {
+  background: #222;
+  border-color: #555;
+  color: #ccc;
+}
+
+.drum-fill-btn:active {
+  background: #333;
+  color: #fff;
+}
+
 .drum-selected-instrument {
   display: flex;
   align-items: center;
@@ -217,6 +246,7 @@
   align-items: flex-start;
   justify-content: center;
   cursor: pointer;
+  position: relative;
   transition: transform 0.08s, box-shadow 0.15s;
   box-shadow: inset 0 -8px 12px rgba(0, 0, 0, 0.22);
 }
@@ -250,6 +280,17 @@
 .drum-step-btn.active .drum-step-led {
   background: var(--drum-color);
   box-shadow: 0 0 8px color-mix(in srgb, var(--drum-color) 65%, transparent);
+}
+
+.drum-step-btn .drum-step-velocity {
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 3px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 1px;
+  pointer-events: none;
 }
 
 .drum-step-btn.current {

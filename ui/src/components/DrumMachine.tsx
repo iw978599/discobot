@@ -22,6 +22,9 @@ export interface DrumMachineProps {
   onDrumFxChange: (fx: Partial<{ sends: Partial<FxSendLevels>; returnLevel: number }>) => void;
   drumEffectsReturn: number;
   onDrumEffectsReturnChange: (value: number) => void;
+  drumSwing: number;
+  onDrumSwingChange: (swing: number) => void;
+  onStepVelocityChange: (instrument: DrumInstrument, step: number, velocity: number) => void;
   onMuteAll: (muted: boolean) => void;
   onSoloAll: () => void;
   drumAudio: ReturnType<typeof import('../hooks/useDrumAudio').useDrumAudio>;
@@ -145,6 +148,9 @@ export default function DrumMachine({
   onDrumFxChange,
   drumEffectsReturn,
   onDrumEffectsReturnChange,
+  onDrumSwingChange,
+  drumSwing,
+  onStepVelocityChange,
   onMuteAll,
   onSoloAll,
   drumAudio,
@@ -153,24 +159,28 @@ export default function DrumMachine({
   const allMuted = INSTRUMENTS.every((inst) => Boolean(drumState[inst].muted));
   const anySolo = INSTRUMENTS.some((inst) => Boolean(drumState[inst].solo));
 
-  const handleStepClick = useCallback((step: number) => {
-    console.log('Step clicked:', selectedInstrument, 'step:', step);
-
+  const handleStepClick = useCallback((step: number, shiftKey: boolean) => {
     const hasSolo = INSTRUMENTS.some((inst) => drumState[inst].solo);
     const selectedTrack = drumState[selectedInstrument];
     const canPreview = !selectedTrack.muted && (!hasSolo || selectedTrack.solo);
 
-    // Play drum hit immediately for instant feedback (before WebSocket roundtrip)
+    if (shiftKey && selectedTrack.steps[step]) {
+      const currentVel = selectedTrack.stepVelocities?.[step] ?? 1;
+      const levels = [0.25, 0.5, 0.75, 1.0];
+      const nextVel = levels[(levels.indexOf(currentVel) + 1) % levels.length] ?? 1;
+      onStepVelocityChange(selectedInstrument, step, nextVel);
+      if (canPreview) drumAudio.playDrumHit(selectedInstrument, selectedTrack.settings, nextVel);
+      return;
+    }
+
     if (canPreview) {
       const settings = selectedTrack.settings;
-      console.log('Playing drum hit for step:', selectedInstrument, settings);
       drumAudio.playDrumHit(selectedInstrument, settings);
     }
 
-    // Then update state (which will send to server)
     const current = drumState[selectedInstrument].steps[step];
     onStepToggle(selectedInstrument, step, !current);
-  }, [drumState, selectedInstrument, onStepToggle, drumAudio]);
+  }, [drumState, selectedInstrument, onStepToggle, drumAudio, onStepVelocityChange]);
 
   const handleInstrumentSelect = useCallback((instrument: DrumInstrument) => {
     console.log('Instrument selected:', instrument);
@@ -257,6 +267,16 @@ export default function DrumMachine({
                 parseInputValue={parsePercent}
                 onChange={onMasterVolumeChange}
                 title="Master volume for all drum instruments"
+              />
+              <DrumKnob
+                label="Swing"
+                value={drumSwing}
+                min={0}
+                max={0.75}
+                displayValue={Math.round(drumSwing * 100) + '%'}
+                parseInputValue={parsePercent}
+                onChange={onDrumSwingChange}
+                title="Swing amount - delays off-beat steps for groove"
               />
               <div className="drum-fx-sends">
                 <DrumKnob
@@ -470,6 +490,66 @@ export default function DrumMachine({
                 />
                 <span>{INSTRUMENT_LABELS[selectedInstrument]}</span>
               </div>
+              <div className="drum-fill-tools">
+                <button
+                  className="drum-fill-btn"
+                  onClick={() => {
+                    const newSteps = drumState[selectedInstrument].steps.map(() => Math.random() < 0.4);
+                    newSteps.forEach((active, i) => {
+                      if (active !== drumState[selectedInstrument].steps[i]) {
+                        onStepToggle(selectedInstrument, i, active);
+                      }
+                    });
+                  }}
+                  title="Random fill for selected instrument"
+                >
+                  Fill
+                </button>
+                <button
+                  className="drum-fill-btn"
+                  onClick={() => {
+                    const steps = [...drumState[selectedInstrument].steps];
+                    const shifted = [steps[15], ...steps.slice(0, 15)];
+                    shifted.forEach((active, i) => {
+                      if (active !== drumState[selectedInstrument].steps[i]) {
+                        onStepToggle(selectedInstrument, i, active);
+                      }
+                    });
+                  }}
+                  title="Shift pattern right"
+                >
+                  &#8594;
+                </button>
+                <button
+                  className="drum-fill-btn"
+                  onClick={() => {
+                    const reversed = [...drumState[selectedInstrument].steps].reverse();
+                    reversed.forEach((active, i) => {
+                      if (active !== drumState[selectedInstrument].steps[i]) {
+                        onStepToggle(selectedInstrument, i, active);
+                      }
+                    });
+                  }}
+                  title="Reverse pattern"
+                >
+                  &#8644;
+                </button>
+                <button
+                  className="drum-fill-btn"
+                  onClick={() => {
+                    const steps = [...drumState[selectedInstrument].steps];
+                    for (let i = 0; i < 8; i++) steps[i + 8] = steps[i];
+                    steps.forEach((active, i) => {
+                      if (active !== drumState[selectedInstrument].steps[i]) {
+                        onStepToggle(selectedInstrument, i, active);
+                      }
+                    });
+                  }}
+                  title="Duplicate first 8 steps to last 8"
+                >
+                  &#8648;
+                </button>
+              </div>
               <div className="drum-step-indicators">
                 {STEPS.map((i) => (
                   <div key={i} className={`drum-step-indicator ${isPlaying && currentStep === i ? 'active' : ''}`}>
@@ -481,15 +561,18 @@ export default function DrumMachine({
             <div className="drum-step-row">
               {STEPS.map((step) => {
                 const active = drumState[selectedInstrument].steps[step];
+                const vel = drumState[selectedInstrument].stepVelocities?.[step] ?? 1;
                 const stepBand = step < 4 ? 'band-a' : step < 8 ? 'band-b' : step < 12 ? 'band-c' : 'band-d';
                 return (
                   <button
                     key={step}
                     className={`drum-step-btn ${stepBand} ${active ? 'active' : ''} ${isPlaying && currentStep === step ? 'current' : ''}`}
                     style={{ '--drum-color': INSTRUMENT_COLORS[selectedInstrument] } as React.CSSProperties}
-                    onClick={() => handleStepClick(step)}
+                    onClick={(e) => handleStepClick(step, e.shiftKey)}
+                    title={active ? `Velocity: ${Math.round(vel * 100)}% (Shift+click to change)` : ''}
                   >
                     <span className="drum-step-led" />
+                    {active && <span className="drum-step-velocity" style={{ height: `${vel * 100}%` }} />}
                   </button>
                 );
               })}

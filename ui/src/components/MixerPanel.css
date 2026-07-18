@@ -1,0 +1,248 @@
+.mixer-panel {
+  background: #181818;
+  border: 1px solid #353535;
+  border-radius: 10px;
+  padding: 0.6rem;
+  min-width: 0;
+}
+
+.mixer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.45rem;
+}
+
+.mixer-header h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #cde2ff;
+}
+
+.mixer-channels {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.mixer-channel {
+  background: #111;
+  border: 1px solid #2f2f2f;
+  border-radius: 8px;
+  padding: 0.4rem 0.35rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 70px;
+}
+
+.mixer-channel-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: #99a4b4;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-align: center;
+}
+
+.mixer-fader-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.mixer-fader {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  width: 22px;
+  height: 60px;
+  appearance: slider-vertical;
+  background: transparent;
+  cursor: pointer;
+}
+
+.mixer-fader::-webkit-slider-track {
+  width: 4px;
+  background: #2a2a2a;
+  border-radius: 2px;
+}
+
+.mixer-fader::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 8px;
+  background: #4a90d9;
+  border-radius: 2px;
+  cursor: grab;
+}
+
+.mixer-fader::-moz-range-track {
+  width: 4px;
+  background: #2a2a2a;
+  border-radius: 2px;
+}
+
+.mixer-fader::-moz-range-thumb {
+  width: 14px;
+  height: 8px;
+  background: #4a90d9;
+  border-radius: 2px;
+  border: none;
+  cursor: grab;
+}
+
+.mixer-fader-value {
+  font-size: 0.6rem;
+  color: #7a8594;
+  font-variant-numeric: tabular-nums;
+}
+
+.mixer-knobs-row {
+  display: flex;
+  gap: 0.3rem;
+  align-items: flex-start;
+}
+
+.mixer-mini-control {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05rem;
+}
+
+.mixer-mini-control label {
+  font-size: 0.55rem;
+  color: #6a7584;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.mixer-pan-slider {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  width: 16px;
+  height: 36px;
+  appearance: slider-vertical;
+  background: transparent;
+  cursor: pointer;
+}
+
+.mixer-pan-slider::-webkit-slider-track {
+  width: 3px;
+  background: #2a2a2a;
+  border-radius: 2px;
+}
+
+.mixer-pan-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 10px;
+  height: 6px;
+  background: #6b7280;
+  border-radius: 2px;
+  cursor: grab;
+}
+
+.mixer-pan-slider::-moz-range-track {
+  width: 3px;
+  background: #2a2a2a;
+  border-radius: 2px;
+}
+
+.mixer-pan-slider::-moz-range-thumb {
+  width: 10px;
+  height: 6px;
+  background: #6b7280;
+  border-radius: 2px;
+  border: none;
+  cursor: grab;
+}
+
+.mixer-mini-value {
+  font-size: 0.5rem;
+  color: #5a6574;
+  font-variant-numeric: tabular-nums;
+}
+
+.mixer-mute-solo {
+  display: flex;
+  gap: 0.15rem;
+}
+
+.mixer-btn {
+  width: 18px;
+  height: 18px;
+  border: 1px solid #3a3a3a;
+  border-radius: 3px;
+  background: #1a1a1a;
+  color: #6a7584;
+  font-size: 0.55rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 1;
+}
+
+.mixer-btn.mute-btn.active {
+  background: #b91c1c;
+  color: #fff;
+  border-color: #dc2626;
+}
+
+.mixer-btn.solo-btn.active {
+  background: #ca8a04;
+  color: #fff;
+  border-color: #eab308;
+}
+
+.mixer-btn:hover {
+  background: #2a2a2a;
+}
+
+.mixer-btn.mute-btn.active:hover {
+  background: #991b1b;
+}
+
+.mixer-btn.solo-btn.active:hover {
+  background: #a16207;
+}
+
+.mixer-drum-indicators {
+  display: flex;
+  gap: 0.15rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.mixer-drum-dot {
+  font-size: 0.5rem;
+  color: #4ade80;
+  background: #1a2a1a;
+  border: 1px solid #2a3a2a;
+  border-radius: 3px;
+  padding: 0.05rem 0.15rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.mixer-drum-dot.muted {
+  color: #6b7280;
+  background: #1a1a1a;
+  border-color: #2a2a2a;
+}
+
+.mixer-drum-dot.solo {
+  color: #facc15;
+  background: #2a2a1a;
+  border-color: #3a3a2a;
+}
+
+@media (max-width: 900px) {
+  .mixer-channels {
+    flex-wrap: wrap;
+  }
+}

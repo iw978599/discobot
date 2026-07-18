@@ -16,6 +16,7 @@ interface DrumHitRenderOptions {
 interface DrumPatternRenderOptions {
   modelVariant?: DrumKitModelVariant;
   humanizeAmount?: number;
+  swing?: number;
   sampleLayers?: Partial<Record<DrumInstrument, Float32Array>>;
 }
 
@@ -106,6 +107,7 @@ export class DrumSynthesizer {
     const mix = new Float32Array(totalSamples);
     const modelVariant = options.modelVariant || 'analog';
     const humanizeAmount = clamp(options.humanizeAmount ?? 0.5, 0, 1);
+    const swing = clamp(options.swing ?? 0, 0, 0.75);
 
     const instruments = Object.keys(drumState) as DrumInstrument[];
     const hasSolo = instruments.some((inst) => Boolean(drumState[inst]?.solo));
@@ -120,7 +122,10 @@ export class DrumSynthesizer {
           hitCount += 1;
           const seedBase = (hitCount + 1) * 97 + (step + 1) * 13 + inst.length * 17;
           const downbeatAccent = step % 4 === 0 ? 1 : 0.88;
-          const velocity = clamp(downbeatAccent + randCentered(seedBase + 3) * 0.08, 0.3, 1.1);
+          const explicitVelocity = track.stepVelocities?.[step];
+          const velocity = explicitVelocity !== undefined
+            ? clamp(explicitVelocity, 0.1, 1)
+            : clamp(downbeatAccent + randCentered(seedBase + 3) * 0.08, 0.3, 1.1);
           const humanize = {
             pitch: randCentered(seedBase + 11) * humanizeAmount * clamp(track.settings.humanize ?? 0.35, 0, 1),
             decay: randCentered(seedBase + 19) * humanizeAmount * clamp(track.settings.humanize ?? 0.35, 0, 1),
@@ -133,7 +138,9 @@ export class DrumSynthesizer {
             sampleLayer: options.sampleLayers?.[inst],
             sampleBlend: modelVariant === 'modern' ? 0.12 : modelVariant === 'dirty' ? 0.2 : 0.08,
           });
-          const offset = Math.floor(step * stepDuration * sampleRate);
+          const isOddStep = step % 2 === 1;
+          const swingOffset = isOddStep ? swing * stepDuration * 0.5 : 0;
+          const offset = Math.floor((step * stepDuration + swingOffset) * sampleRate);
           for (let i = 0; i < pcm.length && offset + i < totalSamples; i++) {
             mix[offset + i] += pcm[i];
           }

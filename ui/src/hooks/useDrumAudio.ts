@@ -63,7 +63,9 @@ export function useDrumAudio() {
     return ctx.state !== 'suspended';
   }
 
-  async function playDrumHit(instrument: DrumInstrument, settings: DrumSettings, muted: boolean = false) {
+  async function playDrumHit(instrument: DrumInstrument, settings: DrumSettings, mutedOrVelocity: boolean | number = false) {
+    const muted = typeof mutedOrVelocity === 'boolean' ? mutedOrVelocity : false;
+    const velocity = typeof mutedOrVelocity === 'number' ? mutedOrVelocity : 1;
     if (muted) return;
 
     try {
@@ -75,7 +77,7 @@ export function useDrumAudio() {
       const sampleRate = ctx.sampleRate;
 
       // Use DrumSynthesizer from engine (no code duplication!)
-      const pcm = DrumSynthesizer.renderHit(instrument, settings, sampleRate);
+      const pcm = DrumSynthesizer.renderHit(instrument, settings, sampleRate, { velocity });
 
       let maxVal = 0;
       for (let i = 0; i < pcm.length; i++) {

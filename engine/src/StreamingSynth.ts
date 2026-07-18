@@ -31,6 +31,9 @@ export class StreamingSynth {
   private combFeedbacks: number[] = [];
 
   private phaserLfoPhase: number = 0;
+  private phaserBuffers: Float32Array[] = [];
+  private phaserWriteIndices: number[] = [];
+  private phaserReadIndices: number[] = [];
 
   private noteOffQueue: Array<{ freq: number; releaseAtSample: number }> = [];
   private totalSamplesRendered: number = 0;
@@ -92,6 +95,11 @@ export class StreamingSynth {
     this.combBuffers = combDelays.map(len => new Float32Array(Math.max(1, Math.floor(len * this.sampleRate))));
     this.combIndices = new Array(combDelays.length).fill(0);
     this.combFeedbacks = combDelays.map(() => clamp(0.55 + this.params.effects.reverb.decay * 0.035, 0.5, 0.92));
+
+    const phaserDelays = [0.002, 0.003, 0.004, 0.005];
+    this.phaserBuffers = phaserDelays.map(len => new Float32Array(Math.max(1, Math.floor(len * this.sampleRate))));
+    this.phaserWriteIndices = new Array(phaserDelays.length).fill(0);
+    this.phaserReadIndices = new Array(phaserDelays.length).fill(0);
   }
 
   private updateDelayBuffer() {
@@ -154,10 +162,8 @@ export class StreamingSynth {
     const PITCH_LFO_MAX = 1200;
     const FILTER_LFO_MAX = 2;
     const FxReturn = clamp(p.fxReturn ?? 0.85, 0, 1);
-    const pan = clamp(p.pan ?? 0, -1, 1);
-    const panAngle = (pan + 1) * Math.PI / 4;
-    const panL = Math.cos(panAngle);
-    const panR = Math.sin(panAngle);
+    const globalPan = clamp(p.pan ?? 0, -1, 1);
+    const spread = clamp(p.spread ?? 0, 0, 1);
 
     const driveCurve = p.fxSends.drive > 0 ? this.computeWaveshaperCurve(p.fxSends.drive * 0.8) : null;
 
@@ -210,8 +216,15 @@ export class StreamingSynth {
 
         const vol = env * voice.velocity * clamp(p.gain, 0, 2) * AUDIO_MIXING.SYNTH_MASTER_VOLUME;
         const out = filtered * vol;
-        dryL += out * panL;
-        dryR += out * panR;
+
+        const freqNorm = clamp((Math.log2(voice.frequency) - Math.log2(80)) / (Math.log2(8000) - Math.log2(80)), 0, 1);
+        const spreadPan = spread > 0 ? (freqNorm * 2 - 1) * spread : 0;
+        const voicePan = clamp(globalPan + spreadPan, -1, 1);
+        const voicePanAngle = (voicePan + 1) * Math.PI / 4;
+        const voicePanL = Math.cos(voicePanAngle);
+        const voicePanR = Math.sin(voicePanAngle);
+        dryL += out * voicePanL;
+        dryR += out * voicePanR;
 
         voice.lfo1Phase += p.lfo1.rate * dt;
         voice.lfo2Phase += p.lfo2.rate * dt;
@@ -269,12 +282,35 @@ export class StreamingSynth {
       if (p.fxSends.phaser > 0) {
         const phaserMix = p.fxSends.phaser * FxReturn;
         if (phaserMix > 0) {
-          this.phaserLfoPhase += (this.params.filter.frequency > 0 ? 0.45 : 0.45) * dt;
+          this.phaserLfoPhase += 0.45 * dt;
           const lfoVal = Math.sin(2 * Math.PI * this.phaserLfoPhase);
-          const delayTime = 0.003 + lfoVal * 0.002;
-          const delaySamples = Math.floor(delayTime * this.sampleRate);
-          wetL += dryL * lfoVal * phaserMix * 0.3;
-          wetR += dryR * lfoVal * phaserMix * 0.3;
+
+          let phaserL = dryL;
+          let phaserR = dryR;
+
+          for (let s = 0; s < 4; s++) {
+            const baseDelay = 0.001 + s * 0.0015;
+            const modDepth = 0.002 * (s + 1);
+            const delayTime = baseDelay + lfoVal * modDepth;
+            const delaySamples = Math.max(1, Math.floor(delayTime * this.sampleRate));
+            const buf = this.phaserBuffers[s];
+            const bufLen = buf.length;
+
+            buf[this.phaserWriteIndices[s]] = phaserL;
+            const readPos = (this.phaserWriteIndices[s] - delaySamples + bufLen * 2) % bufLen;
+            const readIdx = Math.floor(readPos);
+            const frac = readPos - readIdx;
+            const delayed = buf[readIdx] * (1 - frac) + buf[(readIdx + 1) % bufLen] * frac;
+
+            const feedback = 0.3;
+            phaserL = delayed * feedback + phaserL * (1 - feedback);
+            phaserR = delayed * feedback + phaserR * (1 - feedback);
+
+            this.phaserWriteIndices[s] = (this.phaserWriteIndices[s] + 1) % bufLen;
+          }
+
+          wetL += phaserL * phaserMix * 0.5;
+          wetR += phaserR * phaserMix * 0.5;
         }
       }
 

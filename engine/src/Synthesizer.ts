@@ -97,6 +97,34 @@ export class Synthesizer {
     return output;
   }
 
+  static applyFilterType(samples: Float32Array, sampleRate: number, cutoff: number, q: number, type: string): Float32Array {
+    if (type === 'lowpass') return this.applyLowpass(samples, sampleRate, cutoff);
+    const output = new Float32Array(samples.length);
+    const dt = 1 / sampleRate;
+    const w0 = 2 * Math.PI * cutoff / sampleRate;
+    const sinW0 = Math.sin(w0);
+    const cosW0 = Math.cos(w0);
+    const alpha = sinW0 / (2 * q);
+    let hp = 0, bp = 0, lp = samples[0];
+    for (let i = 0; i < samples.length; i++) {
+      const x = samples[i];
+      const xPrev = i > 0 ? samples[i - 1] : x;
+      const lpPrev = i > 0 ? lp : x;
+      const bpPrev = i > 0 ? bp : 0;
+      const hpPrev = i > 0 ? hp : x;
+      bp = bpPrev + w0 * hpPrev;
+      lp = lpPrev + w0 * bpPrev;
+      hp = x - lpPrev - q * bp;
+      switch (type) {
+        case 'highpass': output[i] = hp; break;
+        case 'bandpass': output[i] = bp; break;
+        case 'notch': output[i] = x - bp; break;
+        default: output[i] = lp; break;
+      }
+    }
+    return output;
+  }
+
   private static applyDelay(samples: Float32Array, sampleRate: number, time: number, feedback: number, wet: number): Float32Array {
     const output = new Float32Array(samples.length);
     const delaySamples = Math.max(1, Math.floor(time * sampleRate));
@@ -206,10 +234,30 @@ export class Synthesizer {
         20000
       );
       const dt = 1 / sampleRate;
-      const rc = 1 / (2 * Math.PI * modulatedCutoff);
-      const alpha = dt / (rc + dt);
-      filtered = filtered + alpha * (shapedSamples[i] - filtered);
-      output[i] = filtered;
+      const filterType = this.parameters.filter.type || 'lowpass';
+      const w0 = 2 * Math.PI * modulatedCutoff / sampleRate;
+      const sinW0 = Math.sin(w0);
+      const q = clamp(this.parameters.filter.q, 0.1, 20);
+      const alpha = sinW0 / (2 * q);
+      if (filterType === 'lowpass') {
+        const rc = 1 / (2 * Math.PI * modulatedCutoff);
+        const a = dt / (rc + dt);
+        filtered = filtered + a * (shapedSamples[i] - filtered);
+        output[i] = filtered;
+      } else {
+        const x = shapedSamples[i];
+        const xPrev = i > 0 ? shapedSamples[i - 1] : x;
+        const bp = filtered + w0 * (i > 0 ? output[i - 1] : 0);
+        const lp = (i > 0 ? filtered : x) + w0 * bp;
+        const hp = x - (i > 0 ? filtered : x) - q * bp;
+        filtered = lp;
+        switch (filterType) {
+          case 'highpass': output[i] = hp; break;
+          case 'bandpass': output[i] = bp; break;
+          case 'notch': output[i] = x - bp; break;
+          default: output[i] = lp; break;
+        }
+      }
     }
 
     let effected: Float32Array<ArrayBufferLike> = output;

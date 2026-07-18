@@ -137,6 +137,7 @@ interface GuildRuntimeState {
   drumState: DrumState;
   selectedDrumKitId: DrumKitId;
   drumMasterVolume: number;
+  drumSwing: number;
   drumFx: {
     sends: FxSendLevels;
     returnLevel: number;
@@ -491,6 +492,7 @@ function normalizeDrumState(state: DrumState): DrumState {
     if (!src) continue;
     base[inst] = {
       steps: Array.isArray(src.steps) ? src.steps.slice(0, 16) : base[inst].steps,
+      stepVelocities: Array.isArray(src.stepVelocities) ? src.stepVelocities.slice(0, 16) : undefined,
       settings: {
         volume: clamp(src.settings?.volume ?? base[inst].settings.volume, 0, 1),
         tone: clamp(src.settings?.tone ?? base[inst].settings.tone, 0, 1),
@@ -547,6 +549,7 @@ function createGuildRuntimeState(guildId: string): GuildRuntimeState {
     drumState: createDefaultDrumState(),
     selectedDrumKitId: DEFAULT_DRUM_KIT_ID,
     drumMasterVolume: 1,
+    drumSwing: 0,
     drumFx: createDefaultDrumFx(),
     effectsLoop: createDefaultEffectsLoop(),
     globalTempo: 120,
@@ -1044,7 +1047,16 @@ function renderPatternAudio(state: GuildRuntimeState): string | null {
       const mix = state.synthMixState.get(id) || { muted: false, solo: false };
       if (mix.muted) continue;
       if (hasSynthSolo && !mix.solo) continue;
-      const synthParams = synthData.synth.getParameters();
+      const synthParams = { ...synthData.synth.getParameters() };
+      const origLfo1Rate = synthParams.lfo1.rate;
+      const origLfo2Rate = synthParams.lfo2.rate;
+      if (synthParams.lfo1.sync) {
+        synthParams.lfo1.rate = tempo * 4 / Math.max(1, Math.round(synthParams.lfo1.rate));
+      }
+      if (synthParams.lfo2.sync) {
+        synthParams.lfo2.rate = tempo * 4 / Math.max(1, Math.round(synthParams.lfo2.rate));
+      }
+      synthData.synth.updateParameters(synthParams);
       const pan = clamp(synthParams.pan ?? 0, -1, 1);
       const panAngle = (pan + 1) * Math.PI / 4;
       const panL = Math.cos(panAngle);
@@ -1071,12 +1083,14 @@ function renderPatternAudio(state: GuildRuntimeState): string | null {
           }
         }
       }
+      synthData.synth.updateParameters({ lfo1: { ...synthData.synth.getParameters().lfo1, rate: origLfo1Rate }, lfo2: { ...synthData.synth.getParameters().lfo2, rate: origLfo2Rate } });
     }
 
     const kitVariant = getDrumKitModelVariant(state.selectedDrumKitId);
     const drumPCM = DrumSynthesizer.renderPattern(state.drumState, tempo, sampleRate, {
       modelVariant: kitVariant,
       humanizeAmount: kitVariant === 'modern' ? 0.35 : kitVariant === 'dirty' ? 0.8 : 0.55,
+      swing: state.drumSwing,
     });
     const drumBusDry = new Float32Array(totalSamples);
     for (let i = 0; i < totalSamples; i++) {
@@ -1248,6 +1262,7 @@ function createStreamingManager(guildId: string, state: GuildRuntimeState): Guil
     modelVariant: getDrumKitModelVariant(state.selectedDrumKitId),
     humanizeAmount: getDrumKitModelVariant(state.selectedDrumKitId) === 'modern' ? 0.35
       : getDrumKitModelVariant(state.selectedDrumKitId) === 'dirty' ? 0.8 : 0.55,
+    swing: state.drumSwing,
   });
   const drumLoop = new Float32Array(totalSamples);
   for (let i = 0; i < totalSamples; i++) {
@@ -1339,8 +1354,6 @@ function sendStreamingChunk(guildId: string, state: GuildRuntimeState, streaming
 
   const drumLeft = new Float32Array(chunkSamples);
   const drumRight = new Float32Array(chunkSamples);
-  const effectsLoop = normalizeEffectsLoop(state.effectsLoop);
-  const drumFx = normalizeDrumFx(state.drumFx);
   for (let i = 0; i < chunkSamples; i++) {
     const drumIdx = (streamingState.drumLoopReadOffset + i) % totalBarSamples;
     const drumSample = streamingState.drumLoopPCM[drumIdx];
@@ -1354,8 +1367,8 @@ function sendStreamingChunk(guildId: string, state: GuildRuntimeState, streaming
   const fullLeft = new Float32Array(chunkSamples);
   const fullRight = new Float32Array(chunkSamples);
   for (let i = 0; i < chunkSamples; i++) {
-    let mixL = synthChunk.left[i] + drumLeft[i] * effectsLoop.returns.drums * drumFx.returnLevel;
-    let mixR = synthChunk.right[i] + drumRight[i] * effectsLoop.returns.drums * drumFx.returnLevel;
+    let mixL = synthChunk.left[i] + drumLeft[i];
+    let mixR = synthChunk.right[i] + drumRight[i];
     mixL *= STREAMING_MASTER_GAIN;
     mixR *= STREAMING_MASTER_GAIN;
     if (mixL > threshold) mixL = threshold + (mixL - threshold) * factor;
@@ -1410,9 +1423,6 @@ function streamingLoop(guildId: string) {
     streamingState.samplesSinceLastChunk -= chunkSamples;
     chunksSent++;
   }
-  if (chunksSent === 0) {
-    streamingState.samplesSinceLastChunk -= chunkSamples;
-  }
 
   streamingState.timerId = setTimeout(() => streamingLoop(guildId), 16);
 }
@@ -1455,7 +1465,17 @@ function updateStreamingSynthParams(guildId: string, synthId: number, params: Pa
   const streamingState = guildStreamingStates.get(guildId);
   if (!streamingState) return;
   const synth = streamingState.streamingSynths.get(synthId);
-  if (synth) synth.updateParameters(params);
+  if (!synth) return;
+  const state = getGuildState(guildId);
+  const bpm = clamp(state.globalTempo || 120, 20, 400);
+  const converted = { ...params };
+  if (converted.lfo1?.sync && converted.lfo1.rate !== undefined) {
+    converted.lfo1 = { ...converted.lfo1, rate: bpm * 4 / Math.max(1, Math.round(converted.lfo1.rate)) };
+  }
+  if (converted.lfo2?.sync && converted.lfo2.rate !== undefined) {
+    converted.lfo2 = { ...converted.lfo2, rate: bpm * 4 / Math.max(1, Math.round(converted.lfo2.rate)) };
+  }
+  synth.updateParameters(converted);
 }
 
 const streamingEffectsLoopUpdateThrottles = new Map<string, () => void>();
@@ -1472,6 +1492,7 @@ function updateStreamingEffectsLoopNow(guildId: string) {
     modelVariant: getDrumKitModelVariant(state.selectedDrumKitId),
     humanizeAmount: getDrumKitModelVariant(state.selectedDrumKitId) === 'modern' ? 0.35
       : getDrumKitModelVariant(state.selectedDrumKitId) === 'dirty' ? 0.8 : 0.55,
+    swing: state.drumSwing,
   });
   const drumLoop = new Float32Array(totalBarSamples);
   for (let i = 0; i < totalBarSamples; i++) {
@@ -1871,9 +1892,10 @@ app.post('/synth/:synthId/tempo', (req, res) => {
     return res.status(400).json({ error: 'Invalid tempo', message: 'Tempo must be between 20 and 400 BPM' });
   }
   state.globalTempo = tempo;
-  for (const [, data] of state.synths) {
+  for (const [id, data] of state.synths) {
     data.sequencer.setTempo(tempo);
     data.pattern = { ...data.pattern, tempo };
+    updateStreamingSynthParams(session.guildId, id, data.synth.getParameters());
   }
   broadcastToClients({ type: 'tempoChange', data: { guildId: session.guildId, tempo } }, session.guildId);
   res.json({ success: true });
@@ -1972,6 +1994,22 @@ app.post('/drum/step', (req, res) => {
   res.json({ success: true });
 });
 
+app.post('/drum/step-velocity', (req, res) => {
+  const session = getSession(req);
+  const state = getGuildState(session.guildId);
+  initAudioEngine(state);
+  const { instrument, step, velocity } = req.body as { instrument: DrumInstrument; step: number; velocity: number };
+  if (!DRUM_INSTRUMENTS.includes(instrument) || step < 0 || step > 15) {
+    return res.status(400).json({ error: 'Invalid instrument or step' });
+  }
+  if (!state.drumState[instrument].stepVelocities) {
+    state.drumState[instrument].stepVelocities = new Array(16).fill(1);
+  }
+  state.drumState[instrument].stepVelocities![step] = clamp(velocity, 0.1, 1);
+  broadcastToClients({ type: 'drumStepVelocity', data: { guildId: session.guildId, instrument, step, velocity } }, session.guildId);
+  res.json({ success: true });
+});
+
 app.post('/drum/settings', (req, res) => {
   const session = getSession(req);
   const state = getGuildState(session.guildId);
@@ -2000,6 +2038,20 @@ app.post('/drum/mix', (req, res) => {
   if (typeof muted === 'boolean') track.muted = muted;
   if (typeof solo === 'boolean') track.solo = solo;
   broadcastToClients({ type: 'drumMix', data: { guildId: session.guildId, instrument, muted: Boolean(track.muted), solo: Boolean(track.solo) } }, session.guildId);
+  res.json({ success: true });
+});
+
+app.post('/drum/swing', (req, res) => {
+  const session = getSession(req);
+  const state = getGuildState(session.guildId);
+  initAudioEngine(state);
+  const { swing } = req.body as { swing: number };
+  if (typeof swing !== 'number' || swing < 0 || swing > 0.75) {
+    return res.status(400).json({ error: 'Invalid swing value (0-0.75)' });
+  }
+  state.drumSwing = clamp(swing, 0, 0.75);
+  broadcastToClients({ type: 'drumSwing', data: { guildId: session.guildId, swing: state.drumSwing } }, session.guildId);
+  updateStreamingEffectsLoop(session.guildId);
   res.json({ success: true });
 });
 
@@ -2187,6 +2239,116 @@ app.delete('/patterns/saved/:id', (req, res) => {
   res.json({ success: true });
 });
 
+app.get('/export/wav', (req, res) => {
+  const session = getSession(req);
+  const state = getGuildState(session.guildId);
+  initAudioEngine(state);
+  try {
+    const sampleRate = AUDIO_CONTEXT.RENDER_SAMPLE_RATE;
+    const tempo = clamp(state.globalTempo || 120, 20, 400);
+    const barDuration = (60 / tempo) * 4;
+    const totalSamples = Math.floor(barDuration * sampleRate);
+    const fullPCML = new Float32Array(totalSamples);
+    const fullPCMR = new Float32Array(totalSamples);
+
+    for (const [id, synthData] of state.synths.entries()) {
+      const mix = state.synthMixState.get(id);
+      if (mix?.muted) continue;
+      const hasSolo = Array.from(state.synthMixState.values()).some(m => m.solo);
+      if (hasSolo && !mix?.solo) continue;
+      const synthParams = synthData.synth.getParameters();
+      const pan = clamp(synthParams.pan ?? 0, -1, 1);
+      const panAngle = (pan + 1) * Math.PI / 4;
+      const panL = Math.cos(panAngle);
+      const panR = Math.sin(panAngle);
+      const stepCount = Math.max(1, synthData.pattern?.steps?.length || 16);
+      const stepDuration = barDuration / stepCount;
+      for (let i = 0; i < (synthData.pattern?.steps?.length || 0); i++) {
+        const step = synthData.pattern.steps[i];
+        if (step.active && step.note) {
+          const noteDur = Math.max(stepDuration - 0.01, 0.05);
+          const notePCM = synthData.synth.renderNote(step.note, noteDur, step.velocity, sampleRate, { applyInsertEffects: false });
+          const offset = Math.floor(i * stepDuration * sampleRate);
+          for (let j = 0; j < notePCM.length && offset + j < totalSamples; j++) {
+            fullPCML[offset + j] += notePCM[j] * panL;
+            fullPCMR[offset + j] += notePCM[j] * panR;
+          }
+        }
+      }
+    }
+
+    const kitVariant = getDrumKitModelVariant(state.selectedDrumKitId);
+    const drumPCM = DrumSynthesizer.renderPattern(state.drumState, tempo, sampleRate, {
+      modelVariant: kitVariant,
+      humanizeAmount: kitVariant === 'modern' ? 0.35 : kitVariant === 'dirty' ? 0.8 : 0.55,
+      swing: state.drumSwing,
+    });
+    for (let i = 0; i < totalSamples; i++) {
+      const sample = drumPCM[i % drumPCM.length] * AUDIO_MIXING.DRUM_BOOST_FACTOR * state.drumMasterVolume;
+      fullPCML[i] += sample;
+      fullPCMR[i] += sample;
+    }
+
+    const threshold = AUDIO_MIXING.SOFT_CLIP_THRESHOLD;
+    const factor = AUDIO_MIXING.SOFT_CLIP_FACTOR;
+    for (let i = 0; i < totalSamples; i++) {
+      if (fullPCML[i] > threshold) fullPCML[i] = threshold + (fullPCML[i] - threshold) * factor;
+      if (fullPCML[i] < -threshold) fullPCML[i] = -threshold + (fullPCML[i] + threshold) * factor;
+      if (fullPCMR[i] > threshold) fullPCMR[i] = threshold + (fullPCMR[i] - threshold) * factor;
+      if (fullPCMR[i] < -threshold) fullPCMR[i] = -threshold + (fullPCMR[i] + threshold) * factor;
+    }
+
+    let peak = 0;
+    for (let i = 0; i < totalSamples; i++) {
+      const absL = Math.abs(fullPCML[i]);
+      const absR = Math.abs(fullPCMR[i]);
+      if (absL > peak) peak = absL;
+      if (absR > peak) peak = absR;
+    }
+    if (peak > 1) {
+      const scale = 1 / peak;
+      for (let i = 0; i < totalSamples; i++) {
+        fullPCML[i] *= scale;
+        fullPCMR[i] *= scale;
+      }
+    }
+
+    const numChannels = 2;
+    const bitsPerSample = 16;
+    const byteRate = sampleRate * numChannels * bitsPerSample / 8;
+    const blockAlign = numChannels * bitsPerSample / 8;
+    const dataSize = totalSamples * blockAlign;
+    const wavBuffer = Buffer.alloc(44 + dataSize);
+    const writeStr = (off: number, str: string) => wavBuffer.write(str, off, 'ascii');
+    writeStr(0, 'RIFF');
+    wavBuffer.writeUInt32LE(36 + dataSize, 4);
+    writeStr(8, 'WAVE');
+    writeStr(12, 'fmt ');
+    wavBuffer.writeUInt32LE(16, 16);
+    wavBuffer.writeUInt16LE(1, 20);
+    wavBuffer.writeUInt16LE(numChannels, 22);
+    wavBuffer.writeUInt32LE(sampleRate, 24);
+    wavBuffer.writeUInt32LE(byteRate, 28);
+    wavBuffer.writeUInt16LE(blockAlign, 32);
+    wavBuffer.writeUInt16LE(bitsPerSample, 34);
+    writeStr(36, 'data');
+    wavBuffer.writeUInt32LE(dataSize, 40);
+    for (let i = 0; i < totalSamples; i++) {
+      const valL = clamp(Math.round(fullPCML[i] * 32767), -32768, 32767);
+      const valR = clamp(Math.round(fullPCMR[i] * 32767), -32768, 32767);
+      wavBuffer.writeInt16LE(valL, 44 + i * 4);
+      wavBuffer.writeInt16LE(valR, 44 + i * 4 + 2);
+    }
+
+    res.setHeader('Content-Type', 'audio/wav');
+    res.setHeader('Content-Disposition', 'attachment; filename="discobot-export.wav"');
+    res.send(wavBuffer);
+  } catch (err) {
+    console.error('WAV export failed:', err);
+    res.status(500).json({ error: 'Export failed' });
+  }
+});
+
 app.post('/sequencer/play', (req, res) => {
   const session = getSession(req);
   const state = getGuildState(session.guildId);
@@ -2239,9 +2401,10 @@ app.post('/tempo', (req, res) => {
   }
 
   state.globalTempo = tempo;
-  for (const [, data] of state.synths) {
+  for (const [id, data] of state.synths) {
     data.sequencer.setTempo(tempo);
     data.pattern = { ...data.pattern, tempo };
+    updateStreamingSynthParams(session.guildId, id, data.synth.getParameters());
   }
   broadcastToClients({ type: 'tempoChange', data: { guildId: session.guildId, tempo } }, session.guildId);
   res.json({ success: true });

@@ -18,12 +18,14 @@ class SynthProcessor extends AudioWorkletProcessor {
       detune: 0,
       filterFreq: 5000,
       filterQ: 1,
+      filterType: 'lowpass',
       attack: 0.1,
       decay: 0.2,
       sustain: 0.5,
       release: 1.0,
       gain: 1.0,
       pan: 0,
+      spread: 0,
       portamentoEnabled: false,
       portamentoGlide: 0.05,
       lfo1Enabled: false,
@@ -149,10 +151,8 @@ class SynthProcessor extends AudioWorkletProcessor {
     const len = left.length;
     const dt = 1 / sampleRate;
     const p = this.params;
-    const pan = Math.max(-1, Math.min(1, p.pan));
-    const panAngle = (pan + 1) * Math.PI / 4;
-    const panL = Math.cos(panAngle);
-    const panR = Math.sin(panAngle);
+    const globalPan = Math.max(-1, Math.min(1, p.pan));
+    const spread = Math.max(0, Math.min(1, p.spread || 0));
 
     for (let i = 0; i < len; i++) {
       let dryL = 0;
@@ -201,9 +201,19 @@ class SynthProcessor extends AudioWorkletProcessor {
         voice.filterMemory = voice.filterMemory + alpha * (sample - voice.filterMemory);
 
         const vol = env * voice.velocity * Math.max(0, Math.min(1, p.gain)) * 0.5;
-        const out = voice.filterMemory * vol;
-        dryL += out * panL;
-        dryR += out * panR;
+        let filtered;
+        const ft = p.filterType || 'lowpass';
+        if (ft === 'highpass') filtered = sample - voice.filterMemory;
+        else if (ft === 'bandpass') filtered = voice.filterMemory * 2 - sample;
+        else if (ft === 'notch') filtered = sample - voice.filterMemory + voice.filterMemory * 0.5;
+        else filtered = voice.filterMemory;
+        const out = filtered * vol;
+        const freqNorm = Math.max(0, Math.min(1, (Math.log2(voice.frequency) - Math.log2(80)) / (Math.log2(8000) - Math.log2(80))));
+        const spreadPan = spread > 0 ? (freqNorm * 2 - 1) * spread : 0;
+        const voicePan = Math.max(-1, Math.min(1, globalPan + spreadPan));
+        const voicePanAngle = (voicePan + 1) * Math.PI / 4;
+        dryL += out * Math.cos(voicePanAngle);
+        dryR += out * Math.sin(voicePanAngle);
 
         voice.lfo1Phase += p.lfo1Rate * dt;
         voice.lfo2Phase += p.lfo2Rate * dt;

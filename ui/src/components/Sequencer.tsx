@@ -153,6 +153,12 @@ export default function Sequencer({
               onClick={() => onStepChange(index)}
             >
               {step.note || ''}
+              {step.note && (
+                <div
+                  className="step-velocity-bar"
+                  style={{ height: `${Math.max(2, (step.velocity ?? 0.7) * 100)}%` }}
+                />
+              )}
             </button>
             <div className={`step-light ${currentStep === index && isPlaying ? 'on' : ''}`} />
           </div>

@@ -257,6 +257,46 @@
   outline: none;
 }
 
+.tempo-display-group {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.tempo-display-group .tempo-led {
+  margin: 0;
+}
+
+.tempo-led.tap-flash {
+  border-color: #00d4ff;
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.5);
+}
+
+.tap-tempo-btn {
+  background: #1a1a1a;
+  border: 1px solid #444;
+  border-radius: 4px;
+  padding: 0.25rem 0.45rem;
+  color: #888;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: all 0.15s;
+  line-height: 1;
+}
+
+.tap-tempo-btn:hover {
+  background: #222;
+  border-color: #00d4ff;
+  color: #00d4ff;
+}
+
+.tap-tempo-btn:active {
+  background: #00d4ff;
+  color: #111;
+}
+
 .save-button {
   background: none;
   border: 1px solid #4a4a4a;
