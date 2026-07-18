@@ -173,20 +173,11 @@ docker-compose logs -f
 → Try **Render free tier** or self-host
 
 <!-- AUTO_PR_CHANGELOG_START -->
-### PR #52: Feat/multi synth save layout redesign
+### PR #53: Move sequencer+keyboard above synth control panels
 
 Source branch: `feat/multi-synth-save-layout-redesign`
-Last sync: 2026-07-18T12:38:44.155Z
+Last sync: 2026-07-18T13:43:27.722Z
 
 #### Changed files
-- `engine/src/types.ts` — MODIFIED (+9/-0)
-- `ui/src/App.css` — MODIFIED (+42/-16)
-- `ui/src/App.tsx` — MODIFIED (+294/-127)
-- `ui/src/components/SynthUnit.css` — MODIFIED (+10/-45)
-- `ui/src/components/SynthUnit.tsx` — MODIFIED (+23/-99)
-- `ui/src/hooks/useDrumAudio.ts` — MODIFIED (+27/-13)
-- `ui/src/hooks/usePatternAudio.ts` — MODIFIED (+29/-6)
-- `ui/src/hooks/useSynthAudio.ts` — MODIFIED (+28/-1)
-- `ui/src/types.ts` — MODIFIED (+1/-0)
-- `web/src/index.ts` — MODIFIED (+44/-26)
+- `ui/src/App.tsx` — MODIFIED (+30/-30)
 <!-- AUTO_PR_CHANGELOG_END -->
