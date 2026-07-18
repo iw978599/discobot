@@ -154,3 +154,18 @@ Post your review as a PR comment using:
 ```bash
 gh pr comment <number> --body-file review.md
 ```
+
+<!-- AUTO_PR_CHANGELOG_START -->
+### PR #55: Scrollable drum panel, compact MIDI bar, shorter keyboard/piano-roll
+
+Source branch: `feat/ui-layout-refinements`
+Last sync: 2026-07-18T16:42:19.654Z
+
+#### Changed files
+- `ui/src/App.css` — MODIFIED (+1/-0)
+- `ui/src/components/Keyboard.css` — MODIFIED (+5/-5)
+- `ui/src/components/KeyboardPanel.css` — MODIFIED (+1/-1)
+- `ui/src/components/MidiPanel.css` — MODIFIED (+25/-38)
+- `ui/src/components/MidiPanel.tsx` — MODIFIED (+35/-52)
+- `ui/src/components/PianoRoll.css` — MODIFIED (+1/-1)
+<!-- AUTO_PR_CHANGELOG_END -->
