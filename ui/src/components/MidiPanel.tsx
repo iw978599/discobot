@@ -36,63 +36,46 @@ export default function MidiPanel({
   lastMessage,
   error,
 }: MidiPanelProps) {
-  if (!supported) {
-    return <div className="midi-panel unsupported">MIDI not supported in this browser</div>;
-  }
+  if (!supported) return null;
+  if (!connected && devices.length === 0) return null;
 
   return (
     <div className="midi-panel">
-      <div className="midi-row">
-        <label>MIDI</label>
-        <select value={selectedDeviceId} onChange={(e) => onDeviceChange(e.target.value)}>
-          <option value={allDevicesId}>All devices</option>
-          {devices.map((device) => (
-            <option key={device.id} value={device.id}>{device.name}</option>
-          ))}
-        </select>
-        <span className={`midi-status ${connected ? 'connected' : 'disconnected'}`}>
-          {connected ? 'Connected' : 'Disconnected'}
-        </span>
+      <span className={`midi-status-dot ${connected ? 'connected' : ''}`} />
+      <select value={selectedDeviceId} onChange={(e) => onDeviceChange(e.target.value)}>
+        <option value={allDevicesId}>All</option>
+        {devices.map((device) => (
+          <option key={device.id} value={device.id}>{device.name}</option>
+        ))}
+      </select>
+      <div className="midi-mode-buttons">
+        {(['live', 'record', 'step'] as MidiMode[]).map((value) => (
+          <button
+            key={value}
+            className={mode === value ? 'active' : ''}
+            onClick={() => onModeChange(value)}
+          >
+            {value}
+          </button>
+        ))}
       </div>
-
-      <div className="midi-row">
-        <label>Mode</label>
-        <div className="midi-mode-buttons">
-          {(['live', 'record', 'step'] as MidiMode[]).map((value) => (
-            <button
-              key={value}
-              className={mode === value ? 'active' : ''}
-              onClick={() => onModeChange(value)}
-            >
-              {value}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="midi-row">
-        <label>Channel</label>
-        <select value={channel} onChange={(e) => onChannelChange(Number(e.target.value))}>
-          {Array.from({ length: 16 }, (_, i) => i + 1).map((value) => (
-            <option key={value} value={value}>Ch {value}</option>
-          ))}
-        </select>
-
-        <label>Synth</label>
-        <select
-          value={targetSynthId ?? synthIds[0] ?? 1}
-          onChange={(e) => onTargetSynthChange(Number(e.target.value))}
-        >
-          {synthIds.map((id) => (
-            <option key={id} value={id}>Synth {id}</option>
-          ))}
-        </select>
-      </div>
-
+      <select value={channel} onChange={(e) => onChannelChange(Number(e.target.value))}>
+        {Array.from({ length: 16 }, (_, i) => i + 1).map((value) => (
+          <option key={value} value={value}>Ch{value}</option>
+        ))}
+      </select>
+      <select
+        value={targetSynthId ?? synthIds[0] ?? 1}
+        onChange={(e) => onTargetSynthChange(Number(e.target.value))}
+      >
+        {synthIds.map((id) => (
+          <option key={id} value={id}>Synth {id}</option>
+        ))}
+      </select>
       {(lastMessage || error) && (
-        <div className="midi-last-message">
-          {error ? error : lastMessage}
-        </div>
+        <span className="midi-last-message" title={error || lastMessage}>
+          {error || lastMessage}
+        </span>
       )}
     </div>
   );
