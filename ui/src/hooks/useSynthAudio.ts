@@ -104,6 +104,8 @@ export function useSynthAudio() {
     const output = ctx.createGain();
     output.gain.value = 1;
 
+    input.connect(output);
+
     const delay = ctx.createDelay(2);
     const delayFeedback = ctx.createGain();
     const delayWet = ctx.createGain();
@@ -209,29 +211,36 @@ export function useSynthAudio() {
     bus.phaserFilter.frequency.value = 320 + loop.phaser.depth * 980;
   }
 
-  function flattenParams(p: SynthParameters): Record<string, unknown> {
+  function flattenParams(p: SynthParameters, bpm: number = 120): Record<string, unknown> {
+    const convertSyncRate = (rate: number, sync?: boolean): number => {
+      if (!sync) return rate;
+      return bpm * 4 / Math.max(1, Math.round(rate));
+    };
+
     return {
       oscType: p.oscillator.type,
       detune: p.oscillator.detune,
       filterFreq: p.filter.frequency,
       filterQ: p.filter.q,
+      filterType: p.filter.type || 'lowpass',
       attack: p.envelope.attack,
       decay: p.envelope.decay,
       sustain: p.envelope.sustain,
       release: p.envelope.release,
       gain: p.gain,
       pan: p.pan ?? 0,
+      spread: p.spread ?? 0,
       portamentoEnabled: p.portamento?.enabled ?? false,
       portamentoGlide: p.portamento?.glide ?? 0.05,
       lfo1Enabled: p.lfo1.enabled,
       lfo1Target: p.lfo1.target,
       lfo1Waveform: p.lfo1.waveform,
-      lfo1Rate: p.lfo1.rate,
+      lfo1Rate: convertSyncRate(p.lfo1.rate, p.lfo1.sync),
       lfo1Depth: p.lfo1.depth,
       lfo2Enabled: p.lfo2.enabled,
       lfo2Target: p.lfo2.target,
       lfo2Waveform: p.lfo2.waveform,
-      lfo2Rate: p.lfo2.rate,
+      lfo2Rate: convertSyncRate(p.lfo2.rate, p.lfo2.sync),
       lfo2Depth: p.lfo2.depth,
     };
   }
@@ -265,7 +274,8 @@ export function useSynthAudio() {
     duration?: number,
     velocity: number = 1,
     muted: boolean = false,
-    effectsLoop?: EffectsLoopState
+    effectsLoop?: EffectsLoopState,
+    bpm: number = 120
   ) => {
     if (muted) return;
     const ready = await ensureAudioReady();
@@ -276,10 +286,10 @@ export function useSynthAudio() {
     const node = workletNodeRef.current!;
 
     if (synthParams) {
-      node.port.postMessage({ type: 'params', params: flattenParams(synthParams) });
+      node.port.postMessage({ type: 'params', params: flattenParams(synthParams, bpm) });
     }
 
-    if (effectsLoop?.enabled) {
+    if (effectsLoop) {
       const bus = getOrCreateSharedBus(ctx);
       updateSharedBus(bus, effectsLoop, ctx);
     }

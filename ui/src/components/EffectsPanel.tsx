@@ -28,14 +28,6 @@ export default function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProp
     <section className="effects-panel">
       <div className="effects-panel-header">
         <h3>Effects Loop</h3>
-        <label className="effects-toggle">
-          <input
-            type="checkbox"
-            checked={effectsLoop.enabled}
-            onChange={(e) => onChange({ enabled: e.target.checked })}
-          />
-          <span>On</span>
-        </label>
       </div>
 
       <div className="effects-grid">

@@ -4,6 +4,7 @@ import Sequencer from './components/Sequencer';
 import KeyboardPanel from './components/KeyboardPanel';
 import DrumMachine from './components/DrumMachine';
 import EffectsPanel from './components/EffectsPanel';
+import MixerPanel from './components/MixerPanel';
 import MidiPanel from './components/MidiPanel';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useSynthAudio } from './hooks/useSynthAudio';
@@ -392,6 +393,8 @@ function TempoDisplay({ tempo, onChange }: { tempo: number; onChange: (bpm: numb
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(String(tempo));
   const inputRef = useRef<HTMLInputElement>(null);
+  const tapTimesRef = useRef<number[]>([]);
+  const [tapFlash, setTapFlash] = useState(false);
 
   useEffect(() => {
     if (!editing) setValue(String(tempo));
@@ -406,6 +409,54 @@ function TempoDisplay({ tempo, onChange }: { tempo: number; onChange: (bpm: numb
     if (!isNaN(bpm) && bpm >= 20 && bpm <= 400) onChange(bpm);
     setEditing(false);
   };
+
+  const handleTap = useCallback(() => {
+    const now = performance.now();
+    const taps = tapTimesRef.current;
+    taps.push(now);
+
+    if (taps.length > 8) taps.shift();
+
+    if (taps.length >= 2) {
+      const intervals: number[] = [];
+      for (let i = 1; i < taps.length; i++) {
+        intervals.push(taps[i] - taps[i - 1]);
+      }
+      intervals.sort((a, b) => a - b);
+      const mid = Math.floor(intervals.length / 2);
+      const trimmed = intervals.length > 2
+        ? intervals.slice(Math.max(0, mid - 1), mid + 1)
+        : intervals;
+      const avgInterval = trimmed.reduce((a, b) => a + b, 0) / trimmed.length;
+      const bpm = Math.round(60000 / avgInterval);
+      if (bpm >= 20 && bpm <= 400) {
+        onChange(bpm);
+      }
+    }
+
+    setTapFlash(true);
+    setTimeout(() => setTapFlash(false), 100);
+
+    if (taps.length > 1) {
+      const lastInterval = taps[taps.length - 1] - taps[taps.length - 2];
+      if (lastInterval > 3000) {
+        tapTimesRef.current = [now];
+      }
+    }
+  }, [onChange]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() === 't' && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        const target = event.target as HTMLElement | null;
+        if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+        event.preventDefault();
+        handleTap();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [handleTap]);
 
   if (editing) {
     return (
@@ -423,9 +474,14 @@ function TempoDisplay({ tempo, onChange }: { tempo: number; onChange: (bpm: numb
   }
 
   return (
-    <div className="tempo-led" onClick={() => setEditing(true)}>
-      <span className="tempo-led-label">BPM</span>
-      <span className="tempo-led-value">{String(tempo).padStart(3, ' ')}</span>
+    <div className="tempo-display-group">
+      <div className={`tempo-led ${tapFlash ? 'tap-flash' : ''}`} onClick={() => setEditing(true)}>
+        <span className="tempo-led-label">BPM</span>
+        <span className="tempo-led-value">{String(tempo).padStart(3, ' ')}</span>
+      </div>
+      <button className="tap-tempo-btn" onClick={handleTap} title="Tap Tempo (T)">
+        TAP
+      </button>
     </div>
   );
 }
@@ -579,6 +635,7 @@ function App() {
   const [drumKitsError, setDrumKitsError] = useState<string | null>(null);
   const [selectedDrumKitId, setSelectedDrumKitId] = useState<DrumKitId>(DEFAULT_DRUM_KIT_ID);
   const [drumMasterVolume, setDrumMasterVolume] = useState(1.0);
+  const [drumSwing, setDrumSwing] = useState(0);
   const [drumFx, setDrumFx] = useState(DEFAULT_DRUM_FX);
   const [effectsLoop, setEffectsLoop] = useState(DEFAULT_EFFECTS_LOOP);
   const [browserMuted, setBrowserMuted] = useState(false);
@@ -956,7 +1013,8 @@ function App() {
         Math.max(0.05, windowSeconds * 0.92),
         normalizedVelocity,
         browserMutedRef.current,
-        effectsLoopRef.current
+        effectsLoopRef.current,
+        globalTempo
       );
       return;
     }
@@ -984,11 +1042,11 @@ function App() {
       const arpNote = transposeNote(note, offset);
       if (!arpNote) continue;
       if (pulse === 0) {
-        void synthAudio.playNote(arpNote, synthParams, noteLength, normalizedVelocity, browserMutedRef.current, effectsLoopRef.current);
+        void synthAudio.playNote(arpNote, synthParams, noteLength, normalizedVelocity, browserMutedRef.current, effectsLoopRef.current, globalTempo);
         continue;
       }
       const timeoutId = window.setTimeout(() => {
-        void synthAudio.playNote(arpNote, synthParams, noteLength, normalizedVelocity, browserMutedRef.current, effectsLoopRef.current);
+        void synthAudio.playNote(arpNote, synthParams, noteLength, normalizedVelocity, browserMutedRef.current, effectsLoopRef.current, globalTempo);
       }, interval * pulse * 1000);
       arpTimeoutsRef.current.push(timeoutId);
     }
@@ -1202,6 +1260,20 @@ function App() {
         });
         break;
       }
+      case 'drumStepVelocity': {
+        const { instrument: dvi, step: dvs, velocity: dvv } = message.data;
+        setDrumState(prev => {
+          const next = { ...prev };
+          const inst = dvi as DrumInstrument;
+          next[inst] = {
+            ...next[inst],
+            stepVelocities: [...(next[inst].stepVelocities || new Array(16).fill(1))],
+          };
+          next[inst].stepVelocities![dvs as number] = dvv as number;
+          return next;
+        });
+        break;
+      }
       case 'drumSettings': {
         const { instrument: dsi, settings: dss } = message.data;
         setDrumState(prev => {
@@ -1232,6 +1304,10 @@ function App() {
       }
       case 'drumFullState': {
         if (message.data.drumState) setDrumState(message.data.drumState);
+        break;
+      }
+      case 'drumSwing': {
+        if (typeof message.data.swing === 'number') setDrumSwing(message.data.swing);
         break;
       }
       case 'drumKitChanged': {
@@ -1975,6 +2051,14 @@ function App() {
         body: JSON.stringify({ volume: data.drumMasterVolume }),
       });
     }
+    if (data.drumSwing !== undefined) {
+      setDrumSwing(data.drumSwing);
+      await authFetch('/drum/swing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ swing: data.drumSwing }),
+      });
+    }
     if (data.drumFx) {
       const nextDrumFx = normalizeDrumFx(data.drumFx);
       setDrumFx(nextDrumFx);
@@ -2126,6 +2210,21 @@ function App() {
     });
   }, [pushHistorySnapshot]);
 
+  const handleDrumStepVelocity = useCallback((instrument: DrumInstrument, step: number, velocity: number) => {
+    setDrumState(prev => {
+      const next = { ...prev };
+      const track = next[instrument];
+      next[instrument] = { ...track, stepVelocities: [...(track.stepVelocities || new Array(16).fill(1))] };
+      next[instrument].stepVelocities![step] = velocity;
+      return next;
+    });
+    authFetch('/drum/step-velocity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instrument, step, velocity }),
+    });
+  }, []);
+
   const handleDrumSettingsChange = useCallback((instrument: DrumInstrument, settings: Partial<DrumSettings>) => {
     const synth = synthsRef.current[0];
     if (synth?.pattern) {
@@ -2171,6 +2270,17 @@ function App() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ volume }),
+    });
+    }, [pushHistorySnapshotThrottled]);
+
+  const handleDrumSwingChange = useCallback((swing: number) => {
+    const synth = synthsRef.current[0];
+    if (synth?.pattern) pushHistorySnapshotThrottled(synth.id, synth.pattern.id, 'drum-swing', 300);
+    setDrumSwing(swing);
+    authFetch('/drum/swing', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ swing }),
     });
   }, [pushHistorySnapshotThrottled]);
 
@@ -2420,6 +2530,16 @@ function App() {
             <button className="header-secondary-button" onClick={handleExportMidi} title="Export MIDI (.mid)">
               Export MIDI
             </button>
+            <button
+              className="header-secondary-button"
+              onClick={() => {
+                const url = new URL('/export/wav', window.location.origin);
+                window.open(url.toString(), '_blank');
+              }}
+              title="Download pattern as WAV audio"
+            >
+              Download WAV
+            </button>
             <button className="header-secondary-button" onClick={handleMidiImportClick} title="Import MIDI file">
               Import MIDI
             </button>
@@ -2580,11 +2700,31 @@ function App() {
             onDrumFxChange={handleDrumFxChange}
             drumEffectsReturn={effectsLoop.returns.drums}
             onDrumEffectsReturnChange={handleDrumEffectsReturnChange}
+            drumSwing={drumSwing}
+            onDrumSwingChange={handleDrumSwingChange}
+            onStepVelocityChange={handleDrumStepVelocity}
             onMuteAll={handleDrumMuteAll}
             onSoloAll={handleDrumSoloAll}
             drumAudio={drumAudio}
           />
           <EffectsPanel effectsLoop={effectsLoop} onChange={handleEffectsLoopChange} />
+          <MixerPanel
+            synths={synths}
+            drumState={memoizedDrumState}
+            drumMasterVolume={drumMasterVolume}
+            effectsLoop={effectsLoop}
+            onSynthGainChange={(id, gain) => handleParameterChange(id, { gain })}
+            onSynthPanChange={(id, pan) => handleParameterChange(id, { pan })}
+            onSynthFxReturnChange={(id, fxReturn) => handleParameterChange(id, { fxReturn })}
+            onSynthMuteChange={handleSynthMixChange}
+            onSynthSoloChange={(id, solo) => handleSynthMixChange(id, { solo })}
+            onDrumMasterVolumeChange={handleDrumMasterVolumeChange}
+            onDrumFxReturnChange={handleDrumEffectsReturnChange}
+            onEffectsReturnChange={(which, value) => {
+              const newReturns = { ...effectsLoop.returns, [which]: value };
+              handleEffectsLoopChange({ returns: newReturns });
+            }}
+          />
         </div>
       </div>
 

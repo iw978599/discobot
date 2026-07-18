@@ -321,6 +321,18 @@ export default function SynthControls({
         <div className="synth-column">
           <h3>FILTER</h3>
           <div className="synth-column-controls">
+            <div className="synth-filter-type-row">
+              <select
+                className="synth-filter-type-select"
+                value={parameters.filter.type || 'lowpass'}
+                onChange={(e) => updateFilter({ type: e.target.value as 'lowpass' | 'highpass' | 'bandpass' | 'notch' })}
+              >
+                <option value="lowpass">LP</option>
+                <option value="highpass">HP</option>
+                <option value="bandpass">BP</option>
+                <option value="notch">NT</option>
+              </select>
+            </div>
             <Knob
               label="Cutoff"
               value={parameters.filter.frequency}
@@ -391,18 +403,31 @@ export default function SynthControls({
         <div className="synth-column">
           <h3>LFO 1 MOD</h3>
           <div className="synth-column-controls">
-            <Knob
-              label="Rate"
-              value={parameters.lfo1.rate}
-              min={0.1}
-              max={20}
-              step={0.1}
-              displayValue={`${parameters.lfo1.rate.toFixed(1)}Hz`}
-              onChange={(v) => updateLfo('lfo1', { rate: v })}
-              disabled={!parameters.lfo1.enabled}
-              color="#06b6d4"
-              tooltip={TOOLTIPS.lfoRate}
-            />
+            <div className="synth-lfo-rate-row">
+              <label className="synth-toggle small">
+                <input
+                  type="checkbox"
+                  checked={parameters.lfo1.sync ?? false}
+                  onChange={(e) => updateLfo('lfo1', { sync: e.target.checked })}
+                  disabled={!parameters.lfo1.enabled}
+                />
+                <span className="synth-toggle-slider" />
+              </label>
+              <Knob
+                label="Rate"
+                value={parameters.lfo1.sync ? (parameters.lfo1.rate || 4) : parameters.lfo1.rate}
+                min={parameters.lfo1.sync ? 1 : 0.1}
+                max={parameters.lfo1.sync ? 128 : 20}
+                step={parameters.lfo1.sync ? 1 : 0.1}
+                displayValue={parameters.lfo1.sync
+                  ? `1/${Math.round(parameters.lfo1.rate || 4)}`
+                  : `${parameters.lfo1.rate.toFixed(1)}Hz`}
+                onChange={(v) => updateLfo('lfo1', { rate: v })}
+                disabled={!parameters.lfo1.enabled}
+                color="#06b6d4"
+                tooltip="LFO rate - BPM sync converts to note values"
+              />
+            </div>
             <Knob
               label="Depth"
               value={parameters.lfo1.depth}
@@ -464,18 +489,31 @@ export default function SynthControls({
         <div className="synth-column">
           <h3>LFO 2 MOD</h3>
           <div className="synth-column-controls">
-            <Knob
-              label="Rate"
-              value={parameters.lfo2.rate}
-              min={0.1}
-              max={20}
-              step={0.1}
-              displayValue={`${parameters.lfo2.rate.toFixed(1)}Hz`}
-              onChange={(v) => updateLfo('lfo2', { rate: v })}
-              disabled={!parameters.lfo2.enabled}
-              color="#0891b2"
-              tooltip={TOOLTIPS.lfoRate}
-            />
+            <div className="synth-lfo-rate-row">
+              <label className="synth-toggle small">
+                <input
+                  type="checkbox"
+                  checked={parameters.lfo2.sync ?? false}
+                  onChange={(e) => updateLfo('lfo2', { sync: e.target.checked })}
+                  disabled={!parameters.lfo2.enabled}
+                />
+                <span className="synth-toggle-slider" />
+              </label>
+              <Knob
+                label="Rate"
+                value={parameters.lfo2.sync ? (parameters.lfo2.rate || 4) : parameters.lfo2.rate}
+                min={parameters.lfo2.sync ? 1 : 0.1}
+                max={parameters.lfo2.sync ? 128 : 20}
+                step={parameters.lfo2.sync ? 1 : 0.1}
+                displayValue={parameters.lfo2.sync
+                  ? `1/${Math.round(parameters.lfo2.rate || 4)}`
+                  : `${parameters.lfo2.rate.toFixed(1)}Hz`}
+                onChange={(v) => updateLfo('lfo2', { rate: v })}
+                disabled={!parameters.lfo2.enabled}
+                color="#0891b2"
+                tooltip="LFO rate - BPM sync converts to note values"
+              />
+            </div>
             <Knob
               label="Depth"
               value={parameters.lfo2.depth}
@@ -519,6 +557,25 @@ export default function SynthControls({
               color="#f59e0b"
               tooltip={TOOLTIPS.decay}
             />
+          </div>
+        </div>
+
+        <div className="synth-column synth-env-viz">
+          <h3>SHAPE</h3>
+          <div className="synth-column-controls" style={{ justifyContent: 'center' }}>
+            <svg viewBox="0 0 100 60" width="100%" style={{ maxWidth: 100 }}>
+              {(() => {
+                const { attack, decay, sustain, release } = parameters.envelope;
+                const total = Math.max(0.01, attack + decay + 0.5 + release);
+                const xA = (attack / total) * 100;
+                const xD = xA + (decay / total) * 100;
+                const xS = xD + 50;
+                const xR = Math.min(100, xS + (release / total) * 100);
+                const sY = 60 - sustain * 50;
+                const points = `0,60 ${xA},10 ${xD},${sY} ${xS},${sY} ${xR},60`;
+                return <polyline points={points} fill="none" stroke="#f59e0b" strokeWidth="1.5" />;
+              })()}
+            </svg>
           </div>
         </div>
 
@@ -655,6 +712,17 @@ export default function SynthControls({
               onChange={(v) => onParameterChange({ pan: v })}
               color="#8b5cf6"
               tooltip={TOOLTIPS.pan}
+            />
+            <Knob
+              label="Spread"
+              value={parameters.spread ?? 0}
+              min={0}
+              max={1}
+              step={0.01}
+              displayValue={`${Math.round((parameters.spread ?? 0) * 100)}%`}
+              onChange={(v) => onParameterChange({ spread: v })}
+              color="#8b5cf6"
+              tooltip="Stereo spread - pans notes across stereo field based on pitch"
             />
             <div className="synth-section-header">
               <h3 style={{ fontSize: '10px' }}>GLIDE</h3>

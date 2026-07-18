@@ -43,6 +43,7 @@ export interface SynthParameters {
   gain: number;
   fxReturn: number;
   pan: number;
+  spread?: number;
   portamento: {
     enabled: boolean;
     glide: number;
@@ -63,6 +64,7 @@ export interface SynthParameters {
     waveform: OscillatorType;
     rate: number;
     depth: number;
+    sync?: boolean;
   };
   lfo2: {
     enabled: boolean;
@@ -70,6 +72,7 @@ export interface SynthParameters {
     waveform: OscillatorType;
     rate: number;
     depth: number;
+    sync?: boolean;
   };
   filter: {
     frequency: number;
@@ -155,6 +158,7 @@ export interface DrumKitSelectionState {
 
 export interface DrumTrack {
   steps: boolean[];
+  stepVelocities?: number[];
   settings: DrumSettings;
   muted?: boolean;
   solo?: boolean;
@@ -211,4 +215,5 @@ export interface SavedPatternFull {
   };
   effectsLoop?: EffectsLoopState;
   synths?: SavedSynthData[];
+  drumSwing?: number;
 }

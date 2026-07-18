@@ -76,6 +76,46 @@
   align-items: center;
 }
 
+.synth-filter-type-row {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.synth-filter-type-select {
+  background: #222;
+  border: 1px solid #444;
+  border-radius: 4px;
+  color: #10b981;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.15rem 0.3rem;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  width: 48px;
+  text-align: center;
+}
+
+.synth-filter-type-select:hover {
+  border-color: #10b981;
+}
+
+.synth-filter-type-select option {
+  background: #222;
+  color: #10b981;
+}
+
+.synth-lfo-rate-row {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.synth-toggle.small {
+  transform: scale(0.8);
+}
+
 .synth-octave-controls {
   display: flex;
   align-items: center;
@@ -335,4 +375,12 @@
   .synth-controls-panel {
     padding: 8px;
   }
+}
+
+.synth-env-viz .synth-column-controls {
+  padding: 4px 0;
+}
+
+.synth-env-viz svg {
+  opacity: 0.8;
 }
