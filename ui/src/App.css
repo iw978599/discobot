@@ -164,30 +164,52 @@
   padding-right: 0.2rem;
 }
 
-.synth-units-container {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+.synth-panels-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.55rem;
   min-height: 0;
 }
 
-.add-synth-btn {
-  width: 100%;
-  padding: 0.5rem;
-  background: #2a2a2a;
-  border: 2px dashed #00d4ff;
-  border-radius: 8px;
-  color: #00d4ff;
-  font-size: 1.2rem;
-  font-weight: bold;
-  cursor: pointer;
-  transition: all 0.2s;
+.shared-sequencer-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 0;
 }
 
-.add-synth-btn:hover {
-  background: #333;
-  border-style: solid;
+.synth-tabs {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.synth-tab {
+  flex: 1;
+  padding: 0.4rem 0.6rem;
+  background: #1a1a1a;
+  border: 1px solid #444;
+  border-radius: 4px;
+  color: #aaa;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.synth-tab:hover:not(:disabled) {
+  border-color: #00d4ff;
+  color: #ddd;
+}
+
+.synth-tab.active {
+  background: #00d4ff;
+  color: #000;
+  border-color: #00d4ff;
+}
+
+.synth-tab:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 
 .tempo-led {
@@ -430,6 +452,10 @@
 @media (max-width: 1380px) {
   .app-content {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .synth-panels-row {
+    grid-template-columns: 1fr;
   }
 
   .app-header {

@@ -4,6 +4,16 @@
   border-radius: 8px;
   padding: 10px;
   min-width: 0;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.synth-unit:hover {
+  border-color: #555;
+}
+
+.synth-unit.selected {
+  border-color: #00d4ff;
 }
 
 .synth-unit-header {
@@ -57,55 +67,10 @@
   background: #ff6666;
 }
 
-.synth-unit-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
-  gap: 8px;
-  align-items: stretch;
-}
-
-.synth-unit-sequencer {
-  min-width: 0;
-  grid-column: 2;
-  grid-row: 1;
-}
-
 .synth-unit-controls {
   width: 100%;
-  grid-column: 1;
-  grid-row: 1 / span 2;
 }
 
 .synth-unit-controls .synth-controls-panel {
   max-width: none;
-}
-
-.synth-unit-keyboard-container {
-  display: flex;
-  align-items: stretch;
-  gap: 8px;
-  background: #0a0a0a;
-  padding: 8px;
-  border-radius: 8px;
-  min-width: 0;
-  grid-column: 2;
-  grid-row: 2;
-}
-
-.synth-unit-keyboard-container .keyboard-container {
-  flex: 1;
-  min-width: 0;
-}
-
-@media (max-width: 1100px) {
-  .synth-unit-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .synth-unit-sequencer,
-  .synth-unit-controls,
-  .synth-unit-keyboard-container {
-    grid-column: auto;
-    grid-row: auto;
-  }
 }

@@ -34,6 +34,7 @@ export type {
   // Persistence types
   SavedPatternInfo,
   SavedPatternFull,
+  SavedSynthData,
 
   // Sample types
   Sample,
