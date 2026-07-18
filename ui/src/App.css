@@ -167,17 +167,17 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.55rem;
-  flex: 0 0 auto;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .shared-sequencer-section {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  min-height: 0;
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
+  flex: 0 0 auto;
 }
 
 .synth-tabs {
