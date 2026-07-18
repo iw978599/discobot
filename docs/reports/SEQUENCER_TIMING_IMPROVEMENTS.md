@@ -227,11 +227,51 @@ The new Web Audio API-based sequencer provides:
 **Recommendation**: Migrate to SequencerV2 as default in next release.
 
 <!-- AUTO_PR_CHANGELOG_START -->
-### PR #53: Move sequencer+keyboard above synth control panels
+### PR #54: Feat/multi synth save layout redesign
 
 Source branch: `feat/multi-synth-save-layout-redesign`
-Last sync: 2026-07-18T13:43:27.722Z
+Last sync: 2026-07-18T15:06:55.296Z
 
 #### Changed files
-- `ui/src/App.tsx` — MODIFIED (+30/-30)
+- `.opencode/agent/discobot-developer.md` — MODIFIED (+3/-12)
+- `.opencode/skills/discobot-dev/SKILL.md` — MODIFIED (+3/-12)
+- `AGENTS.md` — MODIFIED (+3/-12)
+- `README.md` — MODIFIED (+3/-12)
+- `docs/guides/DEPLOYMENT.md` — MODIFIED (+3/-12)
+- `docs/guides/FEATURE_TESTING_GUIDE.md` — MODIFIED (+3/-12)
+- `docs/guides/HOSTING_QUICK_START.md` — MODIFIED (+3/-12)
+- `docs/guides/QUICK_START.md` — MODIFIED (+3/-12)
+- `docs/guides/RAILWAY_DEPLOY.md` — MODIFIED (+3/-12)
+- `docs/guides/README_STREAMING.md` — MODIFIED (+3/-12)
+- `docs/guides/SETUP.md` — MODIFIED (+3/-12)
+- `docs/plans/AUDIO_STREAMING_PLAN.md` — MODIFIED (+3/-12)
+- `docs/plans/DRUM_SAMPLE_REPLACEMENT_PLAN.md` — MODIFIED (+3/-12)
+- `docs/plans/EFFECTS_LOOP_IMPLEMENTATION_PLAN.md` — MODIFIED (+3/-12)
+- `docs/plans/EFFECTS_LOOP_INVESTIGATION.md` — MODIFIED (+3/-12)
+- `docs/plans/IMPLEMENTATION_PLAN.md` — MODIFIED (+3/-12)
+- `docs/plans/IMPROVEMENT_IDEAS.md` — MODIFIED (+3/-12)
+- `docs/plans/MIDI_CONTROLLER_PLAN.md` — MODIFIED (+3/-12)
+- `docs/plans/PIANO_ROLL_PLAN.md` — MODIFIED (+3/-12)
+- `docs/plans/SYNTH_CLONE_OPTIONS_PLAN.md` — MODIFIED (+3/-12)
+- `docs/plans/SYNTH_REFACTOR_PLAN.md` — MODIFIED (+3/-12)
+- `docs/reference/AI_DEVELOPMENT_GUIDE.md` — MODIFIED (+3/-12)
+- `docs/reference/AUDIO_STREAMING_CODE.md` — MODIFIED (+3/-12)
+- `docs/reports/ERROR_HANDLING_IMPROVEMENTS.md` — MODIFIED (+3/-12)
+- `docs/reports/FINAL_SUMMARY.md` — MODIFIED (+3/-12)
+- `docs/reports/HIGH_PRIORITY_WORK_COMPLETE.md` — MODIFIED (+3/-12)
+- `docs/reports/PERFORMANCE_IMPROVEMENTS.md` — MODIFIED (+3/-12)
+- `docs/reports/PROJECT_SUMMARY.md` — MODIFIED (+3/-12)
+- `docs/reports/REFACTORING_SUMMARY.md` — MODIFIED (+3/-12)
+- `docs/reports/SEQUENCER_TIMING_IMPROVEMENTS.md` — MODIFIED (+3/-12)
+- `docs/reviews/CODE_REVIEW.md` — MODIFIED (+3/-12)
+- `engine/src/types.ts` — MODIFIED (+1/-0)
+- `start-ui.bat` — ADDED (+4/-0)
+- `start-web.bat` — ADDED (+5/-0)
+- `ui/src/App.css` — MODIFIED (+5/-6)
+- `ui/src/App.tsx` — MODIFIED (+22/-21)
+- `ui/src/components/DrumMachine.tsx` — MODIFIED (+19/-1)
+- `ui/src/components/Keyboard.css` — MODIFIED (+2/-0)
+- `ui/src/components/KeyboardPanel.css` — MODIFIED (+2/-0)
+- `ui/src/hooks/useDrumAudio.ts` — MODIFIED (+6/-1)
+- `web/src/index.ts` — MODIFIED (+3/-0)
 <!-- AUTO_PR_CHANGELOG_END -->
