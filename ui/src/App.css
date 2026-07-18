@@ -160,6 +160,7 @@
 }
 
 .app-main-right {
+  overflow-y: auto;
   padding-right: 0.2rem;
 }
 
