@@ -1,352 +1,142 @@
-import { useRef, useCallback, useEffect } from 'react';
-import { SynthParameters, EffectsLoopState } from '../types';
+import { useRef, useCallback, useEffect, useMemo } from 'react';
+import type { SynthParameters, EffectsLoopState } from '../types';
+import { createAudioLane, getAudioContext, ensureAudioReady, loadSynthWorklet, setEffectsLoop } from './browserAudio';
 
-interface SharedEffectsBus {
-  input: GainNode;
-  output: GainNode;
-  delay: DelayNode;
-  delayFeedback: GainNode;
-  delayWet: GainNode;
-  reverb: ConvolverNode;
-  reverbWet: GainNode;
-  driveShaper: WaveShaperNode;
-  driveWet: GainNode;
-  phaserFilter: BiquadFilterNode;
-  phaserFeedback: GainNode;
-  phaserWet: GainNode;
-  phaserLfo: OscillatorNode;
-  phaserDepth: GainNode;
+// A synced rate N means one LFO cycle per 1/N note, so 1/4 at 120 BPM is 2 Hz.
+export function syncedLfoHz(rate: number, bpm: number): number {
+  return Math.max(20, Math.min(400, bpm)) * Math.max(1, Math.round(rate)) / 240;
 }
 
-function createDriveCurve(amount: number): Float32Array<ArrayBuffer> {
-  const samples = 256;
-  const curve = new Float32Array(samples) as Float32Array<ArrayBuffer>;
-  const k = amount * 18;
-  if (k === 0) {
-    for (let i = 0; i < samples; i++) curve[i] = (i * 2) / samples - 1;
-    return curve;
-  }
-  const limit = Math.tanh(k);
-  for (let i = 0; i < samples; i++) {
-    const x = (i * 2) / samples - 1;
-    curve[i] = Math.tanh(x * k) / limit;
-  }
-  return curve;
+export function flattenSynthParams(p: SynthParameters, bpm = 120): Record<string, unknown> {
+  const syncRate = (rate: number, sync?: boolean) => sync ? syncedLfoHz(rate, bpm) : rate;
+  return {
+    oscType: p.oscillator.type, detune: p.oscillator.detune,
+    filterFreq: p.filter.frequency, filterQ: p.filter.q, filterType: p.filter.type,
+    attack: p.envelope.attack, decay: p.envelope.decay, sustain: p.envelope.sustain,
+    release: p.envelope.release, gain: p.gain, pan: p.pan ?? 0, spread: p.spread ?? 0,
+    portamentoEnabled: p.portamento?.enabled ?? false, portamentoGlide: p.portamento?.glide ?? 0,
+    lfo1Enabled: p.lfo1.enabled, lfo1Target: p.lfo1.target, lfo1Waveform: p.lfo1.waveform,
+    lfo1Rate: syncRate(p.lfo1.rate, p.lfo1.sync), lfo1Depth: p.lfo1.depth,
+    lfo2Enabled: p.lfo2.enabled, lfo2Target: p.lfo2.target, lfo2Waveform: p.lfo2.waveform,
+    lfo2Rate: syncRate(p.lfo2.rate, p.lfo2.sync), lfo2Depth: p.lfo2.depth,
+  };
 }
 
-function createReverbImpulse(ctx: AudioContext, decay: number): AudioBuffer {
-  const length = Math.max(1, Math.floor(ctx.sampleRate * decay));
-  const impulse = ctx.createBuffer(2, length, ctx.sampleRate);
-  for (let channel = 0; channel < 2; channel++) {
-    const data = impulse.getChannelData(channel);
-    for (let i = 0; i < length; i++) {
-      const pos = 1 - i / length;
-      data[i] = (Math.random() * 2 - 1) * pos * pos;
-    }
-  }
-  return impulse;
+interface SynthLane {
+  node?: AudioWorkletNode;
+  audio?: ReturnType<typeof createAudioLane>;
+  loading?: Promise<AudioWorkletNode>;
+  parameters?: SynthParameters;
+  bpm: number;
+  generation: number;
+  // Note-ons still waiting on audio resume or worklet loading, keyed by note name.
+  starting: Map<string, Set<number>>;
 }
 
 export function useSynthAudio() {
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const workletNodeRef = useRef<AudioWorkletNode | null>(null);
-  const workletReadyRef = useRef<boolean>(false);
-  const sharedBusRef = useRef<SharedEffectsBus | null>(null);
-  const reverbImpulseCache = useRef<Map<string, AudioBuffer>>(new Map());
-  const isResumingRef = useRef<boolean>(false);
-  const pendingParamsRef = useRef<Partial<SynthParameters> | null>(null);
-  const masterGainRef = useRef<GainNode | null>(null);
+  const lanesRef = useRef(new Map<number, SynthLane>());
+  const volumeRef = useRef(1);
+  const sequenceRef = useRef(0);
 
-  function getAudioContext(): AudioContext {
-    if (!audioCtxRef.current) {
-      audioCtxRef.current = new AudioContext();
+  function laneFor(id: number): SynthLane {
+    let lane = lanesRef.current.get(id);
+    if (!lane) {
+      lane = { bpm: 120, generation: 0, starting: new Map() };
+      lanesRef.current.set(id, lane);
     }
-    return audioCtxRef.current;
+    return lane;
   }
+  const updateParameters = useCallback((parameters: SynthParameters, bpm = 120, loop?: EffectsLoopState, synthId = 1) => {
+    const lane = laneFor(synthId);
+    lane.parameters = parameters;
+    lane.bpm = bpm;
+    if (loop) setEffectsLoop(loop);
+    lane.node?.port.postMessage({ type: 'params', params: flattenSynthParams(parameters, bpm) });
+    lane.audio?.setSends(parameters.fxSends, parameters.fxReturn);
+  }, []);
 
-  async function ensureWorklet(): Promise<boolean> {
-    const ctx = getAudioContext();
-    if (workletReadyRef.current && workletNodeRef.current) return true;
-
-    try {
-      if (ctx.state === 'suspended') {
-        await ctx.resume();
-      }
-      await ctx.audioWorklet.addModule('/synth-processor.js');
-      const node = new AudioWorkletNode(ctx, 'synth-processor', {
-        numberOfOutputs: 1,
-        outputChannelCount: [2],
-      });
-      workletNodeRef.current = node;
-      workletReadyRef.current = true;
-
-      const bus = getOrCreateSharedBus(ctx);
-      node.connect(bus.input);
-      bus.output.connect(ctx.destination);
-
-      if (pendingParamsRef.current) {
-        node.port.postMessage({ type: 'params', params: flattenParams(pendingParamsRef.current as SynthParameters) });
-        pendingParamsRef.current = null;
-      }
-
-      return true;
-    } catch (err) {
-      console.error('Failed to load AudioWorklet:', err);
-      return false;
+  async function getNode(lane: SynthLane): Promise<AudioWorkletNode> {
+    if (lane.node) return lane.node;
+    if (!lane.loading) {
+      const generation = lane.generation;
+      lane.loading = loadSynthWorklet().then(() => {
+        if (generation !== lane.generation) throw new Error('Audio lane stopped');
+        const ctx = getAudioContext();
+        const node = new AudioWorkletNode(ctx, 'synth-processor', { numberOfOutputs: 1, outputChannelCount: [2] });
+        const audio = createAudioLane('synth');
+        audio.setVolume(volumeRef.current);
+        node.connect(audio.input);
+        lane.audio = audio;
+        lane.node = node;
+        if (lane.parameters) {
+          node.port.postMessage({ type: 'params', params: flattenSynthParams(lane.parameters, lane.bpm) });
+          audio.setSends(lane.parameters.fxSends, lane.parameters.fxReturn);
+        }
+        return node;
+      }).finally(() => { lane.loading = undefined; });
     }
-  }
-
-  function getOrCreateSharedBus(ctx: AudioContext): SharedEffectsBus {
-    if (sharedBusRef.current) return sharedBusRef.current;
-
-    const input = ctx.createGain();
-    input.gain.value = 1;
-    const output = ctx.createGain();
-    output.gain.value = 1;
-
-    input.connect(output);
-
-    const delay = ctx.createDelay(2);
-    const delayFeedback = ctx.createGain();
-    const delayWet = ctx.createGain();
-    delay.delayTime.value = 0.22;
-    delayFeedback.gain.value = 0.35;
-    delayWet.gain.value = 0.3;
-    input.connect(delay);
-    delay.connect(delayFeedback);
-    delayFeedback.connect(delay);
-    delay.connect(delayWet);
-    delayWet.connect(output);
-
-    const reverb = ctx.createConvolver();
-    const reverbWet = ctx.createGain();
-    const decay = 2.1;
-    const decayKey = decay.toFixed(2);
-    let impulse = reverbImpulseCache.current.get(decayKey);
-    if (!impulse) {
-      impulse = createReverbImpulse(ctx, decay);
-      reverbImpulseCache.current.set(decayKey, impulse);
-    }
-    reverb.buffer = impulse;
-    reverbWet.gain.value = 0.38;
-    input.connect(reverb);
-    reverb.connect(reverbWet);
-    reverbWet.connect(output);
-
-    const driveShaper = ctx.createWaveShaper();
-    const driveWet = ctx.createGain();
-    driveShaper.curve = createDriveCurve(0.18);
-    driveShaper.oversample = '2x';
-    driveWet.gain.value = 0.18;
-    input.connect(driveShaper);
-    driveShaper.connect(driveWet);
-    driveWet.connect(output);
-
-    const phaserFilter = ctx.createBiquadFilter();
-    phaserFilter.type = 'allpass';
-    phaserFilter.frequency.value = 720;
-    const phaserFeedback = ctx.createGain();
-    phaserFeedback.gain.value = 0.25;
-    const phaserWet = ctx.createGain();
-    phaserWet.gain.value = 0;
-    const phaserLfo = ctx.createOscillator();
-    phaserLfo.type = 'sine';
-    phaserLfo.frequency.value = 0.45;
-    const phaserDepth = ctx.createGain();
-    phaserDepth.gain.value = 520;
-    phaserLfo.connect(phaserDepth);
-    phaserDepth.connect(phaserFilter.frequency);
-    input.connect(phaserFilter);
-    phaserFilter.connect(phaserFeedback);
-    phaserFeedback.connect(phaserFilter);
-    phaserFilter.connect(phaserWet);
-    phaserWet.connect(output);
-    phaserLfo.start();
-
-    output.connect(getMasterGain(ctx));
-
-    sharedBusRef.current = {
-      input, output, delay, delayFeedback, delayWet,
-      reverb, reverbWet, driveShaper, driveWet,
-      phaserFilter, phaserFeedback, phaserWet, phaserLfo, phaserDepth,
-    };
-    return sharedBusRef.current;
-  }
-
-  function getMasterGain(ctx: AudioContext): GainNode {
-    if (masterGainRef.current) return masterGainRef.current;
-    const gain = ctx.createGain();
-    gain.gain.value = 1;
-    gain.connect(ctx.destination);
-    masterGainRef.current = gain;
-    return gain;
-  }
-
-  function setVolume(volume: number): void {
-    if (masterGainRef.current) masterGainRef.current.gain.value = volume;
-  }
-
-  function updateSharedBus(bus: SharedEffectsBus, loop: EffectsLoopState, ctx: AudioContext) {
-    bus.delay.delayTime.value = loop.delay.time;
-    bus.delayFeedback.gain.value = loop.delay.feedback;
-    bus.delayWet.gain.value = loop.delay.enabled ? loop.delay.mix : 0;
-
-    bus.reverbWet.gain.value = loop.reverb.enabled ? loop.reverb.mix : 0;
-    const newDecay = Math.max(0.1, loop.reverb.decay);
-    const decayKey = newDecay.toFixed(2);
-    let impulse = reverbImpulseCache.current.get(decayKey);
-    if (!impulse) {
-      impulse = createReverbImpulse(ctx, newDecay);
-      reverbImpulseCache.current.set(decayKey, impulse);
-    }
-    if (bus.reverb.buffer !== impulse) bus.reverb.buffer = impulse;
-
-    bus.driveShaper.curve = createDriveCurve(loop.drive.amount);
-    bus.driveWet.gain.value = loop.drive.enabled ? loop.drive.amount : 0;
-
-    bus.phaserLfo.frequency.value = loop.phaser.rate;
-    bus.phaserDepth.gain.value = loop.phaser.depth * 1200;
-    bus.phaserFeedback.gain.value = loop.phaser.enabled ? loop.phaser.feedback : 0;
-    bus.phaserWet.gain.value = loop.phaser.enabled ? loop.phaser.mix : 0;
-    bus.phaserFilter.frequency.value = 320 + loop.phaser.depth * 980;
-  }
-
-  function flattenParams(p: SynthParameters, bpm: number = 120): Record<string, unknown> {
-    const convertSyncRate = (rate: number, sync?: boolean): number => {
-      if (!sync) return rate;
-      return bpm * 4 / Math.max(1, Math.round(rate));
-    };
-
-    return {
-      oscType: p.oscillator.type,
-      detune: p.oscillator.detune,
-      filterFreq: p.filter.frequency,
-      filterQ: p.filter.q,
-      filterType: p.filter.type || 'lowpass',
-      attack: p.envelope.attack,
-      decay: p.envelope.decay,
-      sustain: p.envelope.sustain,
-      release: p.envelope.release,
-      gain: p.gain,
-      pan: p.pan ?? 0,
-      spread: p.spread ?? 0,
-      portamentoEnabled: p.portamento?.enabled ?? false,
-      portamentoGlide: p.portamento?.glide ?? 0.05,
-      lfo1Enabled: p.lfo1.enabled,
-      lfo1Target: p.lfo1.target,
-      lfo1Waveform: p.lfo1.waveform,
-      lfo1Rate: convertSyncRate(p.lfo1.rate, p.lfo1.sync),
-      lfo1Depth: p.lfo1.depth,
-      lfo2Enabled: p.lfo2.enabled,
-      lfo2Target: p.lfo2.target,
-      lfo2Waveform: p.lfo2.waveform,
-      lfo2Rate: convertSyncRate(p.lfo2.rate, p.lfo2.sync),
-      lfo2Depth: p.lfo2.depth,
-    };
-  }
-
-  function tryResume(): void {
-    const ctx = audioCtxRef.current;
-    if (ctx && ctx.state === 'suspended') {
-      ctx.resume().catch(() => {});
-    }
-  }
-
-  async function ensureAudioReady(): Promise<boolean> {
-    const ctx = getAudioContext();
-    if (ctx.state === 'running') return true;
-    if (ctx.state !== 'suspended') return false;
-    if (!isResumingRef.current) {
-      isResumingRef.current = true;
-      try { await ctx.resume(); } catch (err) { console.error('Failed to resume AudioContext:', err); }
-      finally { isResumingRef.current = false; }
-    } else {
-      while (ctx.state === 'suspended' && isResumingRef.current) {
-        await new Promise(resolve => setTimeout(resolve, 10));
-      }
-    }
-    return ctx.state !== 'suspended';
+    return lane.loading;
   }
 
   const playNote = useCallback(async (
-    note: string,
-    synthParams: SynthParameters | null,
-    duration?: number,
-    velocity: number = 1,
-    muted: boolean = false,
-    effectsLoop?: EffectsLoopState,
-    bpm: number = 120
+    note: string, parameters: SynthParameters | null, duration?: number,
+    velocity = 1, muted = false, loop?: EffectsLoopState, bpm = 120, synthId = 1, scheduledTime?: number,
   ) => {
     if (muted) return;
-    const ready = await ensureAudioReady();
-    if (!ready) return;
-    const workletReady = await ensureWorklet();
-    if (!workletReady) return;
-    const ctx = getAudioContext();
-    const node = workletNodeRef.current!;
-
-    if (synthParams) {
-      node.port.postMessage({ type: 'params', params: flattenParams(synthParams, bpm) });
+    const lane = laneFor(synthId), generation = lane.generation, id = ++sequenceRef.current;
+    let starting = lane.starting.get(note);
+    if (!starting) lane.starting.set(note, starting = new Set());
+    starting.add(id);
+    // A release or lane stop that arrives while this note is still starting must win.
+    const cancelled = () => generation !== lane.generation || !lane.starting.get(note)?.has(id);
+    try {
+      if (!await ensureAudioReady() || cancelled()) return;
+      if (parameters) updateParameters(parameters, bpm, loop, synthId);
+      else if (loop) setEffectsLoop(loop);
+      const node = await getNode(lane);
+      if (cancelled()) return;
+      node.port.postMessage({ type: 'noteOn', note, velocity, id, duration, time: scheduledTime });
+    } catch (error) {
+      if (generation === lane.generation) console.error('Synth playback failed:', error);
+    } finally {
+      const remaining = lane.starting.get(note);
+      remaining?.delete(id);
+      if (remaining?.size === 0) lane.starting.delete(note);
     }
+  }, [updateParameters]);
 
-    if (effectsLoop) {
-      const bus = getOrCreateSharedBus(ctx);
-      updateSharedBus(bus, effectsLoop, ctx);
-    }
-
-    const vol = Math.max(0, Math.min(1, velocity));
-    node.port.postMessage({ type: 'noteOn', note, velocity: vol });
-
-    if (duration) {
-      setTimeout(() => {
-        node.port.postMessage({ type: 'noteOff', note });
-      }, duration * 1000);
-    }
+  const stopNote = useCallback((note: string, _parameters?: SynthParameters | null, synthId = 1) => {
+    const lane = lanesRef.current.get(synthId);
+    if (!lane) return;
+    lane.starting.delete(note);
+    lane.node?.port.postMessage({ type: 'noteOff', note });
   }, []);
-
-  const stopNote = useCallback((note: string, _synthParams: SynthParameters | null) => {
-    const node = workletNodeRef.current;
-    if (!node) return;
-    node.port.postMessage({ type: 'noteOff', note });
+  const stopSynth = useCallback((synthId: number, release = 0.03) => {
+    const lane = lanesRef.current.get(synthId);
+    if (!lane) return;
+    lane.generation++;
+    lane.starting.clear();
+    lane.node?.port.postMessage({ type: 'allNotesOff', release });
   }, []);
-
-  const stopAllNotes = useCallback((_release: number = 0.03) => {
-    const node = workletNodeRef.current;
-    if (!node) return;
-    node.port.postMessage({ type: 'allNotesOff' });
+  const stopAllNotes = useCallback((release = 0.03) => {
+    lanesRef.current.forEach((_lane, id) => stopSynth(id, release));
+  }, [stopSynth]);
+  const setVolume = useCallback((volume: number) => {
+    volumeRef.current = Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : 0;
+    lanesRef.current.forEach(lane => lane.audio?.setVolume(volumeRef.current));
   }, []);
-
   const dispose = useCallback(() => {
-    if (workletNodeRef.current) {
-      workletNodeRef.current.disconnect();
-      workletNodeRef.current = null;
-      workletReadyRef.current = false;
-    }
-    if (sharedBusRef.current) {
-      try { sharedBusRef.current.input.disconnect(); sharedBusRef.current.output.disconnect(); } catch { /* ignore */ }
-      sharedBusRef.current = null;
-    }
-    if (masterGainRef.current) {
-      try { masterGainRef.current.disconnect(); } catch { /* ignore */ }
-      masterGainRef.current = null;
-    }
-    if (audioCtxRef.current) {
-      audioCtxRef.current.close().catch(() => {});
-      audioCtxRef.current = null;
-    }
-  }, []);
-
-  useEffect(() => {
-    return () => { dispose(); };
-  }, [dispose]);
-
-  return {
-    ensureAudioReady,
-    tryResume,
-    playNote,
-    stopNote,
-    stopAllNotes,
-    setVolume,
-    dispose,
-  };
+    stopAllNotes();
+    const previous = [...lanesRef.current.values()];
+    lanesRef.current.clear();
+    setTimeout(() => previous.forEach(lane => {
+      lane.node?.disconnect(); lane.node?.port.close(); lane.audio?.dispose();
+    }), 50);
+  }, [stopAllNotes]);
+  useEffect(() => dispose, [dispose]);
+  // The same object on every render, so effects and callbacks that depend on it do not re-run.
+  return useMemo(() => ({
+    ensureAudioReady, tryResume: () => { void ensureAudioReady(); },
+    playNote, stopNote, stopSynth, stopAllNotes, updateParameters, setEffectsLoop, setVolume, dispose,
+  }), [playNote, stopNote, stopSynth, stopAllNotes, updateParameters, setVolume, dispose]);
 }

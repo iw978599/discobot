@@ -85,6 +85,11 @@
   border-color: rgba(245, 158, 11, 0.7);
 }
 
+.knob-rotary:focus-visible {
+  outline: 2px solid #f59e0b;
+  border-radius: 50%;
+}
+
 .knob-disabled .knob-value-input {
   color: #666;
   background: rgba(102, 102, 102, 0.1);

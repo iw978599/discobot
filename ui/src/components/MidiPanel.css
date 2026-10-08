@@ -62,3 +62,8 @@
   text-overflow: ellipsis;
   max-width: 80px;
 }
+.midi-panel[role="status"] {
+  max-width: 30rem;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}

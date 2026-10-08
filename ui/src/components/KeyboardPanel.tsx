@@ -45,6 +45,8 @@ export default function KeyboardPanel({
           className={mode === 'keyboard' ? 'active' : ''}
           onClick={() => onModeChange('keyboard')}
           title="Keyboard"
+          aria-label="Keyboard"
+          aria-pressed={mode === 'keyboard'}
         >
           🎹
         </button>
@@ -52,6 +54,8 @@ export default function KeyboardPanel({
           className={mode === 'piano-roll' ? 'active' : ''}
           onClick={() => onModeChange('piano-roll')}
           title="Piano Roll"
+          aria-label="Piano Roll"
+          aria-pressed={mode === 'piano-roll'}
         >
           📊
         </button>

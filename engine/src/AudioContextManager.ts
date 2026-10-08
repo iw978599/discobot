@@ -88,5 +88,5 @@ class AudioContextManager {
 
 // Export singleton instance
 // Note: AudioContext is created lazily on first getContext() call
-// This prevents crashes in Node.js server environment where AudioContext doesn't exist
+// AudioContext is only created when explicitly requested in a browser.
 export const audioContextManager = AudioContextManager.getInstance();

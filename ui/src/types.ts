@@ -1,10 +1,10 @@
 /**
  * UI Type Definitions
  *
- * Re-exports all types from @discord-synth/engine for consistency.
+ * Re-exports all types from @discobot/engine for consistency.
  * The engine package is the single source of truth for all types.
  *
- * @deprecated Direct usage - import from '@discord-synth/engine' instead
+ * @deprecated Direct usage - import from '@discobot/engine' instead
  */
 
 export type {
@@ -39,4 +39,4 @@ export type {
   // Sample types
   Sample,
   AudioExportOptions,
-} from '@discord-synth/engine';
+} from '@discobot/engine';

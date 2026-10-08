@@ -1,0 +1,199 @@
+SUPERSEDED, 2026-10-08
+This file records the mid-refactor checkpoint and is kept for history only.
+The integration errors listed below were resolved afterwards: typecheck, unit
+tests, production build and the Playwright suite pass. See README.md and
+AGENTS.md for the current state. Publication status below is still accurate:
+the site has not been published.
+
+DISCOBOT BROWSER-ONLY REFACTOR — HANDOFF
+=====================================
+
+STOPPED AT THE USER'S REQUEST, 2026-10-08
+This is a work-in-progress checkpoint, not a completed or deployable release.
+Do not merge or publish it until the integration errors and validation gaps
+below are resolved. The user requested this guide instead of further work.
+
+Repository: iw978599/discobot
+Checkout: /home/runner/work/discobot/discobot
+Current branch: copilot/strip-discord-functionality
+Existing PR: https://github.com/iw978599/discobot/pull/58
+Use the existing branch/PR; do not open a replacement or push another branch.
+
+ORIGINAL GOAL
+-------------
+Remove all Discord functionality and the backend. Run a complete music-making
+application entirely in a browser under /discobot/ on GitHub Pages. Preserve
+multi-synth, keyboard/piano roll, sequencers, drums, effects, samples, presets,
+MIDI, persistence, undo and exposed exports. Improve sound quality and presets;
+audit every interactive control with meaningful tests, then publish if allowed.
+
+IMPLEMENTED / CHECKPOINTED
+-------------------------
+* Root workspaces are engine and ui only, with @discobot package scopes.
+  Bot and web workspaces, auth tests, Node-only audio polyfill, Discord streamer,
+  Docker/Railway/PM2/nginx deployment files and obsolete backend docs were
+  removed. Do not restore remote services as a workaround.
+* Vite base is /discobot/. UI title is Discobot Studio; broken favicon removed.
+* .github/workflows/ci.yml provides read-only PR CI.
+* .github/workflows/pages.yml builds/tests and uploads ui/dist, then uses the
+  official Pages actions with github-pages environment, pages:write and
+  id-token:write. Publication is guarded to main; no privileged PR deployment.
+* package-lock.json was regenerated after deleting the old workspaces.
+  Node >=22 is required. Added tsx 4.23.15 and @playwright/test 1.64.0;
+  upgraded Vite to 6.4.4 and applied compatible transitive advisory fixes.
+* ui/src/services/localService.ts is a local request/event facade, not a server.
+  It implements synth/pattern/drum/effect/tempo operations and localStorage.
+  Review every operation and its caller; a local facade alone is not proof
+  that the rendered controls work.
+* browserTransport.ts provides one look-ahead clock; drumKits.ts provides local
+  kit metadata; sampleStore.ts stores sample files in IndexedDB.
+* App.tsx has been substantially rewired toward these services. Obsolete
+  authClient/config/WebSocket/server-pattern-audio modules were removed.
+  App integration remains unfinished.
+* Audio work includes engine/src/dsp.ts, oscillator/envelope/drum changes,
+  StreamingSynth changes, ui/public/synth-processor.js, and browserAudio.ts.
+  useSynthAudio/useDrumAudio were being adapted to shared browser audio.
+* Components received knob pointer/keyboard handling, piano-roll/keyboard
+  cleanup, accessible labels, MIDI messaging and preset/control improvements.
+  These edits have NOT received a completed exhaustive audit.
+
+PRIMARY BLOCKER: LAST TYPECHECK FAILED
+------------------------------------
+Command: npm run typecheck && npm run build
+Typechecking failed, so the build part never ran.
+
+Reported integration failures at that snapshot:
+* App imports ./components/SamplePanel, which did not exist.
+* browserAudio.ts did not export setMasterVolume, setMasterMuted or playSample,
+  which App imports.
+* Several App playNote calls pass 8/9 arguments, but the hook then accepted
+  only 2–7. Other note/drum calls also have incompatible arities.
+* App calls synthAudio.stopSynth, absent from the hook API at that snapshot.
+* A sample callback in App had an implicit-any parameter.
+
+Inspect current files before fixing: parallel work was paused and the final
+working tree may differ from this exact snapshot. Do not assume these are
+the only remaining errors. Align shared audio APIs first, then typecheck.
+
+VALIDATION ACTUALLY OBSERVED
+---------------------------
+PASS: fresh npm ci, including after lockfile regeneration.
+PASS: npm audit reported zero vulnerabilities at the last dependency check.
+PASS: node --import tsx --test ui/test/static.test.ts (2 tests).
+      These check workspace/dependency boundaries and Pages configuration,
+      NOT music functionality.
+FAIL: integration typecheck described above.
+NOT VERIFIED: complete production build, full unit suite, complete browser
+              control suite, subjective listening, real MIDI hardware, live
+              Pages publication.
+Secret scans before the implementation checkpoints reported no secrets.
+Do not extrapolate those scans to subsequent edits.
+Checkpoint security validation: CodeQL analyzed actions and JavaScript and
+reported zero alerts. Automated code review was unavailable because the
+configured model was not present in its registry; this is NOT a clean review.
+
+TESTS / COMMANDS FOR THE NEXT BOT
+--------------------------------
+Tests were added or drafted at:
+  engine/test/audio.test.ts
+  ui/test/audio-worklet.test.ts
+  ui/test/localService.test.ts
+  ui/test/static.test.ts
+  ui/test/browser/controls.spec.ts
+  playwright.config.ts
+
+After completing integration:
+  npm ci
+  npm run typecheck
+  npm test
+  npm run build
+  npx playwright install --with-deps chromium
+  npm run test:browser
+
+Playwright targets the production preview at
+http://127.0.0.1:4173/discobot/ with desktop Chromium and Pixel 7 profiles.
+The config builds the UI before starting preview. Confirm actual execution
+results; the presence of tests does not establish that they pass.
+Browser MCP access returned "Transport closed"; CLI Playwright is available.
+Keep test reports, traces and build artifacts out of Git.
+
+IMPORTANT REVIEW / REMAINING WORK
+--------------------------------
+1. Finish App/audio service integration without duplicate audio schedulers.
+   Audio must resume on a user gesture. Stop/remove/reset/unmount/blur must
+   cancel scheduled voices and prevent stuck notes.
+2. Verify transport subdivisions against MIDI export and visual step counts.
+   An early browserTransport used 60/BPM/8; review whether /4 is required for
+   sixteenth-note steps. Preserve consistent swing and 16/32-step semantics.
+3. Validate persisted data before using it: malformed nested patterns, missing
+   parameters and invalid values must not crash startup or create unsafe DSP.
+   Test quota/storage-denied behavior; never claim failed saves succeeded.
+4. Verify all-synth save/load/overwrite, selected pattern/model restoration,
+   undo/redo, local custom presets and sample upload/decode/play/delete/reload.
+   Implement the missing SamplePanel and shared-context sample playback.
+5. Complete WAV export integration and verify contents, levels and what
+   effects it actually includes. Check MIDI import/export tempo and routing.
+6. Audit every rendered control, including effect switches/returns/sends,
+   mute/solo/master mute, model macros, LFO sync, pan/spread/glide/arpeggiator,
+   drum velocity/settings/kits/reset, hold/octave, piano-roll painting,
+   dialogs and MIDI live/record/step/channel/device behavior.
+7. Add meaningful parameter-effect and persistence assertions, not just
+   visibility/click tests. Check finite/bounded/non-silent PCM, envelopes,
+   preset differences, voice cleanup, browser errors and network failures.
+8. Review sound/preset changes by listening where possible; signal tests are
+   not subjective listening evidence. Document hardware/browser limitations.
+9. Replace the old README/architecture reference with accurate browser-only
+   usage and publishing instructions. docs/CONTROL_AUDIT.md was planned but
+   not verified complete. Avoid claiming exhaustive coverage.
+10. Review the existing PR diff, scan all changed files for secrets, request
+    code/security validation and address valid findings before completion.
+
+PUBLICATION STATUS / BLOCKER
+----------------------------
+NOT PUBLISHED.
+GitHub repository metadata returned default_branch:main and has_pages:false.
+The expected project URL is https://iw978599.github.io/discobot/.
+A fetch of that URL failed DNS resolution here; there is no live-site evidence.
+The available authenticated tools did not expose a Pages-settings write API.
+An attempted browser visit to GitHub Pages settings failed due to the browser
+tool transport being closed. No settings were changed.
+
+The new workflow is on the unmerged PR branch, not main. Do not merge an
+unfinished PR or bypass branch/environment protections to publish.
+After the next bot completes and validates the work:
+  1. Have the owner review and merge PR #58.
+  2. Settings > Pages > Build and deployment > Source: GitHub Actions.
+  3. Run "Publish GitHub Pages" on main (or observe its merge-triggered run).
+  4. Wait for a successful deploy job; record its run URL.
+  5. Verify the live /discobot/ page, subpath assets/worklet, gesture-started
+     audio, music/save/load workflow, and absence of backend connections.
+Only then state that publication succeeded.
+
+CI EVIDENCE
+-----------
+Recent initial PR workflows returned action_required (approval), not passing CI.
+Older docs workflow run 37796669279 showed failure; fetching failed job logs
+returned zero jobs/no logs. Do not invent its cause.
+Use GitHub Actions run/job tools to investigate future CI failures.
+
+LATE HANDOFF REPORTS — DO NOT CONFUSE WITH PARENT-VERIFIED RESULTS
+----------------------------------------------------------------
+Parallel workers returned these reports after the original stop/checkpoint:
+* Audio worker reports 20 audio/routing tests and engine/UI builds passing.
+* Controls worker reports 20 desktop/mobile production browser cases passing.
+  Two additional tests reportedly reproduce the first-note initialization race:
+  releasing a note before the worklet loads may leave a stuck indefinite voice.
+  This race remains unresolved. Investigate cancellation of pending note-ons
+  and retain the regression tests; do not remove failing tests to get green CI.
+* docs/CONTROL_AUDIT.md now contains the controls worker's coverage report.
+* SamplePanel and additional integration changes landed after the earlier
+  failed typecheck snapshot. Reassess current APIs rather than blindly applying
+  fixes for old errors. The parent has not rerun the suite after these reports.
+* FX bypass preserves master protection. Per-synth FX return scales sends,
+  not already-shared lingering tails. WAV rendering is separate from live
+  worklet playback. Hardware model names are approximate voicings.
+* Physical listening, real MIDI devices and live publication remain unverified.
+
+Generated Playwright build/runtime/result directories are ignored. Preserve
+the unfinished source checkpoint, but do not treat it as an approved release.
+User reiterated: no new work; finish existing handoff with minimal validation.

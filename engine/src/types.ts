@@ -194,6 +194,10 @@ export interface SavedSynthData {
   synthParams: SynthParameters;
   synthModelId?: SynthModelId;
   synthModelParams?: SynthModelParams;
+  muted?: boolean;
+  solo?: boolean;
+  octaveShift?: number;
+  keyboardMode?: 'keyboard' | 'piano-roll';
 }
 
 export interface SavedPatternFull {

@@ -1,6 +1,7 @@
 import { SynthParameters, OscillatorType } from './types';
 import { clamp, noteToFrequency as utilNoteToFrequency } from './utils';
 import { AUDIO_MIXING } from './constants';
+import { ResonantFilter, oscillator, finiteClamp } from './dsp';
 
 interface VoiceState {
   active: boolean;
@@ -14,13 +15,16 @@ interface VoiceState {
   envValue: number;
   noteOnTime: number;
   filterMemory: number;
+  filter: ResonantFilter;
+  note: string;
+  id: number;
+  releaseStep: number;
 }
 
 export class StreamingSynth {
   private voices: VoiceState[] = [];
   private params: SynthParameters;
   private sampleRate: number;
-  private maxVoices: number;
 
   private delayBufferL: Float32Array = new Float32Array(0);
   private delayBufferR: Float32Array = new Float32Array(0);
@@ -33,14 +37,14 @@ export class StreamingSynth {
   private phaserLfoPhase: number = 0;
   private phaserBuffers: Float32Array[] = [];
   private phaserWriteIndices: number[] = [];
-  private phaserReadIndices: number[] = [];
 
-  private noteOffQueue: Array<{ freq: number; releaseAtSample: number }> = [];
+  private noteOffQueue: Array<{ note: string; id: number; releaseAtSample: number }> = [];
   private totalSamplesRendered: number = 0;
+  private noteCounter = 0;
+  private lastFrequency = 440;
 
   constructor(sampleRate: number = 48000, maxVoices: number = 8) {
     this.sampleRate = sampleRate;
-    this.maxVoices = maxVoices;
     this.params = this.getDefaultParams();
     this.initEffects();
     for (let i = 0; i < maxVoices; i++) {
@@ -82,6 +86,10 @@ export class StreamingSynth {
       envValue: 0,
       noteOnTime: 0,
       filterMemory: 0,
+      filter: new ResonantFilter(),
+      note: '',
+      id: 0,
+      releaseStep: 0,
     };
   }
 
@@ -99,7 +107,6 @@ export class StreamingSynth {
     const phaserDelays = [0.002, 0.003, 0.004, 0.005];
     this.phaserBuffers = phaserDelays.map(len => new Float32Array(Math.max(1, Math.floor(len * this.sampleRate))));
     this.phaserWriteIndices = new Array(phaserDelays.length).fill(0);
-    this.phaserReadIndices = new Array(phaserDelays.length).fill(0);
   }
 
   private updateDelayBuffer() {
@@ -109,7 +116,6 @@ export class StreamingSynth {
       const newBufR = new Float32Array(newLength);
       const copyLen = Math.min(newLength, this.delayBufferL.length);
       for (let i = 0; i < copyLen; i++) {
-        const idx = (this.delayWriteIndex - copyLen + i + newLength * 2) % newLength;
         newBufL[i] = this.delayBufferL[(this.delayWriteIndex - copyLen + i + this.delayBufferL.length * 2) % this.delayBufferL.length];
         newBufR[i] = this.delayBufferR[(this.delayWriteIndex - copyLen + i + this.delayBufferR.length * 2) % this.delayBufferR.length];
       }
@@ -130,31 +136,7 @@ export class StreamingSynth {
     }
   }
 
-  private computeWaveshaperCurve(amount: number): Float32Array {
-    const samples = 256;
-    const curve = new Float32Array(samples);
-    const k = amount * 18;
-    if (k === 0) {
-      for (let i = 0; i < samples; i++) curve[i] = (i * 2) / samples - 1;
-      return curve;
-    }
-    const limit = Math.tanh(k);
-    for (let i = 0; i < samples; i++) {
-      const x = (i * 2) / samples - 1;
-      curve[i] = Math.tanh(x * k) / limit;
-    }
-    return curve;
-  }
-
   renderChunk(samplesPerChannel: number): { left: Float32Array; right: Float32Array } {
-    while (this.noteOffQueue.length > 0 && this.noteOffQueue[0].releaseAtSample <= this.totalSamplesRendered) {
-      const entry = this.noteOffQueue.shift()!;
-      const voice = this.voices.find(v => v.active && Math.abs(v.frequency - entry.freq) < 0.5);
-      if (voice && voice.envStage !== 'release') {
-        voice.envStage = 'release';
-      }
-    }
-
     const left = new Float32Array(samplesPerChannel);
     const right = new Float32Array(samplesPerChannel);
     const p = this.params;
@@ -165,9 +147,14 @@ export class StreamingSynth {
     const globalPan = clamp(p.pan ?? 0, -1, 1);
     const spread = clamp(p.spread ?? 0, 0, 1);
 
-    const driveCurve = p.fxSends.drive > 0 ? this.computeWaveshaperCurve(p.fxSends.drive * 0.8) : null;
+    const driveAmount = finiteClamp(p.fxSends.drive, 0, 1);
 
     for (let i = 0; i < samplesPerChannel; i++) {
+      while (this.noteOffQueue.length && this.noteOffQueue[0].releaseAtSample <= this.totalSamplesRendered + i) {
+        const entry = this.noteOffQueue.shift()!;
+        const voice = this.voices.find(v => v.active && v.note === entry.note && v.id === entry.id);
+        if (voice) this.releaseVoice(voice);
+      }
       let dryL = 0;
       let dryR = 0;
 
@@ -190,18 +177,11 @@ export class StreamingSynth {
           + (p.lfo2.enabled && p.lfo2.target === 'pitch' ? lfo2Val * p.lfo2.depth : 0);
         const currentFreq = voice.frequency * Math.pow(2, p.oscillator.detune / 1200) * Math.pow(2, (pitchMod * PITCH_LFO_MAX) / 1200);
 
-        voice.oscPhase += currentFreq / this.sampleRate;
+        const phaseStep = finiteClamp(currentFreq / this.sampleRate, 0.000001, 0.45);
+        voice.oscPhase += phaseStep;
         voice.oscPhase -= Math.floor(voice.oscPhase);
 
-        let sample: number;
-        const frac = voice.oscPhase;
-        switch (p.oscillator.type) {
-          case 'sine': sample = Math.sin(2 * Math.PI * voice.oscPhase); break;
-          case 'square': sample = frac < 0.5 ? 1 : -1; break;
-          case 'sawtooth': sample = 2 * frac - 1; break;
-          case 'triangle': sample = 4 * Math.abs(frac - 0.5) - 1; break;
-          default: sample = Math.sin(2 * Math.PI * voice.oscPhase);
-        }
+        const sample = oscillator(p.oscillator.type, voice.oscPhase, phaseStep);
 
         const filterMod = (p.lfo1.enabled && p.lfo1.target === 'filter' ? lfo1Val * p.lfo1.depth : 0)
           + (p.lfo2.enabled && p.lfo2.target === 'filter' ? lfo2Val * p.lfo2.depth : 0);
@@ -209,10 +189,7 @@ export class StreamingSynth {
           p.filter.frequency * Math.pow(2, clamp(filterMod, -1, 1) * FILTER_LFO_MAX),
           20, 20000
         );
-        const rc = 1 / (2 * Math.PI * modulatedCutoff);
-        const alpha = dt / (rc + dt);
-        voice.filterMemory = voice.filterMemory + alpha * (sample - voice.filterMemory);
-        const filtered = voice.filterMemory;
+        const filtered = voice.filter.process(sample, this.sampleRate, modulatedCutoff, p.filter.q, p.filter.type);
 
         const vol = env * voice.velocity * clamp(p.gain, 0, 2) * AUDIO_MIXING.SYNTH_MASTER_VOLUME;
         const out = filtered * vol;
@@ -235,7 +212,7 @@ export class StreamingSynth {
 
       if (p.effects.delay.enabled && p.effects.delay.wet > 0) {
         const delayLen = this.delayBufferL.length;
-        const readIdx = (this.delayWriteIndex - 1 + delayLen * 2) % delayLen;
+        const readIdx = this.delayWriteIndex;
         const delayedL = this.delayBufferL[readIdx];
         const delayedR = this.delayBufferR[readIdx];
         this.delayBufferL[this.delayWriteIndex] = dryL + delayedL * p.effects.delay.feedback;
@@ -266,16 +243,15 @@ export class StreamingSynth {
         wetR += revOut * dw;
       }
 
-      if (driveCurve && p.fxSends.drive > 0) {
-        const driveMix = p.fxSends.drive;
+      if (driveAmount > 0) {
+        const driveMix = driveAmount;
         const driveWet = driveMix * FxReturn;
         if (driveWet > 0) {
           const driveInL = dryL * 0.5 + dryR * 0.5;
-          const driveInR = driveInL;
-          const idxL = clamp(Math.floor((driveInL * 0.5 + 0.5) * (driveCurve.length - 1)), 0, driveCurve.length - 1);
-          const idxR = clamp(Math.floor((driveInR * 0.5 + 0.5) * (driveCurve.length - 1)), 0, driveCurve.length - 1);
-          wetL += driveCurve[idxL] * driveWet;
-          wetR += driveCurve[idxR] * driveWet;
+          const k = driveAmount * 14.4;
+          const distorted = Math.tanh(driveInL * k) / Math.tanh(k);
+          wetL += distorted * driveWet;
+          wetR += distorted * driveWet;
         }
       }
 
@@ -317,13 +293,8 @@ export class StreamingSynth {
       let outL = dryL + wetL;
       let outR = dryR + wetR;
 
-      if (outL > 1) outL = 1 + (1 - outL) * 0.2;
-      else if (outL < -1) outL = -1 + (1 + outL) * 0.2;
-      if (outR > 1) outR = 1 + (1 - outR) * 0.2;
-      else if (outR < -1) outR = -1 + (1 + outR) * 0.2;
-
-      left[i] = outL;
-      right[i] = outR;
+      left[i] = Number.isFinite(outL) ? Math.tanh(outL * 0.5) : 0;
+      right[i] = Number.isFinite(outR) ? Math.tanh(outR * 0.5) : 0;
     }
 
     this.totalSamplesRendered += samplesPerChannel;
@@ -334,7 +305,7 @@ export class StreamingSynth {
     const env = this.params.envelope;
     switch (voice.envStage) {
       case 'attack': {
-        voice.envValue += dt / Math.max(0.001, env.attack);
+        voice.envValue += dt / Math.max(0.002, env.attack);
         if (voice.envValue >= 1) {
           voice.envValue = 1;
           voice.envStage = 'decay';
@@ -354,8 +325,8 @@ export class StreamingSynth {
         break;
       }
       case 'release': {
-        voice.envValue -= dt / Math.max(0.001, env.release) * voice.envValue;
-        if (voice.envValue <= 0.001) {
+        voice.envValue -= voice.releaseStep;
+        if (voice.envValue <= 0) {
           voice.envValue = 0;
           voice.envStage = 'off';
           voice.active = false;
@@ -368,25 +339,16 @@ export class StreamingSynth {
 
   noteOn(note: string, velocity: number = 0.7) {
     const freq = utilNoteToFrequency(note);
-    let voice = this.voices.find(v => v.active && v.frequency === freq);
-    if (voice) {
-      voice.velocity = velocity;
-      voice.envStage = 'attack';
-      voice.envValue = 0;
-      voice.noteOnTime = 0;
-      return;
-    }
-    voice = this.voices.find(v => !v.active);
+    let voice = this.voices.find(v => v.active && v.note === note) || this.voices.find(v => !v.active);
     if (!voice) {
       voice = this.voices[0];
     }
     voice.active = true;
     voice.targetFrequency = freq;
-    if (this.params.portamento.enabled && this.voices.some(v => v.active && v !== voice)) {
-      voice.frequency = voice.frequency || freq;
-    } else {
-      voice.frequency = freq;
-    }
+    voice.frequency = this.params.portamento.enabled ? this.lastFrequency : freq;
+    this.lastFrequency = freq;
+    voice.note = note;
+    voice.id = ++this.noteCounter;
     voice.velocity = clamp(velocity, 0, 1);
     voice.oscPhase = 0;
     voice.lfo1Phase = 0;
@@ -395,26 +357,29 @@ export class StreamingSynth {
     voice.envValue = 0;
     voice.noteOnTime = 0;
     voice.filterMemory = 0;
+    voice.filter = new ResonantFilter();
   }
 
   noteOff(note: string) {
-    const freq = utilNoteToFrequency(note);
-    const voice = this.voices.find(v => v.active && v.frequency === freq);
-    if (voice && voice.envStage !== 'release') {
-      voice.envStage = 'release';
-    }
+    this.voices.filter(v => v.active && v.note === note).forEach(voice => this.releaseVoice(voice));
+  }
+
+  private releaseVoice(voice: VoiceState, seconds = this.params.envelope.release) {
+    if (voice.envStage === 'release') return;
+    voice.envStage = 'release';
+    voice.releaseStep = voice.envValue / (this.sampleRate * finiteClamp(seconds, 0.005, 10, 0.3));
   }
 
   scheduleNoteOff(note: string, delaySamples: number) {
-    const freq = utilNoteToFrequency(note);
-    this.noteOffQueue.push({ freq, releaseAtSample: this.totalSamplesRendered + delaySamples });
+    const voice = this.voices.find(v => v.active && v.note === note);
+    if (!voice) return;
+    this.noteOffQueue.push({ note, id: voice.id, releaseAtSample: this.totalSamplesRendered + Math.max(0, delaySamples) });
+    this.noteOffQueue.sort((a, b) => a.releaseAtSample - b.releaseAtSample);
   }
 
   allNotesOff() {
     for (const voice of this.voices) {
-      voice.active = false;
-      voice.envStage = 'off';
-      voice.envValue = 0;
+      this.releaseVoice(voice, 0.03);
     }
     this.noteOffQueue.length = 0;
   }
@@ -431,6 +396,7 @@ export class StreamingSynth {
     if (params.gain !== undefined) this.params.gain = params.gain;
     if (params.fxReturn !== undefined) this.params.fxReturn = params.fxReturn;
     if (params.pan !== undefined) this.params.pan = params.pan;
+    if (params.spread !== undefined) this.params.spread = params.spread;
     if (params.portamento) this.params.portamento = { ...this.params.portamento, ...params.portamento };
     if (params.fxSends) this.params.fxSends = { ...this.params.fxSends, ...params.fxSends };
     if (params.effects) {

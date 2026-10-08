@@ -3,12 +3,16 @@ import { DrumInstrument, DrumState, Pattern } from '../types';
 interface MidiSynthLane {
   id: number;
   pattern: Pattern;
+  muted?: boolean;
+  solo?: boolean;
 }
 
 interface MidiExportPayload {
   tempo: number;
   synthLanes: MidiSynthLane[];
   drumState: DrumState;
+  drumSwing?: number;
+  drumMasterVolume?: number;
 }
 
 interface MidiEvent {
@@ -69,7 +73,7 @@ const midiNoteToName = (midi: number): string => {
   return `${note}${octave}`;
 };
 
-const noteNameToMidi = (note: string): number | null => {
+export const noteNameToMidi = (note: string): number | null => {
   const normalized = note.trim().toUpperCase();
   const match = normalized.match(/^([A-G])(#?)(-?\d+)$/);
   if (!match) return null;
@@ -131,30 +135,34 @@ function buildTempoTrack(tempo: number): number[] {
 
 function buildSynthTrack(lane: MidiSynthLane, channel: number): number[] {
   const events: MidiEvent[] = [textMetaEvent(0, `Synth ${lane.id}`)];
+  const ticksPerStep = PPQ * 4 / Math.max(1, lane.pattern.steps.length);
   for (let stepIndex = 0; stepIndex < lane.pattern.steps.length; stepIndex += 1) {
     const step = lane.pattern.steps[stepIndex];
-    if (!step.note) continue;
+    if (!step.active || !step.note || step.velocity <= 0) continue;
     const midiNote = noteNameToMidi(step.note);
     if (midiNote === null) continue;
-    const tick = stepIndex * TICKS_PER_STEP;
+    const tick = Math.round(stepIndex * ticksPerStep);
     const velocity = clampVelocity(step.velocity * 127, DEFAULT_SYNTH_VELOCITY);
     const noteOnStatus = 0x90 | (channel & 0x0f);
     const noteOffStatus = 0x80 | (channel & 0x0f);
     events.push({ tick, data: [noteOnStatus, midiNote, velocity] });
-    events.push({ tick: tick + Math.max(1, Math.round(TICKS_PER_STEP * 0.92)), data: [noteOffStatus, midiNote, 0] });
+    events.push({ tick: tick + Math.max(1, Math.round(ticksPerStep * 0.92)), data: [noteOffStatus, midiNote, 0] });
   }
   return makeTrackChunk(encodeTrack(events));
 }
 
-function buildDrumTrack(drumState: DrumState): number[] {
+function buildDrumTrack(drumState: DrumState, swing = 0, masterVolume = 1): number[] {
   const events: MidiEvent[] = [textMetaEvent(0, 'Drums (GM ch10)')];
+  const hasSolo = Object.values(drumState).some(track => track.solo);
   for (const [instrument, note] of Object.entries(DRUM_NOTE_MAP) as Array<[DrumInstrument, number]>) {
     const track = drumState[instrument];
-    if (!track) continue;
-    const velocity = clampVelocity(track.settings.volume * 127, 100);
+    if (!track || track.muted || (hasSolo && !track.solo) || masterVolume <= 0) continue;
     for (let stepIndex = 0; stepIndex < track.steps.length; stepIndex += 1) {
       if (!track.steps[stepIndex]) continue;
-      const tick = stepIndex * TICKS_PER_STEP;
+      const stepVelocity = track.stepVelocities?.[stepIndex] ?? 1;
+      if (stepVelocity <= 0 || track.settings.volume <= 0) continue;
+      const velocity = clampVelocity(track.settings.volume * stepVelocity * masterVolume * 127, 100);
+      const tick = Math.round((stepIndex + (stepIndex % 2 ? swing : 0)) * TICKS_PER_STEP);
       const noteOnStatus = 0x90 | DRUM_CHANNEL;
       const noteOffStatus = 0x80 | DRUM_CHANNEL;
       events.push({ tick, data: [noteOnStatus, note, velocity] });
@@ -165,7 +173,8 @@ function buildDrumTrack(drumState: DrumState): number[] {
 }
 
 export function createMidiFile(payload: MidiExportPayload): Uint8Array {
-  const activeSynths = payload.synthLanes.filter((lane) => lane.pattern.steps.some((step) => Boolean(step.note)));
+  const hasSolo = payload.synthLanes.some(lane => lane.solo);
+  const activeSynths = payload.synthLanes.filter((lane) => !lane.muted && (!hasSolo || lane.solo) && lane.pattern.steps.some((step) => step.active && Boolean(step.note)));
   const trackChunks: number[][] = [buildTempoTrack(payload.tempo)];
 
   const nonDrumChannels = [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15];
@@ -174,7 +183,7 @@ export function createMidiFile(payload: MidiExportPayload): Uint8Array {
     trackChunks.push(buildSynthTrack(lane, channel));
   });
 
-  trackChunks.push(buildDrumTrack(payload.drumState));
+  trackChunks.push(buildDrumTrack(payload.drumState, payload.drumSwing, payload.drumMasterVolume));
 
   const header = [
     0x4d, 0x54, 0x68, 0x64,
@@ -205,7 +214,7 @@ export function downloadMidiFile(payload: MidiExportPayload, fileName: string): 
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export function transposeNote(note: string, semitones: number): string | null {

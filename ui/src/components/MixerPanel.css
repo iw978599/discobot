@@ -58,7 +58,6 @@
   direction: rtl;
   width: 22px;
   height: 60px;
-  appearance: slider-vertical;
   background: transparent;
   cursor: pointer;
 }
@@ -124,7 +123,6 @@
   direction: rtl;
   width: 16px;
   height: 36px;
-  appearance: slider-vertical;
   background: transparent;
   cursor: pointer;
 }

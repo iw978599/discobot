@@ -1,5 +1,5 @@
 import { DrumState, DrumInstrument, DrumKitModelVariant, DrumSettings } from './types';
-import { clamp } from './utils';
+import { finiteClamp as clamp } from './dsp';
 
 interface DrumHitRenderOptions {
   velocity?: number;
@@ -53,7 +53,8 @@ export class DrumSynthesizer {
     options: DrumHitRenderOptions = {}
   ): Float32Array {
     const profile = VARIANT_PROFILES[options.modelVariant || 'analog'];
-    const velocity = clamp(options.velocity ?? 0.85, 0.2, 1.2);
+    sampleRate = clamp(sampleRate, 8000, 192000, 48000);
+    const velocity = clamp(options.velocity ?? 0.85, 0, 1);
     const tune = clamp(settings.tune ?? 0, -1, 1);
     const pitchMultiplier = Math.pow(2, tune * 0.5);
     const userHumanize = clamp(settings.humanize ?? 0.35, 0, 1);
@@ -71,9 +72,9 @@ export class DrumSynthesizer {
       decay: clamp((optionHumanize.decay + transientHumanize.decay) * userHumanize, -1, 1),
       transient: clamp((optionHumanize.transient + transientHumanize.transient) * userHumanize, -1, 1),
     };
-    const vol = Math.max(0, Math.min(1, settings.volume)) * 2 * (0.72 + velocity * 0.42);
-    const tone = clamp(Math.max(0, Math.min(1, settings.tone)) + humanize.pitch * 0.18 * profile.humanize + (velocity - 0.8) * 0.12, 0, 1);
-    const extra = clamp(Math.max(0, Math.min(1, settings.extra)) + humanize.decay * 0.2 * profile.humanize + (velocity - 0.8) * 0.18, 0, 1);
+    const vol = clamp(settings.volume, 0, 1);
+    const tone = clamp(clamp(settings.tone, 0, 1) + humanize.pitch * 0.18 * profile.humanize + (velocity - 0.8) * 0.12, 0, 1);
+    const extra = clamp(clamp(settings.extra, 0, 1) + humanize.decay * 0.2 * profile.humanize + (velocity - 0.8) * 0.18, 0, 1);
     const transientScale = 1 + humanize.transient * 0.35 * profile.humanize + (velocity - 0.8) * 0.5;
 
     let output: Float32Array;
@@ -92,7 +93,14 @@ export class DrumSynthesizer {
       default: output = new Float32Array(0); break;
     }
     const polished = this.polishHit(output, profile.saturation);
-    return this.mixSampleLayer(polished, options.sampleLayer, options.sampleBlend ?? 0);
+    const mixed = this.mixSampleLayer(polished, options.sampleLayer, options.sampleBlend ?? 0, vol);
+    const attack = Math.max(1, Math.round(sampleRate * 0.0005));
+    const release = Math.max(1, Math.round(sampleRate * 0.006));
+    for (let i = 0; i < mixed.length; i++) {
+      const fade = Math.min(1, i / attack, (mixed.length - 1 - i) / release);
+      mixed[i] = clamp(mixed[i], -1, 1) * velocity * 0.7 * fade;
+    }
+    return mixed;
   }
 
   static renderPattern(
@@ -101,6 +109,8 @@ export class DrumSynthesizer {
     sampleRate: number,
     options: DrumPatternRenderOptions = {}
   ): Float32Array {
+    tempo = clamp(tempo, 20, 300, 120);
+    sampleRate = clamp(sampleRate, 8000, 192000, 48000);
     const beatsPerStep = 60 / tempo / 4;
     const stepDuration = beatsPerStep;
     const totalSamples = Math.floor(16 * stepDuration * sampleRate);
@@ -124,7 +134,7 @@ export class DrumSynthesizer {
           const downbeatAccent = step % 4 === 0 ? 1 : 0.88;
           const explicitVelocity = track.stepVelocities?.[step];
           const velocity = explicitVelocity !== undefined
-            ? clamp(explicitVelocity, 0.1, 1)
+            ? clamp(explicitVelocity, 0, 1)
             : clamp(downbeatAccent + randCentered(seedBase + 3) * 0.08, 0.3, 1.1);
           const humanize = {
             pitch: randCentered(seedBase + 11) * humanizeAmount * clamp(track.settings.humanize ?? 0.35, 0, 1),
@@ -148,28 +158,19 @@ export class DrumSynthesizer {
       }
     }
 
-    let maxVal = 0;
     for (let i = 0; i < mix.length; i++) {
-      const abs = Math.abs(mix[i]);
-      if (abs > maxVal) maxVal = abs;
-    }
-    if (maxVal > 1) {
-      const scale = 1 / maxVal;
-      for (let i = 0; i < mix.length; i++) {
-        const x = mix[i] * scale;
-        mix[i] = Math.tanh(x * 1.1) / Math.tanh(1.1);
-      }
+      mix[i] = Math.tanh(mix[i] * 0.7);
     }
 
     return mix;
   }
 
-  private static mixSampleLayer(base: Float32Array, sampleLayer: Float32Array | undefined, blend: number): Float32Array {
+  private static mixSampleLayer(base: Float32Array, sampleLayer: Float32Array | undefined, blend: number, volume: number): Float32Array {
     if (!sampleLayer || sampleLayer.length === 0 || blend <= 0) return base;
     const mix = clamp(blend, 0, 0.4);
     const out = new Float32Array(base.length);
     for (let i = 0; i < out.length; i++) {
-      const sample = sampleLayer[i % sampleLayer.length] * mix;
+      const sample = (i < sampleLayer.length ? clamp(sampleLayer[i], -1, 1) : 0) * mix * volume;
       out[i] = base[i] * (1 - mix) + sample;
     }
     return out;
@@ -224,7 +225,6 @@ export class DrumSynthesizer {
       ringPhase1 += (bodyFreq * 1.78) / sampleRate;
       ringPhase2 += (bodyFreq * 2.34) / sampleRate;
       const bodyEnv = Math.exp(-t * (16 + (1 - extra) * 6));
-      const subEnv = Math.exp(-t * (10 + (1 - extra) * 4));
       const body = (
         Math.sin(2 * Math.PI * bodyPhase) * 0.42 +
         Math.sin(2 * Math.PI * subPhase) * 0.28 +
@@ -279,6 +279,7 @@ export class DrumSynthesizer {
       lpBand = lpBand * 0.85 + noise * 0.15;
       let metallic = 0;
       for (let p = 0; p < phases.length; p++) {
+        if (base * ratios[p] >= sampleRate * 0.45) continue;
         phases[p] += (base * ratios[p]) / sampleRate;
         metallic += Math.sin(2 * Math.PI * phases[p]) * amps[p];
       }
@@ -316,6 +317,7 @@ export class DrumSynthesizer {
       lpBand = lpBand * 0.82 + noise * 0.18;
       let metallic = 0;
       for (let p = 0; p < phases.length; p++) {
+        if (base * ratios[p] >= sampleRate * 0.45) continue;
         phases[p] += (base * ratios[p]) / sampleRate;
         metallic += Math.sin(2 * Math.PI * phases[p]) * amps[p];
       }
@@ -346,6 +348,7 @@ export class DrumSynthesizer {
       const t = i / sampleRate;
       let metallic = 0;
       for (let p = 0; p < phases.length; p++) {
+        if (baseFreq * ratios[p] >= sampleRate * 0.45) continue;
         phases[p] += (baseFreq * ratios[p]) / sampleRate;
         metallic += Math.sin(2 * Math.PI * phases[p]) * amps[p];
       }
@@ -386,6 +389,7 @@ export class DrumSynthesizer {
       hpBand = hpBand * 0.5 + hpNoise * 0.5;
       let metallic = 0;
       for (let p = 0; p < phases.length; p++) {
+        if (base * ratios[p] >= sampleRate * 0.45) continue;
         phases[p] += (base * ratios[p]) / sampleRate;
         metallic += Math.sin(2 * Math.PI * phases[p]) * amps[p];
       }

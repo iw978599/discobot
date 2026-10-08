@@ -470,3 +470,6 @@
 .btn-delete:hover {
   background: #dc2626;
 }
+.sequencer-grid {
+  overflow-x: auto;
+}

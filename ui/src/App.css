@@ -124,21 +124,6 @@
   text-overflow: ellipsis;
 }
 
-.connected-users {
-  color: #00d4ff;
-}
-
-.status-indicator {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #ef4444;
-}
-
-.status-indicator.connected {
-  background: #22c55e;
-}
-
 .app-content {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(min(420px, 100%), 1fr);
@@ -480,15 +465,6 @@
   max-width: 160px;
 }
 
-.auth-error-banner {
-  padding: 0.35rem 0.7rem;
-  background: rgba(239, 68, 68, 0.12);
-  border-top: 1px solid rgba(239, 68, 68, 0.45);
-  border-bottom: 1px solid rgba(239, 68, 68, 0.45);
-  color: #fecaca;
-  font-size: 0.75rem;
-}
-
 @media (max-width: 1380px) {
   .app-content {
     grid-template-columns: minmax(0, 1fr);
@@ -516,4 +492,30 @@
 .load-select:focus {
   border-color: #00d4ff;
   color: #00d4ff;
+}
+
+.app-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.9rem;
+  background: #3b1d1d;
+  border-bottom: 1px solid #ef4444;
+  color: #fecaca;
+  font-size: 0.85rem;
+}
+
+.app-alert-dismiss {
+  background: none;
+  border: 1px solid #7f1d1d;
+  border-radius: 4px;
+  color: #fecaca;
+  cursor: pointer;
+  padding: 0.15rem 0.45rem;
+  line-height: 1;
+}
+
+.app-alert-dismiss:hover {
+  border-color: #ef4444;
 }

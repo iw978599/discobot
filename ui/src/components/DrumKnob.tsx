@@ -1,4 +1,5 @@
-import { useRef, useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useKnobInteraction } from './useKnobInteraction';
 import './DrumKnob.css';
 
 interface DrumKnobProps {
@@ -11,6 +12,7 @@ interface DrumKnobProps {
   onChange: (value: number) => void;
   parseInputValue?: (input: string) => number | null;
   title?: string;
+  ariaLabel?: string;
 }
 
 export default function DrumKnob({
@@ -23,11 +25,8 @@ export default function DrumKnob({
   onChange,
   parseInputValue,
   title,
+  ariaLabel = label,
 }: DrumKnobProps) {
-  const knobRef = useRef<HTMLDivElement>(null);
-  const dragging = useRef(false);
-  const startY = useRef(0);
-  const startVal = useRef(0);
   const [localVal, setLocalVal] = useState(value);
   const [isEditing, setIsEditing] = useState(false);
   const [inputValue, setInputValue] = useState('');
@@ -41,53 +40,41 @@ export default function DrumKnob({
 
   const pct = (localVal - min) / (max - min);
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    dragging.current = true;
-    startY.current = e.clientY;
-    startVal.current = localVal;
-
-    const handleMouseMove = (me: MouseEvent) => {
-      if (!dragging.current) return;
-      const delta = (startY.current - me.clientY) / 150;
-      const range = max - min;
-      const newVal = Math.max(min, Math.min(max, startVal.current + delta * range));
-      const stepped = Math.round((newVal - min) / step) * step + min;
-      setLocalVal(stepped);
-      onChange(stepped);
-    };
-
-    const handleMouseUp = () => {
-      dragging.current = false;
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-  }, [localVal, min, max, step, onChange]);
+  const { normalize, ...interaction } = useKnobInteraction(localVal, min, max, step, (next) => {
+    setLocalVal(next);
+    onChange(next);
+  });
 
   const svgDeg = -240 + pct * 300;
 
   const commitInput = useCallback(() => {
+    if (!isEditing) return;
     const parsed = parseInputValue
       ? parseInputValue(inputValue)
       : Number.parseFloat(inputValue.replace(/[^0-9+-.]/g, ''));
     if (Number.isFinite(parsed)) {
       const newVal = Math.max(min, Math.min(max, parsed as number));
-      const stepped = Math.round((newVal - min) / step) * step + min;
+      const stepped = normalize(newVal);
       setLocalVal(stepped);
       onChange(stepped);
     }
     setIsEditing(false);
-  }, [parseInputValue, inputValue, min, max, step, onChange]);
+  }, [isEditing, parseInputValue, inputValue, min, max, step, onChange]);
 
   return (
     <div className="drum-knob">
       <div
-        ref={knobRef}
         className="drum-knob-rotary"
-        onMouseDown={handleMouseDown}
+        {...interaction}
+        role="slider"
+        aria-orientation="vertical"
+        tabIndex={0}
+        aria-label={ariaLabel}
+        aria-valuemin={min}
+        aria-valuemax={max}
+        aria-valuenow={localVal}
+        aria-valuetext={computedDisplay}
+        style={{ touchAction: 'none' }}
       >
         <svg viewBox="0 0 44 44" className="drum-knob-svg">
           <circle cx="22" cy="22" r="18" fill="#2a2a2a" stroke="#4a4a4a" strokeWidth="2" />
@@ -107,6 +94,7 @@ export default function DrumKnob({
       <span className="drum-knob-label" title={title}>{label}</span>
       <input
         className="drum-knob-value-input"
+        aria-label={`${ariaLabel} value`}
         value={isEditing ? inputValue : computedDisplay}
         onFocus={() => {
           setIsEditing(true);
@@ -115,7 +103,7 @@ export default function DrumKnob({
         onChange={(e) => setInputValue(e.target.value)}
         onBlur={commitInput}
         onKeyDown={(e) => {
-          if (e.key === 'Enter') commitInput();
+          if (e.key === 'Enter') e.currentTarget.blur();
           if (e.key === 'Escape') {
             setIsEditing(false);
             setInputValue(computedDisplay);

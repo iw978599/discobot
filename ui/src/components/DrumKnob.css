@@ -45,3 +45,7 @@
 .drum-knob-value-input:focus {
   border-color: rgba(245, 158, 11, 0.7);
 }
+.drum-knob-rotary:focus-visible {
+  outline: 2px solid #f59e0b;
+  border-radius: 50%;
+}
