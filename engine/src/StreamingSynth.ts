@@ -25,7 +25,6 @@ export class StreamingSynth {
   private voices: VoiceState[] = [];
   private params: SynthParameters;
   private sampleRate: number;
-  private maxVoices: number;
 
   private delayBufferL: Float32Array = new Float32Array(0);
   private delayBufferR: Float32Array = new Float32Array(0);
@@ -38,7 +37,6 @@ export class StreamingSynth {
   private phaserLfoPhase: number = 0;
   private phaserBuffers: Float32Array[] = [];
   private phaserWriteIndices: number[] = [];
-  private phaserReadIndices: number[] = [];
 
   private noteOffQueue: Array<{ note: string; id: number; releaseAtSample: number }> = [];
   private totalSamplesRendered: number = 0;
@@ -47,7 +45,6 @@ export class StreamingSynth {
 
   constructor(sampleRate: number = 48000, maxVoices: number = 8) {
     this.sampleRate = sampleRate;
-    this.maxVoices = maxVoices;
     this.params = this.getDefaultParams();
     this.initEffects();
     for (let i = 0; i < maxVoices; i++) {
@@ -110,7 +107,6 @@ export class StreamingSynth {
     const phaserDelays = [0.002, 0.003, 0.004, 0.005];
     this.phaserBuffers = phaserDelays.map(len => new Float32Array(Math.max(1, Math.floor(len * this.sampleRate))));
     this.phaserWriteIndices = new Array(phaserDelays.length).fill(0);
-    this.phaserReadIndices = new Array(phaserDelays.length).fill(0);
   }
 
   private updateDelayBuffer() {
@@ -120,7 +116,6 @@ export class StreamingSynth {
       const newBufR = new Float32Array(newLength);
       const copyLen = Math.min(newLength, this.delayBufferL.length);
       for (let i = 0; i < copyLen; i++) {
-        const idx = (this.delayWriteIndex - copyLen + i + newLength * 2) % newLength;
         newBufL[i] = this.delayBufferL[(this.delayWriteIndex - copyLen + i + this.delayBufferL.length * 2) % this.delayBufferL.length];
         newBufR[i] = this.delayBufferR[(this.delayWriteIndex - copyLen + i + this.delayBufferR.length * 2) % this.delayBufferR.length];
       }

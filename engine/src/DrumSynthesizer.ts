@@ -225,7 +225,6 @@ export class DrumSynthesizer {
       ringPhase1 += (bodyFreq * 1.78) / sampleRate;
       ringPhase2 += (bodyFreq * 2.34) / sampleRate;
       const bodyEnv = Math.exp(-t * (16 + (1 - extra) * 6));
-      const subEnv = Math.exp(-t * (10 + (1 - extra) * 4));
       const body = (
         Math.sin(2 * Math.PI * bodyPhase) * 0.42 +
         Math.sin(2 * Math.PI * subPhase) * 0.28 +

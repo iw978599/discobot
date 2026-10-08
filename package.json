@@ -13,7 +13,7 @@
     "build": "npm run build --workspaces",
     "build:ui": "npm run build --workspace=ui",
     "start": "npm run preview --workspace=ui -- --host 0.0.0.0",
-    "typecheck": "npm run build --workspace=engine && tsc --noEmit -p ui/tsconfig.json",
+    "typecheck": "tsc --noEmit -p engine/tsconfig.json && tsc --noEmit -p ui/tsconfig.json",
     "test": "node --import tsx --test engine/test/*.test.ts ui/test/*.test.ts",
     "test:browser": "playwright test"
   },

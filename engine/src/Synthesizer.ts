@@ -49,7 +49,7 @@ export class Synthesizer {
     return buffer;
   }
 
-  static applyADSR(samples: Float32Array, sampleRate: number, attack: number, decay: number, sustain: number, release: number, totalDuration: number): Float32Array {
+  static applyADSR(samples: Float32Array, sampleRate: number, attack: number, decay: number, sustain: number, release: number): Float32Array {
     attack = clamp(attack, 0.002, 10, 0.01);
     decay = clamp(decay, 0.002, 10, 0.2);
     sustain = clamp(sustain, 0, 1, 0.5);
@@ -188,7 +188,7 @@ export class Synthesizer {
       lfo1Phase += lfos[0].rate / sampleRate;
       lfo2Phase += lfos[1].rate / sampleRate;
     }
-    const shapedSamples = Synthesizer.applyADSR(samples, sampleRate, attack, decay, sustain, release, duration);
+    const shapedSamples = Synthesizer.applyADSR(samples, sampleRate, attack, decay, sustain, release);
     const output = new Float32Array(shapedSamples.length);
     const lfoState = [0, 0];
     const filter = new ResonantFilter();
