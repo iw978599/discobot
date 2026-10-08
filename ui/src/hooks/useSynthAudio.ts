@@ -1,9 +1,14 @@
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useMemo } from 'react';
 import type { SynthParameters, EffectsLoopState } from '../types';
 import { createAudioLane, getAudioContext, ensureAudioReady, loadSynthWorklet, setEffectsLoop } from './browserAudio';
 
+// A synced rate N means one LFO cycle per 1/N note, so 1/4 at 120 BPM is 2 Hz.
+export function syncedLfoHz(rate: number, bpm: number): number {
+  return Math.max(20, Math.min(400, bpm)) * Math.max(1, Math.round(rate)) / 240;
+}
+
 export function flattenSynthParams(p: SynthParameters, bpm = 120): Record<string, unknown> {
-  const syncRate = (rate: number, sync?: boolean) => sync ? Math.max(20, Math.min(300, bpm)) * Math.max(1, Math.round(rate)) / 240 : rate;
+  const syncRate = (rate: number, sync?: boolean) => sync ? syncedLfoHz(rate, bpm) : rate;
   return {
     oscType: p.oscillator.type, detune: p.oscillator.detune,
     filterFreq: p.filter.frequency, filterQ: p.filter.q, filterType: p.filter.type,
@@ -24,7 +29,8 @@ interface SynthLane {
   parameters?: SynthParameters;
   bpm: number;
   generation: number;
-  pendingNoteOffs: Set<string>;
+  // Note-ons still waiting on audio resume or worklet loading, keyed by note name.
+  starting: Map<string, Set<number>>;
 }
 
 export function useSynthAudio() {
@@ -35,7 +41,7 @@ export function useSynthAudio() {
   function laneFor(id: number): SynthLane {
     let lane = lanesRef.current.get(id);
     if (!lane) {
-      lane = { bpm: 120, generation: 0, pendingNoteOffs: new Set() };
+      lane = { bpm: 120, generation: 0, starting: new Map() };
       lanesRef.current.set(id, lane);
     }
     return lane;
@@ -76,30 +82,40 @@ export function useSynthAudio() {
     note: string, parameters: SynthParameters | null, duration?: number,
     velocity = 1, muted = false, loop?: EffectsLoopState, bpm = 120, synthId = 1, scheduledTime?: number,
   ) => {
-    const lane = laneFor(synthId), generation = lane.generation;
-    if (muted || !await ensureAudioReady() || generation !== lane.generation) return;
+    if (muted) return;
+    const lane = laneFor(synthId), generation = lane.generation, id = ++sequenceRef.current;
+    let starting = lane.starting.get(note);
+    if (!starting) lane.starting.set(note, starting = new Set());
+    starting.add(id);
+    // A release or lane stop that arrives while this note is still starting must win.
+    const cancelled = () => generation !== lane.generation || !lane.starting.get(note)?.has(id);
     try {
+      if (!await ensureAudioReady() || cancelled()) return;
       if (parameters) updateParameters(parameters, bpm, loop, synthId);
       else if (loop) setEffectsLoop(loop);
       const node = await getNode(lane);
-      if (generation !== lane.generation) return;
-      if (lane.pendingNoteOffs.delete(note)) return;
-      node.port.postMessage({ type: 'noteOn', note, velocity, id: ++sequenceRef.current, duration, time: scheduledTime });
+      if (cancelled()) return;
+      node.port.postMessage({ type: 'noteOn', note, velocity, id, duration, time: scheduledTime });
     } catch (error) {
       if (generation === lane.generation) console.error('Synth playback failed:', error);
+    } finally {
+      const remaining = lane.starting.get(note);
+      remaining?.delete(id);
+      if (remaining?.size === 0) lane.starting.delete(note);
     }
   }, [updateParameters]);
 
   const stopNote = useCallback((note: string, _parameters?: SynthParameters | null, synthId = 1) => {
     const lane = lanesRef.current.get(synthId);
     if (!lane) return;
-    if (lane.node) lane.node.port.postMessage({ type: 'noteOff', note });
-    else lane.pendingNoteOffs.add(note);
+    lane.starting.delete(note);
+    lane.node?.port.postMessage({ type: 'noteOff', note });
   }, []);
   const stopSynth = useCallback((synthId: number, release = 0.03) => {
     const lane = lanesRef.current.get(synthId);
     if (!lane) return;
     lane.generation++;
+    lane.starting.clear();
     lane.node?.port.postMessage({ type: 'allNotesOff', release });
   }, []);
   const stopAllNotes = useCallback((release = 0.03) => {
@@ -118,8 +134,9 @@ export function useSynthAudio() {
     }), 50);
   }, [stopAllNotes]);
   useEffect(() => dispose, [dispose]);
-  return {
+  // The same object on every render, so effects and callbacks that depend on it do not re-run.
+  return useMemo(() => ({
     ensureAudioReady, tryResume: () => { void ensureAudioReady(); },
     playNote, stopNote, stopSynth, stopAllNotes, updateParameters, setEffectsLoop, setVolume, dispose,
-  };
+  }), [playNote, stopNote, stopSynth, stopAllNotes, updateParameters, setVolume, dispose]);
 }

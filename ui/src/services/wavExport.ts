@@ -2,6 +2,8 @@ import { Synthesizer, DrumSynthesizer } from '@discobot/engine';
 import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, SynthParameters } from '../types';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
 import { transposeNote } from '../utils/midiExport';
+import { driveCurve, reverbImpulse, safetyCurve } from '../hooks/browserAudio';
+import { syncedLfoHz } from '../hooks/useSynthAudio';
 
 export interface ExportArrangement {
   tempo: number;
@@ -60,19 +62,12 @@ function connectEffects(ctx: OfflineAudioContext, input: AudioNode, master: Audi
   }
   if (state.reverb.enabled && sends.reverb > 0) {
     const reverb = ctx.createConvolver(), level = ctx.createGain();
-    const buffer = ctx.createBuffer(2, Math.ceil(ctx.sampleRate * state.reverb.decay), ctx.sampleRate);
-    for (let channel = 0; channel < 2; channel++) {
-      const data = buffer.getChannelData(channel);
-      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-6 * i / data.length);
-    }
-    reverb.buffer = buffer; level.gain.value = state.reverb.mix;
+    reverb.buffer = reverbImpulse(ctx, state.reverb.decay); level.gain.value = state.reverb.mix;
     send(sends.reverb).connect(reverb).connect(level).connect(wet);
   }
   if (state.drive.enabled && sends.drive > 0) {
     const drive = ctx.createWaveShaper(), tone = ctx.createBiquadFilter(), level = ctx.createGain();
-    const curve = new Float32Array(2049), k = 1 + state.drive.amount * 12;
-    for (let i = 0; i < curve.length; i++) curve[i] = Math.tanh((2 * i / (curve.length - 1) - 1) * k) / Math.tanh(k);
-    drive.curve = curve; drive.oversample = '4x'; tone.frequency.value = 400 * Math.pow(40, state.drive.tone);
+    drive.curve = driveCurve(state.drive.amount); drive.oversample = '4x'; tone.frequency.value = 400 * Math.pow(40, state.drive.tone);
     level.gain.value = .5;
     send(sends.drive).connect(drive).connect(tone).connect(level).connect(wet);
   }
@@ -98,9 +93,8 @@ export async function renderArrangementWav(arrangement: ExportArrangement): Prom
   const frames = Math.ceil((barDuration + tail) * sampleRate);
   const ctx = new OfflineAudioContext(2, frames, sampleRate);
   const master = ctx.createGain(), limiter = ctx.createDynamicsCompressor();
-  const safety = ctx.createWaveShaper(), curve = new Float32Array(2049);
-  for (let i = 0; i < curve.length; i++) curve[i] = Math.tanh((2 * i / (curve.length - 1) - 1) * 1.2) * .95;
-  safety.curve = curve;
+  const safety = ctx.createWaveShaper();
+  safety.curve = safetyCurve();
   safety.oversample = '2x';
   master.gain.value = .55;
   limiter.threshold.value = -6; limiter.knee.value = 6; limiter.ratio.value = 20;
@@ -117,7 +111,7 @@ export async function renderArrangementWav(arrangement: ExportArrangement): Prom
     if (lane.muted || (synthSolo && !lane.solo) || !lane.pattern || !lane.synthParams) continue;
     const synth = new Synthesizer(), params = lane.synthParams;
     const syncLfo = (lfo: SynthParameters['lfo1']) => ({
-      ...lfo, rate: lfo.sync ? arrangement.tempo * 4 / (60 * Math.max(1, Math.round(lfo.rate))) : lfo.rate,
+      ...lfo, rate: lfo.sync ? syncedLfoHz(lfo.rate, arrangement.tempo) : lfo.rate,
     });
     synth.updateParameters({ ...params, lfo1: syncLfo(params.lfo1), lfo2: syncLfo(params.lfo2),
       effects: { reverb: { ...params.effects.reverb, enabled: false }, delay: { ...params.effects.delay, enabled: false } } });

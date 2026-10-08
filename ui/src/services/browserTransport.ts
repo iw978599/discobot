@@ -8,7 +8,6 @@ export class BrowserTransport {
   private timer: ReturnType<typeof setInterval> | null = null;
   private nextTime = 0;
   private step = 0;
-  private suspended = false;
 
   constructor(
     private clock: () => number,
@@ -16,28 +15,15 @@ export class BrowserTransport {
     private schedule: (tick: TransportTick) => void,
   ) {}
 
-  private onVisibilityChange = () => {
-    if (typeof document === 'undefined') return;
-    if (document.hidden) {
-      this.suspended = true;
-    } else if (this.timer !== null) {
-      this.suspended = false;
-      this.pump();
-    }
-  };
-
   start() {
     if (this.timer !== null) return;
     this.step = 0;
-    this.suspended = typeof document !== 'undefined' && document.hidden;
     this.nextTime = this.clock() + .04;
     this.timer = setInterval(() => this.pump(), 20);
-    if (typeof document !== 'undefined') {
-      document.addEventListener('visibilitychange', this.onVisibilityChange);
-    }
     this.pump();
   }
 
+  // One tick is a 32nd note; 16-step lanes and the drum grid use every second tick.
   pump() {
     const now = this.clock();
     const duration = 60 / Math.max(20, Math.min(400, this.tempo())) / 8;
@@ -57,12 +43,7 @@ export class BrowserTransport {
     if (this.timer !== null) clearInterval(this.timer);
     this.timer = null;
     this.step = 0;
-    this.suspended = false;
-    if (typeof document !== 'undefined') {
-      document.removeEventListener('visibilitychange', this.onVisibilityChange);
-    }
   }
 
   get running() { return this.timer !== null; }
-  get isSuspended() { return this.suspended; }
 }

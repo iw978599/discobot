@@ -24,6 +24,32 @@ type Effects = {
   depth: GainNode;
 };
 
+// Shared with the offline WAV renderer so an export is shaped like live playback.
+export function safetyCurve() {
+  const curve = new Float32Array(2049);
+  for (let i = 0; i < curve.length; i++) curve[i] = Math.tanh((2 * i / (curve.length - 1) - 1) * 1.2) * 0.95;
+  return curve;
+}
+
+export function driveCurve(amount: number) {
+  const curve = new Float32Array(2049);
+  const k = limit(amount, 0, 1) * 18;
+  for (let i = 0; i < curve.length; i++) {
+    const x = 2 * i / (curve.length - 1) - 1;
+    curve[i] = k === 0 ? x : Math.tanh(x * k) / Math.tanh(k);
+  }
+  return curve;
+}
+
+export function reverbImpulse(ctx: BaseAudioContext, decay: number): AudioBuffer {
+  const buffer = ctx.createBuffer(2, Math.ceil(ctx.sampleRate * limit(decay, 0.1, 8)), ctx.sampleRate);
+  for (let c = 0; c < 2; c++) {
+    const data = buffer.getChannelData(c);
+    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-6 * i / data.length) * Math.min(1, i / 64);
+  }
+  return buffer;
+}
+
 let context: AudioContext | undefined;
 let master: GainNode;
 let loop: EffectsLoopState | undefined;
@@ -46,9 +72,7 @@ export function getAudioContext(): AudioContext {
     limiter.attack.value = 0.003;
     limiter.release.value = 0.1;
     const safety = context.createWaveShaper();
-    const curve = new Float32Array(2049);
-    for (let i = 0; i < curve.length; i++) curve[i] = Math.tanh((2 * i / (curve.length - 1) - 1) * 1.2) * 0.95;
-    safety.curve = curve;
+    safety.curve = safetyCurve();
     safety.oversample = '2x';
     master.connect(limiter).connect(safety).connect(context.destination);
   }
@@ -164,11 +188,7 @@ function updateEffects(bus: Effects, group: 'synth' | 'drums', state: EffectsLoo
   smooth(bus.wet.reverb.gain, state.reverb.enabled ? limit(state.reverb.mix, 0, 1) : 0, ctx);
   const decay = limit(state.reverb.decay, 0.1, 8);
   if (Math.abs(decay - bus.decay) > 0.04) {
-    const buffer = ctx.createBuffer(2, Math.ceil(ctx.sampleRate * decay), ctx.sampleRate);
-    for (let c = 0; c < 2; c++) {
-      const data = buffer.getChannelData(c);
-      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-6 * i / data.length) * Math.min(1, i / 64);
-    }
+    const buffer = reverbImpulse(ctx, decay);
     if (bus.reverb.buffer) {
       const previous = bus.reverb, previousFade = bus.reverbFade;
       const next = ctx.createConvolver(), fade = ctx.createGain();
@@ -185,12 +205,7 @@ function updateEffects(bus: Effects, group: 'synth' | 'drums', state: EffectsLoo
   }
   const driveAmount = limit(state.drive.amount, 0, 1);
   if (Math.abs(driveAmount - bus.driveAmount) > 0.005) {
-    const curve = new Float32Array(2049);
-    const k = driveAmount * 18;
-    for (let i = 0; i < curve.length; i++) {
-      const x = 2 * i / (curve.length - 1) - 1;
-      curve[i] = k === 0 ? x : Math.tanh(x * k) / Math.tanh(k);
-    }
+    const curve = driveCurve(driveAmount);
     if (bus.drive.curve) {
       const previous = bus.drive, previousFade = bus.driveFade;
       const next = ctx.createWaveShaper(), fade = ctx.createGain();
