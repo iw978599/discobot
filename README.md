@@ -105,7 +105,7 @@ the site is already published.
 ### PR #58: [WIP] Strip all Discord functionality and configure site for GitHub Pages
 
 Source branch: `copilot/strip-discord-functionality`
-Last sync: 2026-10-08T18:30:00.532Z
+Last sync: 2026-10-08T19:06:37.537Z
 
 #### Changed files
 - `.dockerignore` — REMOVED (+0/-41)
@@ -116,16 +116,17 @@ Last sync: 2026-10-08T18:30:00.532Z
 - `.gitignore` — MODIFIED (+6/-0)
 - `.opencode/agent/discobot-developer.md` — REMOVED (+0/-97)
 - `.opencode/skills/discobot-dev/SKILL.md` — REMOVED (+0/-145)
-- `AGENTS.md` — MODIFIED (+36/-13)
+- `AGENTS.md` — MODIFIED (+172/-35)
 - `Dockerfile` — REMOVED (+0/-60)
 - `Dockerfile.railway` — REMOVED (+0/-64)
-- `README.md` — MODIFIED (+83/-329)
+- `README.md` — MODIFIED (+204/-308)
+- `ai-pr-review-guide.md` — MODIFIED (+136/-22)
 - `bot/package.json` — REMOVED (+0/-28)
 - `bot/src/index.ts` — REMOVED (+0/-585)
 - `bot/tsconfig.json` — REMOVED (+0/-9)
 - `deploy.sh` — REMOVED (+0/-52)
 - `docker-compose.yml` — REMOVED (+0/-59)
-- `docs/CONTROL_AUDIT.md` — ADDED (+80/-0)
+- `docs/CONTROL_AUDIT.md` — ADDED (+222/-0)
 - `docs/REFACTOR_HANDOFF.txt` — ADDED (+192/-0)
 - `docs/guides/DEPLOYMENT.md` — REMOVED (+0/-562)
 - `docs/guides/FEATURE_TESTING_GUIDE.md` — REMOVED (+0/-105)
@@ -213,7 +214,7 @@ Last sync: 2026-10-08T18:30:00.532Z
 - `ui/src/hooks/useDrumAudio.ts` — MODIFIED (+66/-125)
 - `ui/src/hooks/useMidiInput.ts` — MODIFIED (+24/-1)
 - `ui/src/hooks/usePatternAudio.ts` — REMOVED (+0/-170)
-- `ui/src/hooks/useSynthAudio.ts` — MODIFIED (+103/-328)
+- `ui/src/hooks/useSynthAudio.ts` — MODIFIED (+101/-328)
 - `ui/src/hooks/useWebSocket.ts` — REMOVED (+0/-63)
 - `ui/src/services/browserTransport.ts` — ADDED (+68/-0)
 - `ui/src/services/drumKits.ts` — ADDED (+21/-0)
