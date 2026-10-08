@@ -1,3 +1,10 @@
+SUPERSEDED, 2026-10-08
+This file records the mid-refactor checkpoint and is kept for history only.
+The integration errors listed below were resolved afterwards: typecheck, unit
+tests, production build and the Playwright suite pass. See README.md and
+AGENTS.md for the current state. Publication status below is still accurate:
+the site has not been published.
+
 DISCOBOT BROWSER-ONLY REFACTOR — HANDOFF
 =====================================
 
