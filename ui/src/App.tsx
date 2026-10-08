@@ -1965,10 +1965,11 @@ function App() {
   ) => {
     const synth = synthsRef.current.find(s => s.id === synthId);
     if (!synth?.pattern) return;
+    const savedLane = data.synths?.find(lane => lane.id === synthId);
     setGlobalTempo(data.tempo);
     await localRequest('/tempo', { method: 'POST', body: JSON.stringify({ tempo: data.tempo }) });
 
-    const updated = { ...synth.pattern, steps: data.steps, tempo: data.tempo };
+    const updated = { ...synth.pattern, steps: savedLane?.steps ?? data.steps, tempo: data.tempo };
     const historyKey = getHistoryKey(synthId, updated.id);
     historyRef.current[historyKey] = { undo: [], redo: [] };
     activeHistoryKeyRef.current = historyKey;
@@ -2026,8 +2027,8 @@ function App() {
         body: JSON.stringify(nextEffectsLoop),
       });
     }
-    const nextModelId = normalizeSynthModelId(data.synthModelId);
-    const nextModelParams = normalizeSynthModelParams(data.synthModelParams);
+    const nextModelId = normalizeSynthModelId(savedLane?.synthModelId ?? data.synthModelId);
+    const nextModelParams = normalizeSynthModelParams(savedLane?.synthModelParams ?? data.synthModelParams);
     setSynths((prev) => prev.map((entry) => (
       entry.id === synthId
         ? {
@@ -2045,12 +2046,20 @@ function App() {
         modelParams: nextModelParams,
       }),
     });
-    if (data.synthParams) {
+    const nextSynthParams = savedLane?.synthParams ?? data.synthParams;
+    if (nextSynthParams) {
       await localRequest(`/synth/${synthId}/parameters`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(normalizeSynthParams(data.synthParams)),
+        body: JSON.stringify(normalizeSynthParams(nextSynthParams)),
       });
+    }
+    await localRequest(`/synth/${synthId}/mix`, {
+      method: 'POST', body: JSON.stringify({ muted: savedLane?.muted ?? false, solo: savedLane?.solo ?? false }),
+    });
+    if (savedLane) {
+      await localRequest(`/synth/${synthId}/preferences`, { method: 'POST', body: JSON.stringify({ octaveShift: savedLane.octaveShift ?? 0 }) });
+      setSynths(prev => prev.map(s => s.id === synthId ? { ...s, octaveShift: savedLane.octaveShift ?? 0 } : s));
     }
     await localRequest(`/synth/${synthId}/patterns/${synth.pattern.id}`, {
       method: 'PUT',

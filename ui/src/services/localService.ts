@@ -209,7 +209,7 @@ export class LocalProjectService {
     }
     if (path === '/synth/create') {
       const id = body.synthId || [1, 2, 3].find(id => !state.synths.some(s => s.synthId === id));
-      if (!id || id < 1 || id > 3) return respond({ error: 'Three synths maximum' }, 400);
+      if (!Number.isInteger(id) || id < 1 || id > 3) return respond({ error: 'Three synths maximum' }, 400);
       let synth = state.synths.find(s => s.synthId === id);
       if (!synth) { synth = this.createSynth(id); state.synths.push(synth); }
       return update('synthCreated', synth);
@@ -307,15 +307,19 @@ export class LocalProjectService {
     }
     const track = state.drumState[body.instrument as keyof DrumState];
     if (track && path.startsWith('/drum/')) {
+      if ((path === '/drum/step' || path === '/drum/step-velocity') && (!Number.isInteger(body.step) || body.step < 0 || body.step >= 16)) {
+        return respond({ error: 'Invalid drum step' }, 400);
+      }
       if (path === '/drum/step') track.steps[body.step] = Boolean(body.active);
       else if (path === '/drum/step-velocity') {
         track.stepVelocities ||= Array(16).fill(1);
-        track.stepVelocities![body.step] = Math.max(0, Math.min(1, body.velocity));
-      } else if (path === '/drum/settings') track.settings = merge(track.settings, body.settings);
+        track.stepVelocities![body.step] = number(body.velocity, 1, 0, 1);
+      } else if (path === '/drum/settings') track.settings = merge(track.settings, record(body.settings));
       else if (path === '/drum/mix') {
         if (typeof body.muted === 'boolean') track.muted = body.muted;
         if (typeof body.solo === 'boolean') track.solo = body.solo;
       } else return respond({ error: 'Unknown local operation' }, 404);
+      state.drumState = sanitizeDrums(state.drumState, this.defaults!.drumState);
       return update('drumFullState', { drumState: state.drumState });
     }
     return respond({ error: 'Unknown local operation' }, 404);
