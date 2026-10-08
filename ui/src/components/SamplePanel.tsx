@@ -43,7 +43,7 @@ export default function SamplePanel({ onPlay }: { onPlay: (sample: SampleRecord)
       </label>
       {error && <p role="alert">{error}</p>}
       {busy && <span role="status">Working…</span>}
-      <button onClick={() => stopAllSamples()}>Stop All</button>
+      <button onClick={() => stopAllSamples()}>Stop Samples</button>
       {samples.length === 0 && <p>No samples yet. Imported audio stays on this device.</p>}
       <ul className="sample-list">
         {samples.map(sample => (

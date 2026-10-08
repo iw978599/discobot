@@ -83,10 +83,8 @@ export function useSynthAudio() {
       else if (loop) setEffectsLoop(loop);
       const node = await getNode(lane);
       if (generation !== lane.generation) return;
+      if (lane.pendingNoteOffs.delete(note)) return;
       node.port.postMessage({ type: 'noteOn', note, velocity, id: ++sequenceRef.current, duration, time: scheduledTime });
-      if (lane.pendingNoteOffs.delete(note)) {
-        node.port.postMessage({ type: 'noteOff', note });
-      }
     } catch (error) {
       if (generation === lane.generation) console.error('Synth playback failed:', error);
     }
