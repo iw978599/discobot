@@ -333,7 +333,7 @@ export default function DrumMachine({
                   displayValue={Math.round(drumEffectsReturn * 100) + '%'}
                   parseInputValue={parsePercent}
                   onChange={onDrumEffectsReturnChange}
-                  title="Level of the drum loop return from Discord playback"
+                  title="Shared drum effects return level"
                 />
               </div>
               <div className="drum-global-mix">
@@ -346,12 +346,12 @@ export default function DrumMachine({
                   Mute All
                 </button>
                 <button
-                  className={`drum-global-mix-btn ${anySolo ? 'active' : ''}`}
-                  aria-pressed={anySolo}
+                  className="drum-global-mix-btn"
+                  disabled={!anySolo}
                   onClick={onSoloAll}
-                  title="Solo the currently soloed tracks or clear all solos"
+                  title="Clear all drum track solos"
                 >
-                  Solo All
+                  Clear Solos
                 </button>
               </div>
             </div>

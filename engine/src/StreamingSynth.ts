@@ -141,22 +141,6 @@ export class StreamingSynth {
     }
   }
 
-  private computeWaveshaperCurve(amount: number): Float32Array {
-    const samples = 256;
-    const curve = new Float32Array(samples);
-    const k = amount * 18;
-    if (k === 0) {
-      for (let i = 0; i < samples; i++) curve[i] = (i * 2) / samples - 1;
-      return curve;
-    }
-    const limit = Math.tanh(k);
-    for (let i = 0; i < samples; i++) {
-      const x = (i * 2) / samples - 1;
-      curve[i] = Math.tanh(x * k) / limit;
-    }
-    return curve;
-  }
-
   renderChunk(samplesPerChannel: number): { left: Float32Array; right: Float32Array } {
     const left = new Float32Array(samplesPerChannel);
     const right = new Float32Array(samplesPerChannel);
@@ -168,7 +152,7 @@ export class StreamingSynth {
     const globalPan = clamp(p.pan ?? 0, -1, 1);
     const spread = clamp(p.spread ?? 0, 0, 1);
 
-    const driveCurve = p.fxSends.drive > 0 ? this.computeWaveshaperCurve(p.fxSends.drive * 0.8) : null;
+    const driveAmount = finiteClamp(p.fxSends.drive, 0, 1);
 
     for (let i = 0; i < samplesPerChannel; i++) {
       while (this.noteOffQueue.length && this.noteOffQueue[0].releaseAtSample <= this.totalSamplesRendered + i) {
@@ -264,16 +248,15 @@ export class StreamingSynth {
         wetR += revOut * dw;
       }
 
-      if (driveCurve && p.fxSends.drive > 0) {
-        const driveMix = p.fxSends.drive;
+      if (driveAmount > 0) {
+        const driveMix = driveAmount;
         const driveWet = driveMix * FxReturn;
         if (driveWet > 0) {
           const driveInL = dryL * 0.5 + dryR * 0.5;
-          const driveInR = driveInL;
-          const idxL = clamp(Math.floor((driveInL * 0.5 + 0.5) * (driveCurve.length - 1)), 0, driveCurve.length - 1);
-          const idxR = clamp(Math.floor((driveInR * 0.5 + 0.5) * (driveCurve.length - 1)), 0, driveCurve.length - 1);
-          wetL += driveCurve[idxL] * driveWet;
-          wetR += driveCurve[idxR] * driveWet;
+          const k = driveAmount * 14.4;
+          const distorted = Math.tanh(driveInL * k) / Math.tanh(k);
+          wetL += distorted * driveWet;
+          wetR += distorted * driveWet;
         }
       }
 

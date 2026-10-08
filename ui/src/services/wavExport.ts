@@ -98,10 +98,14 @@ export async function renderArrangementWav(arrangement: ExportArrangement): Prom
   const frames = Math.ceil((barDuration + tail) * sampleRate);
   const ctx = new OfflineAudioContext(2, frames, sampleRate);
   const master = ctx.createGain(), limiter = ctx.createDynamicsCompressor();
+  const safety = ctx.createWaveShaper(), curve = new Float32Array(2049);
+  for (let i = 0; i < curve.length; i++) curve[i] = Math.tanh((2 * i / (curve.length - 1) - 1) * 1.2) * .95;
+  safety.curve = curve;
+  safety.oversample = '2x';
   master.gain.value = .55;
   limiter.threshold.value = -6; limiter.knee.value = 6; limiter.ratio.value = 20;
   limiter.attack.value = .003; limiter.release.value = .1;
-  master.connect(limiter).connect(ctx.destination);
+  master.connect(limiter).connect(safety).connect(ctx.destination);
   const play = (pcm: Float32Array, pan: number, sends: FxSendLevels, returnLevel: number, group: 'synth' | 'drums') => {
     const buffer = ctx.createBuffer(1, pcm.length, sampleRate); buffer.getChannelData(0).set(pcm);
     const source = ctx.createBufferSource(), panner = ctx.createStereoPanner();
@@ -112,7 +116,11 @@ export async function renderArrangementWav(arrangement: ExportArrangement): Prom
   for (const lane of arrangement.synths) {
     if (lane.muted || (synthSolo && !lane.solo) || !lane.pattern || !lane.synthParams) continue;
     const synth = new Synthesizer(), params = lane.synthParams;
-    synth.updateParameters({ ...params, effects: { reverb: { ...params.effects.reverb, enabled: false }, delay: { ...params.effects.delay, enabled: false } } });
+    const syncLfo = (lfo: SynthParameters['lfo1']) => ({
+      ...lfo, rate: lfo.sync ? arrangement.tempo * 4 / (60 * Math.max(1, Math.round(lfo.rate))) : lfo.rate,
+    });
+    synth.updateParameters({ ...params, lfo1: syncLfo(params.lfo1), lfo2: syncLfo(params.lfo2),
+      effects: { reverb: { ...params.effects.reverb, enabled: false }, delay: { ...params.effects.delay, enabled: false } } });
     const mix = new Float32Array(frames), stepDuration = barDuration / lane.pattern.steps.length;
     lane.pattern.steps.forEach((step, index) => {
       if (!step.active || !step.note) return;

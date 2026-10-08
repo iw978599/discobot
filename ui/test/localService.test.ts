@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { LocalProjectService } from '../src/services/localService.ts';
 import { DRUM_INSTRUMENTS } from '../src/services/drumKits.ts';
 import { BrowserTransport } from '../src/services/browserTransport.ts';
+import { encodeWav } from '../src/services/wavExport.ts';
 import { Synthesizer } from '../../engine/src/Synthesizer.ts';
 import type { DrumState, EffectsLoopState } from '../src/types.ts';
 
@@ -117,6 +118,39 @@ test('quota failures do not claim successful arrangement saves', async () => {
   assert.equal(result.status, 507);
   assert.deepEqual(service.snapshot().savedPatterns, []);
   assert.ok(messages.includes('storageError'));
+});
+
+test('damaged stored projects recover to a usable local synth and announce the error', () => {
+  setup();
+  storage.set('discobot_browser_project_v1', JSON.stringify({ version: 1, synths: [{}], savedPatterns: [], drumState: null }));
+  const service = new LocalProjectService();
+  service.initialize(defaults());
+  const messages: string[] = [];
+  service.subscribe(message => messages.push(message.type));
+  assert.equal(service.snapshot().synths[0].synthId, 1);
+  assert.equal(service.snapshot().restored, false);
+  assert.ok(messages.includes('storageError'));
+});
+
+test('failed deletes leave the saved arrangement available', async () => {
+  const service = setup();
+  const saved = await (await mutate(service, '/patterns/save', { name: 'Keep', steps: [] })).json();
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
+    setItem() { throw new Error('QuotaExceededError'); },
+  } });
+  assert.equal((await service.request(`/patterns/saved/${saved.id}`, { method: 'DELETE' })).status, 507);
+  assert.equal(service.snapshot().savedPatterns.length, 1);
+});
+
+test('WAV encoding writes valid interleaved stereo PCM and sanitizes nonfinite samples', () => {
+  const data = new DataView(encodeWav([new Float32Array([.5, Infinity]), new Float32Array([-.5, NaN])], 48000));
+  assert.equal(data.getUint16(22, true), 2);
+  assert.equal(data.getUint32(24, true), 48000);
+  assert.equal(data.getUint32(40, true), 8);
+  assert.equal(data.getInt16(44, true), 16384);
+  assert.equal(data.getInt16(46, true), -16383);
+  assert.equal(data.getInt16(48, true), 0);
+  assert.equal(data.getInt16(50, true), 0);
 });
 
 test('shared transport schedules 32 synchronized ticks and skips stale work after suspension', () => {

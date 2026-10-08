@@ -83,7 +83,9 @@ export function useSynthAudio() {
       const node = await getNode(lane);
       if (generation !== lane.generation) return;
       node.port.postMessage({ type: 'noteOn', note, velocity, id: ++sequenceRef.current, duration, time: scheduledTime });
-    } catch (error) { console.error('Synth playback failed:', error); }
+    } catch (error) {
+      if (generation === lane.generation) console.error('Synth playback failed:', error);
+    }
   }, [updateParameters]);
 
   const stopNote = useCallback((note: string, _parameters?: SynthParameters | null, synthId = 1) => {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Fragment } from 'react';
 import { Pattern } from '../types';
 import './PianoRoll.css';
@@ -28,6 +28,7 @@ export default function PianoRoll({
 }: PianoRollProps) {
   const [mouseDown, setMouseDown] = useState(false);
   const [paintMode, setPaintMode] = useState<'assign' | 'erase'>('assign');
+  const lastPaintCell = useRef('');
 
   useEffect(() => {
     const release = () => setMouseDown(false);
@@ -57,6 +58,7 @@ export default function PianoRoll({
   }
 
   const handleCellDown = (stepIndex: number, note: string) => {
+    lastPaintCell.current = `${stepIndex}:${note}`;
     const active = pattern.steps[stepIndex]?.note === note;
     const nextMode: 'assign' | 'erase' = active ? 'erase' : 'assign';
     setPaintMode(nextMode);
@@ -67,6 +69,11 @@ export default function PianoRoll({
 
   const handleCellEnter = (stepIndex: number, note: string) => {
     if (!mouseDown) return;
+    const cell = `${stepIndex}:${note}`;
+    if (lastPaintCell.current === cell) return;
+    lastPaintCell.current = cell;
+    const existing = pattern.steps[stepIndex]?.note;
+    if (paintMode === 'assign' ? existing === note : existing !== note) return;
     onStepSelect(stepIndex);
     onNoteAssign(stepIndex, paintMode === 'assign' ? note : undefined);
   };
@@ -122,6 +129,22 @@ export default function PianoRoll({
                     if (event.detail !== 0) return;
                     onStepSelect(stepIndex);
                     onNoteAssign(stepIndex, active ? undefined : note);
+                  }}
+                  onKeyDown={(event) => {
+                    const row = notes.indexOf(note);
+                    let nextRow = row;
+                    let nextStep = stepIndex;
+                    if (event.key === 'ArrowUp') nextRow -= 1;
+                    else if (event.key === 'ArrowDown') nextRow += 1;
+                    else if (event.key === 'ArrowLeft') nextStep -= 1;
+                    else if (event.key === 'ArrowRight') nextStep += 1;
+                    else if (event.key === 'Home') nextStep = 0;
+                    else if (event.key === 'End') nextStep = pattern.steps.length - 1;
+                    else return;
+                    event.preventDefault();
+                    const nextNote = notes[Math.max(0, Math.min(notes.length - 1, nextRow))];
+                    nextStep = Math.max(0, Math.min(pattern.steps.length - 1, nextStep));
+                    event.currentTarget.parentElement?.querySelector<HTMLButtonElement>(`[data-note="${nextNote}"][data-step="${nextStep}"]`)?.focus();
                   }}
                   style={{ touchAction: 'none' }}
                   type="button"

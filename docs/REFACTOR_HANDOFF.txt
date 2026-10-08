@@ -168,3 +168,25 @@ Recent initial PR workflows returned action_required (approval), not passing CI.
 Older docs workflow run 37796669279 showed failure; fetching failed job logs
 returned zero jobs/no logs. Do not invent its cause.
 Use GitHub Actions run/job tools to investigate future CI failures.
+
+LATE HANDOFF REPORTS — DO NOT CONFUSE WITH PARENT-VERIFIED RESULTS
+----------------------------------------------------------------
+Parallel workers returned these reports after the original stop/checkpoint:
+* Audio worker reports 20 audio/routing tests and engine/UI builds passing.
+* Controls worker reports 20 desktop/mobile production browser cases passing.
+  Two additional tests reportedly reproduce the first-note initialization race:
+  releasing a note before the worklet loads may leave a stuck indefinite voice.
+  This race remains unresolved. Investigate cancellation of pending note-ons
+  and retain the regression tests; do not remove failing tests to get green CI.
+* docs/CONTROL_AUDIT.md now contains the controls worker's coverage report.
+* SamplePanel and additional integration changes landed after the earlier
+  failed typecheck snapshot. Reassess current APIs rather than blindly applying
+  fixes for old errors. The parent has not rerun the suite after these reports.
+* FX bypass preserves master protection. Per-synth FX return scales sends,
+  not already-shared lingering tails. WAV rendering is separate from live
+  worklet playback. Hardware model names are approximate voicings.
+* Physical listening, real MIDI devices and live publication remain unverified.
+
+Generated Playwright build/runtime/result directories are ignored. Preserve
+the unfinished source checkpoint, but do not treat it as an approved release.
+User reiterated: no new work; finish existing handoff with minimal validation.

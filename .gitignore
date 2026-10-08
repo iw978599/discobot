@@ -21,3 +21,6 @@ saved-patterns.json
 playwright-report/
 test-results/
 *.tsbuildinfo
+.playwright-build-*/
+.playwright-runtime/
+ui/test/browser-results/

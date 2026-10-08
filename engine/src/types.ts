@@ -194,6 +194,9 @@ export interface SavedSynthData {
   synthParams: SynthParameters;
   synthModelId?: SynthModelId;
   synthModelParams?: SynthModelParams;
+  muted?: boolean;
+  solo?: boolean;
+  octaveShift?: number;
 }
 
 export interface SavedPatternFull {

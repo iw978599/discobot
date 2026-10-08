@@ -50,6 +50,7 @@ export default function MidiPanel({
   return (
     <div className="midi-panel">
       <span className={`midi-status-dot ${connected ? 'connected' : ''}`} />
+      {!connected && <span role="status">Selected MIDI input is disconnected.</span>}
       <select aria-label="MIDI input device" value={selectedDeviceId} onChange={(e) => onDeviceChange(e.target.value)}>
         <option value={allDevicesId}>All</option>
         {devices.map((device) => (

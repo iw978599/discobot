@@ -15,7 +15,7 @@ class Node {
   threshold = new Param(); knee = new Param(); ratio = new Param(); attack = new Param(); release = new Param();
   curve?: Float32Array; oversample?: string; buffer?: unknown; type?: string;
   connect(node: Node) { this.connections.push(node); return node; }
-  disconnect() { this.connections = []; }
+  disconnect(target?: Node) { this.connections = target ? this.connections.filter(node => node !== target) : []; }
   start() {}
 }
 class Context {
@@ -78,6 +78,13 @@ test('synth and drums share one protected destination and independent parallel F
     assert.ok(ctx.nodes.some(node => node.buffer), 'reverb receives an impulse');
     const effectReturns = ctx.nodes.filter(node => node !== synth.input && node !== drums.input && node.connections.includes(master));
     assert.deepEqual(effectReturns.map(node => node.gain.value), [0.7, 0.6]);
+    const oldReverbs = ctx.nodes.filter(node => node.buffer);
+    const oldDrives = ctx.nodes.filter(node => node.curve && node !== destinationInputs[0]);
+    setEffectsLoop({ ...loop, reverb: { ...loop.reverb, decay: 1.5 }, drive: { ...loop.drive, amount: 0.7 } });
+    assert.ok(oldReverbs.every(node => node.connections[0].gain.value === 0), 'old reverb fades out instead of replacing its impulse abruptly');
+    assert.ok(oldDrives.every(node => node.connections[0].gain.value === 0), 'old drive curve fades out');
+    await new Promise(resolve => setTimeout(resolve, 150));
+    assert.ok([...oldReverbs, ...oldDrives].every(node => node.connections.length === 0), 'crossfaded processors are released');
     setEffectsLoop({ ...loop, enabled: false });
     assert.ok(effectReturns.every(node => node.gain.value === 0), 'global bypass silences only returns, not dry audio');
     assert.equal((synth.input as unknown as Node).gain.value, 1);

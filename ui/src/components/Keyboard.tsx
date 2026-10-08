@@ -23,9 +23,12 @@ const BLACK_KEYS = [
 export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0, holdEnabled = false, releaseSignal = false }: KeyboardProps) {
   const [activeNotes, setActiveNotes] = useState<Set<string>>(new Set());
   const notesRef = useRef(new Set<string>());
+  const clickTimers = useRef(new Set<number>());
   const releaseRef = useRef(onNoteRelease);
   releaseRef.current = onNoteRelease;
   const releaseAll = () => {
+    clickTimers.current.forEach(window.clearTimeout);
+    clickTimers.current.clear();
     notesRef.current.forEach((note) => releaseRef.current(note));
     notesRef.current.clear();
     setActiveNotes(new Set());
@@ -49,6 +52,8 @@ export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0, h
     window.addEventListener('blur', cancel);
     document.addEventListener('visibilitychange', visibility);
     return () => {
+      clickTimers.current.forEach(window.clearTimeout);
+      clickTimers.current.clear();
       notesRef.current.forEach((note) => releaseRef.current(note));
       notesRef.current.clear();
       window.removeEventListener('blur', cancel);
@@ -107,6 +112,16 @@ export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0, h
       handleNoteUp(note);
     },
     onBlur: () => handleNoteUp(note),
+    onClick: (event: React.MouseEvent<HTMLButtonElement>) => {
+      if (event.detail !== 0) return;
+      handleNoteDown(note);
+      if (holdEnabled) return;
+      const timer = window.setTimeout(() => {
+        clickTimers.current.delete(timer);
+        handleNoteUp(note);
+      }, 180);
+      clickTimers.current.add(timer);
+    },
   });
 
   const rangeLabel = `${WHITE_KEYS[0]}${baseOctave} - ${WHITE_KEYS[WHITE_KEYS.length - 1]}${baseOctave + 2}`;

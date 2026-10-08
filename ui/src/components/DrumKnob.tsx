@@ -67,6 +67,7 @@ export default function DrumKnob({
         className="drum-knob-rotary"
         {...interaction}
         role="slider"
+        aria-orientation="vertical"
         tabIndex={0}
         aria-label={ariaLabel}
         aria-valuemin={min}

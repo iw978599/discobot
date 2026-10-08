@@ -5,6 +5,9 @@ export function useKnobInteraction(value: number, min: number, max: number, step
   const drag = useRef<{ id: number; y: number; value: number } | null>(null);
   const normalize = (next: number) => Math.max(min, Math.min(max, Number((Math.round((next - min) / step) * step + min).toFixed(8))));
   useEffect(() => {
+    if (disabled) drag.current = null;
+  }, [disabled]);
+  useEffect(() => {
     const cancel = () => { drag.current = null; };
     window.addEventListener('blur', cancel);
     document.addEventListener('visibilitychange', cancel);

@@ -89,6 +89,7 @@ export default function Knob({
         className="knob-rotary"
         {...interaction}
         role="slider"
+        aria-orientation="vertical"
         tabIndex={disabled ? -1 : 0}
         aria-label={label}
         aria-valuemin={min}

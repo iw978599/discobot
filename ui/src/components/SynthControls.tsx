@@ -151,6 +151,14 @@ export default function SynthControls({
     } as Partial<SynthParameters>);
   };
 
+  const updateLfoSync = (lfo: 'lfo1' | 'lfo2', sync: boolean) => {
+    const rate = parameters[lfo].rate;
+    updateLfo(lfo, {
+      sync,
+      rate: sync ? Math.max(1, Math.min(128, Math.round(rate))) : Math.max(0.1, Math.min(20, rate)),
+    });
+  };
+
   const updateEnvelope = (updates: Partial<SynthParameters['envelope']>) => {
     onParameterChange({
       envelope: { ...parameters.envelope, ...updates },
@@ -475,7 +483,7 @@ export default function SynthControls({
                   type="checkbox"
                   checked={parameters.lfo1.sync ?? false}
                   aria-label="LFO 1 tempo sync"
-                  onChange={(e) => updateLfo('lfo1', { sync: e.target.checked })}
+                  onChange={(e) => updateLfoSync('lfo1', e.target.checked)}
                   disabled={!parameters.lfo1.enabled}
                 />
                 <span className="synth-toggle-slider" />
@@ -566,7 +574,7 @@ export default function SynthControls({
                   type="checkbox"
                   checked={parameters.lfo2.sync ?? false}
                   aria-label="LFO 2 tempo sync"
-                  onChange={(e) => updateLfo('lfo2', { sync: e.target.checked })}
+                  onChange={(e) => updateLfoSync('lfo2', e.target.checked)}
                   disabled={!parameters.lfo2.enabled}
                 />
                 <span className="synth-toggle-slider" />

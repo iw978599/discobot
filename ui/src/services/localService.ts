@@ -34,6 +34,7 @@ export class LocalProjectService {
   private defaults: Defaults | null = null;
   private listeners = new Set<Listener>();
   private storageIssue: string | null = null;
+  private restored = false;
 
   initialize(defaults: Defaults) {
     if (this.state) return;
@@ -55,6 +56,7 @@ export class LocalProjectService {
         this.state.synths = this.state.synths.filter(s => s.synthId >= 1 && s.synthId <= 3).map(s => ({
           ...s, synthParams: merge(defaults.synthParams, s.synthParams), isPlaying: false,
         }));
+        this.restored = true;
       }
     } catch {
       this.storageIssue = 'Browser storage is unavailable or damaged. Edits work, but may not survive reload.';
@@ -82,7 +84,7 @@ export class LocalProjectService {
   }
 
   snapshot() {
-    return clone({ ...this.state, drumKits: DRUM_KITS });
+    return clone({ ...this.state, drumKits: DRUM_KITS, restored: this.restored });
   }
 
   private emit(type: string, data: any) {

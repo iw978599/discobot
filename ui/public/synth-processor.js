@@ -148,7 +148,7 @@ class SynthProcessor extends AudioWorkletProcessor {
           if (v.envelope >= 1) { v.envelope = 1; v.stage = 'decay'; }
         } else if (v.stage === 'decay') {
           v.envelope -= (1 - clamp(p.sustain, 0, 1, 0.5)) / (sampleRate * clamp(p.decay, 0.002, 10, 0.2));
-          if (v.envelope <= p.sustain) { v.envelope = clamp(p.sustain, 0, 1, 0.5); v.stage = 'sustain'; }
+          if (v.envelope <= clamp(p.sustain, 0, 1, 0.5)) { v.envelope = clamp(p.sustain, 0, 1, 0.5); v.stage = 'sustain'; }
         } else if (v.stage === 'sustain') v.envelope += (clamp(p.sustain, 0, 1, 0.5) - v.envelope) * smoothing;
         else if (v.stage === 'release') {
           v.envelope = Math.max(0, v.envelope - v.releaseStep);

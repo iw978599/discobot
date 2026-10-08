@@ -138,14 +138,6 @@ export const AUDIO_CONTEXT = {
 } as const;
 
 /**
- * WebSocket constants
- */
-export const WEBSOCKET = {
-  RECONNECT_DELAY: 3000,
-  AUDIO_RENDER_THROTTLE: 300,
-} as const;
-
-/**
  * Default synthesis parameters
  */
 export const DEFAULT_SYNTH_PARAMS = {

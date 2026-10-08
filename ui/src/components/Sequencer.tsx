@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Pattern, SavedPatternInfo, SavedPatternFull } from '../types';
-import { localRequest as authFetch } from '../services/localService';
+import { localRequest } from '../services/localService';
 import './Sequencer.css';
 
 interface SequencerProps {
@@ -95,7 +95,7 @@ export default function Sequencer({
 
   const fetchSaved = async () => {
     try {
-      const res = await authFetch('/patterns/saved');
+      const res = await localRequest('/patterns/saved');
       if (!res.ok) throw new Error('Unable to list saved patterns.');
       setSavedPatterns(await res.json());
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to list saved patterns.'); }
@@ -117,7 +117,7 @@ export default function Sequencer({
   const handleSelectSaved = async (id: string) => {
     if (!id) return;
     try {
-      const res = await authFetch(`/patterns/saved/${id}`);
+      const res = await localRequest(`/patterns/saved/${id}`);
       if (!res.ok) throw new Error('Saved pattern could not be loaded.');
       const data: SavedPatternFull = await res.json();
       onLoadSavedPattern(data, id);
@@ -127,7 +127,7 @@ export default function Sequencer({
 
   const handleDeleteSaved = async (id: string) => {
     try {
-      const res = await authFetch(`/patterns/saved/${id}`, { method: 'DELETE' });
+      const res = await localRequest(`/patterns/saved/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Saved pattern could not be deleted.');
       void fetchSaved();
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Saved pattern could not be deleted.'); }

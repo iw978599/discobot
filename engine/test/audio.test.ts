@@ -130,3 +130,10 @@ test('WAV encoding uses browser-native bytes, clips safely and sanitizes invalid
   assert.equal(view.getInt16(48, true), 0);
   assert.equal(view.getInt16(50, true), 32767);
 });
+
+test('an idle streaming synth has no waveshaper DC offset', () => {
+  const synth = new StreamingSynth(48000);
+  const output = synth.renderChunk(4800);
+  assert.equal(rms(output.left), 0);
+  assert.equal(rms(output.right), 0);
+});

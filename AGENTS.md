@@ -1,22 +1,42 @@
 # Discobot — AI Context / Restore Prompt
 
 ## Project Overview
-Web-controlled Discord synth/sequencer/drum bot. Monorepo with 4 npm workspaces. Audio engine runs in Node.js (no Tone.js — custom math synthesis). WebSocket drives real-time UI sync.
+Browser-only synth/sequencer/drum workstation with two npm workspaces. All project
+operations, synthesis and playback run locally in the browser. No Discord account,
+backend, authentication or WebSocket transport is required.
 
 ## Architecture
 ```
 discobot/
-├── bot/       # Discord bot (Discord.js, @discordjs/voice)
-├── engine/    # Custom math-based audio synthesis (no Tone.js)
-├── web/       # Express API (3001) + WebSocket server (3001/ws)
-└── ui/        # React web interface (Vite, port 3000)
+├── engine/    # Browser-compatible TypeScript DSP and shared types
+└── ui/        # React/Vite UI, Web Audio and local project/sample services
 ```
 
 ### Audio Flow
-Engine renders PCM → Web server base64-encodes → WebSocket → Bot broadcasts via Discord voice (48kHz stereo 16-bit raw PCM, soft-clipped master mix)
+Browser audio-clock transport → local synth/drum generation → Web Audio effects
+and output. Project edits/named patterns use localStorage; sample bytes and
+metadata use IndexedDB. These stores are origin scoped and are not cloud backups.
 
-### WebSocket Messages
-`init`, `connectedUsers`, `synthCreated`, `synthRemoved`, `synthUpdate`, `synthModelUpdate`, `synthMix`, `sequencerStep`, `sequencerPlay`, `sequencerStop`, `patternAudio`, `patternUpdated`, `patternCreated`, `tempoChange`, `drumStep`, `drumSettings`, `drumMix`, `drumReset`, `drumFullState`, `drumKitChanged`, `effectsLoopUpdate`, `drumFxUpdate`, `sampleLoaded`, `sampleRemoved`
+### Current Services
+- `ui/src/services/localService.ts`: in-process project operations/events and persistence.
+- `ui/src/services/browserTransport.ts`: audio-clock look-ahead scheduling.
+- `ui/src/services/sampleStore.ts`: IndexedDB sample persistence.
+- `ui/src/services/wavExport.ts`: local offline rendering and WAV download.
+
+Use Node.js 22+, `npm ci`, `npm run dev` and
+`http://localhost:3000/discobot/`. Build with `npm run build`; `npm start`
+previews the static output at `http://localhost:4173/discobot/`.
+
+Resume Web Audio through a user gesture. Web MIDI hardware support is optional;
+unsupported/permission-denied input must not block the keyboard or MIDI files.
+Automated checks do not establish subjective audio quality or real MIDI hardware
+compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
+
+## Historical Reference
+
+The remaining notes describe the former Discord/server implementation, not the
+current architecture. Deleted paths and legacy network/auth conventions below
+must not be reintroduced.
 
 ## Key Files
 | File | Purpose |
@@ -100,12 +120,15 @@ Engine renders PCM → Web server base64-encodes → WebSocket → Bot broadcast
 
 ## Commands
 ```bash
-npm run dev          # Run everything (bot + web + ui concurrently)
-npm run dev:web      # API + WebSocket server only (tsx watch)
-npm run dev:ui       # Web UI only (Vite dev server)
-npm run dev:bot      # Discord bot only
-npm run build        # Build all workspaces
+npm ci               # Install locked dependencies
+npm run dev          # Browser UI only
+npm run dev:ui       # Alias for UI development
+npm run build        # Build engine and UI
 npm run build:ui     # Build UI only (tsc + vite build)
+npm start            # Static production-build preview
+npm run typecheck
+npm test
+npm run test:browser
 ```
 
 ## Conventions

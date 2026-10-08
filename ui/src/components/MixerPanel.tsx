@@ -58,6 +58,7 @@ export default function MixerPanel({
                 type="range"
                 aria-label={`Synth ${synth.id} volume`}
                 className="mixer-fader"
+                aria-orientation="vertical"
                 min={0}
                 max={2}
                 step={0.01}
@@ -73,6 +74,7 @@ export default function MixerPanel({
                 <input
                   type="range"
                   className="mixer-pan-slider"
+                  aria-orientation="vertical"
                   min={-1}
                   max={1}
                   step={0.01}
@@ -91,6 +93,7 @@ export default function MixerPanel({
                   max={1}
                   step={0.01}
                   value={params.fxReturn ?? 0.85}
+                  aria-orientation="vertical"
                   aria-label={`Synth ${synth.id} FX return`}
                   onChange={(e) => onSynthFxReturnChange(synth.id, parseFloat(e.target.value))}
                   title={`FX Return: ${Math.round((params.fxReturn ?? 0.85) * 100)}%`}
@@ -127,6 +130,7 @@ export default function MixerPanel({
             <input
               type="range"
               className="mixer-fader"
+              aria-orientation="vertical"
               min={0}
               max={1}
               step={0.01}
@@ -148,6 +152,7 @@ export default function MixerPanel({
                 step={0.01}
                 value={effectsLoop.returns.drums}
                 aria-label="Drum FX return"
+                aria-orientation="vertical"
                 onChange={(e) => onDrumFxReturnChange(parseFloat(e.target.value))}
                 title={`FX Return: ${Math.round(effectsLoop.returns.drums * 100)}%`}
               />
@@ -178,6 +183,7 @@ export default function MixerPanel({
                 max={1}
                 step={0.01}
                 value={effectsLoop.returns.synth}
+                aria-orientation="vertical"
                 aria-label="Shared synth return"
                 onChange={(e) => onEffectsReturnChange('synth', parseFloat(e.target.value))}
                 title={`Synth Return: ${Math.round(effectsLoop.returns.synth * 100)}%`}
@@ -194,6 +200,7 @@ export default function MixerPanel({
                 step={0.01}
                 value={effectsLoop.returns.drums}
                 aria-label="Shared drum return"
+                aria-orientation="vertical"
                 onChange={(e) => onEffectsReturnChange('drums', parseFloat(e.target.value))}
                 title={`Drums Return: ${Math.round(effectsLoop.returns.drums * 100)}%`}
               />

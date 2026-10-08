@@ -12,8 +12,11 @@ type Effects = {
   delay: DelayNode;
   feedback: GainNode;
   reverb: ConvolverNode;
+  reverbFade: GainNode;
   decay: number;
   drive: WaveShaperNode;
+  driveFade: GainNode;
+  driveAmount: number;
   tone: BiquadFilterNode;
   phaser: BiquadFilterNode[];
   phaserFeedback: GainNode;
@@ -116,11 +119,11 @@ function createEffects(group: 'synth' | 'drums'): Effects {
   inputs.delay.connect(delay);
   delay.connect(feedback).connect(delay);
   delay.connect(wet.delay);
-  const reverb = ctx.createConvolver();
-  inputs.reverb.connect(reverb).connect(wet.reverb);
-  const drive = ctx.createWaveShaper(), tone = ctx.createBiquadFilter();
+  const reverb = ctx.createConvolver(), reverbFade = ctx.createGain();
+  inputs.reverb.connect(reverb).connect(reverbFade).connect(wet.reverb);
+  const drive = ctx.createWaveShaper(), driveFade = ctx.createGain(), tone = ctx.createBiquadFilter();
   drive.oversample = '4x';
-  inputs.drive.connect(drive).connect(tone).connect(wet.drive);
+  inputs.drive.connect(drive).connect(driveFade).connect(tone).connect(wet.drive);
   const phaser = Array.from({ length: 4 }, () => ctx.createBiquadFilter());
   phaser.forEach(node => { node.type = 'allpass'; node.Q.value = 0.7; });
   inputs.phaser.connect(phaser[0]);
@@ -135,7 +138,7 @@ function createEffects(group: 'synth' | 'drums'): Effects {
   lfo.connect(depth);
   phaser.forEach(node => depth.connect(node.frequency));
   lfo.start();
-  const bus = { inputs, wet, output, delay, feedback, reverb, decay: 0, drive, tone, phaser, phaserFeedback, lfo, depth };
+  const bus = { inputs, wet, output, delay, feedback, reverb, reverbFade, decay: 0, drive, driveFade, driveAmount: -1, tone, phaser, phaserFeedback, lfo, depth };
   effects.set(group, bus);
   if (loop) updateEffects(bus, group, loop, ctx);
   return bus;
@@ -155,14 +158,40 @@ function updateEffects(bus: Effects, group: 'synth' | 'drums', state: EffectsLoo
       const data = buffer.getChannelData(c);
       for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-6 * i / data.length) * Math.min(1, i / 64);
     }
-    bus.reverb.buffer = buffer;
+    if (bus.reverb.buffer) {
+      const previous = bus.reverb, previousFade = bus.reverbFade;
+      const next = ctx.createConvolver(), fade = ctx.createGain();
+      next.buffer = buffer;
+      fade.gain.value = 0;
+      bus.inputs.reverb.connect(next).connect(fade).connect(bus.wet.reverb);
+      smooth(previousFade.gain, 0, ctx);
+      smooth(fade.gain, 1, ctx);
+      setTimeout(() => { bus.inputs.reverb.disconnect(previous); previous.disconnect(); previousFade.disconnect(); }, 120);
+      bus.reverb = next;
+      bus.reverbFade = fade;
+    } else bus.reverb.buffer = buffer;
     bus.decay = decay;
   }
   const driveAmount = limit(state.drive.amount, 0, 1);
-  const curve = new Float32Array(2049);
-  const k = 1 + driveAmount * 12;
-  for (let i = 0; i < curve.length; i++) curve[i] = Math.tanh((2 * i / (curve.length - 1) - 1) * k) / Math.tanh(k);
-  bus.drive.curve = curve;
+  if (Math.abs(driveAmount - bus.driveAmount) > 0.005) {
+    const curve = new Float32Array(2049);
+    const k = driveAmount * 18;
+    for (let i = 0; i < curve.length; i++) {
+      const x = 2 * i / (curve.length - 1) - 1;
+      curve[i] = k === 0 ? x : Math.tanh(x * k) / Math.tanh(k);
+    }
+    if (bus.drive.curve) {
+      const previous = bus.drive, previousFade = bus.driveFade;
+      const next = ctx.createWaveShaper(), fade = ctx.createGain();
+      next.curve = curve; next.oversample = '4x';
+      fade.gain.value = 0;
+      bus.inputs.drive.connect(next).connect(fade).connect(bus.tone);
+      smooth(previousFade.gain, 0, ctx); smooth(fade.gain, 1, ctx);
+      setTimeout(() => { bus.inputs.drive.disconnect(previous); previous.disconnect(); previousFade.disconnect(); }, 120);
+      bus.drive = next; bus.driveFade = fade;
+    } else bus.drive.curve = curve;
+    bus.driveAmount = driveAmount;
+  }
   smooth(bus.wet.drive.gain, state.drive.enabled ? 0.5 : 0, ctx);
   smooth(bus.tone.frequency, 400 * Math.pow(40, limit(state.drive.tone, 0, 1)), ctx);
   smooth(bus.lfo.frequency, limit(state.phaser.rate, 0.02, 20), ctx);
