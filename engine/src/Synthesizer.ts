@@ -1,8 +1,8 @@
 import { SynthParameters, OscillatorType } from './types';
 import { audioContextManager } from './AudioContextManager';
-import { clamp, noteToFrequency as utilNoteToFrequency, deepMerge } from './utils';
+import { noteToFrequency as utilNoteToFrequency, deepMerge } from './utils';
 import { AUDIO_MIXING } from './constants';
-import { ResonantFilter, oscillator, finiteClamp } from './dsp';
+import { ResonantFilter, oscillator, finiteClamp, finiteClamp as clamp } from './dsp';
 
 export class Synthesizer {
   private static readonly PITCH_LFO_MAX_CENTS = 1200;
@@ -44,25 +44,16 @@ export class Synthesizer {
     for (let i = 0; i < length; i++) {
       const phase = (i * frequency) / sampleRate;
       const frac = phase - Math.floor(phase);
-      switch (type) {
-        case 'sine':
-          buffer[i] = Math.sin(2 * Math.PI * phase);
-          break;
-        case 'square':
-          buffer[i] = frac < 0.5 ? 1 : -1;
-          break;
-        case 'sawtooth':
-          buffer[i] = 2 * frac - 1;
-          break;
-        case 'triangle':
-          buffer[i] = 4 * Math.abs(frac - 0.5) - 1;
-          break;
-      }
+      buffer[i] = oscillator(type, frac, finiteClamp(frequency / sampleRate, 0.000001, 0.45));
     }
     return buffer;
   }
 
   static applyADSR(samples: Float32Array, sampleRate: number, attack: number, decay: number, sustain: number, release: number, totalDuration: number): Float32Array {
+    attack = clamp(attack, 0.002, 10, 0.01);
+    decay = clamp(decay, 0.002, 10, 0.2);
+    sustain = clamp(sustain, 0, 1, 0.5);
+    release = clamp(release, 0.005, 10, 0.3);
     const output = new Float32Array(samples.length);
     const attackSamples = Math.max(1, Math.floor(Math.max(0.002, attack) * sampleRate));
     const decaySamples = Math.max(1, Math.floor(decay * sampleRate));
@@ -103,6 +94,8 @@ export class Synthesizer {
   }
 
   private static applyDelay(samples: Float32Array, sampleRate: number, time: number, feedback: number, wet: number): Float32Array {
+    time = clamp(time, 0.001, 2, 0.25);
+    feedback = clamp(feedback, 0, 0.85);
     const output = new Float32Array(samples.length);
     const delaySamples = Math.max(1, Math.floor(time * sampleRate));
     const delayBuffer = new Float32Array(delaySamples);
@@ -167,8 +160,10 @@ export class Synthesizer {
     sampleRate: number = 44100,
     options?: { applyInsertEffects?: boolean }
   ): Float32Array {
+    sampleRate = finiteClamp(sampleRate, 8000, 192000, 44100);
+    duration = finiteClamp(duration, 0, 60);
     const freq = Synthesizer.noteToFrequency(note);
-    const detunedFreq = freq * Math.pow(2, this.parameters.oscillator.detune / 1200);
+    const detunedFreq = freq * Math.pow(2, finiteClamp(this.parameters.oscillator.detune, -1200, 1200, 0) / 1200);
     const length = Math.floor(sampleRate * duration);
     const { attack, decay, sustain, release } = this.parameters.envelope;
     const oscType = this.parameters.oscillator.type;

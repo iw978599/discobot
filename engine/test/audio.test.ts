@@ -5,6 +5,7 @@ import { StreamingSynth } from '../src/StreamingSynth';
 import { DrumSynthesizer } from '../src/DrumSynthesizer';
 import { ResonantFilter, oscillator } from '../src/dsp';
 import type { DrumInstrument } from '../src/types';
+import { encodeWAV } from '../src/AudioExporter';
 
 const rms = (samples: Float32Array) => Math.sqrt(samples.reduce((sum, value) => sum + value * value, 0) / samples.length);
 const finite = (samples: Float32Array) => assert.ok(samples.every(Number.isFinite), 'all samples must be finite');
@@ -117,4 +118,15 @@ test('every drum has bounded headroom, silent endpoints and genuine zero velocit
 
 test('drum rendering rejects non-finite settings without poisoning PCM', () => {
   finite(DrumSynthesizer.renderHit('kick', { volume: NaN, tone: Infinity, extra: NaN }, NaN));
+});
+
+test('WAV encoding uses browser-native bytes, clips safely and sanitizes invalid PCM', () => {
+  const bytes = encodeWAV(new Float32Array([-2, 0.5, NaN, 2]), 48000);
+  const view = new DataView(bytes.buffer);
+  assert.equal(new TextDecoder().decode(bytes.subarray(0, 4)), 'RIFF');
+  assert.equal(view.getUint32(24, true), 48000);
+  assert.equal(view.getInt16(44, true), -32767);
+  assert.equal(view.getInt16(46, true), 16384);
+  assert.equal(view.getInt16(48, true), 0);
+  assert.equal(view.getInt16(50, true), 32767);
 });

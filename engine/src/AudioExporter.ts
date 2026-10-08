@@ -1,7 +1,7 @@
 import { Pattern } from './types';
 import { Synthesizer } from './Synthesizer';
 
-function encodeWAV(samples: Float32Array, sampleRate: number): Buffer {
+export function encodeWAV(samples: Float32Array, sampleRate: number): Uint8Array {
   const numChannels = 1;
   const bitsPerSample = 16;
   const byteRate = sampleRate * numChannels * bitsPerSample / 8;
@@ -9,26 +9,29 @@ function encodeWAV(samples: Float32Array, sampleRate: number): Buffer {
   const dataSize = samples.length * blockAlign;
   const bufferSize = 44 + dataSize;
 
-  const buffer = Buffer.alloc(bufferSize);
-  const writeString = (offset: number, str: string) => buffer.write(str, offset, 'ascii');
+  const buffer = new Uint8Array(bufferSize);
+  const view = new DataView(buffer.buffer);
+  const writeString = (offset: number, str: string) => {
+    for (let i = 0; i < str.length; i++) buffer[offset + i] = str.charCodeAt(i);
+  };
 
   writeString(0, 'RIFF');
-  buffer.writeUInt32LE(36 + dataSize, 4);
+  view.setUint32(4, 36 + dataSize, true);
   writeString(8, 'WAVE');
   writeString(12, 'fmt ');
-  buffer.writeUInt32LE(16, 16);
-  buffer.writeUInt16LE(1, 20);
-  buffer.writeUInt16LE(numChannels, 22);
-  buffer.writeUInt32LE(sampleRate, 24);
-  buffer.writeUInt32LE(byteRate, 28);
-  buffer.writeUInt16LE(blockAlign, 32);
-  buffer.writeUInt16LE(bitsPerSample, 34);
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitsPerSample, true);
   writeString(36, 'data');
-  buffer.writeUInt32LE(dataSize, 40);
+  view.setUint32(40, dataSize, true);
 
   for (let i = 0; i < samples.length; i++) {
-    const s = Math.max(-1, Math.min(1, samples[i]));
-    buffer.writeInt16LE(Math.round(s * 32767), 44 + i * 2);
+    const s = Number.isFinite(samples[i]) ? Math.max(-1, Math.min(1, samples[i])) : 0;
+    view.setInt16(44 + i * 2, Math.round(s * 32767), true);
   }
 
   return buffer;
@@ -39,7 +42,7 @@ export class AudioExporter {
     synth: Synthesizer,
     pattern: Pattern,
     durationInBars: number = 1
-  ): Promise<Buffer> {
+  ): Promise<Uint8Array> {
     const sampleRate = 44100;
     const stepCount = Math.max(1, pattern.steps.length);
     const lengthInSeconds = (durationInBars * 4 * 60) / pattern.tempo;
@@ -68,7 +71,7 @@ export class AudioExporter {
     synth: Synthesizer,
     notes: Array<{ note: string; time: number; duration: number; velocity: number }>,
     totalDuration: number
-  ): Promise<Buffer> {
+  ): Promise<Uint8Array> {
     const sampleRate = 44100;
     const totalSamples = Math.floor(sampleRate * totalDuration);
     const mix = new Float32Array(totalSamples);

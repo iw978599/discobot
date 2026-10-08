@@ -46,7 +46,9 @@ export class LocalProjectService {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (parsed.version !== 1 || !Array.isArray(parsed.synths) || !Array.isArray(parsed.savedPatterns)) {
+        if (parsed.version !== 1 || !Array.isArray(parsed.synths) || !Array.isArray(parsed.savedPatterns)
+          || !parsed.synths.every((s: any) => typeof s?.synthId === 'number' && Array.isArray(s.pattern?.steps) && Array.isArray(s.patterns))
+          || !DRUM_INSTRUMENTS.every(i => Array.isArray(parsed.drumState?.[i]?.steps) && parsed.drumState[i].settings)) {
           throw new Error('Invalid project data');
         }
         this.state = merge(this.state, parsed);
@@ -186,6 +188,7 @@ export class LocalProjectService {
         return update('synthUpdate', { synthId, parameters: synth.synthParams }, synth.synthParams);
       }
       if (resource === 'model') {
+        if (method === 'GET') return respond({ modelId: synth.synthModelId, modelParams: synth.synthModelParams });
         synth.synthModelId = body.modelId || synth.synthModelId;
         synth.synthModelParams = merge(synth.synthModelParams, body.modelParams || {});
         return update('synthModelUpdate', { synthId, modelId: synth.synthModelId, modelParams: synth.synthModelParams });

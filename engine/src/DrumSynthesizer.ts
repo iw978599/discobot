@@ -93,7 +93,7 @@ export class DrumSynthesizer {
       default: output = new Float32Array(0); break;
     }
     const polished = this.polishHit(output, profile.saturation);
-    const mixed = this.mixSampleLayer(polished, options.sampleLayer, options.sampleBlend ?? 0);
+    const mixed = this.mixSampleLayer(polished, options.sampleLayer, options.sampleBlend ?? 0, vol);
     const attack = Math.max(1, Math.round(sampleRate * 0.0005));
     const release = Math.max(1, Math.round(sampleRate * 0.006));
     for (let i = 0; i < mixed.length; i++) {
@@ -165,12 +165,12 @@ export class DrumSynthesizer {
     return mix;
   }
 
-  private static mixSampleLayer(base: Float32Array, sampleLayer: Float32Array | undefined, blend: number): Float32Array {
+  private static mixSampleLayer(base: Float32Array, sampleLayer: Float32Array | undefined, blend: number, volume: number): Float32Array {
     if (!sampleLayer || sampleLayer.length === 0 || blend <= 0) return base;
     const mix = clamp(blend, 0, 0.4);
     const out = new Float32Array(base.length);
     for (let i = 0; i < out.length; i++) {
-      const sample = (i < sampleLayer.length ? clamp(sampleLayer[i], -1, 1) : 0) * mix;
+      const sample = (i < sampleLayer.length ? clamp(sampleLayer[i], -1, 1) : 0) * mix * volume;
       out[i] = base[i] * (1 - mix) + sample;
     }
     return out;

@@ -103,3 +103,46 @@ test('all model macros alter actual synthesis parameters; normalization rejects 
     }
   }
 });
+
+test('look-ahead note onsets occur at the requested frame and stop clears future notes', () => {
+  const { send, render } = processor();
+  send({ type: 'params', params: { attack: 0.002 } });
+  send({ type: 'noteOn', note: 'A4', velocity: 1, time: 500 / 48000, duration: 0.01 });
+  const pcm = render(900)[0];
+  assert.equal(rms(pcm.subarray(0, 500)), 0);
+  assert.ok(rms(pcm.subarray(520)) > 0.001);
+  send({ type: 'allNotesOff', release: 0.005 });
+  render(1000);
+  send({ type: 'noteOn', note: 'G4', velocity: 1, time: 1 });
+  send({ type: 'allNotesOff' });
+  assert.equal(rms(render(50000)[0]), 0);
+});
+
+test('live oscillator/filter edits preserve output continuity', () => {
+  const { send, render } = processor();
+  send({ type: 'params', params: { attack: 0.002, decay: 0.002, sustain: 1 } });
+  send({ type: 'noteOn', note: 'A4', velocity: 1 });
+  const before = render(301)[0];
+  send({ type: 'params', params: { oscType: 'square', filterType: 'highpass', gain: 0.4, pan: 1 } });
+  const after = render(1000)[0];
+  assert.ok(Math.abs(before[300] - after[0]) < 0.01);
+});
+
+test('oscillator, detune, envelopes, both LFOs, gain, pan and spread affect PCM', () => {
+  const sound = (parameters: Record<string, unknown>, chord = false) => {
+    const { send, render } = processor();
+    send({ type: 'params', params: { oscType: 'sawtooth', filterFreq: 1000, attack: 0.002, decay: 0.05, sustain: 0.7, ...parameters } });
+    send({ type: 'noteOn', note: 'C3', velocity: 1 });
+    if (chord) send({ type: 'noteOn', note: 'G5', velocity: 1 });
+    return render(5000);
+  };
+  const base = sound({});
+  for (const parameters of [
+    { oscType: 'square' }, { detune: 50 }, { attack: 0.1 }, { decay: 0.2 }, { sustain: 0.1 },
+    { gain: 0.3 }, { filterFreq: 300 }, { pan: 1 },
+    { lfo1Enabled: true, lfo1Depth: 0.5, lfo1Rate: 12, lfo1Target: 'pitch' },
+    { lfo2Enabled: true, lfo2Depth: 0.5, lfo2Rate: 12, lfo2Target: 'filter' },
+  ]) assert.notDeepEqual(sound(parameters), base, JSON.stringify(parameters));
+  assert.notDeepEqual(sound({ spread: 1 }, true), sound({ spread: 0 }, true));
+  assert.notDeepEqual(sound({ portamentoEnabled: true, portamentoGlide: 0.5 }), base);
+});

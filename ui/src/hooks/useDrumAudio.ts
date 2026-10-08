@@ -2,6 +2,7 @@ import { useRef, useEffect } from 'react';
 import type { DrumInstrument, DrumSettings, DrumKitId, FxSendLevels } from '../types';
 import { DrumSynthesizer } from '@discobot/engine';
 import { createAudioLane, getAudioContext, ensureAudioReady, setEffectsLoop } from './browserAudio';
+import { DRUM_KITS } from '../services/drumKits';
 
 export function useDrumAudio() {
   const laneRef = useRef<ReturnType<typeof createAudioLane> | null>(null);
@@ -35,7 +36,7 @@ export function useDrumAudio() {
     const velocity = typeof mutedOrVelocity === 'number' ? mutedOrVelocity : 1;
     const ctx = getAudioContext();
     const time = Number.isFinite(scheduledTime) ? Math.max(ctx.currentTime, scheduledTime!) : ctx.currentTime;
-    const variant = kitRef.current === 'punchy-modern' ? 'modern' : kitRef.current === 'lofi-dirty' ? 'dirty' : 'analog';
+    const variant = DRUM_KITS.find(kit => kit.id === kitRef.current)?.modelVariant ?? 'analog';
     const pcm = DrumSynthesizer.renderHit(instrument, settings, ctx.sampleRate, { velocity, modelVariant: variant });
     if (!pcm.length) return;
     const buffer = ctx.createBuffer(1, pcm.length, ctx.sampleRate);

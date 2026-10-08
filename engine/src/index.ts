@@ -1,10 +1,7 @@
 export { Synthesizer } from './Synthesizer';
 export { StreamingSynth } from './StreamingSynth';
 export { DrumSynthesizer } from './DrumSynthesizer';
-export { Sequencer } from './Sequencer';
-export { SequencerV2 } from './SequencerV2';
-export { SamplePlayer } from './SamplePlayer';
-export { audioContextManager } from './AudioContextManager';
+export { AudioExporter, encodeWAV } from './AudioExporter';
 export * from './types';
 export * from './utils';
 export * from './constants';

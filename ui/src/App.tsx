@@ -655,8 +655,7 @@ function App() {
   const initializedSynthLanesRef = useRef(false);
 
   useEffect(() => {
-    if (synths.length === 0 || initializedSynthLanesRef.current) return;
-    initializedSynthLanesRef.current = true;
+    if (synths.length === 0) return;
     if (midiTargetSynthId !== null && synths.some((s) => s.id === midiTargetSynthId)) return;
     setMidiTargetSynthId(synths[0].id);
   }, [synths, midiTargetSynthId]);
@@ -682,7 +681,8 @@ function App() {
   }, [drumAudio, drumMasterVolume, selectedDrumKitId, drumFx, effectsLoop]);
 
   useEffect(() => {
-    if (synths.length === 0) return;
+    if (synths.length === 0 || initializedSynthLanesRef.current) return;
+    initializedSynthLanesRef.current = true;
     for (const id of [2, 3]) {
       if (!synths.some(s => s.id === id)) {
         void ensureSynthExists(id);
@@ -901,7 +901,11 @@ function App() {
         modelId: preset.modelId,
         modelParams: preset.modelParams,
       }));
-    localStorage.setItem(SYNTH_PRESETS_STORAGE_KEY, JSON.stringify(presetsToPersist));
+    try {
+      localStorage.setItem(SYNTH_PRESETS_STORAGE_KEY, JSON.stringify(presetsToPersist));
+    } catch {
+      setStorageError('Unable to persist synth presets in browser storage.');
+    }
   }, [synthPresets]);
 
   useEffect(() => {
@@ -1354,10 +1358,14 @@ function App() {
     const playableSynths = currentSynths.filter(s => s.pattern);
 
     if (!isAnyPlaying) {
-      await Promise.all([
+      const readiness = await Promise.all([
         synthAudio.ensureAudioReady(),
         drumAudio.ensureAudioReady(),
       ]);
+      if (readiness.some(ready => !ready)) {
+        setStorageError('Audio could not start. Allow audio playback and press Play again.');
+        return;
+      }
       const playResponses = await Promise.all(playableSynths.map(async (s) => {
         const response = await authFetch('/sequencer/play', {
           method: 'POST',
