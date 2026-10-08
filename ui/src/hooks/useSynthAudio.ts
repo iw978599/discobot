@@ -17,83 +17,102 @@ export function flattenSynthParams(p: SynthParameters, bpm = 120): Record<string
   };
 }
 
+interface SynthLane {
+  node?: AudioWorkletNode;
+  audio?: ReturnType<typeof createAudioLane>;
+  loading?: Promise<AudioWorkletNode>;
+  parameters?: SynthParameters;
+  bpm: number;
+  generation: number;
+}
+
 export function useSynthAudio() {
-  const nodeRef = useRef<AudioWorkletNode | null>(null);
-  const laneRef = useRef<ReturnType<typeof createAudioLane> | null>(null);
-  const loadingRef = useRef<Promise<AudioWorkletNode> | null>(null);
-  const paramsRef = useRef<SynthParameters | null>(null);
-  const bpmRef = useRef(120);
+  const lanesRef = useRef(new Map<number, SynthLane>());
   const volumeRef = useRef(1);
-  const generationRef = useRef(0);
   const sequenceRef = useRef(0);
 
-  const updateParameters = useCallback((params: SynthParameters, bpm = 120, loop?: EffectsLoopState) => {
-    paramsRef.current = params;
-    bpmRef.current = bpm;
+  function laneFor(id: number): SynthLane {
+    let lane = lanesRef.current.get(id);
+    if (!lane) {
+      lane = { bpm: 120, generation: 0 };
+      lanesRef.current.set(id, lane);
+    }
+    return lane;
+  }
+  const updateParameters = useCallback((parameters: SynthParameters, bpm = 120, loop?: EffectsLoopState, synthId = 1) => {
+    const lane = laneFor(synthId);
+    lane.parameters = parameters;
+    lane.bpm = bpm;
     if (loop) setEffectsLoop(loop);
-    nodeRef.current?.port.postMessage({ type: 'params', params: flattenSynthParams(params, bpm) });
-    laneRef.current?.setSends(params.fxSends, params.fxReturn);
+    lane.node?.port.postMessage({ type: 'params', params: flattenSynthParams(parameters, bpm) });
+    lane.audio?.setSends(parameters.fxSends, parameters.fxReturn);
   }, []);
 
-  async function getNode(): Promise<AudioWorkletNode> {
-    if (nodeRef.current) return nodeRef.current;
-    if (!loadingRef.current) {
-      const generation = generationRef.current;
-      loadingRef.current = loadSynthWorklet().then(() => {
-        if (generation !== generationRef.current) throw new Error('Audio lane disposed');
+  async function getNode(lane: SynthLane): Promise<AudioWorkletNode> {
+    if (lane.node) return lane.node;
+    if (!lane.loading) {
+      const generation = lane.generation;
+      lane.loading = loadSynthWorklet().then(() => {
+        if (generation !== lane.generation) throw new Error('Audio lane stopped');
         const ctx = getAudioContext();
         const node = new AudioWorkletNode(ctx, 'synth-processor', { numberOfOutputs: 1, outputChannelCount: [2] });
-        const lane = createAudioLane('synth');
-        lane.setVolume(volumeRef.current);
-        node.connect(lane.input);
-        laneRef.current = lane;
-        nodeRef.current = node;
-        if (paramsRef.current) updateParameters(paramsRef.current, bpmRef.current);
+        const audio = createAudioLane('synth');
+        audio.setVolume(volumeRef.current);
+        node.connect(audio.input);
+        lane.audio = audio;
+        lane.node = node;
+        if (lane.parameters) {
+          node.port.postMessage({ type: 'params', params: flattenSynthParams(lane.parameters, lane.bpm) });
+          audio.setSends(lane.parameters.fxSends, lane.parameters.fxReturn);
+        }
         return node;
-      }).finally(() => { loadingRef.current = null; });
+      }).finally(() => { lane.loading = undefined; });
     }
-    return loadingRef.current;
+    return lane.loading;
   }
 
   const playNote = useCallback(async (
-    note: string, params: SynthParameters | null, duration?: number,
-    velocity = 1, muted = false, loop?: EffectsLoopState, bpm = 120,
+    note: string, parameters: SynthParameters | null, duration?: number,
+    velocity = 1, muted = false, loop?: EffectsLoopState, bpm = 120, synthId = 1, scheduledTime?: number,
   ) => {
-    const generation = generationRef.current;
-    if (muted || !await ensureAudioReady() || generation !== generationRef.current) return;
+    const lane = laneFor(synthId), generation = lane.generation;
+    if (muted || !await ensureAudioReady() || generation !== lane.generation) return;
     try {
-      const node = await getNode();
-      if (generation !== generationRef.current) return;
-      if (params) updateParameters(params, bpm, loop);
+      if (parameters) updateParameters(parameters, bpm, loop, synthId);
       else if (loop) setEffectsLoop(loop);
-      const id = ++sequenceRef.current;
-      node.port.postMessage({ type: 'noteOn', note, velocity, id, duration });
+      const node = await getNode(lane);
+      if (generation !== lane.generation) return;
+      node.port.postMessage({ type: 'noteOn', note, velocity, id: ++sequenceRef.current, duration, time: scheduledTime });
     } catch (error) { console.error('Synth playback failed:', error); }
   }, [updateParameters]);
 
-  const stopNote = useCallback((note: string, _params?: SynthParameters | null) => {
-    nodeRef.current?.port.postMessage({ type: 'noteOff', note });
+  const stopNote = useCallback((note: string, _parameters?: SynthParameters | null, synthId = 1) => {
+    lanesRef.current.get(synthId)?.node?.port.postMessage({ type: 'noteOff', note });
+  }, []);
+  const stopSynth = useCallback((synthId: number, release = 0.03) => {
+    const lane = lanesRef.current.get(synthId);
+    if (!lane) return;
+    lane.generation++;
+    lane.node?.port.postMessage({ type: 'allNotesOff', release });
   }, []);
   const stopAllNotes = useCallback((release = 0.03) => {
-    generationRef.current++;
-    nodeRef.current?.port.postMessage({ type: 'allNotesOff', release });
-  }, []);
+    lanesRef.current.forEach((_lane, id) => stopSynth(id, release));
+  }, [stopSynth]);
   const setVolume = useCallback((volume: number) => {
     volumeRef.current = Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : 0;
-    laneRef.current?.setVolume(volumeRef.current);
+    lanesRef.current.forEach(lane => lane.audio?.setVolume(volumeRef.current));
   }, []);
   const dispose = useCallback(() => {
     stopAllNotes();
-    const node = nodeRef.current;
-    const lane = laneRef.current;
-    nodeRef.current = null;
-    laneRef.current = null;
-    // Let a short release reach the output before disconnecting the lane.
-    setTimeout(() => { node?.disconnect(); node?.port.close(); lane?.dispose(); }, 50);
+    const previous = [...lanesRef.current.values()];
+    lanesRef.current.clear();
+    setTimeout(() => previous.forEach(lane => {
+      lane.node?.disconnect(); lane.node?.port.close(); lane.audio?.dispose();
+    }), 50);
   }, [stopAllNotes]);
   useEffect(() => dispose, [dispose]);
   return {
     ensureAudioReady, tryResume: () => { void ensureAudioReady(); },
-    playNote, stopNote, stopAllNotes, updateParameters, setEffectsLoop, setVolume, dispose,
+    playNote, stopNote, stopSynth, stopAllNotes, updateParameters, setEffectsLoop, setVolume, dispose,
   };
 }

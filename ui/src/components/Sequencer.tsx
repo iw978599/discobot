@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Pattern, SavedPatternInfo, SavedPatternFull } from '../types';
 import { localRequest as authFetch } from '../services/localService';
 import './Sequencer.css';
@@ -28,12 +28,32 @@ function PatternManager({
   onDelete: (id: string) => void;
   onClose: () => void;
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    dialogRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
+    const key = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeRef.current();
+      }
+      if (event.key !== 'Tab') return;
+      const items = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled)') || []);
+      const first = items[0], last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    document.addEventListener('keydown', key);
+    return () => { document.removeEventListener('keydown', key); previous?.focus(); };
+  }, []);
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} className="modal-content" role="dialog" aria-modal="true" aria-label="Saved Patterns" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Saved Patterns</h3>
-          <button className="modal-close" onClick={onClose}>&times;</button>
+          <button className="modal-close" aria-label="Close saved patterns" onClick={onClose}>&times;</button>
         </div>
         <div className="modal-body">
           {saved.length === 0 && <p className="empty-msg">No saved patterns yet.</p>}

@@ -280,6 +280,7 @@ export class DrumSynthesizer {
       lpBand = lpBand * 0.85 + noise * 0.15;
       let metallic = 0;
       for (let p = 0; p < phases.length; p++) {
+        if (base * ratios[p] >= sampleRate * 0.45) continue;
         phases[p] += (base * ratios[p]) / sampleRate;
         metallic += Math.sin(2 * Math.PI * phases[p]) * amps[p];
       }
@@ -317,6 +318,7 @@ export class DrumSynthesizer {
       lpBand = lpBand * 0.82 + noise * 0.18;
       let metallic = 0;
       for (let p = 0; p < phases.length; p++) {
+        if (base * ratios[p] >= sampleRate * 0.45) continue;
         phases[p] += (base * ratios[p]) / sampleRate;
         metallic += Math.sin(2 * Math.PI * phases[p]) * amps[p];
       }
@@ -347,6 +349,7 @@ export class DrumSynthesizer {
       const t = i / sampleRate;
       let metallic = 0;
       for (let p = 0; p < phases.length; p++) {
+        if (baseFreq * ratios[p] >= sampleRate * 0.45) continue;
         phases[p] += (baseFreq * ratios[p]) / sampleRate;
         metallic += Math.sin(2 * Math.PI * phases[p]) * amps[p];
       }
@@ -387,6 +390,7 @@ export class DrumSynthesizer {
       hpBand = hpBand * 0.5 + hpNoise * 0.5;
       let metallic = 0;
       for (let p = 0; p < phases.length; p++) {
+        if (base * ratios[p] >= sampleRate * 0.45) continue;
         phases[p] += (base * ratios[p]) / sampleRate;
         metallic += Math.sin(2 * Math.PI * phases[p]) * amps[p];
       }

@@ -1,6 +1,6 @@
 import { useRef, useEffect } from 'react';
 import type { DrumInstrument, DrumSettings, DrumKitId, FxSendLevels } from '../types';
-import { DrumSynthesizer } from '@discord-synth/engine';
+import { DrumSynthesizer } from '@discobot/engine';
 import { createAudioLane, getAudioContext, ensureAudioReady, setEffectsLoop } from './browserAudio';
 
 export function useDrumAudio() {
@@ -9,7 +9,7 @@ export function useDrumAudio() {
   const sendsRef = useRef<FxSendLevels>({ reverb: 0, delay: 0, drive: 0, phaser: 0 });
   const returnRef = useRef(1);
   const kitRef = useRef<DrumKitId>('clean-analog');
-  const sourcesRef = useRef(new Set<AudioBufferSourceNode>());
+  const sourcesRef = useRef(new Map<AudioBufferSourceNode, GainNode>());
   const openHatRef = useRef<{ source: AudioBufferSourceNode; gain: GainNode } | null>(null);
   const generationRef = useRef(0);
 
@@ -28,12 +28,13 @@ export function useDrumAudio() {
   }
   function setKit(kit: DrumKitId) { kitRef.current = kit; }
 
-  async function playDrumHit(instrument: DrumInstrument, settings: DrumSettings, mutedOrVelocity: boolean | number = false) {
+  async function playDrumHit(instrument: DrumInstrument, settings: DrumSettings, mutedOrVelocity: boolean | number = false, scheduledTime?: number) {
     if (mutedOrVelocity === true) return;
     const generation = generationRef.current;
     if (!await ensureAudioReady() || generation !== generationRef.current) return;
     const velocity = typeof mutedOrVelocity === 'number' ? mutedOrVelocity : 1;
     const ctx = getAudioContext();
+    const time = Number.isFinite(scheduledTime) ? Math.max(ctx.currentTime, scheduledTime!) : ctx.currentTime;
     const variant = kitRef.current === 'punchy-modern' ? 'modern' : kitRef.current === 'lofi-dirty' ? 'dirty' : 'analog';
     const pcm = DrumSynthesizer.renderHit(instrument, settings, ctx.sampleRate, { velocity, modelVariant: variant });
     if (!pcm.length) return;
@@ -45,27 +46,34 @@ export function useDrumAudio() {
     source.connect(gain).connect(pan).connect(getLane().input);
     if ((instrument === 'closedHH' || instrument === 'openHH') && openHatRef.current) {
       const previous = openHatRef.current;
-      previous.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.003);
-      previous.source.stop(ctx.currentTime + 0.02);
+      previous.gain.gain.setTargetAtTime(0, time, 0.003);
+      previous.source.stop(time + 0.02);
     }
     if (instrument === 'openHH') openHatRef.current = { source, gain };
-    sourcesRef.current.add(source);
+    sourcesRef.current.set(source, gain);
     source.onended = () => {
       sourcesRef.current.delete(source);
       if (openHatRef.current?.source === source) openHatRef.current = null;
       source.disconnect(); gain.disconnect(); pan.disconnect();
     };
-    source.start();
+    source.start(time);
   }
   function stopAllNotes() {
     generationRef.current++;
-    sourcesRef.current.forEach(source => { try { source.stop(); } catch { /* already ended */ } });
+    if (sourcesRef.current.size) {
+      const ctx = getAudioContext();
+      sourcesRef.current.forEach((gain, source) => {
+        gain.gain.setTargetAtTime(0, ctx.currentTime, 0.003);
+        try { source.stop(ctx.currentTime + 0.02); } catch { /* already ended */ }
+      });
+    }
     sourcesRef.current.clear();
     openHatRef.current = null;
   }
   function dispose() {
     stopAllNotes();
-    laneRef.current?.dispose();
+    const previous = laneRef.current;
+    setTimeout(() => previous?.dispose(), 30);
     laneRef.current = null;
   }
   useEffect(() => dispose, []);

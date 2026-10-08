@@ -8,7 +8,7 @@ class SynthProcessor extends AudioWorkletProcessor {
       active: false, note: '', id: 0, frequency: 440, targetFrequency: 440,
       velocity: 0, phase: 0, lfo1Phase: 0, lfo2Phase: 0,
       stage: 'off', envelope: 0, releaseStep: 0, z1: 0, z2: 0,
-      last: 0, tail: 0, tailSamples: 0, age: 0, remaining: Infinity,
+      last: 0, tail: 0, tailSamples: 0, transition: 0, transitionSamples: 0, age: 0, remaining: Infinity,
     }));
     this.params = {
       oscType: 'sine', detune: 0, filterFreq: 5000, filterQ: 0.707, filterType: 'lowpass',
@@ -20,19 +20,35 @@ class SynthProcessor extends AudioWorkletProcessor {
     this.smoothed = { gain: 1, pan: 0, spread: 0, detune: 0, filterFreq: 5000, filterQ: 0.707 };
     this.age = 0;
     this.lastFrequency = 440;
+    this.frame = typeof currentFrame === 'number' ? currentFrame : 0;
+    this.pending = [];
     this.port.onmessage = ({ data }) => {
       if (data.type === 'params') {
+        if ((data.params?.oscType && data.params.oscType !== this.params.oscType)
+          || (data.params?.filterType && data.params.filterType !== this.params.filterType)) {
+          for (const voice of this.voices) {
+            voice.transition = voice.last;
+            voice.transitionSamples = Math.ceil(sampleRate * 0.005);
+          }
+        }
         for (const [key, value] of Object.entries(data.params || {})) {
           if (!(key in this.params)) continue;
           if (typeof this.params[key] === 'number' && !Number.isFinite(value)) continue;
           this.params[key] = value;
         }
-      } else if (data.type === 'noteOn') this.noteOn(data);
+      } else if (data.type === 'noteOn') {
+        if (Number.isFinite(data.time) && data.time * sampleRate > this.frame) {
+          this.pending.push({ ...data, frame: Math.round(data.time * sampleRate) });
+          this.pending.sort((a, b) => a.frame - b.frame);
+        } else this.noteOn(data);
+      }
       else if (data.type === 'noteOff') {
+        this.pending = this.pending.filter(note => note.note !== data.note || (data.id !== undefined && note.id !== data.id));
         for (const voice of this.voices) {
           if (voice.active && voice.note === data.note && (data.id === undefined || data.id === voice.id)) this.release(voice);
         }
       } else if (data.type === 'allNotesOff') {
+        this.pending = [];
         this.voices.forEach(voice => this.release(voice, clamp(data.release, 0.005, 2, 0.03)));
       }
     };
@@ -117,6 +133,7 @@ class SynthProcessor extends AudioWorkletProcessor {
     const left = output[0], right = output[1] || left, p = this.params, s = this.smoothed;
     const smoothing = 1 - Math.exp(-1 / (sampleRate * 0.01));
     for (let i = 0; i < left.length; i++) {
+      while (this.pending.length && this.pending[0].frame <= this.frame + i) this.noteOn(this.pending.shift());
       for (const key of Object.keys(s)) s[key] += (clamp(p[key],
         key === 'pan' ? -1 : key === 'detune' ? -1200 : key === 'filterFreq' ? 20 : 0,
         key === 'filterFreq' ? sampleRate * 0.45 : key === 'filterQ' ? 20 : key === 'detune' ? 1200 : 1,
@@ -153,6 +170,11 @@ class SynthProcessor extends AudioWorkletProcessor {
           value += v.tail * v.tailSamples / Math.ceil(sampleRate * 0.005);
           v.tailSamples--;
         }
+        if (v.transitionSamples > 0) {
+          const blend = v.transitionSamples / Math.ceil(sampleRate * 0.005);
+          value = value * (1 - blend) + v.transition * blend;
+          v.transitionSamples--;
+        }
         v.last = value;
         const spreadPan = clamp(Math.log2(v.targetFrequency / 440) / 3, -1, 1) * s.spread;
         const angle = (clamp(s.pan + spreadPan, -1, 1) + 1) * Math.PI / 4;
@@ -163,6 +185,7 @@ class SynthProcessor extends AudioWorkletProcessor {
       left[i] = Math.tanh(l);
       right[i] = Math.tanh(r);
     }
+    this.frame += left.length;
     return true;
   }
 }

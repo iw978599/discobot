@@ -10,6 +10,7 @@ type Defaults = {
 type LocalSynth = {
   synthId: number; pattern: Pattern; patterns: Pattern[]; synthParams: SynthParameters;
   synthModelId: SynthModelId; synthModelParams: SynthModelParams; muted: boolean; solo: boolean; isPlaying: boolean;
+  octaveShift?: number; keyboardMode?: 'keyboard' | 'piano-roll';
 };
 type State = Defaults & {
   version: 1; synths: LocalSynth[]; tempo: number; selectedDrumKitId: string;
@@ -97,6 +98,13 @@ export class LocalProjectService {
     }
   }
 
+  private notifySaved() {
+    this.emit('savedPatternsChanged', {
+      patterns: this.state!.savedPatterns.map(({ id, name, updatedAt }) => ({ id, name, updatedAt })),
+    });
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('discobot:saved-patterns'));
+  }
+
   setPlaying(synthId: number, playing: boolean, patternId?: string) {
     const synth = this.state!.synths.find(s => s.synthId === synthId);
     if (!synth) return false;
@@ -128,8 +136,13 @@ export class LocalProjectService {
       const saved = state.savedPatterns.find(p => p.id === savedMatch[1]);
       if (!saved) return respond({ error: 'Pattern not found' }, 404);
       if (method === 'DELETE') {
+        const previous = state.savedPatterns;
         state.savedPatterns = state.savedPatterns.filter(p => p !== saved);
-        if (!this.persist()) return respond({ error: 'Storage unavailable' }, 507);
+        if (!this.persist()) {
+          state.savedPatterns = previous;
+          return respond({ error: 'Storage unavailable' }, 507);
+        }
+        this.notifySaved();
       }
       return respond(saved);
     }
@@ -146,6 +159,7 @@ export class LocalProjectService {
         state.savedPatterns = previous;
         return respond({ error: 'Storage unavailable' }, 507);
       }
+      this.notifySaved();
       return respond(saved);
     }
     if (path === '/synth/create') {
@@ -180,6 +194,12 @@ export class LocalProjectService {
         if (typeof body.muted === 'boolean') synth.muted = body.muted;
         if (typeof body.solo === 'boolean') synth.solo = body.solo;
         return update('synthMix', { synthId, muted: synth.muted, solo: synth.solo });
+      }
+      if (resource === 'preferences') {
+        synth.octaveShift = Math.max(-2, Math.min(2, body.octaveShift ?? synth.octaveShift ?? 0));
+        synth.keyboardMode = body.keyboardMode === 'piano-roll' ? 'piano-roll' : body.keyboardMode === 'keyboard' ? 'keyboard' : synth.keyboardMode;
+        this.persist();
+        return respond(synth);
       }
       if (resource === 'patterns' && method === 'GET') return respond(synth.patterns);
       if (resource?.startsWith('patterns')) {

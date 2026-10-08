@@ -25,6 +25,8 @@ let context: AudioContext | undefined;
 let master: GainNode;
 let loop: EffectsLoopState | undefined;
 let workletLoading: Promise<void> | undefined;
+let masterVolume = 1;
+let masterMuted = false;
 const effects = new Map<'synth' | 'drums', Effects>();
 
 export function getAudioContext(): AudioContext {
@@ -33,7 +35,7 @@ export function getAudioContext(): AudioContext {
     effects.clear();
     workletLoading = undefined;
     master = context.createGain();
-    master.gain.value = 0.55;
+    master.gain.value = masterMuted ? 0 : masterVolume * 0.55;
     const limiter = context.createDynamicsCompressor();
     limiter.threshold.value = -6;
     limiter.knee.value = 6;
@@ -58,10 +60,39 @@ export async function ensureAudioReady(): Promise<boolean> {
   } catch { return false; }
 }
 
+export function setMasterVolume(volume: number): void {
+  masterVolume = limit(volume, 0, 1);
+  if (context) smooth(master.gain, masterMuted ? 0 : masterVolume * 0.55, context);
+}
+
+export function setMasterMuted(muted: boolean): void {
+  masterMuted = muted;
+  if (context) smooth(master.gain, masterMuted ? 0 : masterVolume * 0.55, context);
+}
+
+export async function playSample(data: ArrayBuffer): Promise<void> {
+  if (!await ensureAudioReady()) return;
+  const ctx = getAudioContext();
+  const buffer = await ctx.decodeAudioData(data.slice(0));
+  const source = ctx.createBufferSource();
+  const gain = ctx.createGain();
+  source.buffer = buffer;
+  // Samples join the same protected master; short boundary ramps avoid cropped-file clicks.
+  const end = ctx.currentTime + buffer.duration;
+  gain.gain.setValueAtTime(0, ctx.currentTime);
+  gain.gain.linearRampToValueAtTime(0.7, ctx.currentTime + Math.min(0.005, buffer.duration / 2));
+  gain.gain.setValueAtTime(0.7, Math.max(ctx.currentTime, end - 0.005));
+  gain.gain.linearRampToValueAtTime(0, end);
+  source.connect(gain).connect(master);
+  source.onended = () => { source.disconnect(); gain.disconnect(); };
+  source.start();
+}
+
 export function loadSynthWorklet(): Promise<void> {
   const ctx = getAudioContext();
   if (!workletLoading) {
-    workletLoading = ctx.audioWorklet.addModule(`${import.meta.env.BASE_URL}synth-processor.js`)
+    const base = (import.meta as ImportMeta & { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
+    workletLoading = ctx.audioWorklet.addModule(`${base}synth-processor.js`)
       .catch(error => { workletLoading = undefined; throw error; });
   }
   return workletLoading;

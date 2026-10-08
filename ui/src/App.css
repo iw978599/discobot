@@ -124,21 +124,6 @@
   text-overflow: ellipsis;
 }
 
-.connected-users {
-  color: #00d4ff;
-}
-
-.status-indicator {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #ef4444;
-}
-
-.status-indicator.connected {
-  background: #22c55e;
-}
-
 .app-content {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(min(420px, 100%), 1fr);
@@ -478,15 +463,6 @@
   color: #aaa;
   outline: none;
   max-width: 160px;
-}
-
-.auth-error-banner {
-  padding: 0.35rem 0.7rem;
-  background: rgba(239, 68, 68, 0.12);
-  border-top: 1px solid rgba(239, 68, 68, 0.45);
-  border-bottom: 1px solid rgba(239, 68, 68, 0.45);
-  color: #fecaca;
-  font-size: 0.75rem;
 }
 
 @media (max-width: 1380px) {
