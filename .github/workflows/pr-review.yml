@@ -20,14 +20,18 @@ jobs:
           fetch-depth: 0
 
       - name: Checkout PR branch
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          git fetch origin pull/${{ github.event.pull_request.number }}/head:pr-branch
+          git fetch origin "pull/${PR_NUMBER}/head:pr-branch"
           git checkout pr-branch
 
       - name: Get PR diff
         id: diff
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
-          git diff origin/${{ github.event.pull_request.base.ref }}...HEAD > pr.diff
+          git diff "origin/${BASE_REF}...HEAD" > pr.diff
 
           # Check if diff is too large (GitHub API has limits)
           DIFF_SIZE=$(wc -c < pr.diff)
@@ -51,8 +55,14 @@ jobs:
       - name: AI Review with GitHub Models
         if: steps.diff.outputs.too_large == 'false' && steps.guide.outputs.guide_exists == 'true'
         id: ai_review
+        # PR text is attacker-controlled, so it reaches the shell only as environment data.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
+          PR_ADDITIONS: ${{ github.event.pull_request.additions }}
+          PR_DELETIONS: ${{ github.event.pull_request.deletions }}
         run: |
           # Read files
           DIFF_CONTENT=$(cat pr.diff)
@@ -61,12 +71,12 @@ jobs:
           # Create the prompt
           PROMPT="Review this pull request using the comprehensive framework below.
 
-          PR Title: ${{ github.event.pull_request.title }}
-          PR Description: ${{ github.event.pull_request.body }}
+          PR Title: ${PR_TITLE}
+          PR Description: ${PR_BODY}
 
-          Files Changed: ${{ github.event.pull_request.changed_files }}
-          Additions: +${{ github.event.pull_request.additions }}
-          Deletions: -${{ github.event.pull_request.deletions }}
+          Files Changed: ${PR_CHANGED_FILES}
+          Additions: +${PR_ADDITIONS}
+          Deletions: -${PR_DELETIONS}
 
           Diff:
           \`\`\`diff
