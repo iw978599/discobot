@@ -15,11 +15,12 @@ export type MidiMessage =
 
 interface UseMidiInputOptions {
   onMessage: (message: MidiMessage) => void;
+  onDeviceDisconnect?: (note: { note: number; channel: number }) => void;
 }
 
 const ALL_DEVICES_ID = '__all__';
 
-export function useMidiInput({ onMessage }: UseMidiInputOptions) {
+export function useMidiInput({ onMessage, onDeviceDisconnect }: UseMidiInputOptions) {
   const [supported, setSupported] = useState(false);
   const [connected, setConnected] = useState(false);
   const [devices, setDevices] = useState<MidiDeviceInfo[]>([]);
@@ -30,6 +31,9 @@ export function useMidiInput({ onMessage }: UseMidiInputOptions) {
   const accessRef = useRef<any>(null);
   const onMessageRef = useRef(onMessage);
   onMessageRef.current = onMessage;
+  const onDeviceDisconnectRef = useRef(onDeviceDisconnect);
+  onDeviceDisconnectRef.current = onDeviceDisconnect;
+  const heldNoteRef = useRef<{ note: number; channel: number } | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -62,13 +66,25 @@ export function useMidiInput({ onMessage }: UseMidiInputOptions) {
       if (!parsed) return;
       if (parsed.type === 'noteOn') {
         setLastMessage(`Ch ${parsed.channel} Note On ${parsed.note} (${parsed.velocity})`);
+        heldNoteRef.current = { note: parsed.note, channel: parsed.channel };
       } else if (parsed.type === 'noteOff') {
         setLastMessage(`Ch ${parsed.channel} Note Off ${parsed.note}`);
+        if (heldNoteRef.current && heldNoteRef.current.note === parsed.note) heldNoteRef.current = null;
       } else {
         setLastMessage(`Ch ${parsed.channel} CC ${parsed.controller} (${parsed.value})`);
       }
       onMessageRef.current(parsed);
     };
+
+    const releaseHeldNote = () => {
+      const held = heldNoteRef.current;
+      if (!held) return;
+      heldNoteRef.current = null;
+      if (onDeviceDisconnectRef.current) onDeviceDisconnectRef.current(held);
+      else onMessageRef.current({ type: 'noteOff', note: held.note, channel: held.channel });
+    };
+
+    const previousInputIds = new Set<string>();
 
     const bindInputs = () => {
       const access = accessRef.current;
@@ -81,6 +97,7 @@ export function useMidiInput({ onMessage }: UseMidiInputOptions) {
       inputs.forEach((input: any) => {
         const id = String(input.id);
         const state = String(input.state || 'connected');
+        if (state !== 'connected') releaseHeldNote();
         nextDevices.push({
           id,
           name: input.name || `MIDI ${id.slice(0, 6)}`,
@@ -91,6 +108,12 @@ export function useMidiInput({ onMessage }: UseMidiInputOptions) {
         input.onmidimessage = shouldAttach ? onMidiInput : null;
         if (shouldAttach && state === 'connected') activeInputs += 1;
       });
+
+      const currentIds = new Set(inputs.map((input: any) => String(input.id)));
+      previousInputIds.forEach((id) => {
+        if (!currentIds.has(id)) releaseHeldNote();
+      });
+      currentIds.forEach((id) => previousInputIds.add(id));
 
       if (!mounted) return;
       setDevices(nextDevices);

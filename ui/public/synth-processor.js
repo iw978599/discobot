@@ -136,7 +136,7 @@ class SynthProcessor extends AudioWorkletProcessor {
       while (this.pending.length && this.pending[0].frame <= this.frame + i) this.noteOn(this.pending.shift());
       for (const key of Object.keys(s)) s[key] += (clamp(p[key],
         key === 'pan' ? -1 : key === 'detune' ? -1200 : key === 'filterFreq' ? 20 : 0,
-        key === 'filterFreq' ? sampleRate * 0.45 : key === 'filterQ' ? 20 : key === 'detune' ? 1200 : 1,
+        key === 'filterFreq' ? sampleRate * 0.45 : key === 'filterQ' ? 20 : key === 'detune' ? 1200 : key === 'gain' ? 2 : 1,
         s[key]) - s[key]) * smoothing;
       let l = 0, r = 0;
       for (let index = 0; index < this.voices.length; index++) {

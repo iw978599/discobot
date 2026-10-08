@@ -73,8 +73,18 @@ export function setMasterMuted(muted: boolean): void {
   if (context) smooth(master.gain, masterMuted ? 0 : masterVolume * 0.55, context);
 }
 
+const activeSampleSources = new Set<AudioBufferSourceNode>();
+
+export function stopAllSamples(): void {
+  for (const source of activeSampleSources) {
+    try { source.stop(); } catch { /* already stopped */ }
+  }
+  activeSampleSources.clear();
+}
+
 export async function playSample(data: ArrayBuffer): Promise<void> {
   if (!await ensureAudioReady()) return;
+  stopAllSamples();
   const ctx = getAudioContext();
   const buffer = await ctx.decodeAudioData(data.slice(0));
   const source = ctx.createBufferSource();
@@ -87,7 +97,8 @@ export async function playSample(data: ArrayBuffer): Promise<void> {
   gain.gain.setValueAtTime(0.7, Math.max(ctx.currentTime, end - 0.005));
   gain.gain.linearRampToValueAtTime(0, end);
   source.connect(gain).connect(master);
-  source.onended = () => { source.disconnect(); gain.disconnect(); };
+  source.onended = () => { activeSampleSources.delete(source); source.disconnect(); gain.disconnect(); };
+  activeSampleSources.add(source);
   source.start();
 }
 

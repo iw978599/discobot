@@ -30,7 +30,7 @@ test('tempo-synced LFO uses cycles per second, not beats per minute', () => {
   params.lfo1.sync = true; params.lfo1.rate = 4;
   assert.equal(flattenSynthParams(params, 120).lfo1Rate, 2);
   params.lfo1.rate = 16;
-  assert.equal(flattenSynthParams(params, 120).lfo1Rate, 0.5);
+  assert.equal(flattenSynthParams(params, 120).lfo1Rate, 8);
 });
 
 test('worklet stops gliding notes by identity and releases within the requested time', () => {

@@ -13,7 +13,6 @@ interface SequencerProps {
   onStepChange: (stepIndex: number) => void;
   onStepVelocityChange: (stepIndex: number, velocity: number) => void;
   onStepCountChange: (stepCount: 16 | 32) => void;
-  onSavePattern: (name: string) => Promise<boolean>;
   onLoadSavedPattern: (data: SavedPatternFull, savedId?: string) => void;
 }
 

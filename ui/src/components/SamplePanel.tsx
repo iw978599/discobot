@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { deleteSample, listSamples, saveSample, type SampleRecord } from '../services/sampleStore';
+import { stopAllSamples } from '../hooks/browserAudio';
 import './SamplePanel.css';
 
 export default function SamplePanel({ onPlay }: { onPlay: (sample: SampleRecord) => void | Promise<void> }) {
@@ -42,13 +43,14 @@ export default function SamplePanel({ onPlay }: { onPlay: (sample: SampleRecord)
       </label>
       {error && <p role="alert">{error}</p>}
       {busy && <span role="status">Working…</span>}
+      <button onClick={() => stopAllSamples()}>Stop All</button>
       {samples.length === 0 && <p>No samples yet. Imported audio stays on this device.</p>}
       <ul className="sample-list">
         {samples.map(sample => (
           <li key={sample.id}>
             <span>{sample.name}</span>
             <button disabled={busy} aria-label={`Play sample ${sample.name}`} onClick={() => { void perform(async () => { await onPlay(sample); }); }}>Play</button>
-            <button disabled={busy} aria-label={`Delete sample ${sample.name}`} onClick={() => { void perform(async () => { await deleteSample(sample.id); setSamples(await listSamples()); }); }}>Delete</button>
+            <button disabled={busy} aria-label={`Delete sample ${sample.name}`} onClick={() => { void perform(async () => { stopAllSamples(); await deleteSample(sample.id); setSamples(await listSamples()); }); }}>Delete</button>
           </li>
         ))}
       </ul>

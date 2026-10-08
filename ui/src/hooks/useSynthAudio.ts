@@ -3,7 +3,7 @@ import type { SynthParameters, EffectsLoopState } from '../types';
 import { createAudioLane, getAudioContext, ensureAudioReady, loadSynthWorklet, setEffectsLoop } from './browserAudio';
 
 export function flattenSynthParams(p: SynthParameters, bpm = 120): Record<string, unknown> {
-  const syncRate = (rate: number, sync?: boolean) => sync ? Math.max(20, Math.min(300, bpm)) * 4 / (60 * Math.max(1, Math.round(rate))) : rate;
+  const syncRate = (rate: number, sync?: boolean) => sync ? Math.max(20, Math.min(300, bpm)) * Math.max(1, Math.round(rate)) / 240 : rate;
   return {
     oscType: p.oscillator.type, detune: p.oscillator.detune,
     filterFreq: p.filter.frequency, filterQ: p.filter.q, filterType: p.filter.type,
@@ -24,6 +24,7 @@ interface SynthLane {
   parameters?: SynthParameters;
   bpm: number;
   generation: number;
+  pendingNoteOffs: Set<string>;
 }
 
 export function useSynthAudio() {
@@ -34,7 +35,7 @@ export function useSynthAudio() {
   function laneFor(id: number): SynthLane {
     let lane = lanesRef.current.get(id);
     if (!lane) {
-      lane = { bpm: 120, generation: 0 };
+      lane = { bpm: 120, generation: 0, pendingNoteOffs: new Set() };
       lanesRef.current.set(id, lane);
     }
     return lane;
@@ -83,13 +84,19 @@ export function useSynthAudio() {
       const node = await getNode(lane);
       if (generation !== lane.generation) return;
       node.port.postMessage({ type: 'noteOn', note, velocity, id: ++sequenceRef.current, duration, time: scheduledTime });
+      if (lane.pendingNoteOffs.delete(note)) {
+        node.port.postMessage({ type: 'noteOff', note });
+      }
     } catch (error) {
       if (generation === lane.generation) console.error('Synth playback failed:', error);
     }
   }, [updateParameters]);
 
   const stopNote = useCallback((note: string, _parameters?: SynthParameters | null, synthId = 1) => {
-    lanesRef.current.get(synthId)?.node?.port.postMessage({ type: 'noteOff', note });
+    const lane = lanesRef.current.get(synthId);
+    if (!lane) return;
+    if (lane.node) lane.node.port.postMessage({ type: 'noteOff', note });
+    else lane.pendingNoteOffs.add(note);
   }, []);
   const stopSynth = useCallback((synthId: number, release = 0.03) => {
     const lane = lanesRef.current.get(synthId);
