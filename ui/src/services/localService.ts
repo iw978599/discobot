@@ -1,5 +1,7 @@
 import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, SynthParameters, SynthModelId, SynthModelParams } from '../types';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
+import { normalizeSynthModelId } from '../synthModels';
+import { record, number, matchesShape, sanitizePattern, sanitizeSynthParams, sanitizeDrums, sanitizeEffects, sanitizeSends, sanitizeSaved, sanitizeModelParams, sanitizeKit } from './projectSanitization';
 
 type Message = { type: string; data: any };
 type Listener = (message: Message) => void;
@@ -47,15 +49,49 @@ export class LocalProjectService {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (parsed.version !== 1 || !Array.isArray(parsed.synths) || !Array.isArray(parsed.savedPatterns)
-          || !parsed.synths.every((s: any) => typeof s?.synthId === 'number' && Array.isArray(s.pattern?.steps) && Array.isArray(s.patterns))
-          || !DRUM_INSTRUMENTS.every(i => Array.isArray(parsed.drumState?.[i]?.steps) && parsed.drumState[i].settings)) {
+        if (parsed?.version !== 1 || !Array.isArray(parsed.synths) || !Array.isArray(parsed.savedPatterns)) {
           throw new Error('Invalid project data');
         }
-        this.state = merge(this.state, parsed);
-        this.state.synths = this.state.synths.filter(s => s.synthId >= 1 && s.synthId <= 3).map(s => ({
-          ...s, synthParams: merge(defaults.synthParams, s.synthParams), isPlaying: false,
-        }));
+        const tempo = number(parsed.tempo, 120, 20, 400);
+        const seen = new Set<number>();
+        let damaged = !matchesShape(parsed.drumState, defaults.drumState) || !matchesShape(parsed.effectsLoop, defaults.effectsLoop);
+        const synths: LocalSynth[] = parsed.synths.flatMap((value: unknown) => {
+          const input = record(value), pattern = sanitizePattern(input.pattern, tempo);
+          if (!Number.isInteger(input.synthId) || input.synthId < 1 || input.synthId > 3 || seen.has(input.synthId) || !pattern) {
+            damaged = true;
+            return [];
+          }
+          seen.add(input.synthId);
+          if (!matchesShape(input.synthParams, defaults.synthParams)
+            || !input.pattern.steps.every((step: unknown) => matchesShape(step, { active: false, velocity: .7 }))) damaged = true;
+          const patterns: Pattern[] = Array.isArray(input.patterns)
+            ? input.patterns.map((value: unknown) => sanitizePattern(value, tempo)).filter((value: Pattern | null): value is Pattern => value !== null)
+            : [];
+          const unique = new Map(patterns.map(p => [p.id, p]));
+          unique.set(pattern.id, pattern);
+          return [{
+            synthId: input.synthId, pattern, patterns: [...unique.values()],
+            synthParams: sanitizeSynthParams(input.synthParams, defaults.synthParams),
+            synthModelId: normalizeSynthModelId(input.synthModelId), synthModelParams: sanitizeModelParams(input.synthModelParams),
+            isPlaying: false, muted: input.muted === true, solo: input.solo === true,
+            octaveShift: Math.round(number(input.octaveShift, 0, -2, 2)), keyboardMode: input.keyboardMode === 'piano-roll' ? 'piano-roll' : 'keyboard',
+          }];
+        });
+        const savedPatterns = parsed.savedPatterns.map((value: unknown) => sanitizeSaved(value, defaults))
+          .filter((value: SavedPatternFull | null): value is SavedPatternFull => value !== null);
+        if (savedPatterns.length !== parsed.savedPatterns.length) damaged = true;
+        this.state = {
+          ...clone(defaults), version: 1, synths, savedPatterns, tempo,
+          drumState: sanitizeDrums(parsed.drumState, defaults.drumState),
+          effectsLoop: sanitizeEffects(parsed.effectsLoop, defaults.effectsLoop),
+          drumFx: {
+            sends: sanitizeSends(record(parsed.drumFx).sends, defaults.drumFx.sends),
+            returnLevel: number(record(parsed.drumFx).returnLevel, defaults.drumFx.returnLevel, 0, 1),
+          },
+          selectedDrumKitId: sanitizeKit(parsed.selectedDrumKitId),
+          drumMasterVolume: number(parsed.drumMasterVolume, 1, 0, 1), drumSwing: number(parsed.drumSwing, 0, 0, .75),
+        };
+        if (damaged) this.storageIssue = 'Some damaged browser project values were repaired. Please save a new copy of your arrangement.';
         this.restored = true;
       }
     } catch {
@@ -125,10 +161,15 @@ export class LocalProjectService {
     if (!this.state) throw new Error('Local project has not been initialized');
     const state = this.state;
     const method = options.method || 'GET';
-    const body = typeof options.body === 'string' ? JSON.parse(options.body) : {};
     const respond = (data: any, status = 200) => new Response(JSON.stringify(data), {
       status, headers: { 'Content-Type': 'application/json' },
     });
+    let body: Record<string, any>;
+    try {
+      const parsed = typeof options.body === 'string' ? JSON.parse(options.body) : {};
+      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return respond({ error: 'Invalid local operation data' }, 400);
+      body = parsed;
+    } catch { return respond({ error: 'Invalid local operation data' }, 400); }
     const update = (type: string, data: any, response: any = data) => {
       this.persist();
       this.emit(type, data);
@@ -156,7 +197,7 @@ export class LocalProjectService {
       const existing = state.savedPatterns.find(p => p.name.toLowerCase() === name.toLowerCase());
       if (existing && body.overwriteId !== existing.id) return respond({ id: existing.id, name: existing.name }, 409);
       const now = Date.now();
-      const saved = { ...clone(body), id: existing?.id || crypto.randomUUID(), name, createdAt: existing?.createdAt || now, updatedAt: now } as SavedPatternFull;
+      const saved = sanitizeSaved({ ...clone(body), id: existing?.id || crypto.randomUUID(), name, createdAt: existing?.createdAt || now, updatedAt: now }, this.defaults!)!;
       const previous = state.savedPatterns;
       state.savedPatterns = [...previous.filter(p => p.id !== saved.id), saved];
       if (!this.persist()) {
@@ -186,13 +227,13 @@ export class LocalProjectService {
       }
       if (resource === 'parameters') {
         if (method === 'GET') return respond(synth.synthParams);
-        synth.synthParams = merge(synth.synthParams, body);
+        synth.synthParams = sanitizeSynthParams(merge(synth.synthParams, body), this.defaults!.synthParams);
         return update('synthUpdate', { synthId, parameters: synth.synthParams }, synth.synthParams);
       }
       if (resource === 'model') {
         if (method === 'GET') return respond({ modelId: synth.synthModelId, modelParams: synth.synthModelParams });
-        synth.synthModelId = body.modelId || synth.synthModelId;
-        synth.synthModelParams = merge(synth.synthModelParams, body.modelParams || {});
+        synth.synthModelId = normalizeSynthModelId(body.modelId || synth.synthModelId);
+        synth.synthModelParams = sanitizeModelParams(merge(synth.synthModelParams, record(body.modelParams)));
         return update('synthModelUpdate', { synthId, modelId: synth.synthModelId, modelParams: synth.synthModelParams });
       }
       if (resource === 'mix') {
@@ -201,7 +242,7 @@ export class LocalProjectService {
         return update('synthMix', { synthId, muted: synth.muted, solo: synth.solo });
       }
       if (resource === 'preferences') {
-        synth.octaveShift = Math.max(-2, Math.min(2, body.octaveShift ?? synth.octaveShift ?? 0));
+        synth.octaveShift = Math.round(number(body.octaveShift, synth.octaveShift ?? 0, -2, 2));
         synth.keyboardMode = body.keyboardMode === 'piano-roll' ? 'piano-roll' : body.keyboardMode === 'keyboard' ? 'keyboard' : synth.keyboardMode;
         this.persist();
         return respond(synth);
@@ -210,7 +251,8 @@ export class LocalProjectService {
       if (resource?.startsWith('patterns')) {
         const id = resource.split('/')[1] || body.id || crypto.randomUUID();
         const previous = synth.patterns.find(p => p.id === id);
-        const pattern = { ...previous, ...body, id, tempo: state.tempo, steps: body.steps || previous?.steps || synth.pattern.steps } as Pattern;
+        const pattern = sanitizePattern({ ...previous, ...body, id, steps: body.steps || previous?.steps || synth.pattern.steps }, state.tempo);
+        if (!pattern) return respond({ error: 'Invalid sequence pattern' }, 400);
         synth.patterns = [...synth.patterns.filter(p => p.id !== id), pattern];
         synth.pattern = pattern;
         return update(previous ? 'patternUpdated' : 'patternCreated', { synthId, pattern }, pattern);
@@ -238,7 +280,7 @@ export class LocalProjectService {
     }
     if (path === '/drum/state') {
       if (method === 'GET') return respond(state.drumState);
-      state.drumState = clone(body.state || body);
+      state.drumState = sanitizeDrums(body.state || body, this.defaults!.drumState);
       return update('drumFullState', { drumState: state.drumState });
     }
     if (path === '/drum/reset') {
@@ -246,17 +288,21 @@ export class LocalProjectService {
       return update('drumFullState', { drumState: state.drumState });
     }
     if (path === '/drum/master-volume') {
-      state.drumMasterVolume = Math.max(0, Math.min(1, body.volume));
+      state.drumMasterVolume = number(body.volume, state.drumMasterVolume, 0, 1);
       return update('drumMasterVolume', { volume: state.drumMasterVolume });
     }
     if (path === '/drum/swing') {
-      state.drumSwing = Math.max(0, Math.min(.75, body.swing));
+      state.drumSwing = number(body.swing, state.drumSwing, 0, .75);
       return update('drumSwing', { swing: state.drumSwing });
     }
     if (path === '/drum/fx' || path === '/effects-loop') {
       const key = path === '/drum/fx' ? 'drumFx' : 'effectsLoop';
       if (method === 'GET') return respond(state[key]);
-      (state as any)[key] = merge(state[key], body);
+      if (key === 'effectsLoop') state.effectsLoop = sanitizeEffects(merge(state.effectsLoop, body), this.defaults!.effectsLoop);
+      else {
+        const fx = merge(state.drumFx, body);
+        state.drumFx = { sends: sanitizeSends(fx.sends, this.defaults!.drumFx.sends), returnLevel: number(fx.returnLevel, state.drumFx.returnLevel, 0, 1) };
+      }
       return update(key === 'drumFx' ? 'drumFxUpdate' : 'effectsLoopUpdate', { [key]: state[key] });
     }
     const track = state.drumState[body.instrument as keyof DrumState];

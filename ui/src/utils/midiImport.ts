@@ -23,19 +23,16 @@ function quantizeTickToStep(tick: number, ppq: number, stepsPerBar: number): num
 }
 
 function detectStepCount(notes: { ticks: number }[], ppq: number): number {
-  if (notes.length === 0) return 16;
-  const maxTick = Math.max(...notes.map(n => n.ticks));
-  const steps32 = (ppq * 4 * 2) / 32;
-  const maxStep32 = Math.ceil(maxTick / steps32);
-  return maxStep32 > 16 ? 32 : 16;
+  const sixteenth = ppq / 4;
+  return notes.some(note => Math.abs(note.ticks / sixteenth - Math.round(note.ticks / sixteenth)) > .05) ? 32 : 16;
 }
 
 export function importMidiFile(buffer: ArrayBuffer): MidiImportResult {
   const midi = new Midi(buffer);
   const ppq = midi.header.ppq;
-  const detectedTempo = midi.header.tempos.length > 0
+  const detectedTempo = Math.max(20, Math.min(400, midi.header.tempos.length > 0
     ? Math.round(midi.header.tempos[0].bpm)
-    : 120;
+    : 120));
 
   const trackNames: string[] = [];
   const trackNoteCounts: number[] = [];

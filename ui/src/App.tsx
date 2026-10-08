@@ -1844,16 +1844,18 @@ function App() {
   const handleExportMidi = useCallback(() => {
     const synthLanes = synthsRef.current
       .filter((entry) => entry.pattern)
-      .map((entry) => ({ id: entry.id, pattern: clonePattern(entry.pattern!) }));
+      .map((entry) => ({ id: entry.id, pattern: clonePattern(entry.pattern!), muted: entry.muted, solo: entry.solo }));
     downloadMidiFile(
       {
         tempo: globalTempo,
         synthLanes,
         drumState: cloneDrumState(drumStateRef.current),
+        drumSwing,
+        drumMasterVolume,
       },
       `discobot-${Date.now()}.mid`
     );
-  }, [globalTempo]);
+  }, [globalTempo, drumSwing, drumMasterVolume]);
 
   const midiImportFileRef = useRef<HTMLInputElement>(null);
   const [midiImportData, setMidiImportData] = useState<MidiImportResult | null>(null);
