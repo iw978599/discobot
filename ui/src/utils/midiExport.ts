@@ -214,7 +214,7 @@ export function downloadMidiFile(payload: MidiExportPayload, fileName: string): 
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export function transposeNote(note: string, semitones: number): string | null {

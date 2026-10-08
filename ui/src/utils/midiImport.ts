@@ -1,5 +1,6 @@
 import { Midi } from '@tonejs/midi';
 import { Pattern, SequencerStep, DrumInstrument } from '../types';
+import { DRUM_INSTRUMENTS } from '../services/drumKits';
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
@@ -8,20 +9,30 @@ const GM_DRUM_NOTE_MAP: Record<number, DrumInstrument> = {
   51: 'ride', 49: 'crash', 40: 'snare2', 39: 'clap',
 };
 
+const MIDI_DRUM_CHANNEL = 9;
+const DRUM_STEPS = 16;
+
 function midiNoteToName(midi: number): string {
   const note = NOTE_NAMES[((midi % 12) + 12) % 12];
   const octave = Math.floor(midi / 12) - 1;
   return `${note}${octave}`;
 }
 
+export type DrumImportState = Record<DrumInstrument, { steps: boolean[]; stepVelocities: number[] }>;
+
+export interface MidiImportTrack {
+  name: string;
+  noteCount: number;
+  channel: number;
+  // Exactly one of these is set: channel 10 tracks map to the drum grid, the rest to a synth lane.
+  pattern?: Pattern;
+  drums?: DrumImportState;
+}
+
 export interface MidiImportResult {
-  patterns: Pattern[];
-  trackNames: string[];
-  trackNoteCounts: number[];
-  trackChannels: number[];
+  tracks: MidiImportTrack[];
   detectedTempo: number;
   detectedStepCount: number;
-  drumTracks: Array<{ name: string; noteCount: number; state: Record<DrumInstrument, { steps: boolean[]; stepVelocities: number[] }> }>;
 }
 
 function quantizeTickToStep(tick: number, ppq: number, stepsPerBar: number): number {
@@ -34,28 +45,37 @@ function detectStepCount(notes: { ticks: number }[], ppq: number): number {
   return notes.some(note => Math.abs(note.ticks / sixteenth - Math.round(note.ticks / sixteenth)) > .05) ? 32 : 16;
 }
 
-function isDrumTrack(track: any): boolean {
-  if (typeof track.channel === 'number') return track.channel === 9;
-  return Array.isArray(track.notes) && track.notes.some((n: any) => typeof n?.channel === 'number' && n.channel === 9);
-}
-
-function parseDrumTrack(track: { name: string; notes: { midi: number; ticks: number; velocity: number }[] }, ppq: number, stepCount: number) {
-  const state: Record<DrumInstrument, { steps: boolean[]; stepVelocities: number[] }> = {} as any;
-  const instruments: DrumInstrument[] = ['kick', 'snare', 'openHH', 'closedHH', 'ride', 'crash', 'snare2', 'clap'];
-  const ticksPerStep = (ppq * 4) / stepCount;
-  for (const inst of instruments) {
-    state[inst] = { steps: Array(stepCount).fill(false), stepVelocities: Array(stepCount).fill(1) };
-  }
-  for (const note of track.notes) {
-    if (note.velocity <= 0) continue;
-    const inst = GM_DRUM_NOTE_MAP[note.midi];
-    if (!inst) continue;
-    const stepIndex = Math.round(note.ticks / ticksPerStep);
-    if (stepIndex < 0 || stepIndex >= stepCount) continue;
-    state[inst].steps[stepIndex] = true;
-    state[inst].stepVelocities[stepIndex] = Math.max(0.1, Math.min(1, note.velocity));
+// The drum grid is always one bar of sixteenths, whatever resolution the synth lanes use.
+function parseDrumTrack(notes: { midi: number; ticks: number; velocity: number }[], ppq: number): DrumImportState {
+  const state = Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => [
+    instrument, { steps: Array(DRUM_STEPS).fill(false), stepVelocities: Array(DRUM_STEPS).fill(1) },
+  ])) as DrumImportState;
+  const ticksPerStep = ppq / 4;
+  for (const note of notes) {
+    const instrument = GM_DRUM_NOTE_MAP[note.midi];
+    if (!instrument) continue;
+    // Swung hits land late, never early, so bias towards the step they were delayed from.
+    const stepIndex = Math.floor(note.ticks / ticksPerStep + 0.2);
+    if (stepIndex < 0 || stepIndex >= DRUM_STEPS || state[instrument].steps[stepIndex]) continue;
+    state[instrument].steps[stepIndex] = true;
+    state[instrument].stepVelocities[stepIndex] = Math.max(0.1, Math.min(1, note.velocity));
   }
   return state;
+}
+
+function parseSynthTrack(notes: { midi: number; ticks: number; velocity: number }[], ppq: number): SequencerStep[] {
+  const stepCount = detectStepCount(notes, ppq);
+  const steps: SequencerStep[] = Array.from({ length: stepCount }, () => ({ active: false, velocity: 0.7 }));
+  for (const note of notes) {
+    const stepIndex = quantizeTickToStep(note.ticks, ppq, stepCount);
+    if (stepIndex < 0 || stepIndex >= stepCount || steps[stepIndex].active) continue;
+    steps[stepIndex] = {
+      active: true,
+      note: midiNoteToName(note.midi),
+      velocity: Math.max(0.1, Math.min(1, note.velocity)),
+    };
+  }
+  return steps;
 }
 
 export function importMidiFile(buffer: ArrayBuffer): MidiImportResult {
@@ -65,62 +85,27 @@ export function importMidiFile(buffer: ArrayBuffer): MidiImportResult {
     ? Math.round(midi.header.tempos[0].bpm)
     : 120));
 
-  const trackNames: string[] = [];
-  const trackNoteCounts: number[] = [];
-  const trackChannels: number[] = [];
-  const patterns: Pattern[] = [];
-  const drumTracks: MidiImportResult['drumTracks'] = [];
-
+  const tracks: MidiImportTrack[] = [];
   for (const track of midi.tracks) {
     const noteOns = track.notes.filter(n => n.velocity > 0);
     if (noteOns.length === 0) continue;
 
-    const name = track.name || `Track ${trackNames.length + 1}`;
-    const detectedStepCount = detectStepCount(noteOns, ppq);
-
-    if (isDrumTrack(track)) {
-      trackNames.push(name);
-      trackNoteCounts.push(noteOns.length);
-      trackChannels.push(9);
-      drumTracks.push({ name, noteCount: noteOns.length, state: parseDrumTrack(track, ppq, detectedStepCount) });
+    const name = track.name || `Track ${tracks.length + 1}`;
+    const base = { name, noteCount: noteOns.length, channel: track.channel };
+    if (track.channel === MIDI_DRUM_CHANNEL) {
+      tracks.push({ ...base, drums: parseDrumTrack(noteOns, ppq) });
       continue;
     }
-
-    trackNames.push(name);
-    trackNoteCounts.push(noteOns.length);
-    trackChannels.push(0);
-
-    const steps: SequencerStep[] = Array.from({ length: detectedStepCount }, () => ({
-      active: false,
-      velocity: 0.7,
-    }));
-
-    for (const note of noteOns) {
-      const stepIndex = quantizeTickToStep(note.ticks, ppq, detectedStepCount);
-      if (stepIndex < 0 || stepIndex >= detectedStepCount) continue;
-
-      if (!steps[stepIndex].active) {
-        steps[stepIndex] = {
-          active: true,
-          note: midiNoteToName(note.midi),
-          velocity: Math.max(0.1, Math.min(1, note.velocity)),
-        };
-      }
-    }
-
-    patterns.push({
-      id: `midi-import-${Date.now()}-${patterns.length}`,
-      name,
-      steps,
-      tempo: detectedTempo,
+    tracks.push({
+      ...base,
+      pattern: { id: `midi-import-${Date.now()}-${tracks.length}`, name, steps: parseSynthTrack(noteOns, ppq), tempo: detectedTempo },
     });
   }
 
   return {
-    patterns, trackNames, trackNoteCounts, trackChannels,
+    tracks,
     detectedTempo,
-    detectedStepCount: patterns[0]?.steps.length || drumTracks[0]?.state.kick.steps.length || 16,
-    drumTracks,
+    detectedStepCount: tracks.find(track => track.pattern)?.pattern!.steps.length ?? DRUM_STEPS,
   };
 }
 

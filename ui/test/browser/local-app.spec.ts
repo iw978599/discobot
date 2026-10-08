@@ -125,3 +125,35 @@ test('MIDI and WAV exports create local downloadable files', async ({ page }) =>
   expect(wav.suggestedFilename()).toMatch(/\.wav$/);
   expect(await wav.failure()).toBeNull();
 });
+
+test('undo and redo step through synth and drum edits in the order they were made', async ({ page }) => {
+  await page.goto('./');
+  const state = () => page.evaluate(() => {
+    const project = JSON.parse(localStorage.getItem('discobot_browser_project_v1')!);
+    return {
+      kick: project.drumState.kick.steps[0],
+      snare: project.drumState.snare.steps[4],
+      note: project.synths.find((s: any) => s.synthId === 2)?.pattern.steps[0].note ?? null,
+    };
+  });
+  await page.getByRole('button', { name: 'Kick step 1', exact: true }).click();
+  await page.getByRole('button', { name: 'Synth 2', exact: true }).click();
+  await page.getByRole('button', { name: 'Piano Roll', exact: true }).click();
+  await page.getByRole('button', { name: 'C3 step 1', exact: true }).click();
+  await page.getByRole('button', { name: 'Select Snare', exact: true }).click();
+  await page.getByRole('button', { name: 'Snare step 5', exact: true }).click();
+  await expect.poll(state).toEqual({ kick: true, snare: true, note: 'C3' });
+
+  const undo = page.getByRole('button', { name: 'Undo', exact: true });
+  await undo.click();
+  await expect.poll(state).toEqual({ kick: true, snare: false, note: 'C3' });
+  await undo.click();
+  await expect.poll(state).toEqual({ kick: true, snare: false, note: null });
+  await undo.click();
+  await expect.poll(state).toEqual({ kick: false, snare: false, note: null });
+
+  const redo = page.getByRole('button', { name: 'Redo', exact: true });
+  await redo.click();
+  await redo.click();
+  await expect.poll(state).toEqual({ kick: true, snare: false, note: 'C3' });
+});

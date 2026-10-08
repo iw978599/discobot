@@ -84,9 +84,16 @@ interface PatternSnapshot {
   octaveShift?: number;
 }
 
-interface PatternHistory {
-  undo: PatternSnapshot[];
-  redo: PatternSnapshot[];
+interface HistoryEntry {
+  synthId: number;
+  snapshot: PatternSnapshot;
+}
+
+// One chronological stack for the whole project: every snapshot also carries the shared
+// drum, tempo and effects state, so per-lane stacks would undo each other's edits.
+interface ProjectHistory {
+  undo: HistoryEntry[];
+  redo: HistoryEntry[];
 }
 
 interface SynthState {
@@ -581,7 +588,7 @@ function HelpModal({ open, onClose }: { open: boolean; onClose: () => void }) {
             <ul className="help-list help-list-plain">
               <li><strong>Undo:</strong> Ctrl/Cmd + Z</li>
               <li><strong>Redo:</strong> Ctrl/Cmd + Shift + Z or Ctrl/Cmd + Y</li>
-              <li>Undo/redo tracks note edits, step velocity, synth params, and drum edits per pattern.</li>
+              <li>Undo/redo steps back through note, velocity, synth, drum, tempo and effects edits in the order you made them.</li>
             </ul>
           </section>
           <section>
@@ -647,10 +654,10 @@ function App() {
   drumFxRef.current = drumFx;
   const effectsLoopRef = useRef(effectsLoop);
   effectsLoopRef.current = effectsLoop;
-  const historyRef = useRef<Record<string, PatternHistory>>({});
+  const historyRef = useRef<ProjectHistory>({ undo: [], redo: [] });
   const historyThrottleRef = useRef<Record<string, number>>({});
-  const activeHistoryKeyRef = useRef<string | null>(null);
   const isRestoringRef = useRef(false);
+  const midiHeldRef = useRef(new Map<string, number>());
   const globalTempoRef = useRef(globalTempo);
   globalTempoRef.current = globalTempo;
   const drumSwingRef = useRef(drumSwing);
@@ -664,14 +671,6 @@ function App() {
     if (midiTargetSynthId !== null && synths.some((s) => s.id === midiTargetSynthId)) return;
     setMidiTargetSynthId(synths[0].id);
   }, [synths, midiTargetSynthId]);
-
-  useEffect(() => {
-    const firstWithPattern = synths.find((entry) => entry.pattern);
-    if (!firstWithPattern?.pattern) return;
-    if (!activeHistoryKeyRef.current) {
-      activeHistoryKeyRef.current = `${firstWithPattern.id}:${firstWithPattern.pattern.id}`;
-    }
-  }, [synths]);
 
   useEffect(() => {
     setMasterVolume(browserVolume);
@@ -722,8 +721,6 @@ function App() {
     };
   }, [synthAudio, drumAudio]);
 
-  const getHistoryKey = useCallback((synthId: number, patternId: string) => `${synthId}:${patternId}`, []);
-
   const getSnapshot = useCallback((synthId: number, patternId: string): PatternSnapshot | null => {
     const synth = synthsRef.current.find((entry) => entry.id === synthId && entry.pattern?.id === patternId);
     if (!synth?.pattern) return null;
@@ -749,25 +746,23 @@ function App() {
     if (isRestoringRef.current) return;
     const snapshot = getSnapshot(synthId, patternId);
     if (!snapshot) return;
-    const key = getHistoryKey(synthId, patternId);
-    activeHistoryKeyRef.current = key;
-    const history = historyRef.current[key] || { undo: [], redo: [] };
-    history.undo.push(snapshot);
+    const history = historyRef.current;
+    history.undo.push({ synthId, snapshot });
     if (history.undo.length > MAX_HISTORY) history.undo.shift();
     history.redo = [];
-    historyRef.current[key] = history;
-  }, [getHistoryKey, getSnapshot]);
+  }, [getSnapshot]);
 
   const pushHistorySnapshotThrottled = useCallback(
     (synthId: number, patternId: string, keySuffix: string, minIntervalMs = 250) => {
       const now = performance.now();
-      const key = `${getHistoryKey(synthId, patternId)}:${keySuffix}`;
+      const key = `${synthId}:${patternId}:${keySuffix}`;
       const lastTs = historyThrottleRef.current[key] ?? 0;
-      if (now - lastTs < minIntervalMs) return;
       historyThrottleRef.current[key] = now;
+      // Compare against the last change, not the last snapshot, so one continuous drag is one undo step.
+      if (now - lastTs < minIntervalMs) return;
       pushHistorySnapshot(synthId, patternId);
     },
-    [getHistoryKey, pushHistorySnapshot]
+    [pushHistorySnapshot]
   );
 
   const applySnapshot = useCallback(async (synthId: number, snapshot: PatternSnapshot) => {
@@ -841,81 +836,41 @@ function App() {
     ]);
   }, []);
 
-  const resolveHistoryTarget = useCallback((): { key: string; synthId: number; patternId: string } | null => {
-    const activeKey = activeHistoryKeyRef.current;
-    const parseKey = (value: string) => {
-      const [synthRaw, patternId] = value.split(':');
-      const synthId = Number.parseInt(synthRaw, 10);
-      if (!patternId || Number.isNaN(synthId)) return null;
-      return { key: value, synthId, patternId };
-    };
-    if (activeKey) {
-      const parsed = parseKey(activeKey);
-      if (parsed) {
-        const exists = synthsRef.current.some((entry) => entry.id === parsed.synthId && entry.pattern?.id === parsed.patternId);
-        if (exists) return parsed;
-      }
-    }
-    const fallback = synthsRef.current.find((entry) => entry.pattern);
-    if (!fallback?.pattern) return null;
-    const key = getHistoryKey(fallback.id, fallback.pattern.id);
-    activeHistoryKeyRef.current = key;
-    return { key, synthId: fallback.id, patternId: fallback.pattern.id };
-  }, [getHistoryKey]);
-
-  const handleUndo = useCallback(async () => {
-    let target = resolveHistoryTarget();
-    if (!target) return;
-    let history = historyRef.current[target.key];
-    if (!history || history.undo.length === 0) {
-      const cross = Object.entries(historyRef.current).find(([, h]) => h.undo.length > 0);
-      if (!cross) return;
-      const [synthRaw, patternId] = cross[0].split(':');
-      const synthId = Number.parseInt(synthRaw, 10);
-      if (!patternId || Number.isNaN(synthId)) return;
-      target = { key: cross[0], synthId, patternId };
-      history = cross[1];
-      activeHistoryKeyRef.current = cross[0];
-    }
-    const current = getSnapshot(target.synthId, target.patternId);
-    const previous = history.undo.pop();
-    if (!previous) return;
-    if (current) history.redo.push(current);
-    historyRef.current[target.key] = history;
+  const stepHistory = useCallback(async (direction: 'undo' | 'redo') => {
+    if (isRestoringRef.current) return;
+    const history = historyRef.current;
+    const from = direction === 'undo' ? history.undo : history.redo;
+    const to = direction === 'undo' ? history.redo : history.undo;
+    let entry = from.pop();
+    // Entries for a lane that has since been removed can no longer be applied.
+    while (entry && !synthsRef.current.some((synth) => synth.id === entry!.synthId)) entry = from.pop();
+    if (!entry) return;
+    const currentPattern = synthsRef.current.find((synth) => synth.id === entry!.synthId)?.pattern;
+    const current = currentPattern ? getSnapshot(entry.synthId, currentPattern.id) : null;
+    if (current) to.push({ synthId: entry.synthId, snapshot: current });
     isRestoringRef.current = true;
     try {
-      await applySnapshot(target.synthId, previous);
+      await applySnapshot(entry.synthId, entry.snapshot);
     } finally {
       isRestoringRef.current = false;
     }
-  }, [resolveHistoryTarget, getSnapshot, applySnapshot]);
+  }, [getSnapshot, applySnapshot]);
 
-  const handleRedo = useCallback(async () => {
-    const target = resolveHistoryTarget();
-    if (!target) return;
-    const history = historyRef.current[target.key];
-    if (!history || history.redo.length === 0) return;
-    const current = getSnapshot(target.synthId, target.patternId);
-    const next = history.redo.pop();
-    if (!next) return;
-    if (current) history.undo.push(current);
-    historyRef.current[target.key] = history;
-    isRestoringRef.current = true;
-    try {
-      await applySnapshot(target.synthId, next);
-    } finally {
-      isRestoringRef.current = false;
-    }
-  }, [resolveHistoryTarget, getSnapshot, applySnapshot]);
+  const handleUndo = useCallback(() => stepHistory('undo'), [stepHistory]);
+  const handleRedo = useCallback(() => stepHistory('redo'), [stepHistory]);
 
+  const [midiImportData, setMidiImportData] = useState<MidiImportResult | null>(null);
+  const midiImportOpen = midiImportData !== null;
   useEffect(() => {
-    if (!helpOpen) return;
+    if (!helpOpen && !midiImportOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setHelpOpen(false);
+      if (event.key !== 'Escape') return;
+      setHelpOpen(false);
+      setMidiImportData(null);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [helpOpen]);
+  }, [helpOpen, midiImportOpen]);
 
   useEffect(() => {
     const presetsToPersist = synthPresets
@@ -936,7 +891,7 @@ function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (helpOpen) return;
+      if (helpOpen || midiImportOpen) return;
       if (!event.metaKey && !event.ctrlKey) return;
       const target = event.target as HTMLElement | null;
       if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
@@ -959,7 +914,7 @@ function App() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [helpOpen, handleUndo, handleRedo]);
+  }, [helpOpen, midiImportOpen, handleUndo, handleRedo]);
 
   const triggerSynthNote = useCallback((synthParams: SynthParameters, note: string, windowSeconds: number, velocity: number = 1, synthId = 1, scheduledTime?: number) => {
     const normalizedVelocity = Math.max(0, Math.min(1, velocity));
@@ -1443,12 +1398,11 @@ function App() {
     setSynths(prev => prev.map(s =>
       s.id === synthId ? { ...s, pattern } : s
     ));
-    activeHistoryKeyRef.current = getHistoryKey(synthId, pattern.id);
     clearActiveSavedPattern();
     await localRequest(`/synth/${synthId}/patterns/${pattern.id}`, {
       method: 'PUT', body: JSON.stringify(pattern),
     });
-  }, [clearActiveSavedPattern, getHistoryKey]);
+  }, [clearActiveSavedPattern]);
 
   const handleStepChange = useCallback(async (synthId: number, stepIndex: number) => {
     const synth = synthsRef.current.find(s => s.id === synthId);
@@ -1604,19 +1558,23 @@ function App() {
   }, [synthAudio]);
 
   const handleMidiMessage = useCallback((message: MidiMessage) => {
+    if (message.type === 'controlChange') return;
+    const noteName = midiNoteToName(message.note);
+    const heldKey = `${message.channel}:${message.note}`;
+
+    if (message.type === 'noteOff') {
+      // Release on the lane that took the note-on, even if the channel or target changed since.
+      const heldSynthId = midiHeldRef.current.get(heldKey);
+      if (heldSynthId === undefined) return;
+      midiHeldRef.current.delete(heldKey);
+      void handleNoteRelease(heldSynthId, noteName);
+      return;
+    }
     if (message.channel !== midiChannelRef.current) return;
 
     const synthSnapshot = synthsRef.current;
     const targetSynth = synthSnapshot.find(s => s.id === midiTargetSynthIdRef.current) ?? synthSnapshot[0];
     if (!targetSynth) return;
-    if (message.type === 'controlChange') return;
-    const noteName = midiNoteToName(message.note);
-
-    if (message.type === 'noteOff') {
-      void handleNoteRelease(targetSynth.id, noteName);
-      return;
-    }
-    if (message.type !== 'noteOn') return;
     if (targetSynth.muted || (synthSnapshot.some(s => s.solo) && !targetSynth.solo)) return;
 
     const velocity = message.velocity / 127;
@@ -1626,6 +1584,7 @@ function App() {
       if (targetSynth.synthParams?.arpeggiator.enabled) {
         triggerSynthNote(targetSynth.synthParams, noteName, 60 / globalTempo, velocity, targetSynth.id);
       } else if (targetSynth.synthParams) {
+        midiHeldRef.current.set(heldKey, targetSynth.id);
         void synthAudio.playNote(noteName, targetSynth.synthParams, undefined, velocity, browserMutedRef.current, effectsLoopRef.current, globalTempo, targetSynth.id);
       }
       return;
@@ -1734,7 +1693,7 @@ function App() {
     const synth = synthsRef.current.find((entry) => entry.id === synthId);
     if (!synth?.pattern || !synth.pattern.steps[stepIndex]) return;
     const normalizedVelocity = Math.max(0, Math.min(1, velocity));
-    pushHistorySnapshot(synthId, synth.pattern.id);
+    pushHistorySnapshotThrottled(synthId, synth.pattern.id, `step-velocity-${stepIndex}`);
     const nextPattern = {
       ...synth.pattern,
       steps: synth.pattern.steps.map((step, index) => (
@@ -1750,7 +1709,7 @@ function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(nextPattern),
     });
-  }, [pushHistorySnapshot, clearActiveSavedPattern]);
+  }, [pushHistorySnapshotThrottled, clearActiveSavedPattern]);
 
   const handleSynthMixChange = useCallback(async (synthId: number, mix: { muted?: boolean; solo?: boolean }) => {
     setSynths(prev => prev.map(s =>
@@ -1884,7 +1843,6 @@ function App() {
   }, [globalTempo, drumSwing, drumMasterVolume]);
 
   const midiImportFileRef = useRef<HTMLInputElement>(null);
-  const [midiImportData, setMidiImportData] = useState<MidiImportResult | null>(null);
   const [midiImportAssignments, setMidiImportAssignments] = useState<Record<number, number | null | 'drums'>>({});
 
   const handleMidiImportClick = useCallback(() => {
@@ -1897,20 +1855,15 @@ function App() {
     try {
       const buffer = await readFileAsArrayBuffer(file);
       const result = importMidiFile(buffer);
-      if (result.patterns.length === 0 && result.drumTracks.length === 0) {
+      if (result.tracks.length === 0) {
         alert('No note tracks found in MIDI file.');
         return;
       }
       const autoAssign: Record<number, number | null | 'drums'> = {};
       const synthIds = [1, 2, 3];
       let synthIdx = 0;
-      result.trackNames.forEach((_, i) => {
-        if (result.trackChannels[i] === 9) {
-          autoAssign[i] = 'drums';
-        } else {
-          autoAssign[i] = synthIdx < synthIds.length ? synthIds[synthIdx] : null;
-          synthIdx++;
-        }
+      result.tracks.forEach((track, i) => {
+        autoAssign[i] = track.drums ? 'drums' : synthIds[synthIdx++] ?? null;
       });
       setMidiImportAssignments(autoAssign);
       setMidiImportData(result);
@@ -1923,62 +1876,55 @@ function App() {
   const handleMidiImportApplyAll = useCallback(async () => {
     if (!midiImportData) return;
     const tempo = midiImportData.detectedTempo;
-    setGlobalTempo(tempo);
-    void localRequest('/tempo', {
-      method: 'PUT',
-      body: JSON.stringify({ tempo }),
-    });
+    const importedDrums = midiImportData.tracks.filter((track, i) => track.drums && midiImportAssignments[i] === 'drums');
+    let snapshotTaken = false;
 
-    const synthTrackIndices: number[] = [];
-    const drumTrackIndices: number[] = [];
-    midiImportData.trackChannels.forEach((ch, i) => {
-      if (ch === 9) drumTrackIndices.push(i);
-      else synthTrackIndices.push(i);
-    });
-
-    for (const [trackIdx, synthId] of Object.entries(midiImportAssignments)) {
-      if (synthId === null || synthId === undefined) continue;
-      if (synthId === 'drums') {
-        const globalIdx = Number(trackIdx);
-        const drumSlot = drumTrackIndices.indexOf(globalIdx);
-        if (drumSlot < 0) continue;
-        const drumTrack = midiImportData.drumTracks[drumSlot];
-        if (!drumTrack) continue;
-        const next = { ...drumStateRef.current };
-        for (const [inst, data] of Object.entries(drumTrack.state)) {
-          next[inst as keyof typeof next] = {
-            ...next[inst as keyof typeof next],
-            steps: data.steps,
-            stepVelocities: data.stepVelocities,
-          };
-        }
-        setDrumState(next);
-        void localRequest('/drum/state', {
-          method: 'PUT',
-          body: JSON.stringify({ state: next }),
-        });
-        continue;
-      }
-      const idx = Number(trackIdx);
-      const synthSlot = synthTrackIndices.indexOf(idx);
-      if (synthSlot < 0) continue;
-      const pattern = midiImportData.patterns[synthSlot];
-      if (!pattern) continue;
-      const exists = synthsRef.current.some(s => s.id === synthId);
-      if (!exists) {
-        await ensureSynthExists(synthId);
-      }
+    for (const [i, track] of midiImportData.tracks.entries()) {
+      const synthId = midiImportAssignments[i];
+      if (typeof synthId !== 'number' || !track.pattern) continue;
+      if (!await ensureSynthExists(synthId)) continue;
+      const current = synthsRef.current.find(s => s.id === synthId)?.pattern;
+      if (!current) continue;
+      pushHistorySnapshot(synthId, current.id);
+      snapshotTaken = true;
+      // Replace the lane's steps in place so repeated imports do not pile up stored patterns.
+      const pattern = { ...current, steps: track.pattern.steps, tempo };
       setSynths(prev => prev.map(s =>
-        s.id === synthId ? { ...s, pattern } : s
+        s.id === synthId ? { ...s, pattern, selectedStep: null } : s
       ));
-      void localRequest(`/synth/${synthId}/patterns/${pattern.id}`, {
+      await localRequest(`/synth/${synthId}/patterns/${pattern.id}`, {
         method: 'PUT',
         body: JSON.stringify(pattern),
       });
     }
+
+    const firstSynth = synthsRef.current[0];
+    if (!snapshotTaken && firstSynth?.pattern) pushHistorySnapshot(firstSynth.id, firstSynth.pattern.id);
+    if (importedDrums.length > 0) {
+      const next = cloneDrumState(drumStateRef.current);
+      for (const instrument of Object.keys(next) as DrumInstrument[]) {
+        const lanes = importedDrums.map(track => track.drums![instrument]);
+        next[instrument].steps = next[instrument].steps.map((_, step) => lanes.some(lane => lane.steps[step]));
+        next[instrument].stepVelocities = next[instrument].steps.map((_, step) => (
+          lanes.find(lane => lane.steps[step])?.stepVelocities[step] ?? 1
+        ));
+      }
+      setDrumState(next);
+      await localRequest('/drum/state', {
+        method: 'PUT',
+        body: JSON.stringify({ state: next }),
+      });
+    }
+
+    setGlobalTempo(tempo);
+    await localRequest('/tempo', {
+      method: 'POST',
+      body: JSON.stringify({ tempo }),
+    });
+    clearActiveSavedPattern();
     setMidiImportData(null);
     setMidiImportAssignments({});
-  }, [midiImportData, midiImportAssignments, ensureSynthExists]);
+  }, [midiImportData, midiImportAssignments, ensureSynthExists, pushHistorySnapshot, clearActiveSavedPattern]);
 
   const handleSaveGlobal = useCallback(async (name: string): Promise<boolean> => {
     const firstSynth = synthsRef.current[0];
@@ -2032,9 +1978,7 @@ function App() {
     await localRequest('/tempo', { method: 'POST', body: JSON.stringify({ tempo: data.tempo }) });
 
     const updated = { ...synth.pattern, steps: savedLane?.steps ?? data.steps, tempo: data.tempo };
-    const historyKey = getHistoryKey(synthId, updated.id);
-    historyRef.current[historyKey] = { undo: [], redo: [] };
-    activeHistoryKeyRef.current = historyKey;
+    historyRef.current = { undo: [], redo: [] };
     setSynths(prev => prev.map(s =>
       s.id === synthId ? { ...s, pattern: updated, selectedStep: null } : s
     ));
@@ -2133,7 +2077,7 @@ function App() {
     } else {
       setActiveSavedPattern(null);
     }
-  }, [getHistoryKey]);
+  }, []);
 
   const loadSynthFromSavedData = useCallback(async (synthId: number, saved: { steps: SavedPatternFull['steps']; synthParams?: SynthParameters | null; synthModelId?: SynthModelId; synthModelParams?: SynthModelParams; tempo?: number; muted?: boolean; solo?: boolean; octaveShift?: number; keyboardMode?: 'keyboard' | 'piano-roll' }) => {
     const synth = synthsRef.current.find(s => s.id === synthId);
@@ -2143,8 +2087,6 @@ function App() {
     await localRequest(`/synth/${synthId}/mix`, { method: 'POST', body: JSON.stringify({ muted: saved.muted ?? false, solo: saved.solo ?? false }) });
     await localRequest(`/synth/${synthId}/preferences`, { method: 'POST', body: JSON.stringify({ octaveShift: saved.octaveShift ?? 0, keyboardMode: saved.keyboardMode ?? synth.keyboardMode }) });
     setSynths(prev => prev.map(s => s.id === synthId ? { ...s, octaveShift: saved.octaveShift ?? 0, keyboardMode: saved.keyboardMode ?? s.keyboardMode } : s));
-    const historyKey = getHistoryKey(synthId, updated.id);
-    historyRef.current[historyKey] = { undo: [], redo: [] };
     setSynths(prev => prev.map(s =>
       s.id === synthId ? { ...s, pattern: updated, selectedStep: null } : s
     ));
@@ -2170,7 +2112,7 @@ function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updated),
     });
-  }, [getHistoryKey]);
+  }, []);
 
   const handleLoadGlobal = useCallback(async (savedId: string) => {
     const targetSynthId = synthsRef.current[0]?.id;
@@ -2190,6 +2132,8 @@ function App() {
           }
         }
         for (const savedSynth of data.synths) {
+          // handleLoadSavedPattern above already restored this lane from the same data.
+          if (savedSynth.id === targetSynthId) continue;
           const exists = synthsRef.current.some(s => s.id === savedSynth.id);
           if (!exists) {
             await ensureSynthExists(savedSynth.id);
@@ -2289,9 +2233,11 @@ function App() {
   }, [pushHistorySnapshot]);
 
   const handleDrumReset = useCallback(() => {
+    const synth = synthsRef.current[0];
+    if (synth?.pattern) pushHistorySnapshot(synth.id, synth.pattern.id);
     setDrumState(createDefaultDrumState());
     localRequest('/drum/reset', { method: 'POST' });
-  }, []);
+  }, [pushHistorySnapshot]);
 
   const handleDrumMasterVolumeChange = useCallback((volume: number) => {
     const synth = synthsRef.current[0];
@@ -2385,6 +2331,8 @@ function App() {
   }, [handleEffectsLoopChange]);
 
   const handleDrumMuteAll = useCallback((muted: boolean) => {
+    const synth = synthsRef.current[0];
+    if (synth?.pattern) pushHistorySnapshot(synth.id, synth.pattern.id);
     const nextState = Object.fromEntries(
       (Object.keys(drumStateRef.current) as DrumInstrument[]).map(inst => [
         inst,
@@ -2397,9 +2345,11 @@ function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ state: nextState }),
     });
-  }, []);
+  }, [pushHistorySnapshot]);
 
   const handleDrumSoloAll = useCallback(() => {
+    const synth = synthsRef.current[0];
+    if (synth?.pattern) pushHistorySnapshot(synth.id, synth.pattern.id);
     const nextState = Object.fromEntries(
       (Object.keys(drumStateRef.current) as DrumInstrument[]).map(inst => [
         inst,
@@ -2412,7 +2362,7 @@ function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ state: nextState }),
     });
-  }, []);
+  }, [pushHistorySnapshot]);
 
   const handleReset = useCallback(async () => {
     synthAudio.stopAllNotes();
@@ -2611,7 +2561,12 @@ function App() {
         </div>
       </header>
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
-      {storageError && <div role="alert">{storageError}</div>}
+      {storageError && (
+        <div role="alert" className="app-alert">
+          <span>{storageError}</span>
+          <button className="app-alert-dismiss" onClick={() => setStorageError(null)} aria-label="Dismiss message">✕</button>
+        </div>
+      )}
 
       <div className="app-content">
         <div className="app-main-left" style={{ overflowY: 'auto' }}>
@@ -2762,7 +2717,7 @@ function App() {
           <div className="help-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Import MIDI">
             <div className="help-modal-header">
               <h2>Import MIDI</h2>
-              <button className="help-modal-close" onClick={() => setMidiImportData(null)}>&times;</button>
+              <button className="help-close-btn" onClick={() => setMidiImportData(null)} aria-label="Close MIDI import">✕</button>
             </div>
             <div style={{ padding: '1rem', color: '#cfd6df', fontSize: '0.85rem' }}>
               <div style={{ marginBottom: '0.75rem' }}>
@@ -2770,8 +2725,8 @@ function App() {
                 Step count: <strong>{midiImportData.detectedStepCount}</strong>
               </div>
               <div style={{ marginBottom: '0.5rem', color: '#9ca3af' }}>Assign each track to a synth or the drum machine:</div>
-              {midiImportData.trackNames.map((name, i) => {
-                const isDrum = midiImportData.trackChannels[i] === 9;
+              {midiImportData.tracks.map((track, i) => {
+                const isDrum = Boolean(track.drums);
                 return (
                   <div key={i} style={{
                     display: 'flex', alignItems: 'center', gap: '0.5rem',
@@ -2779,9 +2734,10 @@ function App() {
                     border: '1px solid #4a4a4a', borderRadius: '4px',
                     background: isDrum ? '#1a2a1a' : '#1a1a1a',
                   }}>
-                    <span style={{ flex: 1, color: '#cfd6df' }}>{name}</span>
-                    <span style={{ color: '#6b7280', fontSize: '0.75rem', marginRight: '0.25rem' }}>{midiImportData.trackNoteCounts[i]} notes</span>
+                    <span style={{ flex: 1, color: '#cfd6df' }}>{track.name}</span>
+                    <span style={{ color: '#6b7280', fontSize: '0.75rem', marginRight: '0.25rem' }}>{track.noteCount} notes</span>
                     <select
+                      aria-label={`Destination for ${track.name}`}
                       value={midiImportAssignments[i] ?? ''}
                       onChange={(e) => {
                         const val = e.target.value;
@@ -2790,10 +2746,9 @@ function App() {
                       style={{ background: '#1a1a1a', color: '#cfd6df', border: '1px solid #4a4a4a', borderRadius: '3px', padding: '0.2rem 0.4rem', fontSize: '0.8rem' }}
                     >
                       <option value="">Skip</option>
-                      {isDrum && <option value="drums">Drum Machine</option>}
-                      <option value={1}>Synth 1</option>
-                      <option value={2}>Synth 2</option>
-                      <option value={3}>Synth 3</option>
+                      {isDrum
+                        ? <option value="drums">Drum Machine</option>
+                        : [1, 2, 3].map(id => <option key={id} value={id}>Synth {id}</option>)}
                     </select>
                   </div>
                 );

@@ -493,3 +493,29 @@
   border-color: #00d4ff;
   color: #00d4ff;
 }
+
+.app-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.9rem;
+  background: #3b1d1d;
+  border-bottom: 1px solid #ef4444;
+  color: #fecaca;
+  font-size: 0.85rem;
+}
+
+.app-alert-dismiss {
+  background: none;
+  border: 1px solid #7f1d1d;
+  border-radius: 4px;
+  color: #fecaca;
+  cursor: pointer;
+  padding: 0.15rem 0.45rem;
+  line-height: 1;
+}
+
+.app-alert-dismiss:hover {
+  border-color: #ef4444;
+}
