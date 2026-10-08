@@ -73,7 +73,7 @@ const midiNoteToName = (midi: number): string => {
   return `${note}${octave}`;
 };
 
-const noteNameToMidi = (note: string): number | null => {
+export const noteNameToMidi = (note: string): number | null => {
   const normalized = note.trim().toUpperCase();
   const match = normalized.match(/^([A-G])(#?)(-?\d+)$/);
   if (!match) return null;

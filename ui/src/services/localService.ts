@@ -92,7 +92,7 @@ export class LocalProjectService {
           drumMasterVolume: number(parsed.drumMasterVolume, 1, 0, 1), drumSwing: number(parsed.drumSwing, 0, 0, .75),
         };
         if (damaged) this.storageIssue = 'Some damaged browser project values were repaired. Please save a new copy of your arrangement.';
-        this.restored = true;
+        this.restored = synths.length > 0;
       }
     } catch {
       this.storageIssue = 'Browser storage is unavailable or damaged. Edits work, but may not survive reload.';

@@ -148,6 +148,7 @@ export function sanitizeSaved(value: unknown, defaults: { synthParams: SynthPara
       id: synth.id, steps: sanitizeSteps(synth.steps), synthParams: sanitizeSynthParams(synth.synthParams, defaults.synthParams),
       synthModelId: normalizeSynthModelId(synth.synthModelId), synthModelParams: sanitizeModelParams(synth.synthModelParams),
       muted: synth.muted === true, solo: synth.solo === true, octaveShift: Math.round(number(synth.octaveShift, 0, -2, 2)),
+      keyboardMode: (synth.keyboardMode === 'piano-roll' ? 'piano-roll' : 'keyboard') as 'piano-roll' | 'keyboard',
     }];
   }) : undefined;
   return {

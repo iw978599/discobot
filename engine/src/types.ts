@@ -197,6 +197,7 @@ export interface SavedSynthData {
   muted?: boolean;
   solo?: boolean;
   octaveShift?: number;
+  keyboardMode?: 'keyboard' | 'piano-roll';
 }
 
 export interface SavedPatternFull {
