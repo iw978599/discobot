@@ -38,12 +38,59 @@ export interface EffectsLoopState {
   };
 }
 
+export type LfoTarget = 'pitch' | 'filter' | 'amp' | 'pulseWidth';
+export type SynthEngineMode = 'subtractive' | 'fm';
+export type SynthVoiceMode = 'poly' | 'mono';
+
+export interface SynthLfo {
+  enabled: boolean;
+  target: LfoTarget;
+  waveform: OscillatorType;
+  rate: number;
+  depth: number;
+  sync?: boolean;
+  // false keeps one free-running LFO for the lane instead of restarting it on every note
+  retrigger?: boolean;
+}
+
+export interface SynthEnvelope {
+  attack: number;
+  decay: number;
+  sustain: number;
+  release: number;
+}
+
 export interface SynthParameters {
   hold: boolean;
   gain: number;
   fxReturn: number;
   pan: number;
   spread?: number;
+  engine?: SynthEngineMode;
+  voiceMode?: SynthVoiceMode;
+  oscillator2?: {
+    enabled: boolean;
+    type: OscillatorType;
+    semitones: number;
+    detune: number;
+    level: number;
+  };
+  mixer?: {
+    sub: number;
+    noise: number;
+  };
+  filterEnvelope?: SynthEnvelope;
+  velocity?: {
+    amp: number;
+    filter: number;
+  };
+  fm?: {
+    algorithm: number;
+    ratio: number;
+    index: number;
+    decay: number;
+    feedback: number;
+  };
   portamento: {
     enabled: boolean;
     glide: number;
@@ -57,34 +104,20 @@ export interface SynthParameters {
   oscillator: {
     type: OscillatorType;
     detune: number;
+    pulseWidth?: number;
   };
-  lfo1: {
-    enabled: boolean;
-    target: 'pitch' | 'filter';
-    waveform: OscillatorType;
-    rate: number;
-    depth: number;
-    sync?: boolean;
-  };
-  lfo2: {
-    enabled: boolean;
-    target: 'pitch' | 'filter';
-    waveform: OscillatorType;
-    rate: number;
-    depth: number;
-    sync?: boolean;
-  };
+  lfo1: SynthLfo;
+  lfo2: SynthLfo;
   filter: {
     frequency: number;
     q: number;
     type: BiquadFilterType;
+    // signed filter-envelope depth, where 1 sweeps the cutoff up five octaves
+    envAmount?: number;
+    keyTracking?: number;
+    drive?: number;
   };
-  envelope: {
-    attack: number;
-    decay: number;
-    sustain: number;
-    release: number;
-  };
+  envelope: SynthEnvelope;
   fxSends: FxSendLevels;
   effects: {
     reverb: {
@@ -114,6 +147,8 @@ export interface SequencerStep {
   active: boolean;
   note?: string;
   velocity: number;
+  // hold this note into the next step so a mono lane glides instead of retriggering
+  slide?: boolean;
 }
 
 export interface Pattern {

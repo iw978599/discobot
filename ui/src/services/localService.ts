@@ -15,10 +15,13 @@ type LocalSynth = {
   octaveShift?: number; keyboardMode?: 'keyboard' | 'piano-roll';
 };
 type State = Defaults & {
-  version: 1; synths: LocalSynth[]; tempo: number; selectedDrumKitId: string;
+  version: 1; schema: typeof SCHEMA; synths: LocalSynth[]; tempo: number; selectedDrumKitId: string;
   drumMasterVolume: number; drumSwing: number; savedPatterns: SavedPatternFull[];
 };
 const STORAGE_KEY = 'discobot_browser_project_v1';
+// Bumped when synth parameters gain fields. An older project is upgraded with defaults,
+// which is a migration and not damage worth warning about.
+const SCHEMA = 2;
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
 
 function merge<T>(base: T, patch: Partial<T>): T {
@@ -42,7 +45,7 @@ export class LocalProjectService {
     if (this.state) return;
     this.defaults = clone(defaults);
     this.state = {
-      ...clone(defaults), version: 1, synths: [], tempo: 120,
+      ...clone(defaults), version: 1, schema: SCHEMA, synths: [], tempo: 120,
       selectedDrumKitId: 'clean-analog', drumMasterVolume: 1, drumSwing: 0, savedPatterns: [],
     };
     try {
@@ -62,7 +65,7 @@ export class LocalProjectService {
             return [];
           }
           seen.add(input.synthId);
-          if (!matchesShape(input.synthParams, defaults.synthParams)
+          if ((parsed.schema === SCHEMA && !matchesShape(input.synthParams, defaults.synthParams))
             || !input.pattern.steps.every((step: unknown) => matchesShape(step, { active: false, velocity: .7 }))) damaged = true;
           const patterns: Pattern[] = Array.isArray(input.patterns)
             ? input.patterns.map((value: unknown) => sanitizePattern(value, tempo)).filter((value: Pattern | null): value is Pattern => value !== null)
@@ -81,7 +84,7 @@ export class LocalProjectService {
           .filter((value: SavedPatternFull | null): value is SavedPatternFull => value !== null);
         if (savedPatterns.length !== parsed.savedPatterns.length) damaged = true;
         this.state = {
-          ...clone(defaults), version: 1, synths, savedPatterns, tempo,
+          ...clone(defaults), version: 1, schema: SCHEMA, synths, savedPatterns, tempo,
           drumState: sanitizeDrums(parsed.drumState, defaults.drumState),
           effectsLoop: sanitizeEffects(parsed.effectsLoop, defaults.effectsLoop),
           drumFx: {

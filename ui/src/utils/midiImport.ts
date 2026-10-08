@@ -4,9 +4,13 @@ import { DRUM_INSTRUMENTS } from '../services/drumKits';
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
+// 'snare2' and 'ride' are the low and high tom lanes. Notes 40 and 51 are what earlier
+// versions exported for them, so files made before the change still import correctly.
 const GM_DRUM_NOTE_MAP: Record<number, DrumInstrument> = {
-  36: 'kick', 38: 'snare', 46: 'openHH', 42: 'closedHH',
-  51: 'ride', 49: 'crash', 40: 'snare2', 39: 'clap',
+  35: 'kick', 36: 'kick', 38: 'snare', 39: 'clap', 42: 'closedHH', 44: 'closedHH', 46: 'openHH',
+  41: 'snare2', 43: 'snare2', 45: 'snare2', 40: 'snare2',
+  47: 'ride', 48: 'ride', 50: 'ride', 51: 'ride',
+  49: 'crash', 57: 'crash',
 };
 
 const MIDI_DRUM_CHANNEL = 9;

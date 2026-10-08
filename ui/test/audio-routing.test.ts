@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createAudioLane, getAudioContext, loadSynthWorklet, setEffectsLoop, setMasterMuted, setMasterVolume } from '../src/hooks/browserAudio';
+import { MASTER_LEVEL, createAudioLane, getAudioContext, loadAudioWorklet, setEffectsLoop, setMasterMuted, setMasterVolume } from '../src/hooks/browserAudio';
 import type { EffectsLoopState } from '../src/types';
 
 class Param {
@@ -50,11 +50,12 @@ test('synth and drums share one protected destination and independent parallel F
     assert.equal(Context.instances, 1);
     const master = (synth.input as unknown as Node).connections[0];
     assert.equal((drums.input as unknown as Node).connections[0], master);
-    assert.equal(master.gain.value, 0.55 * 0.8);
+    assert.equal(master.gain.value, MASTER_LEVEL * 0.8);
     const destinationInputs = ctx.nodes.filter(node => node.connections.includes(ctx.destination));
     assert.equal(destinationInputs.length, 1, 'only the final safety shaper reaches the destination');
     assert.ok(destinationInputs[0].curve);
     assert.equal(master.connections[0].ratio.value, 20, 'master has a limiter');
+    assert.ok(master.connections[0].threshold.value >= -3, 'the limiter only catches peaks, so drums do not duck each other');
     assert.equal(master.connections.length, 1, 'no dry bypass around limiter');
     assert.equal((synth.input as unknown as Node).connections.length, 5, 'dry plus four parallel sends');
 
@@ -91,8 +92,8 @@ test('synth and drums share one protected destination and independent parallel F
     synth.setVolume(0.4);
     assert.equal((synth.input as unknown as Node).gain.value, 0.4);
     setMasterMuted(true); assert.equal(master.gain.value, 0);
-    setMasterMuted(false); assert.equal(master.gain.value, 0.55 * 0.8);
-    await Promise.all([loadSynthWorklet(), loadSynthWorklet()]);
+    setMasterMuted(false); assert.equal(master.gain.value, MASTER_LEVEL * 0.8);
+    await Promise.all([loadAudioWorklet(), loadAudioWorklet()]);
     assert.equal(ctx.modules.length, 1, 'concurrent lanes load one module');
     synth.dispose(); drums.dispose();
     assert.equal((synth.input as unknown as Node).connections.length, 0);

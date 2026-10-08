@@ -24,3 +24,6 @@ test-results/
 .playwright-build-*/
 .playwright-runtime/
 ui/test/browser-results/
+
+# Bundled from ui/src/audio/worklet.ts by the Vite config
+ui/public/audio-worklet.js

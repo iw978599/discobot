@@ -1,8 +1,7 @@
-export { Synthesizer } from './Synthesizer';
-export { StreamingSynth } from './StreamingSynth';
-export { DrumSynthesizer } from './DrumSynthesizer';
-export { AudioExporter, encodeWAV } from './AudioExporter';
+export { SynthCore } from './synth/SynthCore';
+export type { NoteOnMessage } from './synth/SynthCore';
+export { createDefaultSynthParameters, syncedLfoHz, toVoiceParams } from './synth/voiceParams';
+export type { VoiceParams } from './synth/voiceParams';
+export { DrumCore } from './drums/DrumCore';
+export type { DrumHitMessage } from './drums/DrumCore';
 export * from './types';
-export * from './utils';
-export * from './constants';
-export * from './errors';

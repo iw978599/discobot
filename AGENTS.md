@@ -44,23 +44,28 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 | `ui/src/services/drumKits.ts` | Drum instrument list and kit metadata |
 | `ui/src/hooks/browserAudio.ts` | Shared AudioContext, master limiter, parallel FX buses, sample playback |
 | `ui/src/hooks/useSynthAudio.ts` | Per-lane AudioWorklet nodes, note start/stop, parameter flattening |
-| `ui/src/hooks/useDrumAudio.ts` | Drum hits rendered with `DrumSynthesizer.renderHit()` into buffer sources |
+| `ui/src/hooks/useDrumAudio.ts` | Posts drum hits to the `drum-processor` worklet node |
 | `ui/src/hooks/useMidiInput.ts` | Web MIDI input, per-device held-note tracking |
-| `ui/public/synth-processor.js` | Live synth voice DSP (8-voice AudioWorklet) |
+| `ui/src/audio/worklet.ts` | Worklet entry: thin `synth-processor` and `drum-processor` wrappers around the engine cores. `vite.config.ts` bundles it to `public/audio-worklet.js` (generated, gitignored) |
+| `ui/src/services/noteScheduling.ts` | `expandStep`: what one step plays (arpeggio pulses, slide length); used live and by export |
 | `ui/src/utils/midiExport.ts` / `midiImport.ts` | Standard MIDI File export (PPQ 480, drums on channel 10) and import |
 | `ui/src/synthModels.ts` | Synth model definitions and macro mapping |
 | `ui/src/components/` | `SynthUnit`, `SynthControls`, `Sequencer`, `KeyboardPanel`, `Keyboard`, `PianoRoll`, `DrumMachine`, `EffectsPanel`, `MixerPanel`, `MidiPanel`, `SamplePanel`, `Knob`, `DrumKnob` |
 | `engine/src/types.ts` | Type definitions (single source of truth; `ui/src/types.ts` re-exports them) |
-| `engine/src/Synthesizer.ts` | Offline synth note rendering, used by WAV export |
-| `engine/src/DrumSynthesizer.ts` | Drum voices and kit variants, used live and by WAV export |
-| `engine/src/StreamingSynth.ts` | Chunked poly renderer; covered by engine tests, not used by the UI |
-| `engine/src/dsp.ts` | Shared oscillator and resonant filter |
+| `engine/src/synth/SynthCore.ts` | The synth voice implementation: 8 voices, 2 oscillators + sub + noise, SVF filter, amp and filter envelopes, LFOs, FM, mono/legato |
+| `engine/src/synth/voiceParams.ts` | Default `SynthParameters`, and `toVoiceParams` which flattens them for the core |
+| `engine/src/drums/DrumCore.ts` | The drum voice implementation and per-kit character table |
+| `engine/src/dsp.ts` | Shared oscillators, state-variable filter, exponential ADSR, seeded noise |
 
 ## Behaviour Worth Knowing
 - Up to 3 synth lanes; Synth 1 cannot be removed. Lanes are 16 or 32 steps over one bar; the drum grid is always 16 steps.
 - Undo/redo is one chronological stack for the whole project (`historyRef` in `App.tsx`). Each entry stores one lane plus the shared drum, tempo and effects state. Loading a saved arrangement clears it.
 - A tempo-synced LFO rate `N` means one cycle per 1/N note (`syncedLfoHz`). Live playback and WAV export both use it.
-- Live synth audio comes from the worklet; WAV export renders synth notes with the engine `Synthesizer`. The two share FX curves and routing but are separate voice implementations, so exports can differ slightly from what is heard.
+- Live playback and WAV export run the same `SynthCore` and `DrumCore`. Never add DSP to the worklet wrapper or to `wavExport.ts`; put it in the engine core so both paths get it.
+- Drum voices are summed linearly and the master limiter only acts near full scale. Do not add saturation to the drum bus or lower the limiter threshold: that is what made simultaneous drums duck each other.
+- New `SynthParameters` fields must be optional in the type, present in `createDefaultSynthParameters()` with a neutral value, and clamped in `sanitizeSynthParams`, so older saved projects load unchanged. Bump `SCHEMA` in `localService.ts` when adding one.
+- The lanes labelled Low Tom and High Tom are the `snare2` and `ride` instrument ids, kept for saved-project compatibility.
+- A step's `slide` flag holds its note into the next step; a mono lane then glides instead of retriggering. Accent is step velocity routed to the filter (`velocity.filter`).
 - The audio hooks return a stable object. Keep it that way: effects in `App.tsx` depend on them.
 - Octave shift range is -2 to +2 per lane and only affects the on-screen keyboard and piano roll range.
 
@@ -98,12 +103,11 @@ npm run test:browser # Playwright against the production preview
 ## Known Issues
 - `localService` still exposes a REST-shaped `request(path)` API with `Response` objects, a leftover from the server version
 - `App.tsx` is about 2,800 lines and owns most state
-- Live worklet DSP and the engine `Synthesizer` are separate implementations
 - Firefox/Safari lack Web MIDI API support
 - Two open tabs share one localStorage project and can overwrite each other
 
 ## Potential Next Steps
 - Replace the REST-shaped facade with typed service methods and split `App.tsx`
-- Render WAV exports through the same DSP as live playback
+- See `docs/SONG_MODE_PLAN.md` and `docs/ROADMAP.md`
 - Song mode / pattern chaining
 - Use imported samples as drum or synth sources

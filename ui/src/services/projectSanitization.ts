@@ -47,15 +47,38 @@ export function sanitizeSynthParams(value: unknown, defaults: SynthParameters): 
   for (const key of ['lfo1', 'lfo2'] as const) {
     const raw = record(input[key]), lfo = params[key];
     if (!waves.includes(lfo.waveform)) lfo.waveform = defaults[key].waveform;
-    if (!['pitch', 'filter'].includes(lfo.target)) lfo.target = defaults[key].target;
+    if (!['pitch', 'filter', 'amp', 'pulseWidth'].includes(lfo.target)) lfo.target = defaults[key].target;
     lfo.rate = number(lfo.rate, defaults[key].rate, .01, raw.sync === true ? 64 : 30);
     lfo.depth = number(lfo.depth, defaults[key].depth, 0, 1);
     if (raw.sync !== undefined) lfo.sync = raw.sync === true;
+    lfo.retrigger = raw.retrigger !== false;
   }
+  params.engine = input.engine === 'fm' ? 'fm' : 'subtractive';
+  params.voiceMode = input.voiceMode === 'mono' ? 'mono' : 'poly';
+  params.oscillator.pulseWidth = number(params.oscillator.pulseWidth, .5, .05, .95);
+  const osc2 = params.oscillator2!, osc2Defaults = defaults.oscillator2!;
+  if (!waves.includes(osc2.type)) osc2.type = osc2Defaults.type;
+  osc2.semitones = Math.round(number(osc2.semitones, osc2Defaults.semitones, -36, 36));
+  osc2.detune = number(osc2.detune, osc2Defaults.detune, -100, 100);
+  osc2.level = number(osc2.level, osc2Defaults.level, 0, 1);
+  params.mixer = { sub: number(params.mixer!.sub, 0, 0, 1), noise: number(params.mixer!.noise, 0, 0, 1) };
+  params.velocity = { amp: number(params.velocity!.amp, 1, 0, 1), filter: number(params.velocity!.filter, 0, 0, 1) };
+  const fm = params.fm!, fmDefaults = defaults.fm!;
+  params.fm = {
+    algorithm: Math.round(number(fm.algorithm, fmDefaults.algorithm, 0, 3)), ratio: number(fm.ratio, fmDefaults.ratio, .25, 16),
+    index: number(fm.index, fmDefaults.index, 0, 1), decay: number(fm.decay, fmDefaults.decay, .01, 10),
+    feedback: number(fm.feedback, fmDefaults.feedback, 0, 1),
+  };
+  const filterEnvelope = params.filterEnvelope!, filterEnvelopeDefaults = defaults.filterEnvelope!;
+  for (const key of ['attack', 'decay', 'release'] as const) filterEnvelope[key] = number(filterEnvelope[key], filterEnvelopeDefaults[key], 0, 10);
+  filterEnvelope.sustain = number(filterEnvelope.sustain, filterEnvelopeDefaults.sustain, 0, 1);
   const filter = params.filter;
   if (!['lowpass', 'highpass', 'bandpass', 'lowshelf', 'highshelf', 'peaking', 'notch', 'allpass'].includes(filter.type)) filter.type = defaults.filter.type;
   filter.frequency = number(filter.frequency, defaults.filter.frequency, 20, 20000);
   filter.q = number(filter.q, defaults.filter.q, .1, 30);
+  filter.envAmount = number(filter.envAmount, 0, -1, 1);
+  filter.keyTracking = number(filter.keyTracking, 0, 0, 1);
+  filter.drive = number(filter.drive, 0, 0, 1);
   for (const key of ['attack', 'decay', 'release'] as const) params.envelope[key] = number(params.envelope[key], defaults.envelope[key], 0, 10);
   params.envelope.sustain = number(params.envelope.sustain, defaults.envelope.sustain, 0, 1);
   params.portamento.glide = number(params.portamento.glide, defaults.portamento.glide, 0, 2);
@@ -75,7 +98,10 @@ export function sanitizeSteps(value: unknown): Pattern['steps'] {
   return Array.from({ length: input.length > 16 ? 32 : 16 }, (_, index) => {
     const step = record(input[index]);
     const note = typeof step.note === 'string' && noteNameToMidi(step.note) !== null ? step.note : undefined;
-    return { active: step.active === true && Boolean(note), ...(note ? { note } : {}), velocity: number(step.velocity, .7, 0, 1) };
+    return {
+      active: step.active === true && Boolean(note), ...(note ? { note } : {}), velocity: number(step.velocity, .7, 0, 1),
+      ...(step.slide === true ? { slide: true } : {}),
+    };
   });
 }
 

@@ -157,3 +157,91 @@ test('undo and redo step through synth and drum edits in the order they were mad
   await redo.click();
   await expect.poll(state).toEqual({ kick: true, snare: false, note: 'C3' });
 });
+
+test('drums on the same step all reach the drum voice at their own levels and are audible', async ({ page }) => {
+  await page.addInitScript(() => {
+    const win = window as any;
+    win.drumHits = [];
+    win.drumProbe = null;
+    const Worklet = window.AudioWorkletNode;
+    window.AudioWorkletNode = class extends Worklet {
+      constructor(context: BaseAudioContext, name: string, options?: AudioWorkletNodeOptions) {
+        super(context, name, options);
+        if (name !== 'drum-processor') return;
+        const analyser = context.createAnalyser();
+        analyser.fftSize = 2048;
+        this.connect(analyser);
+        win.drumProbe = analyser;
+        const post = this.port.postMessage.bind(this.port);
+        this.port.postMessage = (message: any) => {
+          if (message.type === 'hit') win.drumHits.push({ instrument: message.instrument, velocity: message.velocity, volume: message.settings.volume, time: message.time });
+          post(message);
+        };
+      }
+    };
+  });
+  await page.goto('./');
+  await page.getByRole('button', { name: 'Kick step 1', exact: true }).click();
+  await page.getByRole('button', { name: 'Select Snare', exact: true }).click();
+  await page.getByRole('button', { name: 'Snare step 1', exact: true }).click();
+  await page.getByLabel('Snare step 1 velocity', { exact: true }).fill('0.4');
+  await page.getByRole('button', { name: 'Select Open Hat', exact: true }).click();
+  await page.getByRole('button', { name: 'Open Hat step 1', exact: true }).click();
+  await page.getByRole('button', { name: 'Select Closed Hat', exact: true }).click();
+  await page.getByRole('button', { name: 'Closed Hat step 1', exact: true }).click();
+  await page.evaluate(() => { (window as any).drumHits.length = 0; });
+  const volumes = await page.evaluate(() => {
+    const state = JSON.parse(localStorage.getItem('discobot_browser_project_v1')!).drumState;
+    return { kick: state.kick.settings.volume, snare: state.snare.settings.volume, openHH: state.openHH.settings.volume, closedHH: state.closedHH.settings.volume };
+  });
+
+  await page.getByRole('button', { name: /Play All/ }).click();
+  const scheduled = () => page.evaluate(() => (window as any).drumHits.filter((hit: any) => typeof hit.time === 'number'));
+  await expect.poll(async () => (await scheduled()).length, { timeout: 8000 }).toBeGreaterThanOrEqual(4);
+  const hits = (await scheduled()).slice(0, 4);
+  expect(new Set(hits.map((hit: any) => hit.time)).size, 'all four drums are scheduled for the same instant').toBe(1);
+  const byInstrument = Object.fromEntries(hits.map((hit: any) => [hit.instrument, hit]));
+  expect(Object.keys(byInstrument).sort()).toEqual(['closedHH', 'kick', 'openHH', 'snare']);
+  for (const instrument of ['kick', 'snare', 'openHH', 'closedHH'] as const) {
+    expect(byInstrument[instrument].volume).toBeCloseTo(volumes[instrument]);
+  }
+  expect(byInstrument.kick.velocity).toBe(1);
+  expect(byInstrument.snare.velocity).toBeCloseTo(0.4);
+  await expect.poll(() => page.evaluate(() => {
+    const analyser = (window as any).drumProbe as AnalyserNode | null;
+    if (!analyser) return false;
+    const samples = new Float32Array(analyser.fftSize);
+    analyser.getFloatTimeDomainData(samples);
+    return samples.some(value => Math.abs(value) > .01);
+  }), { timeout: 8000 }).toBe(true);
+  await page.getByRole('button', { name: /Stop All/ }).click();
+});
+
+test('the new voice controls, FM engine and step slide are saved with the project', async ({ page }) => {
+  await page.goto('./');
+  const lane = () => page.evaluate(() => JSON.parse(localStorage.getItem('discobot_browser_project_v1')!).synths[0]);
+  await page.getByLabel('Oscillator 2 enabled').check({ force: true });
+  await page.getByLabel('Voice mode').selectOption('mono');
+  await page.getByRole('slider', { name: 'Env Amt', exact: true }).press('ArrowUp');
+  await page.getByRole('slider', { name: 'Sub', exact: true }).press('ArrowUp');
+  await page.getByLabel('LFO 1 target').selectOption('amp', { force: true });
+  await expect.poll(async () => {
+    const params = (await lane()).synthParams;
+    return [params.oscillator2.enabled, params.voiceMode, params.filter.envAmount > 0, params.mixer.sub > 0, params.lfo1.target];
+  }).toEqual([true, 'mono', true, true, 'amp']);
+
+  await page.getByLabel('Synth engine').selectOption('fm');
+  await expect(page.getByLabel('FM algorithm')).toBeVisible();
+  await page.getByLabel('FM algorithm').selectOption('0');
+  await expect.poll(async () => { const params = (await lane()).synthParams; return [params.engine, params.fm.algorithm]; }).toEqual(['fm', 0]);
+  await page.getByLabel('Synth model').selectOption('tb-303');
+  await expect.poll(async () => { const params = (await lane()).synthParams; return [params.engine, params.voiceMode, params.velocity.filter > 0.5]; }).toEqual(['subtractive', 'mono', true]);
+
+  await page.getByRole('button', { name: 'Piano Roll', exact: true }).click();
+  await page.getByRole('button', { name: 'C3 step 1', exact: true }).click();
+  await page.getByLabel('Step 1 slide', { exact: true }).check();
+  await expect.poll(async () => (await lane()).pattern.steps[0].slide).toBe(true);
+  await page.reload();
+  await expect.poll(async () => (await lane()).pattern.steps[0].slide).toBe(true);
+  await expect(page.getByLabel('Voice mode')).toHaveValue('mono');
+});

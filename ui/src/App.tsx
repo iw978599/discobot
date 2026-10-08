@@ -12,33 +12,19 @@ import { useSynthAudio } from './hooks/useSynthAudio';
 import { useDrumAudio } from './hooks/useDrumAudio';
 import { MidiMode, MidiMessage, useMidiInput } from './hooks/useMidiInput';
 import { Pattern, SynthParameters, SavedPatternInfo, SavedPatternFull, SavedSynthData, DrumState, DrumInstrument, DrumSettings, DrumKitDefinition, DrumKitId, EffectsLoopState, FxSendLevels, SynthModelId, SynthModelParams } from './types';
+import { createDefaultSynthParameters } from '@discobot/engine';
 import { localRequest, localService } from './services/localService';
+import { sanitizeSynthParams } from './services/projectSanitization';
+import { expandStep } from './services/noteScheduling';
 import { BrowserTransport, TransportTick } from './services/browserTransport';
 import { downloadArrangementWav } from './services/wavExport';
 import { getAudioContext, setMasterVolume, setMasterMuted, playSample } from './hooks/browserAudio';
-import { downloadMidiFile, transposeNote } from './utils/midiExport';
+import { downloadMidiFile } from './utils/midiExport';
 import { importMidiFile, readFileAsArrayBuffer, MidiImportResult } from './utils/midiImport';
 import { DEFAULT_SYNTH_MODEL_ID, createDefaultSynthModelParams, mapSynthModelToEngineParams, normalizeSynthModelId, normalizeSynthModelParams } from './synthModels';
 import './App.css';
 
-const DEFAULT_PARAMS: SynthParameters = {
-  hold: false,
-  gain: 1.0,
-  fxReturn: 0.85,
-  pan: 0,
-  portamento: { enabled: false, glide: 0.05 },
-  arpeggiator: { enabled: false, mode: 'up', rate: '1/16', gate: 0.7 },
-  oscillator: { type: 'sine', detune: 0 },
-  lfo1: { enabled: false, target: 'pitch', waveform: 'sine', rate: 5, depth: 0.2 },
-  lfo2: { enabled: false, target: 'filter', waveform: 'triangle', rate: 0.8, depth: 0.25 },
-  filter: { frequency: 20000, q: 1, type: 'lowpass' },
-  envelope: { attack: 0.01, decay: 0.1, sustain: 0.7, release: 0.3 },
-  fxSends: { reverb: 0.25, delay: 0.2, drive: 0.15, phaser: 0.1 },
-  effects: {
-    reverb: { enabled: false, wet: 0.3, decay: 2 },
-    delay: { enabled: false, wet: 0.3, time: 0.25, feedback: 0.3 },
-  },
-};
+const DEFAULT_PARAMS: SynthParameters = createDefaultSynthParameters();
 
 const DEFAULT_DRUM_FX: { sends: FxSendLevels; returnLevel: number } = {
   sends: { reverb: 0.35, delay: 0.15, drive: 0.2, phaser: 0.1 },
@@ -149,22 +135,7 @@ function cloneDrumState(state: DrumState): DrumState {
 }
 
 function cloneSynthParams(params: SynthParameters | null): SynthParameters | null {
-  if (!params) return null;
-  return {
-    ...params,
-    arpeggiator: { ...params.arpeggiator },
-    oscillator: { ...params.oscillator },
-    lfo1: { ...params.lfo1 },
-    lfo2: { ...params.lfo2 },
-    filter: { ...params.filter },
-    envelope: { ...params.envelope },
-    fxSends: { ...params.fxSends },
-    portamento: { ...params.portamento },
-    effects: {
-      reverb: { ...params.effects.reverb },
-      delay: { ...params.effects.delay },
-    },
-  };
+  return params ? structuredClone(params) : null;
 }
 
 function cloneSynthModelParams(params: SynthModelParams | null | undefined): SynthModelParams {
@@ -187,8 +158,11 @@ function createBuiltInPresets(): SynthPreset[] {
       modelParams: createDefaultSynthModelParams(),
       params: {
         ...DEFAULT_PARAMS,
-        oscillator: { type: 'triangle', detune: -4 },
-        filter: { ...DEFAULT_PARAMS.filter, frequency: 2200, q: 1.8 },
+        oscillator: { type: 'sawtooth', detune: -4, pulseWidth: 0.5 },
+        oscillator2: { enabled: true, type: 'sawtooth', semitones: 0, detune: 11, level: 0.8 },
+        filter: { ...DEFAULT_PARAMS.filter, frequency: 1400, q: 1.8, envAmount: 0.2, keyTracking: 0.4 },
+        filterEnvelope: { attack: 0.6, decay: 1.2, sustain: 0.6, release: 1.2 },
+        spread: 0.5,
         envelope: { attack: 0.35, decay: 0.7, sustain: 0.78, release: 1.2 },
         fxReturn: 0.9,
         fxSends: { reverb: 0.55, delay: 0.26, drive: 0.05, phaser: 0.24 },
@@ -204,8 +178,12 @@ function createBuiltInPresets(): SynthPreset[] {
       modelParams: { macro1: 0.72, macro2: 0.64, macro3: 0.35, macro4: 0.45 },
       params: {
         ...DEFAULT_PARAMS,
-        oscillator: { type: 'sawtooth', detune: -8 },
-        filter: { ...DEFAULT_PARAMS.filter, frequency: 420, q: 2.5 },
+        voiceMode: 'mono',
+        oscillator: { type: 'sawtooth', detune: 0, pulseWidth: 0.5 },
+        mixer: { sub: 0.55, noise: 0 },
+        filter: { ...DEFAULT_PARAMS.filter, frequency: 260, q: 2.5, envAmount: 0.45, keyTracking: 0.3, drive: 0.3 },
+        filterEnvelope: { attack: 0.002, decay: 0.16, sustain: 0.1, release: 0.15 },
+        velocity: { amp: 1, filter: 0.4 },
         envelope: { attack: 0.005, decay: 0.11, sustain: 0.48, release: 0.18 },
         fxReturn: 0.55,
         fxSends: { reverb: 0.08, delay: 0.06, drive: 0.28, phaser: 0.05 },
@@ -221,8 +199,10 @@ function createBuiltInPresets(): SynthPreset[] {
       modelParams: { macro1: 0.63, macro2: 0.55, macro3: 0.58, macro4: 0.44 },
       params: {
         ...DEFAULT_PARAMS,
-        oscillator: { type: 'square', detune: 6 },
-        filter: { ...DEFAULT_PARAMS.filter, frequency: 5200, q: 1.9 },
+        oscillator: { type: 'sawtooth', detune: 0, pulseWidth: 0.5 },
+        oscillator2: { enabled: true, type: 'square', semitones: 0, detune: 8, level: 0.7 },
+        filter: { ...DEFAULT_PARAMS.filter, frequency: 2400, q: 1.9, envAmount: 0.3, keyTracking: 0.6 },
+        filterEnvelope: { attack: 0.005, decay: 0.3, sustain: 0.4, release: 0.3 },
         envelope: { attack: 0.012, decay: 0.22, sustain: 0.62, release: 0.28 },
         fxReturn: 0.72,
         fxSends: { reverb: 0.2, delay: 0.34, drive: 0.2, phaser: 0.12 },
@@ -238,8 +218,10 @@ function createBuiltInPresets(): SynthPreset[] {
       modelParams: { macro1: 0.52, macro2: 0.68, macro3: 0.74, macro4: 0.86 },
       params: {
         ...DEFAULT_PARAMS,
-        oscillator: { type: 'triangle', detune: 0 },
-        filter: { ...DEFAULT_PARAMS.filter, frequency: 2900, q: 4.8 },
+        oscillator: { type: 'sawtooth', detune: 0, pulseWidth: 0.5 },
+        filter: { ...DEFAULT_PARAMS.filter, frequency: 500, q: 3, envAmount: 0.7, keyTracking: 0.5 },
+        filterEnvelope: { attack: 0.001, decay: 0.12, sustain: 0, release: 0.1 },
+        velocity: { amp: 1, filter: 0.3 },
         envelope: { attack: 0.002, decay: 0.19, sustain: 0.2, release: 0.12 },
         fxReturn: 0.62,
         fxSends: { reverb: 0.18, delay: 0.22, drive: 0.1, phaser: 0.07 },
@@ -249,18 +231,21 @@ function createBuiltInPresets(): SynthPreset[] {
     },
     {
       id: 'builtin-grand-piano',
-      name: 'Grand Piano',
+      name: 'Electric Piano',
       builtIn: true,
-      modelId: 'juno-106',
-      modelParams: { macro1: 0.46, macro2: 0.52, macro3: 0.28, macro4: 0.61 },
+      modelId: 'dx7',
+      modelParams: { macro1: 0.95, macro2: 0.2, macro3: 0.45, macro4: 0.5 },
       params: {
         ...DEFAULT_PARAMS,
-        oscillator: { type: 'triangle', detune: 2 },
-        filter: { ...DEFAULT_PARAMS.filter, frequency: 6800, q: 1.35 },
+        engine: 'fm',
+        fm: { algorithm: 1, ratio: 14, index: 0.22, decay: 0.35, feedback: 0 },
+        oscillator: { type: 'sine', detune: 0, pulseWidth: 0.5 },
+        filter: { ...DEFAULT_PARAMS.filter, frequency: 9000, q: 0.7, keyTracking: 0.5 },
+        velocity: { amp: 1, filter: 0.35 },
         envelope: { attack: 0.004, decay: 0.42, sustain: 0.22, release: 1.45 },
         fxReturn: 0.82,
         fxSends: { reverb: 0.34, delay: 0.06, drive: 0.02, phaser: 0.02 },
-        lfo1: { enabled: true, target: 'pitch', waveform: 'triangle', rate: 4.8, depth: 0.08 },
+        lfo1: { enabled: false, target: 'pitch', waveform: 'triangle', rate: 4.8, depth: 0.02 },
         lfo2: { enabled: false, target: 'filter', waveform: 'sine', rate: 1, depth: 0.05 },
       },
     },
@@ -284,7 +269,8 @@ function loadUserPresets(): SynthPreset[] {
       .map((entry) => ({
         id: entry.id,
         name: entry.name,
-        params: cloneSynthParams(entry.params) || DEFAULT_PARAMS,
+        // Presets saved before a parameter existed take its default instead of inheriting the lane's value.
+        params: sanitizeSynthParams(entry.params, DEFAULT_PARAMS),
         modelId: normalizeSynthModelId(entry.modelId),
         modelParams: cloneSynthModelParams(entry.modelParams),
       }));
@@ -916,54 +902,16 @@ function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [helpOpen, midiImportOpen, handleUndo, handleRedo]);
 
-  const triggerSynthNote = useCallback((synthParams: SynthParameters, note: string, windowSeconds: number, velocity: number = 1, synthId = 1, scheduledTime?: number) => {
+  const triggerSynthNote = useCallback((synthParams: SynthParameters, note: string, windowSeconds: number, velocity: number = 1, synthId = 1, scheduledTime?: number, slide = false) => {
     const normalizedVelocity = Math.max(0, Math.min(1, velocity));
-    const arp = synthParams.arpeggiator;
-    if (!arp?.enabled) {
-      void synthAudio.playNote(
-        note,
-        synthParams,
-        Math.max(0.05, windowSeconds * 0.92),
-        normalizedVelocity,
-        browserMutedRef.current,
-        effectsLoopRef.current,
-        globalTempoRef.current,
-        synthId,
-        scheduledTime,
-      );
-      return;
+    for (const scheduled of expandStep(note, synthParams, windowSeconds, globalTempoRef.current, slide)) {
+      // Only later pulses need a start time; an unscheduled first pulse plays immediately.
+      const time = scheduledTime !== undefined ? scheduledTime + scheduled.offset
+        : scheduled.offset > 0 ? getAudioContext().currentTime + scheduled.offset : undefined;
+      void synthAudio.playNote(scheduled.note, synthParams, scheduled.duration, normalizedVelocity,
+        browserMutedRef.current, effectsLoopRef.current, globalTempoRef.current, synthId, time);
     }
-
-    const basePattern = [0, 4, 7, 12];
-    const semitones = arp.mode === 'down'
-      ? [...basePattern].reverse()
-      : arp.mode === 'updown'
-        ? [0, 4, 7, 12, 7, 4]
-        : arp.mode === 'downup'
-          ? [12, 7, 4, 0, 4, 7]
-          : arp.mode === 'converge'
-            ? [0, 12, 4, 7]
-            : arp.mode === 'diverge'
-              ? [7, 4, 12, 0]
-              : basePattern;
-    const rateDivisor = arp.rate === '1/4' ? 1 : arp.rate === '1/8' ? 2 : arp.rate === '1/16' ? 4 : 8;
-    const interval = (60 / globalTempo) / rateDivisor;
-    const noteLength = Math.max(0.03, interval * Math.max(0.1, Math.min(1, arp.gate)));
-    const pulseCount = Math.max(1, Math.floor(Math.max(interval, windowSeconds) / interval));
-    for (let pulse = 0; pulse < pulseCount; pulse += 1) {
-      const offset = arp.mode === 'random'
-        ? semitones[Math.floor(Math.random() * semitones.length)]
-        : semitones[pulse % semitones.length];
-      const arpNote = transposeNote(note, offset);
-      if (!arpNote) continue;
-      if (pulse === 0) {
-        void synthAudio.playNote(arpNote, synthParams, noteLength, normalizedVelocity, browserMutedRef.current, effectsLoopRef.current, globalTempoRef.current, synthId, scheduledTime);
-        continue;
-      }
-      void synthAudio.playNote(arpNote, synthParams, noteLength, normalizedVelocity, browserMutedRef.current, effectsLoopRef.current, globalTempoRef.current,
-        synthId, (scheduledTime ?? getAudioContext().currentTime) + interval * pulse);
-    }
-  }, [synthAudio, globalTempo]);
+  }, [synthAudio]);
 
   scheduleTickRef.current = ({ step, time, duration }) => {
     const lanes = synthsRef.current;
@@ -976,7 +924,7 @@ function App() {
       const index = Math.floor(step / divisor) % count;
       const note = synth.pattern.steps[index];
       if (!synth.muted && (!hasSolo || synth.solo) && note?.active && note.note) {
-        triggerSynthNote(synth.synthParams, note.note, duration * divisor, note.velocity, synth.id, time);
+        triggerSynthNote(synth.synthParams, note.note, duration * divisor, note.velocity, synth.id, time, note.slide);
       }
       setSynths(prev => prev.map(s => s.id === synth.id ? { ...s, currentStep: index } : s));
     }
@@ -1710,6 +1658,24 @@ function App() {
       body: JSON.stringify(nextPattern),
     });
   }, [pushHistorySnapshotThrottled, clearActiveSavedPattern]);
+
+  const handleStepSlideChange = useCallback(async (synthId: number, stepIndex: number, slide: boolean) => {
+    const synth = synthsRef.current.find((entry) => entry.id === synthId);
+    if (!synth?.pattern || !synth.pattern.steps[stepIndex]) return;
+    pushHistorySnapshot(synthId, synth.pattern.id);
+    const nextPattern = {
+      ...synth.pattern,
+      steps: synth.pattern.steps.map((step, index) => (index === stepIndex ? { ...step, slide } : step)),
+    };
+    setSynths((prev) => prev.map((entry) => (
+      entry.id === synthId ? { ...entry, pattern: nextPattern } : entry
+    )));
+    clearActiveSavedPattern();
+    await localRequest(`/synth/${synthId}/patterns/${synth.pattern.id}`, {
+      method: 'PUT',
+      body: JSON.stringify(nextPattern),
+    });
+  }, [pushHistorySnapshot, clearActiveSavedPattern]);
 
   const handleSynthMixChange = useCallback(async (synthId: number, mix: { muted?: boolean; solo?: boolean }) => {
     setSynths(prev => prev.map(s =>
@@ -2604,6 +2570,7 @@ function App() {
                     onStepChange={(step) => handleStepChange(selected.id, step)}
                     onStepCountChange={(stepCount) => handleStepCountChange(selected.id, stepCount)}
                     onStepVelocityChange={(stepIndex, velocity) => { void handleStepVelocityChange(selected.id, stepIndex, velocity); }}
+                    onStepSlideChange={(stepIndex, slide) => { void handleStepSlideChange(selected.id, stepIndex, slide); }}
                     onLoadSavedPattern={(data, savedId) => handleLoadSavedPattern(
                       selected.id,
                       data,

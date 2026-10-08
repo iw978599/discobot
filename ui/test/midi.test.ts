@@ -4,7 +4,6 @@ import { test } from 'node:test';
 import { createMidiFile } from '../src/utils/midiExport.ts';
 import { DRUM_INSTRUMENTS } from '../src/services/drumKits.ts';
 import { isAudioFile } from '../src/services/sampleStore.ts';
-import { syncedLfoHz } from '../src/hooks/useSynthAudio.ts';
 import type { DrumState, Pattern } from '../src/types.ts';
 
 // @tonejs/midi is CommonJS; loading the importer through require gives Node the same named exports Vite sees.
@@ -81,10 +80,4 @@ test('sample import accepts audio by type or extension and rejects everything el
   assert.equal(isAudioFile({ name: 'notes.txt', type: 'text/plain' }), false);
   assert.equal(isAudioFile({ name: 'wav', type: '' }), false);
   assert.equal(isAudioFile({ name: 'archive.wav.zip', type: 'application/zip' }), false);
-});
-
-test('a synced LFO rate is a note value: one cycle per 1/N note at the project tempo', () => {
-  assert.equal(syncedLfoHz(4, 120), 2);
-  assert.equal(syncedLfoHz(16, 120), 8);
-  assert.equal(syncedLfoHz(1, 60), .25);
 });

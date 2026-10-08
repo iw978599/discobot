@@ -24,11 +24,27 @@ type Effects = {
   depth: GainNode;
 };
 
+export const MASTER_LEVEL = 0.7;
+
 // Shared with the offline WAV renderer so an export is shaped like live playback.
+// Transparent below the knee, then a soft ceiling: the mix is only touched when it would clip.
 export function safetyCurve() {
-  const curve = new Float32Array(2049);
-  for (let i = 0; i < curve.length; i++) curve[i] = Math.tanh((2 * i / (curve.length - 1) - 1) * 1.2) * 0.95;
+  const curve = new Float32Array(4097), knee = 0.85;
+  for (let i = 0; i < curve.length; i++) {
+    const x = 2 * i / (curve.length - 1) - 1, level = Math.abs(x);
+    curve[i] = level <= knee ? x : Math.sign(x) * (knee + (0.99 - knee) * Math.tanh((level - knee) / (0.99 - knee)));
+  }
   return curve;
+}
+
+// A peak limiter, not a compressor: with a low threshold a kick would duck every other
+// drum that landed on the same step.
+export function configureLimiter(limiter: DynamicsCompressorNode) {
+  limiter.threshold.value = -1.5;
+  limiter.knee.value = 0;
+  limiter.ratio.value = 20;
+  limiter.attack.value = 0.001;
+  limiter.release.value = 0.06;
 }
 
 export function driveCurve(amount: number) {
@@ -64,13 +80,9 @@ export function getAudioContext(): AudioContext {
     effects.clear();
     workletLoading = undefined;
     master = context.createGain();
-    master.gain.value = masterMuted ? 0 : masterVolume * 0.55;
+    master.gain.value = masterMuted ? 0 : masterVolume * MASTER_LEVEL;
     const limiter = context.createDynamicsCompressor();
-    limiter.threshold.value = -6;
-    limiter.knee.value = 6;
-    limiter.ratio.value = 20;
-    limiter.attack.value = 0.003;
-    limiter.release.value = 0.1;
+    configureLimiter(limiter);
     const safety = context.createWaveShaper();
     safety.curve = safetyCurve();
     safety.oversample = '2x';
@@ -89,12 +101,12 @@ export async function ensureAudioReady(): Promise<boolean> {
 
 export function setMasterVolume(volume: number): void {
   masterVolume = limit(volume, 0, 1);
-  if (context) smooth(master.gain, masterMuted ? 0 : masterVolume * 0.55, context);
+  if (context) smooth(master.gain, masterMuted ? 0 : masterVolume * MASTER_LEVEL, context);
 }
 
 export function setMasterMuted(muted: boolean): void {
   masterMuted = muted;
-  if (context) smooth(master.gain, masterMuted ? 0 : masterVolume * 0.55, context);
+  if (context) smooth(master.gain, masterMuted ? 0 : masterVolume * MASTER_LEVEL, context);
 }
 
 const activeSampleSources = new Set<AudioBufferSourceNode>();
@@ -126,11 +138,11 @@ export async function playSample(data: ArrayBuffer): Promise<void> {
   source.start();
 }
 
-export function loadSynthWorklet(): Promise<void> {
+export function loadAudioWorklet(): Promise<void> {
   const ctx = getAudioContext();
   if (!workletLoading) {
     const base = (import.meta as ImportMeta & { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
-    workletLoading = ctx.audioWorklet.addModule(`${base}synth-processor.js`)
+    workletLoading = ctx.audioWorklet.addModule(`${base}audio-worklet.js`)
       .catch(error => { workletLoading = undefined; throw error; });
   }
   return workletLoading;
