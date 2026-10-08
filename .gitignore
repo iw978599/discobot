@@ -18,3 +18,6 @@ logs/
 
 # User data
 saved-patterns.json
+playwright-report/
+test-results/
+*.tsbuildinfo

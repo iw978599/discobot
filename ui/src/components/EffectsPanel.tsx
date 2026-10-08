@@ -28,6 +28,10 @@ export default function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProp
     <section className="effects-panel">
       <div className="effects-panel-header">
         <h3>Effects Loop</h3>
+        <label className="effects-toggle">
+          <input type="checkbox" aria-label="Effects loop enabled" checked={effectsLoop.enabled} onChange={(event) => onChange({ enabled: event.target.checked })} />
+          <span>Enabled</span>
+        </label>
       </div>
 
       <div className="effects-grid">
@@ -38,6 +42,7 @@ export default function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProp
               <input
                 type="checkbox"
                 checked={effectsLoop.drive.enabled}
+                aria-label="Drive enabled"
                 onChange={(e) => onChange({ drive: { ...effectsLoop.drive, enabled: e.target.checked } })}
               />
               <span>On</span>
@@ -74,6 +79,7 @@ export default function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProp
               <input
                 type="checkbox"
                 checked={effectsLoop.phaser.enabled}
+                aria-label="Phaser enabled"
                 onChange={(e) => onChange({ phaser: { ...effectsLoop.phaser, enabled: e.target.checked } })}
               />
               <span>On</span>
@@ -101,6 +107,16 @@ export default function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProp
               color="#3b82f6"
             />
             <Knob
+              label="Feedback"
+              value={effectsLoop.phaser.feedback}
+              min={0}
+              max={0.95}
+              displayValue={`${Math.round(effectsLoop.phaser.feedback * 100)}%`}
+              parseInputValue={parsePercent}
+              onChange={(value) => onChange({ phaser: { ...effectsLoop.phaser, feedback: value } })}
+              color="#3b82f6"
+            />
+            <Knob
               label="Mix"
               value={effectsLoop.phaser.mix}
               min={0}
@@ -120,6 +136,7 @@ export default function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProp
               <input
                 type="checkbox"
                 checked={effectsLoop.delay.enabled}
+                aria-label="Delay enabled"
                 onChange={(e) => onChange({ delay: { ...effectsLoop.delay, enabled: e.target.checked } })}
               />
               <span>On</span>
@@ -167,6 +184,7 @@ export default function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProp
               <input
                 type="checkbox"
                 checked={effectsLoop.reverb.enabled}
+                aria-label="Reverb enabled"
                 onChange={(e) => onChange({ reverb: { ...effectsLoop.reverb, enabled: e.target.checked } })}
               />
               <span>On</span>

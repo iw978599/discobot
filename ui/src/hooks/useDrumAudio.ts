@@ -1,141 +1,73 @@
-/**
- * Hook for drum audio playback in the browser
- * Uses DrumSynthesizer from engine instead of duplicating code
- */
-
-import { useRef } from 'react';
-import { DrumInstrument, DrumSettings } from '../types';
+import { useRef, useEffect } from 'react';
+import type { DrumInstrument, DrumSettings, DrumKitId, FxSendLevels } from '../types';
 import { DrumSynthesizer } from '@discord-synth/engine';
+import { createAudioLane, getAudioContext, ensureAudioReady, setEffectsLoop } from './browserAudio';
 
 export function useDrumAudio() {
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const masterGainRef = useRef<GainNode | null>(null);
-  const isResumingRef = useRef<boolean>(false);
+  const laneRef = useRef<ReturnType<typeof createAudioLane> | null>(null);
+  const volumeRef = useRef(1);
+  const sendsRef = useRef<FxSendLevels>({ reverb: 0, delay: 0, drive: 0, phaser: 0 });
+  const returnRef = useRef(1);
+  const kitRef = useRef<DrumKitId>('clean-analog');
+  const sourcesRef = useRef(new Set<AudioBufferSourceNode>());
+  const openHatRef = useRef<{ source: AudioBufferSourceNode; gain: GainNode } | null>(null);
+  const generationRef = useRef(0);
 
-  function getAudioContext(): AudioContext {
-    if (!audioCtxRef.current) {
-      audioCtxRef.current = new AudioContext();
+  function getLane() {
+    if (!laneRef.current) {
+      laneRef.current = createAudioLane('drums');
+      laneRef.current.setVolume(volumeRef.current);
+      laneRef.current.setSends(sendsRef.current, returnRef.current);
     }
-    return audioCtxRef.current;
+    return laneRef.current;
   }
-
-  function getMasterGain(): GainNode {
-    if (masterGainRef.current) return masterGainRef.current;
-    const ctx = getAudioContext();
-    const gain = ctx.createGain();
-    gain.gain.value = 1;
-    gain.connect(ctx.destination);
-    masterGainRef.current = gain;
-    return gain;
+  function setVolume(value: number) { volumeRef.current = value; laneRef.current?.setVolume(value); }
+  function setFxSends(sends: FxSendLevels, fxReturn = 1) {
+    sendsRef.current = sends; returnRef.current = fxReturn;
+    laneRef.current?.setSends(sends, fxReturn);
   }
-
-  function setVolume(volume: number): void {
-    const gain = masterGainRef.current;
-    if (gain) gain.gain.value = volume;
-  }
-
-  function tryResume(): void {
-    const ctx = audioCtxRef.current;
-    if (ctx && ctx.state === 'suspended') {
-      ctx.resume().catch(() => {});
-    }
-  }
-
-  async function ensureAudioReady(): Promise<boolean> {
-    const ctx = getAudioContext();
-    if (ctx.state === 'running') return true;
-
-    if (ctx.state !== 'suspended') return false;
-
-    if (!isResumingRef.current) {
-      isResumingRef.current = true;
-      try {
-        await ctx.resume();
-      } finally {
-        isResumingRef.current = false;
-      }
-    } else {
-      while (ctx.state === 'suspended' && isResumingRef.current) {
-        await new Promise(resolve => setTimeout(resolve, 10));
-      }
-    }
-
-    return ctx.state !== 'suspended';
-  }
+  function setKit(kit: DrumKitId) { kitRef.current = kit; }
 
   async function playDrumHit(instrument: DrumInstrument, settings: DrumSettings, mutedOrVelocity: boolean | number = false) {
-    const muted = typeof mutedOrVelocity === 'boolean' ? mutedOrVelocity : false;
+    if (mutedOrVelocity === true) return;
+    const generation = generationRef.current;
+    if (!await ensureAudioReady() || generation !== generationRef.current) return;
     const velocity = typeof mutedOrVelocity === 'number' ? mutedOrVelocity : 1;
-    if (muted) return;
-
-    try {
-      tryResume();
-      const ready = await ensureAudioReady();
-      if (!ready) return;
-      const ctx = getAudioContext();
-
-      const sampleRate = ctx.sampleRate;
-
-      // Use DrumSynthesizer from engine (no code duplication!)
-      const pcm = DrumSynthesizer.renderHit(instrument, settings, sampleRate, { velocity });
-
-      let maxVal = 0;
-      for (let i = 0; i < pcm.length; i++) {
-        const a = Math.abs(pcm[i]);
-        if (a > maxVal) maxVal = a;
-      }
-      if (maxVal < 0.001) {
-        console.warn('Drum PCM output too quiet', {
-          instrument,
-          maxLevel: maxVal,
-          settings,
-          bufferLength: pcm.length,
-        });
-        return;
-      }
-
-      // Create and play audio buffer
-      const buffer = ctx.createBuffer(1, pcm.length, sampleRate);
-      buffer.getChannelData(0).set(pcm);
-
-      const source = ctx.createBufferSource();
-      source.buffer = buffer;
-
-      const gainNode = ctx.createGain();
-      gainNode.gain.value = 1.0;
-
-      const pan = Math.max(-1, Math.min(1, settings.pan ?? 0));
-      const panNode = ctx.createStereoPanner();
-      panNode.pan.value = pan;
-
-      source.connect(gainNode);
-      gainNode.connect(panNode);
-      panNode.connect(getMasterGain());
-      source.start();
-    } catch (error) {
-      console.error('Drum playback error:', {
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-        instrument,
-        settings,
-      });
+    const ctx = getAudioContext();
+    const variant = kitRef.current === 'punchy-modern' ? 'modern' : kitRef.current === 'lofi-dirty' ? 'dirty' : 'analog';
+    const pcm = DrumSynthesizer.renderHit(instrument, settings, ctx.sampleRate, { velocity, modelVariant: variant });
+    if (!pcm.length) return;
+    const buffer = ctx.createBuffer(1, pcm.length, ctx.sampleRate);
+    buffer.getChannelData(0).set(pcm);
+    const source = ctx.createBufferSource(), gain = ctx.createGain(), pan = ctx.createStereoPanner();
+    source.buffer = buffer;
+    pan.pan.value = Number.isFinite(settings.pan) ? Math.max(-1, Math.min(1, settings.pan!)) : 0;
+    source.connect(gain).connect(pan).connect(getLane().input);
+    if ((instrument === 'closedHH' || instrument === 'openHH') && openHatRef.current) {
+      const previous = openHatRef.current;
+      previous.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.003);
+      previous.source.stop(ctx.currentTime + 0.02);
     }
+    if (instrument === 'openHH') openHatRef.current = { source, gain };
+    sourcesRef.current.add(source);
+    source.onended = () => {
+      sourcesRef.current.delete(source);
+      if (openHatRef.current?.source === source) openHatRef.current = null;
+      source.disconnect(); gain.disconnect(); pan.disconnect();
+    };
+    source.start();
   }
-
+  function stopAllNotes() {
+    generationRef.current++;
+    sourcesRef.current.forEach(source => { try { source.stop(); } catch { /* already ended */ } });
+    sourcesRef.current.clear();
+    openHatRef.current = null;
+  }
   function dispose() {
-    if (audioCtxRef.current) {
-      audioCtxRef.current.close().catch((err) => {
-        console.error('Error closing drum audio context:', err);
-      });
-      audioCtxRef.current = null;
-    }
+    stopAllNotes();
+    laneRef.current?.dispose();
+    laneRef.current = null;
   }
-
-  return {
-    ensureAudioReady,
-    tryResume,
-    playDrumHit,
-    setVolume,
-    dispose,
-  };
+  useEffect(() => dispose, []);
+  return { ensureAudioReady, tryResume: () => { void ensureAudioReady(); }, playDrumHit, setVolume, setFxSends, setKit, setEffectsLoop, stopAllNotes, dispose };
 }

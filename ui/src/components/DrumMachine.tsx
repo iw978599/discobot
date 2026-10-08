@@ -94,6 +94,13 @@ const parseTuneSemitones = (input: string): number | null => {
   return n / 12;
 };
 
+const parsePan = (input: string): number | null => {
+  const text = input.trim().toUpperCase();
+  if (text === 'C') return 0;
+  const n = parseNumber(text);
+  return n === null ? null : (text.startsWith('L') ? -Math.abs(n) : n) / 50;
+};
+
 const parseExtraByInstrument: Record<DrumInstrument, (input: string) => number | null> = {
   kick: (input) => {
     const n = parseNumber(input);
@@ -156,10 +163,12 @@ export default function DrumMachine({
   drumAudio,
 }: DrumMachineProps) {
   const [selectedInstrument, setSelectedInstrument] = useState<DrumInstrument>('kick');
+  const [selectedVelocityStep, setSelectedVelocityStep] = useState(0);
   const allMuted = INSTRUMENTS.every((inst) => Boolean(drumState[inst].muted));
   const anySolo = INSTRUMENTS.some((inst) => Boolean(drumState[inst].solo));
 
   const handleStepClick = useCallback((step: number, shiftKey: boolean) => {
+    setSelectedVelocityStep(step);
     const hasSolo = INSTRUMENTS.some((inst) => drumState[inst].solo);
     const selectedTrack = drumState[selectedInstrument];
     const canPreview = !selectedTrack.muted && (!hasSolo || selectedTrack.solo);
@@ -173,9 +182,9 @@ export default function DrumMachine({
       return;
     }
 
-    if (canPreview) {
+    if (canPreview && !selectedTrack.steps[step]) {
       const settings = selectedTrack.settings;
-      drumAudio.playDrumHit(selectedInstrument, settings);
+      drumAudio.playDrumHit(selectedInstrument, settings, selectedTrack.stepVelocities?.[step] ?? 1);
     }
 
     const current = drumState[selectedInstrument].steps[step];
@@ -183,7 +192,6 @@ export default function DrumMachine({
   }, [drumState, selectedInstrument, onStepToggle, drumAudio, onStepVelocityChange]);
 
   const handleInstrumentSelect = useCallback((instrument: DrumInstrument) => {
-    console.log('Instrument selected:', instrument);
     setSelectedInstrument(instrument);
 
     const hasSolo = INSTRUMENTS.some((inst) => drumState[inst].solo);
@@ -193,7 +201,6 @@ export default function DrumMachine({
     // Play drum hit preview when selecting instrument
     if (canPreview) {
       const settings = selectedTrack.settings;
-      console.log('Playing drum hit for instrument:', instrument, settings);
       drumAudio.playDrumHit(instrument, settings);
     }
   }, [drumState, drumAudio]);
@@ -240,6 +247,7 @@ export default function DrumMachine({
               <div className="drum-kit-row">
                 <select
                   className="drum-kit-select"
+                  aria-label="Drum kit"
                   value={selectedDrumKitId}
                   disabled={drumKitsLoading || drumKits.length === 0}
                   onChange={(e) => { void handleKitSelect(e.target.value as DrumKitId); }}
@@ -331,13 +339,15 @@ export default function DrumMachine({
               <div className="drum-global-mix">
                 <button
                   className={`drum-global-mix-btn ${allMuted ? 'active' : ''}`}
+                  aria-pressed={allMuted}
                   onClick={() => onMuteAll(!allMuted)}
                   title={allMuted ? 'Unmute all drum tracks' : 'Mute all drum tracks'}
                 >
                   Mute All
                 </button>
                 <button
-                  className={`drum-global-mix-btn ${!anySolo ? 'active' : ''}`}
+                  className={`drum-global-mix-btn ${anySolo ? 'active' : ''}`}
+                  aria-pressed={anySolo}
                   onClick={onSoloAll}
                   title="Solo the currently soloed tracks or clear all solos"
                 >
@@ -355,6 +365,7 @@ export default function DrumMachine({
                   <DrumKnob
                     key={`${inst}-volume`}
                     label="Volume"
+                    ariaLabel={`${INSTRUMENT_LABELS[inst]} volume`}
                     value={drumState[inst].settings.volume}
                     displayValue={Math.round(drumState[inst].settings.volume * 100) + '%'}
                     parseInputValue={parsePercent}
@@ -367,6 +378,7 @@ export default function DrumMachine({
                   <DrumKnob
                     key={`${inst}-tone`}
                     label="Tone"
+                    ariaLabel={`${INSTRUMENT_LABELS[inst]} tone`}
                     value={drumState[inst].settings.tone}
                     displayValue={drumState[inst].settings.tone.toFixed(2)}
                     parseInputValue={parseNumber}
@@ -379,6 +391,7 @@ export default function DrumMachine({
                   <DrumKnob
                     key={`${inst}-tune`}
                     label="Tune"
+                    ariaLabel={`${INSTRUMENT_LABELS[inst]} tune`}
                     value={drumState[inst].settings.tune ?? 0}
                     min={-1}
                     max={1}
@@ -397,6 +410,7 @@ export default function DrumMachine({
                     <DrumKnob
                       key={`${inst}-extra`}
                       label={labels.knob}
+                      ariaLabel={`${INSTRUMENT_LABELS[inst]} ${labels.knob}`}
                       value={drumState[inst].settings.extra}
                       displayValue={labels.display(drumState[inst].settings.extra)}
                       parseInputValue={parseFn}
@@ -410,6 +424,7 @@ export default function DrumMachine({
                   <DrumKnob
                     key={`${inst}-humanize`}
                     label="Human"
+                    ariaLabel={`${INSTRUMENT_LABELS[inst]} humanize`}
                     value={drumState[inst].settings.humanize ?? 0.35}
                     displayValue={Math.round((drumState[inst].settings.humanize ?? 0.35) * 100) + '%'}
                     parseInputValue={parsePercent}
@@ -422,6 +437,7 @@ export default function DrumMachine({
                   <DrumKnob
                     key={`${inst}-pan`}
                     label="Pan"
+                    ariaLabel={`${INSTRUMENT_LABELS[inst]} pan`}
                     min={-1}
                     max={1}
                     value={drumState[inst].settings.pan ?? 0}
@@ -430,7 +446,7 @@ export default function DrumMachine({
                       if (Math.abs(p) < 0.05) return 'C';
                       return p < 0 ? `L${Math.round(Math.abs(p) * 50)}` : `R${Math.round(p * 50)}`;
                     })()}
-                    parseInputValue={parseTuneSemitones}
+                    parseInputValue={parsePan}
                     onChange={(v) => onSettingsChange(inst, { pan: v })}
                   />
                 ))}
@@ -441,6 +457,8 @@ export default function DrumMachine({
                 <div key={inst} className="drum-instrument-button-stack">
                   <button
                     className={`drum-instrument-btn ${selectedInstrument === inst ? 'selected' : ''}`}
+                    aria-label={`Select ${INSTRUMENT_LABELS[inst]}`}
+                    aria-pressed={selectedInstrument === inst}
                     style={{ '--drum-color': INSTRUMENT_COLORS[inst] } as React.CSSProperties}
                     onClick={() => handleInstrumentSelect(inst)}
                     title={`Select ${INSTRUMENT_LABELS[inst]} — click to preview sound`}
@@ -450,6 +468,8 @@ export default function DrumMachine({
                   <div className="drum-instrument-mix">
                     <button
                       className={`drum-instrument-mix-btn ${drumState[inst].muted ? 'active' : ''}`}
+                      aria-label={`Mute ${INSTRUMENT_LABELS[inst]}`}
+                      aria-pressed={Boolean(drumState[inst].muted)}
                       onClick={() => onMixChange(inst, { muted: !drumState[inst].muted })}
                       title={`${drumState[inst].muted ? 'Unmute' : 'Mute'} ${INSTRUMENT_LABELS[inst]}`}
                     >
@@ -457,6 +477,8 @@ export default function DrumMachine({
                     </button>
                     <button
                       className={`drum-instrument-mix-btn ${drumState[inst].solo ? 'active' : ''}`}
+                      aria-label={`Solo ${INSTRUMENT_LABELS[inst]}`}
+                      aria-pressed={Boolean(drumState[inst].solo)}
                       onClick={() => onMixChange(inst, { solo: !drumState[inst].solo })}
                       title={`${drumState[inst].solo ? 'Unsolo' : 'Solo'} ${INSTRUMENT_LABELS[inst]}`}
                     >
@@ -466,6 +488,7 @@ export default function DrumMachine({
                   {inst === 'crash' && (
                     <button
                       className="drum-cymbal-toggle"
+                      aria-label="Switch cymbal type"
                       onClick={() => {
                         const current = drumState.crash.settings.cymbalType || 'crash';
                         const next: CymbalType = current === 'crash' ? 'ride' : 'crash';
@@ -510,7 +533,9 @@ export default function DrumMachine({
                   onClick={() => {
                     const steps = [...drumState[selectedInstrument].steps];
                     const shifted = [steps[15], ...steps.slice(0, 15)];
+                    const velocities = drumState[selectedInstrument].stepVelocities ?? steps.map(() => 1);
                     shifted.forEach((active, i) => {
+                      onStepVelocityChange(selectedInstrument, i, velocities[(i + 15) % 16]);
                       if (active !== drumState[selectedInstrument].steps[i]) {
                         onStepToggle(selectedInstrument, i, active);
                       }
@@ -524,7 +549,9 @@ export default function DrumMachine({
                   className="drum-fill-btn"
                   onClick={() => {
                     const reversed = [...drumState[selectedInstrument].steps].reverse();
+                    const velocities = drumState[selectedInstrument].stepVelocities ?? reversed.map(() => 1);
                     reversed.forEach((active, i) => {
+                      onStepVelocityChange(selectedInstrument, i, velocities[15 - i]);
                       if (active !== drumState[selectedInstrument].steps[i]) {
                         onStepToggle(selectedInstrument, i, active);
                       }
@@ -539,7 +566,9 @@ export default function DrumMachine({
                   onClick={() => {
                     const steps = [...drumState[selectedInstrument].steps];
                     for (let i = 0; i < 8; i++) steps[i + 8] = steps[i];
+                    const velocities = drumState[selectedInstrument].stepVelocities ?? steps.map(() => 1);
                     steps.forEach((active, i) => {
+                      if (i >= 8) onStepVelocityChange(selectedInstrument, i, velocities[i - 8]);
                       if (active !== drumState[selectedInstrument].steps[i]) {
                         onStepToggle(selectedInstrument, i, active);
                       }
@@ -567,6 +596,8 @@ export default function DrumMachine({
                   <button
                     key={step}
                     className={`drum-step-btn ${stepBand} ${active ? 'active' : ''} ${isPlaying && currentStep === step ? 'current' : ''}`}
+                    aria-label={`${INSTRUMENT_LABELS[selectedInstrument]} step ${step + 1}`}
+                    aria-pressed={active}
                     style={{ '--drum-color': INSTRUMENT_COLORS[selectedInstrument] } as React.CSSProperties}
                     onClick={(e) => handleStepClick(step, e.shiftKey)}
                     title={active ? `Velocity: ${Math.round(vel * 100)}% (Shift+click to change)` : ''}
@@ -580,6 +611,18 @@ export default function DrumMachine({
             <div className="drum-step-note">
               Select an instrument, then program its 16 steps.
             </div>
+            <label className="drum-step-note">
+              Step {selectedVelocityStep + 1} velocity
+              <input
+                type="range"
+                aria-label={`${INSTRUMENT_LABELS[selectedInstrument]} step ${selectedVelocityStep + 1} velocity`}
+                min={0}
+                max={1}
+                step={0.01}
+                value={drumState[selectedInstrument].stepVelocities?.[selectedVelocityStep] ?? 1}
+                onChange={(event) => onStepVelocityChange(selectedInstrument, selectedVelocityStep, Number(event.target.value))}
+              />
+            </label>
           </div>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import './Keyboard.css';
 
 interface KeyboardProps {
@@ -22,49 +22,92 @@ const BLACK_KEYS = [
 
 export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0, holdEnabled = false, releaseSignal = false }: KeyboardProps) {
   const [activeNotes, setActiveNotes] = useState<Set<string>>(new Set());
+  const notesRef = useRef(new Set<string>());
+  const releaseRef = useRef(onNoteRelease);
+  releaseRef.current = onNoteRelease;
+  const releaseAll = () => {
+    notesRef.current.forEach((note) => releaseRef.current(note));
+    notesRef.current.clear();
+    setActiveNotes(new Set());
+  };
 
   const baseOctave = 3 + octaveShift;
 
   const octaves = useMemo(() => [baseOctave, baseOctave + 1, baseOctave + 2], [baseOctave]);
 
   useEffect(() => {
-    if (holdEnabled || activeNotes.size === 0) return;
-    activeNotes.forEach((note) => onNoteRelease(note));
-    setActiveNotes(new Set());
-  }, [holdEnabled, activeNotes, onNoteRelease]);
+    if (!holdEnabled) releaseAll();
+  }, [holdEnabled]);
 
   useEffect(() => {
-    if (activeNotes.size === 0) return;
-    activeNotes.forEach((note) => onNoteRelease(note));
-    setActiveNotes(new Set());
-  }, [releaseSignal, activeNotes, onNoteRelease]);
+    releaseAll();
+  }, [releaseSignal, octaveShift]);
+
+  useEffect(() => {
+    const cancel = () => releaseAll();
+    const visibility = () => { if (document.hidden) cancel(); };
+    window.addEventListener('blur', cancel);
+    document.addEventListener('visibilitychange', visibility);
+    return () => {
+      notesRef.current.forEach((note) => releaseRef.current(note));
+      notesRef.current.clear();
+      window.removeEventListener('blur', cancel);
+      document.removeEventListener('visibilitychange', visibility);
+    };
+  }, []);
 
   const handleNoteDown = (note: string) => {
-    if (activeNotes.has(note)) {
+    if (notesRef.current.has(note)) {
       if (holdEnabled) {
-        setActiveNotes((prev) => {
-          const next = new Set(prev);
-          next.delete(note);
-          return next;
-        });
+        notesRef.current.delete(note);
+        setActiveNotes(new Set(notesRef.current));
         onNoteRelease(note);
       }
       return;
     }
-    setActiveNotes((prev) => new Set(prev).add(note));
+    notesRef.current.add(note);
+    setActiveNotes(new Set(notesRef.current));
     onNotePlay(note);
   };
 
   const handleNoteUp = (note: string) => {
     if (holdEnabled) return;
-    setActiveNotes((prev) => {
-      if (!prev.has(note)) return prev;
-      const next = new Set(prev);
-      next.delete(note);
-      onNoteRelease(note);
-      return next;
-    });
+    if (!notesRef.current.delete(note)) return;
+    setActiveNotes(new Set(notesRef.current));
+    onNoteRelease(note);
   };
+
+  const keyEvents = (note: string) => ({
+    'aria-label': `Play ${note}`,
+    'aria-pressed': activeNotes.has(note),
+    style: { touchAction: 'none' },
+    onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.currentTarget.focus();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      handleNoteDown(note);
+    },
+    onPointerUp: () => handleNoteUp(note),
+    onPointerCancel: () => {
+      if (notesRef.current.delete(note)) {
+        onNoteRelease(note);
+        setActiveNotes(new Set(notesRef.current));
+      }
+    },
+    onLostPointerCapture: () => handleNoteUp(note),
+    onKeyDown: (event: React.KeyboardEvent<HTMLButtonElement>) => {
+      if (![' ', 'Enter'].includes(event.key)) return;
+      event.preventDefault();
+      if (!event.repeat) handleNoteDown(note);
+    },
+    onKeyUp: (event: React.KeyboardEvent<HTMLButtonElement>) => {
+      if (![' ', 'Enter'].includes(event.key)) return;
+      event.preventDefault();
+      handleNoteUp(note);
+    },
+    onBlur: () => handleNoteUp(note),
+  });
 
   const rangeLabel = `${WHITE_KEYS[0]}${baseOctave} - ${WHITE_KEYS[WHITE_KEYS.length - 1]}${baseOctave + 2}`;
 
@@ -86,9 +129,7 @@ export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0, h
                     className={`key white ${
                       activeNotes.has(fullNote) ? 'active' : ''
                     }`}
-                    onMouseDown={() => handleNoteDown(fullNote)}
-                    onMouseUp={() => handleNoteUp(fullNote)}
-                    onMouseLeave={() => handleNoteUp(fullNote)}
+                    {...keyEvents(fullNote)}
                   >
                     <span className="key-label">{note}</span>
                   </button>
@@ -105,10 +146,8 @@ export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0, h
                     className={`key black ${
                       activeNotes.has(fullNote) ? 'active' : ''
                     }`}
-                    style={{ left: `${black.offset * 14.28}%` }}
-                    onMouseDown={() => handleNoteDown(fullNote)}
-                    onMouseUp={() => handleNoteUp(fullNote)}
-                    onMouseLeave={() => handleNoteUp(fullNote)}
+                    {...keyEvents(fullNote)}
+                    style={{ left: `${black.offset * 14.28}%`, touchAction: 'none' }}
                   />
                 );
               })}

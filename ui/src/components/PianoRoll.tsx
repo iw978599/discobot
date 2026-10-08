@@ -31,8 +31,14 @@ export default function PianoRoll({
 
   useEffect(() => {
     const release = () => setMouseDown(false);
-    window.addEventListener('mouseup', release);
-    return () => window.removeEventListener('mouseup', release);
+    window.addEventListener('pointerup', release);
+    window.addEventListener('pointercancel', release);
+    window.addEventListener('blur', release);
+    return () => {
+      window.removeEventListener('pointerup', release);
+      window.removeEventListener('pointercancel', release);
+      window.removeEventListener('blur', release);
+    };
   }, []);
 
   const notes = useMemo(() => {
@@ -74,7 +80,7 @@ export default function PianoRoll({
 
       <div
         className="piano-roll-grid"
-        style={{ gridTemplateColumns: `minmax(58px, auto) repeat(${pattern.steps.length}, minmax(0, 1fr))` }}
+        style={{ gridTemplateColumns: `minmax(58px, auto) repeat(${pattern.steps.length}, minmax(28px, 1fr))` }}
       >
         <div className="piano-roll-corner" />
         {pattern.steps.map((_, stepIndex) => (
@@ -97,8 +103,27 @@ export default function PianoRoll({
                 <button
                   key={`${note}-${stepIndex}`}
                   className={`piano-roll-cell ${active ? 'active' : ''} ${isPlaying && currentStep === stepIndex ? 'playing' : ''} ${selectedStep === stepIndex ? 'selected' : ''}`}
-                  onMouseDown={() => handleCellDown(stepIndex, note)}
-                  onMouseEnter={() => handleCellEnter(stepIndex, note)}
+                  aria-label={`${note} step ${stepIndex + 1}`}
+                  aria-pressed={active}
+                  data-note={note}
+                  data-step={stepIndex}
+                  onPointerDown={(event) => {
+                    if (event.button !== 0) return;
+                    event.preventDefault();
+                    handleCellDown(stepIndex, note);
+                  }}
+                  onPointerEnter={() => handleCellEnter(stepIndex, note)}
+                  onPointerMove={(event) => {
+                    if (event.pointerType === 'mouse' || !mouseDown) return;
+                    const cell = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLButtonElement>('.piano-roll-cell');
+                    if (cell?.dataset.note && cell.dataset.step) handleCellEnter(Number(cell.dataset.step), cell.dataset.note);
+                  }}
+                  onClick={(event) => {
+                    if (event.detail !== 0) return;
+                    onStepSelect(stepIndex);
+                    onNoteAssign(stepIndex, active ? undefined : note);
+                  }}
+                  style={{ touchAction: 'none' }}
                   type="button"
                 />
               );

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Pattern, SavedPatternInfo, SavedPatternFull } from '../types';
-import { authFetch } from '../authClient';
+import { localRequest as authFetch } from '../services/localService';
 import './Sequencer.css';
 
 interface SequencerProps {
@@ -71,15 +71,26 @@ export default function Sequencer({
   const [savedPatterns, setSavedPatterns] = useState<SavedPatternInfo[]>([]);
   const [showAll, setShowAll] = useState(false);
   const [showManager, setShowManager] = useState(false);
+  const [error, setError] = useState('');
 
   const fetchSaved = async () => {
     try {
       const res = await authFetch('/patterns/saved');
-      if (res.ok) setSavedPatterns(await res.json());
-    } catch { /* ignore */ }
+      if (!res.ok) throw new Error('Unable to list saved patterns.');
+      setSavedPatterns(await res.json());
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to list saved patterns.'); }
   };
 
-  useEffect(() => { fetchSaved(); }, []);
+  useEffect(() => {
+    void fetchSaved();
+    const refresh = () => { void fetchSaved(); };
+    window.addEventListener('storage', refresh);
+    window.addEventListener('discobot:saved-patterns', refresh);
+    return () => {
+      window.removeEventListener('storage', refresh);
+      window.removeEventListener('discobot:saved-patterns', refresh);
+    };
+  }, []);
 
   const displayList = showAll ? savedPatterns : savedPatterns.slice(0, 5);
 
@@ -87,18 +98,19 @@ export default function Sequencer({
     if (!id) return;
     try {
       const res = await authFetch(`/patterns/saved/${id}`);
-      if (res.ok) {
-        const data: SavedPatternFull = await res.json();
-        onLoadSavedPattern(data, id);
-      }
-    } catch { /* ignore */ }
+      if (!res.ok) throw new Error('Saved pattern could not be loaded.');
+      const data: SavedPatternFull = await res.json();
+      onLoadSavedPattern(data, id);
+      setError('');
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Saved pattern could not be loaded.'); }
   };
 
   const handleDeleteSaved = async (id: string) => {
     try {
-      await authFetch(`/patterns/saved/${id}`, { method: 'DELETE' });
-      fetchSaved();
-    } catch { /* ignore */ }
+      const res = await authFetch(`/patterns/saved/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Saved pattern could not be deleted.');
+      void fetchSaved();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Saved pattern could not be deleted.'); }
   };
 
   if (!pattern) {
@@ -112,6 +124,7 @@ export default function Sequencer({
         <div className="sequencer-controls">
           <select
             value={pattern.id}
+            aria-label="Sequence pattern"
             onChange={(e) => {
               const selected = patterns.find((p) => p.id === e.target.value);
               if (selected) onPatternChange(selected);
@@ -125,6 +138,7 @@ export default function Sequencer({
           </select>
           <select
             value={pattern.steps.length}
+            aria-label="Sequence length"
             onChange={(e) => onStepCountChange(parseInt(e.target.value, 10) as 16 | 32)}
           >
             <option value={16}>16 steps</option>
@@ -135,7 +149,7 @@ export default function Sequencer({
 
       <div
         className="sequencer-grid"
-        style={{ gridTemplateColumns: `repeat(${pattern.steps.length}, minmax(0, 1fr))` }}
+        style={{ gridTemplateColumns: `repeat(${pattern.steps.length}, minmax(28px, 1fr))` }}
       >
         {pattern.steps.map((step, index) => (
           <div key={index} className="sequencer-column">
@@ -151,6 +165,8 @@ export default function Sequencer({
                 selectedStep === index ? 'selected' : ''
               }`}
               onClick={() => onStepChange(index)}
+              aria-label={`Select step ${index + 1}${step.note ? ` ${step.note}` : ''}`}
+              aria-pressed={selectedStep === index}
             >
               {step.note || ''}
               {step.note && (
@@ -166,11 +182,13 @@ export default function Sequencer({
       </div>
 
       <div className="sequencer-info">
+        {error && <p role="alert">{error}</p>}
         <div className="saved-patterns-bar">
           {savedPatterns.length > 0 && (
             <div className="saved-select-wrapper">
               <select
                 className="saved-select"
+                aria-label="Load saved pattern"
                 defaultValue=""
                 onChange={(e) => {
                   if (e.target.value) handleSelectSaved(e.target.value);
@@ -210,6 +228,7 @@ export default function Sequencer({
                 Vel
                 <input
                   type="range"
+                  aria-label={`Step ${selectedStep + 1} velocity`}
                   min={0}
                   max={1}
                   step={0.01}

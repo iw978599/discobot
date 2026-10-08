@@ -6,48 +6,15 @@ import DrumMachine from './components/DrumMachine';
 import EffectsPanel from './components/EffectsPanel';
 import MixerPanel from './components/MixerPanel';
 import MidiPanel from './components/MidiPanel';
-import { useWebSocket } from './hooks/useWebSocket';
 import { useSynthAudio } from './hooks/useSynthAudio';
 import { useDrumAudio } from './hooks/useDrumAudio';
-import { usePatternAudio } from './hooks/usePatternAudio';
 import { MidiMode, MidiMessage, useMidiInput } from './hooks/useMidiInput';
-import { getWebSocketUrl } from './config';
 import { Pattern, SynthParameters, SavedPatternInfo, SavedPatternFull, SavedSynthData, DrumState, DrumInstrument, DrumSettings, DrumKitDefinition, DrumKitId, EffectsLoopState, FxSendLevels, SynthModelId, SynthModelParams } from './types';
-import { authFetch, exchangeLoginToken, fetchSessionInfo, setAuthContext, compatibilityLogin } from './authClient';
+import { localRequest as authFetch, localService } from './services/localService';
 import { downloadMidiFile, transposeNote } from './utils/midiExport';
 import { importMidiFile, readFileAsArrayBuffer, MidiImportResult } from './utils/midiImport';
 import { DEFAULT_SYNTH_MODEL_ID, createDefaultSynthModelParams, mapSynthModelToEngineParams, normalizeSynthModelId, normalizeSynthModelParams } from './synthModels';
 import './App.css';
-
-const SESSION_TOKEN_STORAGE_KEY = 'discobot_session_token';
-const CSRF_TOKEN_STORAGE_KEY = 'discobot_csrf_token';
-
-function writeAuthTokens(sessionToken: string, csrfToken: string) {
-  sessionStorage.setItem(SESSION_TOKEN_STORAGE_KEY, sessionToken);
-  sessionStorage.setItem(CSRF_TOKEN_STORAGE_KEY, csrfToken);
-}
-
-function clearAuthTokens() {
-  sessionStorage.removeItem(SESSION_TOKEN_STORAGE_KEY);
-  sessionStorage.removeItem(CSRF_TOKEN_STORAGE_KEY);
-  localStorage.removeItem(SESSION_TOKEN_STORAGE_KEY);
-  localStorage.removeItem(CSRF_TOKEN_STORAGE_KEY);
-}
-
-function readAuthTokens() {
-  const sessionToken = sessionStorage.getItem(SESSION_TOKEN_STORAGE_KEY);
-  const csrfToken = sessionStorage.getItem(CSRF_TOKEN_STORAGE_KEY);
-  if (sessionToken && csrfToken) return { sessionToken, csrfToken };
-  const migratedSessionToken = localStorage.getItem(SESSION_TOKEN_STORAGE_KEY);
-  const migratedCsrfToken = localStorage.getItem(CSRF_TOKEN_STORAGE_KEY);
-  if (migratedSessionToken && migratedCsrfToken) {
-    writeAuthTokens(migratedSessionToken, migratedCsrfToken);
-    localStorage.removeItem(SESSION_TOKEN_STORAGE_KEY);
-    localStorage.removeItem(CSRF_TOKEN_STORAGE_KEY);
-    return { sessionToken: migratedSessionToken, csrfToken: migratedCsrfToken };
-  }
-  return null;
-}
 
 const DEFAULT_PARAMS: SynthParameters = {
   hold: false,
@@ -125,11 +92,6 @@ interface SynthState {
   muted: boolean;
   solo: boolean;
   forceReleaseSignal: boolean;
-}
-
-interface PatternAudioPayload {
-  audio: string;
-  sampleRate: number;
 }
 
 function createDefaultDrumState(): DrumState {
@@ -583,8 +545,8 @@ function HelpModal({ open, onClose }: { open: boolean; onClose: () => void }) {
           <section>
             <h3>Quick start</h3>
             <ol className="help-list">
-              <li>Run <strong>/login</strong> in Discord and open the generated link.</li>
-              <li>Use <strong>/join</strong> in Discord to route playback to your voice channel.</li>
+              <li>Everything runs in your browser. No account or server is needed.</li>
+              <li>Saved arrangements and samples stay on this device in browser storage.</li>
               <li>Pick a step on a synth lane, then click a key (or paint in Piano Roll) to place notes.</li>
               <li>Program drum hits in <strong>Rhythm Composer</strong>, choose a kit, and shape tone/volume/extra per lane.</li>
               <li>Press <strong>Play All</strong> to start and <strong>Stop All</strong> to stop.</li>
@@ -626,7 +588,6 @@ function HelpModal({ open, onClose }: { open: boolean; onClose: () => void }) {
 function App() {
   const synthAudio = useSynthAudio();
   const drumAudio = useDrumAudio();
-  const patternAudio = usePatternAudio();
   const [synths, setSynths] = useState<SynthState[]>([]);
   const [selectedSynthId, setSelectedSynthId] = useState(1);
   const [drumState, setDrumState] = useState<DrumState>(createDefaultDrumState);
@@ -641,11 +602,7 @@ function App() {
   const [browserMuted, setBrowserMuted] = useState(false);
   const [browserVolume, setBrowserVolume] = useState(1.0);
   const [globalTempo, setGlobalTempo] = useState(120);
-  const [sessionToken, setSessionToken] = useState<string | null>(null);
-  const [csrfToken, setCsrfToken] = useState<string | null>(null);
-  const [sessionLabel, setSessionLabel] = useState('Unauthenticated');
-  const [connectedUsers, setConnectedUsers] = useState<string[]>([]);
-  const [authError, setAuthError] = useState<string | null>(null);
+  const [storageError, setStorageError] = useState<string | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [midiMode, setMidiMode] = useState<MidiMode>('live');
   const [midiChannel, setMidiChannel] = useState(1);
@@ -682,7 +639,6 @@ function App() {
   const isRestoringRef = useRef(false);
   const arpTimeoutsRef = useRef<number[]>([]);
   const lastDrumPreviewStepRef = useRef<number | null>(null);
-  const lastPatternAudioRef = useRef<PatternAudioPayload | null>(null);
 
   useEffect(() => {
     if (synths.length === 0) return;
@@ -701,8 +657,7 @@ function App() {
   useEffect(() => {
     synthAudio.setVolume(browserVolume);
     drumAudio.setVolume(browserVolume);
-    patternAudio.setVolume(browserVolume);
-  }, [browserVolume, synthAudio, drumAudio, patternAudio]);
+  }, [browserVolume, synthAudio, drumAudio]);
 
   useEffect(() => {
     if (synths.length === 0) return;
@@ -723,7 +678,6 @@ function App() {
     return () => {
       synthAudio.dispose();
       drumAudio.dispose();
-      patternAudio.dispose();
       arpTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
       arpTimeoutsRef.current = [];
     };
@@ -733,7 +687,6 @@ function App() {
     function resumeAudioContexts() {
       if (synthAudio) synthAudio.tryResume();
       if (drumAudio) drumAudio.tryResume();
-      if (patternAudio) patternAudio.tryResume();
     }
     window.addEventListener('click', resumeAudioContexts);
     window.addEventListener('keydown', resumeAudioContexts);
@@ -741,14 +694,7 @@ function App() {
       window.removeEventListener('click', resumeAudioContexts);
       window.removeEventListener('keydown', resumeAudioContexts);
     };
-  }, [synthAudio, drumAudio, patternAudio]);
-
-  useEffect(() => {
-    patternAudio.setMuted(browserMuted);
-    if (!browserMuted && lastPatternAudioRef.current && synthsRef.current.some((s) => s.isPlaying)) {
-      void patternAudio.playLoop(lastPatternAudioRef.current, false);
-    }
-  }, [browserMuted, patternAudio]);
+  }, [synthAudio, drumAudio]);
 
   const getHistoryKey = useCallback((synthId: number, patternId: string) => `${synthId}:${patternId}`, []);
 
@@ -896,64 +842,6 @@ function App() {
     }
   }, [resolveHistoryTarget, getSnapshot, applySnapshot]);
 
-  const handleUnauthorized = useCallback(() => {
-    setSessionToken(null);
-    setCsrfToken(null);
-    setSessionLabel('Session expired');
-    setAuthError('Session expired or unauthorized. Use /login in Discord to reconnect.');
-    clearAuthTokens();
-  }, []);
-
-  useEffect(() => {
-    setAuthContext(sessionToken, csrfToken, handleUnauthorized);
-  }, [sessionToken, csrfToken, handleUnauthorized]);
-
-  useEffect(() => {
-    const initializeAuth = async () => {
-      const params = new URLSearchParams(window.location.search);
-      const loginToken = params.get('loginToken');
-      try {
-        if (loginToken) {
-          const data = await exchangeLoginToken(loginToken);
-          const nextSessionToken = data.sessionToken as string;
-          const nextCsrfToken = data.csrfToken as string;
-          setSessionToken(nextSessionToken);
-          setCsrfToken(nextCsrfToken);
-          setSessionLabel(`${data.session.username} (${data.session.role})`);
-          writeAuthTokens(nextSessionToken, nextCsrfToken);
-          params.delete('loginToken');
-          const nextUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`;
-          window.history.replaceState({}, '', nextUrl);
-          return;
-        }
-
-        const storedAuth = readAuthTokens();
-        if (storedAuth) {
-          const data = await fetchSessionInfo(storedAuth.sessionToken);
-          setSessionToken(storedAuth.sessionToken);
-          setCsrfToken(storedAuth.csrfToken);
-          setSessionLabel(`${data.session.username} (${data.session.role})`);
-          return;
-        }
-
-        setAuthError('Use /login in Discord to link this browser session.');
-        try {
-          const compatData = await compatibilityLogin();
-          setSessionToken(compatData.sessionToken);
-          setCsrfToken(compatData.csrfToken);
-          setSessionLabel('Local User (owner)');
-          writeAuthTokens(compatData.sessionToken, compatData.csrfToken);
-          setAuthError(null);
-          return;
-        } catch {
-        }
-      } catch {
-        setAuthError('Login token invalid or expired. Run /login in Discord again.');
-      }
-    };
-    void initializeAuth();
-  }, []);
-
   useEffect(() => {
     if (!helpOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1098,7 +986,8 @@ function App() {
         if (message.data.drumFx) setDrumFx(normalizeDrumFx(message.data.drumFx));
         if (message.data.effectsLoop) setEffectsLoop(normalizeEffectsLoop(message.data.effectsLoop));
         if (message.data.tempo) setGlobalTempo(message.data.tempo);
-        if (Array.isArray(message.data.connectedUsers)) setConnectedUsers(message.data.connectedUsers);
+        if (typeof message.data.drumMasterVolume === 'number') setDrumMasterVolume(message.data.drumMasterVolume);
+        if (typeof message.data.drumSwing === 'number') setDrumSwing(message.data.drumSwing);
         break;
       }
       case 'synthUpdate': {
@@ -1184,28 +1073,11 @@ function App() {
       }
       case 'sequencerStop': {
         const { synthId } = message.data;
-        const hasOtherPlayingSynth = synthsRef.current.some((s) => s.id !== synthId && s.isPlaying);
-        if (!hasOtherPlayingSynth) {
-          patternAudio.stop();
-          lastPatternAudioRef.current = null;
-        }
         if (synthId === 1) lastDrumPreviewStepRef.current = null;
         synthAudio.stopAllNotes();
         setSynths(prev => prev.map(s =>
           s.id === synthId ? { ...s, isPlaying: false, currentStep: 0, forceReleaseSignal: !s.forceReleaseSignal } : s
         ));
-        break;
-      }
-      case 'patternAudio': {
-        const { audio, sampleRate } = message.data || {};
-        if (typeof audio === 'string' && audio.length > 0) {
-          const payload = {
-            audio,
-            sampleRate: typeof sampleRate === 'number' && Number.isFinite(sampleRate) && sampleRate > 1000 ? sampleRate : 48000,
-          };
-          lastPatternAudioRef.current = payload;
-          void patternAudio.playLoop(payload, browserMutedRef.current);
-        }
         break;
       }
       case 'tempoChange': {
@@ -1222,8 +1094,7 @@ function App() {
         const synthStepCount = Math.max(1, targetSynth?.pattern?.steps.length || 16);
         const normalizedStep = ((step % synthStepCount) + synthStepCount) % synthStepCount;
         const targetStep = targetSynth?.pattern?.steps[normalizedStep];
-        const hasRenderedLoopAudio = patternAudio.isActive();
-        if (!hasRenderedLoopAudio && canPlaySynth && targetSynth?.synthParams && targetStep?.active && targetStep.note) {
+        if (canPlaySynth && targetSynth?.synthParams && targetStep?.active && targetStep.note) {
           const barDurationSeconds = (60 / Math.max(20, globalTempo)) * 4;
           const stepWindowSeconds = barDurationSeconds / synthStepCount;
           triggerSynthNote(targetSynth.synthParams, targetStep.note, stepWindowSeconds, targetStep.velocity);
@@ -1232,7 +1103,7 @@ function App() {
           s.id === synthId ? { ...s, currentStep: step } : s
         ));
         const ds = drumStateRef.current;
-        if (!hasRenderedLoopAudio && ds && synthId === 1) {
+        if (ds && synthId === 1) {
           const drumStep = Math.floor((normalizedStep / synthStepCount) * 16) % 16;
           if (lastDrumPreviewStepRef.current === drumStep) break;
           lastDrumPreviewStepRef.current = drumStep;
@@ -1327,14 +1198,22 @@ function App() {
         if (message.data.effectsLoop) setEffectsLoop(normalizeEffectsLoop(message.data.effectsLoop));
         break;
       }
-      case 'connectedUsers': {
-        if (Array.isArray(message.data.users)) setConnectedUsers(message.data.users);
+      case 'storageError': {
+        setStorageError(message.data.message);
         break;
       }
     }
-  }, [synthAudio, drumAudio, triggerSynthNote, globalTempo, patternAudio]);
+  }, [synthAudio, drumAudio, triggerSynthNote, globalTempo]);
 
-  const connected = useWebSocket(sessionToken ? getWebSocketUrl(sessionToken) : null, handleMessage);
+  const messageHandlerRef = useRef(handleMessage);
+  messageHandlerRef.current = handleMessage;
+  useEffect(() => {
+    localService.initialize({
+      synthParams: DEFAULT_PARAMS, drumState: createDefaultDrumState(),
+      effectsLoop: DEFAULT_EFFECTS_LOOP, drumFx: DEFAULT_DRUM_FX,
+    });
+    return localService.subscribe(message => messageHandlerRef.current(message));
+  }, []);
 
 
   const handleRemoveSynth = useCallback(async (synthId: number) => {
@@ -1418,7 +1297,6 @@ function App() {
       await Promise.all([
         synthAudio.ensureAudioReady(),
         drumAudio.ensureAudioReady(),
-        patternAudio.ensureAudioReady(),
       ]);
       const playResponses = await Promise.all(playableSynths.map(async (s) => {
         const response = await authFetch('/sequencer/play', {
@@ -1426,21 +1304,7 @@ function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ synthId: s.id, patternId: s.pattern!.id }),
         });
-        let patternAudioPayload: PatternAudioPayload | null = null;
-        try {
-          const data = await response.json() as { patternAudio?: { audio?: string; sampleRate?: number } };
-          if (typeof data.patternAudio?.audio === 'string' && data.patternAudio.audio.length > 0) {
-            patternAudioPayload = {
-              audio: data.patternAudio.audio,
-              sampleRate: typeof data.patternAudio.sampleRate === 'number' && Number.isFinite(data.patternAudio.sampleRate)
-                ? data.patternAudio.sampleRate
-                : 48000,
-            };
-          }
-        } catch {
-          // ignore
-        }
-        return { synthId: s.id, ok: response.ok, patternAudioPayload };
+        return { synthId: s.id, ok: response.ok };
       }));
 
       const startedSynthIds = playResponses.filter((entry) => entry.ok).map((entry) => entry.synthId);
@@ -1450,11 +1314,6 @@ function App() {
             ? { ...s, isPlaying: true, currentStep: 0 }
             : s
         )));
-      }
-      const latestPayload = [...playResponses].reverse().find((entry) => entry.patternAudioPayload)?.patternAudioPayload;
-      if (latestPayload) {
-        lastPatternAudioRef.current = latestPayload;
-        void patternAudio.playLoop(latestPayload, browserMutedRef.current);
       }
       return;
     }
@@ -1476,10 +1335,8 @@ function App() {
     }
     arpTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
     arpTimeoutsRef.current = [];
-    patternAudio.stop();
-    lastPatternAudioRef.current = null;
     synthAudio.stopAllNotes();
-  }, [synthAudio, drumAudio, patternAudio]);
+  }, [synthAudio, drumAudio]);
 
   const clearActiveSavedPattern = useCallback(() => {
     setActiveSavedPattern(null);
@@ -1491,6 +1348,9 @@ function App() {
     ));
     activeHistoryKeyRef.current = getHistoryKey(synthId, pattern.id);
     clearActiveSavedPattern();
+    await authFetch(`/synth/${synthId}/patterns/${pattern.id}`, {
+      method: 'PUT', body: JSON.stringify(pattern),
+    });
   }, [clearActiveSavedPattern, getHistoryKey]);
 
   const handleStepChange = useCallback(async (synthId: number, stepIndex: number) => {
@@ -1826,6 +1686,7 @@ function App() {
         drumState: drumStateRef.current,
         drumKitId: selectedDrumKitIdRef.current,
         drumMasterVolume,
+        drumSwing,
         drumFx: drumFxRef.current,
         effectsLoop: effectsLoopRef.current,
         synths: allSynthsData,
@@ -1851,7 +1712,7 @@ function App() {
       console.error('Pattern save error:', error);
       return false;
     }
-  }, [drumMasterVolume]);
+  }, [drumMasterVolume, drumSwing]);
 
   const refreshSavedPatterns = useCallback(async () => {
     setLoadingSavedPatterns(true);
@@ -1979,12 +1840,10 @@ function App() {
   }, [handleSavePattern, refreshSavedPatterns]);
 
   useEffect(() => {
-    if (!sessionToken) return;
     void refreshSavedPatterns();
-  }, [sessionToken, refreshSavedPatterns]);
+  }, [refreshSavedPatterns]);
 
   useEffect(() => {
-    if (!sessionToken) return;
     const fetchDrumKits = async () => {
       setDrumKitsLoading(true);
       setDrumKitsError(null);
@@ -2009,7 +1868,7 @@ function App() {
       }
     };
     void fetchDrumKits();
-  }, [sessionToken]);
+  }, []);
 
   const handleLoadSavedPattern = useCallback(async (
     synthId: number,
@@ -2573,18 +2432,11 @@ function App() {
                 height: '18px', margin: '0',
               }}
             />
-            <div className="status">
-              <span className={`status-indicator ${connected ? 'connected' : 'disconnected'}`} />
-              {connected ? 'Connected' : 'Disconnected'} · {sessionLabel}
-              {connected && connectedUsers.length > 0 && (
-                <span className="connected-users"> · {connectedUsers.join(', ')}</span>
-              )}
-            </div>
           </div>
         </div>
       </header>
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
-      {authError && <div className="auth-error-banner">{authError}</div>}
+      {storageError && <div role="alert">{storageError}</div>}
 
       <div className="app-content">
         <div className="app-main-left">

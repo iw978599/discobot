@@ -19,32 +19,32 @@ export const SYNTH_MODELS: SynthModelDefinition[] = [
   {
     id: 'minimoog-model-d',
     name: 'Minimoog Model D',
-    subtitle: 'Mono ladder-style lead/bass',
+    subtitle: 'Analog-inspired subtractive lead/bass',
     macros: [
-      { key: 'macro1', label: 'Drive' },
-      { key: 'macro2', label: 'Ladder' },
-      { key: 'macro3', label: 'Glide' },
+      { key: 'macro1', label: 'Detune' },
+      { key: 'macro2', label: 'Resonance' },
+      { key: 'macro3', label: 'Brightness' },
       { key: 'macro4', label: 'Contour' },
     ],
   },
   {
     id: 'juno-106',
     name: 'Juno-106',
-    subtitle: 'Poly analog chorus',
+    subtitle: 'Soft analog-inspired poly voice',
     macros: [
-      { key: 'macro1', label: 'Sub' },
-      { key: 'macro2', label: 'Chorus' },
-      { key: 'macro3', label: 'LFO' },
-      { key: 'macro4', label: 'Warmth' },
+      { key: 'macro1', label: 'Detune' },
+      { key: 'macro2', label: 'Resonance' },
+      { key: 'macro3', label: 'Brightness' },
+      { key: 'macro4', label: 'Contour' },
     ],
   },
   {
     id: 'dx7',
     name: 'DX7',
-    subtitle: 'FM macro voice',
+    subtitle: 'DX-inspired sine voice (not FM emulation)',
     macros: [
-      { key: 'macro1', label: 'Ratio' },
-      { key: 'macro2', label: 'Index' },
+      { key: 'macro1', label: 'Detune' },
+      { key: 'macro2', label: 'Resonance' },
       { key: 'macro3', label: 'Bright' },
       { key: 'macro4', label: 'Pluck' },
     ],
@@ -54,20 +54,20 @@ export const SYNTH_MODELS: SynthModelDefinition[] = [
     name: 'TB-303',
     subtitle: 'Acid bassline',
     macros: [
-      { key: 'macro1', label: 'Accent' },
+      { key: 'macro1', label: 'Wave / Tune' },
       { key: 'macro2', label: 'Reso' },
-      { key: 'macro3', label: 'Env Mod' },
+      { key: 'macro3', label: 'Brightness' },
       { key: 'macro4', label: 'Decay' },
     ],
   },
   {
     id: 'prophet-5',
     name: 'Prophet-5',
-    subtitle: 'Classic analog poly',
+    subtitle: 'Analog-inspired poly voice',
     macros: [
-      { key: 'macro1', label: 'Spread' },
-      { key: 'macro2', label: 'Brass' },
-      { key: 'macro3', label: 'Slop' },
+      { key: 'macro1', label: 'Detune' },
+      { key: 'macro2', label: 'Resonance' },
+      { key: 'macro3', label: 'Brightness' },
       { key: 'macro4', label: 'Release' },
     ],
   },
@@ -75,7 +75,7 @@ export const SYNTH_MODELS: SynthModelDefinition[] = [
 
 export const DEFAULT_SYNTH_MODEL_ID: SynthModelId = 'generic';
 
-const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
+const clamp01 = (value: number): number => Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0.5;
 
 export function createDefaultSynthModelParams(): SynthModelParams {
   return { macro1: 0.5, macro2: 0.5, macro3: 0.5, macro4: 0.5 };
@@ -138,6 +138,7 @@ function mapModel(
       release: Number(range(config.release[0], config.release[1], params.macro4).toFixed(3)),
     },
     lfo1: {
+      sync: false,
       enabled: params.macro3 > 0.12,
       target: 'filter',
       waveform: 'triangle',

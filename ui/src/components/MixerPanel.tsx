@@ -56,6 +56,7 @@ export default function MixerPanel({
             <div className="mixer-fader-row">
               <input
                 type="range"
+                aria-label={`Synth ${synth.id} volume`}
                 className="mixer-fader"
                 min={0}
                 max={2}
@@ -76,6 +77,7 @@ export default function MixerPanel({
                   max={1}
                   step={0.01}
                   value={params.pan ?? 0}
+                  aria-label={`Synth ${synth.id} pan`}
                   onChange={(e) => onSynthPanChange(synth.id, parseFloat(e.target.value))}
                   title={`Pan: ${(params.pan ?? 0) > 0 ? 'R' : (params.pan ?? 0) < 0 ? 'L' : 'C'}${Math.abs(Math.round((params.pan ?? 0) * 100))}`}
                 />
@@ -89,6 +91,7 @@ export default function MixerPanel({
                   max={1}
                   step={0.01}
                   value={params.fxReturn ?? 0.85}
+                  aria-label={`Synth ${synth.id} FX return`}
                   onChange={(e) => onSynthFxReturnChange(synth.id, parseFloat(e.target.value))}
                   title={`FX Return: ${Math.round((params.fxReturn ?? 0.85) * 100)}%`}
                 />
@@ -97,6 +100,8 @@ export default function MixerPanel({
             <div className="mixer-mute-solo">
               <button
                 className={`mixer-btn mute-btn ${synth.muted ? 'active' : ''}`}
+                aria-label={`Mute Synth ${synth.id}`}
+                aria-pressed={synth.muted}
                 onClick={() => onSynthMuteChange(synth.id, { muted: !synth.muted })}
                 title={synth.muted ? 'Unmute' : 'Mute'}
               >
@@ -104,6 +109,8 @@ export default function MixerPanel({
               </button>
               <button
                 className={`mixer-btn solo-btn ${synth.solo ? 'active' : ''}`}
+                aria-label={`Solo Synth ${synth.id}`}
+                aria-pressed={synth.solo}
                 onClick={() => onSynthSoloChange(synth.id, !synth.solo)}
                 title={synth.solo ? 'Unsolo' : 'Solo'}
               >
@@ -124,6 +131,7 @@ export default function MixerPanel({
               max={1}
               step={0.01}
               value={drumMasterVolume}
+              aria-label="Drum volume"
               onChange={(e) => onDrumMasterVolumeChange(parseFloat(e.target.value))}
               title={`Volume: ${Math.round(drumMasterVolume * 100)}%`}
             />
@@ -139,6 +147,7 @@ export default function MixerPanel({
                 max={1}
                 step={0.01}
                 value={effectsLoop.returns.drums}
+                aria-label="Drum FX return"
                 onChange={(e) => onDrumFxReturnChange(parseFloat(e.target.value))}
                 title={`FX Return: ${Math.round(effectsLoop.returns.drums * 100)}%`}
               />
@@ -169,6 +178,7 @@ export default function MixerPanel({
                 max={1}
                 step={0.01}
                 value={effectsLoop.returns.synth}
+                aria-label="Shared synth return"
                 onChange={(e) => onEffectsReturnChange('synth', parseFloat(e.target.value))}
                 title={`Synth Return: ${Math.round(effectsLoop.returns.synth * 100)}%`}
               />
@@ -183,6 +193,7 @@ export default function MixerPanel({
                 max={1}
                 step={0.01}
                 value={effectsLoop.returns.drums}
+                aria-label="Shared drum return"
                 onChange={(e) => onEffectsReturnChange('drums', parseFloat(e.target.value))}
                 title={`Drums Return: ${Math.round(effectsLoop.returns.drums * 100)}%`}
               />

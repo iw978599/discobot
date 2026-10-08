@@ -60,12 +60,64 @@ const parseMilliseconds = (input: string): number | null => {
   return ms === null ? null : ms / 1000;
 };
 
+const parsePan = (input: string): number | null => {
+  const text = input.trim().toUpperCase();
+  if (text === 'C') return 0;
+  const n = parseNumber(text);
+  return n === null ? null : (text.startsWith('L') ? -Math.abs(n) : n) / 100;
+};
+
+const parseSyncedRate = (input: string): number | null => parseNumber(input.includes('/') ? input.split('/').pop()! : input);
+
 const parseCutoff = (input: string): number | null => {
   const trimmed = input.trim().toLowerCase();
   const n = parseNumber(trimmed);
   if (n === null) return null;
   return trimmed.includes('k') ? n * 1000 : n;
 };
+
+export function createNamedSynthPresets(base: SynthParameters) {
+  const sounds: Array<[string, OscillatorType, number, number, number, number, number, number]> = [
+    ['Bass — Deep Sub', 'sine', 420, 0.8, 0.003, 0.18, 0.8, 0.12],
+    ['Bass — Acid Pulse', 'sawtooth', 780, 9, 0.003, 0.2, 0.35, 0.08],
+    ['Bass — Rubber Square', 'square', 1100, 3.2, 0.008, 0.24, 0.45, 0.16],
+    ['Lead — Bright Saw', 'sawtooth', 7600, 2.5, 0.012, 0.2, 0.7, 0.22],
+    ['Lead — Soft Triangle', 'triangle', 3800, 1.2, 0.035, 0.25, 0.65, 0.35],
+    ['Lead — Singing Pulse', 'square', 4400, 4, 0.06, 0.3, 0.72, 0.4],
+    ['Pad — Warm Cloud', 'triangle', 1800, 1.4, 0.75, 0.8, 0.82, 1.8],
+    ['Pad — Glass Air', 'sine', 9800, 0.8, 0.45, 0.9, 0.75, 1.4],
+    ['Pad — Analog Strings', 'sawtooth', 2600, 2, 0.65, 0.55, 0.8, 1.2],
+    ['Pluck — Bell', 'sine', 12000, 1, 0.002, 0.55, 0.05, 0.45],
+    ['Pluck — Wooden', 'triangle', 1900, 2, 0.002, 0.18, 0, 0.12],
+    ['Pluck — Short Wire', 'sawtooth', 4800, 3, 0.001, 0.12, 0, 0.08],
+  ];
+  return sounds.map(([name, type, frequency, q, attack, decay, sustain, release], index) => {
+    const pad = name.startsWith('Pad');
+    const bass = name.startsWith('Bass');
+    return {
+      id: `builtin-named-${index}`,
+      name,
+      builtIn: true,
+      modelId: 'generic' as SynthModelId,
+      modelParams: { macro1: 0.5, macro2: 0.5, macro3: 0.5, macro4: 0.5 },
+      params: {
+        ...base,
+        hold: false,
+        gain: bass ? 0.55 : 0.45,
+        pan: 0,
+        spread: pad ? 0.55 : 0,
+        oscillator: { type, detune: pad ? 7 : 0 },
+        filter: { ...base.filter, type: 'lowpass' as const, frequency, q },
+        envelope: { attack, decay, sustain, release },
+        lfo1: { ...base.lfo1, enabled: pad, sync: false, rate: 0.6, depth: 0.15, target: 'filter' as const },
+        lfo2: { ...base.lfo2, enabled: false, sync: false },
+        arpeggiator: { ...base.arpeggiator, enabled: false },
+        portamento: { ...base.portamento, enabled: false },
+        fxSends: { reverb: bass ? 0.03 : pad ? 0.5 : 0.22, delay: bass ? 0 : 0.18, drive: bass ? 0.2 : 0.05, phaser: pad ? 0.15 : 0 },
+      },
+    };
+  });
+}
 
 export default function SynthControls({
   parameters,
@@ -139,6 +191,7 @@ export default function SynthControls({
           <label className="synth-toggle" title={TOOLTIPS.hold}>
             <input
               type="checkbox"
+              aria-label="Hold notes"
               checked={Boolean(parameters.hold)}
               onChange={(e) => onParameterChange({ hold: e.target.checked })}
             />
@@ -149,6 +202,7 @@ export default function SynthControls({
             <label>MODEL</label>
             <select
               className="synth-select model-select"
+              aria-label="Synth model"
               value={synthModelId}
               onChange={(e) => onModelChange(e.target.value as SynthModelId)}
               title="Synth model - changes the character and behavior of the synthesizer"
@@ -165,6 +219,7 @@ export default function SynthControls({
           <div className="preset-controls">
             <select
               className="synth-select preset-select"
+              aria-label="Synth preset"
               value={selectedPresetId}
               onChange={(e) => {
                 setSelectedPresetId(e.target.value);
@@ -181,19 +236,22 @@ export default function SynthControls({
             <input
               className="preset-name-input"
               placeholder="Save preset"
+              aria-label="Preset name"
               value={presetName}
               onChange={(e) => setPresetName(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
-                  onSavePreset(presetName);
+                  if (!presetName.trim()) return;
+                  onSavePreset(presetName.trim());
                   setPresetName('');
                 }
               }}
             />
             <button
               className="octave-shift-btn"
+              disabled={!presetName.trim()}
               onClick={() => {
-                onSavePreset(presetName);
+                onSavePreset(presetName.trim());
                 setPresetName('');
               }}
             >
@@ -218,6 +276,7 @@ export default function SynthControls({
             <label className="synth-toggle" title="Enable arpeggiator for this synth">
               <input
                 type="checkbox"
+                aria-label="Arpeggiator enabled"
                 checked={parameters.arpeggiator.enabled}
                 onChange={(e) => updateArpeggiator({ enabled: e.target.checked })}
               />
@@ -226,6 +285,7 @@ export default function SynthControls({
             <span className="octave-shift-value">ARP</span>
             <select
               className="synth-select arp-select"
+              aria-label="Arpeggiator mode"
               value={parameters.arpeggiator.mode}
               onChange={(e) => updateArpeggiator({ mode: e.target.value as SynthParameters['arpeggiator']['mode'] })}
             >
@@ -240,6 +300,7 @@ export default function SynthControls({
             <select
               className="synth-select arp-select"
               value={parameters.arpeggiator.rate}
+              aria-label="Arpeggiator rate"
               onChange={(e) => updateArpeggiator({ rate: e.target.value as SynthParameters['arpeggiator']['rate'] })}
             >
               <option value="1/4">1/4</option>
@@ -295,6 +356,7 @@ export default function SynthControls({
               <label>WAVE</label>
               <select
                 value={parameters.oscillator.type}
+                aria-label="Oscillator waveform"
                 onChange={(e) => updateOscillator({ type: e.target.value as OscillatorType })}
                 className="synth-select"
               >
@@ -324,6 +386,7 @@ export default function SynthControls({
             <div className="synth-filter-type-row">
               <select
                 className="synth-filter-type-select"
+                aria-label="Filter type"
                 value={parameters.filter.type || 'lowpass'}
                 onChange={(e) => updateFilter({ type: e.target.value as 'lowpass' | 'highpass' | 'bandpass' | 'notch' })}
               >
@@ -365,6 +428,7 @@ export default function SynthControls({
               <input
                 type="checkbox"
                 checked={parameters.lfo1.enabled}
+                aria-label="LFO 1 enabled"
                 onChange={(e) => updateLfo('lfo1', { enabled: e.target.checked })}
               />
               <span className="synth-toggle-slider" />
@@ -375,6 +439,7 @@ export default function SynthControls({
               <label>WAVE</label>
               <select
                 value={parameters.lfo1.waveform}
+                aria-label="LFO 1 waveform"
                 onChange={(e) => updateLfo('lfo1', { waveform: e.target.value as OscillatorType })}
                 className="synth-select"
                 disabled={!parameters.lfo1.enabled}
@@ -389,6 +454,7 @@ export default function SynthControls({
               <label>TARGET</label>
               <select
                 value={parameters.lfo1.target}
+                aria-label="LFO 1 target"
                 onChange={(e) => updateLfo('lfo1', { target: e.target.value as 'pitch' | 'filter' })}
                 className="synth-select"
                 disabled={!parameters.lfo1.enabled}
@@ -408,6 +474,7 @@ export default function SynthControls({
                 <input
                   type="checkbox"
                   checked={parameters.lfo1.sync ?? false}
+                  aria-label="LFO 1 tempo sync"
                   onChange={(e) => updateLfo('lfo1', { sync: e.target.checked })}
                   disabled={!parameters.lfo1.enabled}
                 />
@@ -423,6 +490,7 @@ export default function SynthControls({
                   ? `1/${Math.round(parameters.lfo1.rate || 4)}`
                   : `${parameters.lfo1.rate.toFixed(1)}Hz`}
                 onChange={(v) => updateLfo('lfo1', { rate: v })}
+                parseInputValue={parameters.lfo1.sync ? parseSyncedRate : parseNumber}
                 disabled={!parameters.lfo1.enabled}
                 color="#06b6d4"
                 tooltip="LFO rate - BPM sync converts to note values"
@@ -451,6 +519,7 @@ export default function SynthControls({
               <input
                 type="checkbox"
                 checked={parameters.lfo2.enabled}
+                aria-label="LFO 2 enabled"
                 onChange={(e) => updateLfo('lfo2', { enabled: e.target.checked })}
               />
               <span className="synth-toggle-slider" />
@@ -461,6 +530,7 @@ export default function SynthControls({
               <label>WAVE</label>
               <select
                 value={parameters.lfo2.waveform}
+                aria-label="LFO 2 waveform"
                 onChange={(e) => updateLfo('lfo2', { waveform: e.target.value as OscillatorType })}
                 className="synth-select"
                 disabled={!parameters.lfo2.enabled}
@@ -475,6 +545,7 @@ export default function SynthControls({
               <label>TARGET</label>
               <select
                 value={parameters.lfo2.target}
+                aria-label="LFO 2 target"
                 onChange={(e) => updateLfo('lfo2', { target: e.target.value as 'pitch' | 'filter' })}
                 className="synth-select"
                 disabled={!parameters.lfo2.enabled}
@@ -494,6 +565,7 @@ export default function SynthControls({
                 <input
                   type="checkbox"
                   checked={parameters.lfo2.sync ?? false}
+                  aria-label="LFO 2 tempo sync"
                   onChange={(e) => updateLfo('lfo2', { sync: e.target.checked })}
                   disabled={!parameters.lfo2.enabled}
                 />
@@ -509,6 +581,7 @@ export default function SynthControls({
                   ? `1/${Math.round(parameters.lfo2.rate || 4)}`
                   : `${parameters.lfo2.rate.toFixed(1)}Hz`}
                 onChange={(v) => updateLfo('lfo2', { rate: v })}
+                parseInputValue={parameters.lfo2.sync ? parseSyncedRate : parseNumber}
                 disabled={!parameters.lfo2.enabled}
                 color="#0891b2"
                 tooltip="LFO rate - BPM sync converts to note values"
@@ -569,7 +642,7 @@ export default function SynthControls({
                 const total = Math.max(0.01, attack + decay + 0.5 + release);
                 const xA = (attack / total) * 100;
                 const xD = xA + (decay / total) * 100;
-                const xS = xD + 50;
+                const xS = xD + (0.5 / total) * 100;
                 const xR = Math.min(100, xS + (release / total) * 100);
                 const sY = 60 - sustain * 50;
                 const points = `0,60 ${xA},10 ${xD},${sY} ${xS},${sY} ${xR},60`;
@@ -680,7 +753,7 @@ export default function SynthControls({
               step={0.01}
               displayValue={`${(parameters.gain * 100).toFixed(0)}%`}
               onChange={(v) => onParameterChange({ gain: v })}
-              parseInputValue={parsePercent(0, 2)}
+              parseInputValue={parsePercent(0, 1)}
               color="#ef4444"
               tooltip={TOOLTIPS.gain}
             />
@@ -710,6 +783,7 @@ export default function SynthControls({
               step={0.01}
               displayValue={parameters.pan === 0 ? 'C' : `${parameters.pan < 0 ? 'L' : 'R'}${Math.abs(Math.round(parameters.pan * 100))}`}
               onChange={(v) => onParameterChange({ pan: v })}
+              parseInputValue={parsePan}
               color="#8b5cf6"
               tooltip={TOOLTIPS.pan}
             />
@@ -730,6 +804,7 @@ export default function SynthControls({
                 <input
                   type="checkbox"
                   checked={parameters.portamento.enabled}
+                  aria-label="Portamento enabled"
                   onChange={(e) => updatePortamento({ enabled: e.target.checked })}
                 />
                 <span className="synth-toggle-slider" />
@@ -743,6 +818,7 @@ export default function SynthControls({
               step={0.001}
               displayValue={`${(parameters.portamento.glide * 1000).toFixed(0)}ms`}
               onChange={(v) => updatePortamento({ glide: v })}
+              parseInputValue={parseMilliseconds}
               disabled={!parameters.portamento.enabled}
               color="#8b5cf6"
               tooltip={TOOLTIPS.portamentoGlide}

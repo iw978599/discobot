@@ -50,10 +50,10 @@ export default function SynthUnit({
       <div className="synth-unit-header">
         <h2>Synth {synthId}</h2>
         <div className="synth-unit-header-actions">
-          <button className={`synth-mix-btn ${muted ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); onToggleMute(); }}>
+          <button aria-pressed={muted} className={`synth-mix-btn ${muted ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); onToggleMute(); }}>
             Mute
           </button>
-          <button className={`synth-mix-btn ${solo ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); onToggleSolo(); }}>
+          <button aria-pressed={solo} className={`synth-mix-btn ${solo ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); onToggleSolo(); }}>
             Solo
           </button>
           {showRemoveButton && onRemove && (

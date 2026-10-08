@@ -2,6 +2,7 @@ import { SynthParameters, OscillatorType } from './types';
 import { audioContextManager } from './AudioContextManager';
 import { clamp, noteToFrequency as utilNoteToFrequency, deepMerge } from './utils';
 import { AUDIO_MIXING } from './constants';
+import { ResonantFilter, oscillator, finiteClamp } from './dsp';
 
 export class Synthesizer {
   private static readonly PITCH_LFO_MAX_CENTS = 1200;
@@ -63,23 +64,18 @@ export class Synthesizer {
 
   static applyADSR(samples: Float32Array, sampleRate: number, attack: number, decay: number, sustain: number, release: number, totalDuration: number): Float32Array {
     const output = new Float32Array(samples.length);
-    const attackSamples = Math.floor(attack * sampleRate);
-    const decaySamples = Math.floor(decay * sampleRate);
-    const releaseSamples = Math.floor(release * sampleRate);
+    const attackSamples = Math.max(1, Math.floor(Math.max(0.002, attack) * sampleRate));
+    const decaySamples = Math.max(1, Math.floor(decay * sampleRate));
+    const releaseSamples = Math.max(1, Math.floor(Math.max(0.005, release) * sampleRate));
     const sustainStart = attackSamples + decaySamples;
-    const releaseStart = Math.max(sustainStart, samples.length - releaseSamples);
+    const releaseStart = Math.max(1, samples.length - Math.min(releaseSamples, Math.floor(samples.length * 0.5)));
+    const heldEnvelope = (i: number): number => i < attackSamples ? i / attackSamples
+      : i < sustainStart ? 1 - (1 - sustain) * ((i - attackSamples) / decaySamples) : sustain;
 
     for (let i = 0; i < samples.length; i++) {
       let envelope: number;
-      if (i < attackSamples) {
-        envelope = i / attackSamples;
-      } else if (i < sustainStart) {
-        envelope = 1 - (1 - sustain) * ((i - attackSamples) / decaySamples);
-      } else if (i < releaseStart) {
-        envelope = sustain;
-      } else {
-        envelope = sustain * (1 - (i - releaseStart) / releaseSamples);
-      }
+      envelope = i < releaseStart ? heldEnvelope(i)
+        : heldEnvelope(releaseStart) * (1 - (i - releaseStart) / Math.max(1, samples.length - releaseStart - 1));
       output[i] = samples[i] * Math.max(0, envelope);
     }
     return output;
@@ -98,29 +94,10 @@ export class Synthesizer {
   }
 
   static applyFilterType(samples: Float32Array, sampleRate: number, cutoff: number, q: number, type: string): Float32Array {
-    if (type === 'lowpass') return this.applyLowpass(samples, sampleRate, cutoff);
     const output = new Float32Array(samples.length);
-    const dt = 1 / sampleRate;
-    const w0 = 2 * Math.PI * cutoff / sampleRate;
-    const sinW0 = Math.sin(w0);
-    const cosW0 = Math.cos(w0);
-    const alpha = sinW0 / (2 * q);
-    let hp = 0, bp = 0, lp = samples[0];
+    const filter = new ResonantFilter();
     for (let i = 0; i < samples.length; i++) {
-      const x = samples[i];
-      const xPrev = i > 0 ? samples[i - 1] : x;
-      const lpPrev = i > 0 ? lp : x;
-      const bpPrev = i > 0 ? bp : 0;
-      const hpPrev = i > 0 ? hp : x;
-      bp = bpPrev + w0 * hpPrev;
-      lp = lpPrev + w0 * bpPrev;
-      hp = x - lpPrev - q * bp;
-      switch (type) {
-        case 'highpass': output[i] = hp; break;
-        case 'bandpass': output[i] = bp; break;
-        case 'notch': output[i] = x - bp; break;
-        default: output[i] = lp; break;
-      }
+      output[i] = filter.process(samples[i], sampleRate, cutoff, q, type);
     }
     return output;
   }
@@ -210,15 +187,16 @@ export class Synthesizer {
       ), 0);
       const pitchCents = pitchMod * Synthesizer.PITCH_LFO_MAX_CENTS;
       const currentFreq = detunedFreq * Math.pow(2, pitchCents / 1200);
-      phase += currentFreq / sampleRate;
-      samples[i] = Synthesizer.lfoValue(oscType, phase);
+      const step = finiteClamp(currentFreq / sampleRate, 0.000001, 0.45);
+      phase = (phase + step) % 1;
+      samples[i] = oscillator(oscType, phase, step);
       lfo1Phase += lfos[0].rate / sampleRate;
       lfo2Phase += lfos[1].rate / sampleRate;
     }
     const shapedSamples = Synthesizer.applyADSR(samples, sampleRate, attack, decay, sustain, release, duration);
     const output = new Float32Array(shapedSamples.length);
     const lfoState = [0, 0];
-    let filtered = 0;
+    const filter = new ResonantFilter();
     for (let i = 0; i < shapedSamples.length; i++) {
       lfoState[0] += lfos[0].rate / sampleRate;
       lfoState[1] += lfos[1].rate / sampleRate;
@@ -233,31 +211,9 @@ export class Synthesizer {
         20,
         20000
       );
-      const dt = 1 / sampleRate;
       const filterType = this.parameters.filter.type || 'lowpass';
-      const w0 = 2 * Math.PI * modulatedCutoff / sampleRate;
-      const sinW0 = Math.sin(w0);
       const q = clamp(this.parameters.filter.q, 0.1, 20);
-      const alpha = sinW0 / (2 * q);
-      if (filterType === 'lowpass') {
-        const rc = 1 / (2 * Math.PI * modulatedCutoff);
-        const a = dt / (rc + dt);
-        filtered = filtered + a * (shapedSamples[i] - filtered);
-        output[i] = filtered;
-      } else {
-        const x = shapedSamples[i];
-        const xPrev = i > 0 ? shapedSamples[i - 1] : x;
-        const bp = filtered + w0 * (i > 0 ? output[i - 1] : 0);
-        const lp = (i > 0 ? filtered : x) + w0 * bp;
-        const hp = x - (i > 0 ? filtered : x) - q * bp;
-        filtered = lp;
-        switch (filterType) {
-          case 'highpass': output[i] = hp; break;
-          case 'bandpass': output[i] = bp; break;
-          case 'notch': output[i] = x - bp; break;
-          default: output[i] = lp; break;
-        }
-      }
+      output[i] = filter.process(shapedSamples[i], sampleRate, modulatedCutoff, q, filterType);
     }
 
     let effected: Float32Array<ArrayBufferLike> = output;
@@ -285,7 +241,8 @@ export class Synthesizer {
     const master = clamp(this.parameters.gain, 0, 2);
     const vol = clamp(velocity, 0, 1);
     for (let i = 0; i < effected.length; i++) {
-      effected[i] *= vol * master * AUDIO_MIXING.SYNTH_MASTER_VOLUME;
+      const fade = Math.min(1, i / Math.max(1, sampleRate * 0.002), (effected.length - 1 - i) / Math.max(1, sampleRate * 0.005));
+      effected[i] = Math.tanh(effected[i] * vol * master * AUDIO_MIXING.SYNTH_MASTER_VOLUME) * Math.max(0, fade);
     }
 
     return effected as Float32Array;
@@ -301,7 +258,7 @@ export class Synthesizer {
       }
     }
     for (let i = 0; i < length; i++) {
-      mix[i] = clamp(mix[i], -1, 1);
+      mix[i] = Math.tanh(mix[i] * 0.5);
     }
     return mix;
   }
