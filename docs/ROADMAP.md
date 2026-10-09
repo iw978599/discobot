@@ -87,10 +87,12 @@ mono/slide and the drum voices. What it leaves open:
    work remaining.
 
 2. **Samples on the drum grid and as a synth source.** Drum lanes are done:
-   each lane can play an imported sample, live and in export. Still open:
-   samples do not travel with a project (file, link or sync), ready-made
-   sampled kits for the LinnDrum, DMX and TR-707, and a sample oscillator in
-   the synth.
+   each lane can play an imported sample, live and in export, and Import Kit
+   puts several files on the lanes at once, matched by their names. Sampled
+   kits for the LinnDrum, DMX and TR-707 will not be bundled: no recordings
+   were found that the project may redistribute, so people bring their own.
+   Still open: samples do not travel with a project (file, link or sync), and
+   a sample oscillator in the synth.
 
 3. **Unison and a 24 dB filter mode.** Done. The 24 dB mode is two cascaded
    state-variable stages, not a ladder model; a true ladder with its
