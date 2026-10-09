@@ -17,6 +17,9 @@ interface SynthControlsProps {
   onSavePreset: (name: string) => void;
   onLoadPreset: (presetId: string) => void;
   onDeletePreset: (presetId: string) => void;
+  // Reads a preset file from Discobot or another synth; saves the lane's sound as a file.
+  onImportPreset: (file: File) => void;
+  onExportPreset: (name: string) => void;
   synthModelId: SynthModelId;
   onModelChange: (modelId: SynthModelId) => void;
   tab: SynthTab;
@@ -160,6 +163,8 @@ export default function SynthControls({
   onSavePreset,
   onLoadPreset,
   onDeletePreset,
+  onImportPreset,
+  onExportPreset,
   synthModelId,
   onModelChange,
   tab,
@@ -339,6 +344,27 @@ export default function SynthControls({
               title="Delete selected user preset"
             >
               Delete
+            </button>
+            <label className="octave-shift-btn preset-import" title="Load a preset file: one saved from Discobot, or one from another synth that Discobot knows how to translate">
+              Import
+              <input
+                type="file"
+                accept=".json,application/json"
+                aria-label="Import synth preset"
+                hidden
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0];
+                  event.currentTarget.value = '';
+                  if (file) onImportPreset(file);
+                }}
+              />
+            </label>
+            <button
+              className="octave-shift-btn"
+              title="Save this lane's sound as a file"
+              onClick={() => onExportPreset(presetName.trim() || presets.find(preset => preset.id === selectedPresetId)?.name || '')}
+            >
+              Export
             </button>
           </div>
         </div>

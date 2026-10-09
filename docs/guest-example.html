@@ -168,7 +168,9 @@
   var noteSelect = document.getElementById('note'), waveSelect = document.getElementById('wave');
   NOTES.forEach(function (name) { var option = document.createElement('option'); option.textContent = name; noteSelect.appendChild(option); });
   noteSelect.addEventListener('change', function () { state.note = noteSelect.value; send({ type: 'stateChanged' }); });
-  waveSelect.addEventListener('change', function () { state.wave = waveSelect.value; send({ type: 'stateChanged' }); });
+  // "stateChanged" is optional. This control does not send it, to show that the host still gets the
+  // change: it asks every few seconds, and again whenever the scene is about to change.
+  waveSelect.addEventListener('change', function () { state.wave = waveSelect.value; });
   document.getElementById('start').addEventListener('click', function () {
     // On its own, the page keeps its own time.
     if (transport.playing) setTransport({ playing: false });

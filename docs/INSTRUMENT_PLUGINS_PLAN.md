@@ -34,6 +34,12 @@ result is one of the web formats below, and we can load it.
 
 ### A. Sound presets for Discobot's own synth (small)
 
+**Done.** A lane's sound can be exported as a file and imported again, and
+presets from two other synths are translated on import (VAST G1-J8, and a
+nested two-oscillator patch format), with a report of what did not carry
+over. There is no standard for synth presets, so each further format is a
+new translator.
+
 A preset is already a small block of settings. Sharing one needs a "share this
 sound" link or file, the same way a song is shared now.
 

@@ -193,6 +193,7 @@ export class LocalProjectService {
         ? { laneBars: Object.fromEntries(state.synths.filter(synth => (synth.pattern.bars ?? 1) > 1).map(synth => [synth.synthId, synth.pattern.bars!])) } : {}),
       ...(state.guests?.some(guest => guest.state !== undefined)
         ? { guests: Object.fromEntries(state.guests.filter(guest => guest.state !== undefined).map(guest => [guest.id, clone(guest.state)])) } : {}),
+      ...(state.guests?.length ? { guestMix: Object.fromEntries(state.guests.map(guest => [guest.id, { volume: guest.volume, muted: guest.muted }])) } : {}),
       drums: Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => {
         const { steps, stepVelocities, stepProbabilities, stepRatchets } = state.drumState[instrument];
         return [instrument, clone({
@@ -233,8 +234,12 @@ export class LocalProjectService {
     }
     // A guest takes the settings this scene holds for it. A scene from before the guest was added
     // holds none, and the guest carries on as it is.
-    if (state.guests && scene.guests) {
-      state.guests = state.guests.map(guest => (guest.id in scene.guests! ? { ...guest, state: clone(scene.guests![guest.id]) } : guest));
+    if (state.guests) {
+      state.guests = state.guests.map(guest => ({
+        ...guest,
+        ...(scene.guests && guest.id in scene.guests ? { state: clone(scene.guests[guest.id]) } : {}),
+        ...(scene.guestMix?.[guest.id] ?? {}),
+      }));
     }
     for (const instrument of DRUM_INSTRUMENTS) {
       const track = state.drumState[instrument], pattern = scene.drums[instrument];
@@ -929,6 +934,11 @@ export class LocalProjectService {
           if (!scene.guests) continue;
           delete scene.guests[guestMatch[1]];
           if (Object.keys(scene.guests).length === 0) delete scene.guests;
+        }
+        for (const scene of state.scenes) {
+          if (!scene.guestMix) continue;
+          delete scene.guestMix[guestMatch[1]];
+          if (Object.keys(scene.guestMix).length === 0) delete scene.guestMix;
         }
       }
       return update('guestsChanged', { guests: state.guests });

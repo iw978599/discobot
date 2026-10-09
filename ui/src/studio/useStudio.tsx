@@ -9,6 +9,7 @@ import { createDefaultSynthParameters } from '@discobot/engine';
 import { localRequest, localService } from '../services/localService';
 import { projectSync, startProjectSync } from '../services/projectSync';
 import { loadDrumSample } from '../services/drumSamples';
+import { exportPreset, importPreset, type ImportedPreset } from '../services/presetImport';
 import { BAR_CHOICES, DRUM_STEPS_PER_BAR, clampLengths, drumBars, laneBars, resizeBars, sceneAsBars, sceneBars } from '../services/patternLength';
 import { DRUM_INSTRUMENTS } from '../services/drumKits';
 import type { DrumSample } from '../../../engine/src/drums/DrumCore';
@@ -396,6 +397,8 @@ export function useStudio() {
   // Decoded samples for the drum lanes that use one, and the lanes whose sample is not on this device.
   const drumSamplesRef = useRef<Partial<Record<DrumInstrument, DrumSample>>>({});
   const [missingDrumSamples, setMissingDrumSamples] = useState<DrumInstrument[]>([]);
+  // What an imported preset was, and what did not carry over, shown once after importing.
+  const [presetImportReport, setPresetImportReport] = useState<Pick<ImportedPreset, 'name' | 'source' | 'notes'> | null>(null);
   const [guests, setGuests] = useState<Guest[]>([]);
   // Set while an export is playing the arrangement through to record its guests: how long it will take.
   const [guestRecording, setGuestRecording] = useState<number | null>(null);
@@ -421,6 +424,8 @@ export function useStudio() {
     ...createNamedSynthPresets(DEFAULT_PARAMS),
     ...loadUserPresets(),
   ]);
+  const synthPresetsRef = useRef(synthPresets);
+  synthPresetsRef.current = synthPresets;
   const browserMutedRef = useRef(browserMuted);
   browserMutedRef.current = browserMuted;
 
@@ -1295,6 +1300,10 @@ export function useStudio() {
   };
 
   const sceneRequest = useCallback(async (path: string, body: unknown) => {
+    // Leaving the open scene records it, so first collect what each guest is set to right now.
+    // Guests are only asked every few seconds otherwise, and a change made just before switching
+    // would be recorded late, in the scene being switched to.
+    if (path !== '/song' && path !== '/scenes/rename') await guestLink.captureAll();
     const response = await localRequest(path, { method: 'POST', body: JSON.stringify(body) });
     if (!response.ok) setStorageError((await response.json().catch(() => null))?.error ?? 'That scene change could not be made.');
     return response.ok;
@@ -1773,6 +1782,38 @@ export function useStudio() {
     await handleSynthModelChange(synthId, preset.modelId, preset.modelParams);
     await handleParameterChange(synthId, cloneSynthParams(preset.params) || DEFAULT_PARAMS);
   }, [synthPresets, handleParameterChange, handleSynthModelChange]);
+
+  // Reads a preset made in Discobot or in another synth, keeps it with the user's presets and
+  // puts it on the lane. Other synths' presets are translated; the report says what was lost.
+  const handleImportSynthPreset = useCallback(async (synthId: number, file: File) => {
+    let contents: unknown;
+    try {
+      if (file.size > 2_000_000) throw new Error('too large');
+      contents = JSON.parse(await file.text());
+    } catch {
+      setStorageError('That file could not be read as a preset. Preset files are JSON.');
+      return;
+    }
+    const result = importPreset(contents, DEFAULT_PARAMS, file.name.replace(/(\.preset)?(\.websynth)?\.json$/i, ''));
+    if (!result.ok) { setStorageError(result.error); return; }
+    const { preset } = result;
+    const taken = new Set(synthPresetsRef.current.map(entry => entry.name.toLowerCase()));
+    let name = preset.name;
+    for (let n = 2; taken.has(name.toLowerCase()); n++) name = `${preset.name.slice(0, 56)} ${n}`;
+    const stored: SynthPreset = { id: `user-${Date.now()}`, name, params: preset.params, modelId: normalizeSynthModelId(undefined), modelParams: cloneSynthModelParams(undefined) };
+    setSynthPresets(prev => [...prev, stored]);
+    await handleSynthModelChange(synthId, stored.modelId, stored.modelParams);
+    await handleParameterChange(synthId, cloneSynthParams(stored.params) || DEFAULT_PARAMS);
+    setPresetImportReport({ name, source: preset.source, notes: preset.notes });
+  }, [handleParameterChange, handleSynthModelChange]);
+
+  // The lane's sound as a file another Discobot can import.
+  const handleExportSynthPreset = useCallback((synthId: number, name: string) => {
+    const synth = synthsRef.current.find(entry => entry.id === synthId);
+    if (!synth?.synthParams) return;
+    const title = name.trim() || `Synth ${synthId}`;
+    downloadFile(JSON.stringify(exportPreset(title, synth.synthParams), null, 2), 'application/json', `${title.replace(/[^\w -]+/g, '').trim() || 'preset'}.discobot-preset.json`);
+  }, []);
 
   const handleDeleteSynthPreset = useCallback((presetId: string) => {
     setSynthPresets((prev) => prev.filter((preset) => preset.id !== presetId || preset.builtIn));
@@ -2411,7 +2452,7 @@ export function useStudio() {
     handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange, guests, handleAddGuest, handleRemoveGuest, handleGuestChange, guestRecording, handleExportWav, missingDrumSamples, handleDrumSampleChange, handleLaneBarsChange, handleDrumBarsChange, sceneLength,
     handleSynthMixChange, handleSaveSynthPreset, handleLoadSynthPreset, handleDeleteSynthPreset,
     handleExportMidi, currentArrangement, reportExportError, handleExportProject, projectImportFileRef, handleImportProjectFile, handleImportProject,
-    handleNewProject, handleOpenProject, handleCopyProject, handleRenameProject, handleDeleteProject, handleRestoreVersion, handleCopyVersion, handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail,
+    handleNewProject, handleOpenProject, handleCopyProject, handleRenameProject, handleDeleteProject, handleRestoreVersion, handleCopyVersion, handleImportSynthPreset, handleExportSynthPreset, presetImportReport, setPresetImportReport, handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail,
     handleDrumSettingsChange, handleDrumMixChange, handleDrumReset, handleDrumMasterVolumeChange, handleDrumSwingChange,
     handleDrumFxChange, handleEffectsLoopChange, handleDrumMuteAll, handleDrumSoloAll, handleReset,
     scenes, currentSceneId, song, playMode, setPlayMode, songStartEntry, setSongStartEntry, songPosition,

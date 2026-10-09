@@ -95,6 +95,22 @@ export default function Rack({ studio }: { studio: Studio }) {
       {accountOpen && <AccountDialog onClose={() => setAccountOpen(false)} />}
       {guestOpen && <AddGuestDialog studio={studio} onClose={() => setGuestOpen(false)} />}
       {versionsOpen && <VersionsDialog studio={studio} onClose={() => setVersionsOpen(false)} />}
+      {studio.presetImportReport && (
+        <Dialog title="Preset imported" closeLabel="Close import report" onClose={() => studio.setPresetImportReport(null)}>
+          <p><strong>{studio.presetImportReport.name}</strong> was imported from {studio.presetImportReport.source}. It is on the lane now and saved with your presets.</p>
+          {studio.presetImportReport.source !== 'Discobot' && (
+            <p>Another synth's preset is translated, not copied: the two make sound differently, so expect to adjust it by ear.</p>
+          )}
+          {studio.presetImportReport.notes.length > 0 && (
+            <>
+              <h3>What did not carry over</h3>
+              <ul className="import-notes">
+                {studio.presetImportReport.notes.map(note => <li key={note}>{note}</li>)}
+              </ul>
+            </>
+          )}
+        </Dialog>
+      )}
       {settingsOpen && (
         <Dialog title="MIDI and samples" closeLabel="Close MIDI and samples" onClose={() => setSettingsOpen(false)}>
           <h3>MIDI controller</h3>

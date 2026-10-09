@@ -255,3 +255,41 @@ test('a guest\'s settings belong to the scene, and change with it when a song mo
   await expect(page.getByRole('button', { name: /Play All/ })).toBeVisible({ timeout: 10_000 });
   expect(await sceneGuests(), 'playing through did not mix the two up').toEqual([['Scene 1', 'G4'], ['Scene 2', 'A4']]);
 });
+
+test('a guest changed just before leaving a scene is recorded in that scene, along with its level and mute', async ({ page }, testInfo) => {
+  const baseURL = String(testInfo.project.use.baseURL);
+  await menu(page, 'Add Guest Instrument');
+  const dialog = page.getByRole('dialog', { name: 'Add a guest instrument', exact: true });
+  await dialog.getByLabel('Address of the instrument\'s page', { exact: true }).fill(guestAddress(baseURL));
+  await dialog.getByRole('button', { name: 'Add Guest', exact: true }).click();
+  const unit = page.getByRole('region', { name: /^Guest instrument / });
+  await expect(unit).toHaveAttribute('data-status', 'ready');
+  const note = unit.frameLocator('iframe').getByLabel('Note', { exact: true });
+  const sound = unit.frameLocator('iframe').getByLabel('Sound', { exact: true });
+  const mute = unit.getByRole('button', { name: /^Mute guest / });
+
+  // No waiting between a change and the scene change that follows it: Discobot only asks a guest
+  // for its settings every few seconds, so it has to ask again at the moment the scene is left.
+  // The Sound menu does not announce its changes the way Note does, so only that asking can catch it.
+  await note.selectOption('G4');
+  await sound.selectOption('square');
+  await mute.click();
+  await page.getByRole('button', { name: '+ Copy', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Scene: Scene 2', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await note.selectOption('A4');
+  await sound.selectOption('sine');
+  await mute.click();
+  await page.getByRole('button', { name: 'Scene: Scene 1', exact: true }).click();
+  await expect(note, 'scene 1 has what it was left with').toHaveValue('G4');
+  await expect(sound).toHaveValue('square');
+  await expect(mute, 'and its own mute').toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Scene: Scene 2', exact: true }).click();
+  await expect(note).toHaveValue('A4');
+  await expect(sound).toHaveValue('sine');
+  await expect(mute).toHaveAttribute('aria-pressed', 'false');
+
+  const scenes = (await stored(page)).scenes as Array<{ name: string; guests: Record<string, { note: string; wave: string }>; guestMix: Record<string, { muted: boolean }> }>;
+  expect(scenes.map(scene => [scene.name, Object.values(scene.guests)[0], Object.values(scene.guestMix)[0].muted])).toEqual([
+    ['Scene 1', { note: 'G4', wave: 'square' }, true], ['Scene 2', { note: 'A4', wave: 'sine' }, false],
+  ]);
+});

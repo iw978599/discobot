@@ -238,6 +238,8 @@ export default function SynthModule({ studio, synthId }: SynthModuleProps) {
           onSavePreset={(name) => studio.handleSaveSynthPreset(synthId, name)}
           onLoadPreset={(presetId) => { void studio.handleLoadSynthPreset(synthId, presetId); }}
           onDeletePreset={studio.handleDeleteSynthPreset}
+          onImportPreset={(file) => { void studio.handleImportSynthPreset(synthId, file); }}
+          onExportPreset={(name) => studio.handleExportSynthPreset(synthId, name)}
           synthModelId={synth.synthModelId}
           onModelChange={(modelId) => { void studio.handleSynthModelChange(synthId, modelId); }}
           tab={tab}
