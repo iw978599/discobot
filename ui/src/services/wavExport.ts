@@ -23,6 +23,8 @@ export interface ExportArrangement {
   bars?: Scene[];
   // Decoded samples for the drum lanes that use one. A lane without an entry is synthesized.
   drumSamples?: Partial<Record<DrumInstrument, DrumSample>>;
+  // Guest instruments, recorded in real time at 44.1 kHz from the first beat. Mixed in as they are.
+  guestTakes?: Array<{ left: Float32Array; right: Float32Array; gain: number }>;
 }
 
 // Rendering holds every lane in memory at once, so very long songs are refused.
@@ -240,6 +242,20 @@ export async function renderArrangement(arrangement: ExportArrangement, options:
   }
   if (only === undefined || only === 'drums') {
     play(renderDrums(arrangement, frames, sampleRate, bars, barDuration), arrangement.drumFx.sends, arrangement.drumFx.returnLevel, 'drums');
+  }
+  // Guests are already finished audio: no effect sends and no ducking, only their level. They are
+  // left out of stems and of loops, where a one-pass recording would not wrap.
+  if (only === undefined && !looping) {
+    for (const take of arrangement.guestTakes ?? []) {
+      const buffer = ctx.createBuffer(2, frames, sampleRate);
+      buffer.getChannelData(0).set(take.left.subarray(0, frames));
+      buffer.getChannelData(1).set(take.right.subarray(0, frames));
+      const source = ctx.createBufferSource(), level = ctx.createGain();
+      source.buffer = buffer;
+      level.gain.value = Math.max(0, Math.min(1, take.gain));
+      source.connect(level).connect(master);
+      source.start(0);
+    }
   }
   const rendered = await ctx.startRendering();
   return { channels: [rendered.getChannelData(0).subarray(start), rendered.getChannelData(1).subarray(start)], sampleRate };

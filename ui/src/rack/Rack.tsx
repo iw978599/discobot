@@ -66,6 +66,13 @@ export default function Rack({ studio }: { studio: Studio }) {
             <button className="rack-btn" onClick={projectSync.dismissKeptBoth} aria-label="Dismiss sync message">✕</button>
           </div>
         )}
+        {studio.guestRecording !== null && (
+          <div role="status" className="app-alert">
+            <span>
+              Recording the guest instruments for the export. The music plays through once, about {Math.ceil(studio.guestRecording)} seconds, and then the file downloads.
+            </span>
+          </div>
+        )}
         {studio.storageError && (
           <div role="alert" className="app-alert">
             <span>{studio.storageError}</span>

@@ -182,7 +182,8 @@ npm run migrate --workspace=server  # Apply new database migrations to the live 
 - A guest is never loaded without the user's say-so for that site on this browser (`isTrustedOrigin`). Typing the address in counts; a guest that arrives in a shared or synced project asks first. This is the one place the app loads anything from another site.
 - Messages are accepted only from the guest's own frame at its own origin, and everything in them is untrusted. The guest's `state` is opaque JSON, size-capped, never interpreted.
 - Timing uses the computer's clock, which the frame and the app share. The guest plays `GUEST_LATENCY_MS` early and `createGuestPlayer` holds its audio back by the same amount. When guests are present the transport starts with a longer lead (`GUEST_START_LEAD_SECONDS`) so a guest can catch beat 0.
-- Guests are not in WAV or MIDI export.
+- A guest cannot be rendered offline, so Download WAV and Song WAV play the arrangement through once and record each guest (`guestCapture`, fed from `GuestModule`), then mix the recordings into the normal render as `guestTakes`. Recordings are placed by the guests' time stamps against the transport's first beat. Loop WAV, stems and MIDI leave guests out.
+- `FEATURED_GUESTS` lists instruments offered by name in the Add Guest dialog. Only add one with its creator's permission.
 
 ## Published Songs
 - Publishing stores a slimmed copy of a project on the server behind a ten-character code. It is always an explicit button press, never a side effect of sharing or syncing.

@@ -25,7 +25,7 @@ test('guests read from a project are checked like the rest of it', () => {
     { id: 'nope', url: 'https://example.com/bad-id' },
     { id: b, url: `${OWN}/discobot/` },
     { id: b, url: 'https://example.com/b', state: 'x'.repeat(MAX_GUEST_STATE_CHARS + 1) },
-    { id: id(), url: 'https://example.com/too-many' },
+    ...Array.from({ length: MAX_GUESTS }, (_, index) => ({ id: id(), url: `https://example.com/extra-${index}` })),
     'junk', null,
   ], OWN);
   assert.equal(guests.length, MAX_GUESTS);

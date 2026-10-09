@@ -113,3 +113,55 @@ test('a guest that arrives with someone else\'s song is not loaded until the vis
   expect(requests.length).toBeGreaterThan(0);
   await visitorContext.close();
 });
+
+test('a WAV export records the guest by playing through once, and the named instruments are on offer', async ({ page }, testInfo) => {
+  const baseURL = String(testInfo.project.use.baseURL), address = guestAddress(baseURL);
+  const { readFile } = await import('node:fs/promises');
+  const exportWav = async (name: string) => {
+    const download = page.waitForEvent('download', { timeout: 30_000 });
+    await page.getByRole('button', { name: 'Export ▾', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Download WAV', exact: true }).click();
+    const path = testInfo.outputPath(name);
+    await (await download).saveAs(path);
+    const bytes = await readFile(path);
+    // 16-bit stereo at 44.1 kHz: the level of the left channel between two times, in seconds.
+    return (from: number, to: number) => {
+      let sum = 0, count = 0;
+      for (let frame = Math.round(from * 44100); frame < Math.round(to * 44100); frame++) { const value = bytes.readInt16LE(44 + frame * 4) / 32768; sum += value * value; count++; }
+      return Math.sqrt(sum / count);
+    };
+  };
+
+  await menu(page, 'Add Guest Instrument');
+  const dialog = page.getByRole('dialog', { name: 'Add a guest instrument', exact: true });
+  for (const name of ['Choir', 'Logic Rhythm', 'Boolean Melody Machine', 'Tape Loop Deck']) {
+    await expect(dialog.getByRole('group', { name: `${name} by Aaron Van Dorn`, exact: true }).getByRole('button', { name: 'Add', exact: true })).toBeEnabled();
+  }
+  await dialog.getByLabel('Address of the instrument\'s page', { exact: true }).fill(address);
+  await dialog.getByRole('button', { name: 'Add Guest', exact: true }).click();
+  const unit = page.getByRole('region', { name: /^Guest instrument / });
+  await expect(unit).toHaveAttribute('data-status', 'ready');
+
+  // 240 BPM: a bar is one second and the guest rings on every quarter of it. A kick on beat one only.
+  await page.locator('.tempo-led').click();
+  await page.locator('.tempo-led-input').fill('240');
+  await page.locator('.tempo-led-input').press('Enter');
+  await page.getByRole('button', { name: 'Kick step 1', exact: true }).click();
+
+  // Muted, the guest is left out and nothing has to be played.
+  await unit.getByRole('button', { name: /^Mute guest / }).click();
+  const without = await exportWav('without-guest.wav');
+  await expect(page.getByText('Recording the guest instruments')).toHaveCount(0);
+
+  await unit.getByRole('button', { name: /^Mute guest / }).click();
+  const pending = exportWav('with-guest.wav');
+  await expect(page.getByText('Recording the guest instruments')).toBeVisible();
+  const withGuest = await pending;
+  await expect(page.getByText('Recording the guest instruments')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Play All/ }), 'playback stops when the recording is done').toBeVisible();
+
+  // The fourth beat is three quarters of a second in. Only the guest plays there; the kick is a fading tail by then.
+  expect(withGuest(0.75, 0.81), 'the bell is in the file').toBeGreaterThan(without(0.75, 0.81) * 2 + 0.02);
+  expect(withGuest(0.752, 0.772), 'and it starts on the beat, not before it').toBeGreaterThan(withGuest(0.72, 0.745) * 1.5);
+  expect(withGuest(0, 0.05), 'the kick is still there').toBeGreaterThan(0.02);
+});

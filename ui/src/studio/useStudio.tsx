@@ -12,7 +12,8 @@ import { loadDrumSample } from '../services/drumSamples';
 import { BAR_CHOICES, DRUM_STEPS_PER_BAR, clampLengths, drumBars, laneBars, resizeBars, sceneAsBars, sceneBars } from '../services/patternLength';
 import { DRUM_INSTRUMENTS } from '../services/drumKits';
 import type { DrumSample } from '../../../engine/src/drums/DrumCore';
-import { GUEST_START_LEAD_SECONDS, guestLink, guestOrigin, guestUrl, trustOrigin, wallAtContextTime, type Guest } from '../services/guests';
+import { GUEST_START_LEAD_SECONDS, guestCapture, guestLink, guestOrigin, guestUrl, trustOrigin, wallAtContextTime, wallNow, type Guest } from '../services/guests';
+import { downloadArrangementWav } from '../services/wavExport';
 import type { ProjectInfo } from '../services/projectLibrary';
 import { sanitizeSynthParams } from '../services/projectSanitization';
 import { expandStep, expandStepNotes, stepNotes, withStepNotes } from '../services/noteScheduling';
@@ -396,6 +397,8 @@ export function useStudio() {
   const drumSamplesRef = useRef<Partial<Record<DrumInstrument, DrumSample>>>({});
   const [missingDrumSamples, setMissingDrumSamples] = useState<DrumInstrument[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
+  // Set while an export is playing the arrangement through to record its guests: how long it will take.
+  const [guestRecording, setGuestRecording] = useState<number | null>(null);
   const guestsRef = useRef<Guest[]>([]);
   guestsRef.current = guests;
   const [changedElsewhere, setChangedElsewhere] = useState(false);
@@ -462,6 +465,7 @@ export function useStudio() {
   const songStartBarRef = useRef(0);
   const songEndingRef = useRef(false);
   const stopPlaybackRef = useRef<() => void>(() => {});
+  const handleGlobalPlayStopRef = useRef<() => Promise<void>>(async () => {});
   const transportRef = useRef<BrowserTransport | null>(null);
   const liveSceneRef = useRef<() => Scene>(() => ({ id: '', name: '', lanes: {}, drums: createDefaultDrumState() }));
   const sceneLengthRef = useRef<(sceneId: string) => number>(() => 1);
@@ -1282,6 +1286,7 @@ export function useStudio() {
     drumAudio.stopAllNotes();
     setSongPosition(null);
   }, [synthAudio, drumAudio]);
+  handleGlobalPlayStopRef.current = handleGlobalPlayStop;
   stopPlaybackRef.current = () => {
     if (synthsRef.current.some(s => s.isPlaying)) void handleGlobalPlayStop();
   };
@@ -1849,6 +1854,45 @@ export function useStudio() {
     await localRequest('/drum/sample', { method: 'POST', body: JSON.stringify({ instrument, sampleId }) });
   }, []);
 
+  // Download WAV and Song WAV. With guests in the project the arrangement is first played through
+  // once, in real time, so their sound can be recorded; then the export is rendered as usual.
+  const handleExportWav = useCallback(async (wholeSong: boolean) => {
+    let arrangement: ExportArrangement = wholeSong ? await songArrangement() : currentArrangementRef.current();
+    const audible = guestsRef.current.filter(guest => !guest.muted && guest.volume > 0);
+    if (audible.length > 0 && !guestCapture.active()) {
+      const seconds = (arrangement.bars?.length ?? 1) * 240 / globalTempoRef.current;
+      const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+      const mode = playModeRef.current, startEntry = songStartEntryRef.current;
+      try {
+        if (synthsRef.current.some(synth => synth.isPlaying)) { await handleGlobalPlayStopRef.current(); await sleep(150); }
+        setGuestRecording(seconds);
+        // Play exactly what is being exported: the song from its start, or the open scene.
+        playModeRef.current = wholeSong ? 'song' : 'pattern';
+        songStartEntryRef.current = 0;
+        setPlayMode(playModeRef.current);
+        setSongStartEntry(0);
+        await handleGlobalPlayStopRef.current();
+        // The transport announces where its first beat falls; recording is lined up against that.
+        for (let waited = 0; waited < 4000 && !guestLink.transport().playing; waited += 20) await sleep(20);
+        const transport = guestLink.transport();
+        if (!transport.playing) throw new Error('Playback did not start, so the guest instruments could not be recorded.');
+        guestCapture.start(transport.anchorWall, seconds + 2);
+        await sleep(Math.max(0, transport.anchorWall - wallNow()) + seconds * 1000);
+        if (synthsRef.current.some(synth => synth.isPlaying)) await handleGlobalPlayStopRef.current();
+        // A moment for the last of the guests' audio to arrive.
+        await sleep(600);
+        const takes = guestCapture.stop();
+        arrangement = { ...arrangement, guestTakes: audible.flatMap(guest => { const take = takes.get(guest.id); return take ? [{ ...take, gain: guest.volume }] : []; }) };
+      } finally {
+        guestCapture.stop();
+        setGuestRecording(null);
+        setPlayMode(mode);
+        setSongStartEntry(startEntry);
+      }
+    }
+    await downloadArrangementWav(arrangement);
+  }, [songArrangement]);
+
   const reportExportError = useCallback((error: unknown) => {
     setStorageError(`Audio export failed: ${error instanceof Error ? error.message : error}`);
   }, []);
@@ -2361,7 +2405,7 @@ export function useStudio() {
     handleMidiImportClick, handleMidiImportFile, handleMidiImportApplyAll, midiImportFileRef, handleRemoveSynth,
     ensureSynthExists, handleOctaveShift, handleTempoChange, handleGlobalPlayStop, handleStepChange, handleStepSelect, handleKeyboardModeChange,
     handlePianoRollNoteAssign, handleClearPatternNotes, handleNotePlay, handleNoteRelease, computerKeyNotes, midiState,
-    handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange, guests, handleAddGuest, handleRemoveGuest, handleGuestChange, missingDrumSamples, handleDrumSampleChange, handleLaneBarsChange, handleDrumBarsChange, sceneLength,
+    handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange, guests, handleAddGuest, handleRemoveGuest, handleGuestChange, guestRecording, handleExportWav, missingDrumSamples, handleDrumSampleChange, handleLaneBarsChange, handleDrumBarsChange, sceneLength,
     handleSynthMixChange, handleSaveSynthPreset, handleLoadSynthPreset, handleDeleteSynthPreset,
     handleExportMidi, currentArrangement, reportExportError, handleExportProject, projectImportFileRef, handleImportProjectFile, handleImportProject,
     handleNewProject, handleOpenProject, handleCopyProject, handleRenameProject, handleDeleteProject, handleRestoreVersion, handleCopyVersion, handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail,
