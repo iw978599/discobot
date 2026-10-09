@@ -224,6 +224,8 @@ export interface DrumTrack {
   settings: DrumSettings;
   muted?: boolean;
   solo?: boolean;
+  // an imported sample this lane plays instead of its synthesized voice
+  sampleId?: string;
 }
 
 export type DrumState = Record<DrumInstrument, DrumTrack>;

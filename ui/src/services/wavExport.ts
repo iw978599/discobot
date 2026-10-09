@@ -1,4 +1,4 @@
-import { DrumCore, SynthCore, toVoiceParams } from '@discobot/engine';
+import { DrumCore, type DrumSample, SynthCore, toVoiceParams } from '@discobot/engine';
 import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, Scene, SequencerStep, SynthParameters } from '../types';
 import { sceneDrumState } from './songPlayback';
 import { DRUM_INSTRUMENTS } from './drumKits';
@@ -21,6 +21,8 @@ export interface ExportArrangement {
   // A whole song, one scene per bar. When present these are rendered end to end and each
   // lane's own pattern and the steps in `drumState` are ignored.
   bars?: Scene[];
+  // Decoded samples for the drum lanes that use one. A lane without an entry is synthesized.
+  drumSamples?: Partial<Record<DrumInstrument, DrumSample>>;
 }
 
 // Rendering holds every lane in memory at once, so very long songs are refused.
@@ -99,7 +101,7 @@ export function renderSynthBars(
   return renderCore(core, frames);
 }
 
-type DrumArrangement = Pick<ExportArrangement, 'tempo' | 'drumState' | 'drumKitId' | 'drumMasterVolume' | 'drumSwing' | 'bars'>;
+type DrumArrangement = Pick<ExportArrangement, 'tempo' | 'drumState' | 'drumKitId' | 'drumMasterVolume' | 'drumSwing' | 'bars' | 'drumSamples'>;
 interface DrumHit { instrument: DrumInstrument; time: number; velocity: number; settings: DrumSettings }
 
 // Every drum hit the export plays, with its start time. Worked out once so the drum render
@@ -133,6 +135,7 @@ export function renderDrums(
   arrangement: DrumArrangement, frames: number, sampleRate: number, bars = 1, barDuration = 240 / arrangement.tempo,
 ): Stereo {
   const core = new DrumCore(sampleRate);
+  for (const [instrument, sample] of Object.entries(arrangement.drumSamples ?? {})) core.setSample(instrument as DrumInstrument, sample);
   for (const hit of drumHits(arrangement, bars, barDuration)) core.trigger({ ...hit, kitId: arrangement.drumKitId });
   return renderCore(core, frames);
 }
@@ -154,7 +157,7 @@ function connectEffects(ctx: OfflineAudioContext, input: AudioNode, master: Audi
   }
   if (state.reverb.enabled && sends.reverb > 0) {
     const reverb = ctx.createConvolver(), level = ctx.createGain();
-    reverb.buffer = reverbImpulse(ctx, state.reverb.decay); level.gain.value = state.reverb.mix;
+    reverb.buffer = reverbImpulse(ctx, state.reverb.decay, seededRandom(3)); level.gain.value = state.reverb.mix;
     send(sends.reverb).connect(reverb).connect(level).connect(wet);
   }
   if (state.drive.enabled && sends.drive > 0) {

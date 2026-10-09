@@ -854,7 +854,9 @@ export class LocalProjectService {
           track.stepRatchets![body.step] = number(body.ratchet, 1, 1, 4);
         }
       } else if (path === '/drum/settings') track.settings = merge(track.settings, record(body.settings));
-      else if (path === '/drum/mix') {
+      else if (path === '/drum/sample') {
+        if (typeof body.sampleId === 'string') track.sampleId = body.sampleId; else delete track.sampleId;
+      } else if (path === '/drum/mix') {
         if (typeof body.muted === 'boolean') track.muted = body.muted;
         if (typeof body.solo === 'boolean') track.solo = body.solo;
       } else return respond({ error: 'Unknown local operation' }, 404);

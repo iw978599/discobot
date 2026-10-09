@@ -41,6 +41,9 @@ const VOICE_TRIM: Record<DrumInstrument, number> = {
 };
 const HIT_LEVEL = 0.7;
 
+// A recording a lane plays instead of its synthesized voice: one channel, at its own rate.
+export interface DrumSample { data: Float32Array; rate: number }
+
 interface DrumVoice {
   instrument: DrumInstrument;
   active: boolean;
@@ -76,6 +79,10 @@ interface DrumVoice {
   tail: number;
   tailSamples: number;
   noise: Noise;
+  // Set while this hit is playing a sample; `position` is in the sample's own frames.
+  sample: DrumSample | null;
+  position: number;
+  advance: number;
 }
 
 // Streaming drum voices. One voice per instrument, mixed linearly: no per-hit or bus
@@ -85,6 +92,7 @@ export class DrumCore {
   private voices: Record<DrumInstrument, DrumVoice>;
   private pending: Array<DrumHitMessage & { frame: number }> = [];
   private humanizer = new Noise(0x51ed270b);
+  private samples: Partial<Record<DrumInstrument, DrumSample>> = {};
   private readonly fadeLength: number;
   private readonly attackLength: number;
 
@@ -101,7 +109,15 @@ export class DrumCore {
       choke: 1, chokeRate: 1, last: 0, tail: 0, tailSamples: 0,
       // Each drum has its own noise source, so one hit never changes how another sounds.
       noise: new Noise(0x1f123bb5 + index * 0x9e3779b1),
+      sample: null, position: 0, advance: 1,
     }])) as Record<DrumInstrument, DrumVoice>;
+  }
+
+  // Gives a lane a sample to play, or with null hands it back to its synthesized voice.
+  // Takes effect from the next hit.
+  setSample(instrument: DrumInstrument, sample: DrumSample | null): void {
+    if (sample && sample.data.length > 1 && sample.rate > 0) this.samples[instrument] = sample;
+    else delete this.samples[instrument];
   }
 
   trigger(message: DrumHitMessage): void {
@@ -186,6 +202,21 @@ export class DrumCore {
     voice.noiseLevel = 0;
     voice.burstLength = 0;
 
+    voice.sample = this.samples[message.instrument] ?? null;
+    if (voice.sample) {
+      // The recording is the sound: no voice trim and none of the kit's colouring. Volume,
+      // velocity, pan and tune still apply, and tune changes its speed.
+      voice.position = 0;
+      voice.advance = voice.sample.rate / sr * pitch;
+      voice.trim = 1;
+      voice.driveGain = 1;
+      voice.driveNorm = 1;
+      voice.quantize = 0;
+      voice.holdLength = 1;
+      voice.level = 1;
+      return;
+    }
+
     switch (message.instrument) {
       case 'kick': {
         voice.step[0] = (is909 ? 48 + tone * 30 : 42 + tone * 26) * pitch / sr;
@@ -256,6 +287,16 @@ export class DrumCore {
   }
 
   private render(v: DrumVoice): number {
+    if (v.sample) {
+      const data = v.sample.data, index = Math.floor(v.position), last = data.length - 1;
+      if (index >= last) { v.level = 0; return 0; }
+      const out = data[index] + (data[index + 1] - data[index]) * (v.position - index);
+      v.position += v.advance;
+      // Fade the last few milliseconds so a recording that ends abruptly does not click.
+      const left = (last - v.position) / v.advance;
+      v.level = 1;
+      return left < this.fadeLength ? out * Math.max(0, left / this.fadeLength) : out;
+    }
     const env = v.env, rate = v.rate, phase = v.phase, step = v.step;
     switch (v.instrument) {
       case 'kick': {

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { listSamples, saveSample } from '../services/sampleStore';
 import type { Studio } from '../studio/useStudio';
 import { DrumInstrument, DrumKitId, DrumState, CymbalType } from '../types';
 import DrumKnob from '../components/DrumKnob';
@@ -61,6 +62,11 @@ export default function DrumModule({ studio }: { studio: Studio }) {
   const [selectedStep, setSelectedStep] = useState(0);
   const [showMore, setShowMore] = useState(false);
   const [showSends, setShowSends] = useState(false);
+  // Imported samples a lane can play instead of its built-in sound.
+  const [samples, setSamples] = useState<Array<{ id: string; name: string }>>([]);
+  const sampleFileRef = useRef<HTMLInputElement>(null);
+  const refreshSamples = () => listSamples().then(list => setSamples(list.map(({ id, name }) => ({ id, name })))).catch(() => {});
+  useEffect(() => { void refreshSamples(); }, []);
 
   const anySolo = INSTRUMENTS.some((instrument) => Boolean(drumState[instrument].solo));
   const allMuted = INSTRUMENTS.every((instrument) => Boolean(drumState[instrument].muted));
@@ -251,6 +257,42 @@ export default function DrumModule({ studio }: { studio: Studio }) {
             </button>
           )}
         </div>
+        <label className="drum-sound" title="Play an imported sample on this lane instead of its built-in sound. Volume, tune and pan still apply">
+          Sound
+          <select
+            aria-label={`${LABELS[selected]} sound`}
+            value={track.sampleId ?? ''}
+            onFocus={() => { void refreshSamples(); }}
+            onChange={(event) => {
+              if (event.target.value === 'import') sampleFileRef.current?.click();
+              else void studio.handleDrumSampleChange(selected, event.target.value || null);
+            }}
+          >
+            <option value="">Built-in</option>
+            {samples.map(sample => <option key={sample.id} value={sample.id}>{sample.name}</option>)}
+            {track.sampleId && !samples.some(sample => sample.id === track.sampleId) && <option value={track.sampleId}>Sample not on this device</option>}
+            <option value="import">Import a sample…</option>
+          </select>
+        </label>
+        <input
+          ref={sampleFileRef}
+          type="file"
+          hidden
+          accept="audio/*,.wav,.mp3,.ogg,.flac,.m4a"
+          aria-label="Import drum sample"
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            event.currentTarget.value = '';
+            if (!file) return;
+            const lane = selected;
+            void saveSample(file)
+              .then(async (sample) => { await refreshSamples(); await studio.handleDrumSampleChange(lane, sample.id); })
+              .catch((cause) => studio.setStorageError(cause instanceof Error ? cause.message : 'The sample could not be imported.'));
+          }}
+        />
+        {studio.missingDrumSamples.includes(selected) && (
+          <span className="rack-hint" role="status">This lane's sample is not on this device, so its built-in sound is playing.</span>
+        )}
         <div className="drum-tools">
           <button
             className="rack-btn"

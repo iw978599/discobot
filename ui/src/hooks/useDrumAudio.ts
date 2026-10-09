@@ -1,5 +1,6 @@
 import { useRef, useEffect, useMemo } from 'react';
 import type { DrumInstrument, DrumSettings, DrumKitId, FxSendLevels } from '../types';
+import type { DrumSample } from '../../../engine/src/drums/DrumCore';
 import { createAudioLane, getAudioContext, ensureAudioReady, loadAudioWorklet, setEffectsLoop } from './browserAudio';
 
 export function useDrumAudio() {
@@ -11,6 +12,7 @@ export function useDrumAudio() {
   const returnRef = useRef(1);
   const kitRef = useRef<DrumKitId>('clean-analog');
   const generationRef = useRef(0);
+  const samplesRef = useRef<Partial<Record<DrumInstrument, DrumSample>>>({});
 
   // Everything below only reads refs, so one instance serves every render.
   const api = useMemo(() => {
@@ -22,6 +24,8 @@ export function useDrumAudio() {
         lane.setVolume(volumeRef.current);
         lane.setSends(sendsRef.current, returnRef.current);
         node.connect(lane.input);
+        // Samples chosen before the node existed.
+        for (const [instrument, sample] of Object.entries(samplesRef.current)) node.port.postMessage({ type: 'sample', instrument, sample });
         laneRef.current = lane;
         nodeRef.current = node;
         return node;
@@ -34,6 +38,11 @@ export function useDrumAudio() {
       laneRef.current?.setSends(sends, fxReturn);
     }
     function setKit(kit: DrumKitId) { kitRef.current = kit; }
+    // A lane's sample, or null for its synthesized voice. The worklet gets its own copy.
+    function setSample(instrument: DrumInstrument, sample: DrumSample | null) {
+      if (sample) samplesRef.current[instrument] = sample; else delete samplesRef.current[instrument];
+      nodeRef.current?.port.postMessage({ type: 'sample', instrument, sample });
+    }
 
     async function playDrumHit(instrument: DrumInstrument, settings: DrumSettings, mutedOrVelocity: boolean | number = false, scheduledTime?: number) {
       if (mutedOrVelocity === true) return;
@@ -63,7 +72,7 @@ export function useDrumAudio() {
       laneRef.current = null;
       nodeRef.current = null;
     }
-    return { ensureAudioReady, tryResume: () => { void ensureAudioReady(); }, playDrumHit, setVolume, setFxSends, setKit, setEffectsLoop, stopAllNotes, dispose };
+    return { ensureAudioReady, tryResume: () => { void ensureAudioReady(); }, playDrumHit, setVolume, setFxSends, setKit, setSample, setEffectsLoop, stopAllNotes, dispose };
   }, []);
   useEffect(() => api.dispose, [api]);
   return api;
