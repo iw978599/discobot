@@ -229,6 +229,7 @@ export function HelpModal({ open, onClose }: { open: boolean; onClose: () => voi
           <h3>Keys</h3>
           <ul className="help-list help-list-plain">
             <li><strong>Play notes from the computer keyboard:</strong> the A S D F G H J K L row is the white keys and W E T Y U O P the black keys, on the open lane. Z and X shift the octave.</li>
+            <li><strong>Move along the steps:</strong> with a step selected, the left and right arrow keys select the one before or after it.</li>
             <li><strong>Tap tempo:</strong> Shift + T</li>
             <li><strong>Undo:</strong> Ctrl/Cmd + Z. <strong>Redo:</strong> Ctrl/Cmd + Shift + Z or Ctrl/Cmd + Y. They step back through note, sound, drum, tempo and effects edits in the order you made them.</li>
           </ul>

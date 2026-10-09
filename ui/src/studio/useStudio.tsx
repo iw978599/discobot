@@ -1161,6 +1161,11 @@ export function useStudio() {
     }));
   }, [clearActiveSavedPattern, pushHistorySnapshot]);
 
+  // Moves the selection without the toggle and clear behaviour a click on a step has.
+  const handleStepSelect = useCallback((synthId: number, stepIndex: number) => {
+    setSynths(prev => prev.map(s => (s.id === synthId ? { ...s, selectedStep: stepIndex } : s)));
+  }, []);
+
   const handleKeyboardModeChange = useCallback((synthId: number, mode: 'keyboard' | 'piano-roll') => {
     void localRequest(`/synth/${synthId}/preferences`, { method: 'POST', body: JSON.stringify({ keyboardMode: mode }) });
     setSynths(prev => prev.map(s => (
@@ -2279,7 +2284,7 @@ export function useStudio() {
     midiChannel, setMidiChannel, midiTargetSynthId, setMidiTargetSynthId, activeSavedPattern, synthPresets, drumAudio,
     handleUndo, handleRedo, midiImportData, setMidiImportData, midiImportAssignments, setMidiImportAssignments,
     handleMidiImportClick, handleMidiImportFile, handleMidiImportApplyAll, midiImportFileRef, handleRemoveSynth,
-    ensureSynthExists, handleOctaveShift, handleTempoChange, handleGlobalPlayStop, handleStepChange, handleKeyboardModeChange,
+    ensureSynthExists, handleOctaveShift, handleTempoChange, handleGlobalPlayStop, handleStepChange, handleStepSelect, handleKeyboardModeChange,
     handlePianoRollNoteAssign, handleClearPatternNotes, handleNotePlay, handleNoteRelease, computerKeyNotes, midiState,
     handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange,
     handleSynthMixChange, refreshSavedPatterns, handleSaveSynthPreset, handleLoadSynthPreset, handleDeleteSynthPreset,

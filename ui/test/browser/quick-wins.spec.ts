@@ -237,3 +237,35 @@ test('the app installs a service worker and opens with no network', async ({ pag
   await page.getByRole('button', { name: /Stop All/ }).click();
   await context.setOffline(false);
 });
+
+test('arrow keys walk the selected step along the open lane, leaving knobs alone', async ({ page }) => {
+  const lane = page.locator('.synth-module').first();
+  const step = (n: number) => lane.getByRole('button', { name: new RegExp(`^Select step ${n}( |$)`) });
+  await page.keyboard.press('ArrowRight');
+  await expect(lane.locator('.step-cell.selected'), 'nothing happens until a step is selected').toHaveCount(0);
+
+  await step(3).click();
+  await page.keyboard.press('ArrowRight');
+  await expect(step(4)).toHaveAttribute('aria-pressed', 'true');
+  await expect(step(4)).toBeFocused();
+  await page.keyboard.press('d');
+  await expect.poll(async () => (await project(page)).synths[0].pattern.steps[3].note, { message: 'a played note lands on the step the arrows moved to' }).toBe('E4');
+  await expect.poll(async () => (await project(page)).synths[0].pattern.steps[2].note).toBeUndefined();
+
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('ArrowLeft');
+  await expect(step(1)).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('ArrowLeft');
+  await expect(step(16), 'the selection wraps round the bar').toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('ArrowRight');
+  await expect(step(1)).toHaveAttribute('aria-pressed', 'true');
+  expect((await project(page)).synths[0].pattern.steps[3].note, 'moving the selection does not clear notes').toBe('E4');
+
+  const level = page.getByRole('slider', { name: 'Synth 1 level', exact: true });
+  await level.focus();
+  const before = await level.getAttribute('aria-valuenow');
+  await page.keyboard.press('ArrowLeft');
+  await expect(level).not.toHaveAttribute('aria-valuenow', before!);
+  await expect(step(1), 'an arrow on a focused knob turns the knob, not the selection').toHaveAttribute('aria-pressed', 'true');
+});
