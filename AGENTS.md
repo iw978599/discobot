@@ -42,6 +42,9 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 | `ui/src/services/projectSanitization.ts` | Validation and clamping for everything read from storage or saved arrangements |
 | `ui/src/services/browserTransport.ts` | Look-ahead clock. One tick is a 32nd note; 16-step lanes and drums use every second tick |
 | `ui/src/services/sampleStore.ts` | IndexedDB sample storage |
+| `ui/src/services/projectLibrary.ts` | The project library: one IndexedDB record per project, with an in-memory stand-in for tests and browsers without IndexedDB |
+| `ui/src/services/shareLink.ts` | Share links: a project deflated into the URL after `#song=` |
+| `ui/src/rack/SharedSongPage.tsx` | The page a share link opens: renders the song to audio, plays it, offers a copy |
 | `ui/src/services/wavExport.ts` | Offline arrangement render and WAV encoding: full mix, seamless loop, and per-lane stems zipped by `utils/zip.ts` |
 | `ui/src/services/drumScheduling.ts` | `expandDrumStep`: the hits one drum step plays (chance, repeats); used live and by WAV and MIDI export |
 | `ui/src/hooks/useComputerKeyboard.ts` | Computer-keyboard piano for the selected lane |
@@ -65,6 +68,10 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 | `engine/src/dsp.ts` | Shared oscillators, state-variable filter, exponential ADSR, seeded noise |
 
 ## Behaviour Worth Knowing
+- There are many projects. `localService` holds the open one, with a working copy in `localStorage` (written synchronously, so it survives a closing tab) and a record in the library that is updated after every write. Switching projects goes through `stash()` then `activate()`, which emits `init`. Project operations are async methods on `localService` (`newProject`, `openProject`, `copyProject`, `renameProject`, `deleteProject`, `importProject`), not `localRequest` routes.
+- Importing a file or opening a share link always creates a new project; nothing overwrites an existing one. Project names are unique.
+- `savedPatterns` only exists to migrate arrangements saved by older versions into projects (`openLibrary`). Do not add to it.
+- Share links and project files are untrusted. Both go through `restore()`; `readProjectFile` does that without opening the project.
 - A project has scenes (one bar of every lane plus the drum grid) and a song (scenes in order, with repeats). The lanes' patterns and `drumState` steps in the store are always the open scene; its slot in `scenes` is only brought up to date by `commitScene()`, which runs before anything reads `scenes`. Never read a scene's stored copy for the open scene: use the live pattern.
 - Sounds, kit settings, mutes, tempo and effects are project-wide. A scene holds only steps.
 - In song mode the scheduler picks the scene from the transport's bar number (`sceneAtBar`), plays any scene other than the open one from its stored copy, and asks the store to open the playing scene. `localService.request` emits synchronously, and the `sceneChanged` handler updates the refs the scheduler reads straight away; keep both true or a bar would play the wrong scene.
@@ -124,7 +131,7 @@ npm run test:browser # Playwright against the production preview
 - Do not reintroduce a backend, Discord integration, authentication or WebSocket transport
 
 ## Known Issues
-- `localService` still exposes a REST-shaped `request(path)` API with `Response` objects, a leftover from the server version
+- `localService` still exposes a REST-shaped `request(path)` API with `Response` objects for edits inside a project, a leftover from the server version
 - `useStudio.tsx` is about 2,300 lines and owns most state; the UI is separate from it, but the state itself is not yet split by concern
 - Firefox/Safari lack Web MIDI API support
 

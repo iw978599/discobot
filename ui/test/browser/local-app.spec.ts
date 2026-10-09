@@ -6,6 +6,13 @@ async function menu(page: Page, name: 'Project' | 'Export', item: string) {
   await page.getByRole('button', { name: `${name} ▾`, exact: true }).click();
   await page.getByRole('menuitem', { name: item, exact: true }).click();
 }
+async function openProject(page: Page, name: string) {
+  await page.getByRole('button', { name: /^Project: / }).click();
+  const dialog = page.getByRole('dialog', { name: 'Projects', exact: true });
+  await dialog.getByRole('group', { name: `Project ${name}`, exact: true }).getByRole('button', { name: 'Open', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole('button', { name: `Project: ${name}`, exact: true })).toBeVisible();
+}
 const openMidi = (page: Page) => page.getByRole('button', { name: 'MIDI and samples', exact: true }).click();
 
 test.beforeEach(async ({ page }) => {
@@ -57,7 +64,7 @@ test('browser-local transport emits audible independent synth lanes with no API 
   expect(remote).toEqual([]);
 });
 
-test('saved projects restore tempo, mixer, swing and drum velocity; undo restores edits', async ({ page }) => {
+test('a kept copy restores tempo, lanes, swing and mutes; undo restores edits', async ({ page }) => {
   await page.goto('./');
   await page.getByRole('button', { name: 'Piano Roll', exact: true }).click();
   await page.getByRole('button', { name: 'C3 step 1', exact: true }).click();
@@ -75,16 +82,13 @@ test('saved projects restore tempo, mixer, swing and drum velocity; undo restore
   await page.getByRole('button', { name: 'Oct +', exact: true }).click();
   await page.getByRole('button', { name: 'Piano Roll', exact: true }).click();
   await page.getByRole('button', { name: 'E4 step 1', exact: true }).click();
-  await page.getByRole('button', { name: '+ Save', exact: true }).click();
-  await page.locator('.save-name-input').fill('Local arrangement');
-  await page.locator('.save-name-input').press('Enter');
-  await expect(page.getByText('Saved!', { exact: false })).toBeVisible();
-  const saved = await page.evaluate(() => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem('discobot_browser_project_v1')!)).savedPatterns[0]);
+  const saved = await page.evaluate(() => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem('discobot_browser_project_v1')!)));
   expect(saved.tempo).toBe(146);
   expect(saved.drumSwing).toBe(.35);
   expect(saved.synths).toHaveLength(3);
-  expect(saved.synths.find((s: any) => s.id === 2).muted).toBe(true);
-  expect(saved.synths.find((s: any) => s.id === 2).octaveShift).toBe(1);
+  expect(saved.synths.find((s: any) => s.synthId === 2).muted).toBe(true);
+  expect(saved.synths.find((s: any) => s.synthId === 2).octaveShift).toBe(1);
+  await menu(page, 'Project', 'Save a Copy');
   await page.getByRole('button', { name: 'Mute Synth 2', exact: true }).click();
   await page.getByRole('button', { name: 'Remove', exact: true }).click();
   await page.reload();
@@ -92,7 +96,7 @@ test('saved projects restore tempo, mixer, swing and drum velocity; undo restore
   await page.locator('.tempo-led').click();
   await page.locator('.tempo-led-input').fill('90');
   await page.locator('.tempo-led-input').press('Enter');
-  await page.locator('.load-select').selectOption(saved.id);
+  await openProject(page, 'Untitled copy');
   await expect(page.locator('.tempo-led-value')).toHaveText('146');
   await expect(page.getByRole('button', { name: 'Mute Synth 2', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(() => page.evaluate(() => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem('discobot_browser_project_v1')!)).synths.find((s: any) => s.synthId === 2)?.pattern.steps[0].note)).toBe('E4');

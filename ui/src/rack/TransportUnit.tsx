@@ -2,17 +2,18 @@ import type { Studio } from '../studio/useStudio';
 import { downloadArrangementWav, downloadStemsZip } from '../services/wavExport';
 import Knob from '../components/Knob';
 import Menu from './Menu';
-import { LoadPattern, SavePattern, TempoDisplay } from './HeaderParts';
+import { TempoDisplay } from './HeaderParts';
 
 interface TransportUnitProps {
   studio: Studio;
   onOpenSettings: () => void;
-  onOpenManager: () => void;
+  onOpenProjects: () => void;
+  onShare: () => void;
 }
 
 // The top rack unit: tempo, transport, save and load, and the two menus that hold
 // everything you do once per session instead of once per bar.
-export default function TransportUnit({ studio, onOpenSettings, onOpenManager }: TransportUnitProps) {
+export default function TransportUnit({ studio, onOpenSettings, onOpenProjects, onShare }: TransportUnitProps) {
   const { midiState } = studio;
   const midiStatus = !midiState.supported ? 'MIDI is not available in this browser'
     : midiState.connected ? 'A MIDI controller is connected' : 'No MIDI controller connected';
@@ -21,40 +22,28 @@ export default function TransportUnit({ studio, onOpenSettings, onOpenManager }:
       <div className="rack-row">
         <div className="rack-plate static brand">
           <h1>Discobot</h1>
-          <span className="active-pattern-name" title={studio.activeSavedPattern?.name}>
-            {studio.activeSavedPattern?.name ?? 'Unsaved arrangement'}
-          </span>
+          <button className="project-name" onClick={onOpenProjects} aria-label={`Project: ${studio.projectName}`} title="See all projects, rename this one, or keep a copy">
+            {studio.projectName || 'Untitled'}
+          </button>
         </div>
         <TempoDisplay tempo={studio.globalTempo} onChange={(bpm) => { void studio.handleTempoChange(bpm); }} />
         <button className={`rack-btn go play-all-button ${studio.isAnyPlaying ? 'playing' : ''}`} onClick={() => { void studio.handleGlobalPlayStop(); }}>
           {studio.isAnyPlaying ? '⏹ Stop All' : '▶ Play All'}
         </button>
-        <SavePattern
-          saving={studio.saving}
-          setSaving={studio.setSaving}
-          saveName={studio.saveName}
-          setSaveName={studio.setSaveName}
-          savedFeedback={studio.savedFeedback}
-          setSavedFeedback={studio.setSavedFeedback}
-          onSave={studio.handleSaveGlobal}
-        />
-        <LoadPattern
-          loading={studio.loadingSavedPatterns}
-          savedPatterns={studio.savedPatterns}
-          onLoad={(id) => { void studio.handleLoadGlobal(id); }}
-          onRefresh={() => { void studio.refreshSavedPatterns(); }}
-        />
         <div className="rack-grow" />
         <button className="rack-btn" onClick={() => { void studio.handleUndo(); }} title="Undo (Ctrl/Cmd+Z)">Undo</button>
         <button className="rack-btn" onClick={() => { void studio.handleRedo(); }} title="Redo (Ctrl/Cmd+Shift+Z)">Redo</button>
         <Menu
           label="Project"
           items={[
+            { label: 'New Project', title: 'Start an empty project. The open one stays in your projects', onSelect: () => { void studio.handleNewProject(); } },
+            { label: 'All Projects', title: 'Open, rename, copy or delete projects', onSelect: onOpenProjects },
+            { label: 'Save a Copy', title: 'Keep a copy of this project as it is now, to go back to', onSelect: () => { void studio.handleCopyProject(studio.projectId); } },
+            { label: 'Share Link', title: 'Make a link that plays this song for anyone who opens it', onSelect: onShare },
             { label: 'Export Project', title: 'Download the whole project as a file', onSelect: studio.handleExportProject },
-            { label: 'Import Project', title: 'Open a project file, replacing the current project', onSelect: () => studio.projectImportFileRef.current?.click() },
+            { label: 'Import Project', title: 'Add a project file to your projects and open it', onSelect: () => studio.projectImportFileRef.current?.click() },
             { label: 'Import MIDI', title: 'Bring notes in from a .mid file', onSelect: studio.handleMidiImportClick },
-            { label: 'Manage Saved', title: 'Load or delete saved arrangements', onSelect: onOpenManager },
-            { label: 'Reset All', title: 'Clear every lane, the drums and the effects', onSelect: () => { void studio.handleReset(); } },
+            { label: 'Reset All', title: 'Clear every lane, the drums and the effects of this project', onSelect: () => { void studio.handleReset(); } },
           ]}
         />
         <Menu

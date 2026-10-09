@@ -1,5 +1,6 @@
 import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, Scene, Song, SynthParameters, SynthModelId, SynthModelParams } from '../types';
 import { emptySteps } from './songPlayback';
+import { createIndexedDbLibrary, createMemoryLibrary, hasIndexedDb, type ProjectInfo, type ProjectLibrary, type ProjectRecord } from './projectLibrary';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
 import { normalizeSynthModelId } from '../synthModels';
 import { record, number, matchesShape, sanitizePattern, sanitizeSynthParams, sanitizeDrums, sanitizeEffects, sanitizeSends, sanitizeSaved, sanitizeModelParams, sanitizeKit, sanitizeScenes, sanitizeSong, MAX_SCENES } from './projectSanitization';
@@ -21,7 +22,14 @@ type State = Defaults & {
   // The lanes' patterns and the drum grid above are the scene being edited. Its entry in
   // `scenes` is only brought up to date when it is needed: see commitScene.
   scenes: Scene[]; currentSceneId: string; song: Song;
+  // Which project in the library this is. The copy in localStorage is the working copy of
+  // the open project; the library holds one record per project, this one included.
+  projectId: string; name: string; revision: number; createdAt: number; updatedAt: number;
 };
+type ProjectResult = { ok: true; repaired?: boolean } | { ok: false; error: string };
+const DEFAULT_PROJECT_NAME = 'Untitled';
+const projectName = (value: unknown, fallback = DEFAULT_PROJECT_NAME) =>
+  (typeof value === 'string' && value.trim() ? value.trim() : fallback).slice(0, 60);
 export interface ProjectFile {
   format: typeof PROJECT_FILE_FORMAT;
   formatVersion: 1;
@@ -32,7 +40,7 @@ const PROJECT_FILE_FORMAT = 'discobot-project';
 const STORAGE_KEY = 'discobot_browser_project_v1';
 // Bumped when synth parameters gain fields. An older project is upgraded with defaults,
 // which is a migration and not damage worth warning about.
-const SCHEMA = 4;
+const SCHEMA = 5;
 // Edits are written this long after the last one, so dragging a knob is one write, not hundreds.
 const SAVE_DELAY_MS = 300;
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
@@ -57,20 +65,20 @@ export class LocalProjectService {
   private unsaved = false;
   // Set when another tab has written the project: this tab stops saving until the user chooses a version.
   private paused = false;
+  private library: ProjectLibrary = createMemoryLibrary();
+  // False until a stored working copy was found, so a first run can adopt a library project instead.
+  private hadWorkingCopy = false;
 
   initialize(defaults: Defaults) {
     if (this.state) return;
     this.defaults = clone(defaults);
-    this.state = {
-      ...clone(defaults), version: 1, schema: SCHEMA, synths: [], tempo: 120,
-      selectedDrumKitId: 'clean-analog', drumMasterVolume: 1, drumSwing: 0, savedPatterns: [],
-      scenes: [], currentSceneId: '', song: { entries: [], loop: false },
-    };
+    this.state = this.blankState();
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const { state, damaged } = this.restore(JSON.parse(stored));
         this.state = state;
+        this.hadWorkingCopy = true;
         if (damaged) this.storageIssue = 'Some damaged browser project values were repaired. Please save a new copy of your arrangement.';
         this.restored = state.synths.length > 0;
       }
@@ -89,6 +97,16 @@ export class LocalProjectService {
         this.emit('externalChange', {});
       });
     }
+  }
+
+  private blankState(name = DEFAULT_PROJECT_NAME): State {
+    const now = Date.now();
+    return {
+      ...clone(this.defaults!), version: 1, schema: SCHEMA, synths: [], tempo: 120,
+      selectedDrumKitId: 'clean-analog', drumMasterVolume: 1, drumSwing: 0, savedPatterns: [],
+      scenes: [], currentSceneId: '', song: { entries: [], loop: false },
+      projectId: crypto.randomUUID(), name, revision: 0, createdAt: now, updatedAt: now,
+    };
   }
 
   // Rebuilds a project from untrusted data: browser storage or an imported file.
@@ -136,6 +154,9 @@ export class LocalProjectService {
       selectedDrumKitId: sanitizeKit(parsed.selectedDrumKitId),
       drumMasterVolume: number(parsed.drumMasterVolume, 1, 0, 1), drumSwing: number(parsed.drumSwing, 0, 0, .75),
       scenes: [], currentSceneId: '', song: { entries: [], loop: false },
+      projectId: typeof parsed.projectId === 'string' && parsed.projectId ? parsed.projectId.slice(0, 200) : crypto.randomUUID(),
+      name: projectName(parsed.name), revision: Math.round(number(parsed.revision, 0, 0, 1e12)),
+      createdAt: number(parsed.createdAt, Date.now(), 0, 1e15), updatedAt: number(parsed.updatedAt, Date.now(), 0, 1e15),
     };
     // Projects from before scenes existed have none: ensureScenes makes one from the live pattern.
     const scenes = sanitizeScenes(parsed.scenes, defaults.drumState);
@@ -212,33 +233,239 @@ export class LocalProjectService {
     this.commitScene();
     const project = clone(this.state!);
     project.synths.forEach(synth => { synth.isPlaying = false; });
+    project.savedPatterns = [];
     return { format: PROJECT_FILE_FORMAT, formatVersion: 1, exportedAt: new Date().toISOString(), project };
   }
 
-  // Replaces the whole project with the contents of an exported file.
-  importProject(file: unknown): { ok: true; repaired: boolean } | { ok: false; error: string } {
+  private currentRecord(): ProjectRecord {
+    this.commitScene();
+    const { savedPatterns: _legacy, ...project } = clone(this.state!);
+    project.synths.forEach(synth => { synth.isPlaying = false; });
+    return {
+      id: project.projectId, name: project.name, createdAt: project.createdAt, updatedAt: project.updatedAt,
+      revision: project.revision, project: { ...project, savedPatterns: [] },
+    };
+  }
+
+  // A saved arrangement from before the library existed, as a project of its own.
+  private savedToRecord(saved: SavedPatternFull): ProjectRecord {
+    const lanes = saved.synths?.length ? saved.synths : [{ id: 1, steps: saved.steps, synthParams: saved.synthParams, synthModelId: saved.synthModelId, synthModelParams: saved.synthModelParams }];
+    const { state } = this.restore({
+      version: 1, savedPatterns: [], tempo: saved.tempo, drumState: saved.drumState, effectsLoop: saved.effectsLoop,
+      drumFx: saved.drumFx, selectedDrumKitId: saved.drumKitId, drumMasterVolume: saved.drumMasterVolume, drumSwing: saved.drumSwing,
+      scenes: saved.scenes, song: saved.song, currentSceneId: saved.currentSceneId,
+      synths: lanes.map(lane => {
+        const pattern = { id: crypto.randomUUID(), name: `Synth ${lane.id}`, steps: lane.steps };
+        return { ...lane, synthId: lane.id, pattern, patterns: [pattern] };
+      }),
+      projectId: saved.id, name: saved.name, createdAt: saved.createdAt, updatedAt: saved.updatedAt,
+    });
+    const keep = this.state!;
+    // captureScene reads this.state, so borrow it to give the record its first scene.
+    this.state = state;
+    this.ensureScenes();
+    const record = this.currentRecord();
+    this.state = keep;
+    return record;
+  }
+
+  // Connects the project library and brings it up to date with this browser's working copy.
+  // The app is usable before this resolves; it only gates the library operations.
+  async openLibrary(library?: ProjectLibrary): Promise<void> {
+    try {
+      this.library = library ?? (hasIndexedDb() ? createIndexedDbLibrary() : createMemoryLibrary());
+      const state = this.state!;
+      if (state.savedPatterns.length > 0) {
+        // Saved arrangements become projects. They only leave the working copy once every one is safely stored.
+        for (const saved of state.savedPatterns) await this.library.put(this.savedToRecord(saved));
+        state.savedPatterns = [];
+        this.write();
+      }
+      const projects = await this.library.list();
+      if (!this.hadWorkingCopy && projects.length > 0) {
+        // The working copy is gone (site data partly cleared) but the library survived: reopen the latest.
+        const record = await this.library.get(projects[0].id);
+        if (record) this.activate(this.restore(record.project).state, record);
+      } else {
+        await this.library.put(this.currentRecord());
+      }
+      this.hadWorkingCopy = true;
+      await this.announceProjects();
+    } catch {
+      this.storageIssue = 'The project library is unavailable in this browser. The open project is still saved, but other projects cannot be listed.';
+      this.emit('storageError', { message: this.storageIssue });
+    }
+  }
+
+  private async announceProjects() {
+    this.emit('projectsChanged', { projects: await this.library.list(), projectId: this.state!.projectId, name: this.state!.name });
+  }
+
+  // Puts the open project away in the library before another takes its place.
+  private async stash() {
+    this.write();
+    await this.library.put(this.currentRecord());
+  }
+
+  // Makes a project the open one.
+  private activate(state: State, identity?: Pick<ProjectRecord, 'id' | 'name'>) {
+    this.state = state;
+    if (identity) { state.projectId = identity.id; state.name = projectName(identity.name); }
+    if (!state.synths.some(s => s.synthId === 1)) state.synths.unshift(this.createSynth(1));
+    state.synths.sort((a, b) => a.synthId - b.synthId);
+    this.ensureScenes();
+    this.restored = true;
+    this.paused = false;
+    this.write();
+    this.emit('init', this.snapshot());
+  }
+
+  listProjects(): Promise<ProjectInfo[]> { return this.library.list(); }
+
+  // Two projects may not share a name, or they could not be told apart in the list.
+  private async uniqueName(base: string, ignoreId?: string): Promise<string> {
+    const taken = new Set((await this.library.list()).filter(project => project.id !== ignoreId).map(project => project.name.toLowerCase()));
+    if (!taken.has(base.toLowerCase())) return base;
+    for (let n = 2; ; n++) {
+      const candidate = `${base.slice(0, 56)} ${n}`;
+      if (!taken.has(candidate.toLowerCase())) return candidate;
+    }
+  }
+
+  async newProject(name?: string): Promise<ProjectResult> {
+    try {
+      await this.stash();
+      const state = this.blankState(await this.uniqueName(projectName(name)));
+      this.state = state;
+      state.synths = [1, 2, 3].map(id => this.createSynth(id));
+      this.activate(state);
+      await this.library.put(this.currentRecord());
+      await this.announceProjects();
+      return { ok: true };
+    } catch { return { ok: false, error: 'A new project could not be created.' }; }
+  }
+
+  async openProject(id: string): Promise<ProjectResult> {
+    if (id === this.state!.projectId) return { ok: true };
+    try {
+      const record = await this.library.get(id);
+      if (!record) return { ok: false, error: 'That project is no longer in the library.' };
+      const restored = this.restore(record.project);
+      await this.stash();
+      this.activate(restored.state, record);
+      await this.announceProjects();
+      return { ok: true, repaired: restored.damaged };
+    } catch { return { ok: false, error: 'That project could not be opened.' }; }
+  }
+
+  // A copy of a project as it stands now, left in the library. The open project stays open,
+  // so this is how to keep a version to go back to.
+  async copyProject(id: string, name?: string): Promise<ProjectResult> {
+    try {
+      const source = id === this.state!.projectId ? (this.write(), this.currentRecord()) : await this.library.get(id);
+      if (!source) return { ok: false, error: 'That project is no longer in the library.' };
+      const now = Date.now(), copyId = crypto.randomUUID(), copyName = await this.uniqueName(projectName(name, `${source.name} copy`));
+      await this.library.put({
+        ...source, id: copyId, name: copyName, createdAt: now, updatedAt: now, revision: 0,
+        project: { ...(source.project as object), projectId: copyId, name: copyName, revision: 0, createdAt: now, updatedAt: now },
+      });
+      await this.announceProjects();
+      return { ok: true };
+    } catch { return { ok: false, error: 'The copy could not be saved.' }; }
+  }
+
+  async renameProject(id: string, name: string): Promise<ProjectResult> {
+    const wanted = projectName(name, '');
+    if (!wanted) return { ok: false, error: 'A project needs a name.' };
+    try {
+      const next = await this.uniqueName(wanted, id);
+      if (id === this.state!.projectId) {
+        this.state!.name = next;
+        await this.stash();
+      } else {
+        const record = await this.library.get(id);
+        if (!record) return { ok: false, error: 'That project is no longer in the library.' };
+        await this.library.put({ ...record, name: next, project: { ...(record.project as object), name: next } });
+      }
+      await this.announceProjects();
+      return { ok: true };
+    } catch { return { ok: false, error: 'The project could not be renamed.' }; }
+  }
+
+  async deleteProject(id: string): Promise<ProjectResult> {
+    try {
+      await this.library.remove(id);
+      if (id === this.state!.projectId) {
+        // The open project was deleted: open the most recent one left, or start a new one.
+        const [next] = await this.library.list();
+        const record = next && await this.library.get(next.id);
+        if (record) this.activate(this.restore(record.project).state, record);
+        else {
+          const state = this.blankState();
+          this.state = state;
+          state.synths = [1, 2, 3].map(synthId => this.createSynth(synthId));
+          this.activate(state);
+          await this.library.put(this.currentRecord());
+        }
+      }
+      await this.announceProjects();
+      return { ok: true };
+    } catch { return { ok: false, error: 'The project could not be deleted.' }; }
+  }
+
+  // Checks and repairs a project file without opening it, so a shared song can be shown first.
+  readProjectFile(file: unknown): { ok: true; project: State } | { ok: false; error: string } {
+    const input = record(file);
+    if (input.format !== PROJECT_FILE_FORMAT) return { ok: false, error: 'This is not a Discobot song. The link may have been cut short.' };
+    if (input.formatVersion !== 1) return { ok: false, error: 'This song was made by a newer version of Discobot.' };
+    try {
+      const { state } = this.restore({ savedPatterns: [], ...record(input.project) });
+      const keep = this.state!;
+      this.state = state;
+      if (!state.synths.some(s => s.synthId === 1)) state.synths.unshift(this.createSynth(1));
+      this.ensureScenes();
+      this.state = keep;
+      return { ok: true, project: state };
+    } catch {
+      return { ok: false, error: 'The song in this link is damaged and could not be read.' };
+    }
+  }
+
+  // Adds the contents of an exported file to the library as a new project and opens it.
+  // The project that was open stays in the library.
+  async importProject(file: unknown): Promise<ProjectResult> {
     const input = record(file);
     if (input.format !== PROJECT_FILE_FORMAT) return { ok: false, error: 'This is not a Discobot project file.' };
     if (input.formatVersion !== 1) return { ok: false, error: 'This project file was made by a newer version of Discobot.' };
     let restored: { state: State; damaged: boolean };
     try {
-      restored = this.restore(input.project);
+      restored = this.restore({ savedPatterns: [], ...record(input.project) });
     } catch {
       return { ok: false, error: 'The project file is damaged and could not be read.' };
     }
-    const previous = this.state!;
-    this.state = restored.state;
-    if (!this.state.synths.some(s => s.synthId === 1)) this.state.synths.unshift(this.createSynth(1));
-    this.state.synths.sort((a, b) => a.synthId - b.synthId);
-    this.ensureScenes();
-    if (!this.write()) {
-      this.state = previous;
-      return { ok: false, error: 'The project is too large for this browser\'s storage.' };
-    }
-    this.restored = true;
-    this.emit('init', this.snapshot());
-    this.notifySaved();
-    return { ok: true, repaired: restored.damaged };
+    try {
+      await this.stash();
+      const legacy = restored.state.savedPatterns;
+      restored.state.savedPatterns = [];
+      // A file always arrives as a new project, so importing twice never overwrites anything.
+      const now = Date.now();
+      Object.assign(restored.state, {
+        projectId: crypto.randomUUID(), revision: 0, createdAt: now, updatedAt: now, name: await this.uniqueName(restored.state.name),
+      });
+      const previous = this.state!;
+      this.activate(restored.state);
+      if (this.unsaved) {
+        this.state = previous;
+        this.write();
+        this.emit('init', this.snapshot());
+        return { ok: false, error: 'The project is too large for this browser\'s storage.' };
+      }
+      await this.library.put(this.currentRecord());
+      // Files made before the library existed carry saved arrangements; they come along as projects.
+      for (const saved of legacy) await this.library.put(this.savedToRecord({ ...saved, id: crypto.randomUUID() }));
+      await this.announceProjects();
+      return { ok: true, repaired: restored.damaged };
+    } catch { return { ok: false, error: 'The project could not be added to the library.' }; }
   }
 
   private createSynth(synthId: number): LocalSynth {
@@ -296,23 +523,23 @@ export class LocalProjectService {
   private write() {
     if (this.saveTimer !== null) clearTimeout(this.saveTimer);
     this.saveTimer = null;
+    const state = this.state!;
     try {
       this.commitScene();
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
+      state.revision++;
+      state.updatedAt = Date.now();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       this.unsaved = false;
+      // Keep the library's record of this project in step. It is asynchronous and may not finish
+      // if the tab is closing; the working copy just written is what a reload reads.
+      this.library.put(this.currentRecord()).catch(() => {});
       return true;
     } catch {
+      this.unsaved = true;
       this.storageIssue = 'Unable to save to browser storage. Free space or allow storage for this site.';
       this.emit('storageError', { message: this.storageIssue });
       return false;
     }
-  }
-
-  private notifySaved() {
-    this.emit('savedPatternsChanged', {
-      patterns: this.state!.savedPatterns.map(({ id, name, updatedAt }) => ({ id, name, updatedAt })),
-    });
-    if (typeof window !== 'undefined') window.dispatchEvent(new Event('discobot:saved-patterns'));
   }
 
   setPlaying(synthId: number, playing: boolean, patternId?: string) {
@@ -345,42 +572,6 @@ export class LocalProjectService {
       this.emit(type, data);
       return respond(response);
     };
-    if (path === '/patterns/saved') return respond(state.savedPatterns.map(({ id, name, updatedAt }) => ({ id, name, updatedAt })));
-    const savedMatch = path.match(/^\/patterns\/saved\/([^/]+)$/);
-    if (savedMatch) {
-      const saved = state.savedPatterns.find(p => p.id === savedMatch[1]);
-      if (!saved) return respond({ error: 'Pattern not found' }, 404);
-      if (method === 'DELETE') {
-        const previous = state.savedPatterns;
-        state.savedPatterns = state.savedPatterns.filter(p => p !== saved);
-        if (!this.write()) {
-          state.savedPatterns = previous;
-          return respond({ error: 'Storage unavailable' }, 507);
-        }
-        this.notifySaved();
-      }
-      return respond(saved);
-    }
-    if (path === '/patterns/save') {
-      const name = String(body.name || '').trim();
-      if (!name || !Array.isArray(body.steps)) return respond({ error: 'Name and steps required' }, 400);
-      const existing = state.savedPatterns.find(p => p.name.toLowerCase() === name.toLowerCase());
-      if (existing && body.overwriteId !== existing.id) return respond({ id: existing.id, name: existing.name }, 409);
-      const now = Date.now();
-      this.commitScene();
-      const saved = sanitizeSaved({
-        ...clone(body), id: existing?.id || crypto.randomUUID(), name, createdAt: existing?.createdAt || now, updatedAt: now,
-        scenes: clone(state.scenes), song: clone(state.song), currentSceneId: state.currentSceneId,
-      }, this.defaults!)!;
-      const previous = state.savedPatterns;
-      state.savedPatterns = [...previous.filter(p => p.id !== saved.id), saved];
-      if (!this.write()) {
-        state.savedPatterns = previous;
-        return respond({ error: 'Storage unavailable' }, 507);
-      }
-      this.notifySaved();
-      return respond(saved);
-    }
     if (path === '/scenes') {
       const { scenes, song, currentSceneId } = this.sceneMessage();
       return respond({ scenes, song, currentSceneId });

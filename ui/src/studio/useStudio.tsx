@@ -3,10 +3,11 @@ import { createNamedSynthPresets } from '../components/SynthControls';
 import { useSynthAudio } from '../hooks/useSynthAudio';
 import { useDrumAudio } from '../hooks/useDrumAudio';
 import { MidiMode, MidiMessage, useMidiInput } from '../hooks/useMidiInput';
-import { Pattern, SynthParameters, SavedPatternInfo, SavedPatternFull, SavedSynthData, DrumState, DrumInstrument, DrumSettings, DrumKitDefinition, DrumKitId, EffectsLoopState, FxSendLevels, Scene, Song, SynthModelId, SynthModelParams } from '../types';
+import { Pattern, SynthParameters, DrumState, DrumInstrument, DrumSettings, DrumKitDefinition, DrumKitId, EffectsLoopState, FxSendLevels, Scene, Song, SynthModelId, SynthModelParams } from '../types';
 import { SongPosition, entryStartBar, sceneAtBar, sceneDrumState, songBars } from '../services/songPlayback';
 import { createDefaultSynthParameters } from '@discobot/engine';
 import { localRequest, localService } from '../services/localService';
+import type { ProjectInfo } from '../services/projectLibrary';
 import { sanitizeSynthParams } from '../services/projectSanitization';
 import { expandStep } from '../services/noteScheduling';
 import { BrowserTransport, TransportTick } from '../services/browserTransport';
@@ -393,7 +394,9 @@ export function useStudio() {
   const [midiMode, setMidiMode] = useState<MidiMode>('live');
   const [midiChannel, setMidiChannel] = useState(1);
   const [midiTargetSynthId, setMidiTargetSynthId] = useState<number | null>(1);
-  const [activeSavedPattern, setActiveSavedPattern] = useState<{ id: string; name: string } | null>(null);
+  const [projectId, setProjectId] = useState('');
+  const [projectName, setProjectName] = useState('');
+  const [projects, setProjects] = useState<ProjectInfo[]>([]);
   const [synthPresets, setSynthPresets] = useState<SynthPreset[]>(() => [
     ...createBuiltInPresets(),
     ...createNamedSynthPresets(DEFAULT_PARAMS),
@@ -426,6 +429,8 @@ export function useStudio() {
   globalTempoRef.current = globalTempo;
   const drumSwingRef = useRef(drumSwing);
   drumSwingRef.current = drumSwing;
+  const projectIdRef = useRef(projectId);
+  projectIdRef.current = projectId;
   const scenesRef = useRef(scenes);
   scenesRef.current = scenes;
   const currentSceneIdRef = useRef(currentSceneId);
@@ -573,7 +578,6 @@ export function useStudio() {
     )));
     setDrumState(cloneDrumState(snapshot.drumState));
     setGlobalTempo(snapshot.tempo);
-    setActiveSavedPattern(null);
     await Promise.all([
       localRequest(`/synth/${synthId}/patterns/${snapshot.pattern.id}`, {
         method: 'PUT',
@@ -840,6 +844,10 @@ export function useStudio() {
         if (message.data.tempo) setGlobalTempo(message.data.tempo);
         if (typeof message.data.drumMasterVolume === 'number') setDrumMasterVolume(message.data.drumMasterVolume);
         if (typeof message.data.drumSwing === 'number') setDrumSwing(message.data.drumSwing);
+        if (typeof message.data.projectId === 'string') {
+          setProjectId(message.data.projectId);
+          setProjectName(message.data.name);
+        }
         if (Array.isArray(message.data.scenes)) {
           setScenes(message.data.scenes);
           setCurrentSceneId(message.data.currentSceneId);
@@ -1053,16 +1061,18 @@ export function useStudio() {
         if (message.data.effectsLoop) setEffectsLoop(normalizeEffectsLoop(message.data.effectsLoop));
         break;
       }
+      case 'projectsChanged': {
+        setProjects(message.data.projects);
+        setProjectId(message.data.projectId);
+        setProjectName(message.data.name);
+        break;
+      }
       case 'externalChange': {
         setChangedElsewhere(true);
         break;
       }
       case 'storageError': {
         setStorageError(message.data.message);
-        break;
-      }
-      case 'savedPatternsChanged': {
-        setSavedPatterns(message.data.patterns);
         break;
       }
     }
@@ -1075,7 +1085,9 @@ export function useStudio() {
       synthParams: DEFAULT_PARAMS, drumState: createDefaultDrumState(),
       effectsLoop: DEFAULT_EFFECTS_LOOP, drumFx: DEFAULT_DRUM_FX,
     });
-    return localService.subscribe(message => messageHandlerRef.current(message));
+    const unsubscribe = localService.subscribe(message => messageHandlerRef.current(message));
+    void localService.openLibrary();
+    return unsubscribe;
   }, []);
 
 
@@ -1236,10 +1248,6 @@ export function useStudio() {
     if (localService.resumeSaving()) setChangedElsewhere(false);
   }, []);
 
-  const clearActiveSavedPattern = useCallback(() => {
-    setActiveSavedPattern(null);
-  }, []);
-
   const handleStepChange = useCallback(async (synthId: number, stepIndex: number) => {
     const synth = synthsRef.current.find(s => s.id === synthId);
     const pattern = synth?.pattern;
@@ -1260,7 +1268,6 @@ export function useStudio() {
       setSynths(prev => prev.map(s => (
         s.id === synthId ? { ...s, pattern: updatedPattern, selectedStep: null } : s
       )));
-      clearActiveSavedPattern();
 
       await localRequest(`/synth/${synthId}/patterns/${pattern.id}`, {
         method: 'PUT',
@@ -1274,7 +1281,7 @@ export function useStudio() {
       if (s.id !== synthId) return s;
       return { ...s, selectedStep: s.selectedStep === stepIndex ? null : stepIndex };
     }));
-  }, [clearActiveSavedPattern, pushHistorySnapshot]);
+  }, [pushHistorySnapshot]);
 
   // Moves the selection without the toggle and clear behaviour a click on a step has.
   const handleStepSelect = useCallback((synthId: number, stepIndex: number) => {
@@ -1303,14 +1310,13 @@ export function useStudio() {
     setSynths(prev => prev.map(s => (
       s.id === synthId ? { ...s, pattern: updatedPattern, selectedStep: stepIndex } : s
     )));
-    clearActiveSavedPattern();
 
     await localRequest(`/synth/${synthId}/patterns/${synth.pattern.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updatedPattern),
     });
-  }, [clearActiveSavedPattern, pushHistorySnapshot]);
+  }, [pushHistorySnapshot]);
 
   const handleClearPatternNotes = useCallback(async (synthId: number) => {
     const synth = synthsRef.current.find(s => s.id === synthId);
@@ -1323,13 +1329,12 @@ export function useStudio() {
     setSynths(prev => prev.map(s => (
       s.id === synthId ? { ...s, pattern: updatedPattern, selectedStep: null } : s
     )));
-    clearActiveSavedPattern();
     await localRequest(`/synth/${synthId}/patterns/${synth.pattern.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updatedPattern),
     });
-  }, [clearActiveSavedPattern, pushHistorySnapshot]);
+  }, [pushHistorySnapshot]);
 
   const upsertStepNote = useCallback(async (synthId: number, stepIndex: number, note: string, velocity: number) => {
     const synth = synthsRef.current.find(s => s.id === synthId);
@@ -1349,14 +1354,13 @@ export function useStudio() {
       const nextPointer = (stepIndex + 1) % updatedPattern.steps.length;
       return { ...s, pattern: updatedPattern, selectedStep: stepIndex, stepRecordPointer: nextPointer };
     }));
-    clearActiveSavedPattern();
 
     await localRequest(`/synth/${synthId}/patterns/${synth.pattern.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updatedPattern),
     });
-  }, [clearActiveSavedPattern, pushHistorySnapshot]);
+  }, [pushHistorySnapshot]);
 
   const handleNotePlay = useCallback(async (synthId: number, note: string) => {
     const synth = synthsRef.current.find(s => s.id === synthId);
@@ -1385,14 +1389,13 @@ export function useStudio() {
     setSynths(prev => prev.map(s =>
       s.id === synthId ? { ...s, pattern: updated } : s
     ));
-    clearActiveSavedPattern();
 
     await localRequest(`/synth/${synthId}/patterns/${pattern.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updated),
     });
-  }, [synthAudio, triggerSynthNote, globalTempo, pushHistorySnapshot, clearActiveSavedPattern]);
+  }, [synthAudio, triggerSynthNote, globalTempo, pushHistorySnapshot]);
 
   const handleNoteRelease = useCallback(async (synthId: number, note: string) => {
     const synthParams = synthsRef.current.find(s => s.id === synthId)?.synthParams;
@@ -1485,7 +1488,6 @@ export function useStudio() {
       ...synth.synthModelParams,
       ...modelParams,
     });
-    clearActiveSavedPattern();
     setSynths((prev) => prev.map((entry) => (
       entry.id === synthId
         ? {
@@ -1511,7 +1513,7 @@ export function useStudio() {
         body: JSON.stringify(mapped),
       });
     }
-  }, [pushHistorySnapshot, clearActiveSavedPattern]);
+  }, [pushHistorySnapshot]);
 
   const handleStepCountChange = useCallback(async (synthId: number, stepCount: 16 | 32) => {
     const synth = synthsRef.current.find(s => s.id === synthId);
@@ -1536,14 +1538,13 @@ export function useStudio() {
         currentStep: s.currentStep % stepCount,
       };
     }));
-    clearActiveSavedPattern();
 
     await localRequest(`/synth/${synthId}/patterns/${synth.pattern.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(nextPattern),
     });
-  }, [clearActiveSavedPattern, pushHistorySnapshot]);
+  }, [pushHistorySnapshot]);
 
   const handleStepVelocityChange = useCallback(async (synthId: number, stepIndex: number, velocity: number) => {
     const synth = synthsRef.current.find((entry) => entry.id === synthId);
@@ -1559,13 +1560,12 @@ export function useStudio() {
     setSynths((prev) => prev.map((entry) => (
       entry.id === synthId ? { ...entry, pattern: nextPattern } : entry
     )));
-    clearActiveSavedPattern();
     await localRequest(`/synth/${synthId}/patterns/${synth.pattern.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(nextPattern),
     });
-  }, [pushHistorySnapshotThrottled, clearActiveSavedPattern]);
+  }, [pushHistorySnapshotThrottled]);
 
   const handleStepSlideChange = useCallback(async (synthId: number, stepIndex: number, slide: boolean) => {
     const synth = synthsRef.current.find((entry) => entry.id === synthId);
@@ -1578,12 +1578,11 @@ export function useStudio() {
     setSynths((prev) => prev.map((entry) => (
       entry.id === synthId ? { ...entry, pattern: nextPattern } : entry
     )));
-    clearActiveSavedPattern();
     await localRequest(`/synth/${synthId}/patterns/${synth.pattern.id}`, {
       method: 'PUT',
       body: JSON.stringify(nextPattern),
     });
-  }, [pushHistorySnapshot, clearActiveSavedPattern]);
+  }, [pushHistorySnapshot]);
 
   const handleSynthMixChange = useCallback(async (synthId: number, mix: { muted?: boolean; solo?: boolean }) => {
     setSynths(prev => prev.map(s =>
@@ -1594,84 +1593,6 @@ export function useStudio() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(mix),
     });
-  }, []);
-
-  const handleSavePattern = useCallback(async (synthId: number, name: string): Promise<boolean> => {
-    const synth = synthsRef.current.find(s => s.id === synthId);
-    if (!synth?.pattern || !synth.synthParams) return false;
-    const pattern = synth.pattern;
-    const synthParams = synth.synthParams;
-
-    const allSynthsData: SavedSynthData[] = synthsRef.current
-      .filter((s): s is typeof s & { pattern: NonNullable<typeof s.pattern>; synthParams: NonNullable<typeof s.synthParams> } => Boolean(s.pattern && s.synthParams))
-      .map((s) => ({
-        id: s.id,
-        steps: s.pattern.steps,
-        synthParams: s.synthParams,
-        synthModelId: s.synthModelId,
-        synthModelParams: s.synthModelParams,
-        muted: s.muted,
-        solo: s.solo,
-        octaveShift: s.octaveShift,
-        keyboardMode: s.keyboardMode,
-      }));
-
-    const saveRequest = async (overwriteId?: string) => localRequest('/patterns/save', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name,
-        overwriteId,
-        synthId,
-        steps: pattern.steps,
-        synthParams,
-        synthModelId: synth.synthModelId,
-        synthModelParams: synth.synthModelParams,
-        tempo: globalTempoRef.current,
-        drumState: drumStateRef.current,
-        drumKitId: selectedDrumKitIdRef.current,
-        drumMasterVolume,
-        drumSwing,
-        drumFx: drumFxRef.current,
-        effectsLoop: effectsLoopRef.current,
-        synths: allSynthsData,
-      }),
-    });
-
-    try {
-      let response = await saveRequest();
-      if (response.status === 409) {
-        const conflict = await response.json().catch(() => null);
-        const conflictName = conflict?.name || name;
-        const shouldOverwrite = window.confirm(`Pattern "${conflictName}" already exists. Overwrite it?`);
-        if (!shouldOverwrite) return false;
-        response = await saveRequest(conflict?.id);
-      }
-      if (!response.ok) return false;
-      const saved = await response.json();
-      if (saved?.id && saved?.name) {
-        setActiveSavedPattern({ id: saved.id, name: saved.name });
-      }
-      return true;
-    } catch (error) {
-      console.error('Pattern save error:', error);
-      return false;
-    }
-  }, [drumMasterVolume, drumSwing]);
-
-  const refreshSavedPatterns = useCallback(async () => {
-    setLoadingSavedPatterns(true);
-    try {
-      const res = await localRequest('/patterns/saved');
-      if (res.ok) {
-        const data: SavedPatternInfo[] = await res.json();
-        setSavedPatterns(data);
-      }
-    } catch {
-      // ignore
-    } finally {
-      setLoadingSavedPatterns(false);
-    }
   }, []);
 
   const handleSaveSynthPreset = useCallback((synthId: number, name: string) => {
@@ -1748,6 +1669,46 @@ export function useStudio() {
     downloadFile(JSON.stringify(file), 'application/json', `discobot-project-${new Date().toISOString().slice(0, 10)}.json`);
   }, [synthPresets]);
 
+  // Before the open project is swapped for another: stop sound, and forget undo steps that belong to it.
+  const leaveProject = useCallback(() => {
+    transportRef.current?.stop();
+    synthAudio.stopAllNotes();
+    drumAudio.stopAllNotes();
+    historyRef.current = { undo: [], redo: [] };
+    setSongPosition(null);
+  }, [synthAudio, drumAudio]);
+  const projectAction = useCallback(async (action: () => Promise<{ ok: true; repaired?: boolean } | { ok: false; error: string }>) => {
+    const result = await action();
+    if (!result.ok) setStorageError(result.error);
+    else if (result.repaired) setStorageError('The project was opened, but some damaged values in it were repaired.');
+    return result.ok;
+  }, []);
+  const handleNewProject = useCallback((name?: string) => { leaveProject(); return projectAction(() => localService.newProject(name)); }, [leaveProject, projectAction]);
+  const handleOpenProject = useCallback((id: string) => { leaveProject(); return projectAction(() => localService.openProject(id)); }, [leaveProject, projectAction]);
+  const handleCopyProject = useCallback((id: string, name?: string) => projectAction(() => localService.copyProject(id, name)), [projectAction]);
+  const handleRenameProject = useCallback((id: string, name: string) => projectAction(() => localService.renameProject(id, name)), [projectAction]);
+  const handleDeleteProject = useCallback((id: string) => {
+    if (id === projectIdRef.current) leaveProject();
+    return projectAction(() => localService.deleteProject(id));
+  }, [leaveProject, projectAction]);
+
+  // A project from a file or a share link becomes a new project in the library and is opened.
+  const handleImportProject = useCallback(async (data: unknown): Promise<boolean> => {
+    leaveProject();
+    const result = await localService.importProject(data);
+    if (!result.ok) {
+      setStorageError(result.error);
+      return false;
+    }
+    const importedPresets = parseUserPresets((data as { synthPresets?: unknown } | null)?.synthPresets);
+    if (importedPresets.length > 0) {
+      const importedIds = new Set(importedPresets.map(preset => preset.id));
+      setSynthPresets(prev => [...prev.filter(preset => preset.builtIn || !importedIds.has(preset.id)), ...importedPresets]);
+    }
+    setStorageError(result.repaired ? 'The project was opened, but some damaged values in it were repaired.' : null);
+    return true;
+  }, [leaveProject]);
+
   const projectImportFileRef = useRef<HTMLInputElement>(null);
   const handleImportProjectFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1767,24 +1728,8 @@ export function useStudio() {
       setStorageError('That file is not a Discobot project file.');
       return;
     }
-    if (!window.confirm('Opening a project file replaces everything in the current project, including saved arrangements. Continue?')) return;
-    transportRef.current?.stop();
-    synthAudio.stopAllNotes();
-    drumAudio.stopAllNotes();
-    const result = localService.importProject(parsed);
-    if (!result.ok) {
-      setStorageError(result.error);
-      return;
-    }
-    historyRef.current = { undo: [], redo: [] };
-    setActiveSavedPattern(null);
-    const importedPresets = parseUserPresets(parsed.synthPresets);
-    if (importedPresets.length > 0) {
-      const importedIds = new Set(importedPresets.map(preset => preset.id));
-      setSynthPresets(prev => [...prev.filter(preset => preset.builtIn || !importedIds.has(preset.id)), ...importedPresets]);
-    }
-    setStorageError(result.repaired ? 'The project was opened, but some damaged values in the file were repaired.' : null);
-  }, [synthAudio, drumAudio]);
+    await handleImportProject(parsed);
+  }, [handleImportProject]);
 
   const midiImportFileRef = useRef<HTMLInputElement>(null);
   const [midiImportAssignments, setMidiImportAssignments] = useState<Record<number, number | null | 'drums'>>({});
@@ -1865,23 +1810,9 @@ export function useStudio() {
       method: 'POST',
       body: JSON.stringify({ tempo }),
     });
-    clearActiveSavedPattern();
     setMidiImportData(null);
     setMidiImportAssignments({});
-  }, [midiImportData, midiImportAssignments, ensureSynthExists, pushHistorySnapshot, clearActiveSavedPattern]);
-
-  const handleSaveGlobal = useCallback(async (name: string): Promise<boolean> => {
-    const firstSynth = synthsRef.current[0];
-    if (!firstSynth?.pattern || !firstSynth.synthParams) return false;
-
-    const saved = await handleSavePattern(firstSynth.id, name);
-    if (saved) await refreshSavedPatterns();
-    return saved;
-  }, [handleSavePattern, refreshSavedPatterns]);
-
-  useEffect(() => {
-    void refreshSavedPatterns();
-  }, [refreshSavedPatterns]);
+  }, [midiImportData, midiImportAssignments, ensureSynthExists, pushHistorySnapshot]);
 
   useEffect(() => {
     const fetchDrumKits = async () => {
@@ -1909,190 +1840,6 @@ export function useStudio() {
     };
     void fetchDrumKits();
   }, []);
-
-  const handleLoadSavedPattern = useCallback(async (
-    synthId: number,
-    data: SavedPatternFull,
-    meta?: { id: string; name: string }
-  ) => {
-    const synth = synthsRef.current.find(s => s.id === synthId);
-    if (!synth?.pattern) return;
-    const savedLane = data.synths?.find(lane => lane.id === synthId);
-    setGlobalTempo(data.tempo);
-    await localRequest('/tempo', { method: 'POST', body: JSON.stringify({ tempo: data.tempo }) });
-
-    const updated = { ...synth.pattern, steps: savedLane?.steps ?? data.steps, tempo: data.tempo };
-    historyRef.current = { undo: [], redo: [] };
-    setSynths(prev => prev.map(s =>
-      s.id === synthId ? { ...s, pattern: updated, selectedStep: null } : s
-    ));
-
-    if (data.drumKitId) {
-      setSelectedDrumKitId(data.drumKitId);
-      await localRequest('/drum/kit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kitId: data.drumKitId, applyDefaults: false }),
-      });
-    }
-    if (data.drumState) {
-      setDrumState(data.drumState);
-      await localRequest('/drum/state', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ state: data.drumState }),
-      });
-    }
-    if (data.drumMasterVolume !== undefined) {
-      setDrumMasterVolume(data.drumMasterVolume);
-      await localRequest('/drum/master-volume', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ volume: data.drumMasterVolume }),
-      });
-    }
-    if (data.drumSwing !== undefined) {
-      setDrumSwing(data.drumSwing);
-      await localRequest('/drum/swing', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ swing: data.drumSwing }),
-      });
-    }
-    if (data.drumFx) {
-      const nextDrumFx = normalizeDrumFx(data.drumFx);
-      setDrumFx(nextDrumFx);
-      await localRequest('/drum/fx', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(nextDrumFx),
-      });
-    }
-    if (data.effectsLoop) {
-      const nextEffectsLoop = normalizeEffectsLoop(data.effectsLoop);
-      setEffectsLoop(nextEffectsLoop);
-      await localRequest('/effects-loop', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(nextEffectsLoop),
-      });
-    }
-    const nextModelId = normalizeSynthModelId(savedLane?.synthModelId ?? data.synthModelId);
-    const nextModelParams = normalizeSynthModelParams(savedLane?.synthModelParams ?? data.synthModelParams);
-    setSynths((prev) => prev.map((entry) => (
-      entry.id === synthId
-        ? {
-          ...entry,
-          synthModelId: nextModelId,
-          synthModelParams: nextModelParams,
-        }
-        : entry
-    )));
-    await localRequest(`/synth/${synthId}/model`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        modelId: nextModelId,
-        modelParams: nextModelParams,
-      }),
-    });
-    const nextSynthParams = savedLane?.synthParams ?? data.synthParams;
-    if (nextSynthParams) {
-      await localRequest(`/synth/${synthId}/parameters`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(normalizeSynthParams(nextSynthParams)),
-      });
-    }
-    await localRequest(`/synth/${synthId}/mix`, {
-      method: 'POST', body: JSON.stringify({ muted: savedLane?.muted ?? false, solo: savedLane?.solo ?? false }),
-    });
-    if (savedLane) {
-      await localRequest(`/synth/${synthId}/preferences`, { method: 'POST', body: JSON.stringify({ octaveShift: savedLane.octaveShift ?? 0, keyboardMode: savedLane.keyboardMode ?? synth.keyboardMode }) });
-      setSynths(prev => prev.map(s => s.id === synthId ? { ...s, octaveShift: savedLane.octaveShift ?? 0, keyboardMode: savedLane.keyboardMode ?? s.keyboardMode } : s));
-    }
-    await localRequest(`/synth/${synthId}/patterns/${synth.pattern.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updated),
-    });
-    if (meta?.id && meta?.name) {
-      setActiveSavedPattern({ id: meta.id, name: meta.name });
-    } else {
-      setActiveSavedPattern(null);
-    }
-  }, []);
-
-  const loadSynthFromSavedData = useCallback(async (synthId: number, saved: { steps: SavedPatternFull['steps']; synthParams?: SynthParameters | null; synthModelId?: SynthModelId; synthModelParams?: SynthModelParams; tempo?: number; muted?: boolean; solo?: boolean; octaveShift?: number; keyboardMode?: 'keyboard' | 'piano-roll' }) => {
-    const synth = synthsRef.current.find(s => s.id === synthId);
-    if (!synth?.pattern) return;
-    const tempo = saved.tempo || synth.pattern.tempo;
-    const updated = { ...synth.pattern, steps: saved.steps, tempo };
-    await localRequest(`/synth/${synthId}/mix`, { method: 'POST', body: JSON.stringify({ muted: saved.muted ?? false, solo: saved.solo ?? false }) });
-    await localRequest(`/synth/${synthId}/preferences`, { method: 'POST', body: JSON.stringify({ octaveShift: saved.octaveShift ?? 0, keyboardMode: saved.keyboardMode ?? synth.keyboardMode }) });
-    setSynths(prev => prev.map(s => s.id === synthId ? { ...s, octaveShift: saved.octaveShift ?? 0, keyboardMode: saved.keyboardMode ?? s.keyboardMode } : s));
-    setSynths(prev => prev.map(s =>
-      s.id === synthId ? { ...s, pattern: updated, selectedStep: null } : s
-    ));
-    const nextModelId = normalizeSynthModelId(saved.synthModelId);
-    const nextModelParams = normalizeSynthModelParams(saved.synthModelParams);
-    setSynths(prev => prev.map(entry =>
-      entry.id === synthId ? { ...entry, synthModelId: nextModelId, synthModelParams: nextModelParams } : entry
-    ));
-    await localRequest(`/synth/${synthId}/model`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ modelId: nextModelId, modelParams: nextModelParams }),
-    });
-    if (saved.synthParams) {
-      await localRequest(`/synth/${synthId}/parameters`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(normalizeSynthParams(saved.synthParams)),
-      });
-    }
-    await localRequest(`/synth/${synthId}/patterns/${synth.pattern.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updated),
-    });
-  }, []);
-
-  const handleLoadGlobal = useCallback(async (savedId: string) => {
-    const targetSynthId = synthsRef.current[0]?.id;
-    if (!targetSynthId) return;
-    try {
-      const res = await localRequest(`/patterns/saved/${savedId}`);
-      if (!res.ok) return;
-      const data: SavedPatternFull = await res.json();
-      await handleLoadSavedPattern(targetSynthId, data, { id: savedId, name: data.name });
-
-      if (Array.isArray(data.synths)) {
-        const savedIds = new Set(data.synths.map(s => s.id));
-        for (const current of synthsRef.current) {
-          if (current.id !== 1 && !savedIds.has(current.id)) {
-            synthAudio.stopSynth(current.id);
-            await localRequest(`/synth/${current.id}`, { method: 'DELETE' });
-          }
-        }
-        for (const savedSynth of data.synths) {
-          // handleLoadSavedPattern above already restored this lane from the same data.
-          if (savedSynth.id === targetSynthId) continue;
-          const exists = synthsRef.current.some(s => s.id === savedSynth.id);
-          if (!exists) {
-            await ensureSynthExists(savedSynth.id);
-          }
-          await loadSynthFromSavedData(savedSynth.id, { ...savedSynth, tempo: data.tempo });
-        }
-      }
-      // The lanes and drums now hold the saved arrangement's open scene; bring its other scenes and song with it.
-      await localRequest('/scenes/replace', {
-        method: 'POST', body: JSON.stringify({ scenes: data.scenes, song: data.song, currentSceneId: data.currentSceneId }),
-      });
-    } catch {
-      // ignore
-    }
-  }, [handleLoadSavedPattern, ensureSynthExists, loadSynthFromSavedData, synthAudio]);
 
   const handleDrumKitChange = useCallback(async (kitId: DrumKitId, applyDefaults: boolean): Promise<DrumState | undefined> => {
     setSelectedDrumKitId(kitId);
@@ -2397,7 +2144,6 @@ export function useStudio() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(DEFAULT_EFFECTS_LOOP),
     });
-    setActiveSavedPattern(null);
     handleDrumReset();
     historyRef.current = { undo: [], redo: [] };
     // Back to a single empty scene, taken from the lanes and drums that were just cleared.
@@ -2406,31 +2152,26 @@ export function useStudio() {
 
   const memoizedDrumState = useMemo(() => drumState, [drumState]);
 
-  const [saving, setSaving] = useState(false);
-  const [saveName, setSaveName] = useState('');
-  const [savedFeedback, setSavedFeedback] = useState(false);
-  const [savedPatterns, setSavedPatterns] = useState<SavedPatternInfo[]>([]);
-  const [loadingSavedPatterns, setLoadingSavedPatterns] = useState(false);
   const isAnyPlaying = synths.some(s => s.isPlaying);
 
   return {
     synths, selectedSynthId, setSelectedSynthId, drumState: memoizedDrumState, drumKits, drumKitsLoading, drumKitsError,
     selectedDrumKitId, drumMasterVolume, drumSwing, drumCurrentStep, drumFx, effectsLoop, browserMuted, setBrowserMuted,
     browserVolume, setBrowserVolume, globalTempo, storageError, setStorageError, changedElsewhere, loadOtherTabVersion, keepThisTabVersion, helpOpen, setHelpOpen, midiMode, setMidiMode,
-    midiChannel, setMidiChannel, midiTargetSynthId, setMidiTargetSynthId, activeSavedPattern, synthPresets, drumAudio,
+    midiChannel, setMidiChannel, midiTargetSynthId, setMidiTargetSynthId, projectId, projectName, projects, synthPresets, drumAudio,
     handleUndo, handleRedo, midiImportData, setMidiImportData, midiImportAssignments, setMidiImportAssignments,
     handleMidiImportClick, handleMidiImportFile, handleMidiImportApplyAll, midiImportFileRef, handleRemoveSynth,
     ensureSynthExists, handleOctaveShift, handleTempoChange, handleGlobalPlayStop, handleStepChange, handleStepSelect, handleKeyboardModeChange,
     handlePianoRollNoteAssign, handleClearPatternNotes, handleNotePlay, handleNoteRelease, computerKeyNotes, midiState,
     handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange,
-    handleSynthMixChange, refreshSavedPatterns, handleSaveSynthPreset, handleLoadSynthPreset, handleDeleteSynthPreset,
-    handleExportMidi, currentArrangement, reportExportError, handleExportProject, projectImportFileRef, handleImportProjectFile,
-    handleSaveGlobal, handleLoadGlobal, handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail,
+    handleSynthMixChange, handleSaveSynthPreset, handleLoadSynthPreset, handleDeleteSynthPreset,
+    handleExportMidi, currentArrangement, reportExportError, handleExportProject, projectImportFileRef, handleImportProjectFile, handleImportProject,
+    handleNewProject, handleOpenProject, handleCopyProject, handleRenameProject, handleDeleteProject, handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail,
     handleDrumSettingsChange, handleDrumMixChange, handleDrumReset, handleDrumMasterVolumeChange, handleDrumSwingChange,
     handleDrumFxChange, handleEffectsLoopChange, handleDrumMuteAll, handleDrumSoloAll, handleReset,
     scenes, currentSceneId, song, playMode, setPlayMode, songStartEntry, setSongStartEntry, songPosition,
     handleSceneSelect, handleSceneAdd, handleSceneRename, handleSceneDelete, handleSongChange, songArrangement, handleExportSongMidi,
-    saving, setSaving, saveName, setSaveName, savedFeedback, setSavedFeedback, savedPatterns, loadingSavedPatterns, isAnyPlaying,
+    isAnyPlaying,
   };
 }
 

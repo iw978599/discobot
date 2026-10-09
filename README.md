@@ -60,15 +60,19 @@ see how the parts sit against each other.
    Song switch chooses whether Play loops the open scene or plays the song from
    the marked block; in song mode the rack follows along. Sounds, tempo and
    effects are shared by every scene.
-6. Save a named pattern with Save; load it from the Load list, or delete it
-   under Project → Manage Saved. The Project and Export menus hold project
-   files, MIDI import and the audio and MIDI exports. MIDI controller settings
+6. Your work saves itself. The Project menu starts a new project, keeps a
+   copy, makes a share link, and holds project files and MIDI import; the
+   Export menu holds the audio and MIDI exports. MIDI controller settings
    and imported samples are behind the MIDI button.
 
 ### Local data
 
-Project state and named patterns are stored in **localStorage**. Imported sample
-bytes and metadata are stored in **IndexedDB**, then decoded locally for playback.
+You can keep any number of projects. Click the project's name in the top row to
+see them all, and to open, rename, copy or delete one. The open project saves
+itself as you work; **Save a Copy** keeps a version to go back to. Every project
+is stored in **IndexedDB**, and the open one also has a working copy in
+**localStorage** so nothing is lost when a tab closes. Imported sample bytes and
+metadata are stored in IndexedDB, then decoded locally for playback.
 Nothing is uploaded. Storage is specific to the browser profile and origin:
 localhost ports and the deployed site do not share projects. Clearing site data,
 private browsing or storage quotas can remove/prevent persistence. Storage errors
@@ -77,9 +81,14 @@ after you stop changing things, and immediately when the tab is closed or hidden
 If the same project is changed in a second tab, the first tab stops saving and
 asks which version to keep, so neither silently overwrites the other.
 
-**Export Project** downloads the whole project as one JSON file: lanes, drums,
-effects, saved patterns and your synth presets. **Import Project** replaces the
-current project with a file, after asking. Use the pair as a backup or to move
+**Export Project** downloads the open project as one JSON file: lanes, drums,
+scenes, song, effects and your synth presets. **Import Project** adds a file to
+your projects as a new one and opens it; nothing is replaced.
+
+**Share Link** makes a link with the whole song inside it. Whoever opens it gets
+a page that plays the song and can keep their own copy to edit. Nothing is
+uploaded and no account is involved, so a link cannot be taken back once sent,
+and very large projects do not fit in one. Use the pair as a backup or to move
 to another browser or device. Imported samples are not part of the file.
 
 The site is installable and works offline. A service worker caches the built

@@ -1,5 +1,4 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { SavedPatternInfo } from '../types';
 import Dialog from './Dialog';
 
 export function TempoDisplay({ tempo, onChange }: { tempo: number; onChange: (bpm: number) => void }) {
@@ -100,90 +99,6 @@ export function TempoDisplay({ tempo, onChange }: { tempo: number; onChange: (bp
   );
 }
 
-export function SavePattern({
-  saving, setSaving, saveName, setSaveName, savedFeedback, setSavedFeedback, onSave,
-}: {
-  saving: boolean;
-  setSaving: (v: boolean) => void;
-  saveName: string;
-  setSaveName: (v: string) => void;
-  savedFeedback: boolean;
-  setSavedFeedback: (v: boolean) => void;
-  onSave: (name: string) => Promise<boolean>;
-}) {
-  const handleSaveCommit = async () => {
-    const name = saveName.trim();
-    if (!name) { setSaving(false); return; }
-    const saved = await onSave(name);
-    setSaving(false);
-    if (saved) {
-      setSavedFeedback(true);
-      setTimeout(() => setSavedFeedback(false), 2000);
-    }
-  };
-
-  if (savedFeedback) {
-    return <span className="save-feedback">&#10003; Saved!</span>;
-  }
-
-  if (saving) {
-    return (
-      <div className="save-inline">
-        <input
-          autoFocus
-          className="save-name-input"
-          placeholder="Pattern name..."
-          value={saveName}
-          onChange={(e) => setSaveName(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') void handleSaveCommit(); if (e.key === 'Escape') setSaving(false); }}
-        />
-        <button className="save-confirm-btn" onClick={() => void handleSaveCommit()}>&#10003;</button>
-        <button className="save-cancel-btn" onClick={() => setSaving(false)}>&#10005;</button>
-      </div>
-    );
-  }
-
-  return (
-    <button className="rack-btn save-button" onClick={() => { setSaving(true); setSaveName(''); }}>
-      + Save
-    </button>
-  );
-}
-
-export function LoadPattern({
-  loading,
-  savedPatterns,
-  onLoad,
-  onRefresh,
-}: {
-  loading: boolean;
-  savedPatterns: SavedPatternInfo[];
-  onLoad: (id: string) => void;
-  onRefresh: () => void;
-}) {
-  return (
-    <div className="load-inline">
-      <select
-        className="load-select"
-        defaultValue=""
-        onFocus={onRefresh}
-        onChange={(e) => {
-          if (!e.target.value) return;
-          onLoad(e.target.value);
-          e.target.value = '';
-        }}
-      >
-        <option value="" disabled>{loading ? 'Loading...' : 'Load'}</option>
-        {savedPatterns.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.name}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}
-
 export function HelpModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   if (!open) return null;
   return (
@@ -203,8 +118,9 @@ export function HelpModal({ open, onClose }: { open: boolean; onClose: () => voi
           <h3>Top row</h3>
           <ul className="help-list help-list-plain">
             <li><strong>BPM:</strong> click the display to type a tempo (20–400), or tap it in with <strong>Tap</strong>.</li>
-            <li><strong>Save / Load:</strong> store and recall the whole arrangement in this browser.</li>
-            <li><strong>Project menu:</strong> export or import a project file (a backup you can move to another device; imported samples are not included), import a MIDI file, manage saved arrangements, or reset everything.</li>
+            <li><strong>Projects:</strong> click the project's name to see every project in this browser. The open project saves itself as you work; <strong>Copy</strong> keeps a version to go back to. Arrangements saved in earlier versions are now projects.</li>
+            <li><strong>Project menu:</strong> start a new project, share a link, export or import a project file (a backup you can move to another device; imported samples are not included), import a MIDI file, or reset the open project.</li>
+            <li><strong>Share Link:</strong> makes a link with the whole song inside it. Whoever opens it can listen and keep their own copy. Nothing is uploaded, and no account is needed.</li>
             <li><strong>Export menu:</strong> WAV (one bar with its effect tail), Loop WAV (exactly one bar that repeats seamlessly), Stems (a zip with one WAV per synth lane and one for the drums) and MIDI are of the open scene. Song WAV and Song MIDI are the whole song.</li>
             <li><strong>MIDI:</strong> choose a controller, channel, target lane and live/record/step mode. Imported samples are kept there too.</li>
           </ul>
