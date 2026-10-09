@@ -22,6 +22,9 @@ export function sanitizeShape<T>(value: unknown, defaults: T): T {
 
 export function matchesShape(value: unknown, defaults: unknown): boolean {
   if (defaults !== null && typeof defaults === 'object') {
+  if (Array.isArray(defaults)) {
+    return Array.isArray(value) && defaults.every((fallback, index) => matchesShape(value[index], fallback));
+  }
     const input = record(value);
     return Object.entries(defaults).every(([key, fallback]) => matchesShape(input[key], fallback));
   }
