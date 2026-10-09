@@ -60,16 +60,15 @@ slow down every later change.
    `data.type === ...` checks on the other. Share a discriminated union from
    the engine so a renamed field is a compile error.
 
-9. **Pitch LFO depth is too coarse.** (S)
-   Depth 100% is ±1 octave, so a usable vibrato sits in the bottom 2% of the
-   knob. Give the pitch target its own scale (for example ±1 semitone at 100%)
-   and migrate stored values.
+9. **Pitch LFO depth is too coarse.** Done: a Vibrato LFO target is the
+   pitch target scaled to one semitone at full depth. Pitch is unchanged, so
+   nothing stored had to be migrated.
 
 10. **CI housekeeping.** (S)
     `ci.yml` and `pages.yml` run the same checks on every push to `main`;
     have Pages depend on CI instead. Bump `configure-pages` and `deploy-pages`
-    off Node 20. The `pr-review.yml` workflow cannot review anything larger
-    than 100 KB and depends on a model endpoint; decide whether to keep it.
+    off Node 20. The AI review workflow was removed: the model service it
+    called was retired.
 
 11. **Accessibility pass on custom controls.** (M)
     Knobs are keyboard-operable, but the step grids are long runs of unlabeled
@@ -88,10 +87,12 @@ mono/slide and the drum voices. What it leaves open:
    work remaining.
 
 2. **Samples on the drum grid and as a synth source.** Drum lanes are done:
-   each lane can play an imported sample, live and in export. Still open:
-   samples do not travel with a project (file, link or sync), ready-made
-   sampled kits for the LinnDrum, DMX and TR-707, and a sample oscillator in
-   the synth.
+   each lane can play an imported sample, live and in export, and Import Kit
+   puts several files on the lanes at once, matched by their names. Sampled
+   kits for the LinnDrum, DMX and TR-707 will not be bundled: no recordings
+   were found that the project may redistribute, so people bring their own.
+   Still open: samples do not travel with a project (file, link or sync), and
+   a sample oscillator in the synth.
 
 3. **Unison and a 24 dB filter mode.** Done. The 24 dB mode is two cascaded
    state-variable stages, not a ladder model; a true ladder with its
@@ -102,26 +103,27 @@ mono/slide and the drum voices. What it leaves open:
    Sources (two LFOs, both envelopes, velocity, key, mod wheel) routed to any
    destination with a depth, replacing the fixed LFO target dropdowns.
 
-5. **Insert effects per lane and better shared effects.** (M)
-   A chorus would do more for the Juno model than anything else. The reverb is
-   decaying noise through a convolver; a small algorithmic reverb with
-   pre-delay and damping would sound better and cost less. Tempo-synced delay
-   time is done (Sync on the shared delay).
+5. **Insert effects per lane and better shared effects.** Partly done: a
+   stereo chorus is a fifth shared effect with its own send, and the reverb
+   has pre-delay and damping. It is still a convolver, with a shaped impulse;
+   an algorithmic reverb and per-lane insert effects are open. Tempo-synced
+   delay time is done (Sync on the shared delay).
 
 6. **Sidechain ducking and a master EQ.** Ducking is done (per-lane Duck
-   amount, kick only, fixed recovery time). Master EQ is still open.
+   amount, kick only, fixed recovery time). Master EQ is done: three bands
+   on the whole mix, live and in export.
 
 ## Features
 
 1. **Song mode.** Done; `docs/SONG_MODE_PLAN.md` lists what was left out
-   (per-scene mutes, copy and paste between scenes, sharing a part between
-   scenes).
+   (copy and paste between scenes, sharing a part between scenes). Mutes and
+   solos are now kept per scene.
 
 2. **Longer patterns and per-lane length.** Done: each synth lane and the
    drum grid can be 1, 2, 4 or 8 bars, and lanes of different lengths loop
-   against each other. Still open: lengths that are not a whole number of
-   bars (a 12-step lane against 16), copying one bar to another, and MIDI
-   import of more than one bar.
+   against each other. MIDI files of up to eight bars import at their
+   full length. Still open: lengths that are not a whole number of bars (a
+   12-step lane against 16) and copying one bar to another.
 
 3. **Polyphonic steps and note length.** Done: up to six notes per step and
    a per-step length, in the piano roll, live playback, WAV and MIDI export
@@ -145,9 +147,10 @@ mono/slide and the drum voices. What it leaves open:
    over a section are a large part of electronic arrangement. Depends on the
    typed store.
 
-8. **MIDI output and clock.** (M)
-   Drive external hardware from the sequencer, and send or follow MIDI clock.
-   Web MIDI is already in use for input.
+8. **MIDI output and clock.** Done for sending: the sequencer plays a chosen
+   MIDI output (a channel per lane, drums on 10) and sends clock with start
+   and stop. Still open: following an external clock, sending notes played
+   by hand, and choosing the channels.
 
 9. **Per-step probability and ratchets.** Done, on drums and on synth steps.
 
@@ -158,6 +161,74 @@ mono/slide and the drum voices. What it leaves open:
 12. **Shareable links.** (M)
     Compress a project into the URL fragment so a pattern can be shared with a
     link and no backend. Limited to small projects by URL length.
+
+13. **Collaborative sessions.** (L)
+    A signed-in user starts a session on a project and shares it with another
+    signed-in user, and the two work on the song together. Open questions to
+    settle before building:
+    - Live or turn-based. Live means both see each other's edits as they
+      happen, which needs a connection held open between them (a Cloudflare
+      Durable Object with WebSockets is the natural fit for the current
+      server; note `AGENTS.md` rules out reintroducing a WebSocket transport,
+      so that rule would have to be revisited on purpose). Turn-based means a
+      shared project both can save to, using the revision check sync already
+      has, with no new kind of connection.
+    - What is shared: edits only, or playback position and who is editing
+      what as well. Each person hears their own browser's audio either way.
+    - How two edits to the same thing are settled. Today's sync never merges;
+      it keeps both copies. A session needs a real rule (last edit per step
+      or per control wins is the simplest that feels right).
+    - Who may join: by username, by a session code, or both; how the owner of
+      the project ends a session or removes someone.
+    - Guest instruments and imported samples are per browser today, so a
+      collaborator may not have them.
+    - The typed store (improvements item 1) should come first: edits need to
+      be small, named operations to send to another person.
+
+14. **Kids mode.** (M)
+    A mode a four-year-old can use without reading. A starting point:
+    - A few very large, colourful pads and a big play button; no menus, small
+      knobs, text fields or dialogs.
+    - Everything always sounds good: notes held to one scale, a fixed tempo
+      range, sounds chosen from a handful of pictures.
+    - Tapping makes sound at once (touch first, phone and tablet sized).
+    - Nothing can be lost or broken: it works on its own scratch project, and
+      cannot delete, overwrite, share, publish or reach account settings.
+    - A capped volume.
+    - A way out that a small child will not trigger by accident (press and
+      hold, or a simple sum for the adult).
+    - No account needed and no requests to anywhere, like the rest of the app.
+    To decide: whether what a child makes can be opened later in the full
+    app, and whether it is a separate page or a switch in the transport bar.
+
+15. **A layout for phones and the installed app.** (L)
+    The rack is one wide panel. On a phone it keeps its desktop width and is
+    scrolled sideways, which works but is not comfortable: the step grids and
+    the knobs are small, and the transport bar is wider than the screen. A
+    layout made for a narrow screen:
+    - One unit on screen at a time (a lane, the drums, the song, effects),
+      with a bar along the bottom to move between them and the transport
+      always in reach.
+    - Step grids that fit the width: eight steps to a row, or one bar paged
+      a half at a time.
+    - Touch-sized controls. Knobs become sliders or open a large dial when
+      touched; nothing depends on hover or a right click.
+    - The piano roll and the on-screen keyboard usable with a thumb, in
+      portrait and landscape.
+    - Respect the phone's safe areas (notch, home bar) when installed, and
+      keep the screen awake while playing.
+    - Dialogs as full-screen sheets.
+    The same components and the same `Studio` object should drive both
+    layouts: this is a second arrangement of the rack, not a second app.
+    Kids mode (item 14) is touch-first too and can share its large controls.
+    Decided: "apps" means the installable web app that exists today.
+    Packaged apps in the phone stores are not planned for now; they would be
+    a separate piece of work (a wrapper, store accounts and review).
+
+16. **A walkthrough for new accounts.** Done: after a new account's recovery
+    code, a tour lights nine parts of the rack in turn and explains each, and
+    the account dialog can show it again. Still open: offering it to someone
+    who has no account, from the Help button.
 
 ## Suggested order
 

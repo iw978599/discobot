@@ -282,6 +282,7 @@ export class SynthCore {
           if (lfoDepths[n] === 0) continue;
           const value = lfoShape(lfoWaves[n], lfoRetrigger[n] ? v.lfoPhase[n] : this.globalLfoPhase[n]) * lfoDepths[n];
           if (lfoTargets[n] === 'pitch') pitchMod += value;
+          else if (lfoTargets[n] === 'vibrato') pitchMod += value / 12;
           else if (lfoTargets[n] === 'filter') filterMod += value;
           else if (lfoTargets[n] === 'amp') ampMod *= 1 - (lfoDepths[n] - value) * 0.5;
           else if (lfoTargets[n] === 'pulseWidth') pulseMod += value * 0.45;

@@ -1,8 +1,9 @@
 import type { EffectsLoopState, FxSendLevels } from '../types';
 import { delaySeconds } from '../services/delayTime';
+import { EQ_RANGE_DB, MAX_PRE_DELAY } from '../services/effectSettings';
 
-const limit = (v: number, min: number, max: number, fallback = min) =>
-  Number.isFinite(v) ? Math.max(min, Math.min(max, v)) : fallback;
+const limit = (v: number | undefined, min: number, max: number, fallback = min) =>
+  v !== undefined && Number.isFinite(v) ? Math.max(min, Math.min(max, v)) : fallback;
 const smooth = (p: AudioParam, value: number, ctx: AudioContext) =>
   p.setTargetAtTime(value, ctx.currentTime, 0.015);
 type EffectName = keyof FxSendLevels;
@@ -32,6 +33,8 @@ type Effects = {
   phaserFeedback: GainNode;
   lfo: OscillatorNode;
   depth: GainNode;
+  chorus: Chorus;
+  reverbShape: string;
 };
 
 export const MASTER_LEVEL = 0.7;
@@ -68,17 +71,75 @@ export function driveCurve(amount: number) {
 }
 
 // `random` shapes the reverb's noise. Exports pass a seeded one, so the same song always renders the same file.
-export function reverbImpulse(ctx: BaseAudioContext, decay: number, random: () => number = Math.random): AudioBuffer {
-  const buffer = ctx.createBuffer(2, Math.ceil(ctx.sampleRate * limit(decay, 0.1, 8)), ctx.sampleRate);
+// With no pre-delay and no damping this is the plain decaying noise older projects were made
+// with, sample for sample. Pre-delay is silence before the tail; damping closes a low-pass
+// filter over the noise as the tail goes on, the way a real room loses its highs first.
+export function reverbImpulse(ctx: BaseAudioContext, decay: number, random: () => number = Math.random, preDelay = 0, damping = 0): AudioBuffer {
+  const rate = ctx.sampleRate, tail = Math.ceil(rate * limit(decay, 0.1, 8));
+  const start = Math.round(rate * limit(preDelay, 0, MAX_PRE_DELAY)), damp = limit(damping, 0, 1);
+  const buffer = ctx.createBuffer(2, start + tail, rate);
   for (let c = 0; c < 2; c++) {
     const data = buffer.getChannelData(c);
-    for (let i = 0; i < data.length; i++) data[i] = (random() * 2 - 1) * Math.exp(-6 * i / data.length) * Math.min(1, i / 64);
+    if (start === 0 && damp === 0) {
+      for (let i = 0; i < tail; i++) data[i] = (random() * 2 - 1) * Math.exp(-6 * i / tail) * Math.min(1, i / 64);
+      continue;
+    }
+    let low = 0;
+    for (let i = 0; i < tail; i++) {
+      const cutoff = 16000 * Math.exp(-4.5 * damp * i / tail);
+      low += (1 - Math.exp(-2 * Math.PI * cutoff / rate)) * (random() * 2 - 1 - low);
+      data[start + i] = low * Math.exp(-6 * i / tail) * Math.min(1, i / 64);
+    }
   }
   return buffer;
 }
 
+// A stereo chorus in the manner of the string machines and the Juno: one short delay per side,
+// swept in opposite directions by a slow triangle. It returns only the swept signal; the dry
+// one is already in the mix. Live playback and export build it with this.
+const CHORUS_DELAY = 0.007;
+export const chorusSweep = (depth: number) => limit(depth, 0, 1) * 0.004;
+export function createChorus(ctx: BaseAudioContext) {
+  const input = ctx.createGain(), output = ctx.createChannelMerger(2);
+  const lfo = ctx.createOscillator(), depth = ctx.createGain(), opposite = ctx.createGain();
+  lfo.type = 'triangle';
+  opposite.gain.value = -1;
+  lfo.connect(depth).connect(opposite);
+  [depth, opposite].forEach((sweep, side) => {
+    const delay = ctx.createDelay(0.05);
+    delay.channelCount = 1;
+    delay.channelCountMode = 'explicit';
+    delay.delayTime.value = CHORUS_DELAY;
+    sweep.connect(delay.delayTime);
+    input.connect(delay).connect(output, 0, side);
+  });
+  lfo.start();
+  return { input, output, lfo, depth };
+}
+type Chorus = ReturnType<typeof createChorus>;
+
+// The master EQ: a low shelf, a wide mid bell and a high shelf, in that order.
+export function createMasterEq(ctx: BaseAudioContext): BiquadFilterNode[] {
+  const bands = [['lowshelf', 120], ['peaking', 1000], ['highshelf', 6000]] as const;
+  const nodes = bands.map(([type, frequency]) => {
+    const node = ctx.createBiquadFilter();
+    node.type = type;
+    node.frequency.value = frequency;
+    node.Q.value = 0.7;
+    return node;
+  });
+  nodes[0].connect(nodes[1]).connect(nodes[2]);
+  return nodes;
+}
+export function eqGains(eq: EffectsLoopState['eq']): [number, number, number] {
+  const band = (level: number) => limit(level, -EQ_RANGE_DB, EQ_RANGE_DB, 0);
+  return eq?.enabled ? [band(eq.low), band(eq.mid), band(eq.high)] : [0, 0, 0];
+}
+const EFFECT_NAMES: EffectName[] = ['reverb', 'delay', 'drive', 'phaser', 'chorus'];
+
 let context: AudioContext | undefined;
 let master: GainNode;
+let masterEq: BiquadFilterNode[] = [];
 let loop: EffectsLoopState | undefined;
 let workletLoading: Promise<void> | undefined;
 let masterVolume = 1;
@@ -97,7 +158,10 @@ export function getAudioContext(): AudioContext {
     const safety = context.createWaveShaper();
     safety.curve = safetyCurve();
     safety.oversample = '2x';
-    master.connect(limiter).connect(safety).connect(context.destination);
+    masterEq = createMasterEq(context);
+    eqGains(loop?.eq).forEach((gain, band) => { masterEq[band].gain.value = gain; });
+    master.connect(masterEq[0]);
+    masterEq[2].connect(limiter).connect(safety).connect(context.destination);
   }
   return context;
 }
@@ -166,7 +230,7 @@ function createEffects(group: 'synth' | 'drums'): Effects {
   const output = ctx.createGain();
   output.connect(master);
   const inputs = {} as Effects['inputs'], wet = {} as Effects['wet'];
-  for (const name of ['reverb', 'delay', 'drive', 'phaser'] as EffectName[]) {
+  for (const name of EFFECT_NAMES) {
     inputs[name] = ctx.createGain();
     wet[name] = ctx.createGain();
     wet[name].gain.value = 0;
@@ -196,7 +260,10 @@ function createEffects(group: 'synth' | 'drums'): Effects {
   lfo.connect(depth);
   phaser.forEach(node => depth.connect(node.frequency));
   lfo.start();
-  const bus = { inputs, wet, output, delay, feedback, reverb, reverbFade, decay: 0, drive, driveFade, driveAmount: -1, tone, phaser, phaserFeedback, lfo, depth };
+  const chorus = createChorus(ctx);
+  inputs.chorus.connect(chorus.input);
+  chorus.output.connect(wet.chorus);
+  const bus = { inputs, wet, output, delay, feedback, reverb, reverbFade, decay: 0, drive, driveFade, driveAmount: -1, tone, phaser, phaserFeedback, lfo, depth, chorus, reverbShape: '' };
   effects.set(group, bus);
   if (loop) updateEffects(bus, group, loop, ctx);
   return bus;
@@ -210,8 +277,10 @@ function updateEffects(bus: Effects, group: 'synth' | 'drums', state: EffectsLoo
   smooth(bus.wet.delay.gain, state.delay.enabled ? limit(state.delay.mix, 0, 1) : 0, ctx);
   smooth(bus.wet.reverb.gain, state.reverb.enabled ? limit(state.reverb.mix, 0, 1) : 0, ctx);
   const decay = limit(state.reverb.decay, 0.1, 8);
-  if (Math.abs(decay - bus.decay) > 0.04) {
-    const buffer = reverbImpulse(ctx, decay);
+  const shape = `${(state.reverb.preDelay ?? 0).toFixed(3)}/${(state.reverb.damping ?? 0).toFixed(2)}`;
+  if (Math.abs(decay - bus.decay) > 0.04 || shape !== bus.reverbShape) {
+    const buffer = reverbImpulse(ctx, decay, Math.random, state.reverb.preDelay, state.reverb.damping);
+    bus.reverbShape = shape;
     if (bus.reverb.buffer) {
       const previous = bus.reverb, previousFade = bus.reverbFade;
       const next = ctx.createConvolver(), fade = ctx.createGain();
@@ -248,6 +317,9 @@ function updateEffects(bus: Effects, group: 'synth' | 'drums', state: EffectsLoo
   bus.phaser.forEach((node, i) => smooth(node.frequency, 900 + i * 350, ctx));
   smooth(bus.phaserFeedback.gain, enabled && state.phaser.enabled ? limit(state.phaser.feedback, 0, 0.75) : 0, ctx);
   smooth(bus.wet.phaser.gain, state.phaser.enabled ? limit(state.phaser.mix, 0, 1) * 0.5 : 0, ctx);
+  smooth(bus.chorus.lfo.frequency, limit(state.chorus?.rate, 0.05, 8, 0.6), ctx);
+  smooth(bus.chorus.depth.gain, chorusSweep(state.chorus?.depth ?? 0), ctx);
+  smooth(bus.wet.chorus.gain, state.chorus?.enabled ? limit(state.chorus.mix, 0, 1) : 0, ctx);
 }
 
 // A tempo-synced delay follows this.
@@ -260,7 +332,10 @@ export function setEffectsTempo(tempo: number): void {
 
 export function setEffectsLoop(state: EffectsLoopState): void {
   loop = state;
-  if (context) effects.forEach((bus, group) => updateEffects(bus, group, state, context!));
+  if (!context) return;
+  effects.forEach((bus, group) => updateEffects(bus, group, state, context!));
+  // The EQ is on the whole mix, so it works whether or not the effects loop is on.
+  eqGains(state.eq).forEach((gain, band) => smooth(masterEq[band].gain, gain, context!));
 }
 
 export function createAudioLane(group: 'synth' | 'drums') {
@@ -270,7 +345,7 @@ export function createAudioLane(group: 'synth' | 'drums') {
   input.connect(ducker);
   ducker.connect(master);
   const sends = {} as Record<EffectName, GainNode>;
-  for (const name of ['reverb', 'delay', 'drive', 'phaser'] as EffectName[]) {
+  for (const name of EFFECT_NAMES) {
     sends[name] = ctx.createGain();
     sends[name].gain.value = 0;
     ducker.connect(sends[name]).connect(bus.inputs[name]);

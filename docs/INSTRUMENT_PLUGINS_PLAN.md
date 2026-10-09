@@ -36,7 +36,7 @@ result is one of the web formats below, and we can load it.
 
 **Done.** A lane's sound can be exported as a file and imported again, and
 presets from two other synths are translated on import (VAST G1-J8, and a
-nested two-oscillator patch format), with a report of what did not carry
+WebSynth Studio patch format), with a report of what did not carry
 over. There is no standard for synth presets, so each further format is a
 new translator.
 
@@ -202,7 +202,8 @@ creator of Choir can give to Claude to add the guest side. The creator of Choir 
 (Choir, Logic Rhythm, Boolean Melody Machine, Tape Loop Deck), and with
 permission they are offered by name in the Add Guest dialog. Download WAV and
 Song WAV now record guests by playing through once. A guest's settings are kept per scene and follow a song from scene to scene.
-Not built: guests in loops and stems, effect sends for a guest, and a way for
+Guests are in Loop WAV and stems too, and each has sends to the shared effects.
+Not built: a way for
 a guest to save audio of its own (Tape Loop Deck's loops) with the project.
 
 ## How creators would link an instrument

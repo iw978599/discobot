@@ -26,6 +26,7 @@ test.beforeEach(async ({ page, request }, testInfo) => {
   await request.post(`${apiUrl(String(testInfo.project.use.baseURL))}/__reset`);
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'requestMIDIAccess', { configurable: true, value: undefined });
+    localStorage.setItem('discobot_walkthrough_v1', 'seen');
   });
   await page.goto('./');
   await expect(page.getByRole('heading', { name: 'Discobot', exact: true })).toBeVisible();
@@ -65,6 +66,7 @@ test('the owner creates an account, invites a friend, and both can get back in',
   // A friend, in a browser of their own.
   const friendContext = await browser.newContext({ baseURL });
   const friend = await friendContext.newPage();
+  await friend.addInitScript(() => { localStorage.setItem('discobot_walkthrough_v1', 'seen'); });
   await friend.goto('./');
   const friendDialog = await openAccount(friend);
   await friendDialog.getByRole('tab', { name: 'Create Account', exact: true }).click();

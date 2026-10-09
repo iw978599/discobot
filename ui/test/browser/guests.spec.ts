@@ -174,6 +174,54 @@ test('a WAV export records the guest by playing through once, and the named inst
   expect(withGuest(0, 0.05), 'the kick is still there').toBeGreaterThan(0.02);
 });
 
+test('a song export gives a guest each scene\'s own mute, whichever scene is open', async ({ page }, testInfo) => {
+  const baseURL = String(testInfo.project.use.baseURL);
+  const { readFile } = await import('node:fs/promises');
+  const exportSong = async (name: string) => {
+    const download = page.waitForEvent('download', { timeout: 30_000 });
+    await page.getByRole('button', { name: 'Export ▾', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Song WAV', exact: true }).click();
+    const path = testInfo.outputPath(name);
+    await (await download).saveAs(path);
+    const bytes = await readFile(path);
+    return (from: number, to: number) => {
+      let sum = 0, count = 0;
+      for (let frame = Math.round(from * 44100); frame < Math.round(to * 44100); frame++) { const value = bytes.readInt16LE(44 + frame * 4) / 32768; sum += value * value; count++; }
+      return Math.sqrt(sum / count);
+    };
+  };
+
+  await menu(page, 'Add Guest Instrument');
+  const dialog = page.getByRole('dialog', { name: 'Add a guest instrument', exact: true });
+  await dialog.getByLabel('Address of the instrument\'s page', { exact: true }).fill(guestAddress(baseURL));
+  await dialog.getByRole('button', { name: 'Add Guest', exact: true }).click();
+  const unit = page.getByRole('region', { name: /^Guest instrument / });
+  await expect(unit).toHaveAttribute('data-status', 'ready');
+  const mute = unit.getByRole('button', { name: /^Mute guest / });
+
+  // 240 BPM: a bar is one second and the guest rings on every quarter of it.
+  await page.locator('.tempo-led').click();
+  await page.locator('.tempo-led-input').fill('240');
+  await page.locator('.tempo-led-input').press('Enter');
+
+  // The song is one bar of Scene 1, where the guest plays, then one of Scene 2, where it is muted.
+  await page.getByRole('button', { name: '+ Copy', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Scene: Scene 2', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await mute.click();
+  await page.getByRole('button', { name: '+ Add Scene 2', exact: true }).click();
+  await expect.poll(async () => (await stored(page)).song.entries.length).toBe(2);
+
+  const fromMuted = await exportSong('from-muted-scene.wav');
+  expect(fromMuted(0.75, 0.81), 'the guest plays in the first bar although the open scene mutes it').toBeGreaterThan(0.02);
+  expect(fromMuted(1.75, 1.81), 'and is silent in the second').toBeLessThan(0.005);
+
+  await page.getByRole('button', { name: 'Scene: Scene 1', exact: true }).click();
+  await expect(mute).toHaveAttribute('aria-pressed', 'false');
+  const fromPlaying = await exportSong('from-playing-scene.wav');
+  expect(fromPlaying(0.75, 0.81), 'the guest plays in the first bar').toBeGreaterThan(0.02);
+  expect(fromPlaying(1.75, 1.81), 'and is silent in the second although the open scene plays it').toBeLessThan(0.005);
+});
+
 test('a guest whose sound arrives late is still heard, and is then asked to play earlier', async ({ page }, testInfo) => {
   const baseURL = String(testInfo.project.use.baseURL);
   // The example guest holds every block of audio back by a quarter of a second, as a slow browser might.
@@ -292,4 +340,77 @@ test('a guest changed just before leaving a scene is recorded in that scene, alo
   expect(scenes.map(scene => [scene.name, Object.values(scene.guests)[0], Object.values(scene.guestMix)[0].muted])).toEqual([
     ['Scene 1', { note: 'G4', wave: 'square' }, true], ['Scene 2', { note: 'A4', wave: 'sine' }, false],
   ]);
+});
+
+test('a guest is in the loop and the stems, and has sends to the shared effects', async ({ page }, testInfo) => {
+  const baseURL = String(testInfo.project.use.baseURL), address = guestAddress(baseURL);
+  const { readFile } = await import('node:fs/promises');
+  const download = async (item: string, name: string) => {
+    const pending = page.waitForEvent('download', { timeout: 30_000 });
+    await page.getByRole('button', { name: 'Export ▾', exact: true }).click();
+    await page.getByRole('menuitem', { name: item, exact: true }).click();
+    const path = testInfo.outputPath(name);
+    await (await pending).saveAs(path);
+    return readFile(path);
+  };
+  // 16-bit stereo at 44.1 kHz: the level of the left channel between two times, in seconds.
+  const level = (bytes: Buffer, from: number, to: number) => {
+    let sum = 0, count = 0;
+    for (let frame = Math.round(from * 44100); frame < Math.round(to * 44100); frame++) { const value = bytes.readInt16LE(44 + frame * 4) / 32768; sum += value * value; count++; }
+    return Math.sqrt(sum / count);
+  };
+  // The lowest level any fiftieth of a second reaches between two times.
+  const quietest = (bytes: Buffer, from: number, to: number) => {
+    let lowest = Infinity;
+    for (let start = from; start + 0.02 <= to; start += 0.005) lowest = Math.min(lowest, level(bytes, start, start + 0.02));
+    return lowest;
+  };
+
+  await menu(page, 'Add Guest Instrument');
+  const dialog = page.getByRole('dialog', { name: 'Add a guest instrument', exact: true });
+  await dialog.getByLabel('Address of the instrument\'s page', { exact: true }).fill(address);
+  await dialog.getByRole('button', { name: 'Add Guest', exact: true }).click();
+  const unit = page.getByRole('region', { name: /^Guest instrument / });
+  await expect(unit).toHaveAttribute('data-status', 'ready');
+  await page.locator('.tempo-led').click();
+  await page.locator('.tempo-led-input').fill('240');
+  await page.locator('.tempo-led-input').press('Enter');
+  // The reverb at full, so what it adds to a loop is plain to measure once the guest is sent to it.
+  const reverbMix = page.locator('.effects-block').filter({ has: page.getByRole('heading', { name: 'Reverb', exact: true }) }).getByLabel('Mix value', { exact: true });
+  await reverbMix.fill('100');
+  await reverbMix.press('Enter');
+  await expect.poll(async () => (await stored(page)).effectsLoop.reverb.mix).toBe(1);
+
+  // A loop is one bar, one second here. The guest is recorded over two passes and the second kept.
+  const pending = download('Loop WAV', 'loop.wav');
+  await expect(page.getByText('Recording the guest instruments')).toBeVisible();
+  const loop = await pending;
+  expect(loop.length).toBe(44 + 44100 * 4);
+  expect(level(loop, 0.75, 0.81), 'the bell on the fourth beat is in the loop').toBeGreaterThan(0.02);
+  expect(level(loop, 0, 0.06), 'and the one on the first').toBeGreaterThan(0.02);
+
+  // Sends are off until they are turned up, and are kept with the guest.
+  expect((await stored(page)).guests[0].sends).toBeUndefined();
+  await unit.getByRole('button', { name: 'Sends', exact: true }).click();
+  const send = unit.getByLabel(/ reverb send value$/);
+  await send.fill('100');
+  await send.press('Enter');
+  await expect.poll(async () => (await stored(page)).guests[0].sends).toEqual({ reverb: 1, delay: 0, drive: 0, phaser: 0, chorus: 0 });
+  const wet = await download('Loop WAV', 'loop-reverb.wav');
+  // Between bells the dry loop falls almost to silence, and the reverb does not let it. The two
+  // files are separate recordings of the guest and do not land on the same sample, so each is
+  // measured at its own quietest moment, not at a fixed time: a window that ends where the next
+  // bell begins catches that bell whenever a recording lands a moment early.
+  expect(quietest(wet, 0, 1), 'the reverb fills the gaps between the bells').toBeGreaterThan(quietest(loop, 0, 1) * 2);
+  expect(quietest(wet, 0.75, 1), 'right up to the end of the loop, where it runs on into the start').toBeGreaterThan(quietest(loop, 0.75, 1) * 2);
+  await page.reload();
+  await expect(page.getByRole('region', { name: /^Guest instrument / })).toHaveAttribute('data-status', 'ready');
+  expect((await stored(page)).guests[0].sends.reverb).toBe(1);
+
+  // Stems: the guest gets a file of its own next to the drums.
+  await page.getByRole('button', { name: 'Kick step 1', exact: true }).click();
+  const zip = (await download('Stems', 'stems.zip')).toString('latin1');
+  expect(zip).toContain('drums.wav');
+  expect(zip).toMatch(/guest-1[a-z0-9-]*\.wav/);
+  await expect(page.getByRole('button', { name: /Play All/ }), 'playback stops when the recording is done').toBeVisible();
 });

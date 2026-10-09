@@ -1,5 +1,4 @@
 import type { Studio } from '../studio/useStudio';
-import { downloadArrangementWav, downloadStemsZip } from '../services/wavExport';
 import Knob from '../components/Knob';
 import Menu from './Menu';
 import { TempoDisplay } from './HeaderParts';
@@ -57,11 +56,11 @@ export default function TransportUnit({ studio, onOpenSettings, onOpenProjects, 
         <Menu
           label="Export"
           items={[
-            { label: 'Download WAV', title: 'The open scene: one bar with its effect tail', onSelect: () => { void studio.handleExportWav(false).catch(studio.reportExportError); } },
-            { label: 'Loop WAV', title: 'One bar that loops seamlessly, with effect tails wrapped in', onSelect: () => { void downloadArrangementWav(studio.currentArrangement(), { loop: true }).catch(studio.reportExportError); } },
-            { label: 'Stems', title: 'Each synth lane and the drums as separate WAV files in a zip', onSelect: () => { void downloadStemsZip(studio.currentArrangement()).catch(studio.reportExportError); } },
+            { label: 'Download WAV', title: 'The open scene: one bar with its effect tail', onSelect: () => { void studio.handleExportWav('pattern').catch(studio.reportExportError); } },
+            { label: 'Loop WAV', title: 'One bar that loops seamlessly, with effect tails wrapped in', onSelect: () => { void studio.handleExportWav('loop').catch(studio.reportExportError); } },
+            { label: 'Stems', title: 'Each synth lane, the drums and each guest instrument as separate WAV files in a zip', onSelect: () => { void studio.handleExportWav('stems').catch(studio.reportExportError); } },
             { label: 'Export MIDI', title: 'A Standard MIDI File of the open scene', onSelect: studio.handleExportMidi },
-            { label: 'Song WAV', title: 'The whole song, start to finish, as one audio file', onSelect: () => { void studio.handleExportWav(true).catch(studio.reportExportError); } },
+            { label: 'Song WAV', title: 'The whole song, start to finish, as one audio file', onSelect: () => { void studio.handleExportWav('song').catch(studio.reportExportError); } },
             { label: 'Song MIDI', title: 'The whole song as a MIDI file, with a marker at each section', onSelect: () => { void studio.handleExportSongMidi().catch(studio.reportExportError); } },
           ]}
         />

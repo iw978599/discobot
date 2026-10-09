@@ -38,6 +38,7 @@ test.beforeEach(async ({ page, request }, testInfo) => {
   await request.post(`${apiUrl(String(testInfo.project.use.baseURL))}/__reset`);
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'requestMIDIAccess', { configurable: true, value: undefined });
+    localStorage.setItem('discobot_walkthrough_v1', 'seen');
   });
   await page.goto('./');
   await ready(page);

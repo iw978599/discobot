@@ -13,6 +13,8 @@ import ProjectsDialog from './ProjectsDialog';
 import ShareDialog from './ShareDialog';
 import AccountDialog, { useSyncStatus } from './AccountDialog';
 import { projectSync } from '../services/projectSync';
+import { markWalkthroughSeen } from '../services/walkthrough';
+import Walkthrough from './Walkthrough';
 import MidiImportDialog from './MidiImportDialog';
 import GuestModule from './GuestModule';
 import AddGuestDialog from './AddGuestDialog';
@@ -33,6 +35,12 @@ export default function Rack({ studio }: { studio: Studio }) {
   const [accountOpen, setAccountOpen] = useState(false);
   const [guestOpen, setGuestOpen] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
+  const startTour = () => {
+    setAccountOpen(false);
+    markWalkthroughSeen();
+    setTourOpen(true);
+  };
   const { midiState } = studio;
   const sync = useSyncStatus();
 
@@ -69,7 +77,7 @@ export default function Rack({ studio }: { studio: Studio }) {
         {studio.guestRecording !== null && (
           <div role="status" className="app-alert">
             <span>
-              Recording the guest instruments for the export. The music plays through once, about {Math.ceil(studio.guestRecording)} seconds, and then the file downloads.
+              Recording the guest instruments for the export. The music plays through, about {Math.ceil(studio.guestRecording)} seconds, and then the file downloads.
             </span>
           </div>
         )}
@@ -92,7 +100,8 @@ export default function Rack({ studio }: { studio: Studio }) {
       <MidiImportDialog studio={studio} />
       {projectsOpen && <ProjectsDialog studio={studio} onClose={() => setProjectsOpen(false)} />}
       {shareOpen && <ShareDialog onClose={() => setShareOpen(false)} />}
-      {accountOpen && <AccountDialog onClose={() => setAccountOpen(false)} />}
+      {accountOpen && <AccountDialog onClose={() => setAccountOpen(false)} onWalkthrough={startTour} />}
+      {tourOpen && <Walkthrough onClose={() => setTourOpen(false)} />}
       {guestOpen && <AddGuestDialog studio={studio} onClose={() => setGuestOpen(false)} />}
       {versionsOpen && <VersionsDialog studio={studio} onClose={() => setVersionsOpen(false)} />}
       {studio.presetImportReport && (
@@ -130,6 +139,13 @@ export default function Rack({ studio }: { studio: Studio }) {
             onTargetSynthChange={studio.setMidiTargetSynthId}
             lastMessage={midiState.lastMessage}
             error={midiState.error}
+            outputs={midiState.outputs}
+            selectedOutputId={midiState.selectedOutputId}
+            onOutputChange={midiState.setSelectedOutputId}
+            sendNotes={studio.midiOutNotes}
+            onSendNotesChange={studio.setMidiOutNotes}
+            sendClock={studio.midiOutClock}
+            onSendClockChange={studio.setMidiOutClock}
           />
           <SamplePanel onPlay={sample => playSample(sample.data)} />
         </Dialog>

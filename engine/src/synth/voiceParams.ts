@@ -81,7 +81,7 @@ export function createDefaultSynthParameters(): SynthParameters {
     filterEnvelope: { attack: 0.005, decay: 0.25, sustain: 0.2, release: 0.3 },
     velocity: { amp: 1, filter: 0 },
     fm: { algorithm: 1, ratio: 2, index: 0.4, decay: 0.6, feedback: 0 },
-    fxSends: { reverb: 0.25, delay: 0.2, drive: 0.15, phaser: 0.1 },
+    fxSends: { reverb: 0.25, delay: 0.2, drive: 0.15, phaser: 0.1, chorus: 0 },
     effects: {
       reverb: { enabled: false, wet: 0.3, decay: 2 },
       delay: { enabled: false, wet: 0.3, time: 0.25, feedback: 0.3 },

@@ -922,6 +922,7 @@ export default function SynthControls({
                 disabled={!parameters.lfo1.enabled}
               >
                 <option value="pitch">Pitch</option>
+                <option value="vibrato">Vibrato</option>
                 <option value="filter">Filter</option>
                 <option value="amp">Amp</option>
                 <option value="pulseWidth">Pulse W</option>
@@ -1029,6 +1030,7 @@ export default function SynthControls({
                 disabled={!parameters.lfo2.enabled}
               >
                 <option value="pitch">Pitch</option>
+                <option value="vibrato">Vibrato</option>
                 <option value="filter">Filter</option>
                 <option value="amp">Amp</option>
                 <option value="pulseWidth">Pulse W</option>
@@ -1231,6 +1233,18 @@ export default function SynthControls({
               onChange={(v) => updateFxSends({ phaser: v })}
               parseInputValue={parsePercent(0, 1)}
               color="#3b82f6"
+              tooltip={TOOLTIPS.fxSend}
+            />
+            <Knob
+              label="Chorus"
+              value={parameters.fxSends.chorus ?? 0}
+              min={0}
+              max={1}
+              step={0.01}
+              displayValue={`${((parameters.fxSends.chorus ?? 0) * 100).toFixed(0)}%`}
+              onChange={(v) => updateFxSends({ chorus: v })}
+              parseInputValue={parsePercent(0, 1)}
+              color="#14b8a6"
               tooltip={TOOLTIPS.fxSend}
             />
           </div>

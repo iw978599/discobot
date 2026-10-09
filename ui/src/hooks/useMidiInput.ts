@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { midiOut, type MidiOutPort } from '../services/midiOutput';
 
 export type MidiMode = 'live' | 'record' | 'step';
 
@@ -49,6 +50,12 @@ export function useMidiInput({ onMessage }: UseMidiInputOptions) {
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>(ALL_DEVICES_ID);
   const [lastMessage, setLastMessage] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const [outputs, setOutputs] = useState<MidiDeviceInfo[]>([]);
+  // Empty means nothing is sent.
+  const [selectedOutputId, setSelectedOutputId] = useState<string>('');
+  const selectedOutputRef = useRef(selectedOutputId);
+  selectedOutputRef.current = selectedOutputId;
+  const bindOutputRef = useRef<() => void>(() => {});
 
   const accessRef = useRef<any>(null);
   const onMessageRef = useRef(onMessage);
@@ -83,9 +90,22 @@ export function useMidiInput({ onMessage }: UseMidiInputOptions) {
       onMessageRef.current(parsed);
     };
 
+    // Points the sequencer's MIDI output at the chosen device, or at nothing if it has gone.
+    const bindOutput = () => {
+      const access = accessRef.current;
+      const ports: MidiOutPort[] = access?.outputs ? Array.from(access.outputs.values()) : [];
+      const connected = ports.filter((port: any) => String(port.state || 'connected') === 'connected');
+      if (mounted) setOutputs(connected.map((port: any) => ({ id: String(port.id), name: port.name || `MIDI ${String(port.id).slice(0, 6)}`, state: 'connected' })));
+      const chosen = connected.find(port => String(port.id) === selectedOutputRef.current) ?? null;
+      midiOut.setPort(chosen);
+      if (!chosen && selectedOutputRef.current && mounted && access) setSelectedOutputId('');
+    };
+    bindOutputRef.current = bindOutput;
+
     const bindInputs = () => {
       const access = accessRef.current;
       if (!access) return;
+      bindOutput();
 
       const nextDevices: MidiDeviceInfo[] = [];
       const listening = new Set<string>();
@@ -148,6 +168,9 @@ export function useMidiInput({ onMessage }: UseMidiInputOptions) {
     };
   }, [selectedDeviceId]);
 
+  useEffect(() => { bindOutputRef.current(); }, [selectedOutputId]);
+  useEffect(() => () => { midiOut.setPort(null); }, []);
+
   return {
     supported,
     connected,
@@ -157,5 +180,8 @@ export function useMidiInput({ onMessage }: UseMidiInputOptions) {
     allDevicesId: ALL_DEVICES_ID,
     lastMessage,
     error,
+    outputs,
+    selectedOutputId,
+    setSelectedOutputId,
   };
 }

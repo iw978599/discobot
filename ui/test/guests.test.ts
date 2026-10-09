@@ -38,6 +38,15 @@ test('guests read from a project are checked like the rest of it', () => {
   const patched = patchGuest(guests[0], { volume: -1, muted: true, name: '', state: circular, url: 'https://evil.example/', id: 'changed' });
   assert.deepEqual(patched, { id: a, url: 'https://example.com/a', name: 'Choir', volume: 0, muted: true }, 'the address and id cannot be patched, and a state that cannot be stored is dropped');
   assert.deepEqual(patchGuest(guests[0], { state: { vowel: 'o' } }).state, { vowel: 'o' });
+
+  // Effect sends: absent until one is turned up, merged a knob at a time, and bounded.
+  assert.equal('sends' in guests[0], false);
+  const sent = patchGuest(guests[0], { sends: { reverb: 0.5, chorus: 7, wah: 1, delay: 'lots' } });
+  assert.deepEqual(sent.sends, { reverb: 0.5, delay: 0, drive: 0, phaser: 0, chorus: 1 });
+  assert.deepEqual(patchGuest(sent, { sends: { delay: 0.25 } }).sends, { reverb: 0.5, delay: 0.25, drive: 0, phaser: 0, chorus: 1 });
+  assert.equal('sends' in patchGuest(sent, { sends: { reverb: 0, chorus: 0 } }), false, 'all turned down is stored as no sends');
+  assert.deepEqual(sanitizeGuests([{ id: a, url: 'https://example.com/a', sends: { reverb: 0.3 } }], OWN)[0].sends, { reverb: 0.3, delay: 0, drive: 0, phaser: 0, chorus: 0 });
+  assert.equal('sends' in sanitizeGuests([{ id: a, url: 'https://example.com/a', sends: 'all' }], OWN)[0], false);
 });
 
 test('guest audio is placed end to end, except across a real gap', () => {
@@ -199,4 +208,25 @@ test('a scene also keeps each guest\'s level and mute', async () => {
   assert.equal(sanitizeGuestMix([]), undefined);
   await post(`/guests/${id}`, {}, 'DELETE');
   assert.ok(((await (await service.request('/scenes')).json()).scenes as Array<{ guestMix?: unknown }>).every(scene => !scene.guestMix));
+});
+
+test('a song gives a guest each scene\'s own level and mute, bar by bar', async () => {
+  const { guestBarGains, songBars } = await import('../src/services/songPlayback.ts');
+  const guest = id();
+  const steps = (bars: number) => ({ kick: { steps: Array(16 * bars).fill(false) } });
+  const scenes = [
+    { id: 'verse', name: 'Verse', lanes: {}, drums: steps(2), guestMix: { [guest]: { volume: 0.4, muted: false } } },
+    { id: 'break', name: 'Break', lanes: {}, drums: steps(1), guestMix: { [guest]: { volume: 0.9, muted: true } } },
+    { id: 'old', name: 'Old', lanes: {}, drums: steps(1) },
+    { id: 'chorus', name: 'Chorus', lanes: {}, drums: steps(1), guestMix: { [guest]: { volume: 0.9, muted: false } } },
+  ] as unknown as Parameters<typeof songBars>[1];
+  const song = { loop: false, entries: ['verse', 'break', 'old', 'chorus', 'old'].map(sceneId => ({ sceneId, repeats: 1 })) } as Parameters<typeof songBars>[0];
+  const bars = songBars(song, scenes);
+  assert.equal(bars.length, 6, 'the two-bar verse is two bars of the song');
+  // The open scene has the guest loud and playing; that only matters to a scene with no level of its own.
+  assert.deepEqual(guestBarGains(bars, { id: guest, volume: 1, muted: false }), [0.4, 0.4, 0, 0, 0.9, 0.9],
+    'every bar of a scene has its level, and a scene from before the guest carries on from the one before');
+  assert.deepEqual(guestBarGains(bars, { id: guest, volume: 1, muted: true }), [0.4, 0.4, 0, 0, 0.9, 0.9], 'the open scene\'s mute does not reach the others');
+  assert.deepEqual(guestBarGains(bars.slice(3, 4), { id: guest, volume: 0.7, muted: false }), [0.7], 'with nothing before it, such a scene plays the guest as it is now');
+  assert.deepEqual(guestBarGains(bars, { id: id(), volume: 0.5, muted: false }), [0.5, 0.5, 0.5, 0.5, 0.5, 0.5], 'a guest no scene knows keeps its level');
 });

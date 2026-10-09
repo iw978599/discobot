@@ -148,6 +148,7 @@ export function HelpModal({ open, onClose }: { open: boolean; onClose: () => voi
           <ul className="help-list help-list-plain">
             <li><strong>Step details:</strong> each hit has a velocity, a chance of playing, and a repeat count that packs 2 to 4 hits into the step. Shift+click a hit to step through velocities.</li>
             <li><strong>More / Sends:</strong> show the humanize and pan knobs, and the kit's effect sends.</li>
+            <li><strong>Your own sounds:</strong> <strong>Sound</strong> puts an imported sample on the selected lane. <strong>Import Kit</strong> takes several files at once and matches each to a lane by its name, such as “Kick” or “HH Open”; check the matches before using them. Samples stay in this browser.</li>
           </ul>
         </section>
         <section>

@@ -122,32 +122,45 @@ function fromVast(file: Loose, defaults: SynthParameters): ImportedPreset {
   return { name: fileName(file.name, 'VAST preset'), source: 'VAST G1-J8', params, notes };
 }
 
-// ---- A nested two-oscillator patch: `osc1`, `osc2`, `mix`, `filter`, `envelope`, `lfo1`, `lfo2`.
-// Its units are plain (Hz, seconds, wave names), so it is read by shape.
+// ---- WebSynth Studio (github.com/szabadkai/synth-demo). Its patch file is the bare `Patch`
+// object with no format marker, so it is recognised by shape. Meanings are from its
+// `types.ts`, `Voice.ts` and `engine.ts`: detune is in cents; only oscillator 1 uses `octave`
+// and `detuneFine`; `mix` is a straight crossfade; an LFO's amount is up to 2000 Hz of cutoff,
+// 50 cents of pitch or 80% of the level.
 
-const PATCH_LFO_TARGETS: Record<string, SynthParameters['lfo1']['target']> = { filter: 'filter', cutoff: 'filter', pitch: 'pitch', amp: 'amp', volume: 'amp', gain: 'amp', pw: 'pulseWidth', pulseWidth: 'pulseWidth' };
+const STUDIO_LFO_TARGETS: Record<string, SynthParameters['lfo1']['target']> = { filter: 'filter', pitch: 'vibrato', amp: 'amp' };
 
-function fromNestedPatch(file: Loose, defaults: SynthParameters, name: string): ImportedPreset {
+function fromStudioPatch(file: Loose, defaults: SynthParameters, name: string): ImportedPreset {
   const notes: string[] = [];
   const params = structuredClone(defaults);
   const osc1 = record(file.osc1), osc2 = record(file.osc2);
   const wave = (value: unknown, fallback: OscillatorType) => WAVE_NAMES[String(value)] ?? fallback;
-  params.oscillator = { type: wave(osc1.wave, 'sawtooth'), detune: clamp(num(osc1.detuneFine, 0), -1200, 1200), pulseWidth: 0.5 };
-  const mix = clamp(num(file.mix, 0.5), 0, 1);
-  const pitch = (osc: Loose) => num(osc.octave, 0) * 12 + num(osc.detune, 0);
+  const mix = clamp(num(file.mix, 0), 0, 1);
+  // Cents from the played note. Oscillator 1 is moved by whole semitones only in the report;
+  // what is left of its detune stays on it, and oscillator 2 is placed relative to it.
+  const cents1 = clamp(Math.round(num(osc1.octave, 0)), -3, 3) * 1200 + num(osc1.detune, 0) + num(osc1.detuneFine, 0);
+  const shift = Math.round(cents1 / 100);
+  const apart = num(osc2.detune, 0) - shift * 100;
+  const semitones = clamp(Math.round(apart / 100), -36, 36);
+  params.oscillator = { type: wave(osc1.wave, 'sawtooth'), detune: cents1 - shift * 100, pulseWidth: 0.5 };
   params.oscillator2 = {
-    enabled: mix > 0.001, type: wave(osc2.wave, 'square'),
-    semitones: clamp(Math.round(pitch(osc2) - pitch(osc1)), -36, 36), detune: num(osc2.detuneFine, 0),
+    enabled: mix > 0.001, type: wave(osc2.wave, 'square'), semitones, detune: clamp(apart - semitones * 100, -100, 100),
     // `mix` is the balance between the two; here oscillator 1 stays at full level.
     level: clamp(mix >= 0.5 ? 1 : mix / (1 - mix), 0, 1),
   };
-  if (pitch(osc1) !== 0) notes.push(`Oscillator 1 was transposed ${pitch(osc1) > 0 ? '+' : ''}${pitch(osc1)} semitones. Use the lane's Oct buttons or play it at that pitch to match.`);
+  if (shift !== 0) notes.push(`Oscillator 1 was transposed ${shift > 0 ? '+' : ''}${shift} semitones. Use the lane's Oct buttons or play it at that pitch to match.`);
   if (mix > 0.5) notes.push('Oscillator 2 was louder than oscillator 1; here they are equal.');
-  for (const [label, osc] of [['Oscillator 1', osc1], ['Oscillator 2', osc2]] as const) {
+  let noise = 0;
+  for (const [label, osc, share] of [['Oscillator 1', osc1, 1 - mix], ['Oscillator 2', osc2, mix]] as const) {
     if (typeof osc.mode === 'string' && osc.mode !== 'analog') notes.push(`${label} used a "${osc.mode}" source, which Discobot does not have. It is imported as a plain ${WAVE_NAMES[String(osc.wave)] ?? 'sawtooth'} wave.`);
+    else if (osc.wave === 'noise') { noise = Math.max(noise, share); notes.push(`${label} was noise. Discobot's noise level is turned up in its place; the oscillator itself still plays a plain wave.`); }
+    else if (osc.wave === 'sample') notes.push(`${label} played a sample, which is not carried over.`);
   }
   const sub = record(file.sub);
-  params.mixer = { sub: sub.enabled === true ? clamp(num(sub.level, 0), 0, 1) : 0, noise: 0 };
+  params.mixer = { sub: sub.enabled === true ? clamp(num(sub.level, 0), 0, 1) : 0, noise: clamp(noise, 0, 1) };
+  if (sub.enabled === true && num(sub.level, 0) > 0 && (num(sub.octave, 1) >= 2 || (typeof sub.wave === 'string' && sub.wave !== 'square'))) {
+    notes.push('Its sub oscillator was two octaves down or not a square wave. Discobot\'s is a square one octave down.');
+  }
   const fm = record(file.fm);
   if (fm.enabled === true && num(fm.amount, 0) > 0) {
     params.engine = 'fm';
@@ -163,19 +176,25 @@ function fromNestedPatch(file: Loose, defaults: SynthParameters, name: string): 
   params.envelope = { attack: num(envelope.attack, 0.01), decay: num(envelope.decay, 0.1), sustain: num(envelope.sustain, 0.7), release: num(envelope.release, 0.3) };
 
   for (const slot of ['lfo1', 'lfo2'] as const) {
-    const lfo = record(file[slot]), target = PATCH_LFO_TARGETS[String(lfo.dest)];
-    const wanted = lfo.enabled === true && num(lfo.amount, 0) > 0;
+    const lfo = record(file[slot]), target = STUDIO_LFO_TARGETS[String(lfo.dest)];
+    const amount = Math.max(0, num(lfo.amount, 0)), wanted = lfo.enabled === true && amount > 0;
+    // Discobot's depth at full is two octaves of cutoff, a semitone of vibrato, or the level down to nothing.
+    const depth = target === 'filter' ? Math.log2(1 + amount * 2000 / params.filter.frequency) / 2
+      : target === 'vibrato' ? amount * 50 / 100
+        : amount * 1.6;
     params[slot] = {
       ...params[slot], enabled: wanted && target !== undefined, target: target ?? params[slot].target,
-      waveform: wave(lfo.wave, 'sine'), rate: clamp(num(lfo.rateHz, 1), 0.05, 20), depth: clamp(num(lfo.amount, 0), 0, 1), sync: false,
+      waveform: wave(lfo.wave, 'sine'), rate: clamp(num(lfo.rateHz, 1), 0.05, 20), depth: clamp(depth, 0, 1), sync: false,
     };
     if (wanted && target === undefined) notes.push(`LFO ${slot === 'lfo1' ? 1 : 2} moved "${String(lfo.dest)}", which Discobot's LFOs cannot.`);
+    else if (wanted && lfo.wave === 'noise') notes.push(`LFO ${slot === 'lfo1' ? 1 : 2} was random noise; here it is a sine wave.`);
   }
 
   const arp = record(file.arp);
   const mode = ['up', 'down', 'updown', 'downup', 'random', 'converge', 'diverge'].includes(String(arp.mode)) ? arp.mode as SynthParameters['arpeggiator']['mode'] : 'up';
   const rate = ARP_RATES.find(entry => entry === arp.division) ?? '1/8';
   params.arpeggiator = { enabled: arp.enabled === true, mode, rate, gate: clamp(num(arp.gate, 0.6), 0.1, 1) };
+  if (arp.enabled === true && (arp.bpmSync !== true || arp.mode !== mode || arp.division !== rate)) notes.push('Its arpeggiator ran at its own speed or in a pattern Discobot does not have; here it follows the tempo.');
 
   const effects = record(file.effects), delay = record(effects.delay), reverb = record(effects.reverb);
   params.fxSends = {
@@ -185,10 +204,10 @@ function fromNestedPatch(file: Loose, defaults: SynthParameters, name: string): 
   if (Array.isArray(file.modMatrix) && file.modMatrix.length > 0) notes.push('Its modulation matrix is not carried over.');
   if (record(file.sequencer).enabled === true) notes.push('Its sequence is not imported, only the sound.');
   if (typeof file.engineMode === 'string' && file.engineMode !== 'classic') notes.push(`It was made in "${file.engineMode}" mode, which Discobot does not have.`);
-  return { name, source: 'a two-oscillator patch file', params, notes };
+  return { name, source: 'WebSynth Studio', params, notes };
 }
 
-const looksLikeNestedPatch = (file: Loose) => typeof record(file.osc1).wave === 'string' && typeof record(file.osc2).wave === 'string'
+const looksLikeStudioPatch = (file: Loose) => typeof record(file.osc1).wave === 'string' && typeof record(file.osc2).wave === 'string'
   && typeof record(file.filter).cutoff === 'number' && typeof record(file.envelope).attack === 'number';
 
 // Reads a preset file's contents. `suggestedName` is used when the file does not name the sound.
@@ -202,12 +221,12 @@ export function importPreset(file: unknown, defaults: SynthParameters, suggested
     } else if (input.format === 'websynth-preset') {
       if (input.version !== 1) return { ok: false, error: 'This is a newer kind of VAST preset than Discobot knows how to read.' };
       preset = fromVast(input, defaults);
-    } else if (looksLikeNestedPatch(input)) {
-      preset = fromNestedPatch(input, defaults, fileName(input.name, suggestedName));
+    } else if (looksLikeStudioPatch(input)) {
+      preset = fromStudioPatch(input, defaults, fileName(input.name, suggestedName));
     } else if (input.format === 'discobot-project') {
       return { ok: false, error: 'This is a whole Discobot project, not a preset. Use Project → Import Project.' };
     } else {
-      return { ok: false, error: 'Discobot does not recognise this preset file. It can read its own presets, VAST G1-J8 presets, and two-oscillator patch files. There is no common format for synth presets, so each kind has to be added.' };
+      return { ok: false, error: 'Discobot does not recognise this preset file. It can read its own presets, VAST G1-J8 presets, and WebSynth Studio patches. There is no common format for synth presets, so each kind has to be added.' };
     }
   } catch {
     return { ok: false, error: 'The preset file could not be read.' };

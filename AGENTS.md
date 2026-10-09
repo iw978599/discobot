@@ -45,6 +45,7 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 | `ui/src/services/browserTransport.ts` | Look-ahead clock. One tick is a 32nd note; 16-step lanes and drums use every second tick |
 | `ui/src/services/sampleStore.ts` | IndexedDB sample storage |
 | `ui/src/services/drumSamples.ts` | Decodes a stored sample for a drum lane, once, mixed to one channel |
+| `ui/src/services/kitImport.ts` / `ui/src/rack/KitImportDialog.tsx` | Import Kit: `matchKit` guesses a drum lane for each sample file from its name, and the dialog shows the guesses to be changed before anything is stored |
 | `ui/src/services/projectLibrary.ts` | The project library: one IndexedDB record per project and a store of earlier versions, with an in-memory stand-in for tests and browsers without IndexedDB |
 | `server/src/index.ts` | The whole accounts API: sign up with an invite, sign in, recovery codes, owner tools. `handle(request, env)` is a plain function, so tests call it directly |
 | `server/src/secrets.ts` / `rules.ts` | Password hashing, tokens and codes; username and password rules |
@@ -55,10 +56,12 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 | `ui/src/rack/GuestModule.tsx` / `ui/src/hooks/guestAudio.ts` | The guest's rack unit and frame, and the player that brings its audio into the mixer |
 | `ui/src/services/projectSync.ts` | Project sync: `createProjectSync` (the rules, tested against the real API handler) and `startProjectSync` (when it runs) |
 | `ui/src/rack/AccountDialog.tsx` | Sign in, create account, recovery code, and the owner's invite codes and member list |
+| `ui/src/rack/Walkthrough.tsx` / `ui/src/services/walkthrough.ts` | The tour of the rack shown after a new account's recovery code, and whether this browser has had it |
 | `ui/src/services/shareLink.ts` | Share links: a project deflated into the URL after `#song=`, and short links (`#s=code`) to a song published on the server |
 | `ui/src/rack/SharedSongPage.tsx` | The page a share link opens: renders the song to audio, plays it, offers a copy |
 | `ui/src/services/wavExport.ts` | Offline arrangement render and WAV encoding: full mix, seamless loop, and per-lane stems zipped by `utils/zip.ts` |
 | `ui/src/services/delayTime.ts` | `delaySeconds`: the shared delay's time, free or tempo-synced |
+| `ui/src/services/effectSettings.ts` | Defaults and limits for the chorus, master EQ and reverb shape |
 | `ui/src/services/drumScheduling.ts` | `expandDrumStep`: the hits one drum step plays (chance, repeats); used live and by WAV and MIDI export |
 | `ui/src/hooks/useComputerKeyboard.ts` | Computer-keyboard piano for the selected lane |
 | `ui/pwa/service-worker.js` | Service worker template. `vite.config.ts` fills in the build's file list and emits it as `sw.js`; `main.tsx` registers it in production only |
@@ -66,7 +69,8 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 | `ui/src/hooks/browserAudio.ts` | Shared AudioContext, master limiter, parallel FX buses, sample playback |
 | `ui/src/hooks/useSynthAudio.ts` | Per-lane AudioWorklet nodes, note start/stop, parameter flattening |
 | `ui/src/hooks/useDrumAudio.ts` | Posts drum hits to the `drum-processor` worklet node |
-| `ui/src/hooks/useMidiInput.ts` | Web MIDI input, per-device held-note tracking |
+| `ui/src/hooks/useMidiInput.ts` | Web MIDI input, per-device held-note tracking, and the list of outputs |
+| `ui/src/services/midiOutput.ts` | `midiOut`: the sequencer's notes and MIDI clock to a hardware output |
 | `ui/src/audio/worklet.ts` | Worklet entry: thin `synth-processor` and `drum-processor` wrappers around the engine cores. `vite.config.ts` bundles it to `public/audio-worklet.js` (generated, gitignored) |
 | `ui/src/services/songPlayback.ts` | Pure song helpers: `sceneAtBar` (which scene plays in a bar, and where in it), `songBars`, `sceneDrumState` |
 | `ui/src/services/presetImport.ts` | Synth preset files: Discobot's own (`discobot-preset`), and translators for other synths' presets |
@@ -90,7 +94,8 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 - `savedPatterns` only exists to migrate arrangements saved by older versions into projects (`openLibrary`). Do not add to it.
 - Share links and project files are untrusted. Both go through `restore()`; `readProjectFile` does that without opening the project.
 - A project has scenes (every lane's pattern plus the drum grid, each one or more bars) and a song (scenes in order, with repeats). The lanes' patterns and `drumState` steps in the store are always the open scene; its slot in `scenes` is only brought up to date by `commitScene()`, which runs before anything reads `scenes`. Never read a scene's stored copy for the open scene: use the live pattern.
-- Sounds, kit settings, mutes, tempo and effects are project-wide. A scene holds only steps.
+- Sounds, kit settings, tempo and effects are project-wide. A scene holds steps, and which lanes and drums are muted or soloed (`scene.mutes`): `captureScene` records them and `applyScene` puts them back on the lanes and the drum state, so everything else still reads `muted` and `solo` where it always did. A scene saved before this holds none and leaves the lanes as they are.
+- A song export applies each scene's mutes bar by bar (`applySceneMutes` empties the silent lanes, `sceneDrumState` carries the drum flags) and then hands the lanes to the exporter unmuted. Never filter a song export by the open scene's mutes.
 - In song mode the scheduler picks the scene from the transport's bar number (`sceneAtBar`), plays any scene other than the open one from its stored copy, and asks the store to open the playing scene. `localService.request` emits synchronously, and the `sceneChanged` handler updates the refs the scheduler reads straight away; keep both true or a bar would play the wrong scene.
 - Up to 3 synth lanes; Synth 1 cannot be removed. A bar is 16 steps, or 32 on a synth lane set to finer steps; the drum grid is always 16 per bar.
 - A lane's pattern and the drum grid can each be 1, 2, 4 or 8 bars (`Pattern.bars`, `Scene.laneBars`; the drum grid's length is its step count over 16). Lanes of different lengths loop against each other. `patternLength.ts` holds the arithmetic. A 32-step pattern is one fine bar unless `bars` says two: never infer bars from the step count alone, use `laneBars`.
@@ -108,11 +113,21 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 - A step also has optional `probability` (chance), `ratchet` (repeats across the step's length) and `offset` (how late it starts, as a fraction of a step, which is how a note sits between steps). `withStepNotes` drops all of them when a step is emptied. `expandStepNotes` takes a `random` argument: pass `seededRandom` in exports.
 - A note's length is dragged by the handle on its last piano-roll cell. The handle moves as the note grows, so the drag is followed by listeners on `window`, not on the handle.
 - The shared delay can follow the tempo (`delay.sync`, a note value). `delaySeconds` in `delayTime.ts` is the one place that turns it into seconds, for live playback (`setEffectsTempo`) and export. `sync` is optional and absent when off, so older projects still match the expected shape.
+- The chorus, the master EQ and the reverb's pre-delay and damping came after the first four effects. They are optional in `EffectsLoopState` and must stay out of the defaults passed to `localService`: `restore()` reports a project as damaged when its effects do not match the defaults' shape. `sanitizeEffects` adds them back by hand, and `effectSettings.ts` holds what the controls show until they are set. Only a new project (`blankState`) starts with a shaped reverb.
+- With no pre-delay and no damping `reverbImpulse` is the original impulse, sample for sample, and a flat EQ is left out of an export altogether, so older projects render as they did.
+- `createChorus` and `createMasterEq` in `browserAudio.ts` build those effects for live playback and for export. The EQ is on the whole mix and works with the effects loop off.
+- The `vibrato` LFO target is the `pitch` target scaled to one semitone at full depth. `pitch` is still an octave, so stored sounds are unchanged.
+- Two exports of the same project can differ in a few samples by one step of a 16-bit file: the browser's offline renderer rounds a kick through the reverb differently from run to run. Browser tests that compare exports allow for it (`same` in `effects.spec.ts`).
+- MIDI output is sent from the scheduler (`triggerStep`, the drum loop and the top of `scheduleTick`) with time stamps from `midiTime`, which turns an audio-clock time into Web MIDI's clock. Synth lane N is channel N, drums are channel 10 with the notes MIDI export uses, and clock is three pulses per transport tick with start and stop. The chosen output and what it is sent are session settings, not saved with the project. Notes played by hand are not sent, only the sequencer.
+- A MIDI file is imported at the smallest of 1, 2, 4 or 8 bars that holds it (`barsFor`), the same length for every track; anything past eight bars is left out and the dialog says so.
 - The piano roll paints while a pressed pointer moves. It ignores cells that arrive under a pointer that has not moved (selecting a step can shift the layout), or one click would add a second note.
 - A step's `slide` flag holds its note into the next step; a mono lane then glides instead of retriggering. Accent is step velocity routed to the filter (`velocity.filter`).
 - There is no common format for synth presets, so `presetImport.ts` has one translator per source format, each written from that synth's real parameter definitions, and returns a list of what did not carry over. Add a format by adding a translator and a detection rule; never guess at an unknown file. Every result goes through `sanitizeSynthParams`.
 - `.rack-page` is the page's scrolling area (the window itself does not scroll), which is what lets the transport unit be `position: sticky`. Keep the page's top padding at zero, or scrolled content shows above the bar.
 - The UI is one rack read top to bottom. Synth step rows and the drum grid share the column widths `--plate`, `--side` and `--knobs` in `rack.css` so steps line up vertically; change them together.
+- The walkthrough (`Walkthrough.tsx`) is the one overlay that is not a `Dialog`: it lights one part of the rack and puts a card beside it, or along the bottom of a narrow screen. Its card is `aria-modal`, which is what makes the piano keys and the step arrow keys stand down while it is up. It finds each stop by a selector in `STOPS`; renaming one of those classes or labels means changing the stop and `walkthrough.spec.ts` with it. A stop whose part is not on the page shows its card alone.
+- The walkthrough starts by itself only after the recovery code of a new account, and only in a browser that has not had it (`walkthroughSeen`); Show the Walkthrough in the account dialog starts it at any time. Browser tests that sign up set `discobot_walkthrough_v1` first unless the walkthrough is what they test.
+- A `Dialog` hands focus back to the button that opened it when it closes, after the layout effects of whatever replaces it, and focusing scrolls that button into view. Anything that opens as a dialog closes must place itself and take focus in a mount effect, with `preventScroll` (see `Walkthrough`).
 - Components take the `Studio` object and call its handlers. They hold only view state (open tab, selected drum, dialog open); anything that must be saved or undone belongs in `useStudio`.
 - Fonts are bundled from `@fontsource`. The app must not load anything from another origin: it works offline and a browser test fails on any outside request.
 - Each lane shows four knobs plus Level. For a synth model with macros those four are the macros; otherwise Cutoff, Reso, Env and Decay.
@@ -127,6 +142,8 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 - Exports must be repeatable: use `seededRandom` for anything random in WAV or MIDI export, never `Math.random`. That includes the reverb's noise (`reverbImpulse` takes a random source).
 - A drum lane can play an imported sample instead of its synthesized voice (`DrumTrack.sampleId`). The sample is played by `DrumCore` (`setSample`), so playback and export match; it is one channel, at most ten seconds, and skips the kit's colouring. `drumSamples.ts` decodes and caches by id; `useStudio` keeps the decoded samples for the worklet and for export.
 - Samples live in this browser only. A lane whose sample is not on the device plays its synthesized voice and says so; never treat a missing sample as an error.
+- Import Kit puts several sample files on the drum lanes at once. `matchKit` reads only the file names, so every guess is shown in the dialog and can be changed; nothing is stored or changed until it is confirmed, and only files given a lane are stored. Add a naming convention by adding to `guess` in `kitImport.ts` and a name to its test.
+- No drum machine's recordings are bundled with the app. The owner decided this on 2026-10-09: no LinnDrum, DMX or TR-707 recordings were found that the project is clearly allowed to redistribute. The kits with those names in the kit menu are synthesized. Do not add recordings without the owner's say-so and a checked licence.
 - `localService.exportProject()` / `importProject()` are the project file format (`format: 'discobot-project'`). Import goes through the same `restore()` sanitizing as a reload; never trust a file's contents.
 - The service worker serves hashed files under `assets/` cache-first and everything else network-first. Keep unhashed files (the page, `audio-worklet.js`) network-first, or an update would pair a new app with a stale worklet.
 
@@ -188,11 +205,13 @@ npm run migrate --workspace=server  # Apply new database migrations to the live 
 - With guests connected the transport places its first beat further ahead (`guestLink.startLead`): the largest latency plus reaction time, or longer for a guest that has not been started since it loaded.
 - A guest's settings belong to the scene, like a lane's steps. `guest.state` is the open scene's; `captureScene` copies it into `scene.guests` and `applyScene` copies it back, and `GuestModule` sends `setState` whenever the state changes from outside the guest (a scene opened, a song moving on, sync, a restore). A scene made before a guest was added holds nothing for it, and the guest carries on as it is.
 - A guest is only asked for its settings every few seconds, so anything that leaves the open scene on the user's say-so must first `await guestLink.captureAll()` (see `sceneRequest`). Without it, a change made just before switching is recorded late, in the scene switched to. A scene change also always re-sends the scene's settings to the guest and starts a new epoch, even when the settings are unchanged.
-- A guest's level and mute are per scene too (`scene.guestMix`). Synth lane and drum mutes are still project-wide.
+- A guest's level and mute are per scene too (`scene.guestMix`). Its effect sends (`guest.sends`, absent when all are zero) are project-wide, like a lane's.
+- A song export gives each guest its scenes' levels bar by bar (`guestBarGains`, passed to the renderer as a take's `gains`) and records every guest that any scene of the song plays. Never decide which guests to record, or how loud, from the open scene.
 - Questions to a guest carry an epoch that goes up whenever it is sent settings. An answer from an earlier epoch describes settings the guest no longer has and is ignored; without that, a late answer would be saved into the wrong scene.
 - `GuestModule` handles a message for every block of audio, many times a second. Nothing on that path may set React state; what the unit shows is refreshed on a timer.
 - Do not use `window.confirm` for guest actions: a browser can be told to stop showing a page's dialogs, after which it silently answers no.
-- A guest cannot be rendered offline, so Download WAV and Song WAV play the arrangement through once and record each guest (`guestCapture`, fed from `GuestModule`), then mix the recordings into the normal render as `guestTakes`. Recordings are placed by the guests' time stamps against the transport's first beat. Loop WAV, stems and MIDI leave guests out.
+- A guest cannot be rendered offline, so every audio export (`handleExportWav`) first plays the arrangement through and records each guest (`guestCapture`, fed from `GuestModule`), then mixes the recordings into the normal render as `guestTakes`, through the guest's sends. Recordings are placed by the guests' time stamps against the transport's first beat. For Loop WAV the pattern is played twice and the second pass kept, and the renderer lays that pass end to end. Stems give each guest a file of its own. MIDI leaves guests out.
+- Two recordings of a guest do not land on the same sample: a take can sit a millisecond or two early, and more on a slow machine. A test that compares two guest exports must not measure a fixed window that ends where a sound begins; measure something that does not move with the take (`quietest` in `guests.spec.ts`). The check run on GitHub failed for exactly this while passing on a faster machine.
 - `FEATURED_GUESTS` lists instruments offered by name in the Add Guest dialog. Only add one with its creator's permission.
 
 ## Published Songs
@@ -210,3 +229,12 @@ npm run migrate --workspace=server  # Apply new database migrations to the live 
 - Replace the REST-shaped facade with typed service methods and split `useStudio.tsx` into hooks per concern
 - See `docs/ROADMAP.md` and `docs/STORAGE_AND_ACCOUNTS_PLAN.md`
 - Use imported samples as a synth source, and include samples in project files and sync
+
+## Working Rules for Agents
+- Skills for this repository are in `.claude/skills/`: `add-project-field` (anything stored), `ship-change` (checks, commits, pull requests) and `scripted-edits` (editing on Windows). Read the one that fits before starting.
+- `docs/HANDOFF.md`, when it exists, says where unfinished work stopped. Read it first and delete it when that work is merged.
+- Reproduce a reported bug before fixing it, and see it fixed the same way afterwards. If it cannot be reproduced, say so; do not report a guess as a fix.
+- Find another program's real definitions before translating its files or talking to it (its source, its parameter table). Do not infer units from field names.
+- Anything bundled with the app must be something the project may redistribute. Do not add samples, fonts or data whose licence has not been checked.
+- Changing which outside service a workflow or the app sends data to, or adding a secret, is the owner's decision. Ask first.
+- Sound cannot be verified by tests. Say "not verified by ear" when that is the case.

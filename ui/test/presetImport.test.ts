@@ -48,7 +48,7 @@ test('a VAST preset is translated using that synth\'s own meanings', () => {
 
   assert.deepEqual([params.lfo1.enabled, params.lfo1.target, params.lfo1.waveform, params.lfo1.rate, params.lfo1.depth, params.lfo1.sync], [true, 'filter', 'triangle', 5.2, 0.25, false]);
   assert.equal(params.lfo2.enabled, false, 'an LFO aimed at something Discobot cannot move is off');
-  assert.deepEqual(params.fxSends, { reverb: 0.25, delay: 0, drive: 0, phaser: 0.5 }, 'an effect that was off sends nothing');
+  assert.deepEqual(params.fxSends, { reverb: 0.25, delay: 0, drive: 0, phaser: 0.5, chorus: 0 }, 'an effect that was off sends nothing');
   assert.deepEqual(params.arpeggiator, { enabled: true, mode: 'down', rate: '1/32', gate: 0.5 });
 
   // What did not carry over is said, in plain words.
@@ -76,28 +76,35 @@ test('VAST details: the ladder filter, silent parts, and out-of-range values', (
   assert.equal(importPreset({ format: 'websynth-preset', version: 2, params: {} }, defaults).ok, false);
 });
 
-test('a nested two-oscillator patch is read by its shape', () => {
+test('a WebSynth Studio patch is read by its shape, in the units that synth uses', () => {
   const patch = {
     osc1: { wave: 'sawtooth', detune: 0, detuneFine: 4, octave: -1, mode: 'analog' },
-    osc2: { wave: 'square', detune: 7, detuneFine: -3, octave: 0, mode: 'macro' },
+    osc2: { wave: 'square', detune: 703, detuneFine: -40, octave: 2, mode: 'macro' },
     mix: 0.4, fm: { enabled: true, ratio: 2, amount: 180 }, sub: { enabled: true, level: 0.3 }, ring: { enabled: true, amount: 1 },
     filter: { type: 'bandpass', cutoff: 540, q: 2.8 }, envelope: { attack: 0.012, decay: 0.22, sustain: 0.4, release: 0.3 }, master: { gain: 0.24 },
     effects: { delay: { enabled: false, mix: 0.1 }, reverb: { enabled: true, mix: 0.12 } },
     lfo1: { enabled: true, wave: 'triangle', rateHz: 1.2, amount: 0.25, dest: 'filter' }, lfo2: { enabled: true, wave: 'sine', rateHz: 3, amount: 0.05, dest: 'ringAmount' },
     arp: { enabled: true, mode: 'updown', division: '1/8', gate: 0.6 }, sequencer: { enabled: true }, modMatrix: [{}], engineMode: 'classic',
   };
-  const { name, params, notes } = imported(patch, 'patch');
+  const { name, source, params, notes } = imported(patch, 'patch');
+  assert.equal(source, 'WebSynth Studio');
   assert.equal(name, 'patch', 'the file name stands in when the file does not name the sound');
   assert.deepEqual(params.oscillator, { type: 'sawtooth', detune: 4, pulseWidth: 0.5 });
-  assert.deepEqual([params.oscillator2!.type, params.oscillator2!.semitones, params.oscillator2!.detune], ['square', 19, -3], 'an octave and seven semitones above oscillator 1');
+  assert.deepEqual([params.oscillator2!.type, params.oscillator2!.semitones, params.oscillator2!.detune], ['square', 19, 3], 'detune is cents, and only oscillator 1 uses octave and fine detune');
   near(params.oscillator2!.level, 0.4 / 0.6);
   assert.equal(params.mixer!.sub, 0.3);
   assert.deepEqual([params.filter.type, params.filter.frequency, params.filter.q], ['bandpass', 540, 2.8]);
   assert.deepEqual(params.envelope, { attack: 0.012, decay: 0.22, sustain: 0.4, release: 0.3 });
   assert.deepEqual([params.engine, params.fm!.ratio], ['fm', 2]);
-  assert.deepEqual([params.lfo1.enabled, params.lfo1.target, params.lfo1.rate, params.lfo1.depth], [true, 'filter', 1.2, 0.25]);
+  assert.deepEqual([params.lfo1.enabled, params.lfo1.target, params.lfo1.rate], [true, 'filter', 1.2]);
+  near(params.lfo1.depth, Math.log2(1 + 500 / 540) / 2);
+  const vibrato = imported({ ...patch, lfo1: { enabled: true, wave: 'noise', rateHz: 5, amount: 0.5, dest: 'pitch' }, osc2: { ...patch.osc2, mode: 'analog', wave: 'noise' }, sub: { enabled: true, level: 0.3, octave: 2 } });
+  assert.equal(vibrato.params.lfo1.target, 'vibrato', 'its pitch LFO is at most 50 cents, which is vibrato');
+  near(vibrato.params.lfo1.depth, 0.25);
+  near(vibrato.params.mixer!.noise, 0.4);
+  for (const expected of ['random noise', 'Oscillator 2 was noise', 'two octaves down']) assert.ok(vibrato.notes.join(' | ').includes(expected), expected);
   assert.equal(params.lfo2.enabled, false);
-  assert.deepEqual(params.fxSends, { reverb: 0.12, delay: 0, drive: 0, phaser: 0 });
+  assert.deepEqual(params.fxSends, { reverb: 0.12, delay: 0, drive: 0, phaser: 0, chorus: 0 });
   assert.deepEqual(params.arpeggiator, { enabled: true, mode: 'updown', rate: '1/8', gate: 0.6 });
   const said = notes.join(' | ');
   for (const expected of ['-12 semitones', '"macro" source', 'frequency modulation', 'Ring modulation', 'LFO 2 moved "ringAmount"', 'modulation matrix', 'sequence']) {

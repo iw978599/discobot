@@ -3,6 +3,8 @@
 // Discobot: it cannot read projects or the signed-in session. The two talk only through
 // the messages described in docs/GUEST_PROTOCOL.md.
 
+import type { FxSendLevels } from '../types';
+
 export interface Guest {
   id: string;
   // The page to load. Always another site's https address (or a local one, for development).
@@ -12,7 +14,12 @@ export interface Guest {
   muted: boolean;
   // Whatever the guest last reported as its state. Opaque to Discobot; handed back on load.
   state?: unknown;
+  // How much of the guest goes to each shared effect. Absent means none.
+  sends?: FxSendLevels;
 }
+
+export const GUEST_SEND_NAMES = ['reverb', 'delay', 'drive', 'phaser', 'chorus'] as const;
+export const NO_SENDS: FxSendLevels = { reverb: 0, delay: 0, drive: 0, phaser: 0, chorus: 0 };
 
 export const MAX_GUESTS = 4;
 
@@ -72,6 +79,13 @@ function guestState(value: unknown): unknown {
 const unit = (value: unknown, fallback: number) => (typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : fallback);
 const label = (value: unknown, fallback: string) => (typeof value === 'string' && value.trim() ? value.trim() : fallback).slice(0, 60);
 
+// A guest's effect sends, each from 0 to 1. Undefined when it sends nothing anywhere.
+export function guestSends(value: unknown, current: FxSendLevels = NO_SENDS): FxSendLevels | undefined {
+  const input = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const sends = Object.fromEntries(GUEST_SEND_NAMES.map(name => [name, unit(input[name], current[name] ?? 0)])) as unknown as FxSendLevels;
+  return GUEST_SEND_NAMES.some(name => sends[name]! > 0) ? sends : undefined;
+}
+
 // Guests read from storage, a file, a link or the account are untrusted like the rest of a project.
 export function sanitizeGuests(value: unknown, ownOrigin?: string): Guest[] {
   if (!Array.isArray(value)) return [];
@@ -83,8 +97,8 @@ export function sanitizeGuests(value: unknown, ownOrigin?: string): Guest[] {
     const id = typeof input.id === 'string' && /^[0-9a-f-]{36}$/.test(input.id) ? input.id : '';
     if (!url || !id || seen.has(id) || guests.length >= MAX_GUESTS) continue;
     seen.add(id);
-    const state = guestState(input.state);
-    guests.push({ id, url, name: label(input.name, new URL(url).hostname), volume: unit(input.volume, 0.8), muted: input.muted === true, ...(state !== undefined ? { state } : {}) });
+    const state = guestState(input.state), sends = guestSends(input.sends);
+    guests.push({ id, url, name: label(input.name, new URL(url).hostname), volume: unit(input.volume, 0.8), muted: input.muted === true, ...(state !== undefined ? { state } : {}), ...(sends ? { sends } : {}) });
   }
   return guests;
 }
@@ -116,6 +130,10 @@ export function patchGuest(guest: Guest, patch: Record<string, unknown>): Guest 
   if ('name' in patch) next.name = label(patch.name, guest.name);
   if ('volume' in patch) next.volume = unit(patch.volume, guest.volume);
   if ('muted' in patch) next.muted = patch.muted === true;
+  if ('sends' in patch) {
+    const sends = guestSends(patch.sends, guest.sends);
+    if (sends) next.sends = sends; else delete next.sends;
+  }
   if ('state' in patch) {
     const state = guestState(patch.state);
     if (state === undefined) delete next.state; else next.state = state;

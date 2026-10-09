@@ -1,5 +1,6 @@
 import { DelaySync, EffectsLoopState } from '../types';
 import { DELAY_SYNCS, DELAY_SYNC_LABELS } from '../services/delayTime';
+import { CHORUS_DEFAULT, EQ_DEFAULT, EQ_RANGE_DB, MAX_PRE_DELAY } from '../services/effectSettings';
 import Knob from './Knob';
 import './EffectsPanel.css';
 
@@ -26,6 +27,8 @@ const parseMs = (input: string): number | null => {
 
 export default function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProps) {
   const synced = Boolean(effectsLoop.delay.sync && effectsLoop.delay.sync !== 'off');
+  const chorus = effectsLoop.chorus ?? CHORUS_DEFAULT, eq = effectsLoop.eq ?? EQ_DEFAULT;
+  const decibels = (value: number) => `${value > 0 ? '+' : ''}${value.toFixed(1)}dB`;
   return (
     <section className="effects-panel">
       <div className="effects-panel-header">
@@ -213,6 +216,58 @@ export default function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProp
         </div>
 
         <div className="effects-block">
+          <h4>Chorus</h4>
+          <div className="effects-row-head">
+            <label className="effects-toggle">
+              <input
+                type="checkbox"
+                checked={chorus.enabled}
+                aria-label="Chorus enabled"
+                onChange={(e) => onChange({ chorus: { ...chorus, enabled: e.target.checked } })}
+              />
+              <span>On</span>
+            </label>
+          </div>
+          <div className="effects-knobs">
+            <Knob
+              label="Rate"
+              ariaLabel="Chorus rate"
+              value={chorus.rate}
+              min={0.05}
+              max={8}
+              step={0.01}
+              displayValue={`${chorus.rate.toFixed(2)}Hz`}
+              onChange={(value) => onChange({ chorus: { ...chorus, rate: value } })}
+              tooltip="How fast the chorus sweeps"
+              color="#14b8a6"
+            />
+            <Knob
+              label="Depth"
+              ariaLabel="Chorus depth"
+              value={chorus.depth}
+              min={0}
+              max={1}
+              displayValue={`${Math.round(chorus.depth * 100)}%`}
+              parseInputValue={parsePercent}
+              onChange={(value) => onChange({ chorus: { ...chorus, depth: value } })}
+              tooltip="How far the chorus sweeps: thicker, then wobblier"
+              color="#14b8a6"
+            />
+            <Knob
+              label="Mix"
+              ariaLabel="Chorus mix"
+              value={chorus.mix}
+              min={0}
+              max={1}
+              displayValue={`${Math.round(chorus.mix * 100)}%`}
+              parseInputValue={parsePercent}
+              onChange={(value) => onChange({ chorus: { ...chorus, mix: value } })}
+              color="#14b8a6"
+            />
+          </div>
+        </div>
+
+        <div className="effects-block">
           <h4>Reverb</h4>
           <div className="effects-row-head">
             <label className="effects-toggle">
@@ -237,6 +292,31 @@ export default function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProp
               color="#8b5cf6"
             />
             <Knob
+              label="Pre"
+              ariaLabel="Reverb pre-delay"
+              value={effectsLoop.reverb.preDelay ?? 0}
+              min={0}
+              max={MAX_PRE_DELAY}
+              step={0.001}
+              displayValue={`${Math.round((effectsLoop.reverb.preDelay ?? 0) * 1000)}ms`}
+              parseInputValue={parseMs}
+              onChange={(value) => onChange({ reverb: { ...effectsLoop.reverb, preDelay: value } })}
+              tooltip="A gap before the reverb starts, so the dry sound stays clear in front of it"
+              color="#8b5cf6"
+            />
+            <Knob
+              label="Damp"
+              ariaLabel="Reverb damping"
+              value={effectsLoop.reverb.damping ?? 0}
+              min={0}
+              max={1}
+              displayValue={`${Math.round((effectsLoop.reverb.damping ?? 0) * 100)}%`}
+              parseInputValue={parsePercent}
+              onChange={(value) => onChange({ reverb: { ...effectsLoop.reverb, damping: value } })}
+              tooltip="How quickly the reverb loses its highs: darker and warmer as it rises"
+              color="#8b5cf6"
+            />
+            <Knob
               label="Mix"
               value={effectsLoop.reverb.mix}
               min={0}
@@ -246,6 +326,39 @@ export default function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProp
               onChange={(value) => onChange({ reverb: { ...effectsLoop.reverb, mix: value } })}
               color="#8b5cf6"
             />
+          </div>
+        </div>
+
+        <div className="effects-block">
+          <h4>Master EQ</h4>
+          <div className="effects-row-head">
+            <label className="effects-toggle" title="Shapes the whole mix, including the dry sound. Works whether or not the effects are enabled">
+              <input
+                type="checkbox"
+                checked={eq.enabled}
+                aria-label="Master EQ enabled"
+                onChange={(e) => onChange({ eq: { ...eq, enabled: e.target.checked } })}
+              />
+              <span>On</span>
+            </label>
+          </div>
+          <div className="effects-knobs">
+            {([['low', 'Low', 'Bass, below about 120 Hz'], ['mid', 'Mid', 'The middle, around 1 kHz'], ['high', 'High', 'Treble, above about 6 kHz']] as const).map(([band, label, tooltip]) => (
+              <Knob
+                key={band}
+                label={label}
+                ariaLabel={`EQ ${band}`}
+                value={eq[band]}
+                min={-EQ_RANGE_DB}
+                max={EQ_RANGE_DB}
+                step={0.5}
+                displayValue={decibels(eq[band])}
+                parseInputValue={parseNumber}
+                onChange={(value) => onChange({ eq: { ...eq, [band]: value } })}
+                tooltip={tooltip}
+                color="#eab308"
+              />
+            ))}
           </div>
         </div>
       </div>

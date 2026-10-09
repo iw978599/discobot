@@ -3,8 +3,9 @@ import { createNamedSynthPresets } from '../components/SynthControls';
 import { useSynthAudio } from '../hooks/useSynthAudio';
 import { useDrumAudio } from '../hooks/useDrumAudio';
 import { MidiMode, MidiMessage, useMidiInput } from '../hooks/useMidiInput';
+import { MIDI_DRUM_CHANNEL, midiOut } from '../services/midiOutput';
 import { Pattern, SequencerStep, SynthParameters, DrumState, DrumInstrument, DrumSettings, DrumKitDefinition, DrumKitId, EffectsLoopState, FxSendLevels, Scene, Song, SynthModelId, SynthModelParams } from '../types';
-import { SongPosition, entryStartBar, sceneAtBar, sceneDrumState, songBars } from '../services/songPlayback';
+import { SongPosition, applySceneMutes, audibleLanes, entryStartBar, guestBarGains, sceneAtBar, sceneDrumState, songBars } from '../services/songPlayback';
 import { createDefaultSynthParameters } from '@discobot/engine';
 import { localRequest, localService } from '../services/localService';
 import { projectSync, startProjectSync } from '../services/projectSync';
@@ -14,7 +15,7 @@ import { BAR_CHOICES, DRUM_STEPS_PER_BAR, clampLengths, drumBars, laneBars, resi
 import { DRUM_INSTRUMENTS } from '../services/drumKits';
 import type { DrumSample } from '../../../engine/src/drums/DrumCore';
 import { guestCapture, guestLink, guestOrigin, guestUrl, trustOrigin, wallAtContextTime, wallNow, type Guest } from '../services/guests';
-import { downloadArrangementWav } from '../services/wavExport';
+import { downloadArrangementWav, downloadStemsZip } from '../services/wavExport';
 import type { ProjectInfo } from '../services/projectLibrary';
 import { sanitizeSynthParams } from '../services/projectSanitization';
 import { expandStep, expandStepNotes, stepNotes, withStepNotes } from '../services/noteScheduling';
@@ -23,14 +24,14 @@ import { downloadFile, ExportArrangement } from '../services/wavExport';
 import { expandDrumStep } from '../services/drumScheduling';
 import { useComputerKeyboard } from '../hooks/useComputerKeyboard';
 import { getAudioContext, setMasterVolume, setMasterMuted, setEffectsTempo } from '../hooks/browserAudio';
-import { downloadMidiFile } from '../utils/midiExport';
+import { DRUM_NOTE_MAP, downloadMidiFile, noteNameToMidi } from '../utils/midiExport';
 import { importMidiFile, readFileAsArrayBuffer, MidiImportResult } from '../utils/midiImport';
 import { DEFAULT_SYNTH_MODEL_ID, createDefaultSynthModelParams, mapSynthModelToEngineParams, normalizeSynthModelId, normalizeSynthModelParams } from '../synthModels';
 
 const DEFAULT_PARAMS: SynthParameters = createDefaultSynthParameters();
 
 const DEFAULT_DRUM_FX: { sends: FxSendLevels; returnLevel: number } = {
-  sends: { reverb: 0.35, delay: 0.15, drive: 0.2, phaser: 0.1 },
+  sends: { reverb: 0.35, delay: 0.15, drive: 0.2, phaser: 0.1, chorus: 0 },
   returnLevel: 0.7,
 };
 
@@ -300,6 +301,7 @@ function normalizeFxSends(sends: Partial<FxSendLevels> | undefined): FxSendLevel
     delay: Math.max(0, Math.min(1, sends?.delay ?? DEFAULT_DRUM_FX.sends.delay)),
     drive: Math.max(0, Math.min(1, sends?.drive ?? DEFAULT_DRUM_FX.sends.drive)),
     phaser: Math.max(0, Math.min(1, sends?.phaser ?? DEFAULT_DRUM_FX.sends.phaser)),
+    chorus: Math.max(0, Math.min(1, sends?.chorus ?? 0)),
   };
 }
 
@@ -364,8 +366,29 @@ function normalizeEffectsLoop(loop: Partial<EffectsLoopState> | undefined): Effe
       enabled: loop?.reverb?.enabled ?? DEFAULT_EFFECTS_LOOP.reverb.enabled,
       decay: Math.max(0.2, Math.min(8, loop?.reverb?.decay ?? DEFAULT_EFFECTS_LOOP.reverb.decay)),
       mix: Math.max(0, Math.min(1, loop?.reverb?.mix ?? DEFAULT_EFFECTS_LOOP.reverb.mix)),
+      // Always present here, like the delay's sync, so setting them back to zero reaches the store.
+      preDelay: loop?.reverb?.preDelay ?? 0,
+      damping: loop?.reverb?.damping ?? 0,
     },
+    // Checked and clamped by the store; passed through as they are.
+    ...(loop?.chorus ? { chorus: { ...loop.chorus } } : {}),
+    ...(loop?.eq ? { eq: { ...loop.eq } } : {}),
   };
+}
+
+// A time on the audio clock as a Web MIDI time stamp, which counts from when the page loaded.
+// It is where the sound leaves the speakers, so hardware plays with them and not ahead.
+// The audio clock moves in small jumps, so the gap between the two clocks is averaged over
+// many readings; otherwise MIDI clock pulses would wobble by a few milliseconds.
+let midiClockGap: number | null = null;
+function midiTime(audioTime: number): number {
+  const context = getAudioContext();
+  const stamp = context.getOutputTimestamp?.();
+  const gap = stamp?.contextTime && stamp.performanceTime
+    ? stamp.performanceTime - stamp.contextTime * 1000
+    : performance.now() - (context.currentTime - (context.outputLatency || 0)) * 1000;
+  midiClockGap = midiClockGap === null ? gap : midiClockGap + (gap - midiClockGap) * 0.02;
+  return midiClockGap + audioTime * 1000;
 }
 
 function midiNoteToName(midi: number): string {
@@ -415,6 +438,10 @@ export function useStudio() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [midiMode, setMidiMode] = useState<MidiMode>('live');
   const [midiChannel, setMidiChannel] = useState(1);
+  // What the sequencer sends to the chosen MIDI output. Kept for the session only.
+  const [midiOutNotes, setMidiOutNotes] = useState(true);
+  const [midiOutClock, setMidiOutClock] = useState(false);
+  useEffect(() => { midiOut.configure({ notes: midiOutNotes, clock: midiOutClock }); }, [midiOutNotes, midiOutClock]);
   const [midiTargetSynthId, setMidiTargetSynthId] = useState<number | null>(1);
   const [projectId, setProjectId] = useState('');
   const [projectName, setProjectName] = useState('');
@@ -749,6 +776,11 @@ export function useStudio() {
     for (const scheduled of expandStepNotes(step, synthParams, windowSeconds, globalTempoRef.current)) {
       void synthAudio.playNote(scheduled.note, synthParams, scheduled.duration, velocity,
         browserMutedRef.current, effectsLoopRef.current, globalTempoRef.current, synthId, scheduledTime + scheduled.offset);
+      // Lane 1 goes out on MIDI channel 1, and so on.
+      if (midiOut.active) {
+        const start = scheduledTime + scheduled.offset, midi = noteNameToMidi(scheduled.note);
+        if (midi !== null) midiOut.note(synthId, midi, velocity, midiTime(start), midiTime(start + scheduled.duration));
+      }
     }
   }, [synthAudio]);
 
@@ -774,6 +806,7 @@ export function useStudio() {
   sceneLengthRef.current = sceneLength;
 
   scheduleTickRef.current = ({ step, bar, time, duration }) => {
+    if (midiOut.active) midiOut.tick(midiTime(time), duration * 1000, bar === 0 && step === 0);
     // Where in its pattern each lane is. In song mode that is counted from the start of the
     // scene's pass; otherwise the bars just keep counting and lanes of different lengths drift.
     let passBar = bar;
@@ -803,7 +836,8 @@ export function useStudio() {
       }
     }
     const lanes = synthsRef.current;
-    const hasSolo = lanes.some(s => s.solo);
+    // A scene played from its stored copy brings its own mutes; the open one's are on the lanes.
+    const heard = audibleLanes(scene, lanes);
     for (const synth of lanes) {
       if (!synth.isPlaying || !synth.pattern || !synth.synthParams) continue;
       const steps = scene ? scene.lanes[synth.id] ?? [] : synth.pattern.steps;
@@ -814,7 +848,7 @@ export function useStudio() {
       if (step % divisor !== 0) continue;
       const index = (passBar % bars) * perBar + Math.floor(step / divisor) % perBar;
       const note = steps[index];
-      if (!synth.muted && (!hasSolo || synth.solo) && note?.active && note.note) {
+      if (heard.has(synth.id) && note?.active && note.note) {
         triggerStep(synth.synthParams, note, duration * divisor, synth.id, time);
       }
       setSynths(prev => prev.map(s => s.id === synth.id ? { ...s, currentStep: index } : s));
@@ -833,6 +867,7 @@ export function useStudio() {
       for (const offset of expandDrumStep(track, drumStep)) {
         const hitTime = time + swingOffset + offset * duration * 2;
         void drumAudio.playDrumHit(instrument, track.settings, velocity, hitTime);
+        if (midiOut.active) midiOut.note(MIDI_DRUM_CHANNEL, DRUM_NOTE_MAP[instrument], velocity, midiTime(hitTime), midiTime(hitTime + 0.06));
         if (instrument !== 'kick') continue;
         for (const synth of lanes) {
           const amount = synth.synthParams?.duck ?? 0;
@@ -859,6 +894,8 @@ export function useStudio() {
     } else {
       if (guestLink.transport().playing) guestLink.announce({ playing: false });
       transportRef.current?.stop();
+      midiOut.stop();
+      midiClockGap = null;
       setDrumCurrentStep(0);
       synthAudio.stopAllNotes();
       drumAudio.stopAllNotes();
@@ -936,20 +973,21 @@ export function useStudio() {
         // Each guest takes on the settings the scene holds for it.
         if (message.data.guests) setGuests(message.data.guests);
         const switched = nextSceneId !== currentSceneIdRef.current;
-        const nextLanes = synthsRef.current.map(s => {
-          const pattern = lanePatterns.find((lane: { synthId: number }) => lane.synthId === s.id)?.pattern;
-          return pattern ? { ...s, pattern, selectedStep: switched ? null : s.selectedStep } : s;
-        });
+        // A scene brings its lanes' mutes and solos with it.
+        const withScene = (s: SynthState): SynthState => {
+          const lane = lanePatterns.find((entry: { synthId: number }) => entry.synthId === s.id);
+          return lane?.pattern ? { ...s, pattern: lane.pattern, muted: Boolean(lane.muted), solo: Boolean(lane.solo), selectedStep: switched ? null : s.selectedStep } : s;
+        };
+        const nextLanes = synthsRef.current.map(withScene);
+        const stillHeard = audibleLanes(null, nextLanes);
+        nextLanes.forEach(s => { if (!stillHeard.has(s.id)) synthAudio.stopSynth(s.id); });
         // The scheduler and undo read these refs before React has rendered again.
         synthsRef.current = nextLanes;
         drumStateRef.current = nextDrums;
         scenesRef.current = nextScenes;
         currentSceneIdRef.current = nextSceneId;
         songRef.current = nextSong;
-        setSynths(prev => prev.map(s => {
-          const pattern = lanePatterns.find((lane: { synthId: number }) => lane.synthId === s.id)?.pattern;
-          return pattern ? { ...s, pattern, selectedStep: switched ? null : s.selectedStep } : s;
-        }));
+        setSynths(prev => prev.map(withScene));
         setDrumState(nextDrums);
         setScenes(nextScenes);
         setCurrentSceneId(nextSceneId);
@@ -1321,7 +1359,13 @@ export function useStudio() {
   // The song as one scene per bar, with every scene as it stands now, for export.
   const songArrangement = useCallback(async (): Promise<ExportArrangement & { bars: Scene[] }> => {
     const stored = await (await localRequest('/scenes')).json() as { scenes: Scene[]; song: Song };
-    return { ...currentArrangementRef.current(), bars: songBars(stored.song, stored.scenes) };
+    // Each scene has its own mutes and solos, so they are applied bar by bar here and the
+    // lanes are handed to the exporter unmuted.
+    const arrangement = currentArrangementRef.current();
+    return {
+      ...arrangement, synths: arrangement.synths.map(lane => ({ ...lane, muted: false, solo: false })),
+      bars: applySceneMutes(songBars(stored.song, stored.scenes), arrangement.synths),
+    };
   }, []);
 
   // Another tab saved the project. Either take that version (a reload reads it) or keep this one.
@@ -1853,7 +1897,7 @@ export function useStudio() {
     downloadMidiFile(
       {
         tempo: globalTempoRef.current, drumSwing, drumMasterVolume, drumState: kit,
-        synthLanes: synthsRef.current.filter((entry) => entry.pattern).map((entry) => ({ id: entry.id, pattern: clonePattern(entry.pattern!), muted: entry.muted, solo: entry.solo })),
+        synthLanes: synthsRef.current.filter((entry) => entry.pattern).map((entry) => ({ id: entry.id, pattern: clonePattern(entry.pattern!), muted: false, solo: false })),
         bars: bars.map(scene => ({ name: scene.name, lanes: scene.lanes, drumState: sceneDrumState(scene, kit) })),
       },
       `discobot-song-${Date.now()}.mid`
@@ -1870,7 +1914,7 @@ export function useStudio() {
     return null;
   }, []);
   const handleRemoveGuest = useCallback(async (id: string) => { await localRequest(`/guests/${id}`, { method: 'DELETE' }); }, []);
-  const handleGuestChange = useCallback(async (id: string, patch: Partial<Pick<Guest, 'name' | 'volume' | 'muted' | 'state'>>) => {
+  const handleGuestChange = useCallback(async (id: string, patch: Partial<Pick<Guest, 'name' | 'volume' | 'muted' | 'state' | 'sends'>>) => {
     await localRequest(`/guests/${id}`, { method: 'PUT', body: JSON.stringify(patch) });
   }, []);
 
@@ -1898,13 +1942,20 @@ export function useStudio() {
     await localRequest('/drum/sample', { method: 'POST', body: JSON.stringify({ instrument, sampleId }) });
   }, []);
 
-  // Download WAV and Song WAV. With guests in the project the arrangement is first played through
-  // once, in real time, so their sound can be recorded; then the export is rendered as usual.
-  const handleExportWav = useCallback(async (wholeSong: boolean) => {
+  // Every audio export. With guests in the project the arrangement is first played through in
+  // real time so their sound can be recorded; then the export is rendered as usual. A loop is
+  // played through twice and the second pass kept: by then what rings on from the end of the
+  // pattern is sounding over its start, which is what makes the loop seamless.
+  const handleExportWav = useCallback(async (kind: boolean | 'pattern' | 'song' | 'loop' | 'stems') => {
+    const wholeSong = kind === true || kind === 'song', loop = kind === 'loop';
     let arrangement: ExportArrangement = wholeSong ? await songArrangement() : currentArrangementRef.current();
-    const audible = guestsRef.current.filter(guest => !guest.muted && guest.volume > 0);
+    // A song gives each guest its scene's own level and mute bar by bar, so a guest is recorded
+    // if any scene of the song plays it, whatever the open scene says.
+    const songGains = wholeSong && arrangement.bars ? new Map(guestsRef.current.map(guest => [guest.id, guestBarGains(arrangement.bars!, guest)])) : null;
+    const audible = guestsRef.current.filter(guest => songGains ? songGains.get(guest.id)!.some(gain => gain > 0) : !guest.muted && guest.volume > 0);
     if (audible.length > 0 && !guestCapture.active()) {
-      const seconds = (arrangement.bars?.length ?? 1) * 240 / globalTempoRef.current;
+      const passFrames = (arrangement.bars?.length ?? 1) * Math.round(240 / globalTempoRef.current * 44100);
+      const seconds = (loop ? 2 : 1) * (arrangement.bars?.length ?? 1) * 240 / globalTempoRef.current;
       const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
       const mode = playModeRef.current, startEntry = songStartEntryRef.current;
       try {
@@ -1926,7 +1977,15 @@ export function useStudio() {
         // A moment for the last of the guests' audio to arrive.
         await sleep(600);
         const takes = guestCapture.stop();
-        arrangement = { ...arrangement, guestTakes: audible.flatMap(guest => { const take = takes.get(guest.id); return take ? [{ ...take, gain: guest.volume }] : []; }) };
+        arrangement = {
+          ...arrangement,
+          guestTakes: audible.flatMap(guest => {
+            const take = takes.get(guest.id);
+            if (!take) return [];
+            const [left, right] = [take.left, take.right].map(channel => (loop ? channel.slice(passFrames, passFrames * 2) : channel));
+            return [{ left, right, gain: guest.volume, ...(songGains ? { gains: songGains.get(guest.id) } : {}), name: guest.name, ...(guest.sends ? { sends: guest.sends } : {}) }];
+          }),
+        };
       } finally {
         guestCapture.stop();
         setGuestRecording(null);
@@ -1934,7 +1993,8 @@ export function useStudio() {
         setSongStartEntry(startEntry);
       }
     }
-    await downloadArrangementWav(arrangement);
+    if (kind === 'stems') await downloadStemsZip(arrangement);
+    else await downloadArrangementWav(arrangement, loop ? { loop: true } : {});
   }, [songArrangement]);
 
   const reportExportError = useCallback((error: unknown) => {
@@ -2063,7 +2123,8 @@ export function useStudio() {
       pushHistorySnapshot(synthId, current.id);
       snapshotTaken = true;
       // Replace the lane's steps in place so repeated imports do not pile up stored patterns.
-      const pattern = { ...current, steps: track.pattern.steps, tempo };
+      const { bars: _bars, ...rest } = current;
+      const pattern: Pattern = { ...rest, steps: track.pattern.steps, tempo, ...(track.pattern.bars ? { bars: track.pattern.bars } : {}) };
       setSynths(prev => prev.map(s =>
         s.id === synthId ? { ...s, pattern, selectedStep: null } : s
       ));
@@ -2079,10 +2140,13 @@ export function useStudio() {
       const next = cloneDrumState(drumStateRef.current);
       for (const instrument of Object.keys(next) as DrumInstrument[]) {
         const lanes = importedDrums.map(track => track.drums![instrument]);
-        next[instrument].steps = next[instrument].steps.map((_, step) => lanes.some(lane => lane.steps[step]));
+        // The grid takes the file's length. Chance and repeats belonged to the steps being replaced.
+        next[instrument].steps = lanes[0].steps.map((_, step) => lanes.some(lane => lane.steps[step]));
         next[instrument].stepVelocities = next[instrument].steps.map((_, step) => (
           lanes.find(lane => lane.steps[step])?.stepVelocities[step] ?? 1
         ));
+        delete next[instrument].stepProbabilities;
+        delete next[instrument].stepRatchets;
       }
       setDrumState(next);
       await localRequest('/drum/state', {
@@ -2444,7 +2508,7 @@ export function useStudio() {
     synths, selectedSynthId, setSelectedSynthId, drumState: memoizedDrumState, drumKits, drumKitsLoading, drumKitsError,
     selectedDrumKitId, drumMasterVolume, drumSwing, drumCurrentStep, drumFx, effectsLoop, browserMuted, setBrowserMuted,
     browserVolume, setBrowserVolume, globalTempo, storageError, setStorageError, changedElsewhere, loadOtherTabVersion, keepThisTabVersion, helpOpen, setHelpOpen, midiMode, setMidiMode,
-    midiChannel, setMidiChannel, midiTargetSynthId, setMidiTargetSynthId, projectId, projectName, projects, synthPresets, drumAudio,
+    midiChannel, setMidiChannel, midiOutNotes, setMidiOutNotes, midiOutClock, setMidiOutClock, midiTargetSynthId, setMidiTargetSynthId, projectId, projectName, projects, synthPresets, drumAudio,
     handleUndo, handleRedo, midiImportData, setMidiImportData, midiImportAssignments, setMidiImportAssignments,
     handleMidiImportClick, handleMidiImportFile, handleMidiImportApplyAll, midiImportFileRef, handleRemoveSynth,
     ensureSynthExists, handleOctaveShift, handleTempoChange, handleGlobalPlayStop, handleStepChange, handleStepSelect, handleKeyboardModeChange,

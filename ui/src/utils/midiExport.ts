@@ -30,7 +30,7 @@ const TICKS_PER_BAR = PPQ * 4;
 const DEFAULT_SYNTH_VELOCITY = 96;
 const DRUM_CHANNEL = 9;
 
-const DRUM_NOTE_MAP: Record<DrumInstrument, number> = {
+export const DRUM_NOTE_MAP: Record<DrumInstrument, number> = {
   kick: 36,
   snare: 38,
   openHH: 46,

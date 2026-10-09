@@ -5,6 +5,7 @@ import { BAR_CHOICES, DRUM_STEPS_PER_BAR, laneBars, resizeBars } from './pattern
 import { createIndexedDbLibrary, createMemoryLibrary, hasIndexedDb, type ProjectInfo, type ProjectLibrary, type ProjectRecord, type VersionInfo, type VersionReason } from './projectLibrary';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
 import { normalizeSynthModelId } from '../synthModels';
+import { NEW_PROJECT_REVERB } from './effectSettings';
 import { record, number, matchesShape, sanitizePattern, sanitizeSynthParams, sanitizeDrums, sanitizeEffects, sanitizeSends, sanitizeSaved, sanitizeModelParams, sanitizeKit, sanitizeScenes, sanitizeSong, MAX_SCENES } from './projectSanitization';
 
 type Message = { type: string; data: any };
@@ -45,7 +46,7 @@ const ownOrigin = () => (typeof window !== 'undefined' && window.location ? wind
 const STORAGE_KEY = 'discobot_browser_project_v1';
 // Bumped when synth parameters gain fields. An older project is upgraded with defaults,
 // which is a migration and not damage worth warning about.
-const SCHEMA = 5;
+const SCHEMA = 6;
 // Edits are written this long after the last one, so dragging a knob is one write, not hundreds.
 const SAVE_DELAY_MS = 300;
 // A version is kept when a project is opened, before anything replaces it, and this often while it is edited.
@@ -114,9 +115,10 @@ export class LocalProjectService {
   }
 
   private blankState(name = DEFAULT_PROJECT_NAME): State {
-    const now = Date.now();
+    const now = Date.now(), defaults = clone(this.defaults!);
+    Object.assign(defaults.effectsLoop.reverb, NEW_PROJECT_REVERB);
     return {
-      ...clone(this.defaults!), version: 1, schema: SCHEMA, synths: [], tempo: 120,
+      ...defaults, version: 1, schema: SCHEMA, synths: [], tempo: 120,
       selectedDrumKitId: 'clean-analog', drumMasterVolume: 1, drumSwing: 0, savedPatterns: [],
       scenes: [], currentSceneId: '', song: { entries: [], loop: false },
       projectId: crypto.randomUUID(), name, revision: 0, createdAt: now, updatedAt: now, guests: [],
@@ -194,6 +196,10 @@ export class LocalProjectService {
       ...(state.guests?.some(guest => guest.state !== undefined)
         ? { guests: Object.fromEntries(state.guests.filter(guest => guest.state !== undefined).map(guest => [guest.id, clone(guest.state)])) } : {}),
       ...(state.guests?.length ? { guestMix: Object.fromEntries(state.guests.map(guest => [guest.id, { volume: guest.volume, muted: guest.muted }])) } : {}),
+      mutes: {
+        lanes: Object.fromEntries(state.synths.map(synth => [synth.synthId, { muted: synth.muted, solo: synth.solo }])),
+        drums: Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => [instrument, { muted: state.drumState[instrument].muted, solo: state.drumState[instrument].solo }])),
+      },
       drums: Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => {
         const { steps, stepVelocities, stepProbabilities, stepRatchets } = state.drumState[instrument];
         return [instrument, clone({
@@ -231,6 +237,10 @@ export class LocalProjectService {
       synth.pattern.steps = clone(scene.lanes[synth.synthId] ?? emptySteps());
       const bars = laneBars(synth.pattern.steps.length, scene.laneBars?.[synth.synthId]);
       if (bars > 1) synth.pattern.bars = bars; else delete synth.pattern.bars;
+      // Mutes and solos are the scene's. A scene from before they were kept holds none, and
+      // the lanes carry on as they are.
+      const flags = scene.mutes?.lanes?.[synth.synthId];
+      if (flags) { synth.muted = flags.muted; synth.solo = flags.solo; }
     }
     // A guest takes the settings this scene holds for it. A scene from before the guest was added
     // holds none, and the guest carries on as it is.
@@ -243,6 +253,8 @@ export class LocalProjectService {
     }
     for (const instrument of DRUM_INSTRUMENTS) {
       const track = state.drumState[instrument], pattern = scene.drums[instrument];
+      const flags = scene.mutes?.drums?.[instrument];
+      if (flags) { track.muted = flags.muted; track.solo = flags.solo; }
       track.steps = clone(pattern.steps);
       for (const key of ['stepVelocities', 'stepProbabilities', 'stepRatchets'] as const) {
         if (pattern[key]) track[key] = clone(pattern[key]);
@@ -256,7 +268,7 @@ export class LocalProjectService {
     this.commitScene();
     return {
       scenes: state.scenes, song: state.song, currentSceneId: state.currentSceneId,
-      synths: state.synths.map(synth => ({ synthId: synth.synthId, pattern: synth.pattern })), drumState: state.drumState,
+      synths: state.synths.map(synth => ({ synthId: synth.synthId, pattern: synth.pattern, muted: synth.muted, solo: synth.solo })), drumState: state.drumState,
       guests: state.guests ?? [],
     };
   }
