@@ -12,7 +12,7 @@ import { loadDrumSample } from '../services/drumSamples';
 import { BAR_CHOICES, DRUM_STEPS_PER_BAR, clampLengths, drumBars, laneBars, resizeBars, sceneAsBars, sceneBars } from '../services/patternLength';
 import { DRUM_INSTRUMENTS } from '../services/drumKits';
 import type { DrumSample } from '../../../engine/src/drums/DrumCore';
-import { GUEST_START_LEAD_SECONDS, guestCapture, guestLink, guestOrigin, guestUrl, trustOrigin, wallAtContextTime, wallNow, type Guest } from '../services/guests';
+import { guestCapture, guestLink, guestOrigin, guestUrl, trustOrigin, wallAtContextTime, wallNow, type Guest } from '../services/guests';
 import { downloadArrangementWav } from '../services/wavExport';
 import type { ProjectInfo } from '../services/projectLibrary';
 import { sanitizeSynthParams } from '../services/projectSanitization';
@@ -848,7 +848,8 @@ export function useStudio() {
       const transport = transportRef.current, context = getAudioContext();
       // Guests are told where the beats fall on the computer's clock, which they share with this page.
       transport.onTempo = (bpm, time, beat) => guestLink.announce({ playing: true, bpm, anchorWall: wallAtContextTime(context, time), anchorBeat: beat });
-      transport.start(guestsRef.current.length > 0 ? GUEST_START_LEAD_SECONDS : undefined);
+      // With guests connected the first beat is placed far enough ahead for all of them to make it.
+      transport.start(guestLink.startLead() || undefined);
       guestLink.announce({ playing: true, bpm: globalTempoRef.current, anchorWall: wallAtContextTime(context, transport.startTime), anchorBeat: 0 });
     } else {
       if (guestLink.transport().playing) guestLink.announce({ playing: false });

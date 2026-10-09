@@ -29,8 +29,20 @@ export const GUEST_PROTOCOL = 1;
 // How far ahead of the beat a guest plays, and how long its audio is held before it is heard.
 // The two cancel out, which is what lets sound cross from the frame and still land on the beat.
 export const GUEST_LATENCY_MS = 120;
-// A transport that starts this far in the future gives a guest time to hear about it and schedule.
-export const GUEST_START_LEAD_SECONDS = 0.35;
+// If a guest's audio keeps arriving too late to play, it is asked to play earlier still, up to this.
+export const MAX_GUEST_LATENCY_MS = 480;
+export const GUEST_LATENCY_STEP_MS = 60;
+// On top of its latency, a guest needs this long to hear about a start and schedule its first beat.
+const GUEST_REACTION_SECONDS = 0.23;
+// The first start after a guest loads is slower: it has yet to switch its audio on.
+const COLD_START_LEAD_SECONDS = 0.9;
+
+// The latency to use once a run of blocks has arrived late by up to `lateSeconds`: enough to
+// cover what was missing, with a little to spare, in whole steps.
+export function latencyAfterLateBlocks(current: number, lateSeconds: number): number {
+  const needed = Math.max(0, lateSeconds) * 1000 + 20;
+  return Math.min(MAX_GUEST_LATENCY_MS, current + Math.ceil(needed / GUEST_LATENCY_STEP_MS) * GUEST_LATENCY_STEP_MS);
+}
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1']);
 
@@ -129,10 +141,23 @@ export type GuestTransport = { playing: false } | { playing: true; bpm: number; 
 let transport: GuestTransport = { playing: false };
 const transportListeners = new Set<(state: GuestTransport) => void>();
 
+// The guests that are connected: how early each plays, and whether it has been started before.
+const connected = new Map<string, { latencyMs: number; warm: boolean }>();
+
 export const guestLink = {
+  connect(id: string, latencyMs: number) { connected.set(id, { latencyMs, warm: connected.get(id)?.warm ?? false }); },
+  disconnect(id: string) { connected.delete(id); },
+  // How far ahead the transport should place its first beat so every connected guest can make it.
+  startLead(): number {
+    let lead = 0;
+    for (const guest of connected.values()) lead = Math.max(lead, guest.warm ? guest.latencyMs / 1000 + GUEST_REACTION_SECONDS : COLD_START_LEAD_SECONDS);
+    return lead;
+  },
   transport: () => transport,
   announce(next: GuestTransport) {
     transport = next;
+    // Once started, a guest has its audio running and can start promptly from then on.
+    if (next.playing) for (const guest of connected.values()) guest.warm = true;
     transportListeners.forEach(listener => listener(next));
   },
   subscribe(listener: (state: GuestTransport) => void) {
@@ -178,13 +203,13 @@ export const guestCapture = {
   start(anchorWall: number, seconds: number, sampleRate = 44100) {
     capture = { anchorWall, sampleRate, frames: Math.ceil(seconds * sampleRate), takes: new Map(), expected: new Map() };
   },
-  feed(guestId: string, wall: number, rate: number, left: Float32Array, right: Float32Array) {
+  feed(guestId: string, wall: number, rate: number, left: Float32Array, right: Float32Array, latencyMs = GUEST_LATENCY_MS) {
     if (!capture) return;
     let take = capture.takes.get(guestId);
     if (!take) { take = { left: new Float32Array(capture.frames), right: new Float32Array(capture.frames) }; capture.takes.set(guestId, take); }
     const l = resample(left, rate, capture.sampleRate), r = resample(right, rate, capture.sampleRate);
     // The guest played this early by the agreed latency; add it back to get the time in the song.
-    const target = (wall + GUEST_LATENCY_MS - capture.anchorWall) / 1000 * capture.sampleRate;
+    const target = (wall + latencyMs - capture.anchorWall) / 1000 * capture.sampleRate;
     const start = placeBlock(capture.expected.get(guestId) ?? null, target, capture.sampleRate);
     capture.expected.set(guestId, start + l.length);
     for (let index = 0; index < l.length; index++) {

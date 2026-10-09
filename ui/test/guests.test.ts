@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_GUESTS, MAX_GUEST_STATE_CHARS, guestLink, guestUrl, patchGuest, placeBlock, resample, sanitizeGuests } from '../src/services/guests.ts';
+import { GUEST_LATENCY_MS, MAX_GUESTS, MAX_GUEST_LATENCY_MS, MAX_GUEST_STATE_CHARS, guestLink, guestUrl, latencyAfterLateBlocks, patchGuest, placeBlock, resample, sanitizeGuests } from '../src/services/guests.ts';
 import { BrowserTransport } from '../src/services/browserTransport.ts';
 
 const OWN = 'https://iw978599.github.io';
@@ -87,4 +87,25 @@ test('the transport says when it starts and when a tempo change takes hold', () 
   assert.deepEqual(heard, [{ playing: true, bpm: 120, anchorWall: 5, anchorBeat: 0 }, { playing: false }]);
   assert.deepEqual(guestLink.transport(), { playing: true, bpm: 99, anchorWall: 6, anchorBeat: 0 }, 'a guest that connects later is told the current state');
   guestLink.announce({ playing: false });
+});
+
+test('late audio raises the latency by what was missing, and the transport waits long enough for every guest', () => {
+  assert.equal(latencyAfterLateBlocks(120, 0.03), 180, 'thirty milliseconds late needs one more step');
+  assert.equal(latencyAfterLateBlocks(120, 0.25), 420, 'a quarter of a second late is covered in one go');
+  assert.equal(latencyAfterLateBlocks(120, 5), MAX_GUEST_LATENCY_MS, 'but never past the limit');
+  assert.equal(latencyAfterLateBlocks(MAX_GUEST_LATENCY_MS, 0.2), MAX_GUEST_LATENCY_MS);
+
+  assert.equal(guestLink.startLead(), 0, 'with no guests connected the transport starts as it always has');
+  guestLink.connect('a', GUEST_LATENCY_MS);
+  assert.ok(guestLink.startLead() >= 0.8, 'a guest that has never been started gets a long first lead');
+  guestLink.announce({ playing: true, bpm: 120, anchorWall: 1, anchorBeat: 0 });
+  guestLink.announce({ playing: false });
+  assert.ok(Math.abs(guestLink.startLead() - 0.35) < 1e-9, 'once it has been started, the usual short one');
+  guestLink.connect('a', 420);
+  assert.ok(Math.abs(guestLink.startLead() - 0.65) < 1e-9, 'a guest that plays further ahead needs a longer lead, and stays warm');
+  guestLink.connect('b', GUEST_LATENCY_MS);
+  assert.ok(guestLink.startLead() >= 0.8, 'a newly loaded guest makes the next start a long one again');
+  guestLink.disconnect('a');
+  guestLink.disconnect('b');
+  assert.equal(guestLink.startLead(), 0);
 });

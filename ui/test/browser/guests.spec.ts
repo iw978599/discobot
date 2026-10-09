@@ -79,8 +79,16 @@ test('a guest instrument is hosted, follows the transport, sends its sound to th
   await expect(guest.getByLabel('Note', { exact: true })).toHaveValue('G4');
   await expect(unit.getByRole('button', { name: /^Mute guest / })).toHaveAttribute('aria-pressed', 'true');
 
-  page.once('dialog', confirm => { void confirm.accept(); });
+  // Removing is confirmed in the page, not in a browser dialog, which a browser can be told to stop showing.
+  let dialogs = 0;
+  page.on('dialog', dialog => { dialogs += 1; void dialog.dismiss(); });
   await unit.getByRole('button', { name: 'Remove', exact: true }).click();
+  await expect(unit, 'the first press only asks').toHaveCount(1);
+  await unit.getByRole('button', { name: 'Keep', exact: true }).click();
+  await expect(unit.getByRole('button', { name: 'Remove It', exact: true })).toHaveCount(0);
+  await unit.getByRole('button', { name: 'Remove', exact: true }).click();
+  await unit.getByRole('button', { name: 'Remove It', exact: true }).click();
+  expect(dialogs).toBe(0);
   await expect(unit).toHaveCount(0);
   expect((await stored(page)).guests).toEqual([]);
   expect(errors).toEqual([]);
@@ -164,4 +172,31 @@ test('a WAV export records the guest by playing through once, and the named inst
   expect(withGuest(0.75, 0.81), 'the bell is in the file').toBeGreaterThan(without(0.75, 0.81) * 2 + 0.02);
   expect(withGuest(0.752, 0.772), 'and it starts on the beat, not before it').toBeGreaterThan(withGuest(0.72, 0.745) * 1.5);
   expect(withGuest(0, 0.05), 'the kick is still there').toBeGreaterThan(0.02);
+});
+
+test('a guest whose sound arrives late is still heard, and is then asked to play earlier', async ({ page }, testInfo) => {
+  const baseURL = String(testInfo.project.use.baseURL);
+  // The example guest holds every block of audio back by a quarter of a second, as a slow browser might.
+  await menu(page, 'Add Guest Instrument');
+  const dialog = page.getByRole('dialog', { name: 'Add a guest instrument', exact: true });
+  await dialog.getByLabel('Address of the instrument\'s page', { exact: true }).fill(`${guestAddress(baseURL)}?delay=250`);
+  await dialog.getByRole('button', { name: 'Add Guest', exact: true }).click();
+  const unit = page.getByRole('region', { name: /^Guest instrument / });
+  await expect(unit).toHaveAttribute('data-status', 'ready');
+  await expect(unit).toHaveAttribute('data-latency', '120');
+
+  await page.getByRole('button', { name: 'Kick step 1', exact: true }).click();
+  await page.getByRole('button', { name: /Play All/ }).click();
+  await expect.poll(async () => Number(await unit.getAttribute('data-late-blocks')), { message: 'the late audio is noticed' }).toBeGreaterThan(0);
+  await expect.poll(async () => Number(await unit.getAttribute('data-latency')), { message: 'and the guest is asked to play earlier by enough to cover it' }).toBeGreaterThanOrEqual(240);
+  await expect(unit.getByRole('alert')).toContainText('takes longer than usual to arrive');
+  await expect(unit.frameLocator('iframe').getByRole('status')).toContainText('Playing');
+
+  // Once it has adjusted, blocks stop arriving late.
+  await page.waitForTimeout(1200);
+  const settled = Number(await unit.getAttribute('data-late-blocks'));
+  await page.waitForTimeout(1500);
+  expect(Number(await unit.getAttribute('data-late-blocks')), 'no more late blocks after adjusting').toBe(settled);
+  expect(Number(await unit.getAttribute('data-audio-blocks'))).toBeGreaterThan(50);
+  await page.getByRole('button', { name: /Stop All/ }).click();
 });
