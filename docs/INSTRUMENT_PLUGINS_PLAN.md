@@ -3,9 +3,6 @@
 Written 2026-10-09. The question: can Discobot import VST plugins, and can
 other creators link their own instruments into it?
 
-I have read "vsp" as VST plugins. If you meant something else, most of this
-still applies, but tell me.
-
 ## Short answer
 
 - **Importing VST plugins: not possible.** Not hard, not expensive: not
@@ -180,10 +177,9 @@ without being asked".
 
 ## Decisions for you
 
-1. Is "VST plugins" what you meant?
-2. Which matters more: **existing instruments** people already have (points to
+1. Which matters more: **existing instruments** people already have (points to
    B, the sampler) or **new instruments made for Discobot** (points to D)?
-3. Is contacting another site, when the user says yes, acceptable? Stage 1
+2. Is contacting another site, when the user says yes, acceptable? Stage 1
    linking depends on it.
-4. Would you add a payment card to Cloudflare for file storage (free at this
+3. Would you add a payment card to Cloudflare for file storage (free at this
    scale)? It decides whether samples and a directory can live on the server.

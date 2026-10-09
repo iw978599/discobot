@@ -1,5 +1,6 @@
 import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, Scene, Song, SynthParameters, SynthModelParams } from '../types';
-import { MAX_STEP_NOTES } from './noteScheduling';
+import { DELAY_SYNCS } from './delayTime';
+import { MAX_STEP_NOTES, MAX_STEP_OFFSET } from './noteScheduling';
 import { MAX_REPEATS, MAX_SONG_ENTRIES } from './songPlayback';
 import { normalizeSynthModelId } from '../synthModels';
 import { noteNameToMidi } from '../utils/midiExport';
@@ -117,6 +118,9 @@ export function sanitizeSteps(value: unknown): Pattern['steps'] {
       active: step.active === true && Boolean(note), ...(note ? { note } : {}), velocity: number(step.velocity, .7, 0, 1),
       ...(step.slide === true ? { slide: true } : {}),
       ...(extras.length ? { notes: extras } : {}), ...(length > 1 ? { length } : {}),
+      ...(note && typeof step.probability === 'number' && step.probability >= 0 && step.probability < 1 ? { probability: step.probability } : {}),
+      ...(note && Number.isInteger(step.ratchet) && step.ratchet > 1 ? { ratchet: Math.min(4, step.ratchet) } : {}),
+      ...(note && typeof step.offset === 'number' && step.offset > 0 ? { offset: Math.min(MAX_STEP_OFFSET, step.offset) } : {}),
     };
   });
 }
@@ -218,6 +222,10 @@ export function sanitizeEffects(value: unknown, defaults: EffectsLoopState): Eff
   state.delay.time = number(state.delay.time, defaults.delay.time, .01, 1.5);
   state.delay.feedback = number(state.delay.feedback, defaults.delay.feedback, 0, .85);
   state.delay.mix = number(state.delay.mix, defaults.delay.mix, 0, 1);
+  // Optional, so projects saved before it existed still match the expected shape.
+  const sync = record(record(value).delay).sync;
+  if (DELAY_SYNCS.includes(sync) && sync !== 'off') state.delay.sync = sync;
+  else delete state.delay.sync;
   state.reverb.decay = number(state.reverb.decay, defaults.reverb.decay, .2, 8);
   state.reverb.mix = number(state.reverb.mix, defaults.reverb.mix, 0, 1);
   return state;

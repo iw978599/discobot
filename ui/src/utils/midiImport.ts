@@ -73,8 +73,13 @@ function parseSynthTrack(notes: { midi: number; ticks: number; velocity: number;
   const ticksPerStep = (ppq * 4) / stepCount;
   const steps: SequencerStep[] = Array.from({ length: stepCount }, () => ({ active: false, velocity: 0.7 }));
   for (const note of notes) {
-    const stepIndex = quantizeTickToStep(note.ticks, ppq, stepCount);
+    // A note close to a step lands on it. One clearly between two steps keeps its place,
+    // as a late start on the step before.
+    const position = note.ticks / ticksPerStep, nearest = Math.round(position);
+    const between = Math.abs(position - nearest) >= 0.2;
+    const stepIndex = between ? Math.floor(position) : quantizeTickToStep(note.ticks, ppq, stepCount);
     if (stepIndex < 0 || stepIndex >= stepCount) continue;
+    const offset = between ? Math.round((position - stepIndex) * 12) / 12 : 0;
     const existing = steps[stepIndex];
     // Notes that start together are a chord; the step takes the first one's velocity and length.
     if (existing.active) {
@@ -87,6 +92,7 @@ function parseSynthTrack(notes: { midi: number; ticks: number; velocity: number;
       note: midiNoteToName(note.midi),
       velocity: Math.max(0.1, Math.min(1, note.velocity)),
       ...(length > 1 ? { length } : {}),
+      ...(offset > 0 ? { offset } : {}),
     };
   }
   return steps;

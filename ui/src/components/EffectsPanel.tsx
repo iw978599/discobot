@@ -1,4 +1,5 @@
-import { EffectsLoopState } from '../types';
+import { DelaySync, EffectsLoopState } from '../types';
+import { DELAY_SYNCS, DELAY_SYNC_LABELS } from '../services/delayTime';
 import Knob from './Knob';
 import './EffectsPanel.css';
 
@@ -24,6 +25,7 @@ const parseMs = (input: string): number | null => {
 };
 
 export default function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProps) {
+  const synced = Boolean(effectsLoop.delay.sync && effectsLoop.delay.sync !== 'off');
   return (
     <section className="effects-panel">
       <div className="effects-panel-header">
@@ -163,6 +165,16 @@ export default function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProp
               />
               <span>On</span>
             </label>
+            <label className="effects-toggle" title="Set the echo to a note value so it stays in time when the tempo changes">
+              <span>Sync</span>
+              <select
+                aria-label="Delay sync"
+                value={effectsLoop.delay.sync ?? 'off'}
+                onChange={(e) => onChange({ delay: { ...effectsLoop.delay, sync: e.target.value as DelaySync } })}
+              >
+                {DELAY_SYNCS.map(value => <option key={value} value={value}>{DELAY_SYNC_LABELS[value]}</option>)}
+              </select>
+            </label>
           </div>
           <div className="effects-knobs">
             <Knob
@@ -171,9 +183,10 @@ export default function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProp
               min={0.01}
               max={1.5}
               step={0.001}
-              displayValue={`${Math.round(effectsLoop.delay.time * 1000)}ms`}
+              displayValue={synced ? effectsLoop.delay.sync! : `${Math.round(effectsLoop.delay.time * 1000)}ms`}
               parseInputValue={parseMs}
-              onChange={(value) => onChange({ delay: { ...effectsLoop.delay, time: value } })}
+              tooltip={synced ? 'Following the tempo. Turn the knob to set a free time instead' : undefined}
+              onChange={(value) => onChange({ delay: { ...effectsLoop.delay, time: value, sync: 'off' } })}
               color="#ec4899"
             />
             <Knob

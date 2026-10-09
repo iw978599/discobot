@@ -15,7 +15,7 @@ import { BrowserTransport, TransportTick } from '../services/browserTransport';
 import { downloadFile, ExportArrangement } from '../services/wavExport';
 import { expandDrumStep } from '../services/drumScheduling';
 import { useComputerKeyboard } from '../hooks/useComputerKeyboard';
-import { getAudioContext, setMasterVolume, setMasterMuted } from '../hooks/browserAudio';
+import { getAudioContext, setMasterVolume, setMasterMuted, setEffectsTempo } from '../hooks/browserAudio';
 import { downloadMidiFile } from '../utils/midiExport';
 import { importMidiFile, readFileAsArrayBuffer, MidiImportResult } from '../utils/midiImport';
 import { DEFAULT_SYNTH_MODEL_ID, createDefaultSynthModelParams, mapSynthModelToEngineParams, normalizeSynthModelId, normalizeSynthModelParams } from '../synthModels';
@@ -350,6 +350,8 @@ function normalizeEffectsLoop(loop: Partial<EffectsLoopState> | undefined): Effe
       time: Math.max(0.01, Math.min(1.5, loop?.delay?.time ?? DEFAULT_EFFECTS_LOOP.delay.time)),
       feedback: Math.max(0, Math.min(0.95, loop?.delay?.feedback ?? DEFAULT_EFFECTS_LOOP.delay.feedback)),
       mix: Math.max(0, Math.min(1, loop?.delay?.mix ?? DEFAULT_EFFECTS_LOOP.delay.mix)),
+      // Always present here, so turning sync off reaches the store instead of being merged away.
+      sync: loop?.delay?.sync ?? 'off',
     },
     reverb: {
       enabled: loop?.reverb?.enabled ?? DEFAULT_EFFECTS_LOOP.reverb.enabled,
@@ -727,6 +729,8 @@ export function useStudio() {
         browserMutedRef.current, effectsLoopRef.current, globalTempoRef.current, synthId, scheduledTime + scheduled.offset);
     }
   }, [synthAudio]);
+
+  useEffect(() => { setEffectsTempo(globalTempo); }, [globalTempo]);
 
   scheduleTickRef.current = ({ step, bar, time, duration }) => {
     // In song mode the bar number picks the scene. A scene other than the one open for
@@ -1309,7 +1313,7 @@ export function useStudio() {
   }, []);
 
   // Adds a note to a step's chord or takes it out.
-  const handlePianoRollNoteAssign = useCallback(async (synthId: number, stepIndex: number, note: string, on: boolean) => {
+  const handlePianoRollNoteAssign = useCallback(async (synthId: number, stepIndex: number, note: string, on: boolean, offset = 0) => {
     const synth = synthsRef.current.find(s => s.id === synthId);
     if (!synth?.pattern) return;
     pushHistorySnapshot(synthId, synth.pattern.id);
@@ -1319,7 +1323,9 @@ export function useStudio() {
       steps: synth.pattern.steps.map((step, idx) => {
         if (idx !== stepIndex) return step;
         const current = stepNotes(step);
-        return withStepNotes(step, on ? [...current, note] : current.filter(entry => entry !== note));
+        // A late start is chosen when the step gets its first note; later notes join it there.
+        const base = on && current.length === 0 && offset > 0 ? { ...step, offset } : step;
+        return withStepNotes(base, on ? [...current, note] : current.filter(entry => entry !== note));
       }),
     };
 
@@ -1608,12 +1614,40 @@ export function useStudio() {
     if (!synth?.pattern || !synth.pattern.steps[stepIndex]) return;
     pushHistorySnapshot(synthId, synth.pattern.id);
     const bounded = Math.max(1, Math.min(synth.pattern.steps.length - stepIndex, Math.round(length)));
+    if (bounded === (synth.pattern.steps[stepIndex].length ?? 1)) return;
     const nextPattern = {
       ...synth.pattern,
       steps: synth.pattern.steps.map((step, index) => {
         if (index !== stepIndex) return step;
         const { length: _length, ...rest } = step;
         return bounded > 1 ? { ...rest, length: bounded } : rest;
+      }),
+    };
+    setSynths((prev) => prev.map((entry) => (
+      entry.id === synthId ? { ...entry, pattern: nextPattern } : entry
+    )));
+    await localRequest(`/synth/${synthId}/patterns/${synth.pattern.id}`, {
+      method: 'PUT',
+      body: JSON.stringify(nextPattern),
+    });
+  }, [pushHistorySnapshot]);
+
+  // Chance and repeats for one step.
+  const handleStepDetailChange = useCallback(async (synthId: number, stepIndex: number, detail: { probability?: number; ratchet?: number; offset?: number }) => {
+    const synth = synthsRef.current.find((entry) => entry.id === synthId);
+    if (!synth?.pattern || !synth.pattern.steps[stepIndex]) return;
+    pushHistorySnapshot(synthId, synth.pattern.id);
+    const nextPattern = {
+      ...synth.pattern,
+      steps: synth.pattern.steps.map((step, index) => {
+        if (index !== stepIndex) return step;
+        const { probability, ratchet, offset, ...rest } = { ...step, ...detail };
+        return {
+          ...rest,
+          ...(offset !== undefined && offset > 0 ? { offset: Math.min(0.95, offset) } : {}),
+          ...(probability !== undefined && probability < 1 ? { probability: Math.max(0, probability) } : {}),
+          ...(ratchet !== undefined && ratchet > 1 ? { ratchet: Math.min(4, Math.round(ratchet)) } : {}),
+        };
       }),
     };
     setSynths((prev) => prev.map((entry) => (
@@ -2208,7 +2242,7 @@ export function useStudio() {
     handleMidiImportClick, handleMidiImportFile, handleMidiImportApplyAll, midiImportFileRef, handleRemoveSynth,
     ensureSynthExists, handleOctaveShift, handleTempoChange, handleGlobalPlayStop, handleStepChange, handleStepSelect, handleKeyboardModeChange,
     handlePianoRollNoteAssign, handleClearPatternNotes, handleNotePlay, handleNoteRelease, computerKeyNotes, midiState,
-    handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange,
+    handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange,
     handleSynthMixChange, handleSaveSynthPreset, handleLoadSynthPreset, handleDeleteSynthPreset,
     handleExportMidi, currentArrangement, reportExportError, handleExportProject, projectImportFileRef, handleImportProjectFile, handleImportProject,
     handleNewProject, handleOpenProject, handleCopyProject, handleRenameProject, handleDeleteProject, handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail,

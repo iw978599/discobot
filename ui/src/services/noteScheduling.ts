@@ -1,5 +1,6 @@
 import type { SequencerStep, SynthParameters } from '../types';
 import { noteNameToMidi, transposeNote } from '../utils/midiExport';
+import { MAX_RATCHET } from './drumScheduling';
 
 // The synth has eight voices; six leaves room for the tail of the chord before.
 export const MAX_STEP_NOTES = 6;
@@ -10,12 +11,16 @@ export function stepNotes(step: SequencerStep | undefined): string[] {
   return [...new Set([step.note, ...(step.notes ?? [])])].slice(0, MAX_STEP_NOTES);
 }
 
+export const MAX_STEP_OFFSET = 0.95;
+// How far into its step a step's notes start, as a fraction of a step.
+export const stepOffset = (step: SequencerStep | undefined) => Math.max(0, Math.min(MAX_STEP_OFFSET, step?.offset ?? 0));
+
 // The step with exactly these notes. No notes leaves an empty step.
 export function withStepNotes(step: SequencerStep, notes: string[]): SequencerStep {
   const sorted = [...new Set(notes)].sort((a, b) => (noteNameToMidi(a) ?? 0) - (noteNameToMidi(b) ?? 0)).slice(0, MAX_STEP_NOTES);
-  const { note: _note, notes: _notes, length, ...rest } = step;
+  const { note: _note, notes: _notes, length, probability, ratchet, offset, ...rest } = step;
   if (sorted.length === 0) return { ...rest, active: false };
-  return { ...rest, active: true, note: sorted[0], ...(sorted.length > 1 ? { notes: sorted.slice(1) } : {}), ...(length && length > 1 ? { length } : {}) };
+  return { ...rest, ...(offset && offset > 0 ? { offset } : {}), ...(probability !== undefined && probability < 1 ? { probability } : {}), ...(ratchet && ratchet > 1 ? { ratchet } : {}), active: true, note: sorted[0], ...(sorted.length > 1 ? { notes: sorted.slice(1) } : {}), ...(length && length > 1 ? { length } : {}) };
 }
 
 export interface ScheduledNote {
@@ -74,9 +79,25 @@ export function expandStep(
 
 // Everything a step plays: each note of its chord for the step's length, or, with the
 // arpeggiator on, the chord's notes one after another.
-export function expandStepNotes(step: SequencerStep, params: SynthParameters, windowSeconds: number, tempo: number): ScheduledNote[] {
+// `random` decides steps with a chance below 100%. Exports pass a seeded one so a file is repeatable.
+export function expandStepNotes(
+  step: SequencerStep, params: SynthParameters, windowSeconds: number, tempo: number, random: () => number = Math.random,
+): ScheduledNote[] {
   const notes = stepNotes(step);
   if (notes.length === 0) return [];
+  const probability = step.probability ?? 1;
+  if (probability < 1 && random() >= probability) return [];
+  const late = stepOffset(step) * windowSeconds;
+  return late > 0 ? onTheStep().map(note => ({ ...note, offset: note.offset + late })) : onTheStep();
+
+  function onTheStep(): ScheduledNote[] {
   if (params.arpeggiator?.enabled) return expandStep(notes[0], params, windowSeconds, tempo, step.slide, step.length, notes);
-  return notes.flatMap(note => expandStep(note, params, windowSeconds, tempo, step.slide, step.length));
+  const repeats = Math.max(1, Math.min(MAX_RATCHET, Math.round(step.ratchet ?? 1)));
+  if (repeats === 1) return notes.flatMap(note => expandStep(note, params, windowSeconds, tempo, step.slide, step.length));
+  // Repeats split the step's whole length evenly; only the last one can slide on.
+  const span = windowSeconds * Math.max(1, step.length ?? 1) / repeats;
+  return Array.from({ length: repeats }, (_, index) => index).flatMap(index => notes.map(note => ({
+    note, offset: span * index, duration: step.slide && index === repeats - 1 ? span * 1.1 : Math.max(0.03, span * 0.92),
+  })));
+  }
 }

@@ -31,6 +31,9 @@ interface SynthModuleProps {
 
 // One rack unit per synth lane: name plate, mute and solo, the pattern, and the few knobs
 // you reach for most. The selected lane also opens its full editor underneath.
+// How late a step can start, as a fraction of a step.
+const TIMINGS: Array<[number, string]> = [[0, 'On the step'], [0.25, '¼ step late'], [1 / 3, '⅓ step late'], [0.5, '½ step late'], [2 / 3, '⅔ step late'], [0.75, '¾ step late']];
+
 export default function SynthModule({ studio, synthId }: SynthModuleProps) {
   const [tab, setTab] = useState<SynthTab>('notes');
   const synth = studio.synths.find(entry => entry.id === synthId);
@@ -262,6 +265,42 @@ export default function SynthModule({ studio, synthId }: SynthModuleProps) {
                       />
                       Slide
                     </label>
+                    <label title="How often this step plays each time the pattern comes round">
+                      Chance
+                      <input
+                        type="range"
+                        aria-label={`Step ${synth.selectedStep + 1} chance`}
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        disabled={!synth.pattern.steps[synth.selectedStep]?.note}
+                        value={synth.pattern.steps[synth.selectedStep]?.probability ?? 1}
+                        onChange={(event) => { void studio.handleStepDetailChange(synthId, synth.selectedStep!, { probability: Number(event.target.value) }); }}
+                      />
+                      <span className="rack-readout">{Math.round((synth.pattern.steps[synth.selectedStep]?.probability ?? 1) * 100)}%</span>
+                    </label>
+                    <label title="Hits packed evenly into this step's length">
+                      Repeats
+                      <select
+                        aria-label={`Step ${synth.selectedStep + 1} repeats`}
+                        disabled={!synth.pattern.steps[synth.selectedStep]?.note}
+                        value={synth.pattern.steps[synth.selectedStep]?.ratchet ?? 1}
+                        onChange={(event) => { void studio.handleStepDetailChange(synthId, synth.selectedStep!, { ratchet: Number(event.target.value) }); }}
+                      >
+                        {[1, 2, 3, 4].map((count) => <option key={count} value={count}>{count}</option>)}
+                      </select>
+                    </label>
+                    <label title="Start this step's notes late, between this step and the next">
+                      Timing
+                      <select
+                        aria-label={`Step ${synth.selectedStep + 1} timing`}
+                        disabled={!synth.pattern.steps[synth.selectedStep]?.note}
+                        value={String(TIMINGS.reduce((best, [value]) => (Math.abs(value - (synth.pattern!.steps[synth.selectedStep!]?.offset ?? 0)) < Math.abs(best - (synth.pattern!.steps[synth.selectedStep!]?.offset ?? 0)) ? value : best), 0))}
+                        onChange={(event) => { void studio.handleStepDetailChange(synthId, synth.selectedStep!, { offset: Number(event.target.value) }); }}
+                      >
+                        {TIMINGS.map(([value, label]) => <option key={label} value={String(value)}>{label}</option>)}
+                      </select>
+                    </label>
                     <label title="How many steps this step's notes last">
                       Note length
                       <select
@@ -291,7 +330,8 @@ export default function SynthModule({ studio, synthId }: SynthModuleProps) {
                 releaseSignal={synth.forceReleaseSignal}
                 computerKeyNotes={studio.computerKeyNotes}
                 onStepSelect={(step) => { studio.handleStepSelect(synthId, step); }}
-                onNoteAssign={(stepIndex, note, on) => { void studio.handlePianoRollNoteAssign(synthId, stepIndex, note, on); }}
+                onNoteAssign={(stepIndex, note, on, offset) => { void studio.handlePianoRollNoteAssign(synthId, stepIndex, note, on, offset); }}
+                onNoteLength={(stepIndex, length) => { void studio.handleStepLengthChange(synthId, stepIndex, length); }}
                 onClearPattern={() => { void studio.handleClearPatternNotes(synthId); }}
                 onNotePlay={(note) => { void studio.handleNotePlay(synthId, note); }}
                 onNoteRelease={(note) => { void studio.handleNoteRelease(synthId, note); }}

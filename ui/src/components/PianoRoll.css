@@ -82,6 +82,11 @@
   background: #3b82f6;
 }
 
+.piano-roll-cell { position: relative; padding: 0; }
+.piano-roll-cell.active.late { background: linear-gradient(90deg, #202020 var(--late), #3b82f6 var(--late)); }
+.piano-roll-resize { position: absolute; top: 0; right: 0; bottom: 0; width: 7px; cursor: ew-resize; background: rgba(255, 255, 255, 0.55); touch-action: none; }
+.piano-roll-hint { flex: 1; margin: 0 10px; font-size: 0.7rem; color: #8a8a8a; text-align: right; }
+
 .piano-roll-cell.held {
   background: rgba(59, 130, 246, 0.45);
 }

@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Fragment } from 'react';
 import { Pattern } from '../types';
-import { MAX_STEP_NOTES, stepNotes } from '../services/noteScheduling';
+import { MAX_STEP_NOTES, stepNotes, stepOffset } from '../services/noteScheduling';
 import './PianoRoll.css';
 
 interface PianoRollProps {
@@ -12,7 +12,10 @@ interface PianoRollProps {
   octaveShift: number;
   onStepSelect: (stepIndex: number) => void;
   // Adds the note to the step's chord, or takes it out.
-  onNoteAssign: (stepIndex: number, note: string, on: boolean) => void;
+  // `offset` starts a new step's note that far into the step.
+  onNoteAssign: (stepIndex: number, note: string, on: boolean, offset?: number) => void;
+  // Sets how many steps the notes starting on a step last.
+  onNoteLength: (stepIndex: number, length: number) => void;
   onClear: () => void;
 }
 
@@ -26,6 +29,7 @@ export default function PianoRoll({
   octaveShift,
   onStepSelect,
   onNoteAssign,
+  onNoteLength,
   onClear,
 }: PianoRollProps) {
   const [mouseDown, setMouseDown] = useState(false);
@@ -56,16 +60,44 @@ export default function PianoRoll({
     return all;
   }, [octaveShift]);
 
-  // Cells a longer note sounds through after the step it starts on.
+  // Cells a longer note sounds through after the step it starts on, and the step each began on.
   const held = useMemo(() => {
-    const cells = new Set<string>();
+    const cells = new Map<string, number>();
     pattern?.steps.forEach((step, start) => {
       for (let offset = 1; offset < (step.length ?? 1) && start + offset < pattern.steps.length; offset += 1) {
-        for (const note of stepNotes(step)) cells.add(`${start + offset}:${note}`);
+        for (const note of stepNotes(step)) cells.set(`${start + offset}:${note}`, start);
       }
     });
     return cells;
   }, [pattern]);
+  // The note being stretched by its end: where it starts and how long it was last set to.
+  const resizing = useRef<{ start: number; length: number } | null>(null);
+  const onNoteLengthRef = useRef(onNoteLength);
+  onNoteLengthRef.current = onNoteLength;
+
+  // The handle moves to a new cell as the note grows, so the drag is followed on the window,
+  // not on the handle that started it.
+  useEffect(() => {
+    const move = (event: PointerEvent) => {
+      const drag = resizing.current;
+      if (!drag) return;
+      const under = document.elementsFromPoint(event.clientX, event.clientY).find(element => element.classList.contains('piano-roll-cell')) as HTMLElement | undefined;
+      if (!under?.dataset.step) return;
+      const length = Math.max(1, Number(under.dataset.step) - drag.start + 1);
+      if (length === drag.length) return;
+      drag.length = length;
+      onNoteLengthRef.current(drag.start, length);
+    };
+    const end = () => { resizing.current = null; };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+    return () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+    };
+  }, []);
 
   if (!pattern) {
     return <div className="piano-roll">Loading...</div>;
@@ -74,14 +106,14 @@ export default function PianoRoll({
   const has = (stepIndex: number, note: string) => stepNotes(pattern.steps[stepIndex]).includes(note);
   const full = (stepIndex: number) => stepNotes(pattern.steps[stepIndex]).length >= MAX_STEP_NOTES;
 
-  const handleCellDown = (stepIndex: number, note: string, x: number, y: number) => {
+  const handleCellDown = (stepIndex: number, note: string, x: number, y: number, late = false) => {
     pressedAt.current = { x, y };
     lastPaintCell.current = `${stepIndex}:${note}`;
     const nextMode: 'assign' | 'erase' = has(stepIndex, note) ? 'erase' : 'assign';
     setPaintMode(nextMode);
     setMouseDown(true);
     onStepSelect(stepIndex);
-    if (nextMode === 'erase' || !full(stepIndex)) onNoteAssign(stepIndex, note, nextMode === 'assign');
+    if (nextMode === 'erase' || !full(stepIndex)) onNoteAssign(stepIndex, note, nextMode === 'assign', late ? 0.5 : 0);
   };
 
   const handleCellEnter = (stepIndex: number, note: string, x: number, y: number) => {
@@ -101,6 +133,7 @@ export default function PianoRoll({
     <div className="piano-roll">
       <div className="piano-roll-header">
         <h2>Piano Roll</h2>
+        <span className="piano-roll-hint">Click notes in one column for a chord · drag a note's right edge to lengthen it · Alt+click starts a note halfway to the next step</span>
         <button className="piano-roll-action" onClick={onClear}>Clear</button>
       </div>
 
@@ -126,10 +159,15 @@ export default function PianoRoll({
             {pattern.steps.map((step, stepIndex) => {
               const active = stepNotes(step).includes(note);
               const sustained = !active && held.has(`${stepIndex}:${note}`);
+              const noteStart = active ? stepIndex : held.get(`${stepIndex}:${note}`);
+              const noteLength = noteStart === undefined ? 1 : pattern.steps[noteStart].length ?? 1;
+              // The handle sits on the last cell a note covers.
+              const isEnd = noteStart !== undefined && stepIndex === Math.min(pattern.steps.length - 1, noteStart + noteLength - 1);
+              const late = active ? stepOffset(step) : 0;
               return (
                 <button
                   key={`${note}-${stepIndex}`}
-                  className={`piano-roll-cell ${active ? 'active' : ''} ${active && (step.length ?? 1) > 1 ? 'long' : ''} ${sustained ? 'held' : ''} ${isPlaying && currentStep === stepIndex ? 'playing' : ''} ${selectedStep === stepIndex ? 'selected' : ''}`}
+                  className={`piano-roll-cell ${active ? 'active' : ''} ${late > 0 ? 'late' : ''} ${active && (step.length ?? 1) > 1 ? 'long' : ''} ${sustained ? 'held' : ''} ${isPlaying && currentStep === stepIndex ? 'playing' : ''} ${selectedStep === stepIndex ? 'selected' : ''}`}
                   aria-label={`${note} step ${stepIndex + 1}`}
                   aria-pressed={active}
                   data-note={note}
@@ -137,7 +175,7 @@ export default function PianoRoll({
                   onPointerDown={(event) => {
                     if (event.button !== 0) return;
                     event.preventDefault();
-                    handleCellDown(stepIndex, note, event.clientX, event.clientY);
+                    handleCellDown(stepIndex, note, event.clientX, event.clientY, event.altKey);
                   }}
                   onPointerEnter={(event) => handleCellEnter(stepIndex, note, event.clientX, event.clientY)}
                   onPointerMove={(event) => {
@@ -166,9 +204,24 @@ export default function PianoRoll({
                     nextStep = Math.max(0, Math.min(pattern.steps.length - 1, nextStep));
                     event.currentTarget.parentElement?.querySelector<HTMLButtonElement>(`[data-note="${nextNote}"][data-step="${nextStep}"]`)?.focus();
                   }}
-                  style={{ touchAction: 'none' }}
+                  style={{ touchAction: 'none', ...(late > 0 ? { '--late': `${Math.round(late * 100)}%` } as CSSProperties : {}) }}
                   type="button"
-                />
+                >
+                  {isEnd && (
+                    <span
+                      className="piano-roll-resize"
+                      title="Drag to change how long this note lasts"
+                      onPointerDown={(event) => {
+                        if (event.button !== 0) return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        resizing.current = { start: noteStart!, length: noteLength };
+                        onStepSelect(noteStart!);
+                      }}
+                      onClick={(event) => event.stopPropagation()}
+                    />
+                  )}
+                </button>
               );
             })}
           </Fragment>

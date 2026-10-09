@@ -148,20 +148,26 @@ function buildTempoTrack(tempo: number, markers: MidiEvent[] = []): number[] {
 // `bars` is the lane's steps for each bar in turn.
 function buildSynthTrack(id: number, bars: SequencerStep[][], channel: number): number[] {
   const events: MidiEvent[] = [textMetaEvent(0, `Synth ${id}`)];
+  const random = seededRandom(2);
   bars.forEach((steps, bar) => {
     const ticksPerStep = TICKS_PER_BAR / Math.max(1, steps.length);
     for (let stepIndex = 0; stepIndex < steps.length; stepIndex += 1) {
       const step = steps[stepIndex];
       if (!step.active || !step.note || step.velocity <= 0) continue;
+      const probability = step.probability ?? 1;
+      if (probability < 1 && random() >= probability) continue;
+      const repeats = Math.max(1, Math.min(4, Math.round(step.ratchet ?? 1)));
+      const spanTicks = ticksPerStep * (step.length ?? 1) / repeats;
+      for (let repeat = 0; repeat < repeats; repeat += 1)
       for (const name of [...new Set([step.note, ...(step.notes ?? [])])]) {
       const midiNote = noteNameToMidi(name);
       if (midiNote === null) continue;
-      const tick = bar * TICKS_PER_BAR + Math.round(stepIndex * ticksPerStep);
+      const tick = bar * TICKS_PER_BAR + Math.round((stepIndex + Math.max(0, Math.min(0.95, step.offset ?? 0))) * ticksPerStep + repeat * spanTicks);
       const velocity = clampVelocity(step.velocity * 127, DEFAULT_SYNTH_VELOCITY);
       const noteOnStatus = 0x90 | (channel & 0x0f);
       const noteOffStatus = 0x80 | (channel & 0x0f);
       events.push({ tick, data: [noteOnStatus, midiNote, velocity] });
-      events.push({ tick: tick + Math.max(1, Math.round(ticksPerStep * ((step.length ?? 1) - 1 + 0.92))), data: [noteOffStatus, midiNote, 0] });
+      events.push({ tick: tick + Math.max(1, Math.round(spanTicks - ticksPerStep * 0.08 / repeats)), data: [noteOffStatus, midiNote, 0] });
       }
     }
   });
