@@ -220,3 +220,12 @@ npm run migrate --workspace=server  # Apply new database migrations to the live 
 - Replace the REST-shaped facade with typed service methods and split `useStudio.tsx` into hooks per concern
 - See `docs/ROADMAP.md` and `docs/STORAGE_AND_ACCOUNTS_PLAN.md`
 - Use imported samples as a synth source, and include samples in project files and sync
+
+## Working Rules for Agents
+- Skills for this repository are in `.claude/skills/`: `add-project-field` (anything stored), `ship-change` (checks, commits, pull requests) and `scripted-edits` (editing on Windows). Read the one that fits before starting.
+- `docs/HANDOFF.md`, when it exists, says where unfinished work stopped. Read it first and delete it when that work is merged.
+- Reproduce a reported bug before fixing it, and see it fixed the same way afterwards. If it cannot be reproduced, say so; do not report a guess as a fix.
+- Find another program's real definitions before translating its files or talking to it (its source, its parameter table). Do not infer units from field names.
+- Anything bundled with the app must be something the project may redistribute. Do not add samples, fonts or data whose licence has not been checked.
+- Changing which outside service a workflow or the app sends data to, or adding a secret, is the owner's decision. Ask first.
+- Sound cannot be verified by tests. Say "not verified by ear" when that is the case.
