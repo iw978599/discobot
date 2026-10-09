@@ -73,7 +73,11 @@ requests. Delete this file once everything below is finished and merged.
    has not been verified. Options to put to the owner: a verified
    public-domain or CC0 pack, recordings the owner makes or owns, or leaving
    it as "import your own samples".
-3. **Follow-ups worth offering, not asked for:** following an external MIDI
+3. **Added to the roadmap after the pause** (`docs/ROADMAP.md`): collaborative
+   sessions (features item 13), kids mode (item 14), and a known bug: Song WAV
+   ignores a guest's mute and level per scene. The bug is small and should be
+   fixed first.
+4. **Follow-ups worth offering, not asked for:** following an external MIDI
    clock, sending hand-played notes to MIDI out, choosing output channels.
 
 ## Things the owner should know

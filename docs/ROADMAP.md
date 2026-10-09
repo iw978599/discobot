@@ -160,6 +160,57 @@ mono/slide and the drum voices. What it leaves open:
     Compress a project into the URL fragment so a pattern can be shared with a
     link and no backend. Limited to small projects by URL length.
 
+13. **Collaborative sessions.** (L)
+    A signed-in user starts a session on a project and shares it with another
+    signed-in user, and the two work on the song together. Open questions to
+    settle before building:
+    - Live or turn-based. Live means both see each other's edits as they
+      happen, which needs a connection held open between them (a Cloudflare
+      Durable Object with WebSockets is the natural fit for the current
+      server; note `AGENTS.md` rules out reintroducing a WebSocket transport,
+      so that rule would have to be revisited on purpose). Turn-based means a
+      shared project both can save to, using the revision check sync already
+      has, with no new kind of connection.
+    - What is shared: edits only, or playback position and who is editing
+      what as well. Each person hears their own browser's audio either way.
+    - How two edits to the same thing are settled. Today's sync never merges;
+      it keeps both copies. A session needs a real rule (last edit per step
+      or per control wins is the simplest that feels right).
+    - Who may join: by username, by a session code, or both; how the owner of
+      the project ends a session or removes someone.
+    - Guest instruments and imported samples are per browser today, so a
+      collaborator may not have them.
+    - The typed store (improvements item 1) should come first: edits need to
+      be small, named operations to send to another person.
+
+14. **Kids mode.** (M)
+    A mode a four-year-old can use without reading. A starting point:
+    - A few very large, colourful pads and a big play button; no menus, small
+      knobs, text fields or dialogs.
+    - Everything always sounds good: notes held to one scale, a fixed tempo
+      range, sounds chosen from a handful of pictures.
+    - Tapping makes sound at once (touch first, phone and tablet sized).
+    - Nothing can be lost or broken: it works on its own scratch project, and
+      cannot delete, overwrite, share, publish or reach account settings.
+    - A capped volume.
+    - A way out that a small child will not trigger by accident (press and
+      hold, or a simple sum for the adult).
+    - No account needed and no requests to anywhere, like the rest of the app.
+    To decide: whether what a child makes can be opened later in the full
+    app, and whether it is a separate page or a switch in the transport bar.
+
+## Known bugs
+
+- **Song WAV ignores a guest's mute and level per scene.** The export decides
+  which guests to record, and at what level, from the scene that is open when
+  Export is pressed (`handleExportWav` reads `guestsRef` once and gives each
+  recording a single gain). A guest muted in the open scene is left out of the
+  whole song, and one muted only in another scene plays through it. The fix:
+  record every guest that is audible in any scene of the song, and apply each
+  scene's `guestMix` to the recording bar by bar, the way `applySceneMutes`
+  does for the synth lanes. Loop WAV, Download WAV and stems export one scene
+  and are not affected.
+
 ## Suggested order
 
 1. Listen and tune the new voices (sound item 1).
