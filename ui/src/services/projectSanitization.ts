@@ -2,6 +2,7 @@ import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFu
 import { normalizeSynthModelId } from '../synthModels';
 import { noteNameToMidi } from '../utils/midiExport';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
+import { MAX_RATCHET } from './drumScheduling';
 
 export const record = (value: unknown): Record<string, any> =>
   value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {};
@@ -21,6 +22,9 @@ export function sanitizeShape<T>(value: unknown, defaults: T): T {
 }
 
 export function matchesShape(value: unknown, defaults: unknown): boolean {
+  if (Array.isArray(defaults)) {
+    return Array.isArray(value) && defaults.every((fallback, index) => matchesShape(value[index], fallback));
+  }
   if (defaults !== null && typeof defaults === 'object') {
     const input = record(value);
     return Object.entries(defaults).every(([key, fallback]) => matchesShape(input[key], fallback));
@@ -132,6 +136,12 @@ export function sanitizeDrums(value: unknown, defaults: DrumState): DrumState {
       },
       ...(Array.isArray(track.stepVelocities) ? {
         stepVelocities: Array.from({ length: 16 }, (_, i) => number(track.stepVelocities[i], 1, 0, 1)),
+      } : {}),
+      ...(Array.isArray(track.stepProbabilities) ? {
+        stepProbabilities: Array.from({ length: 16 }, (_, i) => number(track.stepProbabilities[i], 1, 0, 1)),
+      } : {}),
+      ...(Array.isArray(track.stepRatchets) ? {
+        stepRatchets: Array.from({ length: 16 }, (_, i) => Math.round(number(track.stepRatchets[i], 1, 1, MAX_RATCHET))),
       } : {}),
     };
     return [instrument, state];

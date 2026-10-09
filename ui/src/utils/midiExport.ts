@@ -1,4 +1,5 @@
 import { DrumInstrument, DrumState, Pattern } from '../types';
+import { expandDrumStep, seededRandom } from '../services/drumScheduling';
 
 interface MidiSynthLane {
   id: number;
@@ -154,19 +155,21 @@ function buildSynthTrack(lane: MidiSynthLane, channel: number): number[] {
 function buildDrumTrack(drumState: DrumState, swing = 0, masterVolume = 1): number[] {
   const events: MidiEvent[] = [textMetaEvent(0, 'Drums (GM ch10)')];
   const hasSolo = Object.values(drumState).some(track => track.solo);
+  const random = seededRandom(1);
   for (const [instrument, note] of Object.entries(DRUM_NOTE_MAP) as Array<[DrumInstrument, number]>) {
     const track = drumState[instrument];
     if (!track || track.muted || (hasSolo && !track.solo) || masterVolume <= 0) continue;
     for (let stepIndex = 0; stepIndex < track.steps.length; stepIndex += 1) {
-      if (!track.steps[stepIndex]) continue;
+      if (track.settings.volume <= 0) continue;
+      const offsets = expandDrumStep(track, stepIndex, random);
       const stepVelocity = track.stepVelocities?.[stepIndex] ?? 1;
-      if (stepVelocity <= 0 || track.settings.volume <= 0) continue;
       const velocity = clampVelocity(track.settings.volume * stepVelocity * masterVolume * 127, 100);
-      const tick = Math.round((stepIndex + (stepIndex % 2 ? swing : 0)) * TICKS_PER_STEP);
-      const noteOnStatus = 0x90 | DRUM_CHANNEL;
-      const noteOffStatus = 0x80 | DRUM_CHANNEL;
-      events.push({ tick, data: [noteOnStatus, note, velocity] });
-      events.push({ tick: tick + Math.max(1, Math.round(TICKS_PER_STEP * 0.5)), data: [noteOffStatus, note, 0] });
+      const length = Math.max(1, Math.round(TICKS_PER_STEP * 0.5 / offsets.length));
+      for (const offset of offsets) {
+        const tick = Math.round((stepIndex + (stepIndex % 2 ? swing : 0) + offset) * TICKS_PER_STEP);
+        events.push({ tick, data: [0x90 | DRUM_CHANNEL, note, velocity] });
+        events.push({ tick: tick + length, data: [0x80 | DRUM_CHANNEL, note, 0] });
+      }
     }
   }
   return makeTrackChunk(encodeTrack(events));

@@ -126,19 +126,15 @@ mono/slide and the drum voices. What it leaves open:
    length (so a note can last several steps) turn the piano roll into a real
    one. The engine is already eight-voice.
 
-4. **Project files: export and import.** (S)
-   Everything lives in one browser profile and is lost if site data is
-   cleared. A "Download project" button writing JSON (and "Open project") is a
-   backup, a way to move between devices, and a way to share.
+4. **Project files: export and import.** Done. Samples are not yet included
+   in the file.
 
 5. **Record live playing against the clock.** (M)
    MIDI record mode writes to the step under the playhead. Add a metronome, a
    count-in and quantize strength so playing in a part is practical, from the
    on-screen keyboard as well as MIDI.
 
-6. **Computer keyboard as a piano.** (S)
-   Map the A–L row to notes with Z/X for octave. Most users have no MIDI
-   controller, and clicking keys with a mouse is not playing.
+6. **Computer keyboard as a piano.** Done.
 
 7. **Parameter automation.** (L)
    Record knob movements per step or per bar and play them back. Filter sweeps
@@ -149,18 +145,12 @@ mono/slide and the drum voices. What it leaves open:
    Drive external hardware from the sequencer, and send or follow MIDI clock.
    Web MIDI is already in use for input.
 
-9. **Per-step probability and ratchets on drums.** (S)
-   A chance value and a repeat count per step give variation that the fixed
-   16-step grid cannot, for very little code.
+9. **Per-step probability and ratchets on drums.** Done. The same two
+   controls on synth steps would be a small follow-up.
 
-10. **Stem and loop export.** (S)
-    Export each lane and the drums as separate WAV files, and offer a
-    tail-wrapped loop export that repeats seamlessly. Both reuse the existing
-    offline render.
+10. **Stem and loop export.** Done.
 
-11. **Installable, offline-capable app.** (S)
-    A web manifest and a service worker make it installable and usable with no
-    connection. The app already needs no network after load.
+11. **Installable, offline-capable app.** Done.
 
 12. **Shareable links.** (M)
     Compress a project into the URL fragment so a pattern can be shared with a
@@ -169,10 +159,9 @@ mono/slide and the drum voices. What it leaves open:
 ## Suggested order
 
 1. Listen and tune the new voices (sound item 1).
-2. Project file export/import and the computer-keyboard piano: small, and they
-   remove the two most common frustrations.
-3. Typed store and `App.tsx` split, with debounced persistence and the
-   two-tab guard folded in.
+2. Debounced persistence and the two-tab guard: small, and they protect
+   people's work.
+3. Typed store and `App.tsx` split.
 4. Song mode.
 5. Samples on the drum grid.
 6. Longer patterns, then polyphonic steps and note length.

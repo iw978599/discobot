@@ -120,6 +120,23 @@ test('quota failures do not claim successful arrangement saves', async () => {
   assert.ok(messages.includes('storageError'));
 });
 
+test('an intact project reloads without a damage warning; a broken drum grid is reported', async () => {
+  const service = setup();
+  await mutate(service, '/drum/step', { instrument: 'kick', step: 3, active: true });
+  const reload = () => {
+    const restored = new LocalProjectService();
+    restored.initialize(defaults());
+    const messages: string[] = [];
+    restored.subscribe(message => messages.push(message.type));
+    return messages;
+  };
+  assert.deepEqual(reload(), ['init']);
+  const stored = JSON.parse(storage.get('discobot_browser_project_v1')!);
+  stored.drumState.kick.steps = 'none';
+  storage.set('discobot_browser_project_v1', JSON.stringify(stored));
+  assert.deepEqual(reload(), ['init', 'storageError']);
+});
+
 test('damaged stored projects recover to a usable local synth and announce the error', () => {
   setup();
   storage.set('discobot_browser_project_v1', JSON.stringify({ version: 1, synths: [{}], savedPatterns: [], drumState: null }));

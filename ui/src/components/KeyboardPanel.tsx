@@ -14,6 +14,7 @@ interface KeyboardPanelProps {
   onOctaveShift: (direction: 'up' | 'down') => void;
   holdEnabled: boolean;
   releaseSignal: boolean;
+  computerKeyNotes?: ReadonlySet<string>;
   onStepSelect: (stepIndex: number) => void;
   onNoteAssign: (stepIndex: number, note?: string) => void;
   onClearPattern: () => void;
@@ -32,6 +33,7 @@ export default function KeyboardPanel({
   onOctaveShift,
   holdEnabled,
   releaseSignal,
+  computerKeyNotes,
   onStepSelect,
   onNoteAssign,
   onClearPattern,
@@ -64,7 +66,7 @@ export default function KeyboardPanel({
           className="octave-shift-btn"
           onClick={() => onOctaveShift('down')}
           disabled={octaveShift <= -2}
-          title="Shift octave down"
+          title="Shift octave down (Z)"
         >
           Oct -
         </button>
@@ -72,7 +74,7 @@ export default function KeyboardPanel({
           className="octave-shift-btn"
           onClick={() => onOctaveShift('up')}
           disabled={octaveShift >= 2}
-          title="Shift octave up"
+          title="Shift octave up (X)"
         >
           Oct +
         </button>
@@ -85,6 +87,7 @@ export default function KeyboardPanel({
           holdEnabled={holdEnabled}
           octaveShift={octaveShift}
           releaseSignal={releaseSignal}
+          computerKeyNotes={computerKeyNotes}
         />
       ) : (
         <PianoRoll
