@@ -1,6 +1,28 @@
 # Song Mode — Implementation Plan
 
-Status: proposed, not started. Written 2026-10-08 against the `feat/synthesis-rewrite` branch.
+Status: built on `feat/song-mode` (phases 1 to 4). Written 2026-10-08 against the `feat/synthesis-rewrite` branch.
+
+## What was built, and where it differs from this plan
+
+- **Scenes hold their own copy of the notes.** The plan below has scenes
+  point at shared lane patterns by id. What shipped is simpler: a scene stores
+  each lane's steps and the drum grid directly. Editing one scene never
+  changes another, so the "shared patterns surprise users" risk does not
+  arise; the cost is that there is no way to make two scenes share a part.
+- **The lanes and drum grid are the open scene.** All existing editing, undo
+  and saving code keeps working on the live pattern. The project store copies
+  it into the scene's slot whenever scenes are read (`commitScene` in
+  `localService.ts`) and copies a scene out when it is selected.
+- **Follow is always on.** In song mode the editor opens whichever scene is
+  playing. There is no toggle to edit one scene while another plays.
+- **Undo** entries remember their scene; undoing an edit made elsewhere goes
+  back to that scene first. Adding, deleting and renaming scenes, and editing
+  the song order, are not on the undo stack.
+- **Not built:** per-scene lane mutes, copy and paste between scenes, drag to
+  reorder (blocks move with arrow buttons), stems of a whole song, and a
+  progress display for long exports. Song audio export is capped at 8 minutes.
+
+The rest of this document is the original plan, kept for its reasoning.
 
 ## Goal
 

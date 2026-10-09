@@ -205,8 +205,16 @@ export function HelpModal({ open, onClose }: { open: boolean; onClose: () => voi
             <li><strong>BPM:</strong> click the display to type a tempo (20–400), or tap it in with <strong>Tap</strong>.</li>
             <li><strong>Save / Load:</strong> store and recall the whole arrangement in this browser.</li>
             <li><strong>Project menu:</strong> export or import a project file (a backup you can move to another device; imported samples are not included), import a MIDI file, manage saved arrangements, or reset everything.</li>
-            <li><strong>Export menu:</strong> WAV (one bar with its effect tail), Loop WAV (exactly one bar that repeats seamlessly), Stems (a zip with one WAV per synth lane and one for the drums) and MIDI.</li>
+            <li><strong>Export menu:</strong> WAV (one bar with its effect tail), Loop WAV (exactly one bar that repeats seamlessly), Stems (a zip with one WAV per synth lane and one for the drums) and MIDI are of the open scene. Song WAV and Song MIDI are the whole song.</li>
             <li><strong>MIDI:</strong> choose a controller, channel, target lane and live/record/step mode. Imported samples are kept there too.</li>
+          </ul>
+        </section>
+        <section>
+          <h3>Scenes and song</h3>
+          <ul className="help-list help-list-plain">
+            <li><strong>Scenes:</strong> a scene is one bar of everything: the notes on all three lanes and the drum grid. <strong>+ Copy</strong> adds one that starts the same as the open scene; <strong>+ Empty</strong> adds a blank one. Sounds, tempo and effects are shared by every scene.</li>
+            <li><strong>Song:</strong> <strong>+ Add</strong> puts the open scene at the end of the song. Each block has − and + for how many times it repeats, arrows to move it, and ✕ to remove it.</li>
+            <li><strong>Scene / Song:</strong> in Scene, Play loops the open scene. In Song, Play runs the song from the block you last clicked and the rack follows it. Tick Loop to start again at the end.</li>
           </ul>
         </section>
         <section>

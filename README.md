@@ -54,7 +54,13 @@ see how the parts sit against each other.
    packs up to four hits into the step.
 4. Use Play All / Stop All, shared tempo and the mixer. Effects sends feed
    drive, phaser, delay and reverb; a send and its return must be audible.
-5. Save a named pattern with Save; load it from the Load list, or delete it
+5. Build a song from scenes. A scene is one bar of everything: all three
+   lanes' notes and the drum grid. Add scenes with + Copy or + Empty, then add
+   them to the song in order and set how many times each repeats. The Scene /
+   Song switch chooses whether Play loops the open scene or plays the song from
+   the marked block; in song mode the rack follows along. Sounds, tempo and
+   effects are shared by every scene.
+6. Save a named pattern with Save; load it from the Load list, or delete it
    under Project → Manage Saved. The Project and Export menus hold project
    files, MIDI import and the audio and MIDI exports. MIDI controller settings
    and imported samples are behind the MIDI button.
@@ -95,6 +101,8 @@ while online.
 - **Download WAV:** render the current arrangement locally to a stereo audio file:
   one bar followed by its effect tail. The export runs the same synth and drum
   code as live playback, offline.
+- **Song WAV / Song MIDI:** the whole song from start to finish. The MIDI file
+  has a marker at the start of each section. Song audio is limited to 8 minutes.
 - **Loop WAV:** exactly one bar that repeats seamlessly. The pattern is rendered
   for several bars and the last one is kept, so reverb and delay tails from the
   end of the bar are already present at its start.

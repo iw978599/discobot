@@ -60,10 +60,12 @@ export default function TransportUnit({ studio, onOpenSettings, onOpenManager }:
         <Menu
           label="Export"
           items={[
-            { label: 'Download WAV', title: 'One bar with its effect tail', onSelect: () => { void downloadArrangementWav(studio.currentArrangement()).catch(studio.reportExportError); } },
+            { label: 'Download WAV', title: 'The open scene: one bar with its effect tail', onSelect: () => { void downloadArrangementWav(studio.currentArrangement()).catch(studio.reportExportError); } },
             { label: 'Loop WAV', title: 'One bar that loops seamlessly, with effect tails wrapped in', onSelect: () => { void downloadArrangementWav(studio.currentArrangement(), { loop: true }).catch(studio.reportExportError); } },
             { label: 'Stems', title: 'Each synth lane and the drums as separate WAV files in a zip', onSelect: () => { void downloadStemsZip(studio.currentArrangement()).catch(studio.reportExportError); } },
-            { label: 'Export MIDI', title: 'A Standard MIDI File of the arrangement', onSelect: studio.handleExportMidi },
+            { label: 'Export MIDI', title: 'A Standard MIDI File of the open scene', onSelect: studio.handleExportMidi },
+            { label: 'Song WAV', title: 'The whole song, start to finish, as one audio file', onSelect: () => { void studio.songArrangement().then(song => downloadArrangementWav(song)).catch(studio.reportExportError); } },
+            { label: 'Song MIDI', title: 'The whole song as a MIDI file, with a marker at each section', onSelect: () => { void studio.handleExportSongMidi().catch(studio.reportExportError); } },
           ]}
         />
         <button className="rack-btn" onClick={onOpenSettings} title={midiStatus} aria-label="MIDI and samples">

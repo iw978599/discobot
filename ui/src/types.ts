@@ -28,6 +28,9 @@ export type {
   CymbalType,
   DrumTrack,
   DrumState,
+  DrumLanePattern,
+  Scene,
+  Song,
   FxSendLevels,
   EffectsLoopState,
 
