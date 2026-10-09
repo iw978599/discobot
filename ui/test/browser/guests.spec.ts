@@ -359,6 +359,12 @@ test('a guest is in the loop and the stems, and has sends to the shared effects'
     for (let frame = Math.round(from * 44100); frame < Math.round(to * 44100); frame++) { const value = bytes.readInt16LE(44 + frame * 4) / 32768; sum += value * value; count++; }
     return Math.sqrt(sum / count);
   };
+  // The lowest level any fiftieth of a second reaches between two times.
+  const quietest = (bytes: Buffer, from: number, to: number) => {
+    let lowest = Infinity;
+    for (let start = from; start + 0.02 <= to; start += 0.005) lowest = Math.min(lowest, level(bytes, start, start + 0.02));
+    return lowest;
+  };
 
   await menu(page, 'Add Guest Instrument');
   const dialog = page.getByRole('dialog', { name: 'Add a guest instrument', exact: true });
@@ -369,6 +375,11 @@ test('a guest is in the loop and the stems, and has sends to the shared effects'
   await page.locator('.tempo-led').click();
   await page.locator('.tempo-led-input').fill('240');
   await page.locator('.tempo-led-input').press('Enter');
+  // The reverb at full, so what it adds to a loop is plain to measure once the guest is sent to it.
+  const reverbMix = page.locator('.effects-block').filter({ has: page.getByRole('heading', { name: 'Reverb', exact: true }) }).getByLabel('Mix value', { exact: true });
+  await reverbMix.fill('100');
+  await reverbMix.press('Enter');
+  await expect.poll(async () => (await stored(page)).effectsLoop.reverb.mix).toBe(1);
 
   // A loop is one bar, one second here. The guest is recorded over two passes and the second kept.
   const pending = download('Loop WAV', 'loop.wav');
@@ -386,9 +397,12 @@ test('a guest is in the loop and the stems, and has sends to the shared effects'
   await send.press('Enter');
   await expect.poll(async () => (await stored(page)).guests[0].sends).toEqual({ reverb: 1, delay: 0, drive: 0, phaser: 0, chorus: 0 });
   const wet = await download('Loop WAV', 'loop-reverb.wav');
-  // The bell has died away a fifth of a second after each beat; what is left there is reverb.
-  expect(level(wet, 0.2, 0.25), 'the reverb fills the gap after the bell').toBeGreaterThan(level(loop, 0.2, 0.25) * 1.6);
-  expect(level(wet, 0.95, 1), 'and wraps round the end of the loop').toBeGreaterThan(level(loop, 0.95, 1) * 1.6);
+  // Between bells the dry loop falls almost to silence, and the reverb does not let it. The two
+  // files are separate recordings of the guest and do not land on the same sample, so each is
+  // measured at its own quietest moment, not at a fixed time: a window that ends where the next
+  // bell begins catches that bell whenever a recording lands a moment early.
+  expect(quietest(wet, 0, 1), 'the reverb fills the gaps between the bells').toBeGreaterThan(quietest(loop, 0, 1) * 2);
+  expect(quietest(wet, 0.75, 1), 'right up to the end of the loop, where it runs on into the start').toBeGreaterThan(quietest(loop, 0.75, 1) * 2);
   await page.reload();
   await expect(page.getByRole('region', { name: /^Guest instrument / })).toHaveAttribute('data-status', 'ready');
   expect((await stored(page)).guests[0].sends.reverb).toBe(1);
