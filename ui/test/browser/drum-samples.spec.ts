@@ -83,3 +83,52 @@ test('a drum lane plays an imported sample, in playback and export, and falls ba
   await expect(page.locator('.drum-strip').getByRole('status')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
+
+test('a kit of sample files is put on the lanes in one go, matched by name and corrected by hand', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const wav = (name: string) => ({ name, mimeType: 'audio/wav', buffer: toneWav() });
+  const kit = page.getByLabel('Import drum kit files', { exact: true });
+  const dialog = page.getByRole('dialog', { name: 'Import a drum kit', exact: true });
+  const fileFor = (lane: string) => dialog.getByLabel(`File for ${lane}`, { exact: true });
+
+  // Nothing to import: a message, and no dialog.
+  await kit.setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('not a drum') });
+  await expect(page.locator('.app-alert').filter({ hasText: 'None of those files are audio' })).toBeVisible();
+  await expect(dialog).toHaveCount(0);
+  await page.getByRole('button', { name: 'Dismiss message', exact: true }).click();
+
+  await kit.setInputFiles([
+    wav('Linn Kick 2.wav'), wav('Linn Kick 1.wav'), wav('DMX_Snare.wav'), wav('707 HH Closed.wav'), wav('HHOpen.wav'), wav('Tom Lo.wav'), wav('Cowbell.wav'),
+    { name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('not a drum') },
+  ]);
+  const guesses = { Kick: 'Linn Kick 1.wav', Snare: 'DMX_Snare.wav', Clap: 'Leave as it is', 'Closed Hat': '707 HH Closed.wav', 'Open Hat': 'HHOpen.wav', 'Low Tom': 'Tom Lo.wav', 'High Tom': 'Leave as it is', Cymbal: 'Leave as it is' };
+  for (const [lane, file] of Object.entries(guesses)) await expect(fileFor(lane).locator('option:checked'), lane).toHaveText(file);
+  await expect(fileFor('Kick').locator('option'), 'only the audio files are on offer').toHaveCount(8);
+  expect((await stored(page)).drumState.kick.sampleId, 'nothing changes until the choices are confirmed').toBeUndefined();
+
+  // The guesses can be changed: the other kick, the cowbell on the clap lane, and the snare left alone.
+  await fileFor('Kick').selectOption({ label: 'Linn Kick 2.wav' });
+  await fileFor('Clap').selectOption({ label: 'Cowbell.wav' });
+  await fileFor('Snare').selectOption({ label: 'Leave as it is' });
+  await dialog.getByRole('button', { name: 'Use These Sounds', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+
+  const drums = (await stored(page)).drumState as Record<string, { sampleId?: string }>;
+  expect(Object.keys(drums).filter(lane => drums[lane].sampleId).sort()).toEqual(['clap', 'closedHH', 'kick', 'openHH', 'snare2']);
+  expect(new Set(Object.values(drums).map(lane => lane.sampleId).filter(Boolean)).size, 'each lane has its own sample').toBe(5);
+  await expect(page.getByLabel('Kick sound', { exact: true }).locator('option:checked')).toHaveText('Linn Kick 2.wav');
+  await page.getByRole('button', { name: 'Select Clap', exact: true }).click();
+  await expect(page.getByLabel('Clap sound', { exact: true }).locator('option:checked')).toHaveText('Cowbell.wav');
+  await page.getByRole('button', { name: 'Select Snare', exact: true }).click();
+  await expect(page.getByLabel('Snare sound', { exact: true })).toHaveValue('');
+  await expect(page.getByLabel('Snare sound', { exact: true }).locator('option', { hasText: 'DMX_Snare.wav' }), 'a file left off every lane is not kept').toHaveCount(0);
+
+  // Closing the dialog changes nothing.
+  await kit.setInputFiles([wav('Crash.wav')]);
+  await expect(fileFor('Cymbal').locator('option:checked')).toHaveText('Crash.wav');
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  expect((await stored(page)).drumState.crash.sampleId).toBeUndefined();
+  expect(errors).toEqual([]);
+});

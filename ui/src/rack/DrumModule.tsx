@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { listSamples, saveSample } from '../services/sampleStore';
+import { isAudioFile, listSamples, saveSample } from '../services/sampleStore';
+import { MAX_KIT_FILES } from '../services/kitImport';
+import KitImportDialog from './KitImportDialog';
 import { BAR_CHOICES, drumBars } from '../services/patternLength';
 import type { Studio } from '../studio/useStudio';
 import { DrumInstrument, DrumKitId, DrumState, CymbalType } from '../types';
@@ -77,6 +79,9 @@ export default function DrumModule({ studio }: { studio: Studio }) {
   const sampleFileRef = useRef<HTMLInputElement>(null);
   const refreshSamples = () => listSamples().then(list => setSamples(list.map(({ id, name }) => ({ id, name })))).catch(() => {});
   useEffect(() => { void refreshSamples(); }, []);
+  // Several files picked at once, waiting in the kit import dialog to be given lanes.
+  const [kitFiles, setKitFiles] = useState<{ files: File[]; picked: number } | null>(null);
+  const kitFileRef = useRef<HTMLInputElement>(null);
 
   const anySolo = INSTRUMENTS.some((instrument) => Boolean(drumState[instrument].solo));
   const allMuted = INSTRUMENTS.every((instrument) => Boolean(drumState[instrument].muted));
@@ -305,6 +310,23 @@ export default function DrumModule({ studio }: { studio: Studio }) {
               .catch((cause) => studio.setStorageError(cause instanceof Error ? cause.message : 'The sample could not be imported.'));
           }}
         />
+        <button className="rack-btn" onClick={() => kitFileRef.current?.click()} title="Choose several sample files at once. Each is matched to a lane by its name, and you can change the matches before they are used">
+          Import Kit
+        </button>
+        <input
+          ref={kitFileRef}
+          type="file"
+          hidden
+          multiple
+          accept="audio/*,.wav,.mp3,.ogg,.flac,.m4a"
+          aria-label="Import drum kit files"
+          onChange={(event) => {
+            const audio = Array.from(event.currentTarget.files ?? []).filter(isAudioFile);
+            event.currentTarget.value = '';
+            if (audio.length === 0) { studio.setStorageError('None of those files are audio (WAV, MP3, OGG, FLAC, M4A), so there is no kit to import.'); return; }
+            setKitFiles({ files: audio.slice(0, MAX_KIT_FILES), picked: audio.length });
+          }}
+        />
         {studio.missingDrumSamples.includes(selected) && (
           <span className="rack-hint" role="status">This lane's sample is not on this device, so its built-in sound is playing.</span>
         )}
@@ -458,6 +480,16 @@ export default function DrumModule({ studio }: { studio: Studio }) {
           <button className={`rack-btn ${showSends ? 'on' : ''}`} aria-pressed={showSends} onClick={() => setShowSends((value) => !value)} title="Show the kit's effect sends and mute controls">Sends</button>
         </div>
       </div>
+
+      {kitFiles && (
+        <KitImportDialog
+          files={kitFiles.files}
+          picked={kitFiles.picked}
+          lanes={INSTRUMENTS.map(instrument => ({ id: instrument, label: LABELS[instrument] }))}
+          onApply={(lane, sampleId) => studio.handleDrumSampleChange(lane, sampleId)}
+          onClose={() => { setKitFiles(null); void refreshSamples(); }}
+        />
+      )}
 
       {showSends && (
         <div className="rack-row drum-sends">

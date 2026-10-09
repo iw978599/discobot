@@ -48,15 +48,12 @@ again. Delete this file once everything below is finished and merged.
 
 ## Still to do from the same request
 
-1. **Sampled kits (LinnDrum, DMX, TR-707)** (not started). The engine can
-   already play a sample on a drum lane (`DrumTrack.sampleId`,
-   `DrumCore.setSample`). What is missing is the recordings. This needs a
-   decision from the owner before any work: the app may not load anything
-   from another site, so samples must be bundled, and they must be ones the
-   project is allowed to redistribute. Do not bundle recordings whose licence
-   has not been verified. Options to put to the owner: a verified
-   public-domain or CC0 pack, recordings the owner makes or owns, or leaving
-   it as "import your own samples".
+1. **Sampled kits (LinnDrum, DMX, TR-707).** Decided by the owner: no
+   recordings are bundled, because none were found that the project is
+   clearly allowed to redistribute. Instead Import Kit, on the branch
+   `feat/kit-import` (stacked on this one), puts several of your own sample
+   files on the drum lanes at once, matched by their names. The kits with
+   those names in the kit menu are synthesized and have not been tuned by ear.
 2. **Added to the roadmap after the pause** (`docs/ROADMAP.md`): collaborative
    sessions (features item 13), kids mode (item 14) and a layout for phones
    and the installed app (item 15). None is started; each lists questions to
