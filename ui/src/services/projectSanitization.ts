@@ -2,6 +2,7 @@ import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFu
 import { DELAY_SYNCS } from './delayTime';
 import { MAX_STEP_NOTES, MAX_STEP_OFFSET } from './noteScheduling';
 import { BAR_CHOICES, DRUM_STEPS_PER_BAR, MAX_BARS, clampLengths, laneBars } from './patternLength';
+import { sanitizeSceneGuests } from './guests';
 import { MAX_REPEATS, MAX_SONG_ENTRIES } from './songPlayback';
 import { normalizeSynthModelId } from '../synthModels';
 import { noteNameToMidi } from '../utils/midiExport';
@@ -199,6 +200,7 @@ export function sanitizeScenes(value: unknown, defaults: DrumState): Scene[] | n
       name: (typeof input.name === 'string' && input.name.trim() ? input.name.trim() : 'Scene').slice(0, 40),
       lanes,
       ...(Object.keys(lengths).length ? { laneBars: lengths } : {}),
+      ...(sanitizeSceneGuests(input.guests) ? { guests: sanitizeSceneGuests(input.guests) } : {}),
       drums: Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => {
         const { steps, stepVelocities, stepProbabilities, stepRatchets } = drums[instrument];
         return [instrument, {

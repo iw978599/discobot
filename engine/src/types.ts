@@ -250,6 +250,8 @@ export interface Scene {
   drums: Record<DrumInstrument, DrumLanePattern>;
   // bars per synth lane id, for lanes longer than one bar
   laneBars?: Record<number, number>;
+  // each guest instrument's settings in this scene, by guest id. Opaque to Discobot.
+  guests?: Record<string, unknown>;
 }
 
 // The order scenes play in when the transport is in song mode.

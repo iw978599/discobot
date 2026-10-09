@@ -89,6 +89,17 @@ export function sanitizeGuests(value: unknown, ownOrigin?: string): Guest[] {
   return guests;
 }
 
+// The guest settings a scene carries, by guest id, checked like any other stored guest data.
+export function sanitizeSceneGuests(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const kept: Record<string, unknown> = {};
+  for (const [id, state] of Object.entries(value).slice(0, MAX_GUESTS * 2)) {
+    const clean = /^[0-9a-f-]{36}$/.test(id) ? guestState(state) : undefined;
+    if (clean !== undefined) kept[id] = clean;
+  }
+  return Object.keys(kept).length ? kept : undefined;
+}
+
 export function patchGuest(guest: Guest, patch: Record<string, unknown>): Guest {
   const next: Guest = { ...guest };
   if ('name' in patch) next.name = label(patch.name, guest.name);
