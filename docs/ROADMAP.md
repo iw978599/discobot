@@ -114,7 +114,9 @@ mono/slide and the drum voices. What it leaves open:
 
 ## Features
 
-1. **Song mode.** (L) See `docs/SONG_MODE_PLAN.md`.
+1. **Song mode.** Done; `docs/SONG_MODE_PLAN.md` lists what was left out
+   (per-scene mutes, copy and paste between scenes, sharing a part between
+   scenes).
 
 2. **Longer patterns and per-lane length.** (M)
    Patterns are one bar. Allowing 2, 4 or 8 bars, and lanes of different
@@ -160,6 +162,6 @@ mono/slide and the drum voices. What it leaves open:
 
 1. Listen and tune the new voices (sound item 1).
 2. Samples on the drum grid.
-3. Typed store and `App.tsx` split.
-4. Song mode.
+3. Dependable local storage: `docs/STORAGE_AND_ACCOUNTS_PLAN.md`, stage 1.
+4. Typed store, splitting `useStudio.tsx` by concern.
 5. Longer patterns, then polyphonic steps and note length.

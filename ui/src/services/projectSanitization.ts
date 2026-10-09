@@ -1,4 +1,5 @@
-import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, SynthParameters, SynthModelParams } from '../types';
+import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, Scene, Song, SynthParameters, SynthModelParams } from '../types';
+import { MAX_REPEATS, MAX_SONG_ENTRIES } from './songPlayback';
 import { normalizeSynthModelId } from '../synthModels';
 import { noteNameToMidi } from '../utils/midiExport';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
@@ -153,6 +154,51 @@ export function sanitizeDrums(value: unknown, defaults: DrumState): DrumState {
   })) as DrumState;
 }
 
+export const MAX_SCENES = 64;
+
+// Scenes and the song from storage or a file. Returns null when there is no usable scene,
+// which tells the caller to build one from the live project instead.
+export function sanitizeScenes(value: unknown, defaults: DrumState): Scene[] | null {
+  if (!Array.isArray(value)) return null;
+  const seen = new Set<string>();
+  const scenes = value.slice(0, MAX_SCENES).flatMap((entry: unknown) => {
+    const input = record(entry);
+    if (typeof input.id !== 'string' || !input.id || seen.has(input.id)) return [];
+    seen.add(input.id);
+    const lanes: Scene['lanes'] = {};
+    for (const id of [1, 2, 3]) {
+      const steps = record(input.lanes)[id];
+      if (Array.isArray(steps)) lanes[id] = sanitizeSteps(steps);
+    }
+    const drums = sanitizeDrums(input.drums, defaults);
+    return [{
+      id: input.id.slice(0, 200),
+      name: (typeof input.name === 'string' && input.name.trim() ? input.name.trim() : 'Scene').slice(0, 40),
+      lanes,
+      drums: Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => {
+        const { steps, stepVelocities, stepProbabilities, stepRatchets } = drums[instrument];
+        return [instrument, {
+          steps, ...(stepVelocities ? { stepVelocities } : {}), ...(stepProbabilities ? { stepProbabilities } : {}),
+          ...(stepRatchets ? { stepRatchets } : {}),
+        }];
+      })) as Scene['drums'],
+    }];
+  });
+  return scenes.length > 0 ? scenes : null;
+}
+
+// A song can only refer to scenes that exist; an empty song plays the first scene once.
+export function sanitizeSong(value: unknown, scenes: Scene[]): Song {
+  const input = record(value);
+  const ids = new Set(scenes.map(scene => scene.id));
+  const entries = (Array.isArray(input.entries) ? input.entries : []).slice(0, MAX_SONG_ENTRIES).flatMap((entry: unknown) => {
+    const item = record(entry);
+    if (typeof item.sceneId !== 'string' || !ids.has(item.sceneId)) return [];
+    return [{ sceneId: item.sceneId, repeats: Math.round(number(item.repeats, 1, 1, MAX_REPEATS)) }];
+  });
+  return { entries: entries.length > 0 ? entries : [{ sceneId: scenes[0].id, repeats: 1 }], loop: input.loop === true };
+}
+
 export function sanitizeEffects(value: unknown, defaults: EffectsLoopState): EffectsLoopState {
   const state = sanitizeShape(value, defaults);
   state.returns.synth = number(state.returns.synth, defaults.returns.synth, 0, 1);
@@ -192,6 +238,7 @@ export function sanitizeSaved(value: unknown, defaults: { synthParams: SynthPara
       keyboardMode: (synth.keyboardMode === 'piano-roll' ? 'piano-roll' : 'keyboard') as 'piano-roll' | 'keyboard',
     }];
   }) : undefined;
+  const scenes = sanitizeScenes(input.scenes, defaults.drumState);
   return {
     id: input.id.slice(0, 200), name: input.name.trim().slice(0, 200),
     createdAt: number(input.createdAt, Date.now(), 0, 1e15), updatedAt: number(input.updatedAt, Date.now(), 0, 1e15),
@@ -206,5 +253,9 @@ export function sanitizeSaved(value: unknown, defaults: { synthParams: SynthPara
     },
     effectsLoop: sanitizeEffects(input.effectsLoop, defaults.effectsLoop),
     ...(synths?.length ? { synths } : {}),
+    ...(scenes ? {
+      scenes, song: sanitizeSong(input.song, scenes),
+      currentSceneId: scenes.some(scene => scene.id === input.currentSceneId) ? input.currentSceneId : scenes[0].id,
+    } : {}),
   };
 }

@@ -86,7 +86,7 @@ test('saved projects restore tempo, mixer, swing and drum velocity; undo restore
   expect(saved.synths.find((s: any) => s.id === 2).muted).toBe(true);
   expect(saved.synths.find((s: any) => s.id === 2).octaveShift).toBe(1);
   await page.getByRole('button', { name: 'Mute Synth 2', exact: true }).click();
-  await page.getByRole('button', { name: /Remove/ }).click();
+  await page.getByRole('button', { name: 'Remove', exact: true }).click();
   await page.reload();
   await expect(page.getByRole('button', { name: 'Synth 2 +', exact: true })).toBeVisible();
   await page.locator('.tempo-led').click();

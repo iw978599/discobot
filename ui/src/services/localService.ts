@@ -1,7 +1,8 @@
-import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, SynthParameters, SynthModelId, SynthModelParams } from '../types';
+import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, Scene, Song, SynthParameters, SynthModelId, SynthModelParams } from '../types';
+import { emptySteps } from './songPlayback';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
 import { normalizeSynthModelId } from '../synthModels';
-import { record, number, matchesShape, sanitizePattern, sanitizeSynthParams, sanitizeDrums, sanitizeEffects, sanitizeSends, sanitizeSaved, sanitizeModelParams, sanitizeKit } from './projectSanitization';
+import { record, number, matchesShape, sanitizePattern, sanitizeSynthParams, sanitizeDrums, sanitizeEffects, sanitizeSends, sanitizeSaved, sanitizeModelParams, sanitizeKit, sanitizeScenes, sanitizeSong, MAX_SCENES } from './projectSanitization';
 
 type Message = { type: string; data: any };
 type Listener = (message: Message) => void;
@@ -17,6 +18,9 @@ type LocalSynth = {
 type State = Defaults & {
   version: 1; schema: typeof SCHEMA; synths: LocalSynth[]; tempo: number; selectedDrumKitId: string;
   drumMasterVolume: number; drumSwing: number; savedPatterns: SavedPatternFull[];
+  // The lanes' patterns and the drum grid above are the scene being edited. Its entry in
+  // `scenes` is only brought up to date when it is needed: see commitScene.
+  scenes: Scene[]; currentSceneId: string; song: Song;
 };
 export interface ProjectFile {
   format: typeof PROJECT_FILE_FORMAT;
@@ -28,7 +32,7 @@ const PROJECT_FILE_FORMAT = 'discobot-project';
 const STORAGE_KEY = 'discobot_browser_project_v1';
 // Bumped when synth parameters gain fields. An older project is upgraded with defaults,
 // which is a migration and not damage worth warning about.
-const SCHEMA = 3;
+const SCHEMA = 4;
 // Edits are written this long after the last one, so dragging a knob is one write, not hundreds.
 const SAVE_DELAY_MS = 300;
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
@@ -60,6 +64,7 @@ export class LocalProjectService {
     this.state = {
       ...clone(defaults), version: 1, schema: SCHEMA, synths: [], tempo: 120,
       selectedDrumKitId: 'clean-analog', drumMasterVolume: 1, drumSwing: 0, savedPatterns: [],
+      scenes: [], currentSceneId: '', song: { entries: [], loop: false },
     };
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
@@ -73,6 +78,7 @@ export class LocalProjectService {
       this.storageIssue = 'Browser storage is unavailable or damaged. Edits work, but may not survive reload.';
     }
     if (!this.state.synths.some(s => s.synthId === 1)) this.state.synths.unshift(this.createSynth(1));
+    this.ensureScenes();
     if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       window.addEventListener('pagehide', () => { this.flush(); });
       document.addEventListener('visibilitychange', () => { if (document.hidden) this.flush(); });
@@ -129,13 +135,81 @@ export class LocalProjectService {
       },
       selectedDrumKitId: sanitizeKit(parsed.selectedDrumKitId),
       drumMasterVolume: number(parsed.drumMasterVolume, 1, 0, 1), drumSwing: number(parsed.drumSwing, 0, 0, .75),
+      scenes: [], currentSceneId: '', song: { entries: [], loop: false },
     };
+    // Projects from before scenes existed have none: ensureScenes makes one from the live pattern.
+    const scenes = sanitizeScenes(parsed.scenes, defaults.drumState);
+    if (scenes) {
+      state.scenes = scenes;
+      state.currentSceneId = scenes.some(scene => scene.id === parsed.currentSceneId) ? parsed.currentSceneId : scenes[0].id;
+      state.song = sanitizeSong(parsed.song, scenes);
+    }
     return { state, damaged };
+  }
+
+  // The live lanes and drum grid as a scene.
+  private captureScene(id: string, name: string): Scene {
+    const state = this.state!;
+    return {
+      id, name,
+      lanes: Object.fromEntries(state.synths.map(synth => [synth.synthId, clone(synth.pattern.steps)])),
+      drums: Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => {
+        const { steps, stepVelocities, stepProbabilities, stepRatchets } = state.drumState[instrument];
+        return [instrument, clone({
+          steps, ...(stepVelocities ? { stepVelocities } : {}), ...(stepProbabilities ? { stepProbabilities } : {}),
+          ...(stepRatchets ? { stepRatchets } : {}),
+        })];
+      })) as Scene['drums'],
+    };
+  }
+
+  private ensureScenes() {
+    const state = this.state!;
+    if (state.scenes.length === 0) {
+      const scene = this.captureScene(crypto.randomUUID(), 'Scene 1');
+      state.scenes = [scene];
+      state.currentSceneId = scene.id;
+    }
+    if (!state.scenes.some(scene => scene.id === state.currentSceneId)) state.currentSceneId = state.scenes[0].id;
+    state.song = sanitizeSong(state.song, state.scenes);
+  }
+
+  // Copies the live pattern into the current scene's slot. Edits go to the live lanes and
+  // drums, so this runs before anything reads `scenes`: saving, switching, exporting.
+  private commitScene() {
+    const state = this.state!;
+    const index = state.scenes.findIndex(scene => scene.id === state.currentSceneId);
+    if (index >= 0) state.scenes[index] = this.captureScene(state.currentSceneId, state.scenes[index].name);
+  }
+
+  // Makes a scene the live pattern.
+  private applyScene(scene: Scene) {
+    const state = this.state!;
+    state.currentSceneId = scene.id;
+    for (const synth of state.synths) synth.pattern.steps = clone(scene.lanes[synth.synthId] ?? emptySteps());
+    for (const instrument of DRUM_INSTRUMENTS) {
+      const track = state.drumState[instrument], pattern = scene.drums[instrument];
+      track.steps = clone(pattern.steps);
+      for (const key of ['stepVelocities', 'stepProbabilities', 'stepRatchets'] as const) {
+        if (pattern[key]) track[key] = clone(pattern[key]);
+        else delete track[key];
+      }
+    }
+  }
+
+  private sceneMessage() {
+    const state = this.state!;
+    this.commitScene();
+    return {
+      scenes: state.scenes, song: state.song, currentSceneId: state.currentSceneId,
+      synths: state.synths.map(synth => ({ synthId: synth.synthId, pattern: synth.pattern })), drumState: state.drumState,
+    };
   }
 
   // Everything in the project store as one portable object. Samples live in IndexedDB
   // and are not part of it.
   exportProject(): ProjectFile {
+    this.commitScene();
     const project = clone(this.state!);
     project.synths.forEach(synth => { synth.isPlaying = false; });
     return { format: PROJECT_FILE_FORMAT, formatVersion: 1, exportedAt: new Date().toISOString(), project };
@@ -156,6 +230,7 @@ export class LocalProjectService {
     this.state = restored.state;
     if (!this.state.synths.some(s => s.synthId === 1)) this.state.synths.unshift(this.createSynth(1));
     this.state.synths.sort((a, b) => a.synthId - b.synthId);
+    this.ensureScenes();
     if (!this.write()) {
       this.state = previous;
       return { ok: false, error: 'The project is too large for this browser\'s storage.' };
@@ -186,6 +261,7 @@ export class LocalProjectService {
   }
 
   snapshot() {
+    this.commitScene();
     return clone({ ...this.state, drumKits: DRUM_KITS, restored: this.restored });
   }
 
@@ -221,6 +297,7 @@ export class LocalProjectService {
     if (this.saveTimer !== null) clearTimeout(this.saveTimer);
     this.saveTimer = null;
     try {
+      this.commitScene();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
       this.unsaved = false;
       return true;
@@ -290,7 +367,11 @@ export class LocalProjectService {
       const existing = state.savedPatterns.find(p => p.name.toLowerCase() === name.toLowerCase());
       if (existing && body.overwriteId !== existing.id) return respond({ id: existing.id, name: existing.name }, 409);
       const now = Date.now();
-      const saved = sanitizeSaved({ ...clone(body), id: existing?.id || crypto.randomUUID(), name, createdAt: existing?.createdAt || now, updatedAt: now }, this.defaults!)!;
+      this.commitScene();
+      const saved = sanitizeSaved({
+        ...clone(body), id: existing?.id || crypto.randomUUID(), name, createdAt: existing?.createdAt || now, updatedAt: now,
+        scenes: clone(state.scenes), song: clone(state.song), currentSceneId: state.currentSceneId,
+      }, this.defaults!)!;
       const previous = state.savedPatterns;
       state.savedPatterns = [...previous.filter(p => p.id !== saved.id), saved];
       if (!this.write()) {
@@ -299,6 +380,64 @@ export class LocalProjectService {
       }
       this.notifySaved();
       return respond(saved);
+    }
+    if (path === '/scenes') {
+      const { scenes, song, currentSceneId } = this.sceneMessage();
+      return respond({ scenes, song, currentSceneId });
+    }
+    if (path === '/scenes/select') {
+      const target = state.scenes.find(scene => scene.id === body.sceneId);
+      if (!target) return respond({ error: 'Scene not found' }, 404);
+      if (target.id !== state.currentSceneId) {
+        this.commitScene();
+        this.applyScene(target);
+      }
+      return update('sceneChanged', this.sceneMessage());
+    }
+    if (path === '/scenes/create') {
+      if (state.scenes.length >= MAX_SCENES) return respond({ error: `A project can hold ${MAX_SCENES} scenes` }, 400);
+      this.commitScene();
+      const name = (typeof body.name === 'string' && body.name.trim() ? body.name.trim() : `Scene ${state.scenes.length + 1}`).slice(0, 40);
+      const scene = this.captureScene(crypto.randomUUID(), name);
+      if (body.empty === true) {
+        for (const id of Object.keys(scene.lanes)) scene.lanes[Number(id)] = emptySteps(scene.lanes[Number(id)].length);
+        for (const instrument of DRUM_INSTRUMENTS) scene.drums[instrument] = { steps: Array(16).fill(false) };
+      }
+      const index = state.scenes.findIndex(entry => entry.id === state.currentSceneId);
+      state.scenes.splice(index + 1, 0, scene);
+      this.applyScene(scene);
+      return update('sceneChanged', this.sceneMessage());
+    }
+    if (path === '/scenes/rename') {
+      const target = state.scenes.find(scene => scene.id === body.sceneId);
+      const name = typeof body.name === 'string' ? body.name.trim().slice(0, 40) : '';
+      if (!target || !name) return respond({ error: 'A scene needs a name' }, 400);
+      target.name = name;
+      return update('sceneChanged', this.sceneMessage());
+    }
+    if (path === '/scenes/delete') {
+      const index = state.scenes.findIndex(scene => scene.id === body.sceneId);
+      if (index < 0) return respond({ error: 'Scene not found' }, 404);
+      if (state.scenes.length === 1) return respond({ error: 'A project needs at least one scene' }, 400);
+      this.commitScene();
+      state.scenes.splice(index, 1);
+      if (body.sceneId === state.currentSceneId) this.applyScene(state.scenes[Math.max(0, index - 1)]);
+      state.song = sanitizeSong({ ...state.song, entries: state.song.entries.filter(entry => entry.sceneId !== body.sceneId) }, state.scenes);
+      return update('sceneChanged', this.sceneMessage());
+    }
+    if (path === '/scenes/replace') {
+      // Used when a saved arrangement is loaded: the lanes and drums have already been set to
+      // its current scene, so that scene is taken from the live pattern.
+      const scenes = sanitizeScenes(body.scenes, this.defaults!.drumState);
+      state.scenes = scenes ?? [];
+      state.currentSceneId = scenes?.some(scene => scene.id === body.currentSceneId) ? body.currentSceneId : scenes?.[0].id ?? '';
+      state.song = scenes ? sanitizeSong(body.song, scenes) : { entries: [], loop: false };
+      this.ensureScenes();
+      return update('sceneChanged', this.sceneMessage());
+    }
+    if (path === '/song') {
+      state.song = sanitizeSong({ entries: body.entries ?? state.song.entries, loop: body.loop ?? state.song.loop }, state.scenes);
+      return update('sceneChanged', this.sceneMessage());
     }
     if (path === '/synth/create') {
       const id = body.synthId || [1, 2, 3].find(id => !state.synths.some(s => s.synthId === id));

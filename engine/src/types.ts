@@ -214,6 +214,30 @@ export interface DrumTrack {
 
 export type DrumState = Record<DrumInstrument, DrumTrack>;
 
+// The step data of one drum lane, without the kit's sound settings.
+export interface DrumLanePattern {
+  steps: boolean[];
+  stepVelocities?: number[];
+  stepProbabilities?: number[];
+  stepRatchets?: number[];
+}
+
+// One bar of the whole arrangement: every synth lane's notes and the drum grid. Sounds,
+// tempo and effects are not part of a scene; they belong to the project.
+export interface Scene {
+  id: string;
+  name: string;
+  // steps per synth lane id; a missing lane is silent in this scene
+  lanes: Record<number, SequencerStep[]>;
+  drums: Record<DrumInstrument, DrumLanePattern>;
+}
+
+// The order scenes play in when the transport is in song mode.
+export interface Song {
+  entries: Array<{ sceneId: string; repeats: number }>;
+  loop: boolean;
+}
+
 export interface Sample {
   id: string;
   name: string;
@@ -268,4 +292,7 @@ export interface SavedPatternFull {
   effectsLoop?: EffectsLoopState;
   synths?: SavedSynthData[];
   drumSwing?: number;
+  scenes?: Scene[];
+  song?: Song;
+  currentSceneId?: string;
 }

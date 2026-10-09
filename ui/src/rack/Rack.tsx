@@ -7,6 +7,7 @@ import SamplePanel from '../components/SamplePanel';
 import TransportUnit from './TransportUnit';
 import SynthModule from './SynthModule';
 import DrumModule from './DrumModule';
+import SongModule from './SongModule';
 import Dialog from './Dialog';
 import PatternManager from './PatternManager';
 import MidiImportDialog from './MidiImportDialog';
@@ -47,6 +48,7 @@ export default function Rack({ studio }: { studio: Studio }) {
             <button className="rack-btn" onClick={() => studio.setStorageError(null)} aria-label="Dismiss message">✕</button>
           </div>
         )}
+        <SongModule studio={studio} />
         {[1, 2, 3].map(id => <SynthModule key={id} studio={studio} synthId={id} />)}
         <DrumModule studio={studio} />
         <div className="rack-unit effects-unit">

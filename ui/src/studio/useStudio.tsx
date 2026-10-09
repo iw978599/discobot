@@ -3,7 +3,8 @@ import { createNamedSynthPresets } from '../components/SynthControls';
 import { useSynthAudio } from '../hooks/useSynthAudio';
 import { useDrumAudio } from '../hooks/useDrumAudio';
 import { MidiMode, MidiMessage, useMidiInput } from '../hooks/useMidiInput';
-import { Pattern, SynthParameters, SavedPatternInfo, SavedPatternFull, SavedSynthData, DrumState, DrumInstrument, DrumSettings, DrumKitDefinition, DrumKitId, EffectsLoopState, FxSendLevels, SynthModelId, SynthModelParams } from '../types';
+import { Pattern, SynthParameters, SavedPatternInfo, SavedPatternFull, SavedSynthData, DrumState, DrumInstrument, DrumSettings, DrumKitDefinition, DrumKitId, EffectsLoopState, FxSendLevels, Scene, Song, SynthModelId, SynthModelParams } from '../types';
+import { SongPosition, entryStartBar, sceneAtBar, sceneDrumState, songBars } from '../services/songPlayback';
 import { createDefaultSynthParameters } from '@discobot/engine';
 import { localRequest, localService } from '../services/localService';
 import { sanitizeSynthParams } from '../services/projectSanitization';
@@ -65,8 +66,12 @@ interface PatternSnapshot {
 
 interface HistoryEntry {
   synthId: number;
+  // the scene that was being edited, so undo can go back to it first
+  sceneId: string;
   snapshot: PatternSnapshot;
 }
+
+export type PlayMode = 'pattern' | 'song';
 
 // One chronological stack for the whole project: every snapshot also carries the shared
 // drum, tempo and effects state, so per-lane stacks would undo each other's edits.
@@ -377,6 +382,13 @@ export function useStudio() {
   const [globalTempo, setGlobalTempo] = useState(120);
   const [storageError, setStorageError] = useState<string | null>(null);
   const [changedElsewhere, setChangedElsewhere] = useState(false);
+  const [scenes, setScenes] = useState<Scene[]>([]);
+  const [currentSceneId, setCurrentSceneId] = useState('');
+  const [song, setSong] = useState<Song>({ entries: [], loop: false });
+  const [playMode, setPlayMode] = useState<PlayMode>('pattern');
+  // the block of the song that Play starts from
+  const [songStartEntry, setSongStartEntry] = useState(0);
+  const [songPosition, setSongPosition] = useState<SongPosition | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [midiMode, setMidiMode] = useState<MidiMode>('live');
   const [midiChannel, setMidiChannel] = useState(1);
@@ -414,6 +426,20 @@ export function useStudio() {
   globalTempoRef.current = globalTempo;
   const drumSwingRef = useRef(drumSwing);
   drumSwingRef.current = drumSwing;
+  const scenesRef = useRef(scenes);
+  scenesRef.current = scenes;
+  const currentSceneIdRef = useRef(currentSceneId);
+  currentSceneIdRef.current = currentSceneId;
+  const songRef = useRef(song);
+  songRef.current = song;
+  const playModeRef = useRef(playMode);
+  playModeRef.current = playMode;
+  const songStartEntryRef = useRef(songStartEntry);
+  songStartEntryRef.current = songStartEntry;
+  const currentArrangementRef = useRef<() => ExportArrangement>(() => { throw new Error('not ready'); });
+  const songStartBarRef = useRef(0);
+  const songEndingRef = useRef(false);
+  const stopPlaybackRef = useRef<() => void>(() => {});
   const transportRef = useRef<BrowserTransport | null>(null);
   const scheduleTickRef = useRef<(tick: TransportTick) => void>(() => {});
   const initializedSynthLanesRef = useRef(false);
@@ -499,7 +525,7 @@ export function useStudio() {
     const snapshot = getSnapshot(synthId, patternId);
     if (!snapshot) return;
     const history = historyRef.current;
-    history.undo.push({ synthId, snapshot });
+    history.undo.push({ synthId, sceneId: currentSceneIdRef.current, snapshot });
     if (history.undo.length > MAX_HISTORY) history.undo.shift();
     history.redo = [];
   }, [getSnapshot]);
@@ -594,12 +620,18 @@ export function useStudio() {
     const from = direction === 'undo' ? history.undo : history.redo;
     const to = direction === 'undo' ? history.redo : history.undo;
     let entry = from.pop();
-    // Entries for a lane that has since been removed can no longer be applied.
-    while (entry && !synthsRef.current.some((synth) => synth.id === entry!.synthId)) entry = from.pop();
+    // Entries for a lane or scene that has since been removed can no longer be applied.
+    const usable = (candidate: HistoryEntry) => synthsRef.current.some((synth) => synth.id === candidate.synthId)
+      && scenesRef.current.some((scene) => scene.id === candidate.sceneId);
+    while (entry && !usable(entry)) entry = from.pop();
     if (!entry) return;
+    // The edit was made in another scene: go back to it, then undo there.
+    if (entry.sceneId !== currentSceneIdRef.current) {
+      await localRequest('/scenes/select', { method: 'POST', body: JSON.stringify({ sceneId: entry.sceneId }) });
+    }
     const currentPattern = synthsRef.current.find((synth) => synth.id === entry!.synthId)?.pattern;
     const current = currentPattern ? getSnapshot(entry.synthId, currentPattern.id) : null;
-    if (current) to.push({ synthId: entry.synthId, snapshot: current });
+    if (current) to.push({ synthId: entry.synthId, sceneId: entry.sceneId, snapshot: current });
     isRestoringRef.current = true;
     try {
       await applySnapshot(entry.synthId, entry.snapshot);
@@ -679,16 +711,42 @@ export function useStudio() {
     }
   }, [synthAudio]);
 
-  scheduleTickRef.current = ({ step, time, duration }) => {
+  scheduleTickRef.current = ({ step, bar, time, duration }) => {
+    // In song mode the bar number picks the scene. A scene other than the one open for
+    // editing is played from its stored copy; the open one is played from the live pattern.
+    let scene: Scene | null = null;
+    if (playModeRef.current === 'song') {
+      const position = sceneAtBar(songRef.current, songStartBarRef.current + bar);
+      if (!position) {
+        if (!songEndingRef.current) {
+          songEndingRef.current = true;
+          // Stop on the bar line this tick belongs to, not now: ticks are scheduled a little ahead.
+          setTimeout(() => stopPlaybackRef.current(), Math.max(0, (time - getAudioContext().currentTime) * 1000));
+        }
+        return;
+      }
+      if (step === 0) {
+        setSongPosition(position);
+        // Open the playing scene in the editor. This updates the live pattern at once.
+        if (position.sceneId !== currentSceneIdRef.current) {
+          void localRequest('/scenes/select', { method: 'POST', body: JSON.stringify({ sceneId: position.sceneId }) });
+        }
+      }
+      if (position.sceneId !== currentSceneIdRef.current) {
+        scene = scenesRef.current.find(entry => entry.id === position.sceneId) ?? null;
+      }
+    }
     const lanes = synthsRef.current;
     const hasSolo = lanes.some(s => s.solo);
     for (const synth of lanes) {
       if (!synth.isPlaying || !synth.pattern || !synth.synthParams) continue;
-      const count = synth.pattern.steps.length;
+      const steps = scene ? scene.lanes[synth.id] ?? [] : synth.pattern.steps;
+      const count = steps.length;
+      if (count === 0) continue;
       const divisor = count === 32 ? 1 : 2;
       if (step % divisor !== 0) continue;
       const index = Math.floor(step / divisor) % count;
-      const note = synth.pattern.steps[index];
+      const note = steps[index];
       if (!synth.muted && (!hasSolo || synth.solo) && note?.active && note.note) {
         triggerSynthNote(synth.synthParams, note.note, duration * divisor, note.velocity, synth.id, time, note.slide);
       }
@@ -697,7 +755,7 @@ export function useStudio() {
     if (step % 2 !== 0) return;
     const drumStep = Math.floor(step / 2);
     setDrumCurrentStep(drumStep);
-    const state = drumStateRef.current;
+    const state = scene ? sceneDrumState(scene, drumStateRef.current) : drumStateRef.current;
     const drumSolo = (Object.keys(state) as DrumInstrument[]).some(i => state[i].solo);
     const swingOffset = drumStep % 2 ? drumSwingRef.current * duration * 2 : 0;
     for (const instrument of Object.keys(state) as DrumInstrument[]) {
@@ -782,6 +840,36 @@ export function useStudio() {
         if (message.data.tempo) setGlobalTempo(message.data.tempo);
         if (typeof message.data.drumMasterVolume === 'number') setDrumMasterVolume(message.data.drumMasterVolume);
         if (typeof message.data.drumSwing === 'number') setDrumSwing(message.data.drumSwing);
+        if (Array.isArray(message.data.scenes)) {
+          setScenes(message.data.scenes);
+          setCurrentSceneId(message.data.currentSceneId);
+          setSong(message.data.song);
+          setSongStartEntry(0);
+        }
+        break;
+      }
+      case 'sceneChanged': {
+        const { scenes: nextScenes, song: nextSong, currentSceneId: nextSceneId, synths: lanePatterns, drumState: nextDrums } = message.data;
+        const switched = nextSceneId !== currentSceneIdRef.current;
+        const nextLanes = synthsRef.current.map(s => {
+          const pattern = lanePatterns.find((lane: { synthId: number }) => lane.synthId === s.id)?.pattern;
+          return pattern ? { ...s, pattern, selectedStep: switched ? null : s.selectedStep } : s;
+        });
+        // The scheduler and undo read these refs before React has rendered again.
+        synthsRef.current = nextLanes;
+        drumStateRef.current = nextDrums;
+        scenesRef.current = nextScenes;
+        currentSceneIdRef.current = nextSceneId;
+        songRef.current = nextSong;
+        setSynths(prev => prev.map(s => {
+          const pattern = lanePatterns.find((lane: { synthId: number }) => lane.synthId === s.id)?.pattern;
+          return pattern ? { ...s, pattern, selectedStep: switched ? null : s.selectedStep } : s;
+        }));
+        setDrumState(nextDrums);
+        setScenes(nextScenes);
+        setCurrentSceneId(nextSceneId);
+        setSong(nextSong);
+        setSongStartEntry(entry => Math.min(entry, nextSong.entries.length - 1));
         break;
       }
       case 'synthUpdate': {
@@ -1067,6 +1155,8 @@ export function useStudio() {
     const playableSynths = currentSynths.filter(s => s.pattern);
 
     if (!isAnyPlaying) {
+      songEndingRef.current = false;
+      songStartBarRef.current = playModeRef.current === 'song' ? entryStartBar(songRef.current, songStartEntryRef.current) : 0;
       const readiness = await Promise.all([
         synthAudio.ensureAudioReady(),
         drumAudio.ensureAudioReady(),
@@ -1113,7 +1203,32 @@ export function useStudio() {
     transportRef.current?.stop();
     synthAudio.stopAllNotes();
     drumAudio.stopAllNotes();
+    setSongPosition(null);
   }, [synthAudio, drumAudio]);
+  stopPlaybackRef.current = () => {
+    if (synthsRef.current.some(s => s.isPlaying)) void handleGlobalPlayStop();
+  };
+
+  const sceneRequest = useCallback(async (path: string, body: unknown) => {
+    const response = await localRequest(path, { method: 'POST', body: JSON.stringify(body) });
+    if (!response.ok) setStorageError((await response.json().catch(() => null))?.error ?? 'That scene change could not be made.');
+    return response.ok;
+  }, []);
+  const handleSceneSelect = useCallback((sceneId: string) => sceneRequest('/scenes/select', { sceneId }), [sceneRequest]);
+  // A new scene starts as a copy of the one being edited, or empty.
+  const handleSceneAdd = useCallback((empty: boolean) => sceneRequest('/scenes/create', { empty }), [sceneRequest]);
+  const handleSceneRename = useCallback((sceneId: string, name: string) => sceneRequest('/scenes/rename', { sceneId, name }), [sceneRequest]);
+  const handleSceneDelete = useCallback((sceneId: string) => sceneRequest('/scenes/delete', { sceneId }), [sceneRequest]);
+  const handleSongChange = useCallback((next: Partial<Song>) => {
+    setSong(prev => ({ ...prev, ...next }));
+    void sceneRequest('/song', next);
+  }, [sceneRequest]);
+
+  // The song as one scene per bar, with every scene as it stands now, for export.
+  const songArrangement = useCallback(async (): Promise<ExportArrangement & { bars: Scene[] }> => {
+    const stored = await (await localRequest('/scenes')).json() as { scenes: Scene[]; song: Song };
+    return { ...currentArrangementRef.current(), bars: songBars(stored.song, stored.scenes) };
+  }, []);
 
   // Another tab saved the project. Either take that version (a reload reads it) or keep this one.
   const loadOtherTabVersion = useCallback(() => { window.location.reload(); }, []);
@@ -1606,6 +1721,20 @@ export function useStudio() {
     drumKitId: selectedDrumKitIdRef.current, drumMasterVolume, drumSwing,
     drumFx: drumFxRef.current, effectsLoop: effectsLoopRef.current,
   }), [drumMasterVolume, drumSwing]);
+  currentArrangementRef.current = currentArrangement;
+
+  const handleExportSongMidi = useCallback(async () => {
+    const { bars } = await songArrangement();
+    const kit = cloneDrumState(drumStateRef.current);
+    downloadMidiFile(
+      {
+        tempo: globalTempoRef.current, drumSwing, drumMasterVolume, drumState: kit,
+        synthLanes: synthsRef.current.filter((entry) => entry.pattern).map((entry) => ({ id: entry.id, pattern: clonePattern(entry.pattern!), muted: entry.muted, solo: entry.solo })),
+        bars: bars.map(scene => ({ name: scene.name, lanes: scene.lanes, drumState: sceneDrumState(scene, kit) })),
+      },
+      `discobot-song-${Date.now()}.mid`
+    );
+  }, [songArrangement, drumSwing, drumMasterVolume]);
 
   const reportExportError = useCallback((error: unknown) => {
     setStorageError(`Audio export failed: ${error instanceof Error ? error.message : error}`);
@@ -1956,6 +2085,10 @@ export function useStudio() {
           await loadSynthFromSavedData(savedSynth.id, { ...savedSynth, tempo: data.tempo });
         }
       }
+      // The lanes and drums now hold the saved arrangement's open scene; bring its other scenes and song with it.
+      await localRequest('/scenes/replace', {
+        method: 'POST', body: JSON.stringify({ scenes: data.scenes, song: data.song, currentSceneId: data.currentSceneId }),
+      });
     } catch {
       // ignore
     }
@@ -2266,6 +2399,9 @@ export function useStudio() {
     });
     setActiveSavedPattern(null);
     handleDrumReset();
+    historyRef.current = { undo: [], redo: [] };
+    // Back to a single empty scene, taken from the lanes and drums that were just cleared.
+    await localRequest('/scenes/replace', { method: 'POST', body: JSON.stringify({}) });
   }, [handleDrumReset, synthAudio, drumAudio]);
 
   const memoizedDrumState = useMemo(() => drumState, [drumState]);
@@ -2292,6 +2428,8 @@ export function useStudio() {
     handleSaveGlobal, handleLoadGlobal, handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail,
     handleDrumSettingsChange, handleDrumMixChange, handleDrumReset, handleDrumMasterVolumeChange, handleDrumSwingChange,
     handleDrumFxChange, handleEffectsLoopChange, handleDrumMuteAll, handleDrumSoloAll, handleReset,
+    scenes, currentSceneId, song, playMode, setPlayMode, songStartEntry, setSongStartEntry, songPosition,
+    handleSceneSelect, handleSceneAdd, handleSceneRename, handleSceneDelete, handleSongChange, songArrangement, handleExportSongMidi,
     saving, setSaving, saveName, setSaveName, savedFeedback, setSavedFeedback, savedPatterns, loadingSavedPatterns, isAnyPlaying,
   };
 }

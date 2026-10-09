@@ -52,6 +52,8 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 | `ui/src/hooks/useDrumAudio.ts` | Posts drum hits to the `drum-processor` worklet node |
 | `ui/src/hooks/useMidiInput.ts` | Web MIDI input, per-device held-note tracking |
 | `ui/src/audio/worklet.ts` | Worklet entry: thin `synth-processor` and `drum-processor` wrappers around the engine cores. `vite.config.ts` bundles it to `public/audio-worklet.js` (generated, gitignored) |
+| `ui/src/services/songPlayback.ts` | Pure song helpers: `sceneAtBar` (which scene plays in a bar), `songBars`, `sceneDrumState` |
+| `ui/src/rack/SongModule.tsx` | Scene strip, song order and the Scene/Song play mode switch |
 | `ui/src/services/noteScheduling.ts` | `expandStep`: what one step plays (arpeggio pulses, slide length); used live and by export |
 | `ui/src/utils/midiExport.ts` / `midiImport.ts` | Standard MIDI File export (PPQ 480, drums on channel 10) and import |
 | `ui/src/synthModels.ts` | Synth model definitions and macro mapping |
@@ -63,6 +65,9 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 | `engine/src/dsp.ts` | Shared oscillators, state-variable filter, exponential ADSR, seeded noise |
 
 ## Behaviour Worth Knowing
+- A project has scenes (one bar of every lane plus the drum grid) and a song (scenes in order, with repeats). The lanes' patterns and `drumState` steps in the store are always the open scene; its slot in `scenes` is only brought up to date by `commitScene()`, which runs before anything reads `scenes`. Never read a scene's stored copy for the open scene: use the live pattern.
+- Sounds, kit settings, mutes, tempo and effects are project-wide. A scene holds only steps.
+- In song mode the scheduler picks the scene from the transport's bar number (`sceneAtBar`), plays any scene other than the open one from its stored copy, and asks the store to open the playing scene. `localService.request` emits synchronously, and the `sceneChanged` handler updates the refs the scheduler reads straight away; keep both true or a bar would play the wrong scene.
 - Up to 3 synth lanes; Synth 1 cannot be removed. Lanes are 16 or 32 steps over one bar; the drum grid is always 16 steps.
 - Undo/redo is one chronological stack for the whole project (`historyRef` in `useStudio.tsx`). Each entry stores one lane plus the shared drum, tempo and effects state. Loading a saved arrangement clears it.
 - A tempo-synced LFO rate `N` means one cycle per 1/N note (`syncedLfoHz`). Live playback and WAV export both use it.
@@ -125,6 +130,5 @@ npm run test:browser # Playwright against the production preview
 
 ## Potential Next Steps
 - Replace the REST-shaped facade with typed service methods and split `useStudio.tsx` into hooks per concern
-- See `docs/SONG_MODE_PLAN.md` and `docs/ROADMAP.md`
-- Song mode / pattern chaining
+- See `docs/ROADMAP.md` and `docs/STORAGE_AND_ACCOUNTS_PLAN.md`
 - Use imported samples as drum or synth sources (and include them in project files)

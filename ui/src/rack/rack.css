@@ -190,6 +190,38 @@
   color: #ffd9cc; text-transform: none; letter-spacing: 0.02em; font-weight: 500; font-size: 14px;
 }
 
+/* scenes and song */
+.scene-strip, .song-chain { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
+.song-chain { flex: 1; }
+.scene-chip {
+  background: #1a1b1c; border: 1px solid #55585b; border-radius: 3px; color: #d6d8d9;
+  font: inherit; text-transform: inherit; letter-spacing: inherit; padding: 6px 12px; cursor: pointer;
+  max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.scene-chip:hover { border-color: var(--amber); color: var(--amber); }
+.scene-chip.on { background: var(--amber); border-color: var(--amber); color: #111; }
+.rack .scene-name-input { background: #121314; border: 1px solid var(--amber); border-radius: 3px; color: var(--ink); font: inherit; padding: 5px 8px; width: 150px; text-transform: none; }
+.mode-toggle { width: var(--side); }
+.mode-toggle button { width: auto; flex: 1; height: 24px; padding: 0 4px; font-size: 11px; }
+.song-block { display: flex; align-items: stretch; background: #1a1b1c; border: 1px solid #55585b; border-radius: 3px; overflow: hidden; }
+.song-block.start { border-color: var(--ink); }
+.song-block.playing { border-color: var(--amber); box-shadow: 0 0 8px var(--amber-soft); }
+.song-block-name {
+  display: flex; align-items: center; gap: 8px; background: none; border: 0; color: #d6d8d9;
+  font: inherit; text-transform: inherit; letter-spacing: inherit; padding: 5px 8px 5px 10px; cursor: pointer;
+  max-width: 170px; white-space: nowrap; overflow: hidden;
+}
+.song-block.playing .song-block-name { background: var(--amber); color: #111; }
+.song-block-name:hover { color: var(--amber); }
+.song-block.playing .song-block-name:hover { color: #111; }
+.song-block-count { font-family: var(--led-font); letter-spacing: 0; color: var(--amber); }
+.song-block.playing .song-block-count { color: #111; }
+.song-block-tools { display: flex; border-left: 1px solid #45484b; }
+.song-block-tools button { background: none; border: 0; color: var(--dim); font: inherit; width: 20px; padding: 0; cursor: pointer; }
+.song-block-tools button:hover:not(:disabled) { background: #2c2f32; color: var(--amber); }
+.song-block-tools button:disabled { opacity: 0.3; cursor: default; }
+.song-loop { display: flex; align-items: center; gap: 5px; flex: none; }
+
 /* synth lanes */
 .synth-module > .rack-row, .drum-top {
   display: grid;
