@@ -30,30 +30,37 @@ again. Delete this file once everything below is finished and merged.
    lights nine parts of the rack in turn with a short explanation of each.
    Show the Walkthrough in the account dialog starts it again. It starts by
    itself once per browser.
+6. **Import Kit.** Several sample files are put on the drum lanes at once,
+   matched by their names and checked in a dialog before anything is stored.
+   This is instead of bundled LinnDrum, DMX and TR-707 recordings: the owner
+   decided none would be bundled, because none were found that the project is
+   clearly allowed to redistribute. It came in as PR #82.
 
 `AGENTS.md` and `docs/ROADMAP.md` describe all of these.
 
 ## Checked, and not checked
 
 - `npm run typecheck`: clean at the last commit.
-- `npm test`: 145 passing at the last commit.
-- `npm run test:browser`: the whole suite passed (126 tests,
-  desktop and phone width) at the last commit.
+- `npm test`: 147 passing at the last commit.
+- `npm run test:browser`: the whole suite passed (128 tests, desktop and
+  phone width) with everything here in place.
+- The check on GitHub failed on every run of this branch until one guest test
+  was changed: it compared two recordings of a guest in a window that ended
+  where the next bell began. It passes there now.
+- "A guest whose sound arrives late" failed once at phone width in an
+  unusually slow local run and passed six times out of six straight after.
 - Nothing has been listened to. The chorus, the damped reverb and the EQ were
   set by reasoning and measurement, not by ear.
 - MIDI output was tested against a fake device, not real hardware.
-- The walkthrough was looked at in screenshots at desktop and phone width in
-  Chromium only. It has not been tried in Firefox or Safari, on a real phone,
-  or with a screen reader.
+- The walkthrough and Import Kit were looked at in screenshots at desktop and
+  phone width in Chromium only. Neither has been tried in Firefox or Safari,
+  on a real phone, or with a screen reader, and Import Kit has only met
+  generated test tones, not a real sample pack.
 
 ## Still to do from the same request
 
-1. **Sampled kits (LinnDrum, DMX, TR-707).** Decided by the owner: no
-   recordings are bundled, because none were found that the project is
-   clearly allowed to redistribute. Instead Import Kit, on the branch
-   `feat/kit-import` (stacked on this one), puts several of your own sample
-   files on the drum lanes at once, matched by their names. The kits with
-   those names in the kit menu are synthesized and have not been tuned by ear.
+1. **The LinnDrum, DMX and TR-707 kits in the kit menu** are synthesized and
+   have not been tuned by ear against the machines they are named after.
 2. **Added to the roadmap after the pause** (`docs/ROADMAP.md`): collaborative
    sessions (features item 13), kids mode (item 14) and a layout for phones
    and the installed app (item 15). None is started; each lists questions to
