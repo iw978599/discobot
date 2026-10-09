@@ -137,6 +137,7 @@ export function HelpModal({ open, onClose }: { open: boolean; onClose: () => voi
           <h3>Synth lanes</h3>
           <ul className="help-list help-list-plain">
             <li><strong>Lane knobs:</strong> the four you reach for most, plus Level. Choosing a synth model swaps them for that model's own four.</li>
+            <li><strong>Longer patterns:</strong> each lane's Notes tab and the drum strip have a Bars menu (1, 2, 4 or 8). A longer pattern is shown a bar at a time; pick the bar with the numbered buttons, or turn on Follow to watch the one that is playing. Lanes of different lengths loop against each other.</li>
             <li><strong>Editor tabs:</strong> Notes (keyboard or piano roll, each step's velocity, slide, chance, repeats, timing and note length; in the piano roll, click several notes in one column for a chord and drag a note's right edge to lengthen it), then Osc, Filter, Amp, LFO, Arp and Sends for the full sound.</li>
             <li><strong>Thicker and punchier:</strong> Unison (Osc tab) stacks detuned copies of each note. The filter has a 12 dB and a steeper 24 dB slope. Duck (Sends tab) dips the lane on every kick so the kick cuts through.</li>
             <li><strong>Presets:</strong> save, load and delete sounds without touching the pattern.</li>

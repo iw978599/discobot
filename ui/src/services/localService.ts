@@ -1,6 +1,7 @@
 import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, Scene, Song, SynthParameters, SynthModelId, SynthModelParams } from '../types';
 import { MAX_GUESTS, guestUrl, patchGuest, sanitizeGuests, type Guest } from './guests';
 import { emptySteps } from './songPlayback';
+import { BAR_CHOICES, DRUM_STEPS_PER_BAR, laneBars, resizeBars } from './patternLength';
 import { createIndexedDbLibrary, createMemoryLibrary, hasIndexedDb, type ProjectInfo, type ProjectLibrary, type ProjectRecord, type VersionInfo, type VersionReason } from './projectLibrary';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
 import { normalizeSynthModelId } from '../synthModels';
@@ -188,6 +189,8 @@ export class LocalProjectService {
     return {
       id, name,
       lanes: Object.fromEntries(state.synths.map(synth => [synth.synthId, clone(synth.pattern.steps)])),
+      ...(state.synths.some(synth => (synth.pattern.bars ?? 1) > 1)
+        ? { laneBars: Object.fromEntries(state.synths.filter(synth => (synth.pattern.bars ?? 1) > 1).map(synth => [synth.synthId, synth.pattern.bars!])) } : {}),
       drums: Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => {
         const { steps, stepVelocities, stepProbabilities, stepRatchets } = state.drumState[instrument];
         return [instrument, clone({
@@ -221,7 +224,11 @@ export class LocalProjectService {
   private applyScene(scene: Scene) {
     const state = this.state!;
     state.currentSceneId = scene.id;
-    for (const synth of state.synths) synth.pattern.steps = clone(scene.lanes[synth.synthId] ?? emptySteps());
+    for (const synth of state.synths) {
+      synth.pattern.steps = clone(scene.lanes[synth.synthId] ?? emptySteps());
+      const bars = laneBars(synth.pattern.steps.length, scene.laneBars?.[synth.synthId]);
+      if (bars > 1) synth.pattern.bars = bars; else delete synth.pattern.bars;
+    }
     for (const instrument of DRUM_INSTRUMENTS) {
       const track = state.drumState[instrument], pattern = scene.drums[instrument];
       track.steps = clone(pattern.steps);
@@ -773,7 +780,8 @@ export class LocalProjectService {
       const scene = this.captureScene(crypto.randomUUID(), name);
       if (body.empty === true) {
         for (const id of Object.keys(scene.lanes)) scene.lanes[Number(id)] = emptySteps(scene.lanes[Number(id)].length);
-        for (const instrument of DRUM_INSTRUMENTS) scene.drums[instrument] = { steps: Array(16).fill(false) };
+        // An empty scene keeps the lengths of the one it was made from.
+        for (const instrument of DRUM_INSTRUMENTS) scene.drums[instrument] = { steps: Array(scene.drums[instrument].steps.length).fill(false) };
       }
       const index = state.scenes.findIndex(entry => entry.id === state.currentSceneId);
       state.scenes.splice(index + 1, 0, scene);
@@ -927,22 +935,35 @@ export class LocalProjectService {
       }
       return update(key === 'drumFx' ? 'drumFxUpdate' : 'effectsLoopUpdate', { [key]: state[key] });
     }
+    if (path === '/drum/bars') {
+      const bars = BAR_CHOICES.find(choice => choice === body.bars);
+      if (!bars) return respond({ error: 'A drum pattern is 1, 2, 4 or 8 bars long' }, 400);
+      for (const instrument of DRUM_INSTRUMENTS) {
+        const lane = state.drumState[instrument];
+        lane.steps = resizeBars(lane.steps, DRUM_STEPS_PER_BAR, bars, () => false);
+        if (lane.stepVelocities) lane.stepVelocities = resizeBars(lane.stepVelocities, DRUM_STEPS_PER_BAR, bars, () => 1);
+        if (lane.stepProbabilities) lane.stepProbabilities = resizeBars(lane.stepProbabilities, DRUM_STEPS_PER_BAR, bars, () => 1);
+        if (lane.stepRatchets) lane.stepRatchets = resizeBars(lane.stepRatchets, DRUM_STEPS_PER_BAR, bars, () => 1);
+      }
+      state.drumState = sanitizeDrums(state.drumState, this.defaults!.drumState);
+      return update('drumFullState', { drumState: state.drumState });
+    }
     const track = state.drumState[body.instrument as keyof DrumState];
     if (track && path.startsWith('/drum/')) {
-      if ((path === '/drum/step' || path === '/drum/step-velocity' || path === '/drum/step-detail') && (!Number.isInteger(body.step) || body.step < 0 || body.step >= 16)) {
+      if ((path === '/drum/step' || path === '/drum/step-velocity' || path === '/drum/step-detail') && (!Number.isInteger(body.step) || body.step < 0 || body.step >= track.steps.length)) {
         return respond({ error: 'Invalid drum step' }, 400);
       }
       if (path === '/drum/step') track.steps[body.step] = Boolean(body.active);
       else if (path === '/drum/step-velocity') {
-        track.stepVelocities ||= Array(16).fill(1);
+        track.stepVelocities ||= Array(track.steps.length).fill(1);
         track.stepVelocities![body.step] = number(body.velocity, 1, 0, 1);
       } else if (path === '/drum/step-detail') {
         if (body.probability !== undefined) {
-          track.stepProbabilities ||= Array(16).fill(1);
+          track.stepProbabilities ||= Array(track.steps.length).fill(1);
           track.stepProbabilities![body.step] = number(body.probability, 1, 0, 1);
         }
         if (body.ratchet !== undefined) {
-          track.stepRatchets ||= Array(16).fill(1);
+          track.stepRatchets ||= Array(track.steps.length).fill(1);
           track.stepRatchets![body.step] = number(body.ratchet, 1, 1, 4);
         }
       } else if (path === '/drum/settings') track.settings = merge(track.settings, record(body.settings));

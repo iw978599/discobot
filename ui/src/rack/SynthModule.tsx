@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { BAR_CHOICES, laneBars } from '../services/patternLength';
 import type { Studio } from '../studio/useStudio';
 import { SynthModelParams } from '../types';
 import { getSynthModelDefinition } from '../synthModels';
@@ -42,6 +43,22 @@ export default function SynthModule({ studio, synthId }: SynthModuleProps) {
   const selectedStep = synth?.selectedStep ?? null;
   const stepCount = synth?.pattern?.steps.length ?? 0;
   const selectStep = studio.handleStepSelect;
+  // A pattern longer than one bar is shown a bar at a time.
+  const bars = laneBars(stepCount, synth?.pattern?.bars);
+  const perBar = stepCount / bars || 16;
+  const [viewBar, setViewBar] = useState(0);
+  // While playing, the view follows the playhead until a bar or a step is picked by hand.
+  const [follow, setFollow] = useState(true);
+  useEffect(() => {
+    if (selectedStep === null) return;
+    setViewBar(Math.floor(selectedStep / perBar));
+    setFollow(false);
+  }, [selectedStep, perBar]);
+  const playingBar = synth?.isPlaying ? Math.floor(synth.currentStep / perBar) : null;
+  const shownBar = Math.min(bars - 1, follow && playingBar !== null ? playingBar : viewBar);
+  const firstStep = shownBar * perBar;
+  // The step the step controls act on. With nothing selected they are hidden, but still laid out.
+  const toolStep = Math.min(selectedStep ?? 0, Math.max(0, stepCount - 1));
 
   // With a step selected on the open lane, the left and right arrow keys walk along the row.
   useEffect(() => {
@@ -58,11 +75,11 @@ export default function SynthModule({ studio, synthId }: SynthModuleProps) {
       selectStep(synthId, next);
       // Keep keyboard focus on the selected cell if it was on the row, so Enter still acts on what is highlighted.
       const cells = sectionRef.current?.querySelectorAll<HTMLElement>('.step-cell');
-      if (cells && target?.classList.contains('step-cell')) cells[next]?.focus();
+      if (cells && target?.classList.contains('step-cell')) requestAnimationFrame(() => sectionRef.current?.querySelectorAll<HTMLElement>('.step-cell')[next % perBar]?.focus());
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [selected, selectedStep, stepCount, synthId, selectStep]);
+  }, [selected, selectedStep, stepCount, synthId, selectStep, perBar]);
 
   if (!synth) {
     return (
@@ -119,6 +136,8 @@ export default function SynthModule({ studio, synthId }: SynthModuleProps) {
             isPlaying={synth.isPlaying}
             currentStep={synth.currentStep}
             selectedStep={synth.selectedStep}
+            firstStep={firstStep}
+            visibleSteps={perBar}
             onStepClick={(step) => {
               studio.setSelectedSynthId(synthId);
               void studio.handleStepChange(synthId, step);
@@ -231,37 +250,62 @@ export default function SynthModule({ studio, synthId }: SynthModuleProps) {
                   Length
                   <select
                     aria-label="Sequence length"
-                    value={synth.pattern.steps.length}
+                    title="Steps in each bar"
+                    value={perBar}
                     onChange={(event) => { void studio.handleStepCountChange(synthId, Number(event.target.value) as 16 | 32); }}
                   >
                     <option value={16}>16 steps</option>
                     <option value={32}>32 steps</option>
                   </select>
                 </label>
-                {synth.selectedStep === null ? (
-                  <span className="rack-hint">Select a step above, then play a key to put a note on it. The arrow keys move along the row; click a step with a note again to clear it. In the piano roll, click several notes in one column for a chord.</span>
-                ) : (
-                  <>
-                    <span className="step-tools-name">Step {synth.selectedStep + 1}</span>
+                <label title="How many bars this lane's pattern lasts. Lanes of different lengths loop against each other">
+                  Bars
+                  <select aria-label={`Synth ${synthId} bars`} value={bars} onChange={(event) => { void studio.handleLaneBarsChange(synthId, Number(event.target.value)); }}>
+                    {BAR_CHOICES.map(choice => <option key={choice} value={choice}>{choice}</option>)}
+                  </select>
+                </label>
+                {bars > 1 && (
+                  <span className="bar-tabs" role="group" aria-label={`Synth ${synthId} bar on show`}>
+                    {Array.from({ length: bars }, (_, bar) => (
+                      <button
+                        key={bar}
+                        className={`rack-btn ${bar === shownBar ? 'on' : ''} ${bar === playingBar ? 'playing' : ''}`}
+                        aria-label={`Synth ${synthId} bar ${bar + 1}`}
+                        aria-pressed={bar === shownBar}
+                        onClick={() => { setViewBar(bar); setFollow(false); }}
+                      >
+                        {bar + 1}
+                      </button>
+                    ))}
+                    <button className={`rack-btn ${follow ? 'on' : ''}`} aria-pressed={follow} title="Show whichever bar is playing" onClick={() => setFollow(value => !value)}>Follow</button>
+                  </span>
+                )}
+                {/* The hint and the controls share one space, sized for whichever is taller. Selecting a
+                    step then never changes the height of this row, which would move the piano roll
+                    under a pointer that has just pressed a cell. */}
+                <div className="step-tools-swap">
+                  <span className="rack-hint" aria-hidden={synth.selectedStep !== null} style={synth.selectedStep !== null ? { visibility: 'hidden' } : undefined}>Select a step above, then play a key to put a note on it. The arrow keys move along the row; click a step with a note again to clear it. In the piano roll, click several notes in one column for a chord.</span>
+                  <div className="step-tools-controls" aria-hidden={synth.selectedStep === null} style={synth.selectedStep === null ? { visibility: 'hidden' } : undefined}>
+                    <span className="step-tools-name">Step {toolStep + 1}</span>
                     <label>
                       Velocity
                       <input
                         type="range"
-                        aria-label={`Step ${synth.selectedStep + 1} velocity`}
+                        aria-label={`Step ${toolStep + 1} velocity`}
                         min={0}
                         max={1}
                         step={0.01}
-                        value={synth.pattern.steps[synth.selectedStep]?.velocity ?? 0.7}
-                        onChange={(event) => { void studio.handleStepVelocityChange(synthId, synth.selectedStep!, Number(event.target.value)); }}
+                        value={synth.pattern.steps[toolStep]?.velocity ?? 0.7}
+                        onChange={(event) => { void studio.handleStepVelocityChange(synthId, toolStep, Number(event.target.value)); }}
                       />
-                      <span className="rack-readout">{Math.round((synth.pattern.steps[synth.selectedStep]?.velocity ?? 0.7) * 127)}</span>
+                      <span className="rack-readout">{Math.round((synth.pattern.steps[toolStep]?.velocity ?? 0.7) * 127)}</span>
                     </label>
                     <label title="Hold this note into the next step. On a mono synth the pitch glides instead of retriggering.">
                       <input
                         type="checkbox"
-                        aria-label={`Step ${synth.selectedStep + 1} slide`}
-                        checked={Boolean(synth.pattern.steps[synth.selectedStep]?.slide)}
-                        onChange={(event) => { void studio.handleStepSlideChange(synthId, synth.selectedStep!, event.target.checked); }}
+                        aria-label={`Step ${toolStep + 1} slide`}
+                        checked={Boolean(synth.pattern.steps[toolStep]?.slide)}
+                        onChange={(event) => { void studio.handleStepSlideChange(synthId, toolStep, event.target.checked); }}
                       />
                       Slide
                     </label>
@@ -269,23 +313,23 @@ export default function SynthModule({ studio, synthId }: SynthModuleProps) {
                       Chance
                       <input
                         type="range"
-                        aria-label={`Step ${synth.selectedStep + 1} chance`}
+                        aria-label={`Step ${toolStep + 1} chance`}
                         min={0}
                         max={1}
                         step={0.05}
-                        disabled={!synth.pattern.steps[synth.selectedStep]?.note}
-                        value={synth.pattern.steps[synth.selectedStep]?.probability ?? 1}
-                        onChange={(event) => { void studio.handleStepDetailChange(synthId, synth.selectedStep!, { probability: Number(event.target.value) }); }}
+                        disabled={!synth.pattern.steps[toolStep]?.note}
+                        value={synth.pattern.steps[toolStep]?.probability ?? 1}
+                        onChange={(event) => { void studio.handleStepDetailChange(synthId, toolStep, { probability: Number(event.target.value) }); }}
                       />
-                      <span className="rack-readout">{Math.round((synth.pattern.steps[synth.selectedStep]?.probability ?? 1) * 100)}%</span>
+                      <span className="rack-readout">{Math.round((synth.pattern.steps[toolStep]?.probability ?? 1) * 100)}%</span>
                     </label>
                     <label title="Hits packed evenly into this step's length">
                       Repeats
                       <select
-                        aria-label={`Step ${synth.selectedStep + 1} repeats`}
-                        disabled={!synth.pattern.steps[synth.selectedStep]?.note}
-                        value={synth.pattern.steps[synth.selectedStep]?.ratchet ?? 1}
-                        onChange={(event) => { void studio.handleStepDetailChange(synthId, synth.selectedStep!, { ratchet: Number(event.target.value) }); }}
+                        aria-label={`Step ${toolStep + 1} repeats`}
+                        disabled={!synth.pattern.steps[toolStep]?.note}
+                        value={synth.pattern.steps[toolStep]?.ratchet ?? 1}
+                        onChange={(event) => { void studio.handleStepDetailChange(synthId, toolStep, { ratchet: Number(event.target.value) }); }}
                       >
                         {[1, 2, 3, 4].map((count) => <option key={count} value={count}>{count}</option>)}
                       </select>
@@ -293,10 +337,10 @@ export default function SynthModule({ studio, synthId }: SynthModuleProps) {
                     <label title="Start this step's notes late, between this step and the next">
                       Timing
                       <select
-                        aria-label={`Step ${synth.selectedStep + 1} timing`}
-                        disabled={!synth.pattern.steps[synth.selectedStep]?.note}
-                        value={String(TIMINGS.reduce((best, [value]) => (Math.abs(value - (synth.pattern!.steps[synth.selectedStep!]?.offset ?? 0)) < Math.abs(best - (synth.pattern!.steps[synth.selectedStep!]?.offset ?? 0)) ? value : best), 0))}
-                        onChange={(event) => { void studio.handleStepDetailChange(synthId, synth.selectedStep!, { offset: Number(event.target.value) }); }}
+                        aria-label={`Step ${toolStep + 1} timing`}
+                        disabled={!synth.pattern.steps[toolStep]?.note}
+                        value={String(TIMINGS.reduce((best, [value]) => (Math.abs(value - (synth.pattern!.steps[toolStep]?.offset ?? 0)) < Math.abs(best - (synth.pattern!.steps[toolStep]?.offset ?? 0)) ? value : best), 0))}
+                        onChange={(event) => { void studio.handleStepDetailChange(synthId, toolStep, { offset: Number(event.target.value) }); }}
                       >
                         {TIMINGS.map(([value, label]) => <option key={label} value={String(value)}>{label}</option>)}
                       </select>
@@ -304,18 +348,19 @@ export default function SynthModule({ studio, synthId }: SynthModuleProps) {
                     <label title="How many steps this step's notes last">
                       Note length
                       <select
-                        aria-label={`Step ${synth.selectedStep + 1} note length`}
-                        value={synth.pattern.steps[synth.selectedStep]?.length ?? 1}
-                        disabled={!synth.pattern.steps[synth.selectedStep]?.note}
-                        onChange={(event) => { void studio.handleStepLengthChange(synthId, synth.selectedStep!, Number(event.target.value)); }}
+                        className="note-length-select"
+                        aria-label={`Step ${toolStep + 1} note length`}
+                        value={synth.pattern.steps[toolStep]?.length ?? 1}
+                        disabled={!synth.pattern.steps[toolStep]?.note}
+                        onChange={(event) => { void studio.handleStepLengthChange(synthId, toolStep, Number(event.target.value)); }}
                       >
-                        {Array.from({ length: synth.pattern.steps.length - synth.selectedStep }, (_, index) => (
+                        {Array.from({ length: synth.pattern.steps.length - toolStep }, (_, index) => (
                           <option key={index + 1} value={index + 1}>{index + 1} {index === 0 ? 'step' : 'steps'}</option>
                         ))}
                       </select>
                     </label>
-                  </>
-                )}
+                  </div>
+                </div>
               </div>
               <KeyboardPanel
                 mode={synth.keyboardMode}
@@ -332,6 +377,8 @@ export default function SynthModule({ studio, synthId }: SynthModuleProps) {
                 onStepSelect={(step) => { studio.handleStepSelect(synthId, step); }}
                 onNoteAssign={(stepIndex, note, on, offset) => { void studio.handlePianoRollNoteAssign(synthId, stepIndex, note, on, offset); }}
                 onNoteLength={(stepIndex, length) => { void studio.handleStepLengthChange(synthId, stepIndex, length); }}
+                firstStep={firstStep}
+                visibleSteps={perBar}
                 onClearPattern={() => { void studio.handleClearPatternNotes(synthId); }}
                 onNotePlay={(note) => { void studio.handleNotePlay(synthId, note); }}
                 onNoteRelease={(note) => { void studio.handleNoteRelease(synthId, note); }}

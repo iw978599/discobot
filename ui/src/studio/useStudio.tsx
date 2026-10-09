@@ -9,6 +9,7 @@ import { createDefaultSynthParameters } from '@discobot/engine';
 import { localRequest, localService } from '../services/localService';
 import { projectSync, startProjectSync } from '../services/projectSync';
 import { loadDrumSample } from '../services/drumSamples';
+import { BAR_CHOICES, DRUM_STEPS_PER_BAR, clampLengths, drumBars, laneBars, resizeBars, sceneAsBars, sceneBars } from '../services/patternLength';
 import { DRUM_INSTRUMENTS } from '../services/drumKits';
 import type { DrumSample } from '../../../engine/src/drums/DrumCore';
 import { GUEST_START_LEAD_SECONDS, guestLink, guestOrigin, guestUrl, trustOrigin, wallAtContextTime, type Guest } from '../services/guests';
@@ -462,6 +463,8 @@ export function useStudio() {
   const songEndingRef = useRef(false);
   const stopPlaybackRef = useRef<() => void>(() => {});
   const transportRef = useRef<BrowserTransport | null>(null);
+  const liveSceneRef = useRef<() => Scene>(() => ({ id: '', name: '', lanes: {}, drums: createDefaultDrumState() }));
+  const sceneLengthRef = useRef<(sceneId: string) => number>(() => 1);
   const scheduleTickRef = useRef<(tick: TransportTick) => void>(() => {});
   const initializedSynthLanesRef = useRef(false);
 
@@ -742,12 +745,34 @@ export function useStudio() {
 
   useEffect(() => { setEffectsTempo(globalTempo); }, [globalTempo]);
 
+  // The open scene as it stands now: its stored copy can be behind the live lanes.
+  const liveScene = (): Scene => {
+    const lanes = synthsRef.current.filter(synth => synth.pattern);
+    return {
+      id: currentSceneIdRef.current, name: scenesRef.current.find(scene => scene.id === currentSceneIdRef.current)?.name ?? 'Scene',
+      lanes: Object.fromEntries(lanes.map(synth => [synth.id, synth.pattern!.steps])),
+      laneBars: Object.fromEntries(lanes.map(synth => [synth.id, laneBars(synth.pattern!.steps.length, synth.pattern!.bars)])),
+      drums: drumStateRef.current,
+    };
+  };
+  liveSceneRef.current = liveScene;
+  // How many bars one pass through a scene lasts.
+  const sceneLength = (sceneId: string) => {
+    if (sceneId === currentSceneIdRef.current) return sceneBars(liveScene());
+    const stored = scenesRef.current.find(scene => scene.id === sceneId);
+    return stored ? sceneBars(stored) : 1;
+  };
+  sceneLengthRef.current = sceneLength;
+
   scheduleTickRef.current = ({ step, bar, time, duration }) => {
+    // Where in its pattern each lane is. In song mode that is counted from the start of the
+    // scene's pass; otherwise the bars just keep counting and lanes of different lengths drift.
+    let passBar = bar;
     // In song mode the bar number picks the scene. A scene other than the one open for
     // editing is played from its stored copy; the open one is played from the live pattern.
     let scene: Scene | null = null;
     if (playModeRef.current === 'song') {
-      const position = sceneAtBar(songRef.current, songStartBarRef.current + bar);
+      const position = sceneAtBar(songRef.current, songStartBarRef.current + bar, sceneLength);
       if (!position) {
         if (!songEndingRef.current) {
           songEndingRef.current = true;
@@ -756,6 +781,7 @@ export function useStudio() {
         }
         return;
       }
+      passBar = position.bar;
       if (step === 0) {
         setSongPosition(position);
         // Open the playing scene in the editor. This updates the live pattern at once.
@@ -772,11 +798,12 @@ export function useStudio() {
     for (const synth of lanes) {
       if (!synth.isPlaying || !synth.pattern || !synth.synthParams) continue;
       const steps = scene ? scene.lanes[synth.id] ?? [] : synth.pattern.steps;
-      const count = steps.length;
-      if (count === 0) continue;
-      const divisor = count === 32 ? 1 : 2;
+      if (steps.length === 0) continue;
+      const bars = laneBars(steps.length, scene ? scene.laneBars?.[synth.id] : synth.pattern.bars);
+      const perBar = steps.length / bars;
+      const divisor = perBar === 32 ? 1 : 2;
       if (step % divisor !== 0) continue;
-      const index = Math.floor(step / divisor) % count;
+      const index = (passBar % bars) * perBar + Math.floor(step / divisor) % perBar;
       const note = steps[index];
       if (!synth.muted && (!hasSolo || synth.solo) && note?.active && note.note) {
         triggerStep(synth.synthParams, note, duration * divisor, synth.id, time);
@@ -784,11 +811,12 @@ export function useStudio() {
       setSynths(prev => prev.map(s => s.id === synth.id ? { ...s, currentStep: index } : s));
     }
     if (step % 2 !== 0) return;
-    const drumStep = Math.floor(step / 2);
-    setDrumCurrentStep(drumStep);
     const state = scene ? sceneDrumState(scene, drumStateRef.current) : drumStateRef.current;
+    const stepInBar = Math.floor(step / 2);
+    const drumStep = (passBar % drumBars(state)) * DRUM_STEPS_PER_BAR + stepInBar;
+    setDrumCurrentStep(drumStep);
     const drumSolo = (Object.keys(state) as DrumInstrument[]).some(i => state[i].solo);
-    const swingOffset = drumStep % 2 ? drumSwingRef.current * duration * 2 : 0;
+    const swingOffset = stepInBar % 2 ? drumSwingRef.current * duration * 2 : 0;
     for (const instrument of Object.keys(state) as DrumInstrument[]) {
       const track = state[instrument];
       if (track.muted || (drumSolo && !track.solo)) continue;
@@ -1038,7 +1066,7 @@ export function useStudio() {
           const inst = dvi as DrumInstrument;
           next[inst] = {
             ...next[inst],
-            stepVelocities: [...(next[inst].stepVelocities || new Array(16).fill(1))],
+            stepVelocities: [...(next[inst].stepVelocities || new Array(next[inst].steps.length).fill(1))],
           };
           next[inst].stepVelocities![dvs as number] = dvv as number;
           return next;
@@ -1205,7 +1233,7 @@ export function useStudio() {
 
     if (!isAnyPlaying) {
       songEndingRef.current = false;
-      songStartBarRef.current = playModeRef.current === 'song' ? entryStartBar(songRef.current, songStartEntryRef.current) : 0;
+      songStartBarRef.current = playModeRef.current === 'song' ? entryStartBar(songRef.current, songStartEntryRef.current, sceneLengthRef.current) : 0;
       const readiness = await Promise.all([
         synthAudio.ensureAudioReady(),
         drumAudio.ensureAudioReady(),
@@ -1563,15 +1591,17 @@ export function useStudio() {
   const handleStepCountChange = useCallback(async (synthId: number, stepCount: 16 | 32) => {
     const synth = synthsRef.current.find(s => s.id === synthId);
     if (!synth?.pattern) return;
-    if (synth.pattern.steps.length === stepCount) return;
+    const bars = laneBars(synth.pattern.steps.length, synth.pattern.bars), perBar = synth.pattern.steps.length / bars;
+    if (perBar === stepCount) return;
     pushHistorySnapshot(synthId, synth.pattern.id);
 
-    const nextSteps = Array.from({ length: stepCount }, (_, i) => (
-      synth.pattern!.steps[i]
-        ? { ...synth.pattern!.steps[i] }
-        : { active: false, velocity: 0.7 as const }
-    ));
+    // Each bar keeps its steps from the start of the bar; a finer grid adds empty steps after them.
+    const nextSteps = clampLengths(Array.from({ length: stepCount * bars }, (_, i) => {
+      const inBar = i % stepCount, source = inBar < perBar ? synth.pattern!.steps[Math.floor(i / stepCount) * perBar + inBar] : undefined;
+      return source ? { ...source } : { active: false, velocity: 0.7 as const };
+    }));
     const nextPattern = { ...synth.pattern, steps: nextSteps };
+    stepCount = nextSteps.length as 16 | 32;
 
     setSynths(prev => prev.map(s => {
       if (s.id !== synthId) return s;
@@ -1679,6 +1709,30 @@ export function useStudio() {
     });
   }, [pushHistorySnapshot]);
 
+  // How many bars a lane's pattern lasts. A longer one starts as the old one repeated.
+  const handleLaneBarsChange = useCallback(async (synthId: number, bars: number) => {
+    const synth = synthsRef.current.find(s => s.id === synthId);
+    if (!synth?.pattern || !BAR_CHOICES.some(choice => choice === bars)) return;
+    const current = laneBars(synth.pattern.steps.length, synth.pattern.bars);
+    if (current === bars) return;
+    pushHistorySnapshot(synthId, synth.pattern.id);
+    const perBar = synth.pattern.steps.length / current;
+    const steps = clampLengths(resizeBars(synth.pattern.steps, perBar, bars, () => ({ active: false, velocity: 0.7 })));
+    const { bars: _bars, ...rest } = synth.pattern;
+    const nextPattern: Pattern = { ...rest, steps, ...(bars > 1 ? { bars } : {}) };
+    setSynths(prev => prev.map(s => (s.id === synthId
+      ? { ...s, pattern: nextPattern, selectedStep: s.selectedStep !== null && s.selectedStep >= steps.length ? null : s.selectedStep, currentStep: s.currentStep % steps.length }
+      : s)));
+    // The store drops a bar count that is not sent, so one bar is sent as 1.
+    await localRequest(`/synth/${synthId}/patterns/${synth.pattern.id}`, { method: 'PUT', body: JSON.stringify({ ...nextPattern, bars }) });
+  }, [pushHistorySnapshot]);
+
+  const handleDrumBarsChange = useCallback(async (bars: number) => {
+    const synth = synthsRef.current[0];
+    if (synth?.pattern) pushHistorySnapshot(synth.id, synth.pattern.id);
+    await localRequest('/drum/bars', { method: 'POST', body: JSON.stringify({ bars }) });
+  }, [pushHistorySnapshot]);
+
   const handleSynthMixChange = useCallback(async (synthId: number, mix: { muted?: boolean; solo?: boolean }) => {
     setSynths(prev => prev.map(s =>
       s.id === synthId ? { ...s, ...mix } : s
@@ -1727,6 +1781,9 @@ export function useStudio() {
         drumState: cloneDrumState(drumStateRef.current),
         drumSwing,
         drumMasterVolume,
+        ...(sceneBars(liveSceneRef.current()) > 1 ? {
+          bars: sceneAsBars(liveSceneRef.current()).map(scene => ({ name: scene.name, lanes: scene.lanes, drumState: sceneDrumState(scene, drumStateRef.current) })),
+        } : {}),
       },
       `discobot-${Date.now()}.mid`
     );
@@ -1736,6 +1793,8 @@ export function useStudio() {
     tempo: globalTempoRef.current, synths: synthsRef.current, drumState: drumStateRef.current,
     drumKitId: selectedDrumKitIdRef.current, drumMasterVolume, drumSwing,
     drumFx: drumFxRef.current, effectsLoop: effectsLoopRef.current, drumSamples: { ...drumSamplesRef.current },
+    // A scene longer than one bar is rendered a bar at a time, each lane looping at its own length.
+    ...(sceneBars(liveSceneRef.current()) > 1 ? { bars: sceneAsBars(liveSceneRef.current()) } : {}),
   }), [drumMasterVolume, drumSwing]);
   currentArrangementRef.current = currentArrangement;
 
@@ -2023,7 +2082,7 @@ export function useStudio() {
     setDrumState(prev => {
       const next = { ...prev };
       const track = next[instrument];
-      next[instrument] = { ...track, stepVelocities: [...(track.stepVelocities || new Array(16).fill(1))] };
+      next[instrument] = { ...track, stepVelocities: [...(track.stepVelocities || new Array(track.steps.length).fill(1))] };
       next[instrument].stepVelocities![step] = velocity;
       return next;
     });
@@ -2041,11 +2100,11 @@ export function useStudio() {
       const track = prev[instrument];
       const next = { ...track };
       if (detail.probability !== undefined) {
-        next.stepProbabilities = [...(track.stepProbabilities || new Array(16).fill(1))];
+        next.stepProbabilities = [...(track.stepProbabilities || new Array(track.steps.length).fill(1))];
         next.stepProbabilities[step] = detail.probability;
       }
       if (detail.ratchet !== undefined) {
-        next.stepRatchets = [...(track.stepRatchets || new Array(16).fill(1))];
+        next.stepRatchets = [...(track.stepRatchets || new Array(track.steps.length).fill(1))];
         next.stepRatchets[step] = detail.ratchet;
       }
       return { ...prev, [instrument]: next };
@@ -2302,7 +2361,7 @@ export function useStudio() {
     handleMidiImportClick, handleMidiImportFile, handleMidiImportApplyAll, midiImportFileRef, handleRemoveSynth,
     ensureSynthExists, handleOctaveShift, handleTempoChange, handleGlobalPlayStop, handleStepChange, handleStepSelect, handleKeyboardModeChange,
     handlePianoRollNoteAssign, handleClearPatternNotes, handleNotePlay, handleNoteRelease, computerKeyNotes, midiState,
-    handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange, guests, handleAddGuest, handleRemoveGuest, handleGuestChange, missingDrumSamples, handleDrumSampleChange,
+    handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange, guests, handleAddGuest, handleRemoveGuest, handleGuestChange, missingDrumSamples, handleDrumSampleChange, handleLaneBarsChange, handleDrumBarsChange, sceneLength,
     handleSynthMixChange, handleSaveSynthPreset, handleLoadSynthPreset, handleDeleteSynthPreset,
     handleExportMidi, currentArrangement, reportExportError, handleExportProject, projectImportFileRef, handleImportProjectFile, handleImportProject,
     handleNewProject, handleOpenProject, handleCopyProject, handleRenameProject, handleDeleteProject, handleRestoreVersion, handleCopyVersion, handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail,

@@ -183,29 +183,34 @@ function connectEffects(ctx: OfflineAudioContext, input: AudioNode, master: Audi
 // How many bars a render covers and how long each is. A loop plays the bar enough times
 // for every tail to have wrapped round, then keeps only the last bar, which is what the
 // pattern sounds like once it has been looping for a while.
-export function renderPlan(tempo: number, tail: number, sampleRate: number, loop: boolean) {
+// `length` is how many bars the pattern (or song) is.
+export function renderPlan(tempo: number, tail: number, sampleRate: number, loop: boolean, length = 1) {
   if (!loop) {
     const barDuration = 240 / tempo;
-    return { bars: 1, barDuration, frames: Math.ceil((barDuration + tail) * sampleRate), start: 0 };
+    return { bars: length, barDuration, frames: Math.ceil((length * barDuration + tail) * sampleRate), start: 0 };
   }
-  // A whole number of samples per bar, so the kept bar starts exactly on a bar line.
+  // A whole number of samples per bar, so the kept pass starts exactly on a bar line.
   const barFrames = Math.round(240 / tempo * sampleRate);
-  const bars = 1 + Math.ceil(tail * sampleRate / barFrames);
-  return { bars, barDuration: barFrames / sampleRate, frames: bars * barFrames, start: (bars - 1) * barFrames };
+  const passes = 1 + Math.ceil(tail * sampleRate / (barFrames * length));
+  return { bars: passes * length, barDuration: barFrames / sampleRate, frames: passes * length * barFrames, start: (passes - 1) * length * barFrames };
 }
 
 export async function renderArrangement(arrangement: ExportArrangement, options: RenderOptions = {}): Promise<{ channels: Stereo; sampleRate: number }> {
   const sampleRate = 44100;
   const tail = Math.min(8, Math.max(1, arrangement.effectsLoop.reverb.enabled ? arrangement.effectsLoop.reverb.decay : 0,
     ...arrangement.synths.map(s => s.synthParams?.envelope.release || 0)));
-  const song = arrangement.bars;
-  if (song && song.length * 240 / arrangement.tempo > MAX_EXPORT_SECONDS) {
+  // With `loop`, the bars are one pattern to be looped, not a song with an ending.
+  const looping = options.loop === true;
+  const pattern = arrangement.bars;
+  if (pattern && pattern.length * 240 / arrangement.tempo > MAX_EXPORT_SECONDS) {
     throw new Error(`Songs longer than ${MAX_EXPORT_SECONDS / 60} minutes cannot be exported as audio. Shorten the song or raise the tempo.`);
   }
-  if (song && song.length === 0) throw new Error('The song is empty.');
-  const plan = renderPlan(arrangement.tempo, tail, sampleRate, !song && options.loop === true);
-  const bars = song ? song.length : plan.bars, barDuration = plan.barDuration, start = plan.start;
-  const frames = song ? Math.ceil((song.length * barDuration + tail) * sampleRate) : plan.frames;
+  if (pattern && pattern.length === 0) throw new Error('The song is empty.');
+  const plan = renderPlan(arrangement.tempo, tail, sampleRate, looping, pattern?.length ?? 1);
+  // For a loop, the pattern is laid end to end as many times as the plan asks for.
+  const song = pattern ? Array.from({ length: plan.bars }, (_, bar) => pattern[bar % pattern.length]) : undefined;
+  if (song) arrangement = { ...arrangement, bars: song };
+  const bars = plan.bars, barDuration = plan.barDuration, start = plan.start, frames = plan.frames;
   const ctx = new OfflineAudioContext(2, frames, sampleRate);
   const master = ctx.createGain(), limiter = ctx.createDynamicsCompressor(), safety = ctx.createWaveShaper();
   safety.curve = safetyCurve();

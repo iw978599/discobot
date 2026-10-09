@@ -17,6 +17,9 @@ interface PianoRollProps {
   // Sets how many steps the notes starting on a step last.
   onNoteLength: (stepIndex: number, length: number) => void;
   onClear: () => void;
+  // The bar on show, for a pattern longer than one bar. Defaults to the whole pattern.
+  firstStep?: number;
+  visibleSteps?: number;
 }
 
 const NOTE_ORDER = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -31,6 +34,8 @@ export default function PianoRoll({
   onNoteAssign,
   onNoteLength,
   onClear,
+  firstStep = 0,
+  visibleSteps,
 }: PianoRollProps) {
   const [mouseDown, setMouseDown] = useState(false);
   const [paintMode, setPaintMode] = useState<'assign' | 'erase'>('assign');
@@ -103,6 +108,9 @@ export default function PianoRoll({
     return <div className="piano-roll">Loading...</div>;
   }
 
+  const shown = visibleSteps ?? pattern.steps.length;
+  const columns = Array.from({ length: shown }, (_, column) => firstStep + column).filter(index => index < pattern.steps.length);
+
   const has = (stepIndex: number, note: string) => stepNotes(pattern.steps[stepIndex]).includes(note);
   const full = (stepIndex: number) => stepNotes(pattern.steps[stepIndex]).length >= MAX_STEP_NOTES;
 
@@ -139,10 +147,10 @@ export default function PianoRoll({
 
       <div
         className="piano-roll-grid"
-        style={{ gridTemplateColumns: `minmax(58px, auto) repeat(${pattern.steps.length}, minmax(28px, 1fr))` }}
+        style={{ gridTemplateColumns: `minmax(58px, auto) repeat(${columns.length}, minmax(28px, 1fr))` }}
       >
         <div className="piano-roll-corner" />
-        {pattern.steps.map((_, stepIndex) => (
+        {columns.map((stepIndex) => (
           <div
             key={`step-header-${stepIndex}`}
             className={`piano-roll-step-header ${isPlaying && currentStep === stepIndex ? 'playing' : ''} ${selectedStep === stepIndex ? 'selected' : ''}`}
@@ -156,7 +164,8 @@ export default function PianoRoll({
             <div key={`label-${note}`} className={`piano-roll-note-label ${note.includes('#') ? 'sharp' : ''}`}>
               {note}
             </div>
-            {pattern.steps.map((step, stepIndex) => {
+            {columns.map((stepIndex) => {
+              const step = pattern.steps[stepIndex];
               const active = stepNotes(step).includes(note);
               const sustained = !active && held.has(`${stepIndex}:${note}`);
               const noteStart = active ? stepIndex : held.get(`${stepIndex}:${note}`);
