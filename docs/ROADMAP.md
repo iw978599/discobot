@@ -87,12 +87,11 @@ mono/slide and the drum voices. What it leaves open:
    reasoning. A listening session with adjustments is the highest-value sound
    work remaining.
 
-2. **Samples on the drum grid and as a synth source.** (M)
-   The sampler stores files in IndexedDB but they can only be auditioned. Let
-   each drum lane choose a stored sample instead of its synthesized voice
-   (decoded once, posted to the drum worklet), which is also the honest way to
-   do LinnDrum, DMX and TR-707 kits. A one-shot or looped sample oscillator in
-   the synth is a natural follow-up.
+2. **Samples on the drum grid and as a synth source.** Drum lanes are done:
+   each lane can play an imported sample, live and in export. Still open:
+   samples do not travel with a project (file, link or sync), ready-made
+   sampled kits for the LinnDrum, DMX and TR-707, and a sample oscillator in
+   the synth.
 
 3. **Unison and a 24 dB filter mode.** Done. The 24 dB mode is two cascaded
    state-variable stages, not a ladder model; a true ladder with its

@@ -8,6 +8,9 @@ import { SongPosition, entryStartBar, sceneAtBar, sceneDrumState, songBars } fro
 import { createDefaultSynthParameters } from '@discobot/engine';
 import { localRequest, localService } from '../services/localService';
 import { projectSync, startProjectSync } from '../services/projectSync';
+import { loadDrumSample } from '../services/drumSamples';
+import { DRUM_INSTRUMENTS } from '../services/drumKits';
+import type { DrumSample } from '../../../engine/src/drums/DrumCore';
 import { GUEST_START_LEAD_SECONDS, guestLink, guestOrigin, guestUrl, trustOrigin, wallAtContextTime, type Guest } from '../services/guests';
 import type { ProjectInfo } from '../services/projectLibrary';
 import { sanitizeSynthParams } from '../services/projectSanitization';
@@ -388,6 +391,9 @@ export function useStudio() {
   const [browserVolume, setBrowserVolume] = useState(1.0);
   const [globalTempo, setGlobalTempo] = useState(120);
   const [storageError, setStorageError] = useState<string | null>(null);
+  // Decoded samples for the drum lanes that use one, and the lanes whose sample is not on this device.
+  const drumSamplesRef = useRef<Partial<Record<DrumInstrument, DrumSample>>>({});
+  const [missingDrumSamples, setMissingDrumSamples] = useState<DrumInstrument[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
   const guestsRef = useRef<Guest[]>([]);
   guestsRef.current = guests;
@@ -1729,7 +1735,7 @@ export function useStudio() {
   const currentArrangement = useCallback((): ExportArrangement => ({
     tempo: globalTempoRef.current, synths: synthsRef.current, drumState: drumStateRef.current,
     drumKitId: selectedDrumKitIdRef.current, drumMasterVolume, drumSwing,
-    drumFx: drumFxRef.current, effectsLoop: effectsLoopRef.current,
+    drumFx: drumFxRef.current, effectsLoop: effectsLoopRef.current, drumSamples: { ...drumSamplesRef.current },
   }), [drumMasterVolume, drumSwing]);
   currentArrangementRef.current = currentArrangement;
 
@@ -1758,6 +1764,30 @@ export function useStudio() {
   const handleRemoveGuest = useCallback(async (id: string) => { await localRequest(`/guests/${id}`, { method: 'DELETE' }); }, []);
   const handleGuestChange = useCallback(async (id: string, patch: Partial<Pick<Guest, 'name' | 'volume' | 'muted' | 'state'>>) => {
     await localRequest(`/guests/${id}`, { method: 'PUT', body: JSON.stringify(patch) });
+  }, []);
+
+  // Which sample each drum lane uses, as one string, so the effect below only runs when that changes.
+  const drumSampleKey = DRUM_INSTRUMENTS.map(instrument => drumState[instrument]?.sampleId ?? '').join('|');
+  useEffect(() => {
+    let current = true;
+    void Promise.all(DRUM_INSTRUMENTS.map(async (instrument) => {
+      const id = drumStateRef.current[instrument]?.sampleId;
+      return [instrument, id ? await loadDrumSample(id) : null, Boolean(id)] as const;
+    })).then((loaded) => {
+      if (!current) return;
+      const next: Partial<Record<DrumInstrument, DrumSample>> = {};
+      for (const [instrument, sample] of loaded) {
+        if (sample) next[instrument] = sample;
+        if (sample !== (drumSamplesRef.current[instrument] ?? null)) drumAudio.setSample(instrument, sample);
+      }
+      drumSamplesRef.current = next;
+      setMissingDrumSamples(loaded.filter(([, sample, wanted]) => wanted && !sample).map(([instrument]) => instrument));
+    });
+    return () => { current = false; };
+  }, [drumSampleKey, drumAudio]);
+
+  const handleDrumSampleChange = useCallback(async (instrument: DrumInstrument, sampleId: string | null) => {
+    await localRequest('/drum/sample', { method: 'POST', body: JSON.stringify({ instrument, sampleId }) });
   }, []);
 
   const reportExportError = useCallback((error: unknown) => {
@@ -2270,7 +2300,7 @@ export function useStudio() {
     handleMidiImportClick, handleMidiImportFile, handleMidiImportApplyAll, midiImportFileRef, handleRemoveSynth,
     ensureSynthExists, handleOctaveShift, handleTempoChange, handleGlobalPlayStop, handleStepChange, handleStepSelect, handleKeyboardModeChange,
     handlePianoRollNoteAssign, handleClearPatternNotes, handleNotePlay, handleNoteRelease, computerKeyNotes, midiState,
-    handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange, guests, handleAddGuest, handleRemoveGuest, handleGuestChange,
+    handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange, guests, handleAddGuest, handleRemoveGuest, handleGuestChange, missingDrumSamples, handleDrumSampleChange,
     handleSynthMixChange, handleSaveSynthPreset, handleLoadSynthPreset, handleDeleteSynthPreset,
     handleExportMidi, currentArrangement, reportExportError, handleExportProject, projectImportFileRef, handleImportProjectFile, handleImportProject,
     handleNewProject, handleOpenProject, handleCopyProject, handleRenameProject, handleDeleteProject, handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail,

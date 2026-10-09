@@ -52,6 +52,10 @@ export function listSamples(): Promise<SampleRecord[]> {
   return transaction('readonly', store => store.getAll());
 }
 
+export function getSample(id: string): Promise<SampleRecord | undefined> {
+  return transaction('readonly', store => store.get(id));
+}
+
 export function isAudioFile(file: { name: string; type: string }): boolean {
   if (file.type.startsWith('audio/')) return true;
   const dot = file.name.lastIndexOf('.');

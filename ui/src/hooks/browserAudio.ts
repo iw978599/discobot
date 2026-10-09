@@ -67,11 +67,12 @@ export function driveCurve(amount: number) {
   return curve;
 }
 
-export function reverbImpulse(ctx: BaseAudioContext, decay: number): AudioBuffer {
+// `random` shapes the reverb's noise. Exports pass a seeded one, so the same song always renders the same file.
+export function reverbImpulse(ctx: BaseAudioContext, decay: number, random: () => number = Math.random): AudioBuffer {
   const buffer = ctx.createBuffer(2, Math.ceil(ctx.sampleRate * limit(decay, 0.1, 8)), ctx.sampleRate);
   for (let c = 0; c < 2; c++) {
     const data = buffer.getChannelData(c);
-    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-6 * i / data.length) * Math.min(1, i / 64);
+    for (let i = 0; i < data.length; i++) data[i] = (random() * 2 - 1) * Math.exp(-6 * i / data.length) * Math.min(1, i / 64);
   }
   return buffer;
 }

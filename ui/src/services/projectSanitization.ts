@@ -141,6 +141,7 @@ export function sanitizeDrums(value: unknown, defaults: DrumState): DrumState {
     const state = {
       steps: Array.from({ length: 16 }, (_, i) => Array.isArray(track.steps) && track.steps[i] === true),
       muted: track.muted === true, solo: track.solo === true,
+      ...(typeof track.sampleId === 'string' && /^[0-9a-f-]{36}$/.test(track.sampleId) ? { sampleId: track.sampleId } : {}),
       settings: {
         volume: number(settings.volume, base.settings.volume, 0, 1),
         tone: number(settings.tone, base.settings.tone, 0, 1),

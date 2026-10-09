@@ -44,6 +44,7 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 | `ui/src/services/projectSanitization.ts` | Validation and clamping for everything read from storage or saved arrangements |
 | `ui/src/services/browserTransport.ts` | Look-ahead clock. One tick is a 32nd note; 16-step lanes and drums use every second tick |
 | `ui/src/services/sampleStore.ts` | IndexedDB sample storage |
+| `ui/src/services/drumSamples.ts` | Decodes a stored sample for a drum lane, once, mixed to one channel |
 | `ui/src/services/projectLibrary.ts` | The project library: one IndexedDB record per project, with an in-memory stand-in for tests and browsers without IndexedDB |
 | `server/src/index.ts` | The whole accounts API: sign up with an invite, sign in, recovery codes, owner tools. `handle(request, env)` is a plain function, so tests call it directly |
 | `server/src/secrets.ts` / `rules.ts` | Password hashing, tokens and codes; username and password rules |
@@ -112,7 +113,9 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 - Octave shift range is -2 to +2 per lane and affects the on-screen keyboard, the piano roll range and the computer-keyboard piano.
 - The computer keyboard plays notes with unmodified letter keys (matched by physical position, `event.code`). Any new single-key shortcut must use a modifier; tap tempo is Shift+T for that reason.
 - Drum steps carry optional `stepProbabilities` and `stepRatchets` arrays next to `stepVelocities`. Anything that moves or copies drum steps must move all three.
-- Exports must be repeatable: use `seededRandom` for anything random in WAV or MIDI export, never `Math.random`.
+- Exports must be repeatable: use `seededRandom` for anything random in WAV or MIDI export, never `Math.random`. That includes the reverb's noise (`reverbImpulse` takes a random source).
+- A drum lane can play an imported sample instead of its synthesized voice (`DrumTrack.sampleId`). The sample is played by `DrumCore` (`setSample`), so playback and export match; it is one channel, at most ten seconds, and skips the kit's colouring. `drumSamples.ts` decodes and caches by id; `useStudio` keeps the decoded samples for the worklet and for export.
+- Samples live in this browser only. A lane whose sample is not on the device plays its synthesized voice and says so; never treat a missing sample as an error.
 - `localService.exportProject()` / `importProject()` are the project file format (`format: 'discobot-project'`). Import goes through the same `restore()` sanitizing as a reload; never trust a file's contents.
 - The service worker serves hashed files under `assets/` cache-first and everything else network-first. Keep unhashed files (the page, `audio-worklet.js`) network-first, or an update would pair a new app with a stale worklet.
 
@@ -187,4 +190,4 @@ npm run migrate --workspace=server  # Apply new database migrations to the live 
 ## Potential Next Steps
 - Replace the REST-shaped facade with typed service methods and split `useStudio.tsx` into hooks per concern
 - See `docs/ROADMAP.md` and `docs/STORAGE_AND_ACCOUNTS_PLAN.md`
-- Use imported samples as drum or synth sources (and include them in project files)
+- Use imported samples as a synth source, and include samples in project files and sync
