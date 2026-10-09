@@ -7,6 +7,8 @@ export interface FxSendLevels {
   phaser: number;
 }
 
+export type DelaySync = 'off' | '1/4' | '1/8d' | '1/8' | '1/8t' | '1/16';
+
 export interface EffectsLoopState {
   enabled: boolean;
   returns: {
@@ -30,6 +32,8 @@ export interface EffectsLoopState {
     time: number;
     feedback: number;
     mix: number;
+    // a note value that sets the time from the tempo; absent or 'off' uses `time`
+    sync?: DelaySync;
   };
   reverb: {
     enabled: boolean;
@@ -158,6 +162,16 @@ export interface SequencerStep {
   velocity: number;
   // hold this note into the next step so a mono lane glides instead of retriggering
   slide?: boolean;
+  // further notes sounding with `note`, making the step a chord
+  notes?: string[];
+  // how many steps the notes last; absent means one
+  length?: number;
+  // how often the step plays, 0 to 1; absent means always
+  probability?: number;
+  // hits packed evenly into the step's length; absent means one
+  ratchet?: number;
+  // how late the step starts, as a fraction of a step (0 to under 1); absent means on the step
+  offset?: number;
 }
 
 export interface Pattern {

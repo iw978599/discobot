@@ -1,4 +1,5 @@
 import { Midi } from '@tonejs/midi';
+import { stepNotes, withStepNotes } from '../services/noteScheduling';
 import { Pattern, SequencerStep, DrumInstrument } from '../types';
 import { DRUM_INSTRUMENTS } from '../services/drumKits';
 
@@ -67,16 +68,31 @@ function parseDrumTrack(notes: { midi: number; ticks: number; velocity: number }
   return state;
 }
 
-function parseSynthTrack(notes: { midi: number; ticks: number; velocity: number }[], ppq: number): SequencerStep[] {
+function parseSynthTrack(notes: { midi: number; ticks: number; velocity: number; durationTicks?: number }[], ppq: number): SequencerStep[] {
   const stepCount = detectStepCount(notes, ppq);
+  const ticksPerStep = (ppq * 4) / stepCount;
   const steps: SequencerStep[] = Array.from({ length: stepCount }, () => ({ active: false, velocity: 0.7 }));
   for (const note of notes) {
-    const stepIndex = quantizeTickToStep(note.ticks, ppq, stepCount);
-    if (stepIndex < 0 || stepIndex >= stepCount || steps[stepIndex].active) continue;
+    // A note close to a step lands on it. One clearly between two steps keeps its place,
+    // as a late start on the step before.
+    const position = note.ticks / ticksPerStep, nearest = Math.round(position);
+    const between = Math.abs(position - nearest) >= 0.2;
+    const stepIndex = between ? Math.floor(position) : quantizeTickToStep(note.ticks, ppq, stepCount);
+    if (stepIndex < 0 || stepIndex >= stepCount) continue;
+    const offset = between ? Math.round((position - stepIndex) * 12) / 12 : 0;
+    const existing = steps[stepIndex];
+    // Notes that start together are a chord; the step takes the first one's velocity and length.
+    if (existing.active) {
+      steps[stepIndex] = withStepNotes(existing, [...stepNotes(existing), midiNoteToName(note.midi)]);
+      continue;
+    }
+    const length = Math.max(1, Math.min(stepCount - stepIndex, Math.round((note.durationTicks ?? 0) / ticksPerStep)));
     steps[stepIndex] = {
       active: true,
       note: midiNoteToName(note.midi),
       velocity: Math.max(0.1, Math.min(1, note.velocity)),
+      ...(length > 1 ? { length } : {}),
+      ...(offset > 0 ? { offset } : {}),
     };
   }
   return steps;

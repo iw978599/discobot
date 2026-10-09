@@ -2,7 +2,8 @@ import { DrumCore, SynthCore, toVoiceParams } from '@discobot/engine';
 import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, Scene, SequencerStep, SynthParameters } from '../types';
 import { sceneDrumState } from './songPlayback';
 import { DRUM_INSTRUMENTS } from './drumKits';
-import { expandStep } from './noteScheduling';
+import { expandStepNotes } from './noteScheduling';
+import { delaySeconds } from './delayTime';
 import { expandDrumStep, seededRandom } from './drumScheduling';
 import { createZip } from '../utils/zip';
 import { MASTER_LEVEL, configureLimiter, driveCurve, reverbImpulse, safetyCurve, scheduleDuck } from '../hooks/browserAudio';
@@ -83,11 +84,11 @@ export function renderSynthBars(
 ): Stereo {
   const core = new SynthCore(sampleRate);
   core.setParams(toVoiceParams(params, tempo));
+  const random = seededRandom(2);
   bars.forEach((steps, bar) => {
     const stepDuration = barDuration / Math.max(1, steps.length);
     steps.forEach((step, index) => {
-      if (!step.active || !step.note) return;
-      for (const scheduled of expandStep(step.note, params, stepDuration, tempo, step.slide)) {
+      for (const scheduled of expandStepNotes(step, params, stepDuration, tempo, random)) {
         core.noteOn({
           note: scheduled.note, velocity: step.velocity, duration: scheduled.duration,
           time: bar * barDuration + index * stepDuration + scheduled.offset,
@@ -136,7 +137,7 @@ export function renderDrums(
   return renderCore(core, frames);
 }
 
-function connectEffects(ctx: OfflineAudioContext, input: AudioNode, master: AudioNode, sends: FxSendLevels, fxReturn: number, state: EffectsLoopState, group: 'synth' | 'drums') {
+function connectEffects(ctx: OfflineAudioContext, input: AudioNode, master: AudioNode, sends: FxSendLevels, fxReturn: number, state: EffectsLoopState, group: 'synth' | 'drums', tempo: number) {
   input.connect(master);
   if (!state.enabled) return;
   const wet = ctx.createGain();
@@ -147,7 +148,7 @@ function connectEffects(ctx: OfflineAudioContext, input: AudioNode, master: Audi
   };
   if (state.delay.enabled && sends.delay > 0) {
     const delay = ctx.createDelay(2), feedback = ctx.createGain(), level = ctx.createGain();
-    delay.delayTime.value = state.delay.time; feedback.gain.value = Math.min(.85, state.delay.feedback);
+    delay.delayTime.value = delaySeconds(state.delay, tempo); feedback.gain.value = Math.min(.85, state.delay.feedback);
     level.gain.value = state.delay.mix;
     send(sends.delay).connect(delay); delay.connect(feedback).connect(delay); delay.connect(level).connect(wet);
   }
@@ -218,7 +219,7 @@ export async function renderArrangement(arrangement: ExportArrangement, options:
     const ducker = ctx.createGain();
     for (const time of kickTimes) scheduleDuck(ducker.gain, time, duck);
     source.connect(ducker);
-    connectEffects(ctx, ducker, master, sends, returnLevel, arrangement.effectsLoop, group); source.start(0);
+    connectEffects(ctx, ducker, master, sends, returnLevel, arrangement.effectsLoop, group, arrangement.tempo); source.start(0);
   };
   const { only } = options;
   const synthSolo = arrangement.synths.some(s => s.solo);

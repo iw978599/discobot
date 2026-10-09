@@ -16,7 +16,8 @@ interface KeyboardPanelProps {
   releaseSignal: boolean;
   computerKeyNotes?: ReadonlySet<string>;
   onStepSelect: (stepIndex: number) => void;
-  onNoteAssign: (stepIndex: number, note?: string) => void;
+  onNoteAssign: (stepIndex: number, note: string, on: boolean, offset?: number) => void;
+  onNoteLength: (stepIndex: number, length: number) => void;
   onClearPattern: () => void;
   onNotePlay: (note: string) => void;
   onNoteRelease: (note: string) => void;
@@ -36,6 +37,7 @@ export default function KeyboardPanel({
   computerKeyNotes,
   onStepSelect,
   onNoteAssign,
+  onNoteLength,
   onClearPattern,
   onNotePlay,
   onNoteRelease,
@@ -98,6 +100,7 @@ export default function KeyboardPanel({
           octaveShift={octaveShift}
           onStepSelect={onStepSelect}
           onNoteAssign={onNoteAssign}
+          onNoteLength={onNoteLength}
           onClear={onClearPattern}
         />
       )}

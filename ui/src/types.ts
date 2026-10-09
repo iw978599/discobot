@@ -14,6 +14,7 @@ export type {
   SynthModelId,
   SynthModelParams,
   SequencerStep,
+  DelaySync,
   Pattern,
 
   // Drum types

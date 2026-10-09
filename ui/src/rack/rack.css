@@ -261,6 +261,9 @@
 .step-cell:hover { border-color: var(--amber); }
 .step-cell.has-note { background: var(--amber); border-color: #ffcf66; box-shadow: 0 0 6px var(--amber-soft); }
 .step-cell.has-slide.has-note { background: linear-gradient(90deg, var(--amber) 70%, #ffe09a); }
+.step-cell.held { background: linear-gradient(var(--amber-soft), var(--amber-soft)), var(--well); border-color: #8a6a1f; }
+.step-cell.chance { border-style: dashed; border-color: #111; }
+.step-note sup { font-size: 0.75em; margin-left: 1px; }
 .step-cell.selected { outline: 2px solid var(--ink); outline-offset: 1px; z-index: 1; }
 .steps-32 .step-cell { font-size: 9px; }
 .step-light { position: absolute; top: 2px; left: 50%; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: transparent; }

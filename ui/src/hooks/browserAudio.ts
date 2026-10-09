@@ -1,4 +1,5 @@
 import type { EffectsLoopState, FxSendLevels } from '../types';
+import { delaySeconds } from '../services/delayTime';
 
 const limit = (v: number, min: number, max: number, fallback = min) =>
   Number.isFinite(v) ? Math.max(min, Math.min(max, v)) : fallback;
@@ -203,7 +204,7 @@ function createEffects(group: 'synth' | 'drums'): Effects {
 function updateEffects(bus: Effects, group: 'synth' | 'drums', state: EffectsLoopState, ctx: AudioContext) {
   const enabled = state.enabled;
   smooth(bus.output.gain, enabled ? limit(state.returns[group], 0, 1) : 0, ctx);
-  smooth(bus.delay.delayTime, limit(state.delay.time, 0.01, 2), ctx);
+  smooth(bus.delay.delayTime, delaySeconds(state.delay, effectsTempo), ctx);
   smooth(bus.feedback.gain, state.delay.enabled && enabled ? limit(state.delay.feedback, 0, 0.85) : 0, ctx);
   smooth(bus.wet.delay.gain, state.delay.enabled ? limit(state.delay.mix, 0, 1) : 0, ctx);
   smooth(bus.wet.reverb.gain, state.reverb.enabled ? limit(state.reverb.mix, 0, 1) : 0, ctx);
@@ -246,6 +247,14 @@ function updateEffects(bus: Effects, group: 'synth' | 'drums', state: EffectsLoo
   bus.phaser.forEach((node, i) => smooth(node.frequency, 900 + i * 350, ctx));
   smooth(bus.phaserFeedback.gain, enabled && state.phaser.enabled ? limit(state.phaser.feedback, 0, 0.75) : 0, ctx);
   smooth(bus.wet.phaser.gain, state.phaser.enabled ? limit(state.phaser.mix, 0, 1) * 0.5 : 0, ctx);
+}
+
+// A tempo-synced delay follows this.
+let effectsTempo = 120;
+export function setEffectsTempo(tempo: number): void {
+  if (!(tempo > 0) || tempo === effectsTempo) return;
+  effectsTempo = tempo;
+  if (context && loop) effects.forEach((bus, group) => updateEffects(bus, group, loop!, context!));
 }
 
 export function setEffectsLoop(state: EffectsLoopState): void {

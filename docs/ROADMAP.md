@@ -107,7 +107,7 @@ mono/slide and the drum voices. What it leaves open:
    A chorus would do more for the Juno model than anything else. The reverb is
    decaying noise through a convolver; a small algorithmic reverb with
    pre-delay and damping would sound better and cost less. Tempo-synced delay
-   times are an easy win.
+   time is done (Sync on the shared delay).
 
 6. **Sidechain ducking and a master EQ.** Ducking is done (per-lane Duck
    amount, kick only, fixed recovery time). Master EQ is still open.
@@ -123,10 +123,12 @@ mono/slide and the drum voices. What it leaves open:
    lengths running against each other, makes far more music possible than any
    single synthesis feature.
 
-3. **Polyphonic steps and note length.** (M)
-   A step holds one note with a fixed gate. Chords per step and a per-step
-   length (so a note can last several steps) turn the piano roll into a real
-   one. The engine is already eight-voice.
+3. **Polyphonic steps and note length.** Done: up to six notes per step and
+   a per-step length, in the piano roll, live playback, WAV and MIDI export
+   and MIDI import. A note's length can be dragged by its end in the piano roll,
+   and a step can start late (Timing, or Alt+click) so a note sits between
+   steps. Still open: a step holds one start time, so an on-the-step note and
+   a late one cannot share a step; a 32-step lane is the way to get both.
 
 4. **Project files: export and import.** Done. Samples are not yet included
    in the file.
@@ -147,8 +149,7 @@ mono/slide and the drum voices. What it leaves open:
    Drive external hardware from the sequencer, and send or follow MIDI clock.
    Web MIDI is already in use for input.
 
-9. **Per-step probability and ratchets on drums.** Done. The same two
-   controls on synth steps would be a small follow-up.
+9. **Per-step probability and ratchets.** Done, on drums and on synth steps.
 
 10. **Stem and loop export.** Done.
 
