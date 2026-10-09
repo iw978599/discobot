@@ -23,19 +23,23 @@ export interface ExportArrangement {
   bars?: Scene[];
   // Decoded samples for the drum lanes that use one. A lane without an entry is synthesized.
   drumSamples?: Partial<Record<DrumInstrument, DrumSample>>;
-  // Guest instruments, recorded in real time at 44.1 kHz from the first beat. Mixed in as they are.
-  guestTakes?: Array<{ left: Float32Array; right: Float32Array; gain: number }>;
+  // Guest instruments, recorded in real time at 44.1 kHz from the first beat. For a loop each
+  // take is exactly one pass of the pattern, recorded once it had already been round once.
+  guestTakes?: Array<{ left: Float32Array; right: Float32Array; gain: number; name?: string; sends?: FxSendLevels }>;
 }
 
 // Rendering holds every lane in memory at once, so very long songs are refused.
 export const MAX_EXPORT_SECONDS = 480;
 
 export interface RenderOptions {
-  // Render only this synth lane (ignoring its mute and solo) or only the drums: a stem.
-  only?: number | 'drums';
+  // Render only this synth lane (ignoring its mute and solo), only the drums, or only one
+  // guest's recording: a stem.
+  only?: StemPart;
   // Render exactly one bar that repeats seamlessly, with the effect tails wrapped into it.
   loop?: boolean;
 }
+
+export type StemPart = number | 'drums' | { guest: number };
 
 type Stereo = [Float32Array, Float32Array];
 
@@ -110,12 +114,13 @@ interface DrumHit { instrument: DrumInstrument; time: number; velocity: number; 
 // and the kick ducking on the synth lanes agree on which chance steps played.
 export function drumHits(arrangement: DrumArrangement, bars = 1, barDuration = 240 / arrangement.tempo): DrumHit[] {
   const stepDuration = barDuration / 16;
-  const solo = DRUM_INSTRUMENTS.some(instrument => arrangement.drumState[instrument].solo);
   const random = seededRandom(1);
   const hits: DrumHit[] = [];
   const count = arrangement.bars ? arrangement.bars.length : bars;
   for (let bar = 0; bar < count; bar++) {
     const state = arrangement.bars ? sceneDrumState(arrangement.bars[bar], arrangement.drumState) : arrangement.drumState;
+    // Mutes and solos can differ from scene to scene.
+    const solo = DRUM_INSTRUMENTS.some(instrument => state[instrument].solo);
     for (const instrument of DRUM_INSTRUMENTS) {
       const track = state[instrument];
       if (track.muted || (solo && !track.solo)) continue;
@@ -258,20 +263,24 @@ export async function renderArrangement(arrangement: ExportArrangement, options:
   if (only === undefined || only === 'drums') {
     play(renderDrums(arrangement, frames, sampleRate, bars, barDuration), arrangement.drumFx.sends, arrangement.drumFx.returnLevel, 'drums');
   }
-  // Guests are already finished audio: no effect sends and no ducking, only their level. They are
-  // left out of stems and of loops, where a one-pass recording would not wrap.
-  if (only === undefined && !looping) {
-    for (const take of arrangement.guestTakes ?? []) {
-      const buffer = ctx.createBuffer(2, frames, sampleRate);
-      buffer.getChannelData(0).set(take.left.subarray(0, frames));
-      buffer.getChannelData(1).set(take.right.subarray(0, frames));
-      const source = ctx.createBufferSource(), level = ctx.createGain();
-      source.buffer = buffer;
-      level.gain.value = Math.max(0, Math.min(1, take.gain));
-      source.connect(level).connect(master);
-      source.start(0);
-    }
-  }
+  // Guests are finished audio: their level and their effect sends, no ducking. In a loop the
+  // take is one pass of the pattern and is laid end to end like everything else, so what it
+  // sends to the reverb and delay wraps round too.
+  (arrangement.guestTakes ?? []).forEach((take, index) => {
+    if (only !== undefined && !(typeof only === 'object' && only.guest === index)) return;
+    const buffer = ctx.createBuffer(2, frames, sampleRate);
+    [take.left, take.right].forEach((recorded, channel) => {
+      const data = buffer.getChannelData(channel);
+      if (!looping) data.set(recorded.subarray(0, frames));
+      else if (recorded.length > 0) for (let offset = 0; offset < frames; offset += recorded.length) data.set(recorded.subarray(0, Math.min(recorded.length, frames - offset)), offset);
+    });
+    const source = ctx.createBufferSource(), level = ctx.createGain();
+    source.buffer = buffer;
+    level.gain.value = Math.max(0, Math.min(1, take.gain));
+    source.connect(level);
+    connectEffects(ctx, level, master, take.sends ?? { reverb: 0, delay: 0, drive: 0, phaser: 0 }, 1, arrangement.effectsLoop, 'synth', arrangement.tempo);
+    source.start(0);
+  });
   const rendered = await ctx.startRendering();
   return { channels: [rendered.getChannelData(0).subarray(start), rendered.getChannelData(1).subarray(start)], sampleRate };
 }
@@ -282,20 +291,24 @@ export async function renderArrangementWav(arrangement: ExportArrangement, optio
 }
 
 // The parts worth exporting on their own: lanes with notes, and the drums if any step is on.
-export function stemParts(arrangement: ExportArrangement): Array<{ only: number | 'drums'; name: string }> {
-  const parts: Array<{ only: number | 'drums'; name: string }> = arrangement.synths
+export function stemParts(arrangement: ExportArrangement): Array<{ only: StemPart; name: string }> {
+  const parts: Array<{ only: StemPart; name: string }> = arrangement.synths
     .filter(lane => lane.synthParams && lane.pattern?.steps.some(step => step.active && step.note))
     .map(lane => ({ only: lane.id, name: `synth-${lane.id}.wav` }));
   if (DRUM_INSTRUMENTS.some(instrument => arrangement.drumState[instrument].steps.some(Boolean))) {
     parts.push({ only: 'drums', name: 'drums.wav' });
   }
+  (arrangement.guestTakes ?? []).forEach((take, guest) => {
+    const name = (take.name ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30);
+    parts.push({ only: { guest }, name: `guest-${guest + 1}${name ? `-${name}` : ''}.wav` });
+  });
   return parts;
 }
 
 // Every stem is the same length and starts at the same instant, so they line up in a DAW.
 export async function renderStemsZip(arrangement: ExportArrangement) {
   const parts = stemParts(arrangement);
-  if (parts.length === 0) throw new Error('There are no notes or drum steps to export.');
+  if (parts.length === 0) throw new Error('There are no notes, drum steps or guest instruments to export.');
   const entries = [];
   for (const part of parts) {
     entries.push({ name: part.name, data: new Uint8Array(await renderArrangementWav(arrangement, { only: part.only })) });

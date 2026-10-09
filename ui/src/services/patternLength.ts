@@ -70,6 +70,7 @@ export function sceneBar(scene: Scene, bar: number): Scene {
     id: scene.id, name: scene.name,
     lanes: Object.fromEntries(Object.entries(scene.lanes ?? {}).map(([id, steps]) => [id, barOf(steps, stepsPerBar(steps.length, scene.laneBars?.[Number(id)]), bar)])),
     drums: Object.fromEntries((Object.keys(scene.drums ?? {}) as DrumInstrument[]).map(instrument => [instrument, drumLaneBar(scene.drums[instrument], bar)])) as Scene['drums'],
+    ...(scene.mutes ? { mutes: scene.mutes } : {}),
   };
 }
 

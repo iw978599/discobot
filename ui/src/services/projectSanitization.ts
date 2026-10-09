@@ -1,4 +1,4 @@
-import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, Scene, Song, SynthParameters, SynthModelParams } from '../types';
+import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, Scene, SceneMutes, Song, SynthParameters, SynthModelParams } from '../types';
 import { DELAY_SYNCS } from './delayTime';
 import { CHORUS_DEFAULT, EQ_RANGE_DB, MAX_PRE_DELAY } from './effectSettings';
 import { MAX_STEP_NOTES, MAX_STEP_OFFSET } from './noteScheduling';
@@ -179,6 +179,15 @@ export const MAX_SCENES = 64;
 
 // Scenes and the song from storage or a file. Returns null when there is no usable scene,
 // which tells the caller to build one from the live project instead.
+// A scene's mutes and solos, for the lanes and drums that exist. Absent when the scene has none.
+export function sanitizeSceneMutes(value: unknown): SceneMutes | undefined {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const input = record(value), flags = (entry: unknown) => ({ muted: record(entry).muted === true, solo: record(entry).solo === true });
+  const lanes = Object.fromEntries([1, 2, 3].filter(id => record(input.lanes)[id] !== undefined).map(id => [id, flags(record(input.lanes)[id])]));
+  const drums = Object.fromEntries(DRUM_INSTRUMENTS.filter(instrument => record(input.drums)[instrument] !== undefined).map(instrument => [instrument, flags(record(input.drums)[instrument])]));
+  return { lanes, drums };
+}
+
 export function sanitizeScenes(value: unknown, defaults: DrumState): Scene[] | null {
   if (!Array.isArray(value)) return null;
   const seen = new Set<string>();
@@ -203,6 +212,7 @@ export function sanitizeScenes(value: unknown, defaults: DrumState): Scene[] | n
       ...(Object.keys(lengths).length ? { laneBars: lengths } : {}),
       ...(sanitizeSceneGuests(input.guests) ? { guests: sanitizeSceneGuests(input.guests) } : {}),
       ...(sanitizeGuestMix(input.guestMix) ? { guestMix: sanitizeGuestMix(input.guestMix) } : {}),
+      ...(sanitizeSceneMutes(input.mutes) ? { mutes: sanitizeSceneMutes(input.mutes) } : {}),
       drums: Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => {
         const { steps, stepVelocities, stepProbabilities, stepRatchets } = drums[instrument];
         return [instrument, {

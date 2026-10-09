@@ -196,6 +196,10 @@ export class LocalProjectService {
       ...(state.guests?.some(guest => guest.state !== undefined)
         ? { guests: Object.fromEntries(state.guests.filter(guest => guest.state !== undefined).map(guest => [guest.id, clone(guest.state)])) } : {}),
       ...(state.guests?.length ? { guestMix: Object.fromEntries(state.guests.map(guest => [guest.id, { volume: guest.volume, muted: guest.muted }])) } : {}),
+      mutes: {
+        lanes: Object.fromEntries(state.synths.map(synth => [synth.synthId, { muted: synth.muted, solo: synth.solo }])),
+        drums: Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => [instrument, { muted: state.drumState[instrument].muted, solo: state.drumState[instrument].solo }])),
+      },
       drums: Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => {
         const { steps, stepVelocities, stepProbabilities, stepRatchets } = state.drumState[instrument];
         return [instrument, clone({
@@ -233,6 +237,10 @@ export class LocalProjectService {
       synth.pattern.steps = clone(scene.lanes[synth.synthId] ?? emptySteps());
       const bars = laneBars(synth.pattern.steps.length, scene.laneBars?.[synth.synthId]);
       if (bars > 1) synth.pattern.bars = bars; else delete synth.pattern.bars;
+      // Mutes and solos are the scene's. A scene from before they were kept holds none, and
+      // the lanes carry on as they are.
+      const flags = scene.mutes?.lanes?.[synth.synthId];
+      if (flags) { synth.muted = flags.muted; synth.solo = flags.solo; }
     }
     // A guest takes the settings this scene holds for it. A scene from before the guest was added
     // holds none, and the guest carries on as it is.
@@ -245,6 +253,8 @@ export class LocalProjectService {
     }
     for (const instrument of DRUM_INSTRUMENTS) {
       const track = state.drumState[instrument], pattern = scene.drums[instrument];
+      const flags = scene.mutes?.drums?.[instrument];
+      if (flags) { track.muted = flags.muted; track.solo = flags.solo; }
       track.steps = clone(pattern.steps);
       for (const key of ['stepVelocities', 'stepProbabilities', 'stepRatchets'] as const) {
         if (pattern[key]) track[key] = clone(pattern[key]);
@@ -258,7 +268,7 @@ export class LocalProjectService {
     this.commitScene();
     return {
       scenes: state.scenes, song: state.song, currentSceneId: state.currentSceneId,
-      synths: state.synths.map(synth => ({ synthId: synth.synthId, pattern: synth.pattern })), drumState: state.drumState,
+      synths: state.synths.map(synth => ({ synthId: synth.synthId, pattern: synth.pattern, muted: synth.muted, solo: synth.solo })), drumState: state.drumState,
       guests: state.guests ?? [],
     };
   }

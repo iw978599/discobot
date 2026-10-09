@@ -114,8 +114,8 @@ mono/slide and the drum voices. What it leaves open:
 ## Features
 
 1. **Song mode.** Done; `docs/SONG_MODE_PLAN.md` lists what was left out
-   (per-scene mutes, copy and paste between scenes, sharing a part between
-   scenes).
+   (copy and paste between scenes, sharing a part between scenes). Mutes and
+   solos are now kept per scene.
 
 2. **Longer patterns and per-lane length.** Done: each synth lane and the
    drum grid can be 1, 2, 4 or 8 bars, and lanes of different lengths loop

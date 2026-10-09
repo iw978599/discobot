@@ -38,6 +38,15 @@ test('guests read from a project are checked like the rest of it', () => {
   const patched = patchGuest(guests[0], { volume: -1, muted: true, name: '', state: circular, url: 'https://evil.example/', id: 'changed' });
   assert.deepEqual(patched, { id: a, url: 'https://example.com/a', name: 'Choir', volume: 0, muted: true }, 'the address and id cannot be patched, and a state that cannot be stored is dropped');
   assert.deepEqual(patchGuest(guests[0], { state: { vowel: 'o' } }).state, { vowel: 'o' });
+
+  // Effect sends: absent until one is turned up, merged a knob at a time, and bounded.
+  assert.equal('sends' in guests[0], false);
+  const sent = patchGuest(guests[0], { sends: { reverb: 0.5, chorus: 7, wah: 1, delay: 'lots' } });
+  assert.deepEqual(sent.sends, { reverb: 0.5, delay: 0, drive: 0, phaser: 0, chorus: 1 });
+  assert.deepEqual(patchGuest(sent, { sends: { delay: 0.25 } }).sends, { reverb: 0.5, delay: 0.25, drive: 0, phaser: 0, chorus: 1 });
+  assert.equal('sends' in patchGuest(sent, { sends: { reverb: 0, chorus: 0 } }), false, 'all turned down is stored as no sends');
+  assert.deepEqual(sanitizeGuests([{ id: a, url: 'https://example.com/a', sends: { reverb: 0.3 } }], OWN)[0].sends, { reverb: 0.3, delay: 0, drive: 0, phaser: 0, chorus: 0 });
+  assert.equal('sends' in sanitizeGuests([{ id: a, url: 'https://example.com/a', sends: 'all' }], OWN)[0], false);
 });
 
 test('guest audio is placed end to end, except across a real gap', () => {

@@ -4,7 +4,7 @@ import { useSynthAudio } from '../hooks/useSynthAudio';
 import { useDrumAudio } from '../hooks/useDrumAudio';
 import { MidiMode, MidiMessage, useMidiInput } from '../hooks/useMidiInput';
 import { Pattern, SequencerStep, SynthParameters, DrumState, DrumInstrument, DrumSettings, DrumKitDefinition, DrumKitId, EffectsLoopState, FxSendLevels, Scene, Song, SynthModelId, SynthModelParams } from '../types';
-import { SongPosition, entryStartBar, sceneAtBar, sceneDrumState, songBars } from '../services/songPlayback';
+import { SongPosition, applySceneMutes, audibleLanes, entryStartBar, sceneAtBar, sceneDrumState, songBars } from '../services/songPlayback';
 import { createDefaultSynthParameters } from '@discobot/engine';
 import { localRequest, localService } from '../services/localService';
 import { projectSync, startProjectSync } from '../services/projectSync';
@@ -14,7 +14,7 @@ import { BAR_CHOICES, DRUM_STEPS_PER_BAR, clampLengths, drumBars, laneBars, resi
 import { DRUM_INSTRUMENTS } from '../services/drumKits';
 import type { DrumSample } from '../../../engine/src/drums/DrumCore';
 import { guestCapture, guestLink, guestOrigin, guestUrl, trustOrigin, wallAtContextTime, wallNow, type Guest } from '../services/guests';
-import { downloadArrangementWav } from '../services/wavExport';
+import { downloadArrangementWav, downloadStemsZip } from '../services/wavExport';
 import type { ProjectInfo } from '../services/projectLibrary';
 import { sanitizeSynthParams } from '../services/projectSanitization';
 import { expandStep, expandStepNotes, stepNotes, withStepNotes } from '../services/noteScheduling';
@@ -810,7 +810,8 @@ export function useStudio() {
       }
     }
     const lanes = synthsRef.current;
-    const hasSolo = lanes.some(s => s.solo);
+    // A scene played from its stored copy brings its own mutes; the open one's are on the lanes.
+    const heard = audibleLanes(scene, lanes);
     for (const synth of lanes) {
       if (!synth.isPlaying || !synth.pattern || !synth.synthParams) continue;
       const steps = scene ? scene.lanes[synth.id] ?? [] : synth.pattern.steps;
@@ -821,7 +822,7 @@ export function useStudio() {
       if (step % divisor !== 0) continue;
       const index = (passBar % bars) * perBar + Math.floor(step / divisor) % perBar;
       const note = steps[index];
-      if (!synth.muted && (!hasSolo || synth.solo) && note?.active && note.note) {
+      if (heard.has(synth.id) && note?.active && note.note) {
         triggerStep(synth.synthParams, note, duration * divisor, synth.id, time);
       }
       setSynths(prev => prev.map(s => s.id === synth.id ? { ...s, currentStep: index } : s));
@@ -943,20 +944,21 @@ export function useStudio() {
         // Each guest takes on the settings the scene holds for it.
         if (message.data.guests) setGuests(message.data.guests);
         const switched = nextSceneId !== currentSceneIdRef.current;
-        const nextLanes = synthsRef.current.map(s => {
-          const pattern = lanePatterns.find((lane: { synthId: number }) => lane.synthId === s.id)?.pattern;
-          return pattern ? { ...s, pattern, selectedStep: switched ? null : s.selectedStep } : s;
-        });
+        // A scene brings its lanes' mutes and solos with it.
+        const withScene = (s: SynthState): SynthState => {
+          const lane = lanePatterns.find((entry: { synthId: number }) => entry.synthId === s.id);
+          return lane?.pattern ? { ...s, pattern: lane.pattern, muted: Boolean(lane.muted), solo: Boolean(lane.solo), selectedStep: switched ? null : s.selectedStep } : s;
+        };
+        const nextLanes = synthsRef.current.map(withScene);
+        const stillHeard = audibleLanes(null, nextLanes);
+        nextLanes.forEach(s => { if (!stillHeard.has(s.id)) synthAudio.stopSynth(s.id); });
         // The scheduler and undo read these refs before React has rendered again.
         synthsRef.current = nextLanes;
         drumStateRef.current = nextDrums;
         scenesRef.current = nextScenes;
         currentSceneIdRef.current = nextSceneId;
         songRef.current = nextSong;
-        setSynths(prev => prev.map(s => {
-          const pattern = lanePatterns.find((lane: { synthId: number }) => lane.synthId === s.id)?.pattern;
-          return pattern ? { ...s, pattern, selectedStep: switched ? null : s.selectedStep } : s;
-        }));
+        setSynths(prev => prev.map(withScene));
         setDrumState(nextDrums);
         setScenes(nextScenes);
         setCurrentSceneId(nextSceneId);
@@ -1328,7 +1330,13 @@ export function useStudio() {
   // The song as one scene per bar, with every scene as it stands now, for export.
   const songArrangement = useCallback(async (): Promise<ExportArrangement & { bars: Scene[] }> => {
     const stored = await (await localRequest('/scenes')).json() as { scenes: Scene[]; song: Song };
-    return { ...currentArrangementRef.current(), bars: songBars(stored.song, stored.scenes) };
+    // Each scene has its own mutes and solos, so they are applied bar by bar here and the
+    // lanes are handed to the exporter unmuted.
+    const arrangement = currentArrangementRef.current();
+    return {
+      ...arrangement, synths: arrangement.synths.map(lane => ({ ...lane, muted: false, solo: false })),
+      bars: applySceneMutes(songBars(stored.song, stored.scenes), arrangement.synths),
+    };
   }, []);
 
   // Another tab saved the project. Either take that version (a reload reads it) or keep this one.
@@ -1860,7 +1868,7 @@ export function useStudio() {
     downloadMidiFile(
       {
         tempo: globalTempoRef.current, drumSwing, drumMasterVolume, drumState: kit,
-        synthLanes: synthsRef.current.filter((entry) => entry.pattern).map((entry) => ({ id: entry.id, pattern: clonePattern(entry.pattern!), muted: entry.muted, solo: entry.solo })),
+        synthLanes: synthsRef.current.filter((entry) => entry.pattern).map((entry) => ({ id: entry.id, pattern: clonePattern(entry.pattern!), muted: false, solo: false })),
         bars: bars.map(scene => ({ name: scene.name, lanes: scene.lanes, drumState: sceneDrumState(scene, kit) })),
       },
       `discobot-song-${Date.now()}.mid`
@@ -1877,7 +1885,7 @@ export function useStudio() {
     return null;
   }, []);
   const handleRemoveGuest = useCallback(async (id: string) => { await localRequest(`/guests/${id}`, { method: 'DELETE' }); }, []);
-  const handleGuestChange = useCallback(async (id: string, patch: Partial<Pick<Guest, 'name' | 'volume' | 'muted' | 'state'>>) => {
+  const handleGuestChange = useCallback(async (id: string, patch: Partial<Pick<Guest, 'name' | 'volume' | 'muted' | 'state' | 'sends'>>) => {
     await localRequest(`/guests/${id}`, { method: 'PUT', body: JSON.stringify(patch) });
   }, []);
 
@@ -1905,13 +1913,17 @@ export function useStudio() {
     await localRequest('/drum/sample', { method: 'POST', body: JSON.stringify({ instrument, sampleId }) });
   }, []);
 
-  // Download WAV and Song WAV. With guests in the project the arrangement is first played through
-  // once, in real time, so their sound can be recorded; then the export is rendered as usual.
-  const handleExportWav = useCallback(async (wholeSong: boolean) => {
+  // Every audio export. With guests in the project the arrangement is first played through in
+  // real time so their sound can be recorded; then the export is rendered as usual. A loop is
+  // played through twice and the second pass kept: by then what rings on from the end of the
+  // pattern is sounding over its start, which is what makes the loop seamless.
+  const handleExportWav = useCallback(async (kind: boolean | 'pattern' | 'song' | 'loop' | 'stems') => {
+    const wholeSong = kind === true || kind === 'song', loop = kind === 'loop';
     let arrangement: ExportArrangement = wholeSong ? await songArrangement() : currentArrangementRef.current();
     const audible = guestsRef.current.filter(guest => !guest.muted && guest.volume > 0);
     if (audible.length > 0 && !guestCapture.active()) {
-      const seconds = (arrangement.bars?.length ?? 1) * 240 / globalTempoRef.current;
+      const passFrames = (arrangement.bars?.length ?? 1) * Math.round(240 / globalTempoRef.current * 44100);
+      const seconds = (loop ? 2 : 1) * (arrangement.bars?.length ?? 1) * 240 / globalTempoRef.current;
       const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
       const mode = playModeRef.current, startEntry = songStartEntryRef.current;
       try {
@@ -1933,7 +1945,15 @@ export function useStudio() {
         // A moment for the last of the guests' audio to arrive.
         await sleep(600);
         const takes = guestCapture.stop();
-        arrangement = { ...arrangement, guestTakes: audible.flatMap(guest => { const take = takes.get(guest.id); return take ? [{ ...take, gain: guest.volume }] : []; }) };
+        arrangement = {
+          ...arrangement,
+          guestTakes: audible.flatMap(guest => {
+            const take = takes.get(guest.id);
+            if (!take) return [];
+            const [left, right] = [take.left, take.right].map(channel => (loop ? channel.slice(passFrames, passFrames * 2) : channel));
+            return [{ left, right, gain: guest.volume, name: guest.name, ...(guest.sends ? { sends: guest.sends } : {}) }];
+          }),
+        };
       } finally {
         guestCapture.stop();
         setGuestRecording(null);
@@ -1941,7 +1961,8 @@ export function useStudio() {
         setSongStartEntry(startEntry);
       }
     }
-    await downloadArrangementWav(arrangement);
+    if (kind === 'stems') await downloadStemsZip(arrangement);
+    else await downloadArrangementWav(arrangement, loop ? { loop: true } : {});
   }, [songArrangement]);
 
   const reportExportError = useCallback((error: unknown) => {

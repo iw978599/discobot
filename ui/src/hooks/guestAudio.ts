@@ -1,5 +1,6 @@
 import { createAudioLane, getAudioContext, loadAudioWorklet } from './browserAudio';
-import { GUEST_LATENCY_MS, contextTimeAtWall, latencyAfterLateBlocks, placeBlock, resample } from '../services/guests';
+import { GUEST_LATENCY_MS, NO_SENDS, contextTimeAtWall, latencyAfterLateBlocks, placeBlock, resample } from '../services/guests';
+import type { FxSendLevels } from '../types';
 
 const MAX_BLOCK_FRAMES = 16384;
 // Audio that would start sooner than this from now is too late to place where it belongs.
@@ -35,6 +36,7 @@ export function createGuestPlayer(onLatency: (latencyMs: number) => void, initia
   return {
     stats,
     setVolume(volume: number) { lane.setVolume(volume); },
+    setSends(sends: FxSendLevels | undefined) { lane.setSends(sends ?? NO_SENDS); },
     // Returns false for anything that is not a sane block of audio.
     push(wall: unknown, sampleRate: unknown, left: unknown, right: unknown): boolean {
       if (!(left instanceof Float32Array) || !(right instanceof Float32Array) || left.length !== right.length) return false;

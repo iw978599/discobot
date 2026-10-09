@@ -18,7 +18,9 @@ Status: built on `feat/song-mode` (phases 1 to 4). Written 2026-10-08 against th
 - **Undo** entries remember their scene; undoing an edit made elsewhere goes
   back to that scene first. Adding, deleting and renaming scenes, and editing
   the song order, are not on the undo stack.
-- **Not built:** per-scene lane mutes, copy and paste between scenes, drag to
+- Mutes and solos are kept per scene, for the synth lanes and the drums, and a
+  song export applies each scene's own.
+- **Not built:** copy and paste between scenes, drag to
   reorder (blocks move with arrow buttons), stems of a whole song, and a
   progress display for long exports. Song audio export is capped at 8 minutes.
 

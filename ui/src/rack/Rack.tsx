@@ -69,7 +69,7 @@ export default function Rack({ studio }: { studio: Studio }) {
         {studio.guestRecording !== null && (
           <div role="status" className="app-alert">
             <span>
-              Recording the guest instruments for the export. The music plays through once, about {Math.ceil(studio.guestRecording)} seconds, and then the file downloads.
+              Recording the guest instruments for the export. The music plays through, about {Math.ceil(studio.guestRecording)} seconds, and then the file downloads.
             </span>
           </div>
         )}

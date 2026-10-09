@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { localService } from '../services/localService';
-import { songBars, songLengthBars } from '../services/songPlayback';
+import { applySceneMutes, songBars, songLengthBars } from '../services/songPlayback';
 import { sceneBars } from '../services/patternLength';
 import { renderArrangementWav } from '../services/wavExport';
 import './rack.css';
@@ -52,8 +52,8 @@ export default function SharedSongPage({ file, author, error: fetchError, onOpen
       const wav = await renderArrangementWav({
         tempo: project.tempo, drumState: project.drumState, drumKitId: project.selectedDrumKitId,
         drumMasterVolume: project.drumMasterVolume, drumSwing: project.drumSwing, drumFx: project.drumFx, effectsLoop: project.effectsLoop,
-        synths: project.synths.map(synth => ({ id: synth.synthId, pattern: synth.pattern, synthParams: synth.synthParams, muted: synth.muted, solo: synth.solo })),
-        bars: songBars(project.song, project.scenes),
+        synths: project.synths.map(synth => ({ id: synth.synthId, pattern: synth.pattern, synthParams: synth.synthParams, muted: false, solo: false })),
+        bars: applySceneMutes(songBars(project.song, project.scenes), project.synths.map(synth => ({ id: synth.synthId, muted: synth.muted, solo: synth.solo }))),
       });
       setAudioUrl(URL.createObjectURL(new Blob([wav], { type: 'audio/wav' })));
       setStatus('idle');

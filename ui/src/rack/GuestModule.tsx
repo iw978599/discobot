@@ -4,6 +4,7 @@ import { createGuestPlayer, type GuestPlayer } from '../hooks/guestAudio';
 import {
   GUEST_LATENCY_MS, GUEST_PROTOCOL, guestCapture, guestLink, guestOrigin, isTrustedOrigin, trustOrigin,
   type Guest, type GuestTransport,
+  GUEST_SEND_NAMES, NO_SENDS,
 } from '../services/guests';
 import Knob from '../components/Knob';
 
@@ -57,6 +58,9 @@ export default function GuestModule({ studio, guest }: { studio: Studio; guest: 
 
   const level = guest.muted ? 0 : guest.volume;
   useEffect(() => { playerRef.current?.setVolume(level); }, [level]);
+  const sendsKey = JSON.stringify(guest.sends ?? null);
+  useEffect(() => { playerRef.current?.setSends(guestRef.current.sends); }, [sendsKey]);
+  const [showSends, setShowSends] = useState(false);
 
   useEffect(() => {
     if (!allowed) return;
@@ -107,6 +111,7 @@ export default function GuestModule({ studio, guest }: { studio: Studio; guest: 
         if (!playerRef.current) {
           playerRef.current = createGuestPlayer((next) => { latencyMs = next; hello(); }, latencyMs);
           playerRef.current.setVolume(guestRef.current.muted ? 0 : guestRef.current.volume);
+          playerRef.current.setSends(guestRef.current.sends);
         }
         // This runs for every block of audio, many times a second, so it must not re-render anything.
         if (playerRef.current.push(data.wall, data.sampleRate, data.left, data.right)) {
@@ -194,6 +199,7 @@ export default function GuestModule({ studio, guest }: { studio: Studio; guest: 
                 : 'Loading…'}
         </span>
         <div className="rack-grow" />
+        <button className={`rack-btn ${showSends ? 'on' : ''}`} aria-pressed={showSends} title="Show this guest's sends to the shared effects" onClick={() => setShowSends(value => !value)}>Sends</button>
         <button className="rack-btn" onClick={() => setOpen(value => !value)} aria-expanded={open}>{open ? 'Hide' : 'Show'}</button>
         <button className="rack-btn" disabled={!allowed} title="Load the guest's page again" onClick={() => setReloads(count => count + 1)}>Reload</button>
         {removing ? (
@@ -216,6 +222,30 @@ export default function GuestModule({ studio, guest }: { studio: Studio; guest: 
           color="#f1f1ee"
         />
       </div>
+      {showSends && (
+        <div className="rack-row guest-sends">
+          <span className="step-tools-name">Sends</span>
+          <div className="rack-knobs">
+            {GUEST_SEND_NAMES.map((send) => {
+              const value = guest.sends?.[send] ?? 0;
+              return (
+                <Knob
+                  key={send}
+                  size="small"
+                  label={{ reverb: 'Reverb', delay: 'Delay', drive: 'Drive', phaser: 'Phaser', chorus: 'Chorus' }[send]}
+                  ariaLabel={`Guest ${name} ${send} send`}
+                  value={value}
+                  displayValue={`${Math.round(value * 100)}%`}
+                  parseInputValue={(input) => { const parsed = Number.parseFloat(input); return Number.isFinite(parsed) ? parsed / 100 : null; }}
+                  onChange={(next) => { void studio.handleGuestChange(guest.id, { sends: { ...NO_SENDS, ...guest.sends, [send]: next } }); }}
+                  tooltip={`How much of this guest goes to the shared ${send}`}
+                  color="#f1f1ee"
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
       {trouble && <p className="guest-trouble" role="alert">{trouble}</p>}
       {!allowed ? (
         <div className="guest-ask">
@@ -240,7 +270,7 @@ export default function GuestModule({ studio, guest }: { studio: Studio; guest: 
             allow="autoplay"
             referrerPolicy="no-referrer"
           />
-          <p className="rack-hint">A guest plays live and needs a connection to its own site. Its settings, level and mute are kept per scene, like each lane's notes. Download WAV and Song WAV record it by playing through once; it is not in Loop WAV, stems or MIDI.</p>
+          <p className="rack-hint">A guest plays live and needs a connection to its own site. Its settings, level and mute are kept per scene, like each lane's notes. Every audio export records it first by playing the music through; it is not in MIDI.</p>
         </>
       )}
     </section>

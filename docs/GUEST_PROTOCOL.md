@@ -164,9 +164,9 @@ message; one click inside the frame fixes it for the session.
 ## What the host does not do yet
 
 - **Offline export.** Discobot renders WAV files faster than real time and a guest cannot. For
-  Download WAV and Song WAV it plays the music through once and records the guest's `audio`
-  blocks, so a guest that does not send audio is not in the file. Guests are not in Loop WAV,
-  stems or MIDI.
+  every audio export it plays the music through and records the guest's `audio` blocks, so a
+  guest that does not send audio is not in the file. A loop is played twice and the second
+  pass kept. Guests are not in MIDI.
 - **Large settings.** `state` is limited to 100,000 characters, which is not enough for
   recorded audio. A guest that holds audio of its own (loaded samples, tape loops) can save
   its settings but not that audio.

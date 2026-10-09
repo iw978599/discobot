@@ -15,6 +15,8 @@ export type {
   SynthModelParams,
   SequencerStep,
   DelaySync,
+  MuteFlags,
+  SceneMutes,
   Pattern,
 
   // Drum types

@@ -274,6 +274,15 @@ export interface Scene {
   guests?: Record<string, unknown>;
   // each guest's level and mute in this scene, by guest id
   guestMix?: Record<string, { volume: number; muted: boolean }>;
+  // which synth lanes and drum lanes are muted or soloed in this scene. A scene saved before
+  // mutes were kept per scene has none, and plays with whatever the project has at the time.
+  mutes?: SceneMutes;
+}
+
+export interface MuteFlags { muted: boolean; solo: boolean }
+export interface SceneMutes {
+  lanes?: Record<number, MuteFlags>;
+  drums?: Partial<Record<DrumInstrument, MuteFlags>>;
 }
 
 // The order scenes play in when the transport is in song mode.

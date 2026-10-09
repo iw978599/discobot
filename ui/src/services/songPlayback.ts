@@ -1,4 +1,4 @@
-import type { DrumInstrument, DrumState, Scene, SequencerStep, Song } from '../types';
+import type { DrumInstrument, DrumState, MuteFlags, Scene, SequencerStep, Song } from '../types';
 import { sceneAsBars } from './patternLength';
 
 export interface SongPosition {
@@ -55,13 +55,35 @@ export function songBars(song: Song, scenes: Scene[]): Scene[] {
 
 export const emptySteps = (count = 16): SequencerStep[] => Array.from({ length: count }, () => ({ active: false, velocity: 0.7 }));
 
-// A scene only stores which drum steps are on. The sound of the kit, and its mutes and
-// solos, belong to the whole project; this puts the two together for playback.
+// A lane's mute and solo in a scene: the scene's own where it has them, the project's otherwise.
+export function laneFlags(scene: Pick<Scene, 'mutes'> | null | undefined, lane: { id: number; muted?: boolean; solo?: boolean }): MuteFlags {
+  return scene?.mutes?.lanes?.[lane.id] ?? { muted: lane.muted === true, solo: lane.solo === true };
+}
+
+// The synth lanes heard in a scene, once its mutes and solos are applied.
+export function audibleLanes(scene: Pick<Scene, 'mutes'> | null | undefined, lanes: Array<{ id: number; muted?: boolean; solo?: boolean }>): Set<number> {
+  const flags = lanes.map(lane => ({ id: lane.id, ...laneFlags(scene, lane) }));
+  const solo = flags.some(lane => lane.solo);
+  return new Set(flags.filter(lane => !lane.muted && (!solo || lane.solo)).map(lane => lane.id));
+}
+
+// A song's bars with every lane that is silent in its scene emptied. Exporters then treat
+// every lane as unmuted, because the muting has already happened bar by bar.
+export function applySceneMutes(bars: Scene[], lanes: Array<{ id: number; muted?: boolean; solo?: boolean }>): Scene[] {
+  return bars.map(bar => {
+    const heard = audibleLanes(bar, lanes);
+    return { ...bar, lanes: Object.fromEntries(Object.entries(bar.lanes).map(([id, steps]) => [id, heard.has(Number(id)) ? steps : []])) };
+  });
+}
+
+// A scene stores which drum steps are on and which lanes are muted. The sound of the kit
+// belongs to the whole project; this puts the two together for playback.
 export function sceneDrumState(scene: Scene, kit: DrumState): DrumState {
   return Object.fromEntries((Object.keys(kit) as DrumInstrument[]).map(instrument => {
     const pattern = scene.drums[instrument];
     return [instrument, {
-      settings: kit[instrument].settings, muted: kit[instrument].muted, solo: kit[instrument].solo,
+      settings: kit[instrument].settings,
+      muted: scene.mutes?.drums?.[instrument]?.muted ?? kit[instrument].muted, solo: scene.mutes?.drums?.[instrument]?.solo ?? kit[instrument].solo,
       ...(kit[instrument].sampleId ? { sampleId: kit[instrument].sampleId } : {}),
       steps: pattern?.steps ?? Array(16).fill(false),
       ...(pattern?.stepVelocities ? { stepVelocities: pattern.stepVelocities } : {}),
