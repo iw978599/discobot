@@ -17,7 +17,9 @@ import { localRequest, localService } from './services/localService';
 import { sanitizeSynthParams } from './services/projectSanitization';
 import { expandStep } from './services/noteScheduling';
 import { BrowserTransport, TransportTick } from './services/browserTransport';
-import { downloadArrangementWav } from './services/wavExport';
+import { downloadArrangementWav, downloadFile, downloadStemsZip, ExportArrangement } from './services/wavExport';
+import { expandDrumStep } from './services/drumScheduling';
+import { useComputerKeyboard } from './hooks/useComputerKeyboard';
 import { getAudioContext, setMasterVolume, setMasterMuted, playSample } from './hooks/browserAudio';
 import { downloadMidiFile } from './utils/midiExport';
 import { importMidiFile, readFileAsArrayBuffer, MidiImportResult } from './utils/midiImport';
@@ -129,6 +131,8 @@ function cloneDrumState(state: DrumState): DrumState {
         settings: { ...state[instrument].settings },
         steps: [...state[instrument].steps],
         stepVelocities: state[instrument].stepVelocities ? [...state[instrument].stepVelocities!] : undefined,
+        stepProbabilities: state[instrument].stepProbabilities ? [...state[instrument].stepProbabilities!] : undefined,
+        stepRatchets: state[instrument].stepRatchets ? [...state[instrument].stepRatchets!] : undefined,
       },
     ])
   ) as DrumState;
@@ -252,28 +256,32 @@ function createBuiltInPresets(): SynthPreset[] {
   ];
 }
 
+// User presets from browser storage or a project file; anything malformed is dropped.
+function parseUserPresets(value: unknown): SynthPreset[] {
+  if (!Array.isArray(value)) return [];
+  const parsed = value as Array<{
+    id: string;
+    name: string;
+    params: SynthParameters;
+    modelId?: SynthModelId;
+    modelParams?: SynthModelParams;
+  }>;
+  return parsed
+    .filter((entry) => entry && typeof entry.id === 'string' && typeof entry.name === 'string' && entry.params)
+    .map((entry) => ({
+      id: entry.id,
+      name: entry.name,
+      // Presets saved before a parameter existed take its default instead of inheriting the lane's value.
+      params: sanitizeSynthParams(entry.params, DEFAULT_PARAMS),
+      modelId: normalizeSynthModelId(entry.modelId),
+      modelParams: cloneSynthModelParams(entry.modelParams),
+    }));
+}
+
 function loadUserPresets(): SynthPreset[] {
   try {
     const raw = localStorage.getItem(SYNTH_PRESETS_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as Array<{
-      id: string;
-      name: string;
-      params: SynthParameters;
-      modelId?: SynthModelId;
-      modelParams?: SynthModelParams;
-    }>;
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter((entry) => entry && typeof entry.id === 'string' && typeof entry.name === 'string' && entry.params)
-      .map((entry) => ({
-        id: entry.id,
-        name: entry.name,
-        // Presets saved before a parameter existed take its default instead of inheriting the lane's value.
-        params: sanitizeSynthParams(entry.params, DEFAULT_PARAMS),
-        modelId: normalizeSynthModelId(entry.modelId),
-        modelParams: cloneSynthModelParams(entry.modelParams),
-      }));
+    return raw ? parseUserPresets(JSON.parse(raw)) : [];
   } catch {
     return [];
   }
@@ -416,7 +424,8 @@ function TempoDisplay({ tempo, onChange }: { tempo: number; onChange: (bpm: numb
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() === 't' && !event.metaKey && !event.ctrlKey && !event.altKey) {
+      // Plain T is a note on the computer-keyboard piano.
+      if (event.key.toLowerCase() === 't' && event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey) {
         const target = event.target as HTMLElement | null;
         if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
         event.preventDefault();
@@ -448,7 +457,7 @@ function TempoDisplay({ tempo, onChange }: { tempo: number; onChange: (bpm: numb
         <span className="tempo-led-label">BPM</span>
         <span className="tempo-led-value">{String(tempo).padStart(3, ' ')}</span>
       </div>
-      <button className="tap-tempo-btn" onClick={handleTap} title="Tap Tempo (T)">
+      <button className="tap-tempo-btn" onClick={handleTap} title="Tap Tempo (Shift+T)">
         TAP
       </button>
     </div>
@@ -567,11 +576,15 @@ function HelpModal({ open, onClose }: { open: boolean; onClose: () => void }) {
               <li><strong>Play/Stop All:</strong> transport for all synth lanes.</li>
               <li><strong>Save/Load:</strong> store and recall full patterns (synth + drums + FX state).</li>
               <li><strong>Export MIDI:</strong> downloads the current arrangement as a .mid file.</li>
+              <li><strong>Download WAV:</strong> one bar with its effect tail. <strong>Loop WAV</strong> is exactly one bar that repeats seamlessly. <strong>Stems</strong> is a zip with one WAV per synth lane and one for the drums.</li>
+              <li><strong>Export / Import Project:</strong> save everything (lanes, drums, effects, saved arrangements and your synth presets) to a file as a backup or to move to another device. Imported samples are not included.</li>
             </ul>
           </section>
           <section>
             <h3>Editing safety + shortcuts</h3>
             <ul className="help-list help-list-plain">
+              <li><strong>Play notes from the computer keyboard:</strong> the A S D F G H J K L row is the white keys and W E T Y U O P the black keys, on the selected synth. Z and X shift the octave.</li>
+              <li><strong>Tap tempo:</strong> Shift + T</li>
               <li><strong>Undo:</strong> Ctrl/Cmd + Z</li>
               <li><strong>Redo:</strong> Ctrl/Cmd + Shift + Z or Ctrl/Cmd + Y</li>
               <li>Undo/redo steps back through note, velocity, synth, drum, tempo and effects edits in the order you made them.</li>
@@ -583,6 +596,7 @@ function HelpModal({ open, onClose }: { open: boolean; onClose: () => void }) {
               <li><strong>Multi-synth:</strong> up to 3 independent synth lanes, each with its own sequencer + controls.</li>
               <li><strong>Arpeggiator:</strong> per synth toggle with modes/rates (1/4 to 1/32) and gate.</li>
               <li><strong>Synth presets:</strong> save/load/delete sound presets without replacing full patterns.</li>
+              <li><strong>Drum chance and repeats:</strong> each drum step has a chance of playing and a repeat count that packs 2 to 4 hits into the step.</li>
               <li><strong>Drum FX:</strong> set per-drum sends and control both drum <strong>FX Return</strong> and <strong>Loop Return</strong> inside Rhythm Composer.</li>
             </ul>
           </section>
@@ -936,9 +950,10 @@ function App() {
     const swingOffset = drumStep % 2 ? drumSwingRef.current * duration * 2 : 0;
     for (const instrument of Object.keys(state) as DrumInstrument[]) {
       const track = state[instrument];
+      if (track.muted || (drumSolo && !track.solo)) continue;
       const velocity = track.stepVelocities?.[drumStep] ?? 1;
-      if (track.steps[drumStep] && !track.muted && (!drumSolo || track.solo) && velocity > 0) {
-        void drumAudio.playDrumHit(instrument, track.settings, velocity, time + swingOffset);
+      for (const offset of expandDrumStep(track, drumStep)) {
+        void drumAudio.playDrumHit(instrument, track.settings, velocity, time + swingOffset + offset * duration * 2);
       }
     }
   };
@@ -1505,6 +1520,19 @@ function App() {
     synthAudio.stopNote(note, synthParams, synthId);
   }, [synthAudio]);
 
+  const keyboardSynth = synths.find(s => s.id === selectedSynthId);
+  const computerKeyNotes = useComputerKeyboard({
+    target: keyboardSynth
+      ? { synthId: keyboardSynth.id, octaveShift: keyboardSynth.octaveShift, hold: Boolean(keyboardSynth.synthParams?.hold) }
+      : null,
+    resetKey: keyboardSynth
+      ? `${keyboardSynth.id}:${keyboardSynth.octaveShift}:${keyboardSynth.forceReleaseSignal}:${Boolean(keyboardSynth.synthParams?.hold)}`
+      : '',
+    onNoteDown: (synthId, note) => { void handleNotePlay(synthId, note); },
+    onNoteUp: (synthId, note) => { void handleNoteRelease(synthId, note); },
+    onOctave: handleOctaveShift,
+  });
+
   const handleMidiMessage = useCallback((message: MidiMessage) => {
     if (message.type === 'controlChange') return;
     const noteName = midiNoteToName(message.note);
@@ -1807,6 +1835,62 @@ function App() {
       `discobot-${Date.now()}.mid`
     );
   }, [globalTempo, drumSwing, drumMasterVolume]);
+
+  const currentArrangement = useCallback((): ExportArrangement => ({
+    tempo: globalTempoRef.current, synths: synthsRef.current, drumState: drumStateRef.current,
+    drumKitId: selectedDrumKitIdRef.current, drumMasterVolume, drumSwing,
+    drumFx: drumFxRef.current, effectsLoop: effectsLoopRef.current,
+  }), [drumMasterVolume, drumSwing]);
+
+  const reportExportError = useCallback((error: unknown) => {
+    setStorageError(`Audio export failed: ${error instanceof Error ? error.message : error}`);
+  }, []);
+
+  const handleExportProject = useCallback(() => {
+    const file = {
+      ...localService.exportProject(),
+      synthPresets: synthPresets.filter(preset => !preset.builtIn).map(({ id, name, params, modelId, modelParams }) => ({ id, name, params, modelId, modelParams })),
+    };
+    downloadFile(JSON.stringify(file), 'application/json', `discobot-project-${new Date().toISOString().slice(0, 10)}.json`);
+  }, [synthPresets]);
+
+  const projectImportFileRef = useRef<HTMLInputElement>(null);
+  const handleImportProjectFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > 20 * 1024 * 1024) {
+      setStorageError('That file is too large to be a Discobot project.');
+      return;
+    }
+    let parsed: { format?: unknown; synthPresets?: unknown } | null = null;
+    try {
+      parsed = JSON.parse(await file.text());
+    } catch {
+      // reported below
+    }
+    if (parsed?.format !== 'discobot-project') {
+      setStorageError('That file is not a Discobot project file.');
+      return;
+    }
+    if (!window.confirm('Opening a project file replaces everything in the current project, including saved arrangements. Continue?')) return;
+    transportRef.current?.stop();
+    synthAudio.stopAllNotes();
+    drumAudio.stopAllNotes();
+    const result = localService.importProject(parsed);
+    if (!result.ok) {
+      setStorageError(result.error);
+      return;
+    }
+    historyRef.current = { undo: [], redo: [] };
+    setActiveSavedPattern(null);
+    const importedPresets = parseUserPresets(parsed.synthPresets);
+    if (importedPresets.length > 0) {
+      const importedIds = new Set(importedPresets.map(preset => preset.id));
+      setSynthPresets(prev => [...prev.filter(preset => preset.builtIn || !importedIds.has(preset.id)), ...importedPresets]);
+    }
+    setStorageError(result.repaired ? 'The project was opened, but some damaged values in the file were repaired.' : null);
+  }, [synthAudio, drumAudio]);
 
   const midiImportFileRef = useRef<HTMLInputElement>(null);
   const [midiImportAssignments, setMidiImportAssignments] = useState<Record<number, number | null | 'drums'>>({});
@@ -2166,6 +2250,28 @@ function App() {
     });
   }, [pushHistorySnapshot]);
 
+  const handleDrumStepDetail = useCallback((instrument: DrumInstrument, step: number, detail: { probability?: number; ratchet?: number }) => {
+    const synth = synthsRef.current[0];
+    if (synth?.pattern) pushHistorySnapshotThrottled(synth.id, synth.pattern.id, `drum-step-detail-${instrument}-${step}`, 300);
+    setDrumState(prev => {
+      const track = prev[instrument];
+      const next = { ...track };
+      if (detail.probability !== undefined) {
+        next.stepProbabilities = [...(track.stepProbabilities || new Array(16).fill(1))];
+        next.stepProbabilities[step] = detail.probability;
+      }
+      if (detail.ratchet !== undefined) {
+        next.stepRatchets = [...(track.stepRatchets || new Array(16).fill(1))];
+        next.stepRatchets[step] = detail.ratchet;
+      }
+      return { ...prev, [instrument]: next };
+    });
+    localRequest('/drum/step-detail', {
+      method: 'POST',
+      body: JSON.stringify({ instrument, step, ...detail }),
+    });
+  }, [pushHistorySnapshotThrottled]);
+
   const handleDrumSettingsChange = useCallback((instrument: DrumInstrument, settings: Partial<DrumSettings>) => {
     const synth = synthsRef.current[0];
     if (synth?.pattern) {
@@ -2480,15 +2586,24 @@ function App() {
             </button>
             <button
               className="header-secondary-button"
-              onClick={() => {
-                void downloadArrangementWav({
-                  tempo: globalTempo, synths: synthsRef.current, drumState: drumStateRef.current,
-                  drumKitId: selectedDrumKitId, drumMasterVolume, drumSwing, drumFx, effectsLoop,
-                }).catch(error => setStorageError(`Audio export failed: ${error instanceof Error ? error.message : error}`));
-              }}
+              onClick={() => { void downloadArrangementWav(currentArrangement()).catch(reportExportError); }}
               title="Download pattern as WAV audio"
             >
               Download WAV
+            </button>
+            <button
+              className="header-secondary-button"
+              onClick={() => { void downloadArrangementWav(currentArrangement(), { loop: true }).catch(reportExportError); }}
+              title="Download one bar that loops seamlessly, with effect tails wrapped in"
+            >
+              Loop WAV
+            </button>
+            <button
+              className="header-secondary-button"
+              onClick={() => { void downloadStemsZip(currentArrangement()).catch(reportExportError); }}
+              title="Download each synth lane and the drums as separate WAV files in a zip"
+            >
+              Stems
             </button>
             <button className="header-secondary-button" onClick={handleMidiImportClick} title="Import MIDI file">
               Import MIDI
@@ -2499,6 +2614,20 @@ function App() {
               accept=".mid,.midi"
               style={{ display: 'none' }}
               onChange={handleMidiImportFile}
+            />
+            <button className="header-secondary-button" onClick={handleExportProject} title="Download the whole project as a file">
+              Export Project
+            </button>
+            <button className="header-secondary-button" onClick={() => projectImportFileRef.current?.click()} title="Open a project file, replacing the current project">
+              Import Project
+            </button>
+            <input
+              ref={projectImportFileRef}
+              type="file"
+              accept=".json,application/json"
+              aria-label="Import project file"
+              style={{ display: 'none' }}
+              onChange={(e) => { void handleImportProjectFile(e); }}
             />
             <button className="reset-button" onClick={handleReset} title="Reset all synths and drums">
               &#8634;
@@ -2588,6 +2717,7 @@ function App() {
                     onOctaveShift={(dir) => handleOctaveShift(selected.id, dir)}
                     holdEnabled={Boolean(selected.synthParams?.hold)}
                     releaseSignal={selected.forceReleaseSignal}
+                    computerKeyNotes={computerKeyNotes}
                     onStepSelect={(step) => handleStepChange(selected.id, step)}
                     onNoteAssign={(stepIndex, note) => handlePianoRollNoteAssign(selected.id, stepIndex, note)}
                     onClearPattern={() => { void handleClearPatternNotes(selected.id); }}
@@ -2653,6 +2783,7 @@ function App() {
             drumSwing={drumSwing}
             onDrumSwingChange={handleDrumSwingChange}
             onStepVelocityChange={handleDrumStepVelocity}
+            onStepDetailChange={handleDrumStepDetail}
             onMuteAll={handleDrumMuteAll}
             onSoloAll={handleDrumSoloAll}
             drumAudio={drumAudio}

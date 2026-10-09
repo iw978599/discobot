@@ -194,6 +194,10 @@ export interface DrumKitSelectionState {
 export interface DrumTrack {
   steps: boolean[];
   stepVelocities?: number[];
+  // chance from 0 to 1 that a step plays each time round; missing means always
+  stepProbabilities?: number[];
+  // hits packed evenly into one step, 1 to 4; missing means one
+  stepRatchets?: number[];
   settings: DrumSettings;
   muted?: boolean;
   solo?: boolean;

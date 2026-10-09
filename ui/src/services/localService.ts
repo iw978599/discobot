@@ -18,6 +18,13 @@ type State = Defaults & {
   version: 1; schema: typeof SCHEMA; synths: LocalSynth[]; tempo: number; selectedDrumKitId: string;
   drumMasterVolume: number; drumSwing: number; savedPatterns: SavedPatternFull[];
 };
+export interface ProjectFile {
+  format: typeof PROJECT_FILE_FORMAT;
+  formatVersion: 1;
+  exportedAt: string;
+  project: State;
+}
+const PROJECT_FILE_FORMAT = 'discobot-project';
 const STORAGE_KEY = 'discobot_browser_project_v1';
 // Bumped when synth parameters gain fields. An older project is upgraded with defaults,
 // which is a migration and not damage worth warning about.
@@ -51,56 +58,96 @@ export class LocalProjectService {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed?.version !== 1 || !Array.isArray(parsed.synths) || !Array.isArray(parsed.savedPatterns)) {
-          throw new Error('Invalid project data');
-        }
-        const tempo = number(parsed.tempo, 120, 20, 400);
-        const seen = new Set<number>();
-        let damaged = !matchesShape(parsed.drumState, defaults.drumState) || !matchesShape(parsed.effectsLoop, defaults.effectsLoop);
-        const synths: LocalSynth[] = parsed.synths.flatMap((value: unknown) => {
-          const input = record(value), pattern = sanitizePattern(input.pattern, tempo);
-          if (!Number.isInteger(input.synthId) || input.synthId < 1 || input.synthId > 3 || seen.has(input.synthId) || !pattern) {
-            damaged = true;
-            return [];
-          }
-          seen.add(input.synthId);
-          if ((parsed.schema === SCHEMA && !matchesShape(input.synthParams, defaults.synthParams))
-            || !input.pattern.steps.every((step: unknown) => matchesShape(step, { active: false, velocity: .7 }))) damaged = true;
-          const patterns: Pattern[] = Array.isArray(input.patterns)
-            ? input.patterns.map((value: unknown) => sanitizePattern(value, tempo)).filter((value: Pattern | null): value is Pattern => value !== null)
-            : [];
-          const unique = new Map(patterns.map(p => [p.id, p]));
-          unique.set(pattern.id, pattern);
-          return [{
-            synthId: input.synthId, pattern, patterns: [...unique.values()],
-            synthParams: sanitizeSynthParams(input.synthParams, defaults.synthParams),
-            synthModelId: normalizeSynthModelId(input.synthModelId), synthModelParams: sanitizeModelParams(input.synthModelParams),
-            isPlaying: false, muted: input.muted === true, solo: input.solo === true,
-            octaveShift: Math.round(number(input.octaveShift, 0, -2, 2)), keyboardMode: input.keyboardMode === 'piano-roll' ? 'piano-roll' : 'keyboard',
-          }];
-        });
-        const savedPatterns = parsed.savedPatterns.map((value: unknown) => sanitizeSaved(value, defaults))
-          .filter((value: SavedPatternFull | null): value is SavedPatternFull => value !== null);
-        if (savedPatterns.length !== parsed.savedPatterns.length) damaged = true;
-        this.state = {
-          ...clone(defaults), version: 1, schema: SCHEMA, synths, savedPatterns, tempo,
-          drumState: sanitizeDrums(parsed.drumState, defaults.drumState),
-          effectsLoop: sanitizeEffects(parsed.effectsLoop, defaults.effectsLoop),
-          drumFx: {
-            sends: sanitizeSends(record(parsed.drumFx).sends, defaults.drumFx.sends),
-            returnLevel: number(record(parsed.drumFx).returnLevel, defaults.drumFx.returnLevel, 0, 1),
-          },
-          selectedDrumKitId: sanitizeKit(parsed.selectedDrumKitId),
-          drumMasterVolume: number(parsed.drumMasterVolume, 1, 0, 1), drumSwing: number(parsed.drumSwing, 0, 0, .75),
-        };
+        const { state, damaged } = this.restore(JSON.parse(stored));
+        this.state = state;
         if (damaged) this.storageIssue = 'Some damaged browser project values were repaired. Please save a new copy of your arrangement.';
-        this.restored = synths.length > 0;
+        this.restored = state.synths.length > 0;
       }
     } catch {
       this.storageIssue = 'Browser storage is unavailable or damaged. Edits work, but may not survive reload.';
     }
     if (!this.state.synths.some(s => s.synthId === 1)) this.state.synths.unshift(this.createSynth(1));
+  }
+
+  // Rebuilds a project from untrusted data: browser storage or an imported file.
+  private restore(parsed: any): { state: State; damaged: boolean } {
+    const defaults = this.defaults!;
+    if (parsed?.version !== 1 || !Array.isArray(parsed.synths) || !Array.isArray(parsed.savedPatterns)) {
+      throw new Error('Invalid project data');
+    }
+    const tempo = number(parsed.tempo, 120, 20, 400);
+    const seen = new Set<number>();
+    let damaged = !matchesShape(parsed.drumState, defaults.drumState) || !matchesShape(parsed.effectsLoop, defaults.effectsLoop);
+    const synths: LocalSynth[] = parsed.synths.flatMap((value: unknown) => {
+      const input = record(value), pattern = sanitizePattern(input.pattern, tempo);
+      if (!Number.isInteger(input.synthId) || input.synthId < 1 || input.synthId > 3 || seen.has(input.synthId) || !pattern) {
+        damaged = true;
+        return [];
+      }
+      seen.add(input.synthId);
+      if ((parsed.schema === SCHEMA && !matchesShape(input.synthParams, defaults.synthParams))
+        || !input.pattern.steps.every((step: unknown) => matchesShape(step, { active: false, velocity: .7 }))) damaged = true;
+      const patterns: Pattern[] = Array.isArray(input.patterns)
+        ? input.patterns.map((value: unknown) => sanitizePattern(value, tempo)).filter((value: Pattern | null): value is Pattern => value !== null)
+        : [];
+      const unique = new Map(patterns.map(p => [p.id, p]));
+      unique.set(pattern.id, pattern);
+      return [{
+        synthId: input.synthId, pattern, patterns: [...unique.values()],
+        synthParams: sanitizeSynthParams(input.synthParams, defaults.synthParams),
+        synthModelId: normalizeSynthModelId(input.synthModelId), synthModelParams: sanitizeModelParams(input.synthModelParams),
+        isPlaying: false, muted: input.muted === true, solo: input.solo === true,
+        octaveShift: Math.round(number(input.octaveShift, 0, -2, 2)), keyboardMode: input.keyboardMode === 'piano-roll' ? 'piano-roll' : 'keyboard',
+      }];
+    });
+    const savedPatterns = parsed.savedPatterns.map((value: unknown) => sanitizeSaved(value, defaults))
+      .filter((value: SavedPatternFull | null): value is SavedPatternFull => value !== null);
+    if (savedPatterns.length !== parsed.savedPatterns.length) damaged = true;
+    const state: State = {
+      ...clone(defaults), version: 1, schema: SCHEMA, synths, savedPatterns, tempo,
+      drumState: sanitizeDrums(parsed.drumState, defaults.drumState),
+      effectsLoop: sanitizeEffects(parsed.effectsLoop, defaults.effectsLoop),
+      drumFx: {
+        sends: sanitizeSends(record(parsed.drumFx).sends, defaults.drumFx.sends),
+        returnLevel: number(record(parsed.drumFx).returnLevel, defaults.drumFx.returnLevel, 0, 1),
+      },
+      selectedDrumKitId: sanitizeKit(parsed.selectedDrumKitId),
+      drumMasterVolume: number(parsed.drumMasterVolume, 1, 0, 1), drumSwing: number(parsed.drumSwing, 0, 0, .75),
+    };
+    return { state, damaged };
+  }
+
+  // Everything in the project store as one portable object. Samples live in IndexedDB
+  // and are not part of it.
+  exportProject(): ProjectFile {
+    const project = clone(this.state!);
+    project.synths.forEach(synth => { synth.isPlaying = false; });
+    return { format: PROJECT_FILE_FORMAT, formatVersion: 1, exportedAt: new Date().toISOString(), project };
+  }
+
+  // Replaces the whole project with the contents of an exported file.
+  importProject(file: unknown): { ok: true; repaired: boolean } | { ok: false; error: string } {
+    const input = record(file);
+    if (input.format !== PROJECT_FILE_FORMAT) return { ok: false, error: 'This is not a Discobot project file.' };
+    if (input.formatVersion !== 1) return { ok: false, error: 'This project file was made by a newer version of Discobot.' };
+    let restored: { state: State; damaged: boolean };
+    try {
+      restored = this.restore(input.project);
+    } catch {
+      return { ok: false, error: 'The project file is damaged and could not be read.' };
+    }
+    const previous = this.state!;
+    this.state = restored.state;
+    if (!this.state.synths.some(s => s.synthId === 1)) this.state.synths.unshift(this.createSynth(1));
+    this.state.synths.sort((a, b) => a.synthId - b.synthId);
+    if (!this.persist()) {
+      this.state = previous;
+      return { ok: false, error: 'The project is too large for this browser\'s storage.' };
+    }
+    this.restored = true;
+    this.emit('init', this.snapshot());
+    this.notifySaved();
+    return { ok: true, repaired: restored.damaged };
   }
 
   private createSynth(synthId: number): LocalSynth {
@@ -310,13 +357,22 @@ export class LocalProjectService {
     }
     const track = state.drumState[body.instrument as keyof DrumState];
     if (track && path.startsWith('/drum/')) {
-      if ((path === '/drum/step' || path === '/drum/step-velocity') && (!Number.isInteger(body.step) || body.step < 0 || body.step >= 16)) {
+      if ((path === '/drum/step' || path === '/drum/step-velocity' || path === '/drum/step-detail') && (!Number.isInteger(body.step) || body.step < 0 || body.step >= 16)) {
         return respond({ error: 'Invalid drum step' }, 400);
       }
       if (path === '/drum/step') track.steps[body.step] = Boolean(body.active);
       else if (path === '/drum/step-velocity') {
         track.stepVelocities ||= Array(16).fill(1);
         track.stepVelocities![body.step] = number(body.velocity, 1, 0, 1);
+      } else if (path === '/drum/step-detail') {
+        if (body.probability !== undefined) {
+          track.stepProbabilities ||= Array(16).fill(1);
+          track.stepProbabilities![body.step] = number(body.probability, 1, 0, 1);
+        }
+        if (body.ratchet !== undefined) {
+          track.stepRatchets ||= Array(16).fill(1);
+          track.stepRatchets![body.step] = number(body.ratchet, 1, 1, 4);
+        }
       } else if (path === '/drum/settings') track.settings = merge(track.settings, record(body.settings));
       else if (path === '/drum/mix') {
         if (typeof body.muted === 'boolean') track.muted = body.muted;

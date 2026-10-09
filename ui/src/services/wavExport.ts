@@ -2,6 +2,8 @@ import { DrumCore, SynthCore, toVoiceParams } from '@discobot/engine';
 import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, SynthParameters } from '../types';
 import { DRUM_INSTRUMENTS } from './drumKits';
 import { expandStep } from './noteScheduling';
+import { expandDrumStep, seededRandom } from './drumScheduling';
+import { createZip } from '../utils/zip';
 import { MASTER_LEVEL, configureLimiter, driveCurve, reverbImpulse, safetyCurve } from '../hooks/browserAudio';
 
 export interface ExportArrangement {
@@ -13,6 +15,13 @@ export interface ExportArrangement {
   drumSwing: number;
   drumFx: { sends: FxSendLevels; returnLevel: number };
   effectsLoop: EffectsLoopState;
+}
+
+export interface RenderOptions {
+  // Render only this synth lane (ignoring its mute and solo) or only the drums: a stem.
+  only?: number | 'drums';
+  // Render exactly one bar that repeats seamlessly, with the effect tails wrapped into it.
+  loop?: boolean;
 }
 
 type Stereo = [Float32Array, Float32Array];
@@ -50,39 +59,51 @@ function renderCore(core: { process(left: Float32Array, right: Float32Array): vo
   return [left, right];
 }
 
-// One bar of a synth lane through the same voice core the worklet runs live.
-export function renderSynthLane(pattern: Pattern, params: SynthParameters, tempo: number, frames: number, sampleRate: number): Stereo {
+// A synth lane through the same voice core the worklet runs live. The bar is repeated
+// `bars` times in one pass, so tails and held notes carry across the bar line.
+export function renderSynthLane(
+  pattern: Pattern, params: SynthParameters, tempo: number, frames: number, sampleRate: number,
+  bars = 1, barDuration = 240 / tempo,
+): Stereo {
   const core = new SynthCore(sampleRate);
   core.setParams(toVoiceParams(params, tempo));
-  const stepDuration = 240 / tempo / pattern.steps.length;
-  pattern.steps.forEach((step, index) => {
-    if (!step.active || !step.note) return;
-    for (const scheduled of expandStep(step.note, params, stepDuration, tempo, step.slide)) {
-      core.noteOn({ note: scheduled.note, velocity: step.velocity, duration: scheduled.duration, time: index * stepDuration + scheduled.offset });
-    }
-  });
+  const stepDuration = barDuration / pattern.steps.length;
+  for (let bar = 0; bar < bars; bar++) {
+    pattern.steps.forEach((step, index) => {
+      if (!step.active || !step.note) return;
+      for (const scheduled of expandStep(step.note, params, stepDuration, tempo, step.slide)) {
+        core.noteOn({
+          note: scheduled.note, velocity: step.velocity, duration: scheduled.duration,
+          time: bar * barDuration + index * stepDuration + scheduled.offset,
+        });
+      }
+    });
+  }
   return renderCore(core, frames);
 }
 
 export function renderDrums(
   arrangement: Pick<ExportArrangement, 'tempo' | 'drumState' | 'drumKitId' | 'drumMasterVolume' | 'drumSwing'>,
-  frames: number, sampleRate: number,
+  frames: number, sampleRate: number, bars = 1, barDuration = 240 / arrangement.tempo,
 ): Stereo {
   const core = new DrumCore(sampleRate);
-  const stepDuration = 240 / arrangement.tempo / 16;
+  const stepDuration = barDuration / 16;
   const solo = DRUM_INSTRUMENTS.some(instrument => arrangement.drumState[instrument].solo);
-  for (const instrument of DRUM_INSTRUMENTS) {
-    const track = arrangement.drumState[instrument];
-    if (track.muted || (solo && !track.solo)) continue;
-    track.steps.forEach((active, step) => {
-      const velocity = track.stepVelocities?.[step] ?? 1;
-      if (!active || velocity <= 0) return;
-      core.trigger({
-        instrument, velocity, kitId: arrangement.drumKitId,
-        settings: { ...track.settings, volume: track.settings.volume * arrangement.drumMasterVolume },
-        time: (step + (step % 2 ? arrangement.drumSwing : 0)) * stepDuration,
-      });
-    });
+  const random = seededRandom(1);
+  for (let bar = 0; bar < bars; bar++) {
+    for (const instrument of DRUM_INSTRUMENTS) {
+      const track = arrangement.drumState[instrument];
+      if (track.muted || (solo && !track.solo)) continue;
+      for (let step = 0; step < 16; step++) {
+        for (const offset of expandDrumStep(track, step, random)) {
+          core.trigger({
+            instrument, velocity: track.stepVelocities?.[step] ?? 1, kitId: arrangement.drumKitId,
+            settings: { ...track.settings, volume: track.settings.volume * arrangement.drumMasterVolume },
+            time: bar * barDuration + (step + (step % 2 ? arrangement.drumSwing : 0) + offset) * stepDuration,
+          });
+        }
+      }
+    }
   }
   return renderCore(core, frames);
 }
@@ -127,12 +148,25 @@ function connectEffects(ctx: OfflineAudioContext, input: AudioNode, master: Audi
   }
 }
 
-export async function renderArrangementWav(arrangement: ExportArrangement): Promise<ArrayBuffer> {
+// How many bars a render covers and how long each is. A loop plays the bar enough times
+// for every tail to have wrapped round, then keeps only the last bar, which is what the
+// pattern sounds like once it has been looping for a while.
+export function renderPlan(tempo: number, tail: number, sampleRate: number, loop: boolean) {
+  if (!loop) {
+    const barDuration = 240 / tempo;
+    return { bars: 1, barDuration, frames: Math.ceil((barDuration + tail) * sampleRate), start: 0 };
+  }
+  // A whole number of samples per bar, so the kept bar starts exactly on a bar line.
+  const barFrames = Math.round(240 / tempo * sampleRate);
+  const bars = 1 + Math.ceil(tail * sampleRate / barFrames);
+  return { bars, barDuration: barFrames / sampleRate, frames: bars * barFrames, start: (bars - 1) * barFrames };
+}
+
+export async function renderArrangement(arrangement: ExportArrangement, options: RenderOptions = {}): Promise<{ channels: Stereo; sampleRate: number }> {
   const sampleRate = 44100;
-  const barDuration = 240 / arrangement.tempo;
   const tail = Math.min(8, Math.max(1, arrangement.effectsLoop.reverb.enabled ? arrangement.effectsLoop.reverb.decay : 0,
     ...arrangement.synths.map(s => s.synthParams?.envelope.release || 0)));
-  const frames = Math.ceil((barDuration + tail) * sampleRate);
+  const { bars, barDuration, frames, start } = renderPlan(arrangement.tempo, tail, sampleRate, options.loop === true);
   const ctx = new OfflineAudioContext(2, frames, sampleRate);
   const master = ctx.createGain(), limiter = ctx.createDynamicsCompressor(), safety = ctx.createWaveShaper();
   safety.curve = safetyCurve();
@@ -147,19 +181,59 @@ export async function renderArrangementWav(arrangement: ExportArrangement): Prom
     source.buffer = buffer;
     connectEffects(ctx, source, master, sends, returnLevel, arrangement.effectsLoop, group); source.start(0);
   };
+  const { only } = options;
   const synthSolo = arrangement.synths.some(s => s.solo);
   for (const lane of arrangement.synths) {
-    if (lane.muted || (synthSolo && !lane.solo) || !lane.pattern || !lane.synthParams) continue;
-    play(renderSynthLane(lane.pattern, lane.synthParams, arrangement.tempo, frames, sampleRate),
+    if (!lane.pattern || !lane.synthParams) continue;
+    if (only !== undefined ? only !== lane.id : lane.muted || (synthSolo && !lane.solo)) continue;
+    play(renderSynthLane(lane.pattern, lane.synthParams, arrangement.tempo, frames, sampleRate, bars, barDuration),
       lane.synthParams.fxSends, lane.synthParams.fxReturn, 'synth');
   }
-  play(renderDrums(arrangement, frames, sampleRate), arrangement.drumFx.sends, arrangement.drumFx.returnLevel, 'drums');
+  if (only === undefined || only === 'drums') {
+    play(renderDrums(arrangement, frames, sampleRate, bars, barDuration), arrangement.drumFx.sends, arrangement.drumFx.returnLevel, 'drums');
+  }
   const rendered = await ctx.startRendering();
-  return encodeWav([rendered.getChannelData(0), rendered.getChannelData(1)], sampleRate);
+  return { channels: [rendered.getChannelData(0).subarray(start), rendered.getChannelData(1).subarray(start)], sampleRate };
 }
 
-export async function downloadArrangementWav(arrangement: ExportArrangement) {
-  const url = URL.createObjectURL(new Blob([await renderArrangementWav(arrangement)], { type: 'audio/wav' }));
-  const anchor = document.createElement('a'); anchor.href = url; anchor.download = `discobot-${Date.now()}.wav`;
-  anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+export async function renderArrangementWav(arrangement: ExportArrangement, options: RenderOptions = {}): Promise<ArrayBuffer> {
+  const { channels, sampleRate } = await renderArrangement(arrangement, options);
+  return encodeWav(channels, sampleRate);
+}
+
+// The parts worth exporting on their own: lanes with notes, and the drums if any step is on.
+export function stemParts(arrangement: ExportArrangement): Array<{ only: number | 'drums'; name: string }> {
+  const parts: Array<{ only: number | 'drums'; name: string }> = arrangement.synths
+    .filter(lane => lane.synthParams && lane.pattern?.steps.some(step => step.active && step.note))
+    .map(lane => ({ only: lane.id, name: `synth-${lane.id}.wav` }));
+  if (DRUM_INSTRUMENTS.some(instrument => arrangement.drumState[instrument].steps.some(Boolean))) {
+    parts.push({ only: 'drums', name: 'drums.wav' });
+  }
+  return parts;
+}
+
+// Every stem is the same length and starts at the same instant, so they line up in a DAW.
+export async function renderStemsZip(arrangement: ExportArrangement) {
+  const parts = stemParts(arrangement);
+  if (parts.length === 0) throw new Error('There are no notes or drum steps to export.');
+  const entries = [];
+  for (const part of parts) {
+    entries.push({ name: part.name, data: new Uint8Array(await renderArrangementWav(arrangement, { only: part.only })) });
+  }
+  return createZip(entries);
+}
+
+export function downloadFile(data: BlobPart, type: string, fileName: string) {
+  const url = URL.createObjectURL(new Blob([data], { type }));
+  const anchor = document.createElement('a'); anchor.href = url; anchor.download = fileName;
+  document.body.appendChild(anchor); anchor.click(); document.body.removeChild(anchor);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export async function downloadArrangementWav(arrangement: ExportArrangement, options: RenderOptions = {}) {
+  downloadFile(await renderArrangementWav(arrangement, options), 'audio/wav', `discobot-${options.loop ? 'loop-' : ''}${Date.now()}.wav`);
+}
+
+export async function downloadStemsZip(arrangement: ExportArrangement) {
+  downloadFile(await renderStemsZip(arrangement), 'application/zip', `discobot-stems-${Date.now()}.zip`);
 }

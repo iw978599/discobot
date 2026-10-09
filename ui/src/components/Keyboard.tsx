@@ -7,6 +7,8 @@ interface KeyboardProps {
   octaveShift?: number;
   holdEnabled?: boolean;
   releaseSignal?: boolean;
+  // notes held from the computer keyboard, shown pressed alongside clicked ones
+  computerKeyNotes?: ReadonlySet<string>;
 }
 
 const WHITE_KEYS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
@@ -20,8 +22,12 @@ const BLACK_KEYS = [
   null,
 ];
 
-export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0, holdEnabled = false, releaseSignal = false }: KeyboardProps) {
-  const [activeNotes, setActiveNotes] = useState<Set<string>>(new Set());
+export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0, holdEnabled = false, releaseSignal = false, computerKeyNotes }: KeyboardProps) {
+  const [clickedNotes, setActiveNotes] = useState<Set<string>>(new Set());
+  const activeNotes = useMemo(
+    () => (computerKeyNotes?.size ? new Set([...clickedNotes, ...computerKeyNotes]) : clickedNotes),
+    [clickedNotes, computerKeyNotes],
+  );
   const notesRef = useRef(new Set<string>());
   const clickTimers = useRef(new Set<number>());
   const releaseRef = useRef(onNoteRelease);
@@ -130,7 +136,7 @@ export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0, h
     <div className="keyboard-container">
       <div className="keyboard-header">
         <h2>Keyboard</h2>
-        <span className="keyboard-range">{rangeLabel}</span>
+        <span className="keyboard-range" title="Computer keyboard: A–L row plays white keys, W E T Y U O P black keys, Z and X shift the octave">{rangeLabel}</span>
       </div>
       <div className="keyboard">
         {octaves.map((octave) => (

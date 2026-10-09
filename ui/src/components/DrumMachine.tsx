@@ -25,6 +25,7 @@ export interface DrumMachineProps {
   drumSwing: number;
   onDrumSwingChange: (swing: number) => void;
   onStepVelocityChange: (instrument: DrumInstrument, step: number, velocity: number) => void;
+  onStepDetailChange: (instrument: DrumInstrument, step: number, detail: { probability?: number; ratchet?: number }) => void;
   onMuteAll: (muted: boolean) => void;
   onSoloAll: () => void;
   drumAudio: ReturnType<typeof import('../hooks/useDrumAudio').useDrumAudio>;
@@ -158,6 +159,7 @@ export default function DrumMachine({
   onDrumSwingChange,
   drumSwing,
   onStepVelocityChange,
+  onStepDetailChange,
   onMuteAll,
   onSoloAll,
   drumAudio,
@@ -190,6 +192,20 @@ export default function DrumMachine({
     const current = drumState[selectedInstrument].steps[step];
     onStepToggle(selectedInstrument, step, !current);
   }, [drumState, selectedInstrument, onStepToggle, drumAudio, onStepVelocityChange]);
+
+  // The pattern tools move steps around; chance and repeats travel with their step.
+  const moveStepDetails = (sourceFor: (step: number) => number) => {
+    const track = drumState[selectedInstrument];
+    if (!track.stepProbabilities && !track.stepRatchets) return;
+    STEPS.forEach((step) => {
+      const from = sourceFor(step);
+      const probability = track.stepProbabilities?.[from] ?? 1;
+      const ratchet = track.stepRatchets?.[from] ?? 1;
+      if (probability !== (track.stepProbabilities?.[step] ?? 1) || ratchet !== (track.stepRatchets?.[step] ?? 1)) {
+        onStepDetailChange(selectedInstrument, step, { probability, ratchet });
+      }
+    });
+  };
 
   const handleInstrumentSelect = useCallback((instrument: DrumInstrument) => {
     setSelectedInstrument(instrument);
@@ -534,6 +550,7 @@ export default function DrumMachine({
                     const steps = [...drumState[selectedInstrument].steps];
                     const shifted = [steps[15], ...steps.slice(0, 15)];
                     const velocities = drumState[selectedInstrument].stepVelocities ?? steps.map(() => 1);
+                    moveStepDetails((i) => (i + 15) % 16);
                     shifted.forEach((active, i) => {
                       onStepVelocityChange(selectedInstrument, i, velocities[(i + 15) % 16]);
                       if (active !== drumState[selectedInstrument].steps[i]) {
@@ -550,6 +567,7 @@ export default function DrumMachine({
                   onClick={() => {
                     const reversed = [...drumState[selectedInstrument].steps].reverse();
                     const velocities = drumState[selectedInstrument].stepVelocities ?? reversed.map(() => 1);
+                    moveStepDetails((i) => 15 - i);
                     reversed.forEach((active, i) => {
                       onStepVelocityChange(selectedInstrument, i, velocities[15 - i]);
                       if (active !== drumState[selectedInstrument].steps[i]) {
@@ -567,6 +585,7 @@ export default function DrumMachine({
                     const steps = [...drumState[selectedInstrument].steps];
                     for (let i = 0; i < 8; i++) steps[i + 8] = steps[i];
                     const velocities = drumState[selectedInstrument].stepVelocities ?? steps.map(() => 1);
+                    moveStepDetails((i) => (i >= 8 ? i - 8 : i));
                     steps.forEach((active, i) => {
                       if (i >= 8) onStepVelocityChange(selectedInstrument, i, velocities[i - 8]);
                       if (active !== drumState[selectedInstrument].steps[i]) {
@@ -591,19 +610,22 @@ export default function DrumMachine({
               {STEPS.map((step) => {
                 const active = drumState[selectedInstrument].steps[step];
                 const vel = drumState[selectedInstrument].stepVelocities?.[step] ?? 1;
+                const chance = drumState[selectedInstrument].stepProbabilities?.[step] ?? 1;
+                const repeats = drumState[selectedInstrument].stepRatchets?.[step] ?? 1;
                 const stepBand = step < 4 ? 'band-a' : step < 8 ? 'band-b' : step < 12 ? 'band-c' : 'band-d';
                 return (
                   <button
                     key={step}
-                    className={`drum-step-btn ${stepBand} ${active ? 'active' : ''} ${isPlaying && currentStep === step ? 'current' : ''}`}
+                    className={`drum-step-btn ${stepBand} ${active ? 'active' : ''} ${active && chance < 1 ? 'chance' : ''} ${isPlaying && currentStep === step ? 'current' : ''}`}
                     aria-label={`${INSTRUMENT_LABELS[selectedInstrument]} step ${step + 1}`}
                     aria-pressed={active}
                     style={{ '--drum-color': INSTRUMENT_COLORS[selectedInstrument] } as React.CSSProperties}
                     onClick={(e) => handleStepClick(step, e.shiftKey)}
-                    title={active ? `Velocity: ${Math.round(vel * 100)}% (Shift+click to change)` : ''}
+                    title={active ? `Velocity: ${Math.round(vel * 100)}% (Shift+click to change) · Chance: ${Math.round(chance * 100)}% · Repeats: ${repeats}` : ''}
                   >
                     <span className="drum-step-led" />
                     {active && <span className="drum-step-velocity" style={{ height: `${vel * 100}%` }} />}
+                    {active && repeats > 1 && <span className="drum-step-repeats">×{repeats}</span>}
                   </button>
                 );
               })}
@@ -623,6 +645,31 @@ export default function DrumMachine({
                 onChange={(event) => onStepVelocityChange(selectedInstrument, selectedVelocityStep, Number(event.target.value))}
               />
             </label>
+            <div className="drum-step-details">
+              <label className="drum-step-note" title="How often this step plays each time the pattern comes round">
+                Chance
+                <input
+                  type="range"
+                  aria-label={`${INSTRUMENT_LABELS[selectedInstrument]} step ${selectedVelocityStep + 1} chance`}
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={drumState[selectedInstrument].stepProbabilities?.[selectedVelocityStep] ?? 1}
+                  onChange={(event) => onStepDetailChange(selectedInstrument, selectedVelocityStep, { probability: Number(event.target.value) })}
+                />
+                <span>{Math.round((drumState[selectedInstrument].stepProbabilities?.[selectedVelocityStep] ?? 1) * 100)}%</span>
+              </label>
+              <label className="drum-step-note" title="Hits packed evenly into this step">
+                Repeats
+                <select
+                  aria-label={`${INSTRUMENT_LABELS[selectedInstrument]} step ${selectedVelocityStep + 1} repeats`}
+                  value={drumState[selectedInstrument].stepRatchets?.[selectedVelocityStep] ?? 1}
+                  onChange={(event) => onStepDetailChange(selectedInstrument, selectedVelocityStep, { ratchet: Number(event.target.value) })}
+                >
+                  {[1, 2, 3, 4].map((count) => <option key={count} value={count}>{count}</option>)}
+                </select>
+              </label>
+            </div>
           </div>
         </div>
       </div>

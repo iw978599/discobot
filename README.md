@@ -39,7 +39,12 @@ not an application backend. The build's asset base is `/discobot/`.
 1. Click a keyboard key or Play to unlock browser audio; start with low output volume.
 2. Select a synth step and assign a note, or paint notes in the piano roll.
    Adjust velocity, oscillator, filter, ADSR, LFOs and arpeggiator controls.
+   The computer keyboard plays the selected synth: the A S D F G H J K L row is
+   the white keys, W E T Y U O P the black keys, and Z / X shift the octave.
+   Tap tempo is Shift+T.
 3. Add drum steps, select a kit, and adjust track settings, swing, mute/solo and mix.
+   Each drum step has a velocity, a chance of playing, and a repeat count that
+   packs up to four hits into the step.
 4. Use Play All / Stop All, shared tempo and the mixer. Effects sends feed
    drive, phaser, delay and reverb; a send and its return must be audible.
 5. Save a named pattern; load or delete it through the pattern manager.
@@ -53,6 +58,16 @@ localhost ports and the deployed site do not share projects. Clearing site data,
 private browsing or storage quotas can remove/prevent persistence. Storage errors
 are reported in the UI; local storage is not a backup.
 
+**Export Project** downloads the whole project as one JSON file: lanes, drums,
+effects, saved patterns and your synth presets. **Import Project** replaces the
+current project with a file, after asking. Use the pair as a backup or to move
+to another browser or device. Imported samples are not part of the file.
+
+The site is installable and works offline. A service worker caches the built
+app on first visit; after that it opens with no connection. It checks the
+network first for the page itself, so a new release appears on the next visit
+while online.
+
 ### MIDI and audio files
 
 - **MIDI input:** select a device, channel, target synth and live/record/step mode.
@@ -64,8 +79,16 @@ are reported in the UI; local storage is not a backup.
   Web MIDI or a connected controller.
 - **Export MIDI:** download a Standard MIDI File containing synth lanes, tempo
   and drums on channel 10. MIDI stores note events, not synthesized audio.
-- **Export WAV:** render the current arrangement locally to a stereo audio file.
-  The export runs the same synth and drum code as live playback, offline.
+- **Download WAV:** render the current arrangement locally to a stereo audio file:
+  one bar followed by its effect tail. The export runs the same synth and drum
+  code as live playback, offline.
+- **Loop WAV:** exactly one bar that repeats seamlessly. The pattern is rendered
+  for several bars and the last one is kept, so reverb and delay tails from the
+  end of the bar are already present at its start.
+- **Stems:** a zip with one WAV per synth lane that has notes (muted or not)
+  and one for the drums. All stems are the same length and line up.
+- Drum steps with a chance below 100% are decided by a fixed random sequence in
+  WAV and MIDI export, so the same project always exports the same file.
 
 ### Audio implementation
 

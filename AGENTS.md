@@ -40,7 +40,10 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 | `ui/src/services/projectSanitization.ts` | Validation and clamping for everything read from storage or saved arrangements |
 | `ui/src/services/browserTransport.ts` | Look-ahead clock. One tick is a 32nd note; 16-step lanes and drums use every second tick |
 | `ui/src/services/sampleStore.ts` | IndexedDB sample storage |
-| `ui/src/services/wavExport.ts` | Offline arrangement render and WAV encoding |
+| `ui/src/services/wavExport.ts` | Offline arrangement render and WAV encoding: full mix, seamless loop, and per-lane stems zipped by `utils/zip.ts` |
+| `ui/src/services/drumScheduling.ts` | `expandDrumStep`: the hits one drum step plays (chance, repeats); used live and by WAV and MIDI export |
+| `ui/src/hooks/useComputerKeyboard.ts` | Computer-keyboard piano for the selected lane |
+| `ui/pwa/service-worker.js` | Service worker template. `vite.config.ts` fills in the build's file list and emits it as `sw.js`; `main.tsx` registers it in production only |
 | `ui/src/services/drumKits.ts` | Drum instrument list and kit metadata |
 | `ui/src/hooks/browserAudio.ts` | Shared AudioContext, master limiter, parallel FX buses, sample playback |
 | `ui/src/hooks/useSynthAudio.ts` | Per-lane AudioWorklet nodes, note start/stop, parameter flattening |
@@ -67,7 +70,12 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 - The lanes labelled Low Tom and High Tom are the `snare2` and `ride` instrument ids, kept for saved-project compatibility.
 - A step's `slide` flag holds its note into the next step; a mono lane then glides instead of retriggering. Accent is step velocity routed to the filter (`velocity.filter`).
 - The audio hooks return a stable object. Keep it that way: effects in `App.tsx` depend on them.
-- Octave shift range is -2 to +2 per lane and only affects the on-screen keyboard and piano roll range.
+- Octave shift range is -2 to +2 per lane and affects the on-screen keyboard, the piano roll range and the computer-keyboard piano.
+- The computer keyboard plays notes with unmodified letter keys (matched by physical position, `event.code`). Any new single-key shortcut must use a modifier; tap tempo is Shift+T for that reason.
+- Drum steps carry optional `stepProbabilities` and `stepRatchets` arrays next to `stepVelocities`. Anything that moves or copies drum steps must move all three.
+- Exports must be repeatable: use `seededRandom` for anything random in WAV or MIDI export, never `Math.random`.
+- `localService.exportProject()` / `importProject()` are the project file format (`format: 'discobot-project'`). Import goes through the same `restore()` sanitizing as a reload; never trust a file's contents.
+- The service worker serves hashed files under `assets/` cache-first and everything else network-first. Keep unhashed files (the page, `audio-worklet.js`) network-first, or an update would pair a new app with a stale worklet.
 
 ## Drum Instrument Details
 | Instrument | Tone range | Extra knob | Engine function |
@@ -110,4 +118,4 @@ npm run test:browser # Playwright against the production preview
 - Replace the REST-shaped facade with typed service methods and split `App.tsx`
 - See `docs/SONG_MODE_PLAN.md` and `docs/ROADMAP.md`
 - Song mode / pattern chaining
-- Use imported samples as drum or synth sources
+- Use imported samples as drum or synth sources (and include them in project files)
