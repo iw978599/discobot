@@ -5,9 +5,11 @@ import { test } from 'node:test';
 const root = new URL('../../', import.meta.url);
 const read = (path: string) => readFileSync(new URL(path, root), 'utf8');
 
-test('only browser-compatible workspaces and dependencies remain', () => {
+test('the app has no server dependencies, and the accounts API has no dependencies at all', () => {
   const manifest = JSON.parse(read('package.json'));
-  assert.deepEqual(manifest.workspaces, ['engine', 'ui']);
+  assert.deepEqual(manifest.workspaces, ['engine', 'ui', 'server']);
+  assert.equal(JSON.parse(read('server/package.json')).dependencies, undefined);
+  assert.doesNotMatch(read('ui/package.json'), /@discobot\/server/);
   const lock = read('package-lock.json');
   assert.doesNotMatch(lock, /discord\.js|@discordjs\/|node-web-audio-api|"node_modules\/express"|"node_modules\/ws"/);
   assert.equal(existsSync(new URL('bot/package.json', root)), false);
@@ -27,4 +29,6 @@ test('project assets and privileged deployment use the correct boundary', () => 
   const ci = read('.github/workflows/ci.yml');
   assert.match(ci, /pull_request:/);
   assert.doesNotMatch(ci, /pages: write|id-token: write|pull_request_target/);
+  assert.match(pages, /VITE_API_URL: https:\/\//, 'the published site is told where the accounts API is');
+  assert.match(read('server/wrangler.toml'), /ALLOWED_ORIGINS = "https:\/\/iw978599\.github\.io"/, 'and the API only answers that site');
 });

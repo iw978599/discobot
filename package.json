@@ -5,7 +5,8 @@
   "private": true,
   "workspaces": [
     "engine",
-    "ui"
+    "ui",
+    "server"
   ],
   "scripts": {
     "dev:ui": "npm run dev --workspace=ui",
@@ -13,9 +14,10 @@
     "build": "npm run build --workspaces",
     "build:ui": "npm run build --workspace=ui",
     "start": "npm run preview --workspace=ui -- --host 0.0.0.0",
-    "typecheck": "tsc --noEmit -p engine/tsconfig.json && tsc --noEmit -p ui/tsconfig.json",
-    "test": "node --import tsx --test engine/test/*.test.ts ui/test/*.test.ts",
-    "test:browser": "playwright test"
+    "typecheck": "tsc --noEmit -p engine/tsconfig.json && tsc --noEmit -p ui/tsconfig.json && tsc --noEmit -p server/tsconfig.json",
+    "test": "node --import tsx --test engine/test/*.test.ts ui/test/*.test.ts server/test/*.test.ts",
+    "test:browser": "playwright test",
+    "dev:api": "npm run dev --workspace=server"
   },
   "devDependencies": {
     "@playwright/test": "1.64.0",

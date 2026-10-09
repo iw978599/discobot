@@ -2,7 +2,11 @@
 
 A browser-only music workstation: up to three synths, 16/32-step sequencing,
 piano-roll editing, an eight-instrument drum machine, MIDI and shared effects.
-No Discord account, backend, API keys or login is required.
+Everything runs in your browser and no login is required.
+
+An account is optional: a username and a password, by invitation, with no email
+address or personal details. It does not sync projects yet. The accounts API is
+in `server/` (see `server/README.md`).
 
 ## Architecture
 

@@ -16,7 +16,14 @@ Status: proposed, nothing built. Written 2026-10-08; stage 3 revised the same da
 - **Stage 1, items 5 to 7: not built.**
 - **Stage 2, share by link: built.** A link carries the song; opening it shows
   a page that plays it and offers a copy. No account and no server.
-- **Stage 3: not started.**
+- **Stage 3, step 2 (the API and accounts): built.** Sign up with an invite
+  code, sign in, sign out, recovery codes, change password, delete account,
+  and the owner's invite codes and member list. The API runs on Cloudflare at
+  `https://discobot-api.discobot-server.workers.dev`. Only the owner creates
+  invite codes. Samples will not sync at first: Cloudflare's file storage (R2)
+  needs a payment card, so projects go in the database and samples wait.
+- **Stage 3, steps 3 to 5 (sync, public pages, samples): not started.**
+  Signing in does not sync anything yet.
 
 ## Where things were when this was written
 
