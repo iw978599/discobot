@@ -214,6 +214,7 @@ export function HelpModal({ open, onClose }: { open: boolean; onClose: () => voi
           <ul className="help-list help-list-plain">
             <li><strong>Lane knobs:</strong> the four you reach for most, plus Level. Choosing a synth model swaps them for that model's own four.</li>
             <li><strong>Editor tabs:</strong> Notes (keyboard or piano roll, step velocity and slide), then Osc, Filter, Amp, LFO, Arp and Sends for the full sound.</li>
+            <li><strong>Thicker and punchier:</strong> Unison (Osc tab) stacks detuned copies of each note. The filter has a 12 dB and a steeper 24 dB slope. Duck (Sends tab) dips the lane on every kick so the kick cuts through.</li>
             <li><strong>Presets:</strong> save, load and delete sounds without touching the pattern.</li>
           </ul>
         </section>
@@ -228,6 +229,7 @@ export function HelpModal({ open, onClose }: { open: boolean; onClose: () => voi
           <h3>Keys</h3>
           <ul className="help-list help-list-plain">
             <li><strong>Play notes from the computer keyboard:</strong> the A S D F G H J K L row is the white keys and W E T Y U O P the black keys, on the open lane. Z and X shift the octave.</li>
+            <li><strong>Move along the steps:</strong> with a step selected, the left and right arrow keys select the one before or after it.</li>
             <li><strong>Tap tempo:</strong> Shift + T</li>
             <li><strong>Undo:</strong> Ctrl/Cmd + Z. <strong>Redo:</strong> Ctrl/Cmd + Shift + Z or Ctrl/Cmd + Y. They step back through note, sound, drum, tempo and effects edits in the order you made them.</li>
           </ul>

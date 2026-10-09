@@ -99,6 +99,9 @@ export function useSynthAudio() {
     lane.starting.clear();
     lane.node?.port.postMessage({ type: 'allNotesOff', release });
   }, []);
+  const duck = useCallback((synthId: number, time: number, amount: number) => {
+    lanesRef.current.get(synthId)?.audio?.duck(time, amount);
+  }, []);
   const stopAllNotes = useCallback((release = 0.03) => {
     lanesRef.current.forEach((_lane, id) => stopSynth(id, release));
   }, [stopSynth]);
@@ -118,6 +121,6 @@ export function useSynthAudio() {
   // The same object on every render, so effects and callbacks that depend on it do not re-run.
   return useMemo(() => ({
     ensureAudioReady, tryResume: () => { void ensureAudioReady(); },
-    playNote, stopNote, stopSynth, stopAllNotes, updateParameters, setEffectsLoop, setVolume, dispose,
-  }), [playNote, stopNote, stopSynth, stopAllNotes, updateParameters, setVolume, dispose]);
+    playNote, stopNote, stopSynth, stopAllNotes, updateParameters, setEffectsLoop, setVolume, duck, dispose,
+  }), [playNote, stopNote, stopSynth, stopAllNotes, updateParameters, setVolume, duck, dispose]);
 }

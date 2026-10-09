@@ -42,6 +42,7 @@ test('local synth state merges nested controls, isolates lanes, persists across 
   assert.equal(state.synths[0].synthParams.filter.q, defaults().synthParams.filter.q);
   assert.equal(state.synths[0].synthParams.lfo1.sync, true);
   assert.notEqual(state.synths[1].synthParams.filter.frequency, 1234);
+  service.flush();
   const restored = new LocalProjectService();
   restored.initialize(defaults());
   assert.equal(restored.snapshot().synths[0].synthParams.filter.frequency, 1234);
@@ -102,6 +103,7 @@ test('imported pattern becomes active and transport never resumes automatically 
   await mutate(service, '/sequencer/play', { synthId: 1, patternId: pattern.id });
   assert.equal(service.snapshot().synths[0].isPlaying, true);
   await mutate(service, '/synth/1/parameters', { gain: .7 });
+  service.flush();
   const restored = new LocalProjectService(); restored.initialize(defaults());
   assert.equal(restored.snapshot().synths[0].pattern.id, pattern.id);
   assert.equal(restored.snapshot().synths[0].isPlaying, false);
@@ -123,6 +125,7 @@ test('quota failures do not claim successful arrangement saves', async () => {
 test('an intact project reloads without a damage warning; a broken drum grid is reported', async () => {
   const service = setup();
   await mutate(service, '/drum/step', { instrument: 'kick', step: 3, active: true });
+  service.flush();
   const reload = () => {
     const restored = new LocalProjectService();
     restored.initialize(defaults());

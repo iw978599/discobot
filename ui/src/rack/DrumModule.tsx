@@ -306,6 +306,7 @@ export default function DrumModule({ studio }: { studio: Studio }) {
         </div>
         <div className="rack-knobs">
           <DrumKnob
+            key={`${selected}-volume`}
             label="Volume"
             ariaLabel={`${LABELS[selected]} volume`}
             value={track.settings.volume}
@@ -314,6 +315,7 @@ export default function DrumModule({ studio }: { studio: Studio }) {
             onChange={(value) => onSettings(selected, { volume: value })}
           />
           <DrumKnob
+            key={`${selected}-tone`}
             label="Tone"
             ariaLabel={`${LABELS[selected]} tone`}
             value={track.settings.tone}
@@ -322,6 +324,7 @@ export default function DrumModule({ studio }: { studio: Studio }) {
             onChange={(value) => onSettings(selected, { tone: value })}
           />
           <DrumKnob
+            key={`${selected}-tune`}
             label="Tune"
             ariaLabel={`${LABELS[selected]} tune`}
             value={track.settings.tune ?? 0}
@@ -332,6 +335,7 @@ export default function DrumModule({ studio }: { studio: Studio }) {
             onChange={(value) => onSettings(selected, { tune: value })}
           />
           <DrumKnob
+            key={`${selected}-extraknob`}
             label={extra.knob}
             ariaLabel={`${LABELS[selected]} ${extra.knob}`}
             value={track.settings.extra}
@@ -342,6 +346,7 @@ export default function DrumModule({ studio }: { studio: Studio }) {
           {showMore && (
             <>
               <DrumKnob
+                key={`${selected}-human`}
                 label="Human"
                 ariaLabel={`${LABELS[selected]} humanize`}
                 value={track.settings.humanize ?? 0.35}
@@ -351,6 +356,7 @@ export default function DrumModule({ studio }: { studio: Studio }) {
                 title="Small random pitch changes from hit to hit"
               />
               <DrumKnob
+                key={`${selected}-pan`}
                 label="Pan"
                 ariaLabel={`${LABELS[selected]} pan`}
                 min={-1}

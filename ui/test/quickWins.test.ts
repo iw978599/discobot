@@ -100,6 +100,7 @@ test('the project store saves drum chance and repeats per step', async () => {
   await post(store, '/drum/step-detail', { instrument: 'snare', step: 4, probability: 0.5 });
   await post(store, '/drum/step-detail', { instrument: 'snare', step: 4, ratchet: 3 });
   assert.equal((await post(store, '/drum/step-detail', { instrument: 'snare', step: 16, ratchet: 2 })).status, 400);
+  store.flush();
   const reloaded = new LocalProjectService();
   reloaded.initialize(defaults());
   const snare = reloaded.snapshot().drumState.snare;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Studio } from '../studio/useStudio';
 import { SynthModelParams } from '../types';
 import { getSynthModelDefinition } from '../synthModels';
@@ -35,6 +35,31 @@ export default function SynthModule({ studio, synthId }: SynthModuleProps) {
   const [tab, setTab] = useState<SynthTab>('notes');
   const synth = studio.synths.find(entry => entry.id === synthId);
   const selected = studio.selectedSynthId === synthId;
+  const sectionRef = useRef<HTMLElement>(null);
+  const selectedStep = synth?.selectedStep ?? null;
+  const stepCount = synth?.pattern?.steps.length ?? 0;
+  const selectStep = studio.handleStepSelect;
+
+  // With a step selected on the open lane, the left and right arrow keys walk along the row.
+  useEffect(() => {
+    if (!selected || selectedStep === null || stepCount === 0) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      // Knobs, sliders, menus, text fields and the piano roll use the arrow keys themselves.
+      if (target?.closest('input, select, textarea, [role="slider"], [role="menu"], [role="tablist"], [aria-modal="true"], .piano-roll')) return;
+      if (document.querySelector('[aria-modal="true"]')) return;
+      event.preventDefault();
+      const next = (selectedStep + (event.key === 'ArrowRight' ? 1 : stepCount - 1)) % stepCount;
+      selectStep(synthId, next);
+      // Keep keyboard focus on the selected cell if it was on the row, so Enter still acts on what is highlighted.
+      const cells = sectionRef.current?.querySelectorAll<HTMLElement>('.step-cell');
+      if (cells && target?.classList.contains('step-cell')) cells[next]?.focus();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [selected, selectedStep, stepCount, synthId, selectStep]);
 
   if (!synth) {
     return (
@@ -55,7 +80,7 @@ export default function SynthModule({ studio, synthId }: SynthModuleProps) {
   const change = studio.handleParameterChange;
 
   return (
-    <section className={`rack-unit synth-module ${selected ? 'selected' : ''}`} aria-label={`Synth ${synthId} module`}>
+    <section ref={sectionRef} className={`rack-unit synth-module ${selected ? 'selected' : ''}`} aria-label={`Synth ${synthId} module`}>
       <div className="rack-row">
         <button
           className="rack-plate"
@@ -211,7 +236,7 @@ export default function SynthModule({ studio, synthId }: SynthModuleProps) {
                   </select>
                 </label>
                 {synth.selectedStep === null ? (
-                  <span className="rack-hint">Select a step above, then play a key to put a note on it. Click a step with a note again to clear it.</span>
+                  <span className="rack-hint">Select a step above, then play a key to put a note on it. The arrow keys move along the row; click a step with a note again to clear it.</span>
                 ) : (
                   <>
                     <span className="step-tools-name">Step {synth.selectedStep + 1}</span>

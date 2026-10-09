@@ -66,6 +66,10 @@ export function sanitizeSynthParams(value: unknown, defaults: SynthParameters): 
   osc2.detune = number(osc2.detune, osc2Defaults.detune, -100, 100);
   osc2.level = number(osc2.level, osc2Defaults.level, 0, 1);
   params.mixer = { sub: number(params.mixer!.sub, 0, 0, 1), noise: number(params.mixer!.noise, 0, 0, 1) };
+  params.unison = {
+    voices: Math.round(number(params.unison!.voices, 1, 1, 5)), detune: number(params.unison!.detune, defaults.unison!.detune, 0, 1),
+  };
+  params.duck = number(input.duck, 0, 0, 1);
   params.velocity = { amp: number(params.velocity!.amp, 1, 0, 1), filter: number(params.velocity!.filter, 0, 0, 1) };
   const fm = params.fm!, fmDefaults = defaults.fm!;
   params.fm = {
@@ -83,6 +87,7 @@ export function sanitizeSynthParams(value: unknown, defaults: SynthParameters): 
   filter.envAmount = number(filter.envAmount, 0, -1, 1);
   filter.keyTracking = number(filter.keyTracking, 0, 0, 1);
   filter.drive = number(filter.drive, 0, 0, 1);
+  filter.slope = filter.slope === 24 ? 24 : 12;
   for (const key of ['attack', 'decay', 'release'] as const) params.envelope[key] = number(params.envelope[key], defaults.envelope[key], 0, 10);
   params.envelope.sustain = number(params.envelope.sustain, defaults.envelope.sustain, 0, 1);
   params.portamento.glide = number(params.portamento.glide, defaults.portamento.glide, 0, 2);

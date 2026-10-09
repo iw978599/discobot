@@ -148,6 +148,8 @@
 .rack input[type="checkbox"] { accent-color: var(--amber); }
 
 /* menus */
+.app-alert-actions { display: flex; gap: 6px; flex: none; }
+.rack .synth-filter-type-row { gap: 4px; }
 .rack-menu { position: relative; }
 .rack-menu-list {
   position: absolute; right: 0; top: calc(100% + 4px); z-index: 30;

@@ -39,14 +39,10 @@ slow down every later change.
    IndexedDB records. This also allows export and import of a single
    arrangement as a file.
 
-4. **Guard against two tabs.** (S)
-   Two tabs share one project key and silently overwrite each other. Use a
-   `BroadcastChannel` or the Web Locks API to detect a second tab and either
-   make it read-only or reload it when the other tab saves.
+4. **Guard against two tabs.** Done: a tab stops saving when another tab
+   writes the project, and asks which version to keep.
 
-5. **Debounce persistence.** (S)
-   Dragging a knob serializes and writes the entire project on every pointer
-   move. Write on a trailing 250 ms timer and on `visibilitychange`/`pagehide`.
+5. **Debounce persistence.** Done.
 
 6. **Stop re-rendering the whole app on every step.** (M)
    The playhead position lives in React state at the top of the tree, so all
@@ -98,10 +94,10 @@ mono/slide and the drum voices. What it leaves open:
    do LinnDrum, DMX and TR-707 kits. A one-shot or looped sample oscillator in
    the synth is a natural follow-up.
 
-3. **Unison and a 24 dB filter mode.** (S each)
-   Unison (several detuned copies per note) is the missing piece for big
-   leads and pads. A four-pole ladder mode alongside the current two-pole
-   filter gives the steeper Moog and 303 character.
+3. **Unison and a 24 dB filter mode.** Done. The 24 dB mode is two cascaded
+   state-variable stages, not a ladder model; a true ladder with its
+   characteristic resonance and bass loss is still open. The Minimoog and
+   TB-303 models do not switch to 24 dB by themselves yet.
 
 4. **A modulation matrix.** (M)
    Sources (two LFOs, both envelopes, velocity, key, mod wheel) routed to any
@@ -113,9 +109,8 @@ mono/slide and the drum voices. What it leaves open:
    pre-delay and damping would sound better and cost less. Tempo-synced delay
    times are an easy win.
 
-6. **Sidechain ducking and a master EQ.** (S each)
-   Kick-triggered ducking of a synth lane is central to the dance styles this
-   tool suits, and is one gain envelope.
+6. **Sidechain ducking and a master EQ.** Ducking is done (per-lane Duck
+   amount, kick only, fixed recovery time). Master EQ is still open.
 
 ## Features
 
@@ -164,9 +159,7 @@ mono/slide and the drum voices. What it leaves open:
 ## Suggested order
 
 1. Listen and tune the new voices (sound item 1).
-2. Debounced persistence and the two-tab guard: small, and they protect
-   people's work.
+2. Samples on the drum grid.
 3. Typed store and `App.tsx` split.
 4. Song mode.
-5. Samples on the drum grid.
-6. Longer patterns, then polyphonic steps and note length.
+5. Longer patterns, then polyphonic steps and note length.

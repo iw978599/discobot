@@ -376,6 +376,7 @@ export function useStudio() {
   const [browserVolume, setBrowserVolume] = useState(1.0);
   const [globalTempo, setGlobalTempo] = useState(120);
   const [storageError, setStorageError] = useState<string | null>(null);
+  const [changedElsewhere, setChangedElsewhere] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [midiMode, setMidiMode] = useState<MidiMode>('live');
   const [midiChannel, setMidiChannel] = useState(1);
@@ -704,7 +705,13 @@ export function useStudio() {
       if (track.muted || (drumSolo && !track.solo)) continue;
       const velocity = track.stepVelocities?.[drumStep] ?? 1;
       for (const offset of expandDrumStep(track, drumStep)) {
-        void drumAudio.playDrumHit(instrument, track.settings, velocity, time + swingOffset + offset * duration * 2);
+        const hitTime = time + swingOffset + offset * duration * 2;
+        void drumAudio.playDrumHit(instrument, track.settings, velocity, hitTime);
+        if (instrument !== 'kick') continue;
+        for (const synth of lanes) {
+          const amount = synth.synthParams?.duck ?? 0;
+          if (amount > 0) synthAudio.duck(synth.id, hitTime, amount);
+        }
       }
     }
   };
@@ -958,6 +965,10 @@ export function useStudio() {
         if (message.data.effectsLoop) setEffectsLoop(normalizeEffectsLoop(message.data.effectsLoop));
         break;
       }
+      case 'externalChange': {
+        setChangedElsewhere(true);
+        break;
+      }
       case 'storageError': {
         setStorageError(message.data.message);
         break;
@@ -1104,6 +1115,12 @@ export function useStudio() {
     drumAudio.stopAllNotes();
   }, [synthAudio, drumAudio]);
 
+  // Another tab saved the project. Either take that version (a reload reads it) or keep this one.
+  const loadOtherTabVersion = useCallback(() => { window.location.reload(); }, []);
+  const keepThisTabVersion = useCallback(() => {
+    if (localService.resumeSaving()) setChangedElsewhere(false);
+  }, []);
+
   const clearActiveSavedPattern = useCallback(() => {
     setActiveSavedPattern(null);
   }, []);
@@ -1143,6 +1160,11 @@ export function useStudio() {
       return { ...s, selectedStep: s.selectedStep === stepIndex ? null : stepIndex };
     }));
   }, [clearActiveSavedPattern, pushHistorySnapshot]);
+
+  // Moves the selection without the toggle and clear behaviour a click on a step has.
+  const handleStepSelect = useCallback((synthId: number, stepIndex: number) => {
+    setSynths(prev => prev.map(s => (s.id === synthId ? { ...s, selectedStep: stepIndex } : s)));
+  }, []);
 
   const handleKeyboardModeChange = useCallback((synthId: number, mode: 'keyboard' | 'piano-roll') => {
     void localRequest(`/synth/${synthId}/preferences`, { method: 'POST', body: JSON.stringify({ keyboardMode: mode }) });
@@ -2258,11 +2280,11 @@ export function useStudio() {
   return {
     synths, selectedSynthId, setSelectedSynthId, drumState: memoizedDrumState, drumKits, drumKitsLoading, drumKitsError,
     selectedDrumKitId, drumMasterVolume, drumSwing, drumCurrentStep, drumFx, effectsLoop, browserMuted, setBrowserMuted,
-    browserVolume, setBrowserVolume, globalTempo, storageError, setStorageError, helpOpen, setHelpOpen, midiMode, setMidiMode,
+    browserVolume, setBrowserVolume, globalTempo, storageError, setStorageError, changedElsewhere, loadOtherTabVersion, keepThisTabVersion, helpOpen, setHelpOpen, midiMode, setMidiMode,
     midiChannel, setMidiChannel, midiTargetSynthId, setMidiTargetSynthId, activeSavedPattern, synthPresets, drumAudio,
     handleUndo, handleRedo, midiImportData, setMidiImportData, midiImportAssignments, setMidiImportAssignments,
     handleMidiImportClick, handleMidiImportFile, handleMidiImportApplyAll, midiImportFileRef, handleRemoveSynth,
-    ensureSynthExists, handleOctaveShift, handleTempoChange, handleGlobalPlayStop, handleStepChange, handleKeyboardModeChange,
+    ensureSynthExists, handleOctaveShift, handleTempoChange, handleGlobalPlayStop, handleStepChange, handleStepSelect, handleKeyboardModeChange,
     handlePianoRollNoteAssign, handleClearPatternNotes, handleNotePlay, handleNoteRelease, computerKeyNotes, midiState,
     handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange,
     handleSynthMixChange, refreshSavedPatterns, handleSaveSynthPreset, handleLoadSynthPreset, handleDeleteSynthPreset,

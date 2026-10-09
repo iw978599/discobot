@@ -16,7 +16,7 @@ async function menu(page: Page, name: 'Project' | 'Export', item: string) {
 const openMidi = (page: Page) => page.getByRole('button', { name: 'MIDI and samples', exact: true }).click();
 
 async function project(page: Page) {
-  return page.evaluate(key => JSON.parse(localStorage.getItem(key) || '{}'), PROJECT_KEY);
+  return page.evaluate(key => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem(key) || '{}')), PROJECT_KEY);
 }
 
 test.beforeEach(async ({ page }, testInfo) => {
