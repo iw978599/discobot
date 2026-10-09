@@ -4,12 +4,12 @@ import { LocalProjectService } from '../src/services/localService.ts';
 import { DRUM_INSTRUMENTS } from '../src/services/drumKits.ts';
 import { BrowserTransport } from '../src/services/browserTransport.ts';
 import { encodeWav } from '../src/services/wavExport.ts';
-import { Synthesizer } from '../../engine/src/Synthesizer.ts';
+import { createDefaultSynthParameters } from '../../engine/src/synth/voiceParams.ts';
 import type { DrumState, EffectsLoopState } from '../src/types.ts';
 
 const storage = new Map<string, string>();
 const defaults = () => ({
-  synthParams: new Synthesizer().getParameters(),
+  synthParams: createDefaultSynthParameters(),
   drumState: Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => [instrument, {
     steps: Array(16).fill(false), settings: { volume: .5, tone: .5, extra: .5 }, muted: false, solo: false,
   }])) as DrumState,

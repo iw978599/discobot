@@ -131,7 +131,7 @@ test('full musical arrangement survives save, editing, load and reload', async (
   await expect(page.getByRole('button', { name: 'Kick step 1', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: /Play All/ }).click();
   await expect(page.locator('.step-light.on').first()).toBeVisible();
-  await expect.poll(() => page.evaluate(() => (window as unknown as { workletUrls: string[] }).workletUrls.some(url => url.endsWith('/discobot/synth-processor.js')))).toBe(true);
+  await expect.poll(() => page.evaluate(() => (window as unknown as { workletUrls: string[] }).workletUrls.some(url => url.endsWith('/discobot/audio-worklet.js')))).toBe(true);
   await page.getByRole('button', { name: /Stop All/ }).click();
   await expect(page.locator('.step-light.on')).toHaveCount(0);
   await page.reload();

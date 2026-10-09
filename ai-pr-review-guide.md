@@ -77,7 +77,7 @@ discobot/
 
 - [ ] `DrumState` initialized with `createDefaultDrumState()` (never null)
 - [ ] Synth parameters clamped to valid ranges
-- [ ] StreamingSynth chunks: 20ms at 48kHz (960 samples)
+- [ ] DSP changes live in the engine cores, not in the worklet wrapper or WAV export
 - [ ] Pattern audio: stereo Int16 PCM at 48kHz, base64 encoded
 - [ ] Browser AudioWorklet messages match engine expectations
 - [ ] Drum kit changes apply defaults without losing user tweaks

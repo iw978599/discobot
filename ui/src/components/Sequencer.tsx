@@ -12,6 +12,7 @@ interface SequencerProps {
   onPatternChange: (pattern: Pattern) => void;
   onStepChange: (stepIndex: number) => void;
   onStepVelocityChange: (stepIndex: number, velocity: number) => void;
+  onStepSlideChange: (stepIndex: number, slide: boolean) => void;
   onStepCountChange: (stepCount: 16 | 32) => void;
   onLoadSavedPattern: (data: SavedPatternFull, savedId?: string) => void;
 }
@@ -84,6 +85,7 @@ export default function Sequencer({
   onPatternChange,
   onStepChange,
   onStepVelocityChange,
+  onStepSlideChange,
   onStepCountChange,
   onLoadSavedPattern,
 }: SequencerProps) {
@@ -180,7 +182,7 @@ export default function Sequencer({
               </span>
             </div>
             <button
-              className={`step-button ${step.note ? 'has-note' : ''} ${
+              className={`step-button ${step.note ? 'has-note' : ''} ${step.slide ? 'has-slide' : ''} ${
                 selectedStep === index ? 'selected' : ''
               }`}
               onClick={() => onStepChange(index)}
@@ -255,6 +257,15 @@ export default function Sequencer({
                   onChange={(event) => onStepVelocityChange(selectedStep, Number(event.target.value))}
                 />
                 <span>{Math.round((pattern.steps[selectedStep]?.velocity ?? 0.7) * 127)}</span>
+              </label>
+              <label className="step-slide-control" title="Hold this note into the next step. On a mono synth the pitch glides instead of retriggering.">
+                <input
+                  type="checkbox"
+                  aria-label={`Step ${selectedStep + 1} slide`}
+                  checked={Boolean(pattern.steps[selectedStep]?.slide)}
+                  onChange={(event) => onStepSlideChange(selectedStep, event.target.checked)}
+                />
+                Slide
               </label>
             </div>
           )}

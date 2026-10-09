@@ -4,6 +4,7 @@
  */
 
 import { useState } from 'react';
+import { createDefaultSynthParameters } from '@discobot/engine';
 import { SynthParameters, OscillatorType, SynthModelId, SynthModelParams } from '../types';
 import { SYNTH_MODELS, getSynthModelDefinition } from '../synthModels';
 import Knob from './Knob';
@@ -42,7 +43,24 @@ const TOOLTIPS = {
   pan: 'Stereo position - left, center, or right',
   portamentoEnable: 'Enable pitch glide between consecutive notes',
   portamentoGlide: 'Glide time - how long to slide between notes',
+  pulseWidth: 'Pulse width of the square wave - 50% is a plain square, narrower is thinner and more nasal',
+  osc2Semitones: 'Oscillator 2 pitch offset in semitones',
+  osc2Detune: 'Oscillator 2 fine tuning in cents - a few cents against oscillator 1 gives a thick, beating sound',
+  osc2Level: 'Oscillator 2 level in the mix',
+  sub: 'Square wave one octave below oscillator 1',
+  noise: 'White noise level',
+  envAmount: 'How far the filter envelope moves the cutoff - negative closes the filter instead of opening it',
+  keyTracking: 'How much the cutoff follows the note played, so high notes stay bright',
+  filterDrive: 'Overdrive into the filter',
+  velocityAmp: 'How much step or key velocity changes loudness',
+  velocityFilter: 'How much velocity opens the filter - this is the accent on an acid bassline',
+  fmRatio: 'Modulator frequency as a multiple of the note - whole numbers are harmonic, others are bell-like',
+  fmIndex: 'Modulation depth - more adds brightness and bite',
+  fmDecay: 'How quickly the modulation fades after the note starts - short gives a pluck',
+  fmFeedback: 'Modulator feedback - adds grit',
 };
+
+const DEFAULTS = createDefaultSynthParameters();
 
 const parseNumber = (input: string): number | null => {
   const n = Number.parseFloat(input.replace(/[^0-9+-.]/g, ''));
@@ -157,6 +175,30 @@ export default function SynthControls({
       sync,
       rate: sync ? Math.max(1, Math.min(128, Math.round(rate))) : Math.max(0.1, Math.min(20, rate)),
     });
+  };
+
+  // Projects saved before these sections existed load without them.
+  const osc2 = parameters.oscillator2 ?? DEFAULTS.oscillator2!;
+  const mixer = parameters.mixer ?? DEFAULTS.mixer!;
+  const filterEnvelope = parameters.filterEnvelope ?? DEFAULTS.filterEnvelope!;
+  const velocity = parameters.velocity ?? DEFAULTS.velocity!;
+  const fm = parameters.fm ?? DEFAULTS.fm!;
+  const isFm = parameters.engine === 'fm';
+
+  const updateOscillator2 = (updates: Partial<NonNullable<SynthParameters['oscillator2']>>) => {
+    onParameterChange({ oscillator2: { ...osc2, ...updates } });
+  };
+  const updateMixer = (updates: Partial<NonNullable<SynthParameters['mixer']>>) => {
+    onParameterChange({ mixer: { ...mixer, ...updates } });
+  };
+  const updateFilterEnvelope = (updates: Partial<SynthParameters['envelope']>) => {
+    onParameterChange({ filterEnvelope: { ...filterEnvelope, ...updates } });
+  };
+  const updateVelocity = (updates: Partial<NonNullable<SynthParameters['velocity']>>) => {
+    onParameterChange({ velocity: { ...velocity, ...updates } });
+  };
+  const updateFm = (updates: Partial<NonNullable<SynthParameters['fm']>>) => {
+    onParameterChange({ fm: { ...fm, ...updates } });
   };
 
   const updateEnvelope = (updates: Partial<SynthParameters['envelope']>) => {
@@ -361,12 +403,25 @@ export default function SynthControls({
           <h3>OSC</h3>
           <div className="synth-column-controls">
             <div className="synth-waveform-selector">
+              <label>ENGINE</label>
+              <select
+                value={isFm ? 'fm' : 'subtractive'}
+                aria-label="Synth engine"
+                onChange={(e) => onParameterChange({ engine: e.target.value as 'subtractive' | 'fm' })}
+                className="synth-select"
+              >
+                <option value="subtractive">Analog</option>
+                <option value="fm">FM</option>
+              </select>
+            </div>
+            <div className="synth-waveform-selector">
               <label>WAVE</label>
               <select
                 value={parameters.oscillator.type}
                 aria-label="Oscillator waveform"
                 onChange={(e) => updateOscillator({ type: e.target.value as OscillatorType })}
                 className="synth-select"
+                disabled={isFm}
               >
                 <option value="sine">~</option>
                 <option value="square">⎍</option>
@@ -385,8 +440,191 @@ export default function SynthControls({
               color="#3b82f6"
               tooltip={TOOLTIPS.detune}
             />
+            <Knob
+              label="Pulse W"
+              value={parameters.oscillator.pulseWidth ?? 0.5}
+              min={0.05}
+              max={0.95}
+              step={0.01}
+              displayValue={`${Math.round((parameters.oscillator.pulseWidth ?? 0.5) * 100)}%`}
+              onChange={(v) => updateOscillator({ pulseWidth: v })}
+              parseInputValue={parsePercent(0, 1)}
+              disabled={isFm || parameters.oscillator.type !== 'square'}
+              color="#3b82f6"
+              tooltip={TOOLTIPS.pulseWidth}
+            />
           </div>
         </div>
+
+        {isFm ? (
+          <div className="synth-column">
+            <h3>FM</h3>
+            <div className="synth-column-controls">
+              <div className="synth-waveform-selector">
+                <label>ALGO</label>
+                <select
+                  value={fm.algorithm}
+                  aria-label="FM algorithm"
+                  onChange={(e) => updateFm({ algorithm: Number(e.target.value) })}
+                  className="synth-select"
+                >
+                  <option value={0}>Stack</option>
+                  <option value={1}>Dual</option>
+                  <option value={2}>Fan</option>
+                  <option value={3}>Organ</option>
+                </select>
+              </div>
+              <Knob
+                label="Ratio"
+                value={fm.ratio}
+                min={0.5}
+                max={14}
+                step={0.5}
+                displayValue={`${fm.ratio}x`}
+                onChange={(v) => updateFm({ ratio: v })}
+                color="#f97316"
+                tooltip={TOOLTIPS.fmRatio}
+              />
+              <Knob
+                label="Amount"
+                value={fm.index}
+                min={0}
+                max={1}
+                step={0.01}
+                displayValue={`${Math.round(fm.index * 100)}%`}
+                onChange={(v) => updateFm({ index: v })}
+                parseInputValue={parsePercent(0, 1)}
+                color="#f97316"
+                tooltip={TOOLTIPS.fmIndex}
+              />
+              <Knob
+                label="Mod Decay"
+                value={fm.decay}
+                min={0.02}
+                max={4}
+                step={0.01}
+                displayValue={`${(fm.decay * 1000).toFixed(0)}ms`}
+                onChange={(v) => updateFm({ decay: v })}
+                parseInputValue={parseMilliseconds}
+                color="#f97316"
+                tooltip={TOOLTIPS.fmDecay}
+              />
+              <Knob
+                label="Feedback"
+                value={fm.feedback}
+                min={0}
+                max={1}
+                step={0.01}
+                displayValue={`${Math.round(fm.feedback * 100)}%`}
+                onChange={(v) => updateFm({ feedback: v })}
+                parseInputValue={parsePercent(0, 1)}
+                color="#f97316"
+                tooltip={TOOLTIPS.fmFeedback}
+              />
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="synth-column">
+              <div className="synth-section-header">
+                <h3>OSC 2</h3>
+                <label className="synth-toggle">
+                  <input
+                    type="checkbox"
+                    checked={osc2.enabled}
+                    aria-label="Oscillator 2 enabled"
+                    onChange={(e) => updateOscillator2({ enabled: e.target.checked })}
+                  />
+                  <span className="synth-toggle-slider" />
+                </label>
+              </div>
+              <div className="synth-column-controls">
+                <div className="synth-waveform-selector">
+                  <label>WAVE</label>
+                  <select
+                    value={osc2.type}
+                    aria-label="Oscillator 2 waveform"
+                    onChange={(e) => updateOscillator2({ type: e.target.value as OscillatorType })}
+                    className="synth-select"
+                    disabled={!osc2.enabled}
+                  >
+                    <option value="sine">~</option>
+                    <option value="square">⎍</option>
+                    <option value="sawtooth">/|</option>
+                    <option value="triangle">/\</option>
+                  </select>
+                </div>
+                <Knob
+                  label="Semi"
+                  value={osc2.semitones}
+                  min={-24}
+                  max={24}
+                  step={1}
+                  displayValue={`${osc2.semitones > 0 ? '+' : ''}${osc2.semitones}`}
+                  onChange={(v) => updateOscillator2({ semitones: Math.round(v) })}
+                  disabled={!osc2.enabled}
+                  color="#6366f1"
+                  tooltip={TOOLTIPS.osc2Semitones}
+                />
+                <Knob
+                  label="Fine"
+                  value={osc2.detune}
+                  min={-50}
+                  max={50}
+                  step={1}
+                  displayValue={`${osc2.detune > 0 ? '+' : ''}${osc2.detune}`}
+                  onChange={(v) => updateOscillator2({ detune: v })}
+                  disabled={!osc2.enabled}
+                  color="#6366f1"
+                  tooltip={TOOLTIPS.osc2Detune}
+                />
+              </div>
+            </div>
+
+            <div className="synth-column">
+              <h3>MIX</h3>
+              <div className="synth-column-controls">
+                <Knob
+                  label="Osc 2"
+                  value={osc2.level}
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  displayValue={`${Math.round(osc2.level * 100)}%`}
+                  onChange={(v) => updateOscillator2({ level: v })}
+                  parseInputValue={parsePercent(0, 1)}
+                  disabled={!osc2.enabled}
+                  color="#6366f1"
+                  tooltip={TOOLTIPS.osc2Level}
+                />
+                <Knob
+                  label="Sub"
+                  value={mixer.sub}
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  displayValue={`${Math.round(mixer.sub * 100)}%`}
+                  onChange={(v) => updateMixer({ sub: v })}
+                  parseInputValue={parsePercent(0, 1)}
+                  color="#6366f1"
+                  tooltip={TOOLTIPS.sub}
+                />
+                <Knob
+                  label="Noise"
+                  value={mixer.noise}
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  displayValue={`${Math.round(mixer.noise * 100)}%`}
+                  onChange={(v) => updateMixer({ noise: v })}
+                  parseInputValue={parsePercent(0, 1)}
+                  color="#6366f1"
+                  tooltip={TOOLTIPS.noise}
+                />
+              </div>
+            </div>
+          </>
+        )}
 
         <div className="synth-column">
           <h3>FILTER</h3>
@@ -430,6 +668,145 @@ export default function SynthControls({
         </div>
 
         <div className="synth-column">
+          <h3>FILTER MOD</h3>
+          <div className="synth-column-controls">
+            <Knob
+              label="Env Amt"
+              value={parameters.filter.envAmount ?? 0}
+              min={-1}
+              max={1}
+              step={0.01}
+              displayValue={`${Math.round((parameters.filter.envAmount ?? 0) * 100)}%`}
+              onChange={(v) => updateFilter({ envAmount: v })}
+              parseInputValue={parsePercent(0, 1)}
+              color="#14b8a6"
+              tooltip={TOOLTIPS.envAmount}
+            />
+            <Knob
+              label="Key Trk"
+              value={parameters.filter.keyTracking ?? 0}
+              min={0}
+              max={1}
+              step={0.01}
+              displayValue={`${Math.round((parameters.filter.keyTracking ?? 0) * 100)}%`}
+              onChange={(v) => updateFilter({ keyTracking: v })}
+              parseInputValue={parsePercent(0, 1)}
+              color="#14b8a6"
+              tooltip={TOOLTIPS.keyTracking}
+            />
+            <Knob
+              label="Flt Drive"
+              value={parameters.filter.drive ?? 0}
+              min={0}
+              max={1}
+              step={0.01}
+              displayValue={`${Math.round((parameters.filter.drive ?? 0) * 100)}%`}
+              onChange={(v) => updateFilter({ drive: v })}
+              parseInputValue={parsePercent(0, 1)}
+              color="#14b8a6"
+              tooltip={TOOLTIPS.filterDrive}
+            />
+          </div>
+        </div>
+
+        <div className="synth-column">
+          <h3>FILTER ENV</h3>
+          <div className="synth-column-controls">
+            <Knob
+              label="F Attack"
+              value={filterEnvelope.attack}
+              min={0.001}
+              max={2}
+              step={0.001}
+              displayValue={`${(filterEnvelope.attack * 1000).toFixed(0)}ms`}
+              onChange={(v) => updateFilterEnvelope({ attack: v })}
+              parseInputValue={parseMilliseconds}
+              color="#14b8a6"
+              tooltip="Time for the filter envelope to reach its peak"
+            />
+            <Knob
+              label="F Decay"
+              value={filterEnvelope.decay}
+              min={0.001}
+              max={2}
+              step={0.001}
+              displayValue={`${(filterEnvelope.decay * 1000).toFixed(0)}ms`}
+              onChange={(v) => updateFilterEnvelope({ decay: v })}
+              parseInputValue={parseMilliseconds}
+              color="#14b8a6"
+              tooltip="Time for the filter envelope to fall to its sustain level"
+            />
+            <Knob
+              label="F Sustain"
+              value={filterEnvelope.sustain}
+              min={0}
+              max={1}
+              step={0.01}
+              displayValue={`${(filterEnvelope.sustain * 100).toFixed(0)}%`}
+              onChange={(v) => updateFilterEnvelope({ sustain: v })}
+              parseInputValue={parsePercent(0, 1)}
+              color="#14b8a6"
+              tooltip="Filter envelope level held while the key is down"
+            />
+            <Knob
+              label="F Release"
+              value={filterEnvelope.release}
+              min={0.001}
+              max={5}
+              step={0.001}
+              displayValue={`${(filterEnvelope.release * 1000).toFixed(0)}ms`}
+              onChange={(v) => updateFilterEnvelope({ release: v })}
+              parseInputValue={parseMilliseconds}
+              color="#14b8a6"
+              tooltip="Time for the filter envelope to close after the key is released"
+            />
+          </div>
+        </div>
+
+        <div className="synth-column">
+          <h3>VOICE</h3>
+          <div className="synth-column-controls">
+            <div className="synth-waveform-selector">
+              <label>MODE</label>
+              <select
+                value={parameters.voiceMode ?? 'poly'}
+                aria-label="Voice mode"
+                onChange={(e) => onParameterChange({ voiceMode: e.target.value as 'poly' | 'mono' })}
+                className="synth-select"
+                title="Poly plays chords. Mono plays one note at a time and glides between tied notes."
+              >
+                <option value="poly">Poly</option>
+                <option value="mono">Mono</option>
+              </select>
+            </div>
+            <Knob
+              label="Vel Amp"
+              value={velocity.amp}
+              min={0}
+              max={1}
+              step={0.01}
+              displayValue={`${Math.round(velocity.amp * 100)}%`}
+              onChange={(v) => updateVelocity({ amp: v })}
+              parseInputValue={parsePercent(0, 1)}
+              color="#eab308"
+              tooltip={TOOLTIPS.velocityAmp}
+            />
+            <Knob
+              label="Accent"
+              value={velocity.filter}
+              min={0}
+              max={1}
+              step={0.01}
+              displayValue={`${Math.round(velocity.filter * 100)}%`}
+              onChange={(v) => updateVelocity({ filter: v })}
+              parseInputValue={parsePercent(0, 1)}
+              color="#eab308"
+              tooltip={TOOLTIPS.velocityFilter}
+            />
+          </div>
+        </div>
+
+        <div className="synth-column">
           <div className="synth-section-header">
             <h3>LFO 1</h3>
             <label className="synth-toggle">
@@ -463,12 +840,28 @@ export default function SynthControls({
               <select
                 value={parameters.lfo1.target}
                 aria-label="LFO 1 target"
-                onChange={(e) => updateLfo('lfo1', { target: e.target.value as 'pitch' | 'filter' })}
+                onChange={(e) => updateLfo('lfo1', { target: e.target.value as SynthParameters['lfo1']['target'] })}
                 className="synth-select"
                 disabled={!parameters.lfo1.enabled}
               >
                 <option value="pitch">Pitch</option>
                 <option value="filter">Filter</option>
+                <option value="amp">Amp</option>
+                <option value="pulseWidth">Pulse W</option>
+              </select>
+            </div>
+            <div className="synth-waveform-selector">
+              <label>PHASE</label>
+              <select
+                value={parameters.lfo1.retrigger === false ? 'free' : 'retrigger'}
+                aria-label="LFO 1 phase mode"
+                onChange={(e) => updateLfo('lfo1', { retrigger: e.target.value !== 'free' })}
+                className="synth-select"
+                disabled={!parameters.lfo1.enabled}
+                title="Retrig restarts the LFO on every note. Free keeps one LFO running for the whole lane."
+              >
+                <option value="retrigger">Retrig</option>
+                <option value="free">Free</option>
               </select>
             </div>
           </div>
@@ -554,12 +947,28 @@ export default function SynthControls({
               <select
                 value={parameters.lfo2.target}
                 aria-label="LFO 2 target"
-                onChange={(e) => updateLfo('lfo2', { target: e.target.value as 'pitch' | 'filter' })}
+                onChange={(e) => updateLfo('lfo2', { target: e.target.value as SynthParameters['lfo1']['target'] })}
                 className="synth-select"
                 disabled={!parameters.lfo2.enabled}
               >
                 <option value="pitch">Pitch</option>
                 <option value="filter">Filter</option>
+                <option value="amp">Amp</option>
+                <option value="pulseWidth">Pulse W</option>
+              </select>
+            </div>
+            <div className="synth-waveform-selector">
+              <label>PHASE</label>
+              <select
+                value={parameters.lfo2.retrigger === false ? 'free' : 'retrigger'}
+                aria-label="LFO 2 phase mode"
+                onChange={(e) => updateLfo('lfo2', { retrigger: e.target.value !== 'free' })}
+                className="synth-select"
+                disabled={!parameters.lfo2.enabled}
+                title="Retrig restarts the LFO on every note. Free keeps one LFO running for the whole lane."
+              >
+                <option value="retrigger">Retrig</option>
+                <option value="free">Free</option>
               </select>
             </div>
           </div>

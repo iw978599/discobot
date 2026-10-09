@@ -1,26 +1,7 @@
 import { useRef, useCallback, useEffect, useMemo } from 'react';
 import type { SynthParameters, EffectsLoopState } from '../types';
-import { createAudioLane, getAudioContext, ensureAudioReady, loadSynthWorklet, setEffectsLoop } from './browserAudio';
-
-// A synced rate N means one LFO cycle per 1/N note, so 1/4 at 120 BPM is 2 Hz.
-export function syncedLfoHz(rate: number, bpm: number): number {
-  return Math.max(20, Math.min(400, bpm)) * Math.max(1, Math.round(rate)) / 240;
-}
-
-export function flattenSynthParams(p: SynthParameters, bpm = 120): Record<string, unknown> {
-  const syncRate = (rate: number, sync?: boolean) => sync ? syncedLfoHz(rate, bpm) : rate;
-  return {
-    oscType: p.oscillator.type, detune: p.oscillator.detune,
-    filterFreq: p.filter.frequency, filterQ: p.filter.q, filterType: p.filter.type,
-    attack: p.envelope.attack, decay: p.envelope.decay, sustain: p.envelope.sustain,
-    release: p.envelope.release, gain: p.gain, pan: p.pan ?? 0, spread: p.spread ?? 0,
-    portamentoEnabled: p.portamento?.enabled ?? false, portamentoGlide: p.portamento?.glide ?? 0,
-    lfo1Enabled: p.lfo1.enabled, lfo1Target: p.lfo1.target, lfo1Waveform: p.lfo1.waveform,
-    lfo1Rate: syncRate(p.lfo1.rate, p.lfo1.sync), lfo1Depth: p.lfo1.depth,
-    lfo2Enabled: p.lfo2.enabled, lfo2Target: p.lfo2.target, lfo2Waveform: p.lfo2.waveform,
-    lfo2Rate: syncRate(p.lfo2.rate, p.lfo2.sync), lfo2Depth: p.lfo2.depth,
-  };
-}
+import { toVoiceParams } from '@discobot/engine';
+import { createAudioLane, getAudioContext, ensureAudioReady, loadAudioWorklet, setEffectsLoop } from './browserAudio';
 
 interface SynthLane {
   node?: AudioWorkletNode;
@@ -51,7 +32,7 @@ export function useSynthAudio() {
     lane.parameters = parameters;
     lane.bpm = bpm;
     if (loop) setEffectsLoop(loop);
-    lane.node?.port.postMessage({ type: 'params', params: flattenSynthParams(parameters, bpm) });
+    lane.node?.port.postMessage({ type: 'params', params: toVoiceParams(parameters, bpm) });
     lane.audio?.setSends(parameters.fxSends, parameters.fxReturn);
   }, []);
 
@@ -59,7 +40,7 @@ export function useSynthAudio() {
     if (lane.node) return lane.node;
     if (!lane.loading) {
       const generation = lane.generation;
-      lane.loading = loadSynthWorklet().then(() => {
+      lane.loading = loadAudioWorklet().then(() => {
         if (generation !== lane.generation) throw new Error('Audio lane stopped');
         const ctx = getAudioContext();
         const node = new AudioWorkletNode(ctx, 'synth-processor', { numberOfOutputs: 1, outputChannelCount: [2] });
@@ -69,7 +50,7 @@ export function useSynthAudio() {
         lane.audio = audio;
         lane.node = node;
         if (lane.parameters) {
-          node.port.postMessage({ type: 'params', params: flattenSynthParams(lane.parameters, lane.bpm) });
+          node.port.postMessage({ type: 'params', params: toVoiceParams(lane.parameters, lane.bpm) });
           audio.setSends(lane.parameters.fxSends, lane.parameters.fxReturn);
         }
         return node;

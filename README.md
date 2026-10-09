@@ -65,17 +65,29 @@ are reported in the UI; local storage is not a backup.
 - **Export MIDI:** download a Standard MIDI File containing synth lanes, tempo
   and drums on channel 10. MIDI stores note events, not synthesized audio.
 - **Export WAV:** render the current arrangement locally to a stereo audio file.
-  Offline rendering is a separate DSP path, not a recording of the live output.
+  The export runs the same synth and drum code as live playback, offline.
 
 ### Audio implementation
 
-- Eight-voice AudioWorklet synthesis with PolyBLEP correction for saw/square
-  oscillators, smoothed parameters and short voice-stealing/transition ramps.
+- One synth voice core (`engine/src/synth/SynthCore.ts`) runs both in the
+  AudioWorklet and in WAV export. Each of its eight voices has two band-limited
+  oscillators plus sub and noise, a zero-delay-feedback state-variable filter
+  with drive, separate exponential amp and filter envelopes, key tracking,
+  velocity-to-filter accent, two LFOs (retriggered or free-running) and a
+  four-operator FM mode. Mono mode glides between tied (slide) steps.
+- One drum core (`engine/src/drums/DrumCore.ts`) runs in the worklet and in
+  export. Voices are mixed linearly with no per-hit or bus saturation, so drums
+  that land on the same step keep the level their volume and velocity ask for.
+  The 808-style kits use six detuned square oscillators for hats and cymbals;
+  LinnDrum, DMX and TR-707 kits approximate those sample-based machines by
+  reducing the voices to their converter's bit depth and sample rate.
+- Noise is seeded, so the same arrangement always exports the same audio.
 - Audio-clock look-ahead sequencing rather than network-delivered audio.
 - Parallel effects sends preserve the dry signal when effects are bypassed;
   the phaser mixes a dry tap with its all-pass stages.
-- Shared output headroom, compression and soft saturation protect the live mix;
-  sample previews use the same output with short boundary fades.
+- The master bus has a peak limiter and a soft ceiling that only act near full
+  scale; below that the mix passes through unchanged. Sample previews use the
+  same output with short boundary fades.
 
 These are implemented DSP safeguards, not a claim of listening-verified quality
 or exact emulation of vintage hardware.

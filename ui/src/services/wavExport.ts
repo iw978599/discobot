@@ -1,9 +1,8 @@
-import { Synthesizer, DrumSynthesizer } from '@discobot/engine';
+import { DrumCore, SynthCore, toVoiceParams } from '@discobot/engine';
 import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, SynthParameters } from '../types';
-import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
-import { transposeNote } from '../utils/midiExport';
-import { driveCurve, reverbImpulse, safetyCurve } from '../hooks/browserAudio';
-import { syncedLfoHz } from '../hooks/useSynthAudio';
+import { DRUM_INSTRUMENTS } from './drumKits';
+import { expandStep } from './noteScheduling';
+import { MASTER_LEVEL, configureLimiter, driveCurve, reverbImpulse, safetyCurve } from '../hooks/browserAudio';
 
 export interface ExportArrangement {
   tempo: number;
@@ -15,6 +14,8 @@ export interface ExportArrangement {
   drumFx: { sends: FxSendLevels; returnLevel: number };
   effectsLoop: EffectsLoopState;
 }
+
+type Stereo = [Float32Array, Float32Array];
 
 export function encodeWav(channels: Float32Array[], sampleRate: number): ArrayBuffer {
   const count = channels.length;
@@ -40,9 +41,50 @@ export function encodeWav(channels: Float32Array[], sampleRate: number): ArrayBu
   return buffer;
 }
 
-function addNote(mix: Float32Array, pcm: Float32Array, time: number, sampleRate: number) {
-  const offset = Math.round(time * sampleRate);
-  for (let i = 0; i < pcm.length && offset + i < mix.length; i++) mix[offset + i] += pcm[i];
+function renderCore(core: { process(left: Float32Array, right: Float32Array): void }, frames: number): Stereo {
+  const left = new Float32Array(frames), right = new Float32Array(frames);
+  for (let offset = 0; offset < frames; offset += 128) {
+    const end = Math.min(frames, offset + 128);
+    core.process(left.subarray(offset, end), right.subarray(offset, end));
+  }
+  return [left, right];
+}
+
+// One bar of a synth lane through the same voice core the worklet runs live.
+export function renderSynthLane(pattern: Pattern, params: SynthParameters, tempo: number, frames: number, sampleRate: number): Stereo {
+  const core = new SynthCore(sampleRate);
+  core.setParams(toVoiceParams(params, tempo));
+  const stepDuration = 240 / tempo / pattern.steps.length;
+  pattern.steps.forEach((step, index) => {
+    if (!step.active || !step.note) return;
+    for (const scheduled of expandStep(step.note, params, stepDuration, tempo, step.slide)) {
+      core.noteOn({ note: scheduled.note, velocity: step.velocity, duration: scheduled.duration, time: index * stepDuration + scheduled.offset });
+    }
+  });
+  return renderCore(core, frames);
+}
+
+export function renderDrums(
+  arrangement: Pick<ExportArrangement, 'tempo' | 'drumState' | 'drumKitId' | 'drumMasterVolume' | 'drumSwing'>,
+  frames: number, sampleRate: number,
+): Stereo {
+  const core = new DrumCore(sampleRate);
+  const stepDuration = 240 / arrangement.tempo / 16;
+  const solo = DRUM_INSTRUMENTS.some(instrument => arrangement.drumState[instrument].solo);
+  for (const instrument of DRUM_INSTRUMENTS) {
+    const track = arrangement.drumState[instrument];
+    if (track.muted || (solo && !track.solo)) continue;
+    track.steps.forEach((active, step) => {
+      const velocity = track.stepVelocities?.[step] ?? 1;
+      if (!active || velocity <= 0) return;
+      core.trigger({
+        instrument, velocity, kitId: arrangement.drumKitId,
+        settings: { ...track.settings, volume: track.settings.volume * arrangement.drumMasterVolume },
+        time: (step + (step % 2 ? arrangement.drumSwing : 0)) * stepDuration,
+      });
+    });
+  }
+  return renderCore(core, frames);
 }
 
 function connectEffects(ctx: OfflineAudioContext, input: AudioNode, master: AudioNode, sends: FxSendLevels, fxReturn: number, state: EffectsLoopState, group: 'synth' | 'drums') {
@@ -92,64 +134,26 @@ export async function renderArrangementWav(arrangement: ExportArrangement): Prom
     ...arrangement.synths.map(s => s.synthParams?.envelope.release || 0)));
   const frames = Math.ceil((barDuration + tail) * sampleRate);
   const ctx = new OfflineAudioContext(2, frames, sampleRate);
-  const master = ctx.createGain(), limiter = ctx.createDynamicsCompressor();
-  const safety = ctx.createWaveShaper();
+  const master = ctx.createGain(), limiter = ctx.createDynamicsCompressor(), safety = ctx.createWaveShaper();
   safety.curve = safetyCurve();
   safety.oversample = '2x';
-  master.gain.value = .55;
-  limiter.threshold.value = -6; limiter.knee.value = 6; limiter.ratio.value = 20;
-  limiter.attack.value = .003; limiter.release.value = .1;
+  master.gain.value = MASTER_LEVEL;
+  configureLimiter(limiter);
   master.connect(limiter).connect(safety).connect(ctx.destination);
-  const play = (pcm: Float32Array, pan: number, sends: FxSendLevels, returnLevel: number, group: 'synth' | 'drums') => {
-    const buffer = ctx.createBuffer(1, pcm.length, sampleRate); buffer.getChannelData(0).set(pcm);
-    const source = ctx.createBufferSource(), panner = ctx.createStereoPanner();
-    source.buffer = buffer; panner.pan.value = Math.max(-1, Math.min(1, pan));
-    source.connect(panner); connectEffects(ctx, panner, master, sends, returnLevel, arrangement.effectsLoop, group); source.start(0);
+  const play = ([left, right]: Stereo, sends: FxSendLevels, returnLevel: number, group: 'synth' | 'drums') => {
+    const buffer = ctx.createBuffer(2, frames, sampleRate);
+    buffer.getChannelData(0).set(left); buffer.getChannelData(1).set(right);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    connectEffects(ctx, source, master, sends, returnLevel, arrangement.effectsLoop, group); source.start(0);
   };
   const synthSolo = arrangement.synths.some(s => s.solo);
   for (const lane of arrangement.synths) {
     if (lane.muted || (synthSolo && !lane.solo) || !lane.pattern || !lane.synthParams) continue;
-    const synth = new Synthesizer(), params = lane.synthParams;
-    const syncLfo = (lfo: SynthParameters['lfo1']) => ({
-      ...lfo, rate: lfo.sync ? syncedLfoHz(lfo.rate, arrangement.tempo) : lfo.rate,
-    });
-    synth.updateParameters({ ...params, lfo1: syncLfo(params.lfo1), lfo2: syncLfo(params.lfo2),
-      effects: { reverb: { ...params.effects.reverb, enabled: false }, delay: { ...params.effects.delay, enabled: false } } });
-    const mix = new Float32Array(frames), stepDuration = barDuration / lane.pattern.steps.length;
-    lane.pattern.steps.forEach((step, index) => {
-      if (!step.active || !step.note) return;
-      const arp = params.arpeggiator;
-      if (!arp.enabled) {
-        addNote(mix, synth.renderNote(step.note, stepDuration * .92, step.velocity, sampleRate), index * stepDuration, sampleRate);
-      } else {
-        const offsets = arp.mode === 'down' ? [12,7,4,0] : arp.mode === 'updown' ? [0,4,7,12,7,4]
-          : arp.mode === 'downup' ? [12,7,4,0,4,7] : arp.mode === 'converge' ? [0,12,4,7] : arp.mode === 'diverge' ? [7,4,12,0] : [0,4,7,12];
-        const divisor = arp.rate === '1/4' ? 1 : arp.rate === '1/8' ? 2 : arp.rate === '1/16' ? 4 : 8;
-        const interval = 60 / arrangement.tempo / divisor;
-        for (let pulse = 0; pulse < Math.max(1, Math.floor(stepDuration / interval)); pulse++) {
-          const offset = offsets[arp.mode === 'random' ? Math.floor(Math.random() * offsets.length) : pulse % offsets.length];
-          const note = transposeNote(step.note, offset);
-          if (note) addNote(mix, synth.renderNote(note, interval * arp.gate, step.velocity, sampleRate), index * stepDuration + pulse * interval, sampleRate);
-        }
-      }
-    });
-    play(mix, params.pan || 0, params.fxSends, params.fxReturn, 'synth');
+    play(renderSynthLane(lane.pattern, lane.synthParams, arrangement.tempo, frames, sampleRate),
+      lane.synthParams.fxSends, lane.synthParams.fxReturn, 'synth');
   }
-  const drumSolo = DRUM_INSTRUMENTS.some(i => arrangement.drumState[i].solo);
-  const variant = DRUM_KITS.find(k => k.id === arrangement.drumKitId)?.modelVariant || 'analog';
-  for (const instrument of DRUM_INSTRUMENTS) {
-    const track = arrangement.drumState[instrument];
-    if (track.muted || (drumSolo && !track.solo)) continue;
-    const mix = new Float32Array(frames);
-    track.steps.forEach((active, step) => {
-      if (!active) return;
-      const velocity = track.stepVelocities?.[step] ?? 1;
-      if (velocity <= 0) return;
-      const pcm = DrumSynthesizer.renderHit(instrument, { ...track.settings, volume: track.settings.volume * arrangement.drumMasterVolume }, sampleRate, { velocity, modelVariant: variant });
-      addNote(mix, pcm, (step + (step % 2 ? arrangement.drumSwing : 0)) * barDuration / 16, sampleRate);
-    });
-    play(mix, track.settings.pan || 0, arrangement.drumFx.sends, arrangement.drumFx.returnLevel, 'drums');
-  }
+  play(renderDrums(arrangement, frames, sampleRate), arrangement.drumFx.sends, arrangement.drumFx.returnLevel, 'drums');
   const rendered = await ctx.startRendering();
   return encodeWav([rendered.getChannelData(0), rendered.getChannelData(1)], sampleRate);
 }

@@ -30,9 +30,9 @@ const DRUM_NOTE_MAP: Record<DrumInstrument, number> = {
   snare: 38,
   openHH: 46,
   closedHH: 42,
-  ride: 51,
+  ride: 50,
   crash: 49,
-  snare2: 40,
+  snare2: 45,
   clap: 39,
 };
 
