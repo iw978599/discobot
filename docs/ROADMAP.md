@@ -60,10 +60,9 @@ slow down every later change.
    `data.type === ...` checks on the other. Share a discriminated union from
    the engine so a renamed field is a compile error.
 
-9. **Pitch LFO depth is too coarse.** (S)
-   Depth 100% is ±1 octave, so a usable vibrato sits in the bottom 2% of the
-   knob. Give the pitch target its own scale (for example ±1 semitone at 100%)
-   and migrate stored values.
+9. **Pitch LFO depth is too coarse.** Done: a Vibrato LFO target is the
+   pitch target scaled to one semitone at full depth. Pitch is unchanged, so
+   nothing stored had to be migrated.
 
 10. **CI housekeeping.** (S)
     `ci.yml` and `pages.yml` run the same checks on every push to `main`;
@@ -102,14 +101,15 @@ mono/slide and the drum voices. What it leaves open:
    Sources (two LFOs, both envelopes, velocity, key, mod wheel) routed to any
    destination with a depth, replacing the fixed LFO target dropdowns.
 
-5. **Insert effects per lane and better shared effects.** (M)
-   A chorus would do more for the Juno model than anything else. The reverb is
-   decaying noise through a convolver; a small algorithmic reverb with
-   pre-delay and damping would sound better and cost less. Tempo-synced delay
-   time is done (Sync on the shared delay).
+5. **Insert effects per lane and better shared effects.** Partly done: a
+   stereo chorus is a fifth shared effect with its own send, and the reverb
+   has pre-delay and damping. It is still a convolver, with a shaped impulse;
+   an algorithmic reverb and per-lane insert effects are open. Tempo-synced
+   delay time is done (Sync on the shared delay).
 
 6. **Sidechain ducking and a master EQ.** Ducking is done (per-lane Duck
-   amount, kick only, fixed recovery time). Master EQ is still open.
+   amount, kick only, fixed recovery time). Master EQ is done: three bands
+   on the whole mix, live and in export.
 
 ## Features
 

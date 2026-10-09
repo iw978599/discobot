@@ -48,7 +48,7 @@ test('a VAST preset is translated using that synth\'s own meanings', () => {
 
   assert.deepEqual([params.lfo1.enabled, params.lfo1.target, params.lfo1.waveform, params.lfo1.rate, params.lfo1.depth, params.lfo1.sync], [true, 'filter', 'triangle', 5.2, 0.25, false]);
   assert.equal(params.lfo2.enabled, false, 'an LFO aimed at something Discobot cannot move is off');
-  assert.deepEqual(params.fxSends, { reverb: 0.25, delay: 0, drive: 0, phaser: 0.5 }, 'an effect that was off sends nothing');
+  assert.deepEqual(params.fxSends, { reverb: 0.25, delay: 0, drive: 0, phaser: 0.5, chorus: 0 }, 'an effect that was off sends nothing');
   assert.deepEqual(params.arpeggiator, { enabled: true, mode: 'down', rate: '1/32', gate: 0.5 });
 
   // What did not carry over is said, in plain words.
@@ -99,11 +99,12 @@ test('a WebSynth Studio patch is read by its shape, in the units that synth uses
   assert.deepEqual([params.lfo1.enabled, params.lfo1.target, params.lfo1.rate], [true, 'filter', 1.2]);
   near(params.lfo1.depth, Math.log2(1 + 500 / 540) / 2);
   const vibrato = imported({ ...patch, lfo1: { enabled: true, wave: 'noise', rateHz: 5, amount: 0.5, dest: 'pitch' }, osc2: { ...patch.osc2, mode: 'analog', wave: 'noise' }, sub: { enabled: true, level: 0.3, octave: 2 } });
-  near(vibrato.params.lfo1.depth, 25 / 1200);
+  assert.equal(vibrato.params.lfo1.target, 'vibrato', 'its pitch LFO is at most 50 cents, which is vibrato');
+  near(vibrato.params.lfo1.depth, 0.25);
   near(vibrato.params.mixer!.noise, 0.4);
   for (const expected of ['random noise', 'Oscillator 2 was noise', 'two octaves down']) assert.ok(vibrato.notes.join(' | ').includes(expected), expected);
   assert.equal(params.lfo2.enabled, false);
-  assert.deepEqual(params.fxSends, { reverb: 0.12, delay: 0, drive: 0, phaser: 0 });
+  assert.deepEqual(params.fxSends, { reverb: 0.12, delay: 0, drive: 0, phaser: 0, chorus: 0 });
   assert.deepEqual(params.arpeggiator, { enabled: true, mode: 'updown', rate: '1/8', gate: 0.6 });
   const said = notes.join(' | ');
   for (const expected of ['-12 semitones', '"macro" source', 'frequency modulation', 'Ring modulation', 'LFO 2 moved "ringAmount"', 'modulation matrix', 'sequence']) {

@@ -371,7 +371,10 @@
 .effects-unit .effects-panel-header { flex-direction: column; align-items: flex-start; gap: 6px; margin: 0; }
 .effects-unit .effects-panel-header h3 { font-family: var(--panel-font); font-size: 18px; letter-spacing: 0.08em; color: var(--ink); }
 .effects-unit .effects-returns { display: flex; gap: 2px; }
-.effects-unit .effects-grid { grid-template-columns: 2fr 4fr 3fr 2fr; gap: 6px; }
+/* Two rows of ten: drive, phaser, delay; then chorus, reverb, master EQ. */
+.effects-unit .effects-grid { grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 6px; }
+.effects-unit .effects-block { grid-column: span 3; }
+.effects-unit .effects-block:nth-child(2), .effects-unit .effects-block:nth-child(5) { grid-column: span 4; }
 .effects-unit .effects-block { background: #1f2123; border: 1px solid #3c3f42; border-radius: 2px; padding: 6px 8px; display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; }
 .effects-unit .effects-block h4 { font-family: var(--panel-font); font-size: 12px; letter-spacing: 0.12em; color: var(--dim); margin: 0; }
 .effects-unit .effects-row-head { margin: 0; }

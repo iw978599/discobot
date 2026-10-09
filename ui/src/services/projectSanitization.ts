@@ -1,5 +1,6 @@
 import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, Scene, Song, SynthParameters, SynthModelParams } from '../types';
 import { DELAY_SYNCS } from './delayTime';
+import { CHORUS_DEFAULT, EQ_RANGE_DB, MAX_PRE_DELAY } from './effectSettings';
 import { MAX_STEP_NOTES, MAX_STEP_OFFSET } from './noteScheduling';
 import { BAR_CHOICES, DRUM_STEPS_PER_BAR, MAX_BARS, clampLengths, laneBars } from './patternLength';
 import { sanitizeGuestMix, sanitizeSceneGuests } from './guests';
@@ -56,7 +57,7 @@ export function sanitizeSynthParams(value: unknown, defaults: SynthParameters): 
   for (const key of ['lfo1', 'lfo2'] as const) {
     const raw = record(input[key]), lfo = params[key];
     if (!waves.includes(lfo.waveform)) lfo.waveform = defaults[key].waveform;
-    if (!['pitch', 'filter', 'amp', 'pulseWidth'].includes(lfo.target)) lfo.target = defaults[key].target;
+    if (!['pitch', 'filter', 'amp', 'pulseWidth', 'vibrato'].includes(lfo.target)) lfo.target = defaults[key].target;
     lfo.rate = number(lfo.rate, defaults[key].rate, .01, raw.sync === true ? 64 : 30);
     lfo.depth = number(lfo.depth, defaults[key].depth, 0, 1);
     if (raw.sync !== undefined) lfo.sync = raw.sync === true;
@@ -245,6 +246,21 @@ export function sanitizeEffects(value: unknown, defaults: EffectsLoopState): Eff
   else delete state.delay.sync;
   state.reverb.decay = number(state.reverb.decay, defaults.reverb.decay, .2, 8);
   state.reverb.mix = number(state.reverb.mix, defaults.reverb.mix, 0, 1);
+  const raw = record(value), reverb = record(raw.reverb);
+  const preDelay = number(reverb.preDelay, 0, 0, MAX_PRE_DELAY), damping = number(reverb.damping, 0, 0, 1);
+  if (preDelay > 0) state.reverb.preDelay = preDelay;
+  if (damping > 0) state.reverb.damping = damping;
+  if (raw.chorus !== null && typeof raw.chorus === 'object') {
+    const chorus = record(raw.chorus);
+    state.chorus = {
+      enabled: chorus.enabled === true, rate: number(chorus.rate, CHORUS_DEFAULT.rate, .05, 8),
+      depth: number(chorus.depth, CHORUS_DEFAULT.depth, 0, 1), mix: number(chorus.mix, CHORUS_DEFAULT.mix, 0, 1),
+    };
+  }
+  if (raw.eq !== null && typeof raw.eq === 'object') {
+    const eq = record(raw.eq), band = (level: unknown) => number(level, 0, -EQ_RANGE_DB, EQ_RANGE_DB);
+    state.eq = { enabled: eq.enabled === true, low: band(eq.low), mid: band(eq.mid), high: band(eq.high) };
+  }
   return state;
 }
 

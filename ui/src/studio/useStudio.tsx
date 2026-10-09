@@ -30,7 +30,7 @@ import { DEFAULT_SYNTH_MODEL_ID, createDefaultSynthModelParams, mapSynthModelToE
 const DEFAULT_PARAMS: SynthParameters = createDefaultSynthParameters();
 
 const DEFAULT_DRUM_FX: { sends: FxSendLevels; returnLevel: number } = {
-  sends: { reverb: 0.35, delay: 0.15, drive: 0.2, phaser: 0.1 },
+  sends: { reverb: 0.35, delay: 0.15, drive: 0.2, phaser: 0.1, chorus: 0 },
   returnLevel: 0.7,
 };
 
@@ -300,6 +300,7 @@ function normalizeFxSends(sends: Partial<FxSendLevels> | undefined): FxSendLevel
     delay: Math.max(0, Math.min(1, sends?.delay ?? DEFAULT_DRUM_FX.sends.delay)),
     drive: Math.max(0, Math.min(1, sends?.drive ?? DEFAULT_DRUM_FX.sends.drive)),
     phaser: Math.max(0, Math.min(1, sends?.phaser ?? DEFAULT_DRUM_FX.sends.phaser)),
+    chorus: Math.max(0, Math.min(1, sends?.chorus ?? 0)),
   };
 }
 
@@ -364,7 +365,13 @@ function normalizeEffectsLoop(loop: Partial<EffectsLoopState> | undefined): Effe
       enabled: loop?.reverb?.enabled ?? DEFAULT_EFFECTS_LOOP.reverb.enabled,
       decay: Math.max(0.2, Math.min(8, loop?.reverb?.decay ?? DEFAULT_EFFECTS_LOOP.reverb.decay)),
       mix: Math.max(0, Math.min(1, loop?.reverb?.mix ?? DEFAULT_EFFECTS_LOOP.reverb.mix)),
+      // Always present here, like the delay's sync, so setting them back to zero reaches the store.
+      preDelay: loop?.reverb?.preDelay ?? 0,
+      damping: loop?.reverb?.damping ?? 0,
     },
+    // Checked and clamped by the store; passed through as they are.
+    ...(loop?.chorus ? { chorus: { ...loop.chorus } } : {}),
+    ...(loop?.eq ? { eq: { ...loop.eq } } : {}),
   };
 }
 

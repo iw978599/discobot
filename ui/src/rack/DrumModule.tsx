@@ -463,14 +463,14 @@ export default function DrumModule({ studio }: { studio: Studio }) {
         <div className="rack-row drum-sends">
           <span className="step-tools-name">Kit sends</span>
           <div className="rack-knobs">
-            {(['reverb', 'delay', 'drive', 'phaser'] as const).map((send) => {
-              const label = { reverb: 'Rev Send', delay: 'Dly Send', drive: 'Drv Send', phaser: 'Phs Send' }[send];
+            {(['reverb', 'delay', 'drive', 'phaser', 'chorus'] as const).map((send) => {
+              const label = { reverb: 'Rev Send', delay: 'Dly Send', drive: 'Drv Send', phaser: 'Phs Send', chorus: 'Cho Send' }[send];
               return (
                 <DrumKnob
                   key={send}
                   label={label}
-                  value={drumFx.sends[send]}
-                  displayValue={percentText(drumFx.sends[send])}
+                  value={drumFx.sends[send] ?? 0}
+                  displayValue={percentText(drumFx.sends[send] ?? 0)}
                   parseInputValue={parsePercent}
                   onChange={(value) => onFx({ sends: { [send]: value } })}
                   title={`Amount of the drum kit sent to the ${send}`}

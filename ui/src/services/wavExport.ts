@@ -6,7 +6,7 @@ import { expandStepNotes } from './noteScheduling';
 import { delaySeconds } from './delayTime';
 import { expandDrumStep, seededRandom } from './drumScheduling';
 import { createZip } from '../utils/zip';
-import { MASTER_LEVEL, configureLimiter, driveCurve, reverbImpulse, safetyCurve, scheduleDuck } from '../hooks/browserAudio';
+import { MASTER_LEVEL, chorusSweep, configureLimiter, createChorus, createMasterEq, driveCurve, eqGains, reverbImpulse, safetyCurve, scheduleDuck } from '../hooks/browserAudio';
 import type { DrumInstrument, DrumSettings } from '../types';
 
 export interface ExportArrangement {
@@ -159,7 +159,7 @@ function connectEffects(ctx: OfflineAudioContext, input: AudioNode, master: Audi
   }
   if (state.reverb.enabled && sends.reverb > 0) {
     const reverb = ctx.createConvolver(), level = ctx.createGain();
-    reverb.buffer = reverbImpulse(ctx, state.reverb.decay, seededRandom(3)); level.gain.value = state.reverb.mix;
+    reverb.buffer = reverbImpulse(ctx, state.reverb.decay, seededRandom(3), state.reverb.preDelay, state.reverb.damping); level.gain.value = state.reverb.mix;
     send(sends.reverb).connect(reverb).connect(level).connect(wet);
   }
   if (state.drive.enabled && sends.drive > 0) {
@@ -180,6 +180,12 @@ function connectEffects(ctx: OfflineAudioContext, input: AudioNode, master: Audi
     filters[3].connect(feedback).connect(filters[0]); filters[3].connect(level); source.connect(level);
     level.gain.value = state.phaser.mix * .5; level.connect(wet);
   }
+  if (state.chorus?.enabled && (sends.chorus ?? 0) > 0) {
+    const chorus = createChorus(ctx), level = ctx.createGain();
+    chorus.lfo.frequency.value = state.chorus.rate; chorus.depth.gain.value = chorusSweep(state.chorus.depth);
+    level.gain.value = state.chorus.mix;
+    send(sends.chorus!).connect(chorus.input); chorus.output.connect(level).connect(wet);
+  }
 }
 
 // How many bars a render covers and how long each is. A loop plays the bar enough times
@@ -199,7 +205,8 @@ export function renderPlan(tempo: number, tail: number, sampleRate: number, loop
 
 export async function renderArrangement(arrangement: ExportArrangement, options: RenderOptions = {}): Promise<{ channels: Stereo; sampleRate: number }> {
   const sampleRate = 44100;
-  const tail = Math.min(8, Math.max(1, arrangement.effectsLoop.reverb.enabled ? arrangement.effectsLoop.reverb.decay : 0,
+  const reverb = arrangement.effectsLoop.reverb;
+  const tail = Math.min(8.25, Math.max(1, reverb.enabled ? reverb.decay + (reverb.preDelay ?? 0) : 0,
     ...arrangement.synths.map(s => s.synthParams?.envelope.release || 0)));
   // With `loop`, the bars are one pattern to be looped, not a song with an ending.
   const looping = options.loop === true;
@@ -219,7 +226,15 @@ export async function renderArrangement(arrangement: ExportArrangement, options:
   safety.oversample = '2x';
   master.gain.value = MASTER_LEVEL;
   configureLimiter(limiter);
-  master.connect(limiter).connect(safety).connect(ctx.destination);
+  // An EQ left flat is left out, so a project without one renders exactly as it did before.
+  const gains = eqGains(arrangement.effectsLoop.eq);
+  if (gains.some(gain => gain !== 0)) {
+    const eq = createMasterEq(ctx);
+    gains.forEach((gain, band) => { eq[band].gain.value = gain; });
+    master.connect(eq[0]);
+    eq[2].connect(limiter);
+  } else master.connect(limiter);
+  limiter.connect(safety).connect(ctx.destination);
   const kickTimes = drumHits(arrangement, bars, barDuration).filter(hit => hit.instrument === 'kick').map(hit => hit.time);
   const play = ([left, right]: Stereo, sends: FxSendLevels, returnLevel: number, group: 'synth' | 'drums', duck = 0) => {
     const buffer = ctx.createBuffer(2, frames, sampleRate);

@@ -128,7 +128,7 @@ function fromVast(file: Loose, defaults: SynthParameters): ImportedPreset {
 // and `detuneFine`; `mix` is a straight crossfade; an LFO's amount is up to 2000 Hz of cutoff,
 // 50 cents of pitch or 80% of the level.
 
-const STUDIO_LFO_TARGETS: Record<string, SynthParameters['lfo1']['target']> = { filter: 'filter', pitch: 'pitch', amp: 'amp' };
+const STUDIO_LFO_TARGETS: Record<string, SynthParameters['lfo1']['target']> = { filter: 'filter', pitch: 'vibrato', amp: 'amp' };
 
 function fromStudioPatch(file: Loose, defaults: SynthParameters, name: string): ImportedPreset {
   const notes: string[] = [];
@@ -178,9 +178,9 @@ function fromStudioPatch(file: Loose, defaults: SynthParameters, name: string): 
   for (const slot of ['lfo1', 'lfo2'] as const) {
     const lfo = record(file[slot]), target = STUDIO_LFO_TARGETS[String(lfo.dest)];
     const amount = Math.max(0, num(lfo.amount, 0)), wanted = lfo.enabled === true && amount > 0;
-    // Discobot's depth at full is two octaves of cutoff, one octave of pitch, or the level down to nothing.
+    // Discobot's depth at full is two octaves of cutoff, a semitone of vibrato, or the level down to nothing.
     const depth = target === 'filter' ? Math.log2(1 + amount * 2000 / params.filter.frequency) / 2
-      : target === 'pitch' ? amount * 50 / 1200
+      : target === 'vibrato' ? amount * 50 / 100
         : amount * 1.6;
     params[slot] = {
       ...params[slot], enabled: wanted && target !== undefined, target: target ?? params[slot].target,

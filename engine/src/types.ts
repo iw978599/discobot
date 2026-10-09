@@ -5,6 +5,7 @@ export interface FxSendLevels {
   delay: number;
   drive: number;
   phaser: number;
+  chorus?: number;
 }
 
 export type DelaySync = 'off' | '1/4' | '1/8d' | '1/8' | '1/8t' | '1/16';
@@ -39,10 +40,29 @@ export interface EffectsLoopState {
     enabled: boolean;
     decay: number;
     mix: number;
+    // seconds of silence before the tail, and how fast its highs die away (0 to 1).
+    // Both absent or zero is the plain reverb older projects were made with.
+    preDelay?: number;
+    damping?: number;
+  };
+  // Absent means off, so older projects still match the expected shape.
+  chorus?: {
+    enabled: boolean;
+    rate: number;
+    depth: number;
+    mix: number;
+  };
+  // Three bands on the whole mix, in decibels.
+  eq?: {
+    enabled: boolean;
+    low: number;
+    mid: number;
+    high: number;
   };
 }
 
-export type LfoTarget = 'pitch' | 'filter' | 'amp' | 'pulseWidth';
+// 'pitch' is up to an octave either way; 'vibrato' is the same movement scaled to one semitone.
+export type LfoTarget = 'pitch' | 'filter' | 'amp' | 'pulseWidth' | 'vibrato';
 export type SynthEngineMode = 'subtractive' | 'fm';
 export type SynthVoiceMode = 'poly' | 'mono';
 

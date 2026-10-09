@@ -5,6 +5,7 @@ import { BAR_CHOICES, DRUM_STEPS_PER_BAR, laneBars, resizeBars } from './pattern
 import { createIndexedDbLibrary, createMemoryLibrary, hasIndexedDb, type ProjectInfo, type ProjectLibrary, type ProjectRecord, type VersionInfo, type VersionReason } from './projectLibrary';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
 import { normalizeSynthModelId } from '../synthModels';
+import { NEW_PROJECT_REVERB } from './effectSettings';
 import { record, number, matchesShape, sanitizePattern, sanitizeSynthParams, sanitizeDrums, sanitizeEffects, sanitizeSends, sanitizeSaved, sanitizeModelParams, sanitizeKit, sanitizeScenes, sanitizeSong, MAX_SCENES } from './projectSanitization';
 
 type Message = { type: string; data: any };
@@ -45,7 +46,7 @@ const ownOrigin = () => (typeof window !== 'undefined' && window.location ? wind
 const STORAGE_KEY = 'discobot_browser_project_v1';
 // Bumped when synth parameters gain fields. An older project is upgraded with defaults,
 // which is a migration and not damage worth warning about.
-const SCHEMA = 5;
+const SCHEMA = 6;
 // Edits are written this long after the last one, so dragging a knob is one write, not hundreds.
 const SAVE_DELAY_MS = 300;
 // A version is kept when a project is opened, before anything replaces it, and this often while it is edited.
@@ -114,9 +115,10 @@ export class LocalProjectService {
   }
 
   private blankState(name = DEFAULT_PROJECT_NAME): State {
-    const now = Date.now();
+    const now = Date.now(), defaults = clone(this.defaults!);
+    Object.assign(defaults.effectsLoop.reverb, NEW_PROJECT_REVERB);
     return {
-      ...clone(this.defaults!), version: 1, schema: SCHEMA, synths: [], tempo: 120,
+      ...defaults, version: 1, schema: SCHEMA, synths: [], tempo: 120,
       selectedDrumKitId: 'clean-analog', drumMasterVolume: 1, drumSwing: 0, savedPatterns: [],
       scenes: [], currentSceneId: '', song: { entries: [], loop: false },
       projectId: crypto.randomUUID(), name, revision: 0, createdAt: now, updatedAt: now, guests: [],
