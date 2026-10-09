@@ -27,11 +27,33 @@ export default function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProp
   return (
     <section className="effects-panel">
       <div className="effects-panel-header">
-        <h3>Effects Loop</h3>
+        <h3>Effects</h3>
         <label className="effects-toggle">
           <input type="checkbox" aria-label="Effects loop enabled" checked={effectsLoop.enabled} onChange={(event) => onChange({ enabled: event.target.checked })} />
           <span>Enabled</span>
         </label>
+        <div className="effects-returns">
+          <Knob
+            label="Synth Rtn"
+            ariaLabel="Synth return"
+            size="small"
+            value={effectsLoop.returns.synth}
+            displayValue={`${Math.round(effectsLoop.returns.synth * 100)}%`}
+            parseInputValue={parsePercent}
+            onChange={(value) => onChange({ returns: { ...effectsLoop.returns, synth: value } })}
+            tooltip="How much of the shared effects the synths get back"
+          />
+          <Knob
+            label="Drum Rtn"
+            ariaLabel="Drum return"
+            size="small"
+            value={effectsLoop.returns.drums}
+            displayValue={`${Math.round(effectsLoop.returns.drums * 100)}%`}
+            parseInputValue={parsePercent}
+            onChange={(value) => onChange({ returns: { ...effectsLoop.returns, drums: value } })}
+            tooltip="How much of the shared effects the drums get back"
+          />
+        </div>
       </div>
 
       <div className="effects-grid">

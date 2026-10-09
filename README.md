@@ -36,18 +36,28 @@ not an application backend. The build's asset base is `/discobot/`.
 
 ## Make music
 
+The screen is one rack, read top to bottom: the transport, three synth lanes,
+the drum grid, then the shared effects. Every lane's steps line up, so you can
+see how the parts sit against each other.
+
 1. Click a keyboard key or Play to unlock browser audio; start with low output volume.
-2. Select a synth step and assign a note, or paint notes in the piano roll.
-   Adjust velocity, oscillator, filter, ADSR, LFOs and arpeggiator controls.
+2. Click a synth lane's name plate to open its editor. Select a step in its row
+   and play a note onto it, or paint notes in the piano roll. Each lane has four
+   knobs and a level on its face; the editor's tabs (Notes, Osc, Filter, Amp,
+   LFO, Arp, Sends) hold the rest of the sound.
    The computer keyboard plays the selected synth: the A S D F G H J K L row is
    the white keys, W E T Y U O P the black keys, and Z / X shift the octave.
    Tap tempo is Shift+T.
-3. Add drum steps, select a kit, and adjust track settings, swing, mute/solo and mix.
+3. Click cells in the drum grid to add hits, and select a kit. The strip under
+   the grid edits the instrument and step you last touched.
    Each drum step has a velocity, a chance of playing, and a repeat count that
    packs up to four hits into the step.
 4. Use Play All / Stop All, shared tempo and the mixer. Effects sends feed
    drive, phaser, delay and reverb; a send and its return must be audible.
-5. Save a named pattern; load or delete it through the pattern manager.
+5. Save a named pattern with Save; load it from the Load list, or delete it
+   under Project → Manage Saved. The Project and Export menus hold project
+   files, MIDI import and the audio and MIDI exports. MIDI controller settings
+   and imported samples are behind the MIDI button.
 
 ### Local data
 

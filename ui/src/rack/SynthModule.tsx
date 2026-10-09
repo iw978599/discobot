@@ -1,0 +1,267 @@
+import { useState } from 'react';
+import type { Studio } from '../studio/useStudio';
+import { SynthModelParams } from '../types';
+import { getSynthModelDefinition } from '../synthModels';
+import Knob from '../components/Knob';
+import SynthControls, { type SynthTab } from '../components/SynthControls';
+import KeyboardPanel from '../components/KeyboardPanel';
+import StepRow from './StepRow';
+
+const AMBER = '#ffb000';
+
+const percent = (input: string): number | null => {
+  const value = Number.parseFloat(input.replace(/[^0-9+-.]/g, ''));
+  return Number.isFinite(value) ? value / 100 : null;
+};
+const cutoff = (input: string): number | null => {
+  const value = Number.parseFloat(input.replace(/[^0-9+-.]/g, ''));
+  if (!Number.isFinite(value)) return null;
+  return /k/i.test(input) ? value * 1000 : value;
+};
+
+const milliseconds = (input: string): number | null => {
+  const value = Number.parseFloat(input.replace(/[^0-9+-.]/g, ''));
+  return Number.isFinite(value) ? value / 1000 : null;
+};
+
+interface SynthModuleProps {
+  studio: Studio;
+  synthId: number;
+}
+
+// One rack unit per synth lane: name plate, mute and solo, the pattern, and the few knobs
+// you reach for most. The selected lane also opens its full editor underneath.
+export default function SynthModule({ studio, synthId }: SynthModuleProps) {
+  const [tab, setTab] = useState<SynthTab>('notes');
+  const synth = studio.synths.find(entry => entry.id === synthId);
+  const selected = studio.selectedSynthId === synthId;
+
+  if (!synth) {
+    return (
+      <section className="rack-unit empty" aria-label={`Synth ${synthId}`}>
+        <button
+          className="rack-btn"
+          onClick={() => { void studio.ensureSynthExists(synthId).then(created => { if (created) studio.setSelectedSynthId(synthId); }); }}
+        >
+          Synth {synthId} +
+        </button>
+        <span className="rack-hint">Empty slot. Add a third voice to the arrangement.</span>
+      </section>
+    );
+  }
+
+  const params = synth.synthParams;
+  const model = getSynthModelDefinition(synth.synthModelId);
+  const change = studio.handleParameterChange;
+
+  return (
+    <section className={`rack-unit synth-module ${selected ? 'selected' : ''}`} aria-label={`Synth ${synthId} module`}>
+      <div className="rack-row">
+        <button
+          className="rack-plate"
+          aria-label={`Synth ${synthId}`}
+          aria-pressed={selected}
+          onClick={() => studio.setSelectedSynthId(synthId)}
+          title={selected ? 'This lane is open for editing' : 'Open this lane for editing'}
+        >
+          <b>Synth {synthId}</b>
+          <span>{model.id === 'generic' ? 'Analog' : model.name}</span>
+        </button>
+        <div className="rack-ms">
+          <button
+            className={synth.muted ? 'on' : ''}
+            aria-label={`Mute Synth ${synthId}`}
+            aria-pressed={synth.muted}
+            onClick={() => { void studio.handleSynthMixChange(synthId, { muted: !synth.muted }); }}
+          >
+            M
+          </button>
+          <button
+            className={synth.solo ? 'on' : ''}
+            aria-label={`Solo Synth ${synthId}`}
+            aria-pressed={synth.solo}
+            onClick={() => { void studio.handleSynthMixChange(synthId, { solo: !synth.solo }); }}
+          >
+            S
+          </button>
+        </div>
+        {synth.pattern && (
+          <StepRow
+            pattern={synth.pattern}
+            isPlaying={synth.isPlaying}
+            currentStep={synth.currentStep}
+            selectedStep={synth.selectedStep}
+            onStepClick={(step) => {
+              studio.setSelectedSynthId(synthId);
+              void studio.handleStepChange(synthId, step);
+            }}
+          />
+        )}
+        {params && (
+          <div className="rack-knobs">
+            {model.macros.length > 0 ? (
+              <div className="synth-model-macro-grid" title={model.subtitle}>
+                {model.macros.map((macro) => (
+                  <Knob
+                    key={macro.key}
+                    size="small"
+                    label={macro.label}
+                    ariaLabel={`Synth ${synthId} ${macro.label}`}
+                    value={synth.synthModelParams[macro.key]}
+                    displayValue={`${Math.round(synth.synthModelParams[macro.key] * 100)}%`}
+                    parseInputValue={percent}
+                    onChange={(value) => { void studio.handleSynthModelChange(synthId, synth.synthModelId, { [macro.key]: value } as Partial<SynthModelParams>); }}
+                    color={AMBER}
+                  />
+                ))}
+              </div>
+            ) : (
+              <>
+                <Knob
+                  size="small"
+                  label="Cutoff"
+                  ariaLabel={`Synth ${synthId} cutoff`}
+                  value={params.filter.frequency}
+                  min={20}
+                  max={20000}
+                  step={10}
+                  displayValue={params.filter.frequency >= 1000 ? `${(params.filter.frequency / 1000).toFixed(1)}k` : `${params.filter.frequency}`}
+                  parseInputValue={cutoff}
+                  onChange={(value) => { void change(synthId, { filter: { ...params.filter, frequency: value } }); }}
+                  color={AMBER}
+                />
+                <Knob
+                  size="small"
+                  label="Reso"
+                  ariaLabel={`Synth ${synthId} resonance`}
+                  value={params.filter.q}
+                  min={0.1}
+                  max={20}
+                  step={0.1}
+                  onChange={(value) => { void change(synthId, { filter: { ...params.filter, q: value } }); }}
+                  color={AMBER}
+                />
+                <Knob
+                  size="small"
+                  label="Env"
+                  ariaLabel={`Synth ${synthId} filter envelope`}
+                  value={params.filter.envAmount ?? 0}
+                  min={-1}
+                  max={1}
+                  displayValue={`${Math.round((params.filter.envAmount ?? 0) * 100)}%`}
+                  parseInputValue={percent}
+                  onChange={(value) => { void change(synthId, { filter: { ...params.filter, envAmount: value } }); }}
+                  color={AMBER}
+                />
+                <Knob
+                  size="small"
+                  label="Decay"
+                  ariaLabel={`Synth ${synthId} decay`}
+                  value={params.envelope.decay}
+                  min={0}
+                  max={2}
+                  displayValue={`${Math.round(params.envelope.decay * 1000)}ms`}
+                  parseInputValue={milliseconds}
+                  onChange={(value) => { void change(synthId, { envelope: { ...params.envelope, decay: value } }); }}
+                  color={AMBER}
+                />
+              </>
+            )}
+            <Knob
+              size="small"
+              label="Level"
+              ariaLabel={`Synth ${synthId} level`}
+              value={params.gain}
+              min={0}
+              max={2}
+              displayValue={`${Math.round(params.gain * 100)}%`}
+              parseInputValue={percent}
+              onChange={(value) => { void change(synthId, { gain: value }); }}
+              color="#f1f1ee"
+            />
+          </div>
+        )}
+      </div>
+
+      {selected && params && (
+        <SynthControls
+          parameters={params}
+          onParameterChange={(next) => { void change(synthId, next); }}
+          presets={studio.synthPresets}
+          onSavePreset={(name) => studio.handleSaveSynthPreset(synthId, name)}
+          onLoadPreset={(presetId) => { void studio.handleLoadSynthPreset(synthId, presetId); }}
+          onDeletePreset={studio.handleDeleteSynthPreset}
+          synthModelId={synth.synthModelId}
+          onModelChange={(modelId) => { void studio.handleSynthModelChange(synthId, modelId); }}
+          tab={tab}
+          onTabChange={setTab}
+          onRemove={synthId !== 1 ? () => { void studio.handleRemoveSynth(synthId); } : undefined}
+          notes={synth.pattern && (
+            <div className="synth-notes">
+              <div className="step-tools">
+                <label>
+                  Length
+                  <select
+                    aria-label="Sequence length"
+                    value={synth.pattern.steps.length}
+                    onChange={(event) => { void studio.handleStepCountChange(synthId, Number(event.target.value) as 16 | 32); }}
+                  >
+                    <option value={16}>16 steps</option>
+                    <option value={32}>32 steps</option>
+                  </select>
+                </label>
+                {synth.selectedStep === null ? (
+                  <span className="rack-hint">Select a step above, then play a key to put a note on it. Click a step with a note again to clear it.</span>
+                ) : (
+                  <>
+                    <span className="step-tools-name">Step {synth.selectedStep + 1}</span>
+                    <label>
+                      Velocity
+                      <input
+                        type="range"
+                        aria-label={`Step ${synth.selectedStep + 1} velocity`}
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        value={synth.pattern.steps[synth.selectedStep]?.velocity ?? 0.7}
+                        onChange={(event) => { void studio.handleStepVelocityChange(synthId, synth.selectedStep!, Number(event.target.value)); }}
+                      />
+                      <span className="rack-readout">{Math.round((synth.pattern.steps[synth.selectedStep]?.velocity ?? 0.7) * 127)}</span>
+                    </label>
+                    <label title="Hold this note into the next step. On a mono synth the pitch glides instead of retriggering.">
+                      <input
+                        type="checkbox"
+                        aria-label={`Step ${synth.selectedStep + 1} slide`}
+                        checked={Boolean(synth.pattern.steps[synth.selectedStep]?.slide)}
+                        onChange={(event) => { void studio.handleStepSlideChange(synthId, synth.selectedStep!, event.target.checked); }}
+                      />
+                      Slide
+                    </label>
+                  </>
+                )}
+              </div>
+              <KeyboardPanel
+                mode={synth.keyboardMode}
+                onModeChange={(mode) => studio.handleKeyboardModeChange(synthId, mode)}
+                pattern={synth.pattern}
+                currentStep={synth.currentStep}
+                isPlaying={synth.isPlaying}
+                selectedStep={synth.selectedStep}
+                octaveShift={synth.octaveShift}
+                onOctaveShift={(direction) => studio.handleOctaveShift(synthId, direction)}
+                holdEnabled={Boolean(params.hold)}
+                releaseSignal={synth.forceReleaseSignal}
+                computerKeyNotes={studio.computerKeyNotes}
+                onStepSelect={(step) => { void studio.handleStepChange(synthId, step); }}
+                onNoteAssign={(stepIndex, note) => { void studio.handlePianoRollNoteAssign(synthId, stepIndex, note); }}
+                onClearPattern={() => { void studio.handleClearPatternNotes(synthId); }}
+                onNotePlay={(note) => { void studio.handleNotePlay(synthId, note); }}
+                onNoteRelease={(note) => { void studio.handleNoteRelease(synthId, note); }}
+              />
+            </div>
+          )}
+        />
+      )}
+    </section>
+  );
+}

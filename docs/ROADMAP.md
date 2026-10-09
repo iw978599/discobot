@@ -6,6 +6,11 @@ ordered by value for the effort within each section. Sizes are rough:
 
 ## Design and implementation improvements
 
+The UI was rebuilt as a single rack (transport, three synth lanes, drum grid,
+effects) on the `feat/rack-ui` branch. That moved all behaviour out of
+`App.tsx` into `ui/src/studio/useStudio.tsx`, which is the first half of item 1
+below; the typed store is still to do.
+
 These do not add features. They remove the things most likely to cause bugs or
 slow down every later change.
 
