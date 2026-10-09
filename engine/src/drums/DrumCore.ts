@@ -204,7 +204,8 @@ export class DrumCore {
         voice.sweep = is909 ? 0.75 : 0;
         voice.rate[0] = this.decayRate((is909 ? 0.075 : 0.055) * decay);
         voice.rate[1] = this.decayRate(is909 ? 0.012 : 0.03 * decay);
-        voice.rate[2] = this.decayRate((0.06 + extra * 0.2) * decay);
+        // Snare wires: gone in about a third of a second at the default setting.
+        voice.rate[2] = this.decayRate((0.02 + extra * 0.07) * decay);
         voice.noiseLevel = 0.4 + extra * 0.5;
         this.setFilter(voice, 0, is909 ? 700 : 1500 + tone * 900, 0.8);
         this.setFilter(voice, 1, is909 ? 9000 : 11000, 0.7);
