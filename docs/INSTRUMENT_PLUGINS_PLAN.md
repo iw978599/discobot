@@ -7,8 +7,9 @@ other creators link their own instruments into it?
 
 - **Importing VST plugins: not possible.** Not hard, not expensive: not
   possible, in any browser.
-- **Letting creators link instruments: possible**, in three forms of
-  increasing effort. Two of them are safe to open to strangers. One is not.
+- **Letting creators link instruments: possible**, in several forms. For a
+  creator who already has a web instrument of their own, option E (guest
+  apps) is the one that fits.
 
 ## Why VSTs cannot be imported
 
@@ -120,6 +121,71 @@ Risks and how they are handled:
 - **Effort:** about two weeks for a working prototype with one Faust example,
   then about as long again for knobs, presets, export and the safety limits.
 
+### E. Guest apps: a creator's own web instrument, hosted in Discobot (medium, recommended first)
+
+Added after looking at the example the owner gave:
+[Choir](https://github.com/aaronvandorn/Choir), a generative choral
+synthesizer by Aaron Van Dorn (MIT licence).
+
+Choir is not a plugin in the sense of A to D. It is a complete web page: its
+own sound engine built from the browser's audio building blocks, its own
+melody and rhythm generator, and its own screen of controls. None of the
+formats above can hold it. Samples cannot (it is generated live), and the
+WebAssembly format cannot without the creator rewriting it and losing its
+interface.
+
+What fits is to **host the creator's page inside Discobot as a rack unit**,
+in a frame, and connect the two with a small set of messages.
+
+Why this is safe: a frame loaded from the creator's own address is kept apart
+from Discobot by the browser. It cannot read projects or the signed-in
+session. That is the protection option C lacks.
+
+What Choir already has that makes this practical:
+
+- **A sync protocol** ("Jam Link"): messages for tempo, start and stop, key
+  and mode, and for saving and recalling its state as a "scene". It keeps
+  time against the computer's clock, which a frame and its host share.
+- **A tap on its own audio output**, used for its export feature.
+- **Its page can be framed.** Its host sends nothing that forbids it.
+
+What is missing, on the creator's side: Jam Link only talks to pages at the
+same address. It needs one more way to send its messages, to the page that
+frames it, and to pass its audio out the same way. That is a small addition
+to code the creator already wrote, in a block shared by all three of their
+apps, so one change would bring in all three.
+
+What Discobot would build:
+
+- **A guest unit in the rack**: paste an address, and the page appears as a
+  module with its own controls.
+- **Sync out**: tempo, play and stop, and key sent to the guest.
+- **Audio in**: the guest's sound arrives in Discobot's mixer, so it gets a
+  level, the shared effects, mute and solo.
+- **State in the project**: each Discobot scene asks the guest for its state
+  and stores it, and recalls it when the scene plays. This maps directly onto
+  Jam Link's scenes.
+
+Limits, which are real:
+
+- **WAV export.** Discobot renders exports faster than real time, and a guest
+  cannot do that. A guest lane would be **recorded in real time** into the
+  project first ("freeze"), and the export uses the recording.
+- **Generative guests do not repeat.** Choir changes its melody on each pass,
+  so two playbacks differ. The frozen recording is the only fixed version.
+- **Latency.** Audio crossing from the frame arrives a few tens of
+  milliseconds late. The guest can be told to play that much early; Choir
+  already has a setting for this.
+- **It contacts the creator's site** every time the project opens, and does
+  not work offline.
+- **It depends on the creator.** If their page changes or disappears, the
+  lane changes or goes silent. The frozen recording still plays.
+- **Share links** carry the guest's address and state, not its sound. Someone
+  opening the link would be asked before the guest is loaded.
+
+Effort: about two weeks on Discobot's side for the unit, sync, audio and
+freeze. On the creator's side, a day or less, and it needs their agreement.
+
 ## How creators would link an instrument
 
 In two stages, the second only if the first gets used.
@@ -165,14 +231,18 @@ without being asked".
 
 ## Recommended order
 
-1. **A: preset sharing.** A day. Useful immediately and tests the "open a
+1. **E: guest apps**, if instruments like Choir are the goal. It is the only
+   option that brings in a creator's existing web instrument whole, and it
+   needs the least from them. Start by agreeing the message format with one
+   creator.
+2. **A: preset sharing.** A day. Useful immediately and tests the "open a
    shared thing" flow.
-2. **B: the sampler**, with drum-lane samples first, then SoundFont and SFZ.
+3. **B: the sampler**, with drum-lane samples first, then SoundFont and SFZ.
    Already wanted, and it opens the largest library of existing instruments.
-3. **D: WebAssembly instruments, stage 1.** Start with a prototype to confirm
+4. **D: WebAssembly instruments, stage 1.** Start with a prototype to confirm
    processor cost and export behaviour before committing to the format.
-4. **D stage 2: the directory**, if people are making instruments.
-5. **C: Web Audio Modules**, only as an opt-in for the user's own trusted
+5. **D stage 2: the directory**, if people are making instruments.
+6. **C: Web Audio Modules**, only as an opt-in for the user's own trusted
    modules, if anyone asks.
 
 ## Decisions for you
