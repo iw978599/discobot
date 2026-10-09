@@ -5,7 +5,8 @@ piano-roll editing, an eight-instrument drum machine, MIDI and shared effects.
 Everything runs in your browser and no login is required.
 
 An account is optional: a username and a password, by invitation, with no email
-address or personal details. It does not sync projects yet. The accounts API is
+address or personal details. Signed in, projects are also kept in the account and follow it to other
+browsers; imported samples are not. The accounts API is
 in `server/` (see `server/README.md`).
 
 ## Architecture

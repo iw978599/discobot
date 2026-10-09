@@ -7,6 +7,7 @@ import { Pattern, SynthParameters, DrumState, DrumInstrument, DrumSettings, Drum
 import { SongPosition, entryStartBar, sceneAtBar, sceneDrumState, songBars } from '../services/songPlayback';
 import { createDefaultSynthParameters } from '@discobot/engine';
 import { localRequest, localService } from '../services/localService';
+import { projectSync, startProjectSync } from '../services/projectSync';
 import type { ProjectInfo } from '../services/projectLibrary';
 import { sanitizeSynthParams } from '../services/projectSanitization';
 import { expandStep } from '../services/noteScheduling';
@@ -1086,7 +1087,7 @@ export function useStudio() {
       effectsLoop: DEFAULT_EFFECTS_LOOP, drumFx: DEFAULT_DRUM_FX,
     });
     const unsubscribe = localService.subscribe(message => messageHandlerRef.current(message));
-    void localService.openLibrary();
+    void localService.openLibrary().then(startProjectSync);
     return unsubscribe;
   }, []);
 
@@ -1689,7 +1690,11 @@ export function useStudio() {
   const handleRenameProject = useCallback((id: string, name: string) => projectAction(() => localService.renameProject(id, name)), [projectAction]);
   const handleDeleteProject = useCallback((id: string) => {
     if (id === projectIdRef.current) leaveProject();
-    return projectAction(() => localService.deleteProject(id));
+    return projectAction(() => localService.deleteProject(id)).then((ok) => {
+      // Deleting a synced project deletes it from the account too; sync has to be told, it never guesses.
+      if (ok) void projectSync.noteDeleted(id);
+      return ok;
+    });
   }, [leaveProject, projectAction]);
 
   // A project from a file or a share link becomes a new project in the library and is opened.

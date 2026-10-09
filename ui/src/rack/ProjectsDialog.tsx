@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Studio } from '../studio/useStudio';
+import { projectSync } from '../services/projectSync';
+import { useAccountUser, useSyncStatus } from './AccountDialog';
 import Dialog from './Dialog';
 
 const when = (time: number) => new Date(time).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
@@ -10,6 +12,8 @@ export default function ProjectsDialog({ studio, onClose }: { studio: Studio; on
   const [renaming, setRenaming] = useState<string | null>(null);
   const [draftName, setDraftName] = useState('');
   const [protectedStorage, setProtectedStorage] = useState<boolean | null>(null);
+  const user = useAccountUser();
+  const sync = useSyncStatus();
 
   useEffect(() => {
     let mounted = true;
@@ -34,6 +38,8 @@ export default function ProjectsDialog({ studio, onClose }: { studio: Studio; on
       {studio.projects.length === 0 && <p className="rack-empty">Loading projects…</p>}
       {studio.projects.map((project) => {
         const open = project.id === studio.projectId;
+        const synced = sync.inAccount.includes(project.id);
+        const where = !user ? '' : sync.problems[project.id] ? ` · Not synced: ${sync.problems[project.id]}` : synced ? ' · In your account' : ' · This browser only';
         return (
           <div key={project.id} className={`rack-list-row ${open ? 'current' : ''}`} role="group" aria-label={`Project ${project.name}`}>
             {renaming === project.id ? (
@@ -52,8 +58,11 @@ export default function ProjectsDialog({ studio, onClose }: { studio: Studio; on
             ) : (
               <span>
                 <strong>{project.name}</strong>
-                <small>{open ? 'Open now · saves as you work' : `Last changed ${when(project.updatedAt)}`}</small>
+                <small>{open ? 'Open now · saves as you work' : `Last changed ${when(project.updatedAt)}`}{where}</small>
               </span>
+            )}
+            {user && !synced && sync.browserOnly.includes(project.id) && (
+              <button className="rack-btn" title="Keep this project in your account too" onClick={() => { void projectSync.addToAccount([project.id]); }}>Add to Account</button>
             )}
             <button className="rack-btn" disabled={open} onClick={() => { void studio.handleOpenProject(project.id).then(ok => { if (ok) onClose(); }); }}>Open</button>
             <button className="rack-btn" onClick={() => { setDraftName(project.name); setRenaming(project.id); }}>Rename</button>
@@ -61,7 +70,7 @@ export default function ProjectsDialog({ studio, onClose }: { studio: Studio; on
             <button
               className="rack-btn danger"
               onClick={() => {
-                if (window.confirm(`Delete the project "${project.name}"? This cannot be undone.`)) void studio.handleDeleteProject(project.id);
+                if (window.confirm(`Delete the project "${project.name}"${user && synced ? ' from this browser and from your account' : ''}? This cannot be undone.`)) void studio.handleDeleteProject(project.id);
               }}
             >
               Delete
@@ -70,7 +79,7 @@ export default function ProjectsDialog({ studio, onClose }: { studio: Studio; on
         );
       })}
       <p className="rack-empty">
-        Projects are stored in this browser on this device.
+        {user ? 'Projects in your account are stored there and in this browser. The rest are in this browser only.' : 'Projects are stored in this browser on this device.'}
         {protectedStorage === true && ' The browser has agreed not to clear them to free up space.'}
         {protectedStorage === false && ' The browser may clear them if it runs short of space, so export the ones you care about.'}
         {' '}Use Project → Export Project for a backup file.
