@@ -36,7 +36,7 @@ result is one of the web formats below, and we can load it.
 
 **Done.** A lane's sound can be exported as a file and imported again, and
 presets from two other synths are translated on import (VAST G1-J8, and a
-nested two-oscillator patch format), with a report of what did not carry
+WebSynth Studio patch format), with a report of what did not carry
 over. There is no standard for synth presets, so each further format is a
 new translator.
 
