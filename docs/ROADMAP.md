@@ -68,8 +68,8 @@ slow down every later change.
 10. **CI housekeeping.** (S)
     `ci.yml` and `pages.yml` run the same checks on every push to `main`;
     have Pages depend on CI instead. Bump `configure-pages` and `deploy-pages`
-    off Node 20. The `pr-review.yml` workflow cannot review anything larger
-    than 100 KB and depends on a model endpoint; decide whether to keep it.
+    off Node 20. The AI review workflow was removed: the model service it
+    called was retired.
 
 11. **Accessibility pass on custom controls.** (M)
     Knobs are keyboard-operable, but the step grids are long runs of unlabeled
