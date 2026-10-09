@@ -1,6 +1,6 @@
 # Long-term storage and users — plan
 
-Status: proposed, nothing built. Written 2026-10-08.
+Status: proposed, nothing built. Written 2026-10-08; stage 3 revised the same day after the owner's decisions.
 
 ## Where things are today
 
@@ -29,8 +29,8 @@ It can be the right call, but it brings running costs, a privacy policy,
 account deletion, and someone responsible for the data.
 
 So the plan is in three stages. Each is useful on its own, and the first two
-need no server. Stage 3 is where users arrive, and it should be a deliberate
-choice, not a default.
+need no server. Stage 3 is where users arrive. The owner has chosen to go
+there, with the limits recorded under stage 3.
 
 Throughout: **the browser copy stays the working copy.** The app must keep
 working offline and signed out. Anything in the cloud is a copy that syncs.
@@ -75,48 +75,66 @@ backups, with no accounts.
 Result: people can send each other songs. Still no server and nothing to
 moderate, because nothing is hosted.
 
-## Stage 3 — accounts and sync (needs a server)
+## Stage 3 — accounts, sync and public song pages (needs a server)
 
-### What it would give
+### Decisions made (2026-10-08)
 
-- The same projects on every device after signing in.
-- A copy that survives a lost laptop.
-- Optionally, public pages for shared songs.
+- **Who it is for:** friends, mostly.
+- **Public song pages:** wanted.
+- **Accounts:** a username and a password, and nothing else. No email
+  address, no real name, no other personal information.
 
-### Three ways to do it
+### What those decisions lead to
 
-| | A. The user's own cloud drive | B. Hosted backend service | C. Our own server |
-|---|---|---|---|
-| How | Sign in with Google or Dropbox; projects are files in a folder the app is allowed to see | Supabase or Firebase: sign-in, database and file storage as a service | A small API (for example Cloudflare Workers with a database and object storage) |
-| Who holds the data | The user | The service, on our account | Us |
-| Running cost | None | Free at small scale, then by usage | Small, but never zero |
-| Our obligations | Few: we never see the data | Privacy policy, deletion, data requests | The same, plus security and upkeep |
-| Sharing publicly | Awkward | Straightforward | Straightforward |
-| Effort | M–L | L | L+ |
+**No email means no "forgot my password".** There is nowhere to send a reset
+link. Instead, sign-up shows a **recovery code** once, to be written down; it
+can set a new password. Someone who loses both the password and the code
+loses the account, though not the projects in their browser. This is the one
+real cost of collecting no email, and people need to be told at sign-up.
 
-**Recommendation:** B (Supabase) if the goal is a product with users and
-shared songs; A if the goal is only "my projects on all my devices" with the
-least responsibility. C is not worth it at this size.
+**No email means anyone can make accounts without limit.** With public pages
+that invites spam. Since this is for friends, sign-up needs an **invite
+code**: you generate codes and hand them out. That also keeps storage costs
+bounded and means every account belongs to someone you know.
 
-### Signing in
+**Hosted sign-in services do not fit.** Supabase and Firebase build their
+accounts around an email address or phone number. Username-only sign-in means
+a small server of our own that stores a username and a password hash. This
+changes the earlier recommendation from a hosted service to a small API.
 
-Use the service's sign-in: a link sent by email, plus "Continue with Google"
-and "Continue with GitHub". The app never stores a password. Signing in is
-always optional; a signed-out visitor gets exactly today's app.
+### What to build it on
 
-### What gets stored (option B)
+A Cloudflare Worker (the API), with Cloudflare's D1 database for accounts and
+projects and R2 object storage for samples. Reasons: the free allowance is far
+more than a group of friends will use, there is no machine to maintain, and
+the site itself can stay on GitHub Pages. It needs a Cloudflare account in
+your name; that is the one thing I cannot set up for you.
 
-- **Users:** id, email, display name, created date. Nothing else.
+### What gets stored
+
+- **Accounts:** username, password hash, recovery-code hash, created date,
+  and which invite code was used. Nothing else. No IP addresses are kept by
+  the app.
+- **Sessions:** a random token per signed-in browser, stored as a hash, with
+  an expiry. "Sign out everywhere" deletes them.
 - **Projects:** id, owner, name, updated time, revision number, and the
-  project as one JSON document. It is the same format as the project file, so
-  there is one format to keep compatible.
-- **Samples:** files in object storage, named by a hash of their contents so
-  the same sample is stored once per user. Private by default, with a size
-  limit per user.
-- **Shares:** project id, a short link code, and whether it is public.
+  project as one JSON document in the same format as the project file.
+- **Samples:** files in object storage, named by a hash of their contents,
+  private, with a size limit per account.
+- **Public pages:** project id, a short code for the link, a title, and the
+  published copy of the project.
 
-Each row is readable and writable only by its owner, enforced by the database
-itself (row-level security), not only by the app.
+### Passwords
+
+- Stored only as a salted hash made with a slow, standard function (PBKDF2 or
+  scrypt, as strong as the platform's limits allow). Never logged, never
+  stored in plain form.
+- A minimum length of ten characters and a check against the most common
+  passwords. No rules about symbols.
+- Sign-in attempts are limited per username, so a password cannot be guessed
+  by brute force.
+- Usernames are public (they appear on song pages), so the sign-up form
+  should say: do not use your real name if you do not want it shown.
 
 ### How syncing works
 
@@ -125,50 +143,59 @@ itself (row-level security), not only by the app.
 - Saving sends the project with that revision. If the server's revision is
   the same, the save is accepted and the number goes up.
 - If the server has moved on (the project was edited on another device), the
-  save is refused and the user is offered both versions; the simplest safe
-  answer is to keep the other one as "Song (copy from laptop)". Nothing is
-  merged automatically and nothing is overwritten silently. This is the same
-  rule the two-tab guard already follows.
+  save is refused and both versions are kept, the other as "Song (copy from
+  laptop)". Nothing is merged automatically and nothing is overwritten
+  silently. This is the rule the two-tab guard already follows.
 - Offline edits are queued and sent when the connection returns.
-- No live collaboration. Two people editing one song at once is a much larger
-  project and is out of scope.
+- No live collaboration.
 
-### First sign-in
+Signing in is always optional. Signed out, the app is exactly what it is
+today. On first sign-in the app offers to upload the projects already in the
+browser; it never uploads without being asked.
 
-Projects already in the browser stay there. The app offers to upload them;
-it never uploads without being asked.
+### Public song pages
 
-### What we take on by having users
+- **Publish** makes a public, read-only copy of a project at a short link.
+  The page shows the title and the author's username, plays the song, and has
+  **Open a copy**, which loads it into the visitor's own browser.
+- Publishing is a snapshot: later edits do not change the page until you
+  publish again. **Unpublish** removes it.
+- A profile page lists a user's published songs.
+- Imported samples are not included in public pages at first. They can be
+  copyrighted audio, and hosting them publicly is the part most likely to
+  cause trouble.
+- Visitors do not need an account to listen or to open a copy.
 
-- A privacy policy and terms, written before launch.
-- "Delete my account" that removes everything, and "download my data".
-- If songs can be public: a way to report one, and a way to take it down.
-  Imported samples can be copyrighted audio, so samples stay private and are
-  not included in public shares unless the user explicitly adds them.
-- Limits per user on projects and sample storage, so the bill has a ceiling.
-- Someone who reads the support address.
+### What we still take on
 
-### Order of work for stage 3
+Even with no email or personal details:
 
-1. Stage 1 items 1 and 3 first: IndexedDB and the project library. Sync needs
-   "a list of projects with ids and revisions" to exist locally.
-2. Sign-in and a private "my projects" list that syncs. (L)
-3. Samples in cloud storage. (M)
-4. Share links backed by the server, and optional public pages. (M)
+- A short, plain privacy note saying exactly what is stored (the list above).
+- **Delete my account**, which removes the account, its projects, samples and
+  pages. **Download my data**, which is the existing project file export.
+- A way for you, as the owner, to remove a published page or an account.
+- Limits per account on projects, sample storage and published pages.
 
-## Questions to answer before stage 3
+### Order of work
 
-1. **Who is this for?** You and friends, or the public? For a handful of
-   people, option A or just stage 1 and 2 may be all that is needed.
-2. **Do you want public song pages, or only private sync?** Public pages are
-   what bring moderation and copyright questions.
-3. **Are you willing to be responsible for people's data and an email
-   address they can write to?**
-4. **Is there a budget?** Supabase's free tier would cover early use; past
-   that it is a monthly bill.
+1. **Stage 1 items 1 and 3 first:** IndexedDB and the project library. Sync
+   needs a local list of projects with ids and revisions. (M each)
+2. **The API and accounts:** sign up with an invite code, sign in, sign out,
+   recovery code, delete account. (L)
+3. **Project sync:** upload, download, revisions and the keep-both rule. (L)
+4. **Public pages:** publish, the read-only player page, open a copy,
+   profile page. (M)
+5. **Samples in the cloud.** (M) Last, and optional.
+
+### Still to decide
+
+1. **A Cloudflare account** to host the API, or another host you prefer.
+2. **The address.** The API can live at a `workers.dev` address for free; a
+   custom domain is optional and would also give public pages nicer links.
+3. **Who can create invite codes:** only you, or any member.
 
 ## Suggested next step
 
-Do stage 1 items 1 to 4 regardless of the answers: they fix real risks for
-every user today and are the foundation for anything later. Decide on stage 3
-once those are in and you know who is using it.
+Stage 1 items 1 to 4. They fix real risks for every user today, and items 1
+and 3 are required before any sync can be built. The server work can start
+as soon as there is a Cloudflare account to deploy to.
