@@ -199,6 +199,30 @@ mono/slide and the drum voices. What it leaves open:
     To decide: whether what a child makes can be opened later in the full
     app, and whether it is a separate page or a switch in the transport bar.
 
+15. **A layout for phones and the installed app.** (L)
+    The rack is one wide panel. On a phone it keeps its desktop width and is
+    scrolled sideways, which works but is not comfortable: the step grids and
+    the knobs are small, and the transport bar is wider than the screen. A
+    layout made for a narrow screen:
+    - One unit on screen at a time (a lane, the drums, the song, effects),
+      with a bar along the bottom to move between them and the transport
+      always in reach.
+    - Step grids that fit the width: eight steps to a row, or one bar paged
+      a half at a time.
+    - Touch-sized controls. Knobs become sliders or open a large dial when
+      touched; nothing depends on hover or a right click.
+    - The piano roll and the on-screen keyboard usable with a thumb, in
+      portrait and landscape.
+    - Respect the phone's safe areas (notch, home bar) when installed, and
+      keep the screen awake while playing.
+    - Dialogs as full-screen sheets.
+    The same components and the same `Studio` object should drive both
+    layouts: this is a second arrangement of the rack, not a second app.
+    Kids mode (item 14) is touch-first too and can share its large controls.
+    To decide: whether "apps" means the installable web app that exists
+    today, or packaged apps in the phone stores as well, which is a separate
+    piece of work (a wrapper, store accounts and review).
+
 ## Known bugs
 
 - **Song WAV ignores a guest's mute and level per scene.** The export decides
