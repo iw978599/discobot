@@ -223,18 +223,6 @@ mono/slide and the drum voices. What it leaves open:
     Packaged apps in the phone stores are not planned for now; they would be
     a separate piece of work (a wrapper, store accounts and review).
 
-## Known bugs
-
-- **Song WAV ignores a guest's mute and level per scene.** The export decides
-  which guests to record, and at what level, from the scene that is open when
-  Export is pressed (`handleExportWav` reads `guestsRef` once and gives each
-  recording a single gain). A guest muted in the open scene is left out of the
-  whole song, and one muted only in another scene plays through it. The fix:
-  record every guest that is audible in any scene of the song, and apply each
-  scene's `guestMix` to the recording bar by bar, the way `applySceneMutes`
-  does for the synth lanes. Loop WAV, Download WAV and stems export one scene
-  and are not affected.
-
 ## Suggested order
 
 1. Listen and tune the new voices (sound item 1).

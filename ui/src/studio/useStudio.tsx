@@ -5,7 +5,7 @@ import { useDrumAudio } from '../hooks/useDrumAudio';
 import { MidiMode, MidiMessage, useMidiInput } from '../hooks/useMidiInput';
 import { MIDI_DRUM_CHANNEL, midiOut } from '../services/midiOutput';
 import { Pattern, SequencerStep, SynthParameters, DrumState, DrumInstrument, DrumSettings, DrumKitDefinition, DrumKitId, EffectsLoopState, FxSendLevels, Scene, Song, SynthModelId, SynthModelParams } from '../types';
-import { SongPosition, applySceneMutes, audibleLanes, entryStartBar, sceneAtBar, sceneDrumState, songBars } from '../services/songPlayback';
+import { SongPosition, applySceneMutes, audibleLanes, entryStartBar, guestBarGains, sceneAtBar, sceneDrumState, songBars } from '../services/songPlayback';
 import { createDefaultSynthParameters } from '@discobot/engine';
 import { localRequest, localService } from '../services/localService';
 import { projectSync, startProjectSync } from '../services/projectSync';
@@ -1949,7 +1949,10 @@ export function useStudio() {
   const handleExportWav = useCallback(async (kind: boolean | 'pattern' | 'song' | 'loop' | 'stems') => {
     const wholeSong = kind === true || kind === 'song', loop = kind === 'loop';
     let arrangement: ExportArrangement = wholeSong ? await songArrangement() : currentArrangementRef.current();
-    const audible = guestsRef.current.filter(guest => !guest.muted && guest.volume > 0);
+    // A song gives each guest its scene's own level and mute bar by bar, so a guest is recorded
+    // if any scene of the song plays it, whatever the open scene says.
+    const songGains = wholeSong && arrangement.bars ? new Map(guestsRef.current.map(guest => [guest.id, guestBarGains(arrangement.bars!, guest)])) : null;
+    const audible = guestsRef.current.filter(guest => songGains ? songGains.get(guest.id)!.some(gain => gain > 0) : !guest.muted && guest.volume > 0);
     if (audible.length > 0 && !guestCapture.active()) {
       const passFrames = (arrangement.bars?.length ?? 1) * Math.round(240 / globalTempoRef.current * 44100);
       const seconds = (loop ? 2 : 1) * (arrangement.bars?.length ?? 1) * 240 / globalTempoRef.current;
@@ -1980,7 +1983,7 @@ export function useStudio() {
             const take = takes.get(guest.id);
             if (!take) return [];
             const [left, right] = [take.left, take.right].map(channel => (loop ? channel.slice(passFrames, passFrames * 2) : channel));
-            return [{ left, right, gain: guest.volume, name: guest.name, ...(guest.sends ? { sends: guest.sends } : {}) }];
+            return [{ left, right, gain: guest.volume, ...(songGains ? { gains: songGains.get(guest.id) } : {}), name: guest.name, ...(guest.sends ? { sends: guest.sends } : {}) }];
           }),
         };
       } finally {

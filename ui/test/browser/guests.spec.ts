@@ -174,6 +174,54 @@ test('a WAV export records the guest by playing through once, and the named inst
   expect(withGuest(0, 0.05), 'the kick is still there').toBeGreaterThan(0.02);
 });
 
+test('a song export gives a guest each scene\'s own mute, whichever scene is open', async ({ page }, testInfo) => {
+  const baseURL = String(testInfo.project.use.baseURL);
+  const { readFile } = await import('node:fs/promises');
+  const exportSong = async (name: string) => {
+    const download = page.waitForEvent('download', { timeout: 30_000 });
+    await page.getByRole('button', { name: 'Export ▾', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Song WAV', exact: true }).click();
+    const path = testInfo.outputPath(name);
+    await (await download).saveAs(path);
+    const bytes = await readFile(path);
+    return (from: number, to: number) => {
+      let sum = 0, count = 0;
+      for (let frame = Math.round(from * 44100); frame < Math.round(to * 44100); frame++) { const value = bytes.readInt16LE(44 + frame * 4) / 32768; sum += value * value; count++; }
+      return Math.sqrt(sum / count);
+    };
+  };
+
+  await menu(page, 'Add Guest Instrument');
+  const dialog = page.getByRole('dialog', { name: 'Add a guest instrument', exact: true });
+  await dialog.getByLabel('Address of the instrument\'s page', { exact: true }).fill(guestAddress(baseURL));
+  await dialog.getByRole('button', { name: 'Add Guest', exact: true }).click();
+  const unit = page.getByRole('region', { name: /^Guest instrument / });
+  await expect(unit).toHaveAttribute('data-status', 'ready');
+  const mute = unit.getByRole('button', { name: /^Mute guest / });
+
+  // 240 BPM: a bar is one second and the guest rings on every quarter of it.
+  await page.locator('.tempo-led').click();
+  await page.locator('.tempo-led-input').fill('240');
+  await page.locator('.tempo-led-input').press('Enter');
+
+  // The song is one bar of Scene 1, where the guest plays, then one of Scene 2, where it is muted.
+  await page.getByRole('button', { name: '+ Copy', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Scene: Scene 2', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await mute.click();
+  await page.getByRole('button', { name: '+ Add Scene 2', exact: true }).click();
+  await expect.poll(async () => (await stored(page)).song.entries.length).toBe(2);
+
+  const fromMuted = await exportSong('from-muted-scene.wav');
+  expect(fromMuted(0.75, 0.81), 'the guest plays in the first bar although the open scene mutes it').toBeGreaterThan(0.02);
+  expect(fromMuted(1.75, 1.81), 'and is silent in the second').toBeLessThan(0.005);
+
+  await page.getByRole('button', { name: 'Scene: Scene 1', exact: true }).click();
+  await expect(mute).toHaveAttribute('aria-pressed', 'false');
+  const fromPlaying = await exportSong('from-playing-scene.wav');
+  expect(fromPlaying(0.75, 0.81), 'the guest plays in the first bar').toBeGreaterThan(0.02);
+  expect(fromPlaying(1.75, 1.81), 'and is silent in the second although the open scene plays it').toBeLessThan(0.005);
+});
+
 test('a guest whose sound arrives late is still heard, and is then asked to play earlier', async ({ page }, testInfo) => {
   const baseURL = String(testInfo.project.use.baseURL);
   // The example guest holds every block of audio back by a quarter of a second, as a slow browser might.

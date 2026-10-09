@@ -25,8 +25,12 @@ export interface ExportArrangement {
   drumSamples?: Partial<Record<DrumInstrument, DrumSample>>;
   // Guest instruments, recorded in real time at 44.1 kHz from the first beat. For a loop each
   // take is exactly one pass of the pattern, recorded once it had already been round once.
-  guestTakes?: Array<{ left: Float32Array; right: Float32Array; gain: number; name?: string; sends?: FxSendLevels }>;
+  // In a song `gains` is the guest's level in each bar, and is used instead of `gain`.
+  guestTakes?: Array<{ left: Float32Array; right: Float32Array; gain: number; gains?: number[]; name?: string; sends?: FxSendLevels }>;
 }
+
+// How long a guest's level takes to move when it changes at a bar line, in seconds.
+const GUEST_FADE = 0.005;
 
 // Rendering holds every lane in memory at once, so very long songs are refused.
 export const MAX_EXPORT_SECONDS = 480;
@@ -276,7 +280,15 @@ export async function renderArrangement(arrangement: ExportArrangement, options:
     });
     const source = ctx.createBufferSource(), level = ctx.createGain();
     source.buffer = buffer;
-    level.gain.value = Math.max(0, Math.min(1, take.gain));
+    const gainAt = (bar: number) => Math.max(0, Math.min(1, take.gains?.[bar] ?? take.gain));
+    level.gain.value = gainAt(0);
+    // The level moves over the last moment of a bar, so a held sound does not click and the
+    // next bar starts at its own level.
+    for (let bar = 1; take.gains && bar < bars; bar++) {
+      if (gainAt(bar) === gainAt(bar - 1)) continue;
+      level.gain.setValueAtTime(gainAt(bar - 1), bar * barDuration - GUEST_FADE);
+      level.gain.linearRampToValueAtTime(gainAt(bar), bar * barDuration);
+    }
     source.connect(level);
     connectEffects(ctx, level, master, take.sends ?? { reverb: 0, delay: 0, drive: 0, phaser: 0 }, 1, arrangement.effectsLoop, 'synth', arrangement.tempo);
     source.start(0);

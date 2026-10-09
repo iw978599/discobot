@@ -76,6 +76,16 @@ export function applySceneMutes(bars: Scene[], lanes: Array<{ id: number; muted?
   });
 }
 
+// A guest's level in each bar of a song: its scene's own, and nothing where the scene mutes it.
+// A scene from before the guest was added holds no level for it, and the guest carries on as it was.
+export function guestBarGains(bars: Scene[], guest: { id: string; volume: number; muted: boolean }): number[] {
+  let mix = { volume: guest.volume, muted: guest.muted };
+  return bars.map(bar => {
+    mix = bar.guestMix?.[guest.id] ?? mix;
+    return mix.muted ? 0 : mix.volume;
+  });
+}
+
 // A scene stores which drum steps are on and which lanes are muted. The sound of the kit
 // belongs to the whole project; this puts the two together for playback.
 export function sceneDrumState(scene: Scene, kit: DrumState): DrumState {
