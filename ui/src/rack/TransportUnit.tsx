@@ -13,11 +13,12 @@ interface TransportUnitProps {
   onShare: () => void;
   onOpenAccount: () => void;
   onAddGuest: () => void;
+  onOpenVersions: () => void;
 }
 
 // The top rack unit: tempo, transport, save and load, and the two menus that hold
 // everything you do once per session instead of once per bar.
-export default function TransportUnit({ studio, onOpenSettings, onOpenProjects, onShare, onOpenAccount, onAddGuest }: TransportUnitProps) {
+export default function TransportUnit({ studio, onOpenSettings, onOpenProjects, onShare, onOpenAccount, onAddGuest, onOpenVersions }: TransportUnitProps) {
   const { midiState } = studio;
   const user = useAccountUser();
   const midiStatus = !midiState.supported ? 'MIDI is not available in this browser'
@@ -44,6 +45,7 @@ export default function TransportUnit({ studio, onOpenSettings, onOpenProjects, 
             { label: 'New Project', title: 'Start an empty project. The open one stays in your projects', onSelect: () => { void studio.handleNewProject(); } },
             { label: 'All Projects', title: 'Open, rename, copy or delete projects', onSelect: onOpenProjects },
             { label: 'Save a Copy', title: 'Keep a copy of this project as it is now, to go back to', onSelect: () => { void studio.handleCopyProject(studio.projectId); } },
+            { label: 'Version History', title: 'Go back to an earlier version of this project', onSelect: onOpenVersions },
             { label: 'Share Link', title: 'Make a link that plays this song for anyone who opens it', onSelect: onShare },
             { label: 'Export Project', title: 'Download the whole project as a file', onSelect: studio.handleExportProject },
             { label: 'Import Project', title: 'Add a project file to your projects and open it', onSelect: () => studio.projectImportFileRef.current?.click() },

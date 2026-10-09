@@ -154,6 +154,11 @@ test('an edit in one browser reaches the other, including the project it has ope
   await phone.run();
   assert.equal(phone.service.snapshot().tempo, 133);
   assert.equal(phone.service.snapshot().name, 'Shared');
+  // What the download replaced is still there as a version.
+  phone.use();
+  const kept = await phone.service.listVersions();
+  const tempos = await Promise.all(kept.map(async version => ((await phone.library.getVersion(version.id))!.project as { tempo: number }).tempo));
+  assert.ok(tempos.includes(120), 'the copy the phone had before the sync can be restored');
 
   await phone.edit('/tempo', { tempo: 88 });
   await phone.run();

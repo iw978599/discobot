@@ -45,7 +45,7 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 | `ui/src/services/browserTransport.ts` | Look-ahead clock. One tick is a 32nd note; 16-step lanes and drums use every second tick |
 | `ui/src/services/sampleStore.ts` | IndexedDB sample storage |
 | `ui/src/services/drumSamples.ts` | Decodes a stored sample for a drum lane, once, mixed to one channel |
-| `ui/src/services/projectLibrary.ts` | The project library: one IndexedDB record per project, with an in-memory stand-in for tests and browsers without IndexedDB |
+| `ui/src/services/projectLibrary.ts` | The project library: one IndexedDB record per project and a store of earlier versions, with an in-memory stand-in for tests and browsers without IndexedDB |
 | `server/src/index.ts` | The whole accounts API: sign up with an invite, sign in, recovery codes, owner tools. `handle(request, env)` is a plain function, so tests call it directly |
 | `server/src/secrets.ts` / `rules.ts` | Password hashing, tokens and codes; username and password rules |
 | `server/src/localDatabase.ts` / `server/dev.ts` | An in-memory SQLite with D1's interface, and a local runner for it. Used by tests and `npm run dev:api`; never deployed |
@@ -82,6 +82,8 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 
 ## Behaviour Worth Knowing
 - There are many projects. `localService` holds the open one, with a working copy in `localStorage` (written synchronously, so it survives a closing tab) and a record in the library that is updated after every write. Switching projects goes through `stash()` then `activate()`, which emits `init`. Project operations are async methods on `localService` (`newProject`, `openProject`, `copyProject`, `renameProject`, `deleteProject`, `importProject`), not `localRequest` routes.
+- Each project keeps up to 20 earlier versions in the library (`keepVersion` in `localService.ts`): one when it is opened, one every five minutes of editing, and one before anything replaces it (a sync download, a restore). A version identical to the last one kept is skipped, compared in `normalized()` form. Anything new that overwrites a project must call `keepVersion` first.
+- Versions are in this browser only: not in project files, links or sync. Deleting a project deletes them.
 - Importing a file or opening a share link always creates a new project; nothing overwrites an existing one. Project names are unique.
 - `savedPatterns` only exists to migrate arrangements saved by older versions into projects (`openLibrary`). Do not add to it.
 - Share links and project files are untrusted. Both go through `restore()`; `readProjectFile` does that without opening the project.

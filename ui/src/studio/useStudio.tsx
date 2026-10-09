@@ -1819,6 +1819,8 @@ export function useStudio() {
   const handleNewProject = useCallback((name?: string) => { leaveProject(); return projectAction(() => localService.newProject(name)); }, [leaveProject, projectAction]);
   const handleOpenProject = useCallback((id: string) => { leaveProject(); return projectAction(() => localService.openProject(id)); }, [leaveProject, projectAction]);
   const handleCopyProject = useCallback((id: string, name?: string) => projectAction(() => localService.copyProject(id, name)), [projectAction]);
+  const handleRestoreVersion = useCallback((versionId: string) => { leaveProject(); return projectAction(() => localService.restoreVersion(versionId)); }, [leaveProject, projectAction]);
+  const handleCopyVersion = useCallback((versionId: string) => projectAction(() => localService.copyVersion(versionId)), [projectAction]);
   const handleRenameProject = useCallback((id: string, name: string) => projectAction(() => localService.renameProject(id, name)), [projectAction]);
   const handleDeleteProject = useCallback((id: string) => {
     if (id === projectIdRef.current) leaveProject();
@@ -2303,7 +2305,7 @@ export function useStudio() {
     handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange, guests, handleAddGuest, handleRemoveGuest, handleGuestChange, missingDrumSamples, handleDrumSampleChange,
     handleSynthMixChange, handleSaveSynthPreset, handleLoadSynthPreset, handleDeleteSynthPreset,
     handleExportMidi, currentArrangement, reportExportError, handleExportProject, projectImportFileRef, handleImportProjectFile, handleImportProject,
-    handleNewProject, handleOpenProject, handleCopyProject, handleRenameProject, handleDeleteProject, handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail,
+    handleNewProject, handleOpenProject, handleCopyProject, handleRenameProject, handleDeleteProject, handleRestoreVersion, handleCopyVersion, handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail,
     handleDrumSettingsChange, handleDrumMixChange, handleDrumReset, handleDrumMasterVolumeChange, handleDrumSwingChange,
     handleDrumFxChange, handleEffectsLoopChange, handleDrumMuteAll, handleDrumSoloAll, handleReset,
     scenes, currentSceneId, song, playMode, setPlayMode, songStartEntry, setSongStartEntry, songPosition,

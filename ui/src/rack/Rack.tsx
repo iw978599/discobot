@@ -16,6 +16,7 @@ import { projectSync } from '../services/projectSync';
 import MidiImportDialog from './MidiImportDialog';
 import GuestModule from './GuestModule';
 import AddGuestDialog from './AddGuestDialog';
+import VersionsDialog from './VersionsDialog';
 import { HelpModal } from './HeaderParts';
 import '@fontsource/barlow-condensed/latin-500.css';
 import '@fontsource/barlow-condensed/latin-600.css';
@@ -31,6 +32,7 @@ export default function Rack({ studio }: { studio: Studio }) {
   const [shareOpen, setShareOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [guestOpen, setGuestOpen] = useState(false);
+  const [versionsOpen, setVersionsOpen] = useState(false);
   const { midiState } = studio;
   const sync = useSyncStatus();
 
@@ -44,6 +46,7 @@ export default function Rack({ studio }: { studio: Studio }) {
           onShare={() => setShareOpen(true)}
           onOpenAccount={() => setAccountOpen(true)}
           onAddGuest={() => setGuestOpen(true)}
+          onOpenVersions={() => setVersionsOpen(true)}
         />
         {studio.changedElsewhere && (
           <div role="alert" className="app-alert">
@@ -84,6 +87,7 @@ export default function Rack({ studio }: { studio: Studio }) {
       {shareOpen && <ShareDialog onClose={() => setShareOpen(false)} />}
       {accountOpen && <AccountDialog onClose={() => setAccountOpen(false)} />}
       {guestOpen && <AddGuestDialog studio={studio} onClose={() => setGuestOpen(false)} />}
+      {versionsOpen && <VersionsDialog studio={studio} onClose={() => setVersionsOpen(false)} />}
       {settingsOpen && (
         <Dialog title="MIDI and samples" closeLabel="Close MIDI and samples" onClose={() => setSettingsOpen(false)}>
           <h3>MIDI controller</h3>
