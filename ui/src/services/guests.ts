@@ -100,6 +100,17 @@ export function sanitizeSceneGuests(value: unknown): Record<string, unknown> | u
   return Object.keys(kept).length ? kept : undefined;
 }
 
+// The level and mute a scene holds for each guest.
+export function sanitizeGuestMix(value: unknown): Record<string, { volume: number; muted: boolean }> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const kept: Record<string, { volume: number; muted: boolean }> = {};
+  for (const [id, mix] of Object.entries(value).slice(0, MAX_GUESTS * 2)) {
+    if (!/^[0-9a-f-]{36}$/.test(id) || !mix || typeof mix !== 'object') continue;
+    kept[id] = { volume: unit((mix as { volume?: unknown }).volume, 0.8), muted: (mix as { muted?: unknown }).muted === true };
+  }
+  return Object.keys(kept).length ? kept : undefined;
+}
+
 export function patchGuest(guest: Guest, patch: Record<string, unknown>): Guest {
   const next: Guest = { ...guest };
   if ('name' in patch) next.name = label(patch.name, guest.name);
@@ -154,10 +165,16 @@ const transportListeners = new Set<(state: GuestTransport) => void>();
 
 // The guests that are connected: how early each plays, and whether it has been started before.
 const connected = new Map<string, { latencyMs: number; warm: boolean }>();
+// For each connected guest, a way to fetch its settings right now and save them.
+const captures = new Map<string, () => Promise<void>>();
 
 export const guestLink = {
   connect(id: string, latencyMs: number) { connected.set(id, { latencyMs, warm: connected.get(id)?.warm ?? false }); },
-  disconnect(id: string) { connected.delete(id); },
+  disconnect(id: string) { connected.delete(id); captures.delete(id); },
+  onCapture(id: string, capture: () => Promise<void>) { captures.set(id, capture); },
+  // Asks every guest for its settings and waits, briefly, for them to be saved. Run before the
+  // open scene is left, so what the guest was just set to is recorded in that scene and not the next.
+  async captureAll(): Promise<void> { await Promise.all([...captures.values()].map(capture => capture().catch(() => {}))); },
   // How far ahead the transport should place its first beat so every connected guest can make it.
   startLead(): number {
     let lead = 0;

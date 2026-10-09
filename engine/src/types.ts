@@ -252,6 +252,8 @@ export interface Scene {
   laneBars?: Record<number, number>;
   // each guest instrument's settings in this scene, by guest id. Opaque to Discobot.
   guests?: Record<string, unknown>;
+  // each guest's level and mute in this scene, by guest id
+  guestMix?: Record<string, { volume: number; muted: boolean }>;
 }
 
 // The order scenes play in when the transport is in song mode.

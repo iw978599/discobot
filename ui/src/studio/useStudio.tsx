@@ -1300,6 +1300,10 @@ export function useStudio() {
   };
 
   const sceneRequest = useCallback(async (path: string, body: unknown) => {
+    // Leaving the open scene records it, so first collect what each guest is set to right now.
+    // Guests are only asked every few seconds otherwise, and a change made just before switching
+    // would be recorded late, in the scene being switched to.
+    if (path !== '/song' && path !== '/scenes/rename') await guestLink.captureAll();
     const response = await localRequest(path, { method: 'POST', body: JSON.stringify(body) });
     if (!response.ok) setStorageError((await response.json().catch(() => null))?.error ?? 'That scene change could not be made.');
     return response.ok;

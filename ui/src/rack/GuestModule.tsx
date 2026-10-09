@@ -10,6 +10,8 @@ import Knob from '../components/Knob';
 const STATE_POLL_MS = 4000;
 const ANSWER_WAIT_MS = 6000;
 const READOUT_MS = 500;
+// How long a scene change waits for a guest to hand over its settings.
+const CAPTURE_WAIT_MS = 400;
 
 type Status = 'asking' | 'loading' | 'ready' | 'unanswered';
 // What the unit can tell about a connected guest's sound.
@@ -38,14 +40,20 @@ export default function GuestModule({ studio, guest }: { studio: Studio; guest: 
   const link = useRef<{ ready: boolean; send: (message: Record<string, unknown>) => void } | null>(null);
 
   // Settings that change from outside the guest, by opening another scene or a song moving on to
-  // one, by sync or by restoring a version, are handed to it.
+  // one, by sync or by restoring a version, are handed to it. A change of scene always does so,
+  // even to the same settings: the guest may have been altered since it was last asked, and any
+  // answer still on its way belongs to the scene that was left.
   const stateText = JSON.stringify(guest.state ?? null);
+  const sceneId = studio.currentSceneId;
+  const shownScene = useRef(sceneId);
   useEffect(() => {
-    if (stateText === savedState.current) return;
+    const sceneChanged = shownScene.current !== sceneId;
+    shownScene.current = sceneId;
+    if (!sceneChanged && stateText === savedState.current) return;
     savedState.current = stateText;
     epoch.current += 1;
     if (link.current?.ready && guestRef.current.state !== undefined) link.current.send({ type: 'setState', state: guestRef.current.state });
-  }, [stateText]);
+  }, [stateText, sceneId]);
 
   const level = guest.muted ? 0 : guest.volume;
   useEffect(() => { playerRef.current?.setVolume(level); }, [level]);
@@ -84,12 +92,15 @@ export default function GuestModule({ studio, guest }: { studio: Studio; guest: 
         sendTransport(guestLink.transport());
       } else if (data.type === 'state') {
         // An answer to a question asked before the guest was last given settings describes the old ones.
-        if (data.id !== `ask:${epoch.current}`) return;
+        const asked = String(data.id);
+        if (asked !== `ask:${epoch.current}` && !asked.startsWith(`ask:${epoch.current}:`)) return;
+        const done = waiting.get(asked);
+        waiting.delete(asked);
         let text: string;
-        try { text = JSON.stringify(data.state ?? null); } catch { return; }
-        if (text === savedState.current) return;
+        try { text = JSON.stringify(data.state ?? null); } catch { done?.(); return; }
+        if (text === savedState.current) { done?.(); return; }
         savedState.current = text;
-        void studio.handleGuestChange(id, { state: data.state });
+        void studio.handleGuestChange(id, { state: data.state }).then(() => done?.(), () => done?.());
       } else if (data.type === 'stateChanged') {
         send({ type: 'getState', id: `ask:${epoch.current}` });
       } else if (data.type === 'audio') {
@@ -117,6 +128,17 @@ export default function GuestModule({ studio, guest }: { studio: Studio; guest: 
       sendTransport(transport);
     });
     // The guest cannot tell Discobot every time a knob moves, so its settings are asked for now and then.
+    // Fetches the guest's settings now and resolves once they are saved, or after a short wait if
+    // the guest does not answer.
+    const waiting = new Map<string, () => void>();
+    let asks = 0;
+    guestLink.onCapture(id, () => new Promise<void>((resolve) => {
+      if (!ready) { resolve(); return; }
+      const ask = `ask:${epoch.current}:${++asks}`;
+      waiting.set(ask, resolve);
+      send({ type: 'getState', id: ask });
+      setTimeout(() => { waiting.delete(ask); resolve(); }, CAPTURE_WAIT_MS);
+    }));
     const poll = setInterval(() => { if (ready) send({ type: 'getState', id: `ask:${epoch.current}` }); }, STATE_POLL_MS);
     const unanswered = setTimeout(() => { if (!ready) setStatus('unanswered'); }, ANSWER_WAIT_MS);
     // What is shown about the sound is refreshed a couple of times a second, not per block.
@@ -218,7 +240,7 @@ export default function GuestModule({ studio, guest }: { studio: Studio; guest: 
             allow="autoplay"
             referrerPolicy="no-referrer"
           />
-          <p className="rack-hint">A guest plays live and needs a connection to its own site. Its settings are kept per scene, like each lane's notes. Download WAV and Song WAV record it by playing through once; it is not in Loop WAV, stems or MIDI.</p>
+          <p className="rack-hint">A guest plays live and needs a connection to its own site. Its settings, level and mute are kept per scene, like each lane's notes. Download WAV and Song WAV record it by playing through once; it is not in Loop WAV, stems or MIDI.</p>
         </>
       )}
     </section>
