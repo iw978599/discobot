@@ -3,10 +3,10 @@
  * Organized like a classic analog synthesizer panel
  */
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { createDefaultSynthParameters } from '@discobot/engine';
-import { SynthParameters, OscillatorType, SynthModelId, SynthModelParams } from '../types';
-import { SYNTH_MODELS, getSynthModelDefinition } from '../synthModels';
+import { SynthParameters, OscillatorType, SynthModelId } from '../types';
+import { SYNTH_MODELS } from '../synthModels';
 import Knob from './Knob';
 import './SynthControls.css';
 
@@ -18,10 +18,26 @@ interface SynthControlsProps {
   onLoadPreset: (presetId: string) => void;
   onDeletePreset: (presetId: string) => void;
   synthModelId: SynthModelId;
-  synthModelParams: SynthModelParams;
   onModelChange: (modelId: SynthModelId) => void;
-  onModelParamsChange: (params: Partial<SynthModelParams>) => void;
+  tab: SynthTab;
+  onTabChange: (tab: SynthTab) => void;
+  // shown on the Notes tab: step tools and the keyboard
+  notes: ReactNode;
+  onRemove?: () => void;
 }
+
+export type SynthTab = 'notes' | 'osc' | 'filter' | 'amp' | 'lfo' | 'arp' | 'sends';
+const TABS: Array<{ id: SynthTab; label: string }> = [
+  { id: 'notes', label: 'Notes' }, { id: 'osc', label: 'Osc' }, { id: 'filter', label: 'Filter' }, { id: 'amp', label: 'Amp' },
+  { id: 'lfo', label: 'LFO' }, { id: 'arp', label: 'Arp' }, { id: 'sends', label: 'Sends' },
+];
+const COLUMN_TABS: Record<string, SynthTab> = {
+  OSC: 'osc', FM: 'osc', 'OSC 2': 'osc', MIX: 'osc', VOICE: 'osc',
+  FILTER: 'filter', 'FILTER MOD': 'filter', 'FILTER ENV': 'filter',
+  'ENV A': 'amp', SHAPE: 'amp', 'ENV B': 'amp', MASTER: 'amp', STEREO: 'amp',
+  'LFO 1': 'lfo', 'LFO 1 MOD': 'lfo', 'LFO 2': 'lfo', 'LFO 2 MOD': 'lfo',
+  'FX SEND A': 'sends', 'FX SEND B': 'sends',
+};
 
 const TOOLTIPS = {
   hold: 'Latch notes on the keyboard until toggled off or tapped again',
@@ -145,9 +161,11 @@ export default function SynthControls({
   onLoadPreset,
   onDeletePreset,
   synthModelId,
-  synthModelParams,
   onModelChange,
-  onModelParamsChange,
+  tab,
+  onTabChange,
+  notes,
+  onRemove,
 }: SynthControlsProps) {
   const [presetName, setPresetName] = useState('');
   const [selectedPresetId, setSelectedPresetId] = useState('');
@@ -231,12 +249,9 @@ export default function SynthControls({
     });
   };
 
-  const model = getSynthModelDefinition(synthModelId);
-
   return (
     <div className="synth-controls-panel">
       <div className="synth-header">
-        <h2>SYNTHESIZER</h2>
         <div className="synth-octave-controls">
           <label className="synth-toggle" title={TOOLTIPS.hold}>
             <input
@@ -266,6 +281,9 @@ export default function SynthControls({
           </div>
         </div>
         <div className="synth-header-tools">
+          {onRemove && (
+            <button className="octave-shift-btn" onClick={onRemove} title="Remove this synth lane">Remove</button>
+          )}
           <div className="preset-controls">
             <select
               className="synth-select preset-select"
@@ -322,84 +340,79 @@ export default function SynthControls({
               Delete
             </button>
           </div>
-          <div className="arp-controls">
-            <label className="synth-toggle" title="Enable arpeggiator for this synth">
-              <input
-                type="checkbox"
-                aria-label="Arpeggiator enabled"
-                checked={parameters.arpeggiator.enabled}
-                onChange={(e) => updateArpeggiator({ enabled: e.target.checked })}
-              />
-              <span className="synth-toggle-slider" />
-            </label>
-            <span className="octave-shift-value">ARP</span>
-            <select
-              className="synth-select arp-select"
-              aria-label="Arpeggiator mode"
-              value={parameters.arpeggiator.mode}
-              onChange={(e) => updateArpeggiator({ mode: e.target.value as SynthParameters['arpeggiator']['mode'] })}
-            >
-              <option value="up">Up</option>
-              <option value="down">Down</option>
-              <option value="updown">Up/Down</option>
-              <option value="downup">Down/Up</option>
-              <option value="random">Random</option>
-              <option value="converge">Converge</option>
-              <option value="diverge">Diverge</option>
-            </select>
-            <select
-              className="synth-select arp-select"
-              value={parameters.arpeggiator.rate}
-              aria-label="Arpeggiator rate"
-              onChange={(e) => updateArpeggiator({ rate: e.target.value as SynthParameters['arpeggiator']['rate'] })}
-            >
-              <option value="1/4">1/4</option>
-              <option value="1/8">1/8</option>
-              <option value="1/16">1/16</option>
-              <option value="1/32">1/32</option>
-            </select>
-            <label className="arp-gate-label" title="Arpeggiator gate length - proportion of step duration the note plays">
-              Gate
-              <input
-                type="range"
-                min={0.1}
-                max={1}
-                step={0.05}
-                value={parameters.arpeggiator.gate}
-                onChange={(e) => updateArpeggiator({ gate: Number(e.target.value) })}
-              />
-            </label>
-          </div>
         </div>
       </div>
 
-      {model.macros.length > 0 && (
-        <div className="synth-model-macros">
-          <div className="synth-model-header">
-            <h3>{model.name}</h3>
-            <span>{model.subtitle}</span>
-          </div>
-          <div className="synth-model-macro-grid">
-            {model.macros.map((macro) => (
-              <Knob
-                key={macro.key}
-                label={macro.label}
-                value={synthModelParams[macro.key]}
-                min={0}
-                max={1}
-                step={0.01}
-                displayValue={`${Math.round(synthModelParams[macro.key] * 100)}%`}
-                onChange={(value) => onModelParamsChange({ [macro.key]: value } as Partial<SynthModelParams>)}
-                parseInputValue={parsePercent(0, 1)}
-                color="#f59e0b"
-              />
-            ))}
-          </div>
+      <div className="synth-tabs" role="tablist" aria-label="Synth editor">
+        {TABS.map((entry) => (
+          <button
+            key={entry.id}
+            role="tab"
+            aria-selected={tab === entry.id}
+            className={tab === entry.id ? 'active' : ''}
+            onClick={() => onTabChange(entry.id)}
+          >
+            {entry.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'notes' && notes}
+      {tab === 'arp' && (
+        <div className="synth-arp-panel">
+        <div className="arp-controls">
+          <label className="synth-toggle" title="Enable arpeggiator for this synth">
+            <input
+              type="checkbox"
+              aria-label="Arpeggiator enabled"
+              checked={parameters.arpeggiator.enabled}
+              onChange={(e) => updateArpeggiator({ enabled: e.target.checked })}
+            />
+            <span className="synth-toggle-slider" />
+          </label>
+          <span className="octave-shift-value">ARP</span>
+          <select
+            className="synth-select arp-select"
+            aria-label="Arpeggiator mode"
+            value={parameters.arpeggiator.mode}
+            onChange={(e) => updateArpeggiator({ mode: e.target.value as SynthParameters['arpeggiator']['mode'] })}
+          >
+            <option value="up">Up</option>
+            <option value="down">Down</option>
+            <option value="updown">Up/Down</option>
+            <option value="downup">Down/Up</option>
+            <option value="random">Random</option>
+            <option value="converge">Converge</option>
+            <option value="diverge">Diverge</option>
+          </select>
+          <select
+            className="synth-select arp-select"
+            value={parameters.arpeggiator.rate}
+            aria-label="Arpeggiator rate"
+            onChange={(e) => updateArpeggiator({ rate: e.target.value as SynthParameters['arpeggiator']['rate'] })}
+          >
+            <option value="1/4">1/4</option>
+            <option value="1/8">1/8</option>
+            <option value="1/16">1/16</option>
+            <option value="1/32">1/32</option>
+          </select>
+          <label className="arp-gate-label" title="Arpeggiator gate length - proportion of step duration the note plays">
+            Gate
+            <input
+              type="range"
+              min={0.1}
+              max={1}
+              step={0.05}
+              value={parameters.arpeggiator.gate}
+              onChange={(e) => updateArpeggiator({ gate: Number(e.target.value) })}
+            />
+          </label>
+        </div>
         </div>
       )}
 
-      <div className="synth-columns">
-        <div className="synth-column">
+      <div className="synth-columns" data-tab={tab}>
+        <div className="synth-column" data-tab={COLUMN_TABS['OSC']}>
           <h3>OSC</h3>
           <div className="synth-column-controls">
             <div className="synth-waveform-selector">
@@ -457,7 +470,7 @@ export default function SynthControls({
         </div>
 
         {isFm ? (
-          <div className="synth-column">
+          <div className="synth-column" data-tab={COLUMN_TABS['FM']}>
             <h3>FM</h3>
             <div className="synth-column-controls">
               <div className="synth-waveform-selector">
@@ -525,7 +538,7 @@ export default function SynthControls({
           </div>
         ) : (
           <>
-            <div className="synth-column">
+            <div className="synth-column" data-tab={COLUMN_TABS['OSC 2']}>
               <div className="synth-section-header">
                 <h3>OSC 2</h3>
                 <label className="synth-toggle">
@@ -581,7 +594,7 @@ export default function SynthControls({
               </div>
             </div>
 
-            <div className="synth-column">
+            <div className="synth-column" data-tab={COLUMN_TABS['MIX']}>
               <h3>MIX</h3>
               <div className="synth-column-controls">
                 <Knob
@@ -626,7 +639,7 @@ export default function SynthControls({
           </>
         )}
 
-        <div className="synth-column">
+        <div className="synth-column" data-tab={COLUMN_TABS['FILTER']}>
           <h3>FILTER</h3>
           <div className="synth-column-controls">
             <div className="synth-filter-type-row">
@@ -667,7 +680,7 @@ export default function SynthControls({
           </div>
         </div>
 
-        <div className="synth-column">
+        <div className="synth-column" data-tab={COLUMN_TABS['FILTER MOD']}>
           <h3>FILTER MOD</h3>
           <div className="synth-column-controls">
             <Knob
@@ -709,7 +722,7 @@ export default function SynthControls({
           </div>
         </div>
 
-        <div className="synth-column">
+        <div className="synth-column" data-tab={COLUMN_TABS['FILTER ENV']}>
           <h3>FILTER ENV</h3>
           <div className="synth-column-controls">
             <Knob
@@ -763,7 +776,7 @@ export default function SynthControls({
           </div>
         </div>
 
-        <div className="synth-column">
+        <div className="synth-column" data-tab={COLUMN_TABS['VOICE']}>
           <h3>VOICE</h3>
           <div className="synth-column-controls">
             <div className="synth-waveform-selector">
@@ -806,7 +819,7 @@ export default function SynthControls({
           </div>
         </div>
 
-        <div className="synth-column">
+        <div className="synth-column" data-tab={COLUMN_TABS['LFO 1']}>
           <div className="synth-section-header">
             <h3>LFO 1</h3>
             <label className="synth-toggle">
@@ -867,7 +880,7 @@ export default function SynthControls({
           </div>
         </div>
 
-        <div className="synth-column">
+        <div className="synth-column" data-tab={COLUMN_TABS['LFO 1 MOD']}>
           <h3>LFO 1 MOD</h3>
           <div className="synth-column-controls">
             <div className="synth-lfo-rate-row">
@@ -913,7 +926,7 @@ export default function SynthControls({
           </div>
         </div>
 
-        <div className="synth-column">
+        <div className="synth-column" data-tab={COLUMN_TABS['LFO 2']}>
           <div className="synth-section-header">
             <h3>LFO 2</h3>
             <label className="synth-toggle">
@@ -974,7 +987,7 @@ export default function SynthControls({
           </div>
         </div>
 
-        <div className="synth-column">
+        <div className="synth-column" data-tab={COLUMN_TABS['LFO 2 MOD']}>
           <h3>LFO 2 MOD</h3>
           <div className="synth-column-controls">
             <div className="synth-lfo-rate-row">
@@ -1020,7 +1033,7 @@ export default function SynthControls({
           </div>
         </div>
 
-        <div className="synth-column">
+        <div className="synth-column" data-tab={COLUMN_TABS['ENV A']}>
           <h3>ENV A</h3>
           <div className="synth-column-controls">
             <Knob
@@ -1050,7 +1063,7 @@ export default function SynthControls({
           </div>
         </div>
 
-        <div className="synth-column synth-env-viz">
+        <div className="synth-column synth-env-viz" data-tab={COLUMN_TABS['SHAPE']}>
           <h3>SHAPE</h3>
           <div className="synth-column-controls" style={{ justifyContent: 'center' }}>
             <svg viewBox="0 0 100 60" width="100%" style={{ maxWidth: 100 }}>
@@ -1069,7 +1082,7 @@ export default function SynthControls({
           </div>
         </div>
 
-        <div className="synth-column">
+        <div className="synth-column" data-tab={COLUMN_TABS['ENV B']}>
           <h3>ENV B</h3>
           <div className="synth-column-controls">
             <Knob
@@ -1099,7 +1112,7 @@ export default function SynthControls({
           </div>
         </div>
 
-        <div className="synth-column">
+        <div className="synth-column" data-tab={COLUMN_TABS['FX SEND A']}>
           <h3>FX SEND A</h3>
           <div className="synth-column-controls">
             <Knob
@@ -1129,7 +1142,7 @@ export default function SynthControls({
           </div>
         </div>
 
-        <div className="synth-column">
+        <div className="synth-column" data-tab={COLUMN_TABS['FX SEND B']}>
           <h3>FX SEND B</h3>
           <div className="synth-column-controls">
             <Knob
@@ -1159,7 +1172,7 @@ export default function SynthControls({
           </div>
         </div>
 
-        <div className="synth-column">
+        <div className="synth-column" data-tab={COLUMN_TABS['MASTER']}>
           <h3>MASTER</h3>
           <div className="synth-column-controls">
             <Knob
@@ -1189,7 +1202,7 @@ export default function SynthControls({
           </div>
         </div>
 
-        <div className="synth-column">
+        <div className="synth-column" data-tab={COLUMN_TABS['STEREO']}>
           <h3>STEREO</h3>
           <div className="synth-column-controls">
             <Knob

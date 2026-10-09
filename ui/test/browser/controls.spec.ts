@@ -8,6 +8,13 @@ async function edit(control: Locator, text: string) {
   await control.press('Enter');
 }
 
+const tab = (page: Page, name: string) => page.getByRole('tab', { name, exact: true }).click();
+async function menu(page: Page, name: 'Project' | 'Export', item: string) {
+  await page.getByRole('button', { name: `${name} ▾`, exact: true }).click();
+  await page.getByRole('menuitem', { name: item, exact: true }).click();
+}
+const openMidi = (page: Page) => page.getByRole('button', { name: 'MIDI and samples', exact: true }).click();
+
 async function project(page: Page) {
   return page.evaluate(key => JSON.parse(localStorage.getItem(key) || '{}'), PROJECT_KEY);
 }
@@ -61,7 +68,7 @@ test.beforeEach(async ({ page }, testInfo) => {
     };
   });
   await page.goto('./');
-  await expect(page.getByRole('heading', { name: 'SYNTHESIZER', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Discobot', exact: true })).toBeVisible();
 });
 
 test.afterEach(async ({ page }, testInfo) => {
@@ -78,9 +85,12 @@ test('full musical arrangement survives save, editing, load and reload', async (
   await page.locator('.tempo-led').click();
   await edit(page.locator('.tempo-led-input'), '96');
   await synth.getByLabel('Synth preset', { exact: true }).selectOption({ label: 'Bass — Deep Sub *' });
+  await tab(page, 'Amp');
   await edit(synth.getByLabel('Gain value', { exact: true }), '63%');
   await edit(synth.getByLabel('Pan value', { exact: true }), 'L25');
+  await tab(page, 'Filter');
   await edit(synth.getByLabel('Cutoff value', { exact: true }), '1.2k');
+  await tab(page, 'Notes');
   await page.getByRole('button', { name: 'Piano Roll', exact: true }).click();
   await page.getByRole('button', { name: 'C3 step 1', exact: true }).click();
   await page.getByRole('button', { name: 'G3 step 5', exact: true }).click();
@@ -88,12 +98,14 @@ test('full musical arrangement survives save, editing, load and reload', async (
   await page.getByLabel('Drum kit', { exact: true }).selectOption('tr-808');
   await page.getByRole('button', { name: 'Kick step 1', exact: true }).click();
   await page.getByLabel('Kick step 1 velocity', { exact: true }).fill('0.4');
+  await page.getByRole('button', { name: 'More', exact: true }).click();
   await edit(page.getByLabel('Kick pan value', { exact: true }), 'R20');
   await edit(page.getByLabel('Swing value', { exact: true }), '25%');
   await edit(page.getByLabel('Master value', { exact: true }), '76%');
+  await page.getByRole('button', { name: 'Sends', exact: true }).click();
   await edit(page.getByLabel('Rev Send value', { exact: true }), '45%');
   await edit(page.locator('.drum-machine').getByLabel('FX Return value', { exact: true }), '55%');
-  await page.getByLabel('Shared drum return', { exact: true }).fill('0.53');
+  await edit(page.getByLabel('Drum return value', { exact: true }), '53%');
   const effects = page.locator('.effects-panel');
   await effects.getByLabel('Phaser enabled', { exact: true }).check();
   await edit(effects.locator('.effects-block').filter({ has: page.getByRole('heading', { name: 'Delay', exact: true }) }).getByLabel('Time value'), '320ms');
@@ -123,11 +135,14 @@ test('full musical arrangement survives save, editing, load and reload', async (
   expect(saved.effectsLoop.delay.time).toBeCloseTo(0.32);
   expect(saved.effectsLoop.phaser.enabled).toBe(true);
   await page.getByRole('button', { name: 'Clear', exact: true }).click();
+  await tab(page, 'Amp');
   await edit(synth.getByLabel('Gain value', { exact: true }), '20%');
   await page.getByRole('button', { name: 'Kick step 1', exact: true }).click();
   await page.locator('.load-select').selectOption(saved.id);
-  await expect(page.getByRole('button', { name: 'C3 step 1', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(synth.getByLabel('Gain value', { exact: true })).toHaveValue('63%');
+  await expect(page.getByLabel('Synth 1 level value', { exact: true })).toHaveValue('63%');
+  await tab(page, 'Notes');
+  await expect(page.getByRole('button', { name: 'C3 step 1', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('button', { name: 'Kick step 1', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: /Play All/ }).click();
   await expect(page.locator('.step-light.on').first()).toBeVisible();
@@ -135,6 +150,7 @@ test('full musical arrangement survives save, editing, load and reload', async (
   await page.getByRole('button', { name: /Stop All/ }).click();
   await expect(page.locator('.step-light.on')).toHaveCount(0);
   await page.reload();
+  await tab(page, 'Amp');
   await expect(page.getByLabel('Gain value', { exact: true })).toHaveValue('63%');
   await expect(page.getByRole('button', { name: 'Kick step 1', exact: true })).toHaveAttribute('aria-pressed', 'true');
   expect((await project(page)).savedPatterns[0]).toEqual(saved);
@@ -143,6 +159,7 @@ test('full musical arrangement survives save, editing, load and reload', async (
 test('rotary keyboard bounds, typed units, cancellation and pointer cleanup', async ({ page, isMobile }) => {
   const synth = page.locator('.synth-controls-panel');
   const gain = synth.getByRole('slider', { name: 'Gain', exact: true });
+  await tab(page, 'Amp');
   await gain.focus();
   await gain.press('Home');
   await expect(gain).toHaveAttribute('aria-valuenow', '0');
@@ -161,10 +178,12 @@ test('rotary keyboard bounds, typed units, cancellation and pointer cleanup', as
   await synth.getByLabel('Portamento enabled', { exact: true }).check();
   await edit(synth.getByLabel('Glide value', { exact: true }), '120ms');
   await expect(synth.getByRole('slider', { name: 'Glide', exact: true })).toHaveAttribute('aria-valuenow', '0.12');
+  await tab(page, 'LFO');
   await synth.getByLabel('LFO 1 enabled', { exact: true }).check();
   await synth.getByLabel('LFO 1 tempo sync', { exact: true }).check();
   await edit(synth.getByLabel('Rate value', { exact: true }).first(), '1/16');
   await expect(synth.getByRole('slider', { name: 'Rate', exact: true }).first()).toHaveAttribute('aria-valuenow', '16');
+  await tab(page, 'Amp');
   if (!isMobile) {
     await gain.scrollIntoViewIfNeeded();
     const box = await gain.boundingBox();
@@ -204,6 +223,7 @@ test('keyboard sustain, hold, octave release and unsupported MIDI feedback', asy
   await page.getByRole('button', { name: 'Oct +', exact: true }).click();
   await expect(page.locator('.key.active')).toHaveCount(0);
   await page.getByLabel('Hold notes', { exact: true }).uncheck();
+  await openMidi(page);
   await expect(page.getByText('MIDI input is not supported in this browser.', { exact: false })).toBeVisible();
 });
 
@@ -246,14 +266,16 @@ test('all named presets and model macros are selectable; user presets survive re
   for (const family of ['Bass —', 'Lead —', 'Pad —', 'Pluck —']) {
     expect(named.filter(name => name.startsWith(family))).toHaveLength(3);
   }
+  await tab(page, 'Amp');
   for (const name of named.filter(name => name.includes('—'))) {
     await preset.selectOption({ label: name });
     await expect(synth.getByRole('slider', { name: 'Gain', exact: true })).toHaveAttribute('aria-valuenow', /0\.(45|55)/);
   }
+  const macros = page.locator('.synth-module.selected .synth-model-macro-grid [role="slider"]');
   for (const model of ['minimoog-model-d', 'juno-106', 'dx7', 'tb-303', 'prophet-5']) {
     await synth.getByLabel('Synth model', { exact: true }).selectOption(model);
-    await expect(synth.locator('.synth-model-macro-grid [role="slider"]')).toHaveCount(4);
-    await synth.locator('.synth-model-macro-grid [role="slider"]').first().press('ArrowUp');
+    await expect(macros).toHaveCount(4);
+    await macros.first().press('ArrowUp');
   }
   await synth.getByLabel('Preset name', { exact: true }).fill('My keys');
   await synth.getByRole('button', { name: 'Save', exact: true }).click();
@@ -299,9 +321,9 @@ test('saved-pattern manager refreshes, traps focus, closes with Escape and delet
   await page.getByRole('button', { name: '+ Save', exact: true }).click();
   await page.locator('.save-name-input').fill('Manager arrangement');
   await page.locator('.save-name-input').press('Enter');
-  await expect(page.getByLabel('Load saved pattern', { exact: true })).toBeVisible();
-  const manage = page.getByRole('button', { name: 'Manage', exact: true });
-  await manage.click();
+  await expect(page.getByText('Saved!', { exact: false })).toBeVisible();
+  const projectMenu = page.getByRole('button', { name: 'Project ▾', exact: true });
+  await menu(page, 'Project', 'Manage Saved');
   const dialog = page.getByRole('dialog', { name: 'Saved Patterns', exact: true });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Close saved patterns', exact: true })).toBeFocused();
@@ -309,29 +331,46 @@ test('saved-pattern manager refreshes, traps focus, closes with Escape and delet
   await expect(dialog.getByRole('button', { name: 'Delete', exact: true })).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
-  await expect(manage).toBeFocused();
-  await manage.click();
+  await expect(projectMenu).toBeFocused();
+  await menu(page, 'Project', 'Manage Saved');
   await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(dialog.getByText('No saved patterns yet.', { exact: true })).toBeVisible();
   expect((await project(page)).savedPatterns).toHaveLength(0);
   await page.keyboard.press('Escape');
-  await expect(page.getByLabel('Load saved pattern', { exact: true })).toHaveCount(0);
+  await expect(dialog).toHaveCount(0);
+  await expect(page.locator('.load-select option').filter({ hasText: 'Manager arrangement' })).toHaveCount(0);
 });
 
 test('all synth, effects and mixer control families update durable project state', async ({ page }) => {
   const synth = page.locator('.synth-controls-panel');
+  await tab(page, 'Osc');
   await synth.getByLabel('Oscillator waveform').selectOption('sawtooth');
+  await tab(page, 'Filter');
   await synth.getByLabel('Filter type').selectOption('highpass');
+  await tab(page, 'LFO');
   await synth.getByLabel('LFO 1 enabled').check();
   await synth.getByLabel('LFO 2 enabled').check();
   await synth.getByLabel('LFO 1 waveform').selectOption('triangle');
   await synth.getByLabel('LFO 2 target').selectOption('pitch');
+  await tab(page, 'Arp');
   await synth.getByLabel('Arpeggiator enabled').check();
   await synth.getByLabel('Arpeggiator mode').selectOption('converge');
   await synth.getByLabel('Arpeggiator rate').selectOption('1/8');
+  await tab(page, 'Amp');
   await synth.getByLabel('Portamento enabled').check();
-  for (const control of await synth.locator('[role="slider"]:not([aria-disabled="true"])').all()) {
-    await control.focus();
+  let turned = 0;
+  for (const name of ['Osc', 'Filter', 'Amp', 'LFO', 'Sends']) {
+    await tab(page, name);
+    for (const control of await synth.locator('[role="slider"]:not([aria-disabled="true"]):visible').all()) {
+      await control.focus();
+      const before = Number(await control.getAttribute('aria-valuenow'));
+      await control.press(before === Number(await control.getAttribute('aria-valuemax')) ? 'ArrowDown' : 'ArrowUp');
+      expect(Number(await control.getAttribute('aria-valuenow'))).not.toBe(before);
+      turned++;
+    }
+  }
+  expect(turned, 'every tab of the editor has working knobs').toBeGreaterThan(30);
+  for (const control of await page.locator('.synth-module.selected .rack-knobs [role="slider"]').all()) {
     const before = Number(await control.getAttribute('aria-valuenow'));
     await control.press(before === Number(await control.getAttribute('aria-valuemax')) ? 'ArrowDown' : 'ArrowUp');
     expect(Number(await control.getAttribute('aria-valuenow'))).not.toBe(before);
@@ -347,11 +386,12 @@ test('all synth, effects and mixer control families update durable project state
   await page.getByLabel('Effects loop enabled', { exact: true }).uncheck();
   await expect(page.getByLabel('Effects loop enabled', { exact: true })).not.toBeChecked();
   await page.getByLabel('Effects loop enabled', { exact: true }).check();
-  await page.getByLabel('Synth 1 volume', { exact: true }).fill('0.72');
-  await page.getByLabel('Synth 1 pan', { exact: true }).fill('0.35');
-  await page.getByLabel('Synth 1 FX return', { exact: true }).fill('0.44');
-  await page.getByLabel('Shared synth return', { exact: true }).fill('0.66');
-  await page.getByLabel('Shared drum return', { exact: true }).fill('0.53');
+  await edit(page.getByLabel('Synth 1 level value', { exact: true }), '72%');
+  await tab(page, 'Amp');
+  await edit(synth.getByLabel('Pan value', { exact: true }), 'R35');
+  await edit(synth.getByLabel('FX Return value', { exact: true }), '44%');
+  await edit(page.getByLabel('Synth return value', { exact: true }), '66%');
+  await edit(page.getByLabel('Drum return value', { exact: true }), '53%');
   await page.getByRole('button', { name: 'Mute Synth 1', exact: true }).click();
   await page.getByRole('button', { name: 'Solo Synth 1', exact: true }).click();
   const state = await project(page);
@@ -366,6 +406,7 @@ test('all synth, effects and mixer control families update durable project state
 });
 
 test('drum instrument settings, mute/solo and pattern tools retain velocity accents', async ({ page }) => {
+  await page.getByRole('button', { name: 'More', exact: true }).click();
   for (const label of ['Kick', 'Snare', 'Clap', 'Closed Hat', 'Open Hat', 'Low Tom', 'High Tom', 'Cymbal']) {
     await page.getByRole('button', { name: `Select ${label}`, exact: true }).click();
     for (const suffix of ['volume', 'tone', 'tune', 'humanize', 'pan']) {
@@ -390,6 +431,7 @@ test('drum instrument settings, mute/solo and pattern tools retain velocity acce
   state = await project(page);
   expect(state.drumState.kick.steps[14]).toBe(true);
   expect(state.drumState.kick.stepVelocities[14]).toBeCloseTo(0.35);
+  await page.getByRole('button', { name: 'Select Cymbal', exact: true }).click();
   await page.getByRole('button', { name: 'Switch cymbal type', exact: true }).click();
   expect((await project(page)).drumState.crash.settings.cymbalType).toBe('ride');
 });
@@ -401,14 +443,17 @@ test('sample import, playback, persistence and deletion use device-local storage
   buffer.writeUInt32LE(8000, 24); buffer.writeUInt32LE(16000, 28); buffer.writeUInt16LE(2, 32); buffer.writeUInt16LE(16, 34);
   buffer.write('data', 36); buffer.writeUInt32LE(1600, 40);
   for (let i = 0; i < 800; i++) buffer.writeInt16LE(Math.round(Math.sin(i / 8000 * 440 * Math.PI * 2) * 8000), 44 + i * 2);
+  await openMidi(page);
   await page.getByLabel('Import audio sample', { exact: true }).setInputFiles({ name: 'browser-tone.wav', mimeType: 'audio/wav', buffer });
   await expect(page.getByRole('button', { name: 'Play sample browser-tone.wav', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Play sample browser-tone.wav', exact: true }).click();
   await page.reload();
+  await openMidi(page);
   await expect(page.getByRole('button', { name: 'Play sample browser-tone.wav', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Delete sample browser-tone.wav', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Play sample browser-tone.wav', exact: true })).toHaveCount(0);
   await page.reload();
+  await openMidi(page);
   await expect(page.getByText('No samples yet.', { exact: false })).toBeVisible();
 });
 
@@ -420,6 +465,7 @@ test('simulated MIDI device routes step notes by channel and target; permission 
     (window as unknown as { emitMidi: (data: number[]) => void }).emitMidi = data => input.onmidimessage?.({ data: new Uint8Array(data) });
   });
   await page.reload();
+  await openMidi(page);
   await page.getByLabel('MIDI input device').selectOption('test-controller');
   await page.getByRole('button', { name: 'step', exact: true }).click();
   await page.getByLabel('MIDI channel').selectOption('2');
@@ -434,6 +480,7 @@ test('simulated MIDI device routes step notes by channel and target; permission 
     Object.defineProperty(navigator, 'requestMIDIAccess', { configurable: true, value: async () => { throw new Error('Denied'); } });
   });
   await page.reload();
+  await openMidi(page);
   await expect(page.getByText('MIDI permission denied', { exact: true })).toBeVisible();
 });
 
@@ -441,7 +488,7 @@ test('MIDI export/import and WAV download produce real local files', async ({ pa
   await page.getByRole('button', { name: 'Piano Roll', exact: true }).click();
   await page.getByRole('button', { name: 'C4 step 1', exact: true }).click();
   const midiDownload = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Export MIDI', exact: true }).click();
+  await menu(page, 'Export', 'Export MIDI');
   const midi = await midiDownload;
   const midiPath = testInfo.outputPath('arrangement.mid');
   await midi.saveAs(midiPath);
@@ -449,7 +496,7 @@ test('MIDI export/import and WAV download produce real local files', async ({ pa
   expect(midiBytes.subarray(0, 4).toString()).toBe('MThd');
   expect(midiBytes.length).toBeGreaterThan(30);
   const wavDownload = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Download WAV', exact: true }).click();
+  await menu(page, 'Export', 'Download WAV');
   const wav = await wavDownload;
   const wavPath = testInfo.outputPath('arrangement.wav');
   await wav.saveAs(wavPath);

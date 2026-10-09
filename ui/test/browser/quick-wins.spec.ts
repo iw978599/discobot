@@ -5,6 +5,11 @@ const PROJECT_KEY = 'discobot_browser_project_v1';
 const project = (page: Page) => page.evaluate(key => JSON.parse(localStorage.getItem(key) || '{}'), PROJECT_KEY);
 
 type Captured = { type: string; note?: string; instrument?: string; time?: number };
+async function menu(page: Page, name: 'Project' | 'Export', item: string) {
+  await page.getByRole('button', { name: `${name} ▾`, exact: true }).click();
+  await page.getByRole('menuitem', { name: item, exact: true }).click();
+}
+
 const messages = (page: Page) => page.evaluate(() => (window as unknown as { audioMessages: Captured[] }).audioMessages);
 
 test.beforeEach(async ({ page }) => {
@@ -25,7 +30,7 @@ test.beforeEach(async ({ page }) => {
     };
   });
   await page.goto('./');
-  await expect(page.getByRole('heading', { name: 'SYNTHESIZER', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Discobot', exact: true })).toBeVisible();
 });
 
 test('the computer keyboard plays the selected synth, shifts octave and stays out of text fields', async ({ page }) => {
@@ -43,15 +48,15 @@ test('the computer keyboard plays the selected synth, shifts octave and stays ou
   await page.keyboard.up('w');
 
   await page.keyboard.press('x');
-  await expect(page.locator('.octave-shift-value').first()).toHaveText('+1');
+  await expect(page.locator('.keyboard-panel-toggle .octave-shift-value')).toHaveText('+1');
   await page.keyboard.down('a');
   await expect(page.getByRole('button', { name: 'Play C5', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page.keyboard.up('a');
   await page.keyboard.press('z');
-  await expect(page.locator('.octave-shift-value').first()).toHaveText('0');
+  await expect(page.locator('.keyboard-panel-toggle .octave-shift-value')).toHaveText('0');
 
   // A selected step takes the note, the same as clicking the on-screen key.
-  await page.getByRole('button', { name: 'Select step 3', exact: true }).click();
+  await page.locator('.synth-module').first().getByRole('button', { name: 'Select step 3', exact: true }).click();
   await page.keyboard.press('d');
   await expect.poll(async () => (await project(page)).synths[0].pattern.steps[2].note).toBe('E4');
 
@@ -107,7 +112,7 @@ test('loop export is exactly one bar and stems arrive as one zip of aligned WAV 
   await page.getByRole('button', { name: 'Kick step 1', exact: true }).click();
 
   const loopDownload = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Loop WAV', exact: true }).click();
+  await menu(page, 'Export', 'Loop WAV');
   const loop = await loopDownload;
   expect(loop.suggestedFilename()).toMatch(/^discobot-loop-\d+\.wav$/);
   const loopPath = testInfo.outputPath('loop.wav');
@@ -117,7 +122,7 @@ test('loop export is exactly one bar and stems arrive as one zip of aligned WAV 
   expect(loopBytes.subarray(44).some(byte => byte !== 0)).toBe(true);
 
   const stemsDownload = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Stems', exact: true }).click();
+  await menu(page, 'Export', 'Stems');
   const stems = await stemsDownload;
   expect(stems.suggestedFilename()).toMatch(/^discobot-stems-\d+\.zip$/);
   const stemsPath = testInfo.outputPath('stems.zip');
@@ -161,7 +166,7 @@ test('a project file restores lanes, drums, saved arrangements and presets over 
   await expect(page.getByText('Saved!', { exact: false })).toBeVisible();
 
   const download = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Export Project', exact: true }).click();
+  await menu(page, 'Project', 'Export Project');
   const exported = await download;
   expect(exported.suggestedFilename()).toMatch(/^discobot-project-\d{4}-\d{2}-\d{2}\.json$/);
   const path = testInfo.outputPath('project.json');
@@ -173,7 +178,7 @@ test('a project file restores lanes, drums, saved arrangements and presets over 
 
   // A reload with an intact project must not warn that it was damaged.
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'SYNTHESIZER', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Discobot', exact: true })).toBeVisible();
   await expect(page.locator('.app-alert')).toHaveCount(0);
 
   // Wipe the browser, as if this were another device.
@@ -183,12 +188,14 @@ test('a project file restores lanes, drums, saved arrangements and presets over 
   await expect(page.getByLabel('Synth preset', { exact: true }).locator('option').filter({ hasText: 'Travel keys' })).toHaveCount(0);
 
   const input = page.locator('input[aria-label="Import project file"]');
-  page.once('dialog', dialog => { void dialog.dismiss(); });
+  const refused = page.waitForEvent('dialog');
   await input.setInputFiles(path);
+  await (await refused).dismiss();
   await expect(page.locator('.tempo-led-value')).toHaveText('120');
 
-  page.once('dialog', dialog => { void dialog.accept(); });
+  const confirmed = page.waitForEvent('dialog');
   await input.setInputFiles(path);
+  await (await confirmed).accept();
   await expect(page.locator('.tempo-led-value')).toHaveText('96');
   await expect(page.getByRole('button', { name: 'G3 step 2', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'Select Snare', exact: true }).click();
@@ -222,7 +229,7 @@ test('the app installs a service worker and opens with no network', async ({ pag
 
   await context.setOffline(true);
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'SYNTHESIZER', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Discobot', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Kick step 1', exact: true }).click();
   await page.getByRole('button', { name: /Play All/ }).click();
   await expect(page.locator('.drum-step-indicator.active').first()).toBeVisible();

@@ -1,5 +1,12 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { encodeWav } from '../../src/services/wavExport';
+
+const tab = (page: Page, name: string) => page.getByRole('tab', { name, exact: true }).click();
+async function menu(page: Page, name: 'Project' | 'Export', item: string) {
+  await page.getByRole('button', { name: `${name} ▾`, exact: true }).click();
+  await page.getByRole('menuitem', { name: item, exact: true }).click();
+}
+const openMidi = (page: Page) => page.getByRole('button', { name: 'MIDI and samples', exact: true }).click();
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -98,16 +105,20 @@ test('saved projects restore tempo, mixer, swing and drum velocity; undo restore
 test('samples persist in IndexedDB and play and delete without uploading', async ({ page }) => {
   await page.goto('./');
   const samples = Float32Array.from({ length: 4410 }, (_, i) => Math.sin(i * 2 * Math.PI * 440 / 44100) * .1);
+  await openMidi(page);
   await page.getByLabel('Import audio sample', { exact: true }).setInputFiles({
     name: 'local-tone.wav', mimeType: 'audio/wav', buffer: Buffer.from(encodeWav([samples], 44100)),
   });
   await expect(page.getByRole('button', { name: 'Play sample local-tone.wav', exact: true })).toBeVisible();
   await page.reload();
+  await openMidi(page);
   await page.getByRole('button', { name: 'Play sample local-tone.wav', exact: true }).click();
   await expect(page.locator('.sample-panel [role="alert"]')).toHaveCount(0);
   await page.getByRole('button', { name: 'Delete sample local-tone.wav', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Play sample local-tone.wav', exact: true })).toHaveCount(0);
   await page.reload();
+  await openMidi(page);
+  await expect(page.getByText('No samples yet.', { exact: false })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Play sample local-tone.wav', exact: true })).toHaveCount(0);
 });
 
@@ -116,11 +127,11 @@ test('MIDI and WAV exports create local downloadable files', async ({ page }) =>
   await page.getByRole('button', { name: 'Piano Roll', exact: true }).click();
   await page.getByRole('button', { name: 'C3 step 1', exact: true }).click();
   const midiPromise = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Export MIDI', exact: true }).click();
+  await menu(page, 'Export', 'Export MIDI');
   const midi = await midiPromise;
   expect(midi.suggestedFilename()).toMatch(/\.mid$/);
   const wavPromise = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Download WAV', exact: true }).click();
+  await menu(page, 'Export', 'Download WAV');
   const wav = await wavPromise;
   expect(wav.suggestedFilename()).toMatch(/\.wav$/);
   expect(await wav.failure()).toBeNull();
@@ -220,16 +231,20 @@ test('drums on the same step all reach the drum voice at their own levels and ar
 test('the new voice controls, FM engine and step slide are saved with the project', async ({ page }) => {
   await page.goto('./');
   const lane = () => page.evaluate(() => JSON.parse(localStorage.getItem('discobot_browser_project_v1')!).synths[0]);
+  await tab(page, 'Osc');
   await page.getByLabel('Oscillator 2 enabled').check({ force: true });
   await page.getByLabel('Voice mode').selectOption('mono');
-  await page.getByRole('slider', { name: 'Env Amt', exact: true }).press('ArrowUp');
   await page.getByRole('slider', { name: 'Sub', exact: true }).press('ArrowUp');
+  await tab(page, 'Filter');
+  await page.getByRole('slider', { name: 'Env Amt', exact: true }).press('ArrowUp');
+  await tab(page, 'LFO');
   await page.getByLabel('LFO 1 target').selectOption('amp', { force: true });
   await expect.poll(async () => {
     const params = (await lane()).synthParams;
     return [params.oscillator2.enabled, params.voiceMode, params.filter.envAmount > 0, params.mixer.sub > 0, params.lfo1.target];
   }).toEqual([true, 'mono', true, true, 'amp']);
 
+  await tab(page, 'Osc');
   await page.getByLabel('Synth engine').selectOption('fm');
   await expect(page.getByLabel('FM algorithm')).toBeVisible();
   await page.getByLabel('FM algorithm').selectOption('0');
@@ -237,11 +252,13 @@ test('the new voice controls, FM engine and step slide are saved with the projec
   await page.getByLabel('Synth model').selectOption('tb-303');
   await expect.poll(async () => { const params = (await lane()).synthParams; return [params.engine, params.voiceMode, params.velocity.filter > 0.5]; }).toEqual(['subtractive', 'mono', true]);
 
+  await tab(page, 'Notes');
   await page.getByRole('button', { name: 'Piano Roll', exact: true }).click();
   await page.getByRole('button', { name: 'C3 step 1', exact: true }).click();
   await page.getByLabel('Step 1 slide', { exact: true }).check();
   await expect.poll(async () => (await lane()).pattern.steps[0].slide).toBe(true);
   await page.reload();
   await expect.poll(async () => (await lane()).pattern.steps[0].slide).toBe(true);
+  await tab(page, 'Osc');
   await expect(page.getByLabel('Voice mode')).toHaveValue('mono');
 });

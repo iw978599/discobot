@@ -20,6 +20,7 @@ interface KnobProps {
   disabled?: boolean;
   tooltip?: string;
   parseInputValue?: (input: string) => number | null;
+  ariaLabel?: string;
 }
 
 export default function Knob({
@@ -35,6 +36,7 @@ export default function Knob({
   disabled = false,
   tooltip,
   parseInputValue,
+  ariaLabel = label,
 }: KnobProps) {
   const [localVal, setLocalVal] = useState(value);
   const [isEditing, setIsEditing] = useState(false);
@@ -91,7 +93,7 @@ export default function Knob({
         role="slider"
         aria-orientation="vertical"
         tabIndex={disabled ? -1 : 0}
-        aria-label={label}
+        aria-label={ariaLabel}
         aria-valuemin={min}
         aria-valuemax={max}
         aria-valuenow={localVal}
@@ -137,7 +139,7 @@ export default function Knob({
       <span className="knob-label" title={tooltip}>{label}</span>
       <input
         className="knob-value-input"
-        aria-label={`${label} value`}
+        aria-label={`${ariaLabel} value`}
         value={isEditing ? inputValue : computedDisplay}
         onFocus={() => {
           setIsEditing(true);
