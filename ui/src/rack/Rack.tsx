@@ -14,6 +14,8 @@ import ShareDialog from './ShareDialog';
 import AccountDialog, { useSyncStatus } from './AccountDialog';
 import { projectSync } from '../services/projectSync';
 import MidiImportDialog from './MidiImportDialog';
+import GuestModule from './GuestModule';
+import AddGuestDialog from './AddGuestDialog';
 import { HelpModal } from './HeaderParts';
 import '@fontsource/barlow-condensed/latin-500.css';
 import '@fontsource/barlow-condensed/latin-600.css';
@@ -28,6 +30,7 @@ export default function Rack({ studio }: { studio: Studio }) {
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [guestOpen, setGuestOpen] = useState(false);
   const { midiState } = studio;
   const sync = useSyncStatus();
 
@@ -40,6 +43,7 @@ export default function Rack({ studio }: { studio: Studio }) {
           onOpenProjects={() => setProjectsOpen(true)}
           onShare={() => setShareOpen(true)}
           onOpenAccount={() => setAccountOpen(true)}
+          onAddGuest={() => setGuestOpen(true)}
         />
         {studio.changedElsewhere && (
           <div role="alert" className="app-alert">
@@ -67,6 +71,7 @@ export default function Rack({ studio }: { studio: Studio }) {
         )}
         <SongModule studio={studio} />
         {[1, 2, 3].map(id => <SynthModule key={id} studio={studio} synthId={id} />)}
+        {studio.guests.map(guest => <GuestModule key={guest.id} studio={studio} guest={guest} />)}
         <DrumModule studio={studio} />
         <div className="rack-unit effects-unit">
           <EffectsPanel effectsLoop={studio.effectsLoop} onChange={studio.handleEffectsLoopChange} />
@@ -78,6 +83,7 @@ export default function Rack({ studio }: { studio: Studio }) {
       {projectsOpen && <ProjectsDialog studio={studio} onClose={() => setProjectsOpen(false)} />}
       {shareOpen && <ShareDialog onClose={() => setShareOpen(false)} />}
       {accountOpen && <AccountDialog onClose={() => setAccountOpen(false)} />}
+      {guestOpen && <AddGuestDialog studio={studio} onClose={() => setGuestOpen(false)} />}
       {settingsOpen && (
         <Dialog title="MIDI and samples" closeLabel="Close MIDI and samples" onClose={() => setSettingsOpen(false)}>
           <h3>MIDI controller</h3>

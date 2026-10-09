@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beat Bell: a minimal Discobot guest</title>
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; margin: 20px; color: #1c1c1c; background: #f6f4ee; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  label { display: inline-flex; gap: 6px; align-items: center; margin-right: 14px; }
+  #status { margin-top: 12px; font-family: ui-monospace, Consolas, monospace; font-size: 13px; white-space: pre-line; }
+  button, select { font: inherit; padding: 4px 10px; }
+</style>
+</head>
+<body>
+<h1>Beat Bell</h1>
+<p>Rings a note on every beat. A complete, minimal example of a Discobot guest instrument: see <code>GUEST_PROTOCOL.md</code>.</p>
+<label>Note <select id="note" aria-label="Note"></select></label>
+<label>Sound <select id="wave" aria-label="Sound"><option>triangle</option><option>sine</option><option>square</option></select></label>
+<button id="start">Start</button>
+<div id="status" role="status"></div>
+
+<script>
+(function () {
+  'use strict';
+  var PROTOCOL = 1;
+  var NOTES = ['C4', 'D4', 'E4', 'G4', 'A4', 'C5'], MIDI = [60, 62, 64, 67, 69, 72];
+
+  // ---- the instrument itself: a note on every beat
+  var state = { note: 'C4', wave: 'triangle' };
+  var ctx = null, output = null, monitor = null;
+  var transport = { playing: false };   // { playing, bpm, anchorWall, anchorBeat }
+  var nextBeat = 0, scheduled = 0, timer = null;
+
+  // ---- hosting
+  var hosted = window.parent !== window;
+  var host = null, hostOrigin = null;    // set by the first message from the page that frames this one
+  var latencyMs = 0;                     // how early the host wants everything played
+  var streaming = false, blocksSent = 0;
+
+  function wallNow() { return performance.timeOrigin + performance.now(); }
+  // The audio-clock time at which sound scheduled for `wall` is heard, and the reverse.
+  function ctxAtWall(wall) {
+    var stamp = ctx.getOutputTimestamp ? ctx.getOutputTimestamp() : null;
+    if (stamp && stamp.performanceTime && stamp.contextTime) return stamp.contextTime + (wall - (performance.timeOrigin + stamp.performanceTime)) / 1000;
+    return ctx.currentTime + (wall - wallNow()) / 1000;
+  }
+  function wallAtCtx(time) {
+    var stamp = ctx.getOutputTimestamp ? ctx.getOutputTimestamp() : null;
+    if (stamp && stamp.performanceTime && stamp.contextTime) return performance.timeOrigin + stamp.performanceTime + (time - stamp.contextTime) * 1000;
+    return wallNow() + (time - ctx.currentTime) * 1000;
+  }
+  function wallOfBeat(beat) { return transport.anchorWall + (beat - transport.anchorBeat) * 60000 / transport.bpm; }
+  function beatAtWall(wall) { return transport.anchorBeat + (wall - transport.anchorWall) * transport.bpm / 60000; }
+
+  function ensureAudio() {
+    if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
+    ctx = new AudioContext();
+    output = ctx.createGain();
+    monitor = ctx.createGain();           // this page's own speakers; silenced while the host carries the sound
+    output.connect(monitor).connect(ctx.destination);
+    if (streaming) startStreaming();
+  }
+
+  function ring(time) {
+    var osc = ctx.createOscillator(), amp = ctx.createGain();
+    osc.type = state.wave;
+    osc.frequency.value = 440 * Math.pow(2, (MIDI[NOTES.indexOf(state.note)] - 69) / 12);
+    amp.gain.setValueAtTime(0, time);
+    amp.gain.linearRampToValueAtTime(0.5, time + 0.005);
+    amp.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
+    osc.connect(amp).connect(output);
+    osc.start(time); osc.stop(time + 0.32);
+    scheduled += 1;
+  }
+
+  // Look a little way ahead and place every beat that falls in that window. Each beat is
+  // played `latencyMs` early: the host holds the audio back by the same amount.
+  function pump() {
+    if (!transport.playing || !ctx) return;
+    var horizon = wallNow() + 150;
+    while (wallOfBeat(nextBeat) - latencyMs < horizon) {
+      var time = ctxAtWall(wallOfBeat(nextBeat) - latencyMs);
+      if (time > ctx.currentTime) ring(time);
+      nextBeat += 1;
+    }
+    show();
+  }
+
+  function setTransport(next) {
+    transport = next;
+    clearInterval(timer); timer = null;
+    if (!next.playing) { show(); return; }
+    ensureAudio();
+    // The first whole beat that can still be played on time.
+    nextBeat = Math.max(0, Math.ceil(beatAtWall(wallNow() + latencyMs + 20) - 1e-9));
+    timer = setInterval(pump, 25);
+    pump();
+  }
+
+  // ---- sending this page's sound to the host
+  var TAP = 'class Tap extends AudioWorkletProcessor {' +
+    'constructor(){ super(); this.l = new Float32Array(1024); this.r = new Float32Array(1024); this.n = 0; this.start = 0; }' +
+    'process(inputs){ var input = inputs[0]; if(this.n === 0) this.start = currentFrame;' +
+    ' var a = input && input[0], b = input && (input[1] || input[0]);' +
+    ' for(var i = 0; i < 128; i++){ this.l[this.n + i] = a ? a[i] : 0; this.r[this.n + i] = b ? b[i] : 0; }' +
+    ' this.n += 128;' +
+    ' if(this.n >= 1024){ this.port.postMessage({ frame: this.start, l: this.l, r: this.r }, [this.l.buffer, this.r.buffer]);' +
+    '  this.l = new Float32Array(1024); this.r = new Float32Array(1024); this.n = 0; }' +
+    ' return true; } }' +
+    'registerProcessor("guest-tap", Tap);';
+  var tapReady = null, tap = null;
+  function startStreaming() {
+    streaming = true;
+    if (!ctx) return;
+    monitor.gain.value = 0;
+    if (tap) return;
+    tapReady = tapReady || ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([TAP], { type: 'application/javascript' })));
+    tapReady.then(function () {
+      if (tap || !streaming) return;
+      tap = new AudioWorkletNode(ctx, 'guest-tap', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2] });
+      tap.port.onmessage = function (event) {
+        // `wall` is when the first sample of this block would have been heard on this page.
+        send({ type: 'audio', wall: wallAtCtx(event.data.frame / ctx.sampleRate), sampleRate: ctx.sampleRate, left: event.data.l, right: event.data.r }, [event.data.l.buffer, event.data.r.buffer]);
+        blocksSent += 1;
+      };
+      output.connect(tap);
+      tap.connect(ctx.destination);   // the tap outputs silence; this only keeps it running
+    });
+  }
+  function stopStreaming() {
+    streaming = false;
+    if (monitor) monitor.gain.value = 1;
+    if (tap) { try { output.disconnect(tap); tap.disconnect(); } catch (e) {} tap = null; }
+  }
+
+  // ---- messages
+  function send(message, transfer) {
+    if (!hosted) return;
+    message.discobotGuest = PROTOCOL;
+    // Before the host has spoken its address is unknown; "ready" carries nothing private.
+    window.parent.postMessage(message, hostOrigin || '*', transfer || []);
+  }
+  window.addEventListener('message', function (event) {
+    if (!hosted || event.source !== window.parent) return;
+    var m = event.data;
+    if (!m || m.discobotGuest !== PROTOCOL) return;
+    host = event.source; hostOrigin = event.origin;
+    if (m.type === 'hello') { latencyMs = Math.max(0, Math.min(1000, Number(m.latencyMs) || 0)); document.getElementById('start').hidden = true; }
+    else if (m.type === 'transport') setTransport(m.playing ? { playing: true, bpm: Number(m.bpm), anchorWall: Number(m.anchorWall), anchorBeat: Number(m.anchorBeat) } : { playing: false });
+    else if (m.type === 'getState') send({ type: 'state', id: m.id, state: state });
+    else if (m.type === 'setState') applyState(m.state);
+    else if (m.type === 'audio') { if (m.on) startStreaming(); else stopStreaming(); }
+    show();
+  });
+
+  // ---- state and controls
+  function applyState(next) {
+    if (!next || typeof next !== 'object') return;
+    if (NOTES.indexOf(next.note) >= 0) state.note = next.note;
+    if (['triangle', 'sine', 'square'].indexOf(next.wave) >= 0) state.wave = next.wave;
+    noteSelect.value = state.note; waveSelect.value = state.wave;
+  }
+  var noteSelect = document.getElementById('note'), waveSelect = document.getElementById('wave');
+  NOTES.forEach(function (name) { var option = document.createElement('option'); option.textContent = name; noteSelect.appendChild(option); });
+  noteSelect.addEventListener('change', function () { state.note = noteSelect.value; send({ type: 'stateChanged' }); });
+  waveSelect.addEventListener('change', function () { state.wave = waveSelect.value; send({ type: 'stateChanged' }); });
+  document.getElementById('start').addEventListener('click', function () {
+    // On its own, the page keeps its own time.
+    if (transport.playing) setTransport({ playing: false });
+    else { ensureAudio(); setTransport({ playing: true, bpm: 120, anchorWall: wallNow() + 100, anchorBeat: 0 }); }
+  });
+
+  function show() {
+    document.getElementById('status').textContent =
+      (hostOrigin ? 'Hosted by ' + hostOrigin : hosted ? 'In a frame, waiting for the host' : 'Standalone') +
+      '\n' + (transport.playing ? 'Playing at ' + transport.bpm + ' BPM' : 'Stopped') +
+      '\nBeats played: ' + scheduled +
+      '\nAudio blocks sent: ' + blocksSent +
+      (ctx && ctx.state !== 'running' ? '\nAudio is waiting for a click on this page' : '');
+  }
+  show();
+  send({ type: 'ready', name: 'Beat Bell', features: ['transport', 'state', 'audio'] });
+})();
+</script>
+</body>
+</html>
