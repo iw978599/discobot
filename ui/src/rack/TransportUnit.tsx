@@ -3,18 +3,22 @@ import { downloadArrangementWav, downloadStemsZip } from '../services/wavExport'
 import Knob from '../components/Knob';
 import Menu from './Menu';
 import { TempoDisplay } from './HeaderParts';
+import { accountsEnabled } from '../services/account';
+import { useAccountUser } from './AccountDialog';
 
 interface TransportUnitProps {
   studio: Studio;
   onOpenSettings: () => void;
   onOpenProjects: () => void;
   onShare: () => void;
+  onOpenAccount: () => void;
 }
 
 // The top rack unit: tempo, transport, save and load, and the two menus that hold
 // everything you do once per session instead of once per bar.
-export default function TransportUnit({ studio, onOpenSettings, onOpenProjects, onShare }: TransportUnitProps) {
+export default function TransportUnit({ studio, onOpenSettings, onOpenProjects, onShare, onOpenAccount }: TransportUnitProps) {
   const { midiState } = studio;
+  const user = useAccountUser();
   const midiStatus = !midiState.supported ? 'MIDI is not available in this browser'
     : midiState.connected ? 'A MIDI controller is connected' : 'No MIDI controller connected';
   return (
@@ -57,6 +61,11 @@ export default function TransportUnit({ studio, onOpenSettings, onOpenProjects, 
             { label: 'Song MIDI', title: 'The whole song as a MIDI file, with a marker at each section', onSelect: () => { void studio.handleExportSongMidi().catch(studio.reportExportError); } },
           ]}
         />
+        {accountsEnabled && (
+          <button className="rack-btn account-button" onClick={onOpenAccount} title={user ? 'Your account' : 'Sign in or create an account. Optional'} aria-label={user ? `Account: ${user.username}` : 'Sign in'}>
+            {user ? user.username : 'Sign In'}
+          </button>
+        )}
         <button className="rack-btn" onClick={onOpenSettings} title={midiStatus} aria-label="MIDI and samples">
           <span className={`rack-led ${midiState.connected ? 'on' : ''}`} /> MIDI
         </button>

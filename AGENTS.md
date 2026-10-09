@@ -1,15 +1,17 @@
 # Discobot — AI Context / Restore Prompt
 
 ## Project Overview
-Browser-only synth/sequencer/drum workstation with two npm workspaces. All project
-operations, synthesis and playback run locally in the browser. No Discord account,
-backend, authentication or WebSocket transport is required.
+Browser synth/sequencer/drum workstation with three npm workspaces. All project
+operations, synthesis and playback run locally in the browser, signed in or not.
+Accounts are optional and live in a small separate API (`server/`); the app never
+depends on it.
 
 ## Architecture
 ```
 discobot/
 ├── engine/    # Browser-compatible TypeScript DSP and shared types
-└── ui/        # React/Vite UI, Web Audio and local project/sample services
+├── ui/        # React/Vite UI, Web Audio and local project/sample services
+└── server/    # Accounts API: a Cloudflare Worker with a D1 database
 ```
 
 ### Audio Flow
@@ -43,6 +45,12 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 | `ui/src/services/browserTransport.ts` | Look-ahead clock. One tick is a 32nd note; 16-step lanes and drums use every second tick |
 | `ui/src/services/sampleStore.ts` | IndexedDB sample storage |
 | `ui/src/services/projectLibrary.ts` | The project library: one IndexedDB record per project, with an in-memory stand-in for tests and browsers without IndexedDB |
+| `server/src/index.ts` | The whole accounts API: sign up with an invite, sign in, recovery codes, owner tools. `handle(request, env)` is a plain function, so tests call it directly |
+| `server/src/secrets.ts` / `rules.ts` | Password hashing, tokens and codes; username and password rules |
+| `server/src/localDatabase.ts` / `server/dev.ts` | An in-memory SQLite with D1's interface, and a local runner for it. Used by tests and `npm run dev:api`; never deployed |
+| `server/migrations/` | The database schema. Add a new numbered file; never edit one that has been applied |
+| `ui/src/services/account.ts` | Browser side of accounts: the session and every API call. `accountsEnabled` is false when the build has no `VITE_API_URL` |
+| `ui/src/rack/AccountDialog.tsx` | Sign in, create account, recovery code, and the owner's invite codes and member list |
 | `ui/src/services/shareLink.ts` | Share links: a project deflated into the URL after `#song=` |
 | `ui/src/rack/SharedSongPage.tsx` | The page a share link opens: renders the song to audio, plays it, offers a copy |
 | `ui/src/services/wavExport.ts` | Offline arrangement render and WAV encoding: full mix, seamless loop, and per-lane stems zipped by `utils/zip.ts` |
@@ -119,7 +127,10 @@ npm run build        # Build engine and UI
 npm start            # Static production-build preview
 npm run typecheck    # No build needed: the UI resolves the engine from source
 npm test             # Node unit tests (engine + UI services)
-npm run test:browser # Playwright against the production preview
+npm run test:browser # Playwright against the production preview and a local API
+npm run dev:api      # The accounts API on http://127.0.0.1:8787, in memory
+npm run deploy --workspace=server   # Publish the API (needs `npx wrangler login`)
+npm run migrate --workspace=server  # Apply new database migrations to the live database
 ```
 
 ## Conventions
@@ -128,7 +139,12 @@ npm run test:browser # Playwright against the production preview
 - Engine types are single source of truth (`engine/src/types.ts`), UI re-exports via `ui/src/types.ts`
 - All project mutations go through `localRequest`; components do not write localStorage directly (synth presets in `useStudio.tsx` are the one exception)
 - Sanitize anything read from storage in `projectSanitization.ts` before it reaches audio code
-- Do not reintroduce a backend, Discord integration, authentication or WebSocket transport
+- The app must work fully with no account and with the API unreachable. Signed out, it makes no request to the API at all; a browser test checks both
+- The API stores a username, password hash, recovery-code hash, join date and invite code, and nothing else: no email, no names, no IP addresses. Do not add personal data, analytics or logging of request contents
+- Passwords, session tokens and recovery codes are stored only as hashes and never logged. PBKDF2 is capped at 100,000 iterations by Cloudflare
+- The API is called with a bearer token, not cookies, and only answers origins in `ALLOWED_ORIGINS` (`server/wrangler.toml`)
+- `server/` has no runtime dependencies and `wrangler` is run with `npx`, not installed, to keep the lockfile small
+- Do not reintroduce Discord integration or a WebSocket transport
 
 ## Known Issues
 - `localService` still exposes a REST-shaped `request(path)` API with `Response` objects for edits inside a project, a leftover from the server version

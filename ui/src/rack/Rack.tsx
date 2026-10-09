@@ -11,6 +11,7 @@ import SongModule from './SongModule';
 import Dialog from './Dialog';
 import ProjectsDialog from './ProjectsDialog';
 import ShareDialog from './ShareDialog';
+import AccountDialog from './AccountDialog';
 import MidiImportDialog from './MidiImportDialog';
 import { HelpModal } from './HeaderParts';
 import '@fontsource/barlow-condensed/latin-500.css';
@@ -25,6 +26,7 @@ export default function Rack({ studio }: { studio: Studio }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const { midiState } = studio;
 
   return (
@@ -35,6 +37,7 @@ export default function Rack({ studio }: { studio: Studio }) {
           onOpenSettings={() => setSettingsOpen(true)}
           onOpenProjects={() => setProjectsOpen(true)}
           onShare={() => setShareOpen(true)}
+          onOpenAccount={() => setAccountOpen(true)}
         />
         {studio.changedElsewhere && (
           <div role="alert" className="app-alert">
@@ -63,6 +66,7 @@ export default function Rack({ studio }: { studio: Studio }) {
       <MidiImportDialog studio={studio} />
       {projectsOpen && <ProjectsDialog studio={studio} onClose={() => setProjectsOpen(false)} />}
       {shareOpen && <ShareDialog onClose={() => setShareOpen(false)} />}
+      {accountOpen && <AccountDialog onClose={() => setAccountOpen(false)} />}
       {settingsOpen && (
         <Dialog title="MIDI and samples" closeLabel="Close MIDI and samples" onClose={() => setSettingsOpen(false)}>
           <h3>MIDI controller</h3>

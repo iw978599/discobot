@@ -397,6 +397,20 @@
 .shared-card .rack-btn { text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
 .shared-card p { margin: 0; }
 .rack-empty { color: var(--dim); }
+.account-button { max-width: 14ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-tabs, .account-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.account-form { display: flex; flex-direction: column; gap: 10px; }
+.account-field { display: flex; flex-direction: column; gap: 3px; }
+.account-field > label { font-family: var(--panel-font); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--legend); }
+.account-field input { background: #121314; border: 1px solid #55585b; border-radius: 3px; color: var(--ink); padding: 7px 9px; font: inherit; }
+.account-field input:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
+.account-field small { color: var(--dim); font-size: 12px; }
+.account-code { font-family: var(--led-font); font-size: 20px; letter-spacing: 0.06em; color: var(--amber); background: #121314; border: 1px solid var(--amber); border-radius: 3px; padding: 12px 14px; user-select: all; overflow-wrap: anywhere; }
+.account-mono { font-family: var(--led-font); letter-spacing: 0.04em; }
+.account-check { display: flex; align-items: flex-start; gap: 8px; }
+.account-check input { margin-top: 4px; }
+.rack-dialog-body [role="alert"] { color: #ff8f80; }
+.rack-dialog-body [role="status"] { color: var(--legend); }
 .rack-list-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: #1f2123; border: 1px solid #3c3f42; border-radius: 2px; }
 .rack-list-row > span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .help-sections { display: flex; flex-direction: column; gap: 12px; }

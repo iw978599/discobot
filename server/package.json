@@ -1,0 +1,17 @@
+{
+  "name": "@discobot/server",
+  "version": "1.0.0",
+  "description": "Accounts API for Discobot: a Cloudflare Worker with a D1 database",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "dev": "node --import tsx dev.ts",
+    "deploy": "npx wrangler@4 deploy",
+    "migrate": "npx wrangler@4 d1 migrations apply discobot --remote"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.3.3"
+  }
+}

@@ -24,6 +24,9 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+        env:
+          # The accounts API (server/). Without this the site has no sign-in at all.
+          VITE_API_URL: https://discobot-api.discobot-server.workers.dev
       - run: npx playwright install --with-deps chromium
       - run: npm run test:browser
       - uses: actions/configure-pages@v5
