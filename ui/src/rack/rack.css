@@ -449,6 +449,26 @@
 .help-list-plain { list-style: none; padding-left: 0; }
 .rack-dialog .midi-panel, .rack-dialog .sample-panel { background: #1f2123; border: 1px solid #3c3f42; border-radius: 2px; }
 
+/* The walkthrough: everything but one part of the rack is dimmed, and a card explains that part.
+   The dimming is the spot's shadow; the shade under it only keeps clicks off the rack. */
+.tour-shade { position: fixed; inset: 0; z-index: 200; }
+.tour-shade.dark { background: rgba(0, 0, 0, 0.7); }
+.tour-spot { position: fixed; z-index: 201; box-sizing: border-box; pointer-events: none; border: 2px solid var(--amber); border-radius: 4px; box-shadow: 0 0 0 200vmax rgba(0, 0, 0, 0.7); }
+.tour-card {
+  position: fixed; z-index: 202; box-sizing: border-box; width: min(340px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow-y: auto;
+  display: flex; flex-direction: column; gap: 8px; padding: 14px 16px;
+  background: linear-gradient(var(--unit-top), var(--unit-bottom)); border: 1px solid var(--amber); border-radius: 3px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+}
+.tour-count { font-size: 12px; letter-spacing: 0.12em; color: var(--amber); }
+.tour-card h2 { margin: 0; font-size: 18px; letter-spacing: 0.08em; color: var(--ink); }
+.tour-card p {
+  margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  text-transform: none; letter-spacing: 0; font-weight: 400; font-size: 14px; line-height: 1.5; color: #dcdedf;
+}
+.tour-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 4px; }
+.tour-skip { margin-right: auto; }
+
 @media (prefers-reduced-motion: reduce) {
   .rack-page * { transition: none !important; }
 }

@@ -1,6 +1,7 @@
 import { useEffect, useId, useState, useSyncExternalStore, type FormEvent, type ReactNode } from 'react';
 import { account, currentUser, subscribeAccount, type Invite, type Member } from '../services/account';
 import { projectSync } from '../services/projectSync';
+import { walkthroughSeen } from '../services/walkthrough';
 import Dialog from './Dialog';
 
 export const useAccountUser = () => useSyncExternalStore(subscribeAccount, currentUser);
@@ -65,7 +66,7 @@ function RecoveryCode({ code, onDone }: { code: string; onDone: () => void }) {
 
 type Mode = 'signin' | 'signup' | 'recover';
 
-function SignedOut({ onRecoveryCode }: { onRecoveryCode: (code: string) => void }) {
+function SignedOut({ onRecoveryCode }: { onRecoveryCode: (code: string, newAccount?: boolean) => void }) {
   const [mode, setMode] = useState<Mode>('signin');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -75,7 +76,7 @@ function SignedOut({ onRecoveryCode }: { onRecoveryCode: (code: string) => void 
 
   const submit = () => run(async () => {
     if (mode === 'signin') await account.signIn(username, password);
-    else if (mode === 'signup') onRecoveryCode(await account.signUp(username, password, invite));
+    else if (mode === 'signup') onRecoveryCode(await account.signUp(username, password, invite), true);
     else onRecoveryCode(await account.recover(username, recoveryCode, password));
   });
 
@@ -167,7 +168,7 @@ function OwnerTools() {
   );
 }
 
-function SignedIn({ username, owner, onRecoveryCode }: { username: string; owner: boolean; onRecoveryCode: (code: string) => void }) {
+function SignedIn({ username, owner, onRecoveryCode, onWalkthrough }: { username: string; owner: boolean; onRecoveryCode: (code: string) => void; onWalkthrough: () => void }) {
   const [panel, setPanel] = useState<'' | 'password' | 'code' | 'delete'>('');
   const [password, setPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -207,6 +208,7 @@ function SignedIn({ username, owner, onRecoveryCode }: { username: string; owner
         <button className="rack-btn" disabled={busy} title="Sign out of every browser where this account is signed in" onClick={() => { void run(account.signOutEverywhere); }}>Sign Out Everywhere</button>
         <button className={`rack-btn ${panel === 'password' ? 'on' : ''}`} onClick={() => open('password')}>Change Password</button>
         <button className={`rack-btn ${panel === 'code' ? 'on' : ''}`} onClick={() => open('code')}>New Recovery Code</button>
+        <button className="rack-btn" title="A short tour of the rack" onClick={onWalkthrough}>Show the Walkthrough</button>
         <button className={`rack-btn danger ${panel === 'delete' ? 'on' : ''}`} onClick={() => open('delete')}>Delete Account</button>
       </div>
       {notice && <p role="status">{notice}</p>}
@@ -239,17 +241,25 @@ function SignedIn({ username, owner, onRecoveryCode }: { username: string; owner
 
 // Signing in, and everything about the signed-in account. Nothing here touches projects.
 // While a recovery code is on screen the dialog only closes through its Done button: the
-// code cannot be shown again.
-export default function AccountDialog({ onClose }: { onClose: () => void }) {
+// code cannot be shown again. `onWalkthrough` closes the dialog and starts the tour of the rack.
+export default function AccountDialog({ onClose, onWalkthrough }: { onClose: () => void; onWalkthrough: () => void }) {
   const user = useAccountUser();
   const [recoveryCode, setRecoveryCode] = useState('');
+  // A new account's code is followed by the walkthrough, the first time in this browser. A code
+  // from Forgot Password or New Recovery Code is not.
+  const [newAccount, setNewAccount] = useState(false);
+  const showCode = (code: string, created = false) => { setRecoveryCode(code); setNewAccount(created); };
+  const codeKept = () => {
+    setRecoveryCode('');
+    if (newAccount && !walkthroughSeen()) onWalkthrough();
+  };
   return (
     <Dialog title="Account" closeLabel="Close account" onClose={recoveryCode ? () => {} : onClose}>
       {recoveryCode
-        ? <RecoveryCode code={recoveryCode} onDone={() => setRecoveryCode('')} />
+        ? <RecoveryCode code={recoveryCode} onDone={codeKept} />
         : user
-          ? <SignedIn username={user.username} owner={user.owner} onRecoveryCode={setRecoveryCode} />
-          : <SignedOut onRecoveryCode={setRecoveryCode} />}
+          ? <SignedIn username={user.username} owner={user.owner} onRecoveryCode={showCode} onWalkthrough={onWalkthrough} />
+          : <SignedOut onRecoveryCode={showCode} />}
     </Dialog>
   );
 }

@@ -1,7 +1,8 @@
 # Handoff: where the work stopped
 
 Written 2026-10-09 when the session was paused part-way through a batch of
-requests. Delete this file once everything below is finished and merged.
+requests, and brought up to date later that day when the work was picked up
+again. Delete this file once everything below is finished and merged.
 
 ## Branches
 
@@ -9,9 +10,8 @@ requests. Delete this file once everything below is finished and merged.
   workflow (GitHub Models, the service it called, was retired on 30 July 2026)
   and corrects the WebSynth Studio preset translator. Its `test` check passed
   before the two removal commits; it has not been merged.
-- `draft/handoff-effects-midi` (this branch, a draft PR) is stacked on #80. It
-  holds three finished commits of features, then this file and the skills in
-  `.claude/skills/`. Merging it brings in #80 as well. Carry on from here.
+- `draft/handoff-effects-midi` (this branch, PR #81) is stacked on #80.
+  Merging it brings in #80 as well.
 
 ## Finished on this branch
 
@@ -23,48 +23,32 @@ requests. Delete this file once everything below is finished and merged.
 3. **MIDI.** The sequencer plays a chosen MIDI output (a channel per lane,
    drums on 10) and can send clock with start and stop. MIDI files of up to
    eight bars import at their full length.
+4. **Song WAV and guests.** A song export used the open scene's mute and
+   level for each guest through the whole song. It now uses each scene's own,
+   bar by bar. Reproduced with a browser test that failed, then passed.
+5. **Walkthrough for new users.** After a new account's recovery code, a tour
+   lights nine parts of the rack in turn with a short explanation of each.
+   Show the Walkthrough in the account dialog starts it again. It starts by
+   itself once per browser.
 
-`AGENTS.md` and `docs/ROADMAP.md` already describe all three.
+`AGENTS.md` and `docs/ROADMAP.md` describe all of these.
 
 ## Checked, and not checked
 
 - `npm run typecheck`: clean at the last commit.
-- `npm test`: 144 passing at the last commit (run it again to confirm the
-  count; the last full run before the MIDI tests showed 142).
-- `npm run test:browser`: the full suite last passed (112 tests) after the
-  effects commit only. After the later two commits only the affected specs
-  were run and passed: `guests`, `scene-mutes`, `song-mode`, `quick-wins`,
-  `midi-out`, `effects`. **Run the whole suite before marking the PR ready.**
+- `npm test`: 145 passing at the last commit.
+- `npm run test:browser`: the whole suite passed (126 tests,
+  desktop and phone width) at the last commit.
 - Nothing has been listened to. The chorus, the damped reverb and the EQ were
   set by reasoning and measurement, not by ear.
 - MIDI output was tested against a fake device, not real hardware.
+- The walkthrough was looked at in screenshots at desktop and phone width in
+  Chromium only. It has not been tried in Firefox or Safari, on a real phone,
+  or with a screen reader.
 
 ## Still to do from the same request
 
-1. **Walkthrough for new users** (not started; only the account dialog was
-   read). Asked for: a highlighted, step-by-step tour shown the first time
-   someone signs up, and a button in the account dialog to see it again.
-   Notes for building it:
-   - `AccountDialog.tsx`: `SignedOut.submit` handles sign-up and passes the
-     recovery code to `onRecoveryCode`. The tour should start after the
-     recovery code's Done button, only when the code came from sign-up (not
-     from Forgot Password or New Recovery Code).
-   - Add a "Show the Walkthrough" button to `SignedIn`'s `account-actions`.
-     It should close the dialog and start the tour.
-   - Tour state is view state, so it belongs in `Rack.tsx`, not `useStudio`.
-     "Has seen it" can be remembered per browser; components do not write
-     `localStorage` directly, so put a tiny helper in `ui/src/services/`.
-   - The transport bar is sticky and `.rack-page` is the scrolling area, so
-     scroll a step's target into view inside `.rack-page` before measuring it.
-   - Suggested stops: transport (play, tempo), a synth lane's steps, its
-     sound editor, the drum grid, the song unit, effects, the Project and
-     Export menus, and the account button.
-   - No `window.confirm` or other browser dialogs; Escape and a Skip button
-     must end it; it must be usable by keyboard and at phone width.
-   - Add a browser test: sign up against the local API (see
-     `accounts.spec.ts` for the pattern), finish the recovery-code step, walk
-     the tour, reopen it from the account dialog.
-2. **Sampled kits (LinnDrum, DMX, TR-707)** (not started). The engine can
+1. **Sampled kits (LinnDrum, DMX, TR-707)** (not started). The engine can
    already play a sample on a drum lane (`DrumTrack.sampleId`,
    `DrumCore.setSample`). What is missing is the recordings. This needs a
    decision from the owner before any work: the app may not load anything
@@ -73,12 +57,14 @@ requests. Delete this file once everything below is finished and merged.
    has not been verified. Options to put to the owner: a verified
    public-domain or CC0 pack, recordings the owner makes or owns, or leaving
    it as "import your own samples".
-3. **Added to the roadmap after the pause** (`docs/ROADMAP.md`): collaborative
+2. **Added to the roadmap after the pause** (`docs/ROADMAP.md`): collaborative
    sessions (features item 13), kids mode (item 14) and a layout for phones
-   and the installed app (item 15). The known bug noted with them (Song WAV
-   ignoring a guest's mute and level per scene) is fixed.
-4. **Follow-ups worth offering, not asked for:** following an external MIDI
-   clock, sending hand-played notes to MIDI out, choosing output channels.
+   and the installed app (item 15). None is started; each lists questions to
+   settle first.
+3. **Follow-ups worth offering, not asked for:** following an external MIDI
+   clock, sending hand-played notes to MIDI out, choosing output channels;
+   running the browser tests as two halves side by side to save time
+   (`PLAYWRIGHT_PORT` already gives each run its own app and API).
 
 ## Things the owner should know
 

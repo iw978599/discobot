@@ -223,6 +223,11 @@ mono/slide and the drum voices. What it leaves open:
     Packaged apps in the phone stores are not planned for now; they would be
     a separate piece of work (a wrapper, store accounts and review).
 
+16. **A walkthrough for new accounts.** Done: after a new account's recovery
+    code, a tour lights nine parts of the rack in turn and explains each, and
+    the account dialog can show it again. Still open: offering it to someone
+    who has no account, from the Help button.
+
 ## Suggested order
 
 1. Listen and tune the new voices (sound item 1).

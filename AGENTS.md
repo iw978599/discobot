@@ -55,6 +55,7 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 | `ui/src/rack/GuestModule.tsx` / `ui/src/hooks/guestAudio.ts` | The guest's rack unit and frame, and the player that brings its audio into the mixer |
 | `ui/src/services/projectSync.ts` | Project sync: `createProjectSync` (the rules, tested against the real API handler) and `startProjectSync` (when it runs) |
 | `ui/src/rack/AccountDialog.tsx` | Sign in, create account, recovery code, and the owner's invite codes and member list |
+| `ui/src/rack/Walkthrough.tsx` / `ui/src/services/walkthrough.ts` | The tour of the rack shown after a new account's recovery code, and whether this browser has had it |
 | `ui/src/services/shareLink.ts` | Share links: a project deflated into the URL after `#song=`, and short links (`#s=code`) to a song published on the server |
 | `ui/src/rack/SharedSongPage.tsx` | The page a share link opens: renders the song to audio, plays it, offers a copy |
 | `ui/src/services/wavExport.ts` | Offline arrangement render and WAV encoding: full mix, seamless loop, and per-lane stems zipped by `utils/zip.ts` |
@@ -123,6 +124,9 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 - There is no common format for synth presets, so `presetImport.ts` has one translator per source format, each written from that synth's real parameter definitions, and returns a list of what did not carry over. Add a format by adding a translator and a detection rule; never guess at an unknown file. Every result goes through `sanitizeSynthParams`.
 - `.rack-page` is the page's scrolling area (the window itself does not scroll), which is what lets the transport unit be `position: sticky`. Keep the page's top padding at zero, or scrolled content shows above the bar.
 - The UI is one rack read top to bottom. Synth step rows and the drum grid share the column widths `--plate`, `--side` and `--knobs` in `rack.css` so steps line up vertically; change them together.
+- The walkthrough (`Walkthrough.tsx`) is the one overlay that is not a `Dialog`: it lights one part of the rack and puts a card beside it, or along the bottom of a narrow screen. Its card is `aria-modal`, which is what makes the piano keys and the step arrow keys stand down while it is up. It finds each stop by a selector in `STOPS`; renaming one of those classes or labels means changing the stop and `walkthrough.spec.ts` with it. A stop whose part is not on the page shows its card alone.
+- The walkthrough starts by itself only after the recovery code of a new account, and only in a browser that has not had it (`walkthroughSeen`); Show the Walkthrough in the account dialog starts it at any time. Browser tests that sign up set `discobot_walkthrough_v1` first unless the walkthrough is what they test.
+- A `Dialog` hands focus back to the button that opened it when it closes, after the layout effects of whatever replaces it, and focusing scrolls that button into view. Anything that opens as a dialog closes must place itself and take focus in a mount effect, with `preventScroll` (see `Walkthrough`).
 - Components take the `Studio` object and call its handlers. They hold only view state (open tab, selected drum, dialog open); anything that must be saved or undone belongs in `useStudio`.
 - Fonts are bundled from `@fontsource`. The app must not load anything from another origin: it works offline and a browser test fails on any outside request.
 - Each lane shows four knobs plus Level. For a synth model with macros those four are the macros; otherwise Cutoff, Reso, Env and Decay.
