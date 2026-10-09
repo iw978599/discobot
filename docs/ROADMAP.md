@@ -219,9 +219,9 @@ mono/slide and the drum voices. What it leaves open:
     The same components and the same `Studio` object should drive both
     layouts: this is a second arrangement of the rack, not a second app.
     Kids mode (item 14) is touch-first too and can share its large controls.
-    To decide: whether "apps" means the installable web app that exists
-    today, or packaged apps in the phone stores as well, which is a separate
-    piece of work (a wrapper, store accounts and review).
+    Decided: "apps" means the installable web app that exists today.
+    Packaged apps in the phone stores are not planned for now; they would be
+    a separate piece of work (a wrapper, store accounts and review).
 
 ## Known bugs
 
