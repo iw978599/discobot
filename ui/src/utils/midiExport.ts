@@ -153,14 +153,16 @@ function buildSynthTrack(id: number, bars: SequencerStep[][], channel: number): 
     for (let stepIndex = 0; stepIndex < steps.length; stepIndex += 1) {
       const step = steps[stepIndex];
       if (!step.active || !step.note || step.velocity <= 0) continue;
-      const midiNote = noteNameToMidi(step.note);
+      for (const name of [...new Set([step.note, ...(step.notes ?? [])])]) {
+      const midiNote = noteNameToMidi(name);
       if (midiNote === null) continue;
       const tick = bar * TICKS_PER_BAR + Math.round(stepIndex * ticksPerStep);
       const velocity = clampVelocity(step.velocity * 127, DEFAULT_SYNTH_VELOCITY);
       const noteOnStatus = 0x90 | (channel & 0x0f);
       const noteOffStatus = 0x80 | (channel & 0x0f);
       events.push({ tick, data: [noteOnStatus, midiNote, velocity] });
-      events.push({ tick: tick + Math.max(1, Math.round(ticksPerStep * 0.92)), data: [noteOffStatus, midiNote, 0] });
+      events.push({ tick: tick + Math.max(1, Math.round(ticksPerStep * ((step.length ?? 1) - 1 + 0.92))), data: [noteOffStatus, midiNote, 0] });
+      }
     }
   });
   return makeTrackChunk(encodeTrack(events));

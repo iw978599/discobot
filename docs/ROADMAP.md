@@ -123,10 +123,11 @@ mono/slide and the drum voices. What it leaves open:
    lengths running against each other, makes far more music possible than any
    single synthesis feature.
 
-3. **Polyphonic steps and note length.** (M)
-   A step holds one note with a fixed gate. Chords per step and a per-step
-   length (so a note can last several steps) turn the piano roll into a real
-   one. The engine is already eight-voice.
+3. **Polyphonic steps and note length.** Done: up to six notes per step and
+   a per-step length, in the piano roll, live playback, WAV and MIDI export
+   and MIDI import. Still open: dragging a note's end in the piano roll to
+   set its length (it is a menu on the selected step), and notes that start
+   between steps.
 
 4. **Project files: export and import.** Done. Samples are not yet included
    in the file.

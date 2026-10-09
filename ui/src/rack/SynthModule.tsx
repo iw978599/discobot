@@ -236,7 +236,7 @@ export default function SynthModule({ studio, synthId }: SynthModuleProps) {
                   </select>
                 </label>
                 {synth.selectedStep === null ? (
-                  <span className="rack-hint">Select a step above, then play a key to put a note on it. The arrow keys move along the row; click a step with a note again to clear it.</span>
+                  <span className="rack-hint">Select a step above, then play a key to put a note on it. The arrow keys move along the row; click a step with a note again to clear it. In the piano roll, click several notes in one column for a chord.</span>
                 ) : (
                   <>
                     <span className="step-tools-name">Step {synth.selectedStep + 1}</span>
@@ -262,6 +262,19 @@ export default function SynthModule({ studio, synthId }: SynthModuleProps) {
                       />
                       Slide
                     </label>
+                    <label title="How many steps this step's notes last">
+                      Note length
+                      <select
+                        aria-label={`Step ${synth.selectedStep + 1} note length`}
+                        value={synth.pattern.steps[synth.selectedStep]?.length ?? 1}
+                        disabled={!synth.pattern.steps[synth.selectedStep]?.note}
+                        onChange={(event) => { void studio.handleStepLengthChange(synthId, synth.selectedStep!, Number(event.target.value)); }}
+                      >
+                        {Array.from({ length: synth.pattern.steps.length - synth.selectedStep }, (_, index) => (
+                          <option key={index + 1} value={index + 1}>{index + 1} {index === 0 ? 'step' : 'steps'}</option>
+                        ))}
+                      </select>
+                    </label>
                   </>
                 )}
               </div>
@@ -277,8 +290,8 @@ export default function SynthModule({ studio, synthId }: SynthModuleProps) {
                 holdEnabled={Boolean(params.hold)}
                 releaseSignal={synth.forceReleaseSignal}
                 computerKeyNotes={studio.computerKeyNotes}
-                onStepSelect={(step) => { void studio.handleStepChange(synthId, step); }}
-                onNoteAssign={(stepIndex, note) => { void studio.handlePianoRollNoteAssign(synthId, stepIndex, note); }}
+                onStepSelect={(step) => { studio.handleStepSelect(synthId, step); }}
+                onNoteAssign={(stepIndex, note, on) => { void studio.handlePianoRollNoteAssign(synthId, stepIndex, note, on); }}
                 onClearPattern={() => { void studio.handleClearPatternNotes(synthId); }}
                 onNotePlay={(note) => { void studio.handleNotePlay(synthId, note); }}
                 onNoteRelease={(note) => { void studio.handleNoteRelease(synthId, note); }}

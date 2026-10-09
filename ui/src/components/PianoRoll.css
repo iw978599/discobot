@@ -82,6 +82,10 @@
   background: #3b82f6;
 }
 
+.piano-roll-cell.held {
+  background: rgba(59, 130, 246, 0.45);
+}
+
 .piano-roll-cell.selected,
 .piano-roll-step-header.selected {
   outline: 1px solid #f59e0b;

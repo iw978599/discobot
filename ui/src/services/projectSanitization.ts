@@ -1,4 +1,5 @@
 import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, Scene, Song, SynthParameters, SynthModelParams } from '../types';
+import { MAX_STEP_NOTES } from './noteScheduling';
 import { MAX_REPEATS, MAX_SONG_ENTRIES } from './songPlayback';
 import { normalizeSynthModelId } from '../synthModels';
 import { noteNameToMidi } from '../utils/midiExport';
@@ -108,9 +109,14 @@ export function sanitizeSteps(value: unknown): Pattern['steps'] {
   return Array.from({ length: input.length > 16 ? 32 : 16 }, (_, index) => {
     const step = record(input[index]);
     const note = typeof step.note === 'string' && noteNameToMidi(step.note) !== null ? step.note : undefined;
+    const extras = note && Array.isArray(step.notes)
+      ? [...new Set((step.notes as unknown[]).filter((entry): entry is string => typeof entry === 'string' && noteNameToMidi(entry) !== null && entry !== note))].slice(0, MAX_STEP_NOTES - 1)
+      : [];
+    const length = note && Number.isInteger(step.length) ? Math.max(1, Math.min(32, step.length)) : 1;
     return {
       active: step.active === true && Boolean(note), ...(note ? { note } : {}), velocity: number(step.velocity, .7, 0, 1),
       ...(step.slide === true ? { slide: true } : {}),
+      ...(extras.length ? { notes: extras } : {}), ...(length > 1 ? { length } : {}),
     };
   });
 }

@@ -158,6 +158,10 @@ export interface SequencerStep {
   velocity: number;
   // hold this note into the next step so a mono lane glides instead of retriggering
   slide?: boolean;
+  // further notes sounding with `note`, making the step a chord
+  notes?: string[];
+  // how many steps the notes last; absent means one
+  length?: number;
 }
 
 export interface Pattern {

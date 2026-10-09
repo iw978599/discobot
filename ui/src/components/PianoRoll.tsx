@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Fragment } from 'react';
 import { Pattern } from '../types';
+import { MAX_STEP_NOTES, stepNotes } from '../services/noteScheduling';
 import './PianoRoll.css';
 
 interface PianoRollProps {
@@ -10,7 +11,8 @@ interface PianoRollProps {
   selectedStep: number | null;
   octaveShift: number;
   onStepSelect: (stepIndex: number) => void;
-  onNoteAssign: (stepIndex: number, note?: string) => void;
+  // Adds the note to the step's chord, or takes it out.
+  onNoteAssign: (stepIndex: number, note: string, on: boolean) => void;
   onClear: () => void;
 }
 
@@ -29,6 +31,7 @@ export default function PianoRoll({
   const [mouseDown, setMouseDown] = useState(false);
   const [paintMode, setPaintMode] = useState<'assign' | 'erase'>('assign');
   const lastPaintCell = useRef('');
+  const pressedAt = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
     const release = () => setMouseDown(false);
@@ -53,29 +56,45 @@ export default function PianoRoll({
     return all;
   }, [octaveShift]);
 
+  // Cells a longer note sounds through after the step it starts on.
+  const held = useMemo(() => {
+    const cells = new Set<string>();
+    pattern?.steps.forEach((step, start) => {
+      for (let offset = 1; offset < (step.length ?? 1) && start + offset < pattern.steps.length; offset += 1) {
+        for (const note of stepNotes(step)) cells.add(`${start + offset}:${note}`);
+      }
+    });
+    return cells;
+  }, [pattern]);
+
   if (!pattern) {
     return <div className="piano-roll">Loading...</div>;
   }
 
-  const handleCellDown = (stepIndex: number, note: string) => {
+  const has = (stepIndex: number, note: string) => stepNotes(pattern.steps[stepIndex]).includes(note);
+  const full = (stepIndex: number) => stepNotes(pattern.steps[stepIndex]).length >= MAX_STEP_NOTES;
+
+  const handleCellDown = (stepIndex: number, note: string, x: number, y: number) => {
+    pressedAt.current = { x, y };
     lastPaintCell.current = `${stepIndex}:${note}`;
-    const active = pattern.steps[stepIndex]?.note === note;
-    const nextMode: 'assign' | 'erase' = active ? 'erase' : 'assign';
+    const nextMode: 'assign' | 'erase' = has(stepIndex, note) ? 'erase' : 'assign';
     setPaintMode(nextMode);
     setMouseDown(true);
     onStepSelect(stepIndex);
-    onNoteAssign(stepIndex, nextMode === 'assign' ? note : undefined);
+    if (nextMode === 'erase' || !full(stepIndex)) onNoteAssign(stepIndex, note, nextMode === 'assign');
   };
 
-  const handleCellEnter = (stepIndex: number, note: string) => {
+  const handleCellEnter = (stepIndex: number, note: string, x: number, y: number) => {
     if (!mouseDown) return;
+    // Selecting a step can move the grid under a pointer that is holding still. Only a pointer
+    // that has itself moved is painting; otherwise one click would add a second note.
+    if (Math.hypot(x - pressedAt.current.x, y - pressedAt.current.y) < 4) return;
     const cell = `${stepIndex}:${note}`;
     if (lastPaintCell.current === cell) return;
     lastPaintCell.current = cell;
-    const existing = pattern.steps[stepIndex]?.note;
-    if (paintMode === 'assign' ? existing === note : existing !== note) return;
+    if (paintMode === 'assign' ? has(stepIndex, note) || full(stepIndex) : !has(stepIndex, note)) return;
     onStepSelect(stepIndex);
-    onNoteAssign(stepIndex, paintMode === 'assign' ? note : undefined);
+    onNoteAssign(stepIndex, note, paintMode === 'assign');
   };
 
   return (
@@ -105,11 +124,12 @@ export default function PianoRoll({
               {note}
             </div>
             {pattern.steps.map((step, stepIndex) => {
-              const active = step.note === note;
+              const active = stepNotes(step).includes(note);
+              const sustained = !active && held.has(`${stepIndex}:${note}`);
               return (
                 <button
                   key={`${note}-${stepIndex}`}
-                  className={`piano-roll-cell ${active ? 'active' : ''} ${isPlaying && currentStep === stepIndex ? 'playing' : ''} ${selectedStep === stepIndex ? 'selected' : ''}`}
+                  className={`piano-roll-cell ${active ? 'active' : ''} ${active && (step.length ?? 1) > 1 ? 'long' : ''} ${sustained ? 'held' : ''} ${isPlaying && currentStep === stepIndex ? 'playing' : ''} ${selectedStep === stepIndex ? 'selected' : ''}`}
                   aria-label={`${note} step ${stepIndex + 1}`}
                   aria-pressed={active}
                   data-note={note}
@@ -117,18 +137,18 @@ export default function PianoRoll({
                   onPointerDown={(event) => {
                     if (event.button !== 0) return;
                     event.preventDefault();
-                    handleCellDown(stepIndex, note);
+                    handleCellDown(stepIndex, note, event.clientX, event.clientY);
                   }}
-                  onPointerEnter={() => handleCellEnter(stepIndex, note)}
+                  onPointerEnter={(event) => handleCellEnter(stepIndex, note, event.clientX, event.clientY)}
                   onPointerMove={(event) => {
                     if (event.pointerType === 'mouse' || !mouseDown) return;
                     const cell = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLButtonElement>('.piano-roll-cell');
-                    if (cell?.dataset.note && cell.dataset.step) handleCellEnter(Number(cell.dataset.step), cell.dataset.note);
+                    if (cell?.dataset.note && cell.dataset.step) handleCellEnter(Number(cell.dataset.step), cell.dataset.note, event.clientX, event.clientY);
                   }}
                   onClick={(event) => {
                     if (event.detail !== 0) return;
                     onStepSelect(stepIndex);
-                    onNoteAssign(stepIndex, active ? undefined : note);
+                    if (active || !full(stepIndex)) onNoteAssign(stepIndex, note, !active);
                   }}
                   onKeyDown={(event) => {
                     const row = notes.indexOf(note);

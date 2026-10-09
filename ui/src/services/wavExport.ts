@@ -2,7 +2,7 @@ import { DrumCore, SynthCore, toVoiceParams } from '@discobot/engine';
 import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, Scene, SequencerStep, SynthParameters } from '../types';
 import { sceneDrumState } from './songPlayback';
 import { DRUM_INSTRUMENTS } from './drumKits';
-import { expandStep } from './noteScheduling';
+import { expandStepNotes } from './noteScheduling';
 import { expandDrumStep, seededRandom } from './drumScheduling';
 import { createZip } from '../utils/zip';
 import { MASTER_LEVEL, configureLimiter, driveCurve, reverbImpulse, safetyCurve, scheduleDuck } from '../hooks/browserAudio';
@@ -86,8 +86,7 @@ export function renderSynthBars(
   bars.forEach((steps, bar) => {
     const stepDuration = barDuration / Math.max(1, steps.length);
     steps.forEach((step, index) => {
-      if (!step.active || !step.note) return;
-      for (const scheduled of expandStep(step.note, params, stepDuration, tempo, step.slide)) {
+      for (const scheduled of expandStepNotes(step, params, stepDuration, tempo)) {
         core.noteOn({
           note: scheduled.note, velocity: step.velocity, duration: scheduled.duration,
           time: bar * barDuration + index * stepDuration + scheduled.offset,

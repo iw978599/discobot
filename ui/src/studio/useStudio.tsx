@@ -3,14 +3,14 @@ import { createNamedSynthPresets } from '../components/SynthControls';
 import { useSynthAudio } from '../hooks/useSynthAudio';
 import { useDrumAudio } from '../hooks/useDrumAudio';
 import { MidiMode, MidiMessage, useMidiInput } from '../hooks/useMidiInput';
-import { Pattern, SynthParameters, DrumState, DrumInstrument, DrumSettings, DrumKitDefinition, DrumKitId, EffectsLoopState, FxSendLevels, Scene, Song, SynthModelId, SynthModelParams } from '../types';
+import { Pattern, SequencerStep, SynthParameters, DrumState, DrumInstrument, DrumSettings, DrumKitDefinition, DrumKitId, EffectsLoopState, FxSendLevels, Scene, Song, SynthModelId, SynthModelParams } from '../types';
 import { SongPosition, entryStartBar, sceneAtBar, sceneDrumState, songBars } from '../services/songPlayback';
 import { createDefaultSynthParameters } from '@discobot/engine';
 import { localRequest, localService } from '../services/localService';
 import { projectSync, startProjectSync } from '../services/projectSync';
 import type { ProjectInfo } from '../services/projectLibrary';
 import { sanitizeSynthParams } from '../services/projectSanitization';
-import { expandStep } from '../services/noteScheduling';
+import { expandStep, expandStepNotes, stepNotes, withStepNotes } from '../services/noteScheduling';
 import { BrowserTransport, TransportTick } from '../services/browserTransport';
 import { downloadFile, ExportArrangement } from '../services/wavExport';
 import { expandDrumStep } from '../services/drumScheduling';
@@ -39,6 +39,8 @@ const DEFAULT_EFFECTS_LOOP: EffectsLoopState = {
 const DEFAULT_DRUM_KIT_ID: DrumKitId = 'clean-analog';
 const SYNTH_PRESETS_STORAGE_KEY = 'discobot_synth_presets_v1';
 const MAX_HISTORY = 80;
+// MIDI keys pressed within this long of each other are one chord.
+const CHORD_WINDOW_MS = 60;
 
 interface SynthPreset {
   id: string;
@@ -426,6 +428,7 @@ export function useStudio() {
   const historyThrottleRef = useRef<Record<string, number>>({});
   const isRestoringRef = useRef(false);
   const midiHeldRef = useRef(new Map<string, number>());
+  const midiChordRef = useRef<{ synthId: number; stepIndex: number; at: number } | null>(null);
   const globalTempoRef = useRef(globalTempo);
   globalTempoRef.current = globalTempo;
   const drumSwingRef = useRef(drumSwing);
@@ -716,6 +719,15 @@ export function useStudio() {
     }
   }, [synthAudio]);
 
+  // One step of a pattern: its whole chord, for its whole length.
+  const triggerStep = useCallback((synthParams: SynthParameters, step: SequencerStep, windowSeconds: number, synthId: number, scheduledTime: number) => {
+    const velocity = Math.max(0, Math.min(1, step.velocity));
+    for (const scheduled of expandStepNotes(step, synthParams, windowSeconds, globalTempoRef.current)) {
+      void synthAudio.playNote(scheduled.note, synthParams, scheduled.duration, velocity,
+        browserMutedRef.current, effectsLoopRef.current, globalTempoRef.current, synthId, scheduledTime + scheduled.offset);
+    }
+  }, [synthAudio]);
+
   scheduleTickRef.current = ({ step, bar, time, duration }) => {
     // In song mode the bar number picks the scene. A scene other than the one open for
     // editing is played from its stored copy; the open one is played from the live pattern.
@@ -753,7 +765,7 @@ export function useStudio() {
       const index = Math.floor(step / divisor) % count;
       const note = steps[index];
       if (!synth.muted && (!hasSolo || synth.solo) && note?.active && note.note) {
-        triggerSynthNote(synth.synthParams, note.note, duration * divisor, note.velocity, synth.id, time, note.slide);
+        triggerStep(synth.synthParams, note, duration * divisor, synth.id, time);
       }
       setSynths(prev => prev.map(s => s.id === synth.id ? { ...s, currentStep: index } : s));
     }
@@ -1262,7 +1274,7 @@ export function useStudio() {
       const updatedPattern = {
         ...pattern,
         steps: pattern.steps.map((s, i) => (
-          i === stepIndex ? { ...s, note: undefined, active: false } : s
+          i === stepIndex ? withStepNotes(s, []) : s
         )),
       };
 
@@ -1296,18 +1308,23 @@ export function useStudio() {
     )));
   }, []);
 
-  const handlePianoRollNoteAssign = useCallback(async (synthId: number, stepIndex: number, note?: string) => {
+  // Adds a note to a step's chord or takes it out.
+  const handlePianoRollNoteAssign = useCallback(async (synthId: number, stepIndex: number, note: string, on: boolean) => {
     const synth = synthsRef.current.find(s => s.id === synthId);
     if (!synth?.pattern) return;
     pushHistorySnapshot(synthId, synth.pattern.id);
 
     const updatedPattern = {
       ...synth.pattern,
-      steps: synth.pattern.steps.map((step, idx) => (
-        idx === stepIndex ? { ...step, note, active: Boolean(note) } : step
-      )),
+      steps: synth.pattern.steps.map((step, idx) => {
+        if (idx !== stepIndex) return step;
+        const current = stepNotes(step);
+        return withStepNotes(step, on ? [...current, note] : current.filter(entry => entry !== note));
+      }),
     };
 
+    // Two cells painted in one frame must both land, so the next call has to see this one.
+    synthsRef.current = synthsRef.current.map(s => (s.id === synthId ? { ...s, pattern: updatedPattern } : s));
     setSynths(prev => prev.map(s => (
       s.id === synthId ? { ...s, pattern: updatedPattern, selectedStep: stepIndex } : s
     )));
@@ -1325,7 +1342,7 @@ export function useStudio() {
     pushHistorySnapshot(synthId, synth.pattern.id);
     const updatedPattern = {
       ...synth.pattern,
-      steps: synth.pattern.steps.map((step) => ({ ...step, note: undefined, active: false })),
+      steps: synth.pattern.steps.map((step) => withStepNotes(step, [])),
     };
     setSynths(prev => prev.map(s => (
       s.id === synthId ? { ...s, pattern: updatedPattern, selectedStep: null } : s
@@ -1337,7 +1354,8 @@ export function useStudio() {
     });
   }, [pushHistorySnapshot]);
 
-  const upsertStepNote = useCallback(async (synthId: number, stepIndex: number, note: string, velocity: number) => {
+  // Writes a note to a step. `add` joins it to the chord already there instead of replacing it.
+  const upsertStepNote = useCallback(async (synthId: number, stepIndex: number, note: string, velocity: number, add = false) => {
     const synth = synthsRef.current.find(s => s.id === synthId);
     if (!synth?.pattern) return;
     pushHistorySnapshot(synthId, synth.pattern.id);
@@ -1346,9 +1364,10 @@ export function useStudio() {
     const updatedPattern = {
       ...synth.pattern,
       steps: synth.pattern.steps.map((step, idx) => (
-        idx === stepIndex ? { ...step, note, active: true, velocity: boundedVelocity } : step
+        idx === stepIndex ? withStepNotes({ ...step, velocity: boundedVelocity }, add ? [...stepNotes(step), note] : [note]) : step
       )),
     };
+    synthsRef.current = synthsRef.current.map(s => (s.id === synthId ? { ...s, pattern: updatedPattern } : s));
 
     setSynths(prev => prev.map(s => {
       if (s.id !== synthId) return s;
@@ -1453,15 +1472,14 @@ export function useStudio() {
     const pattern = targetSynth.pattern;
     if (!pattern || pattern.steps.length === 0) return;
 
-    if (mode === 'record') {
-      if (!targetSynth.isPlaying) return;
-      const stepIndex = targetSynth.currentStep % pattern.steps.length;
-      void upsertStepNote(targetSynth.id, stepIndex, noteName, velocity);
-      return;
-    }
-
-    const stepIndex = targetSynth.stepRecordPointer % pattern.steps.length;
-    void upsertStepNote(targetSynth.id, stepIndex, noteName, velocity);
+    if (mode === 'record' && !targetSynth.isPlaying) return;
+    // Keys pressed together are a chord: they go on the step the first of them landed on.
+    const now = performance.now(), chord = midiChordRef.current;
+    const joins = chord !== null && chord.synthId === targetSynth.id && now - chord.at < CHORD_WINDOW_MS;
+    const stepIndex = joins ? chord.stepIndex
+      : (mode === 'record' ? targetSynth.currentStep : targetSynth.stepRecordPointer) % pattern.steps.length;
+    midiChordRef.current = { synthId: targetSynth.id, stepIndex, at: now };
+    void upsertStepNote(targetSynth.id, stepIndex, noteName, velocity, joins);
   }, [handleNoteRelease, upsertStepNote, triggerSynthNote, globalTempo, synthAudio]);
 
   const midiState = useMidiInput({ onMessage: handleMidiMessage });
@@ -1575,6 +1593,28 @@ export function useStudio() {
     const nextPattern = {
       ...synth.pattern,
       steps: synth.pattern.steps.map((step, index) => (index === stepIndex ? { ...step, slide } : step)),
+    };
+    setSynths((prev) => prev.map((entry) => (
+      entry.id === synthId ? { ...entry, pattern: nextPattern } : entry
+    )));
+    await localRequest(`/synth/${synthId}/patterns/${synth.pattern.id}`, {
+      method: 'PUT',
+      body: JSON.stringify(nextPattern),
+    });
+  }, [pushHistorySnapshot]);
+
+  const handleStepLengthChange = useCallback(async (synthId: number, stepIndex: number, length: number) => {
+    const synth = synthsRef.current.find((entry) => entry.id === synthId);
+    if (!synth?.pattern || !synth.pattern.steps[stepIndex]) return;
+    pushHistorySnapshot(synthId, synth.pattern.id);
+    const bounded = Math.max(1, Math.min(synth.pattern.steps.length - stepIndex, Math.round(length)));
+    const nextPattern = {
+      ...synth.pattern,
+      steps: synth.pattern.steps.map((step, index) => {
+        if (index !== stepIndex) return step;
+        const { length: _length, ...rest } = step;
+        return bounded > 1 ? { ...rest, length: bounded } : rest;
+      }),
     };
     setSynths((prev) => prev.map((entry) => (
       entry.id === synthId ? { ...entry, pattern: nextPattern } : entry
@@ -2168,7 +2208,7 @@ export function useStudio() {
     handleMidiImportClick, handleMidiImportFile, handleMidiImportApplyAll, midiImportFileRef, handleRemoveSynth,
     ensureSynthExists, handleOctaveShift, handleTempoChange, handleGlobalPlayStop, handleStepChange, handleStepSelect, handleKeyboardModeChange,
     handlePianoRollNoteAssign, handleClearPatternNotes, handleNotePlay, handleNoteRelease, computerKeyNotes, midiState,
-    handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange,
+    handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange,
     handleSynthMixChange, handleSaveSynthPreset, handleLoadSynthPreset, handleDeleteSynthPreset,
     handleExportMidi, currentArrangement, reportExportError, handleExportProject, projectImportFileRef, handleImportProjectFile, handleImportProject,
     handleNewProject, handleOpenProject, handleCopyProject, handleRenameProject, handleDeleteProject, handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail,
