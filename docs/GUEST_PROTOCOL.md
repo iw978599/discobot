@@ -107,8 +107,11 @@ same amount. The two cancel and the guest lands on the beat.
 const when = ctxAtWall(ctx, wallOfBeat(b) - latencyMs);
 ```
 
-`latencyMs` comes from `hello` (currently 120). Apply it only while hosted and
-only while audio is on.
+`latencyMs` comes from `hello`. It starts at 120 and **can change**: if the
+guest's audio reaches the host too late to play on time, the host sends `hello`
+again with a larger value, possibly while playing. Use the new value from the
+next beat you schedule. Apply the latency only while hosted and only while
+audio is on.
 
 ## Sound
 

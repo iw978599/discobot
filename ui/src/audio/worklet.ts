@@ -71,7 +71,7 @@ class GuestPlayer extends AudioWorkletProcessor {
     this.port.onmessage = ({ data }) => {
       if (data.type === 'clear') { this.filledTo = 0; return; }
       const start = Math.round(data.frame), length = data.left.length;
-      // Too late to play, or absurdly far ahead: drop it.
+      // Too late to play any of it, or absurdly far ahead: drop it.
       if (start + length <= currentFrame || start > currentFrame + this.size - length) return;
       for (let index = 0; index < length; index++) {
         const frame = start + index;

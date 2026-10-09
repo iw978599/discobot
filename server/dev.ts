@@ -21,7 +21,7 @@ createServer(async (incoming, outgoing) => {
   for (const [name, value] of Object.entries(incoming.headers)) if (typeof value === 'string') headers.set(name, value);
   const method = incoming.method || 'GET';
   let response: Response;
-  if (method === 'GET' && incoming.url === '/__guest') {
+  if (method === 'GET' && (incoming.url === '/__guest' || incoming.url?.startsWith('/__guest?'))) {
     // The example guest instrument, served from this other address so the app can frame it as it would a real one.
     response = new Response(readFileSync(new URL('../docs/guest-example.html', import.meta.url)), { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
   } else if (method === 'POST' && incoming.url === '/__reset') {

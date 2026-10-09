@@ -24,6 +24,7 @@
 (function () {
   'use strict';
   var PROTOCOL = 1;
+  var SEND_DELAY_MS = Math.max(0, Math.min(2000, Number(new URLSearchParams(location.search).get('delay')) || 0));
   var NOTES = ['C4', 'D4', 'E4', 'G4', 'A4', 'C5'], MIDI = [60, 62, 64, 67, 69, 72];
 
   // ---- the instrument itself: a note on every beat
@@ -121,7 +122,10 @@
       tap = new AudioWorkletNode(ctx, 'guest-tap', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2] });
       tap.port.onmessage = function (event) {
         // `wall` is when the first sample of this block would have been heard on this page.
-        send({ type: 'audio', wall: wallAtCtx(event.data.frame / ctx.sampleRate), sampleRate: ctx.sampleRate, left: event.data.l, right: event.data.r }, [event.data.l.buffer, event.data.r.buffer]);
+        var message = { type: 'audio', wall: wallAtCtx(event.data.frame / ctx.sampleRate), sampleRate: ctx.sampleRate, left: event.data.l, right: event.data.r };
+        var transfer = [event.data.l.buffer, event.data.r.buffer];
+        // For testing a slow path between the frame and the host: ?delay=200 holds every block back 200 ms.
+        if (SEND_DELAY_MS > 0) setTimeout(function () { send(message, transfer); }, SEND_DELAY_MS); else send(message, transfer);
         blocksSent += 1;
       };
       output.connect(tap);

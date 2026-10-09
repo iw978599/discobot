@@ -454,3 +454,5 @@
 .rack-dialog .sample-list { list-style: none; margin: 0; padding: 0; width: 100%; display: flex; flex-direction: column; gap: 4px; }
 .rack-dialog .sample-list li { display: flex; align-items: center; gap: 8px; }
 .rack-dialog .sample-list li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.guest-confirm { display: inline-flex; gap: 4px; }
+.guest-trouble { margin: 0; padding: 6px 10px; border: 1px solid var(--danger); border-radius: 2px; color: #ffb4a6; text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 13px; }
