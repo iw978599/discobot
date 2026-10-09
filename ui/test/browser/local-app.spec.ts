@@ -79,7 +79,7 @@ test('saved projects restore tempo, mixer, swing and drum velocity; undo restore
   await page.locator('.save-name-input').fill('Local arrangement');
   await page.locator('.save-name-input').press('Enter');
   await expect(page.getByText('Saved!', { exact: false })).toBeVisible();
-  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('discobot_browser_project_v1')!).savedPatterns[0]);
+  const saved = await page.evaluate(() => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem('discobot_browser_project_v1')!)).savedPatterns[0]);
   expect(saved.tempo).toBe(146);
   expect(saved.drumSwing).toBe(.35);
   expect(saved.synths).toHaveLength(3);
@@ -95,7 +95,7 @@ test('saved projects restore tempo, mixer, swing and drum velocity; undo restore
   await page.locator('.load-select').selectOption(saved.id);
   await expect(page.locator('.tempo-led-value')).toHaveText('146');
   await expect(page.getByRole('button', { name: 'Mute Synth 2', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('discobot_browser_project_v1')!).synths.find((s: any) => s.synthId === 2)?.pattern.steps[0].note)).toBe('E4');
+  await expect.poll(() => page.evaluate(() => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem('discobot_browser_project_v1')!)).synths.find((s: any) => s.synthId === 2)?.pattern.steps[0].note)).toBe('E4');
   await page.reload();
   await expect(page.locator('.tempo-led-value')).toHaveText('146');
   await expect(page.getByLabel('Swing value', { exact: true })).toHaveValue('35%');
@@ -140,7 +140,7 @@ test('MIDI and WAV exports create local downloadable files', async ({ page }) =>
 test('undo and redo step through synth and drum edits in the order they were made', async ({ page }) => {
   await page.goto('./');
   const state = () => page.evaluate(() => {
-    const project = JSON.parse(localStorage.getItem('discobot_browser_project_v1')!);
+    const project = (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem('discobot_browser_project_v1')!));
     return {
       kick: project.drumState.kick.steps[0],
       snare: project.drumState.snare.steps[4],
@@ -202,7 +202,7 @@ test('drums on the same step all reach the drum voice at their own levels and ar
   await page.getByRole('button', { name: 'Closed Hat step 1', exact: true }).click();
   await page.evaluate(() => { (window as any).drumHits.length = 0; });
   const volumes = await page.evaluate(() => {
-    const state = JSON.parse(localStorage.getItem('discobot_browser_project_v1')!).drumState;
+    const state = (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem('discobot_browser_project_v1')!)).drumState;
     return { kick: state.kick.settings.volume, snare: state.snare.settings.volume, openHH: state.openHH.settings.volume, closedHH: state.closedHH.settings.volume };
   });
 
@@ -230,7 +230,7 @@ test('drums on the same step all reach the drum voice at their own levels and ar
 
 test('the new voice controls, FM engine and step slide are saved with the project', async ({ page }) => {
   await page.goto('./');
-  const lane = () => page.evaluate(() => JSON.parse(localStorage.getItem('discobot_browser_project_v1')!).synths[0]);
+  const lane = () => page.evaluate(() => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem('discobot_browser_project_v1')!)).synths[0]);
   await tab(page, 'Osc');
   await page.getByLabel('Oscillator 2 enabled').check({ force: true });
   await page.getByLabel('Voice mode').selectOption('mono');

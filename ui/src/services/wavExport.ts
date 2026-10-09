@@ -4,7 +4,8 @@ import { DRUM_INSTRUMENTS } from './drumKits';
 import { expandStep } from './noteScheduling';
 import { expandDrumStep, seededRandom } from './drumScheduling';
 import { createZip } from '../utils/zip';
-import { MASTER_LEVEL, configureLimiter, driveCurve, reverbImpulse, safetyCurve } from '../hooks/browserAudio';
+import { MASTER_LEVEL, configureLimiter, driveCurve, reverbImpulse, safetyCurve, scheduleDuck } from '../hooks/browserAudio';
+import type { DrumInstrument, DrumSettings } from '../types';
 
 export interface ExportArrangement {
   tempo: number;
@@ -82,22 +83,24 @@ export function renderSynthLane(
   return renderCore(core, frames);
 }
 
-export function renderDrums(
-  arrangement: Pick<ExportArrangement, 'tempo' | 'drumState' | 'drumKitId' | 'drumMasterVolume' | 'drumSwing'>,
-  frames: number, sampleRate: number, bars = 1, barDuration = 240 / arrangement.tempo,
-): Stereo {
-  const core = new DrumCore(sampleRate);
+type DrumArrangement = Pick<ExportArrangement, 'tempo' | 'drumState' | 'drumKitId' | 'drumMasterVolume' | 'drumSwing'>;
+interface DrumHit { instrument: DrumInstrument; time: number; velocity: number; settings: DrumSettings }
+
+// Every drum hit the export plays, with its start time. Worked out once so the drum render
+// and the kick ducking on the synth lanes agree on which chance steps played.
+export function drumHits(arrangement: DrumArrangement, bars = 1, barDuration = 240 / arrangement.tempo): DrumHit[] {
   const stepDuration = barDuration / 16;
   const solo = DRUM_INSTRUMENTS.some(instrument => arrangement.drumState[instrument].solo);
   const random = seededRandom(1);
+  const hits: DrumHit[] = [];
   for (let bar = 0; bar < bars; bar++) {
     for (const instrument of DRUM_INSTRUMENTS) {
       const track = arrangement.drumState[instrument];
       if (track.muted || (solo && !track.solo)) continue;
       for (let step = 0; step < 16; step++) {
         for (const offset of expandDrumStep(track, step, random)) {
-          core.trigger({
-            instrument, velocity: track.stepVelocities?.[step] ?? 1, kitId: arrangement.drumKitId,
+          hits.push({
+            instrument, velocity: track.stepVelocities?.[step] ?? 1,
             settings: { ...track.settings, volume: track.settings.volume * arrangement.drumMasterVolume },
             time: bar * barDuration + (step + (step % 2 ? arrangement.drumSwing : 0) + offset) * stepDuration,
           });
@@ -105,6 +108,14 @@ export function renderDrums(
       }
     }
   }
+  return hits;
+}
+
+export function renderDrums(
+  arrangement: DrumArrangement, frames: number, sampleRate: number, bars = 1, barDuration = 240 / arrangement.tempo,
+): Stereo {
+  const core = new DrumCore(sampleRate);
+  for (const hit of drumHits(arrangement, bars, barDuration)) core.trigger({ ...hit, kitId: arrangement.drumKitId });
   return renderCore(core, frames);
 }
 
@@ -174,12 +185,16 @@ export async function renderArrangement(arrangement: ExportArrangement, options:
   master.gain.value = MASTER_LEVEL;
   configureLimiter(limiter);
   master.connect(limiter).connect(safety).connect(ctx.destination);
-  const play = ([left, right]: Stereo, sends: FxSendLevels, returnLevel: number, group: 'synth' | 'drums') => {
+  const kickTimes = drumHits(arrangement, bars, barDuration).filter(hit => hit.instrument === 'kick').map(hit => hit.time);
+  const play = ([left, right]: Stereo, sends: FxSendLevels, returnLevel: number, group: 'synth' | 'drums', duck = 0) => {
     const buffer = ctx.createBuffer(2, frames, sampleRate);
     buffer.getChannelData(0).set(left); buffer.getChannelData(1).set(right);
     const source = ctx.createBufferSource();
     source.buffer = buffer;
-    connectEffects(ctx, source, master, sends, returnLevel, arrangement.effectsLoop, group); source.start(0);
+    const ducker = ctx.createGain();
+    for (const time of kickTimes) scheduleDuck(ducker.gain, time, duck);
+    source.connect(ducker);
+    connectEffects(ctx, ducker, master, sends, returnLevel, arrangement.effectsLoop, group); source.start(0);
   };
   const { only } = options;
   const synthSolo = arrangement.synths.some(s => s.solo);
@@ -187,7 +202,7 @@ export async function renderArrangement(arrangement: ExportArrangement, options:
     if (!lane.pattern || !lane.synthParams) continue;
     if (only !== undefined ? only !== lane.id : lane.muted || (synthSolo && !lane.solo)) continue;
     play(renderSynthLane(lane.pattern, lane.synthParams, arrangement.tempo, frames, sampleRate, bars, barDuration),
-      lane.synthParams.fxSends, lane.synthParams.fxReturn, 'synth');
+      lane.synthParams.fxSends, lane.synthParams.fxReturn, 'synth', lane.synthParams.duck ?? 0);
   }
   if (only === undefined || only === 'drums') {
     play(renderDrums(arrangement, frames, sampleRate, bars, barDuration), arrangement.drumFx.sends, arrangement.drumFx.returnLevel, 'drums');

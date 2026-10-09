@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
 const PROJECT_KEY = 'discobot_browser_project_v1';
-const project = (page: Page) => page.evaluate(key => JSON.parse(localStorage.getItem(key) || '{}'), PROJECT_KEY);
+const project = (page: Page) => page.evaluate(key => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem(key) || '{}')), PROJECT_KEY);
 
 type Captured = { type: string; note?: string; instrument?: string; time?: number };
 async function menu(page: Page, name: 'Project' | 'Export', item: string) {

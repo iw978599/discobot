@@ -5,6 +5,15 @@ const limit = (v: number, min: number, max: number, fallback = min) =>
 const smooth = (p: AudioParam, value: number, ctx: AudioContext) =>
   p.setTargetAtTime(value, ctx.currentTime, 0.015);
 type EffectName = keyof FxSendLevels;
+
+// Sidechain-style ducking: pull a gain down at a kick and let it swell back. Live playback
+// and WAV export both schedule it with this, so they pump identically. Full amount is -20 dB.
+export function scheduleDuck(gain: AudioParam, time: number, amount: number): void {
+  const depth = 1 - limit(amount, 0, 1) * 0.9;
+  if (depth >= 1) return;
+  gain.setTargetAtTime(depth, time, 0.004);
+  gain.setTargetAtTime(1, time + 0.03, 0.09);
+}
 type Effects = {
   inputs: Record<EffectName, GainNode>;
   wet: Record<EffectName, GainNode>;
@@ -246,22 +255,27 @@ export function setEffectsLoop(state: EffectsLoopState): void {
 
 export function createAudioLane(group: 'synth' | 'drums') {
   const ctx = getAudioContext(), bus = createEffects(group);
-  const input = ctx.createGain();
-  input.connect(master);
+  // input carries the lane volume; ducker sits after it so the dry signal and the sends pump together.
+  const input = ctx.createGain(), ducker = ctx.createGain();
+  input.connect(ducker);
+  ducker.connect(master);
   const sends = {} as Record<EffectName, GainNode>;
   for (const name of ['reverb', 'delay', 'drive', 'phaser'] as EffectName[]) {
     sends[name] = ctx.createGain();
     sends[name].gain.value = 0;
-    input.connect(sends[name]).connect(bus.inputs[name]);
+    ducker.connect(sends[name]).connect(bus.inputs[name]);
   }
   return {
     input,
+    output: ducker,
+    duck(time: number, amount: number) { scheduleDuck(ducker.gain, time, amount); },
     setVolume(value: number) { smooth(input.gain, limit(value, 0, 1), ctx); },
     setSends(values: FxSendLevels, returnLevel = 1) {
       for (const name of Object.keys(sends) as EffectName[]) smooth(sends[name].gain, limit(values[name], 0, 1) * limit(returnLevel, 0, 1), ctx);
     },
     dispose() {
       input.disconnect();
+      ducker.disconnect();
       Object.values(sends).forEach(node => node.disconnect());
     },
   };

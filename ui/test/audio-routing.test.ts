@@ -48,8 +48,9 @@ test('synth and drums share one protected destination and independent parallel F
     const synth = createAudioLane('synth'), drums = createAudioLane('drums');
     const ctx = getAudioContext() as unknown as Context;
     assert.equal(Context.instances, 1);
-    const master = (synth.input as unknown as Node).connections[0];
-    assert.equal((drums.input as unknown as Node).connections[0], master);
+    const master = (synth.output as unknown as Node).connections[0];
+    assert.deepEqual((synth.input as unknown as Node).connections, [synth.output], 'lane volume feeds the ducker and nothing else');
+    assert.equal((drums.output as unknown as Node).connections[0], master);
     assert.equal(master.gain.value, MASTER_LEVEL * 0.8);
     const destinationInputs = ctx.nodes.filter(node => node.connections.includes(ctx.destination));
     assert.equal(destinationInputs.length, 1, 'only the final safety shaper reaches the destination');
@@ -57,12 +58,15 @@ test('synth and drums share one protected destination and independent parallel F
     assert.equal(master.connections[0].ratio.value, 20, 'master has a limiter');
     assert.ok(master.connections[0].threshold.value >= -3, 'the limiter only catches peaks, so drums do not duck each other');
     assert.equal(master.connections.length, 1, 'no dry bypass around limiter');
-    assert.equal((synth.input as unknown as Node).connections.length, 5, 'dry plus four parallel sends');
+    assert.equal((synth.output as unknown as Node).connections.length, 5, 'dry plus four parallel sends');
+    synth.duck(0, 0.5);
+    assert.equal((synth.output as unknown as Node).gain.value, 1, 'a duck dips and then returns to full level');
+    assert.equal((drums.output as unknown as Node).gain.value, 1);
 
     synth.setSends({ reverb: 0.1, delay: 0.2, drive: 0.3, phaser: 0.4 }, 0.5);
     drums.setSends({ reverb: 0.8, delay: 0.7, drive: 0.6, phaser: 0.5 }, 1);
-    const synthSends = (synth.input as unknown as Node).connections.slice(1);
-    const drumSends = (drums.input as unknown as Node).connections.slice(1);
+    const synthSends = (synth.output as unknown as Node).connections.slice(1);
+    const drumSends = (drums.output as unknown as Node).connections.slice(1);
     assert.deepEqual(synthSends.map(node => node.gain.value), [0.05, 0.1, 0.15, 0.2]);
     assert.deepEqual(drumSends.map(node => node.gain.value), [0.8, 0.7, 0.6, 0.5]);
     const loop: EffectsLoopState = {
@@ -77,7 +81,7 @@ test('synth and drums share one protected destination and independent parallel F
     assert.ok(ctx.nodes.some(node => node.gain.value === 0.75), 'phaser feedback safely bounded');
     assert.ok(ctx.nodes.some(node => node.frequency.value === 400 * Math.pow(40, 0.25)), 'drive tone is connected and controlled');
     assert.ok(ctx.nodes.some(node => node.buffer), 'reverb receives an impulse');
-    const effectReturns = ctx.nodes.filter(node => node !== synth.input && node !== drums.input && node.connections.includes(master));
+    const effectReturns = ctx.nodes.filter(node => node !== synth.output && node !== drums.output && node.connections.includes(master));
     assert.deepEqual(effectReturns.map(node => node.gain.value), [0.7, 0.6]);
     const oldReverbs = ctx.nodes.filter(node => node.buffer);
     const oldDrives = ctx.nodes.filter(node => node.curve && node !== destinationInputs[0]);

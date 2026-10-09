@@ -201,6 +201,7 @@ export default function SynthControls({
   const filterEnvelope = parameters.filterEnvelope ?? DEFAULTS.filterEnvelope!;
   const velocity = parameters.velocity ?? DEFAULTS.velocity!;
   const fm = parameters.fm ?? DEFAULTS.fm!;
+  const unison = parameters.unison ?? DEFAULTS.unison!;
   const isFm = parameters.engine === 'fm';
 
   const updateOscillator2 = (updates: Partial<NonNullable<SynthParameters['oscillator2']>>) => {
@@ -636,6 +637,33 @@ export default function SynthControls({
                 />
               </div>
             </div>
+            <div className="synth-column" data-tab="osc">
+              <h3>UNISON</h3>
+              <div className="synth-column-controls">
+                <Knob
+                  label="Voices"
+                  value={unison.voices}
+                  min={1}
+                  max={5}
+                  step={1}
+                  displayValue={unison.voices === 1 ? 'Off' : `${unison.voices}`}
+                  onChange={(v) => onParameterChange({ unison: { ...unison, voices: Math.round(v) } })}
+                  tooltip="Detuned copies of the oscillators stacked on every note - more is thicker"
+                />
+                <Knob
+                  label="Uni Det"
+                  value={unison.detune}
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  displayValue={`${Math.round(unison.detune * 50)}c`}
+                  onChange={(v) => onParameterChange({ unison: { ...unison, detune: v } })}
+                  parseInputValue={(input) => { const cents = parseNumber(input); return cents === null ? null : cents / 50; }}
+                  disabled={unison.voices === 1}
+                  tooltip="How far apart the unison copies are tuned, in cents each way"
+                />
+              </div>
+            </div>
           </>
         )}
 
@@ -653,6 +681,16 @@ export default function SynthControls({
                 <option value="highpass">HP</option>
                 <option value="bandpass">BP</option>
                 <option value="notch">NT</option>
+              </select>
+              <select
+                className="synth-filter-type-select"
+                aria-label="Filter slope"
+                value={parameters.filter.slope === 24 ? 24 : 12}
+                onChange={(e) => updateFilter({ slope: Number(e.target.value) })}
+                title="12 dB per octave is gentler; 24 dB is the steeper, darker classic-synth filter"
+              >
+                <option value={12}>12 dB</option>
+                <option value={24}>24 dB</option>
               </select>
             </div>
             <Knob
@@ -1168,6 +1206,23 @@ export default function SynthControls({
               parseInputValue={parsePercent(0, 1)}
               color="#3b82f6"
               tooltip={TOOLTIPS.fxSend}
+            />
+          </div>
+        </div>
+
+        <div className="synth-column" data-tab="sends">
+          <h3>KICK DUCK</h3>
+          <div className="synth-column-controls">
+            <Knob
+              label="Duck"
+              value={parameters.duck ?? 0}
+              min={0}
+              max={1}
+              step={0.01}
+              displayValue={`${Math.round((parameters.duck ?? 0) * 100)}%`}
+              onChange={(v) => onParameterChange({ duck: v })}
+              parseInputValue={parsePercent(0, 1)}
+              tooltip="Pulls this lane down each time the kick hits and lets it swell back, so the kick cuts through"
             />
           </div>
         </div>

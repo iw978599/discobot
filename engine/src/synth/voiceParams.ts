@@ -15,6 +15,8 @@ export interface VoiceParams {
   osc2Level: number;
   subLevel: number;
   noiseLevel: number;
+  unisonVoices: number;
+  unisonDetune: number;
   fmAlgorithm: number;
   fmRatio: number;
   fmIndex: number;
@@ -26,6 +28,7 @@ export interface VoiceParams {
   filterEnvAmount: number;
   filterKeyTracking: number;
   filterDrive: number;
+  filterSlope: number;
   attack: number;
   decay: number;
   sustain: number;
@@ -69,9 +72,11 @@ export function createDefaultSynthParameters(): SynthParameters {
     oscillator: { type: 'sine', detune: 0, pulseWidth: 0.5 },
     oscillator2: { enabled: false, type: 'sawtooth', semitones: 0, detune: 7, level: 0.7 },
     mixer: { sub: 0, noise: 0 },
+    unison: { voices: 1, detune: 0.3 },
+    duck: 0,
     lfo1: { enabled: false, target: 'pitch', waveform: 'sine', rate: 5, depth: 0.2, sync: false, retrigger: true },
     lfo2: { enabled: false, target: 'filter', waveform: 'triangle', rate: 0.8, depth: 0.25, sync: false, retrigger: true },
-    filter: { frequency: 20000, q: 1, type: 'lowpass', envAmount: 0, keyTracking: 0, drive: 0 },
+    filter: { frequency: 20000, q: 1, type: 'lowpass', envAmount: 0, keyTracking: 0, drive: 0, slope: 12 },
     envelope: { attack: 0.01, decay: 0.1, sustain: 0.7, release: 0.3 },
     filterEnvelope: { attack: 0.005, decay: 0.25, sustain: 0.2, release: 0.3 },
     velocity: { amp: 1, filter: 0 },
@@ -96,15 +101,18 @@ export function toVoiceParams(p: SynthParameters, bpm = 120): VoiceParams {
   const filterEnvelope = p.filterEnvelope ?? d.filterEnvelope!;
   const velocity = p.velocity ?? d.velocity!;
   const fm = p.fm ?? d.fm!;
+  const unison = p.unison ?? d.unison!;
   const lfoRate = (lfo: SynthParameters['lfo1']) => lfo.sync ? syncedLfoHz(lfo.rate, bpm) : lfo.rate;
   return {
     engine: p.engine ?? 'subtractive', voiceMode: p.voiceMode ?? 'poly',
     oscType: p.oscillator.type, detune: p.oscillator.detune, pulseWidth: p.oscillator.pulseWidth ?? 0.5,
     osc2Enabled: osc2.enabled, osc2Type: osc2.type, osc2Semitones: osc2.semitones, osc2Detune: osc2.detune, osc2Level: osc2.level,
     subLevel: mixer.sub, noiseLevel: mixer.noise,
+    unisonVoices: unison.voices, unisonDetune: unison.detune,
     fmAlgorithm: fm.algorithm, fmRatio: fm.ratio, fmIndex: fm.index, fmDecay: fm.decay, fmFeedback: fm.feedback,
     filterType: p.filter.type, filterFreq: p.filter.frequency, filterQ: p.filter.q,
     filterEnvAmount: p.filter.envAmount ?? 0, filterKeyTracking: p.filter.keyTracking ?? 0, filterDrive: p.filter.drive ?? 0,
+    filterSlope: p.filter.slope ?? 12,
     attack: p.envelope.attack, decay: p.envelope.decay, sustain: p.envelope.sustain, release: p.envelope.release,
     filterAttack: filterEnvelope.attack, filterDecay: filterEnvelope.decay,
     filterSustain: filterEnvelope.sustain, filterRelease: filterEnvelope.release,

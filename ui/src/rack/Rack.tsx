@@ -32,6 +32,15 @@ export default function Rack({ studio }: { studio: Studio }) {
           onOpenSettings={() => setSettingsOpen(true)}
           onOpenManager={() => { void studio.refreshSavedPatterns(); setManagerOpen(true); }}
         />
+        {studio.changedElsewhere && (
+          <div role="alert" className="app-alert">
+            <span>This project was changed in another tab. Edits made here are not being saved.</span>
+            <span className="app-alert-actions">
+              <button className="rack-btn" onClick={studio.loadOtherTabVersion}>Load the other tab's version</button>
+              <button className="rack-btn" onClick={studio.keepThisTabVersion}>Keep this tab's version</button>
+            </span>
+          </div>
+        )}
         {studio.storageError && (
           <div role="alert" className="app-alert">
             <span>{studio.storageError}</span>

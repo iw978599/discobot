@@ -28,7 +28,9 @@ const PROJECT_FILE_FORMAT = 'discobot-project';
 const STORAGE_KEY = 'discobot_browser_project_v1';
 // Bumped when synth parameters gain fields. An older project is upgraded with defaults,
 // which is a migration and not damage worth warning about.
-const SCHEMA = 2;
+const SCHEMA = 3;
+// Edits are written this long after the last one, so dragging a knob is one write, not hundreds.
+const SAVE_DELAY_MS = 300;
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
 
 function merge<T>(base: T, patch: Partial<T>): T {
@@ -47,6 +49,10 @@ export class LocalProjectService {
   private listeners = new Set<Listener>();
   private storageIssue: string | null = null;
   private restored = false;
+  private saveTimer: ReturnType<typeof setTimeout> | null = null;
+  private unsaved = false;
+  // Set when another tab has written the project: this tab stops saving until the user chooses a version.
+  private paused = false;
 
   initialize(defaults: Defaults) {
     if (this.state) return;
@@ -67,6 +73,16 @@ export class LocalProjectService {
       this.storageIssue = 'Browser storage is unavailable or damaged. Edits work, but may not survive reload.';
     }
     if (!this.state.synths.some(s => s.synthId === 1)) this.state.synths.unshift(this.createSynth(1));
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('pagehide', () => { this.flush(); });
+      document.addEventListener('visibilitychange', () => { if (document.hidden) this.flush(); });
+      // The storage event only fires in tabs other than the one that wrote.
+      window.addEventListener('storage', (event) => {
+        if (event.key !== STORAGE_KEY || this.paused) return;
+        this.paused = true;
+        this.emit('externalChange', {});
+      });
+    }
   }
 
   // Rebuilds a project from untrusted data: browser storage or an imported file.
@@ -140,7 +156,7 @@ export class LocalProjectService {
     this.state = restored.state;
     if (!this.state.synths.some(s => s.synthId === 1)) this.state.synths.unshift(this.createSynth(1));
     this.state.synths.sort((a, b) => a.synthId - b.synthId);
-    if (!this.persist()) {
+    if (!this.write()) {
       this.state = previous;
       return { ok: false, error: 'The project is too large for this browser\'s storage.' };
     }
@@ -177,9 +193,36 @@ export class LocalProjectService {
     for (const listener of this.listeners) listener({ type, data: clone(data) });
   }
 
+  // Marks the project as changed; the write follows once edits pause.
   private persist() {
+    this.unsaved = true;
+    if (this.saveTimer !== null) clearTimeout(this.saveTimer);
+    this.saveTimer = setTimeout(() => { this.flush(); }, SAVE_DELAY_MS);
+  }
+
+  // Writes any pending edits now. Called when the page is hidden or closed, and by anything
+  // that needs to know the write succeeded.
+  flush(): boolean {
+    if (this.saveTimer !== null) clearTimeout(this.saveTimer);
+    this.saveTimer = null;
+    if (!this.unsaved || this.paused) return true;
+    return this.write();
+  }
+
+  // Another tab changed the stored project. Keep this tab's version: save it over theirs and carry on.
+  resumeSaving(): boolean {
+    this.paused = false;
+    return this.write();
+  }
+
+  get savingPaused() { return this.paused; }
+
+  private write() {
+    if (this.saveTimer !== null) clearTimeout(this.saveTimer);
+    this.saveTimer = null;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
+      this.unsaved = false;
       return true;
     } catch {
       this.storageIssue = 'Unable to save to browser storage. Free space or allow storage for this site.';
@@ -233,7 +276,7 @@ export class LocalProjectService {
       if (method === 'DELETE') {
         const previous = state.savedPatterns;
         state.savedPatterns = state.savedPatterns.filter(p => p !== saved);
-        if (!this.persist()) {
+        if (!this.write()) {
           state.savedPatterns = previous;
           return respond({ error: 'Storage unavailable' }, 507);
         }
@@ -250,7 +293,7 @@ export class LocalProjectService {
       const saved = sanitizeSaved({ ...clone(body), id: existing?.id || crypto.randomUUID(), name, createdAt: existing?.createdAt || now, updatedAt: now }, this.defaults!)!;
       const previous = state.savedPatterns;
       state.savedPatterns = [...previous.filter(p => p.id !== saved.id), saved];
-      if (!this.persist()) {
+      if (!this.write()) {
         state.savedPatterns = previous;
         return respond({ error: 'Storage unavailable' }, 507);
       }

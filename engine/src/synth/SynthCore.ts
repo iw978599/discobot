@@ -19,8 +19,9 @@ interface Voice {
   targetFrequency: number;
   velocity: number;
   keyOctaves: number;
-  phase1: number;
-  phase2: number;
+  // one phase per unison copy; a single voice only uses the first
+  phase1: Float64Array;
+  phase2: Float64Array;
   phaseSub: number;
   fmPhase: [number, number, number, number];
   fmFeedback: number;
@@ -29,6 +30,7 @@ interface Voice {
   amp: Adsr;
   filterEnv: Adsr;
   filter: Svf;
+  filter2: Svf;
   previousInput: number;
   last: number;
   transition: number;
@@ -41,6 +43,9 @@ interface Voice {
 const TWO_PI = 2 * Math.PI;
 const VOICE_LEVEL = 0.18;
 const MIDDLE_C = 261.6256;
+const MAX_UNISON = 5;
+// The second stage of the 24 dB filter is not resonant; the first stage supplies the peak.
+const SECOND_STAGE_DAMPING = Math.SQRT2;
 
 // The one synth voice implementation. The AudioWorklet runs it block by block for live
 // playback and the WAV exporter runs it offline, so both produce the same audio.
@@ -53,6 +58,7 @@ export class SynthCore {
     attack: 0, decay: 0, sustain: 0.7, release: 0,
     filterAttack: 0, filterDecay: 0, filterSustain: 0.2, filterRelease: 0,
     glide: 1, osc2Ratio: 1, mixScale: 1, fmDecay: 0, driveGain: 1, driveMakeup: 1,
+    unisonCount: 1, unisonRatios: new Float64Array(MAX_UNISON).fill(1), twoStage: false,
   };
   private pending: Array<NoteOnMessage & { frame: number }> = [];
   private globalLfoPhase: [number, number] = [0, 0];
@@ -67,8 +73,9 @@ export class SynthCore {
     this.transitionLength = Math.ceil(sampleRate * 0.005);
     this.voices = Array.from({ length: voiceCount }, () => ({
       active: false, note: '', id: undefined, frequency: 440, targetFrequency: 440, velocity: 0, keyOctaves: 0,
-      phase1: 0, phase2: 0, phaseSub: 0, fmPhase: [0, 0, 0, 0], fmFeedback: 0, fmEnv: 0, lfoPhase: [0, 0],
-      amp: new Adsr(), filterEnv: new Adsr(), filter: new Svf(), previousInput: 0,
+      phase1: new Float64Array(MAX_UNISON), phase2: new Float64Array(MAX_UNISON), phaseSub: 0,
+      fmPhase: [0, 0, 0, 0], fmFeedback: 0, fmEnv: 0, lfoPhase: [0, 0],
+      amp: new Adsr(), filterEnv: new Adsr(), filter: new Svf(), filter2: new Svf(), previousInput: 0,
       last: 0, transition: 0, transitionSamples: 0, age: 0, remaining: Infinity, releaseOverride: 0,
     }));
     this.refreshDerived();
@@ -80,7 +87,8 @@ export class SynthCore {
   setParams(update: Partial<Record<keyof VoiceParams, unknown>> | null | undefined): void {
     if (!update) return;
     const p = this.params as unknown as Record<string, unknown>;
-    const before = `${p.oscType}|${p.filterType}|${p.engine}|${p.osc2Type}`;
+    const signature = () => `${p.oscType}|${p.filterType}|${p.engine}|${p.osc2Type}|${p.filterSlope}|${p.unisonVoices}`;
+    const before = signature();
     for (const [key, value] of Object.entries(update)) {
       if (!(key in p)) continue;
       const current = p[key];
@@ -90,8 +98,8 @@ export class SynthCore {
         if (typeof value === 'boolean') p[key] = value;
       } else if (typeof value === 'string') p[key] = value;
     }
-    if (before !== `${p.oscType}|${p.filterType}|${p.engine}|${p.osc2Type}`) {
-      // Switching waveform, filter mode or engine jumps the signal; crossfade from the last sample.
+    if (before !== signature()) {
+      // Switching waveform, filter mode, unison or engine jumps the signal; crossfade from the last sample.
       for (const voice of this.voices) {
         voice.transition = voice.last;
         voice.transitionSamples = this.transitionLength;
@@ -115,7 +123,15 @@ export class SynthCore {
     d.osc2Ratio = 2 ** (clamp(p.osc2Semitones, -36, 36, 0) / 12 + clamp(p.osc2Detune, -100, 100, 0) / 1200);
     const osc2 = p.osc2Enabled ? clamp(p.osc2Level, 0, 1) : 0;
     const sub = clamp(p.subLevel, 0, 1), noise = clamp(p.noiseLevel, 0, 1);
-    d.mixScale = 1 / Math.sqrt(1 + osc2 * osc2 + sub * sub + noise * noise);
+    d.unisonCount = Math.round(clamp(p.unisonVoices, 1, MAX_UNISON, 1));
+    // Copies are spread evenly across plus and minus the detune amount, up to 50 cents each way.
+    const spreadCents = clamp(p.unisonDetune, 0, 1) * 50;
+    for (let u = 0; u < MAX_UNISON; u++) {
+      const position = d.unisonCount > 1 ? (u / (d.unisonCount - 1)) * 2 - 1 : 0;
+      d.unisonRatios[u] = 2 ** (position * spreadCents / 1200);
+    }
+    d.mixScale = 1 / Math.sqrt(d.unisonCount * (1 + osc2 * osc2) + sub * sub + noise * noise);
+    d.twoStage = p.filterSlope >= 24 && (p.filterType === 'lowpass' || p.filterType === 'highpass' || p.filterType === 'bandpass');
     d.fmDecay = approachCoefficient(clamp(p.fmDecay, 0.01, 10, 0.6), sr, 4.6);
     const drive = clamp(p.filterDrive, 0, 1);
     d.driveGain = 1 + drive * 5;
@@ -166,10 +182,16 @@ export class SynthCore {
 
   private trigger(voice: Voice, message: NoteOnMessage, frequency: number, startFrequency: number, velocity: number, remaining: number, keyOctaves: number): void {
     if (!voice.active) {
-      voice.phase1 = voice.phase2 = voice.phaseSub = 0;
+      // Unison copies start out of phase with each other, or the note would open with a spike.
+      for (let u = 0; u < MAX_UNISON; u++) {
+        voice.phase1[u] = (u * 0.37) % 1;
+        voice.phase2[u] = (u * 0.61) % 1;
+      }
+      voice.phaseSub = 0;
       voice.fmPhase = [0, 0, 0, 0];
       voice.fmFeedback = 0;
       voice.filter.reset();
+      voice.filter2.reset();
       voice.previousInput = 0;
       voice.amp.reset();
       voice.filterEnv.reset();
@@ -291,12 +313,17 @@ export class SynthCore {
               + depth * (Math.sin(TWO_PI * ph[1]) + opD));
           }
         } else {
-          v.phase1 = (v.phase1 + step) % 1;
-          source = oscillator(p.oscType, v.phase1, step, clamp(s.pulseWidth + pulseMod, 0.05, 0.95, 0.5));
-          if (osc2Level > 0) {
-            const step2 = clamp(step * d.osc2Ratio, 0.000001, 0.45);
-            v.phase2 = (v.phase2 + step2) % 1;
-            source += oscillator(p.osc2Type, v.phase2, step2) * osc2Level;
+          const pulseWidth = clamp(s.pulseWidth + pulseMod, 0.05, 0.95, 0.5);
+          source = 0;
+          for (let u = 0; u < d.unisonCount; u++) {
+            const step1 = clamp(step * d.unisonRatios[u], 0.000001, 0.45);
+            v.phase1[u] = (v.phase1[u] + step1) % 1;
+            source += oscillator(p.oscType, v.phase1[u], step1, pulseWidth);
+            if (osc2Level > 0) {
+              const step2 = clamp(step1 * d.osc2Ratio, 0.000001, 0.45);
+              v.phase2[u] = (v.phase2[u] + step2) % 1;
+              source += oscillator(p.osc2Type, v.phase2[u], step2) * osc2Level;
+            }
           }
           if (subLevel > 0) {
             v.phaseSub = (v.phaseSub + step * 0.5) % 1;
@@ -312,12 +339,19 @@ export class SynthCore {
         // Run the filter twice per sample: cheap 2x oversampling keeps resonance clean near Nyquist.
         const g = svfCoefficient(clamp(s.filterFreq * 2 ** octaves, 20, maxCutoff, 1000), sr * 2);
         const damping = 1 / s.filterQ;
-        v.filter.tick((v.previousInput + source) * 0.5, g, damping);
+        const midpoint = (v.previousInput + source) * 0.5;
+        v.filter.tick(midpoint, g, damping);
+        if (d.twoStage) v.filter2.tick(v.filter.output(p.filterType, midpoint, damping), g, SECOND_STAGE_DAMPING);
         v.filter.tick(source, g, damping);
         v.previousInput = source;
+        let filtered = v.filter.output(p.filterType, source, damping);
+        if (d.twoStage) {
+          v.filter2.tick(filtered, g, SECOND_STAGE_DAMPING);
+          filtered = v.filter2.output(p.filterType, filtered, SECOND_STAGE_DAMPING);
+        }
 
         const velocityGain = 1 - velocityAmp * (1 - v.velocity);
-        let value = v.filter.output(p.filterType, source, damping) * amp * ampMod * velocityGain * s.gain * VOICE_LEVEL;
+        let value = filtered * amp * ampMod * velocityGain * s.gain * VOICE_LEVEL;
         if (v.transitionSamples > 0) {
           const blend = v.transitionSamples / this.transitionLength;
           value = value * (1 - blend) + v.transition * blend;

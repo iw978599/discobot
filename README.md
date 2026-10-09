@@ -66,7 +66,10 @@ bytes and metadata are stored in **IndexedDB**, then decoded locally for playbac
 Nothing is uploaded. Storage is specific to the browser profile and origin:
 localhost ports and the deployed site do not share projects. Clearing site data,
 private browsing or storage quotas can remove/prevent persistence. Storage errors
-are reported in the UI; local storage is not a backup.
+are reported in the UI; local storage is not a backup. Edits are saved a moment
+after you stop changing things, and immediately when the tab is closed or hidden.
+If the same project is changed in a second tab, the first tab stops saving and
+asks which version to keep, so neither silently overwrites the other.
 
 **Export Project** downloads the whole project as one JSON file: lanes, drums,
 effects, saved patterns and your synth presets. **Import Project** replaces the
@@ -108,6 +111,10 @@ while online.
   with drive, separate exponential amp and filter envelopes, key tracking,
   velocity-to-filter accent, two LFOs (retriggered or free-running) and a
   four-operator FM mode. Mono mode glides between tied (slide) steps.
+- Unison stacks up to five detuned copies of the oscillators on each note. The
+  filter has a 12 dB and a steeper 24 dB per octave slope. Each synth lane has a
+  Duck amount that pulls it down on every kick and lets it swell back
+  (sidechain-style pumping); it is applied the same way in WAV export.
 - One drum core (`engine/src/drums/DrumCore.ts`) runs in the worklet and in
   export. Voices are mixed linearly with no per-hit or bus saturation, so drums
   that land on the same step keep the level their volume and velocity ask for.

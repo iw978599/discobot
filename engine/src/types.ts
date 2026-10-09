@@ -84,6 +84,13 @@ export interface SynthParameters {
     amp: number;
     filter: number;
   };
+  // several detuned copies of the oscillators per note; 1 voice is off
+  unison?: {
+    voices: number;
+    detune: number;
+  };
+  // how far a kick drum pulls this lane's level down, 0 to 1
+  duck?: number;
   fm?: {
     algorithm: number;
     ratio: number;
@@ -116,6 +123,8 @@ export interface SynthParameters {
     envAmount?: number;
     keyTracking?: number;
     drive?: number;
+    // 12 or 24 dB per octave; 24 applies to low-pass, high-pass and band-pass
+    slope?: number;
   };
   envelope: SynthEnvelope;
   fxSends: FxSendLevels;
