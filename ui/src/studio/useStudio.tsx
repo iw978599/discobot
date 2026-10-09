@@ -928,6 +928,8 @@ export function useStudio() {
       }
       case 'sceneChanged': {
         const { scenes: nextScenes, song: nextSong, currentSceneId: nextSceneId, synths: lanePatterns, drumState: nextDrums } = message.data;
+        // Each guest takes on the settings the scene holds for it.
+        if (message.data.guests) setGuests(message.data.guests);
         const switched = nextSceneId !== currentSceneIdRef.current;
         const nextLanes = synthsRef.current.map(s => {
           const pattern = lanePatterns.find((lane: { synthId: number }) => lane.synthId === s.id)?.pattern;

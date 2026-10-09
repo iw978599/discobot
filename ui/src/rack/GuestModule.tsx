@@ -30,7 +30,22 @@ export default function GuestModule({ studio, guest }: { studio: Studio; guest: 
   const playerRef = useRef<GuestPlayer | null>(null);
   const guestRef = useRef(guest);
   guestRef.current = guest;
+  // The guest's settings as last agreed with it: what it last reported, or what it was last sent.
   const savedState = useRef(JSON.stringify(guest.state ?? null));
+  // Goes up each time settings are sent to the guest, so an answer to an earlier question, about
+  // settings it no longer has, is not saved over the new ones.
+  const epoch = useRef(0);
+  const link = useRef<{ ready: boolean; send: (message: Record<string, unknown>) => void } | null>(null);
+
+  // Settings that change from outside the guest, by opening another scene or a song moving on to
+  // one, by sync or by restoring a version, are handed to it.
+  const stateText = JSON.stringify(guest.state ?? null);
+  useEffect(() => {
+    if (stateText === savedState.current) return;
+    savedState.current = stateText;
+    epoch.current += 1;
+    if (link.current?.ready && guestRef.current.state !== undefined) link.current.send({ type: 'setState', state: guestRef.current.state });
+  }, [stateText]);
 
   const level = guest.muted ? 0 : guest.volume;
   useEffect(() => { playerRef.current?.setVolume(level); }, [level]);
@@ -44,6 +59,7 @@ export default function GuestModule({ studio, guest }: { studio: Studio; guest: 
     };
     const sendTransport = (transport: GuestTransport) => send({ type: 'transport', ...transport });
     let ready = false;
+    link.current = { ready: false, send };
     let latencyMs = GUEST_LATENCY_MS;
     let playingSince = 0, blocksAtStart = 0;
     // "hello" may be sent again: it is how the guest learns it must play earlier.
@@ -56,6 +72,7 @@ export default function GuestModule({ studio, guest }: { studio: Studio; guest: 
       if (!data || typeof data !== 'object' || data.discobotGuest !== GUEST_PROTOCOL) return;
       if (data.type === 'ready') {
         ready = true;
+        link.current = { ready: true, send };
         setStatus('ready');
         const told = typeof data.name === 'string' ? data.name.trim().slice(0, 60) : '';
         setReported(told);
@@ -66,13 +83,15 @@ export default function GuestModule({ studio, guest }: { studio: Studio; guest: 
         send({ type: 'audio', on: true });
         sendTransport(guestLink.transport());
       } else if (data.type === 'state') {
+        // An answer to a question asked before the guest was last given settings describes the old ones.
+        if (data.id !== `ask:${epoch.current}`) return;
         let text: string;
         try { text = JSON.stringify(data.state ?? null); } catch { return; }
         if (text === savedState.current) return;
         savedState.current = text;
         void studio.handleGuestChange(id, { state: data.state });
       } else if (data.type === 'stateChanged') {
-        send({ type: 'getState', id: 'changed' });
+        send({ type: 'getState', id: `ask:${epoch.current}` });
       } else if (data.type === 'audio') {
         if (!playerRef.current) {
           playerRef.current = createGuestPlayer((next) => { latencyMs = next; hello(); }, latencyMs);
@@ -98,7 +117,7 @@ export default function GuestModule({ studio, guest }: { studio: Studio; guest: 
       sendTransport(transport);
     });
     // The guest cannot tell Discobot every time a knob moves, so its settings are asked for now and then.
-    const poll = setInterval(() => { if (ready) send({ type: 'getState', id: 'poll' }); }, STATE_POLL_MS);
+    const poll = setInterval(() => { if (ready) send({ type: 'getState', id: `ask:${epoch.current}` }); }, STATE_POLL_MS);
     const unanswered = setTimeout(() => { if (!ready) setStatus('unanswered'); }, ANSWER_WAIT_MS);
     // What is shown about the sound is refreshed a couple of times a second, not per block.
     const show = setInterval(() => {
@@ -116,6 +135,7 @@ export default function GuestModule({ studio, guest }: { studio: Studio; guest: 
       clearInterval(show);
       clearTimeout(unanswered);
       guestLink.disconnect(id);
+      link.current = null;
       playerRef.current?.dispose();
       playerRef.current = null;
     };
@@ -198,7 +218,7 @@ export default function GuestModule({ studio, guest }: { studio: Studio; guest: 
             allow="autoplay"
             referrerPolicy="no-referrer"
           />
-          <p className="rack-hint">A guest plays live and needs a connection to its own site. Download WAV and Song WAV record it by playing through once; it is not in Loop WAV, stems or MIDI.</p>
+          <p className="rack-hint">A guest plays live and needs a connection to its own site. Its settings are kept per scene, like each lane's notes. Download WAV and Song WAV record it by playing through once; it is not in Loop WAV, stems or MIDI.</p>
         </>
       )}
     </section>

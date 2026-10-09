@@ -145,6 +145,12 @@ next time the project opens, on any device.
 - `setState` must not write to the guest's own saved presets or storage. It
   only sets what is on screen.
 - Settings come back from old projects. Tolerate missing and unknown fields.
+- **Settings are kept per scene.** A Discobot project is made of scenes (verse,
+  chorus, break), and each remembers how the guest was set. `setState` therefore
+  arrives often: whenever the user opens another scene, and **during playback**
+  each time a song moves to its next scene, a little before the bar line. Apply
+  it without stopping or restarting, and without a click or a gap, so the
+  change lands on the next bar.
 
 ## Starting sound in a frame
 
@@ -167,7 +173,6 @@ message; one click inside the frame fixes it for the session.
 - **Key and scale.** Discobot has no key setting to send.
 - **Notes.** The host does not send notes to a guest; a guest makes its own
   music in time with the host.
-- **Per-scene settings.** One set of settings is saved per project.
 
 ## Trying it
 

@@ -191,6 +191,8 @@ export class LocalProjectService {
       lanes: Object.fromEntries(state.synths.map(synth => [synth.synthId, clone(synth.pattern.steps)])),
       ...(state.synths.some(synth => (synth.pattern.bars ?? 1) > 1)
         ? { laneBars: Object.fromEntries(state.synths.filter(synth => (synth.pattern.bars ?? 1) > 1).map(synth => [synth.synthId, synth.pattern.bars!])) } : {}),
+      ...(state.guests?.some(guest => guest.state !== undefined)
+        ? { guests: Object.fromEntries(state.guests.filter(guest => guest.state !== undefined).map(guest => [guest.id, clone(guest.state)])) } : {}),
       drums: Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => {
         const { steps, stepVelocities, stepProbabilities, stepRatchets } = state.drumState[instrument];
         return [instrument, clone({
@@ -229,6 +231,11 @@ export class LocalProjectService {
       const bars = laneBars(synth.pattern.steps.length, scene.laneBars?.[synth.synthId]);
       if (bars > 1) synth.pattern.bars = bars; else delete synth.pattern.bars;
     }
+    // A guest takes the settings this scene holds for it. A scene from before the guest was added
+    // holds none, and the guest carries on as it is.
+    if (state.guests && scene.guests) {
+      state.guests = state.guests.map(guest => (guest.id in scene.guests! ? { ...guest, state: clone(scene.guests![guest.id]) } : guest));
+    }
     for (const instrument of DRUM_INSTRUMENTS) {
       const track = state.drumState[instrument], pattern = scene.drums[instrument];
       track.steps = clone(pattern.steps);
@@ -245,6 +252,7 @@ export class LocalProjectService {
     return {
       scenes: state.scenes, song: state.song, currentSceneId: state.currentSceneId,
       synths: state.synths.map(synth => ({ synthId: synth.synthId, pattern: synth.pattern })), drumState: state.drumState,
+      guests: state.guests ?? [],
     };
   }
 
@@ -915,6 +923,14 @@ export class LocalProjectService {
       state.guests = method === 'DELETE'
         ? guests.filter(guest => guest.id !== guestMatch[1])
         : guests.map(guest => (guest.id === guestMatch[1] ? patchGuest(guest, body) : guest));
+      if (method === 'DELETE') {
+        // Its settings go from every scene too.
+        for (const scene of state.scenes) {
+          if (!scene.guests) continue;
+          delete scene.guests[guestMatch[1]];
+          if (Object.keys(scene.guests).length === 0) delete scene.guests;
+        }
+      }
       return update('guestsChanged', { guests: state.guests });
     }
     if (path === '/drum/master-volume') {

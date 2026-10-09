@@ -109,3 +109,58 @@ test('late audio raises the latency by what was missing, and the transport waits
   guestLink.disconnect('b');
   assert.equal(guestLink.startLead(), 0);
 });
+
+test('each scene keeps its own settings for a guest', async () => {
+  const { LocalProjectService } = await import('../src/services/localService.ts');
+  const { createMemoryLibrary } = await import('../src/services/projectLibrary.ts');
+  const { createDefaultSynthParameters } = await import('../../engine/src/synth/voiceParams.ts');
+  const { DRUM_INSTRUMENTS } = await import('../src/services/drumKits.ts');
+  const { sanitizeSceneGuests } = await import('../src/services/guests.ts');
+  const storage = new Map<string, string>();
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => { storage.set(key, value); } } });
+  const drums = Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => [instrument, { steps: Array(16).fill(false), muted: false, solo: false, settings: { volume: 0.8, tone: 0.5, extra: 0.5 } }]));
+  const service = new LocalProjectService();
+  service.initialize({
+    synthParams: createDefaultSynthParameters(), drumState: drums as never, drumFx: { sends: { reverb: .2, delay: .1, drive: .1, phaser: 0 }, returnLevel: .7 },
+    effectsLoop: { enabled: true, returns: { synth: .8, drums: .7 }, drive: { enabled: true, amount: .2, tone: .6 }, phaser: { enabled: false, rate: .5, depth: .4, feedback: .2, mix: .2 }, delay: { enabled: true, time: .2, feedback: .3, mix: .3 }, reverb: { enabled: true, decay: 2, mix: .3 } },
+  });
+  await service.openLibrary(createMemoryLibrary());
+  const post = (path: string, body: unknown, method = 'POST') => service.request(path, { method, body: JSON.stringify(body) });
+  const guests = () => service.snapshot().guests as Array<{ id: string; state?: unknown }>;
+
+  await post('/guests', { url: 'https://example.com/choir' });
+  await post('/guests', { url: 'https://example.com/drums' });
+  const [choir, kit] = guests().map(guest => guest.id);
+  const verse = service.snapshot().currentSceneId;
+  await post(`/guests/${choir}`, { state: { vowel: 'a' } }, 'PUT');
+
+  // A second scene starts as a copy, then gets settings of its own.
+  await post('/scenes/create', {});
+  const chorus = service.snapshot().currentSceneId;
+  assert.deepEqual(guests()[0].state, { vowel: 'a' });
+  await post(`/guests/${choir}`, { state: { vowel: 'o' } }, 'PUT');
+  await post(`/guests/${kit}`, { state: { swing: 0.3 } }, 'PUT');
+
+  const selected = await (await post('/scenes/select', { sceneId: verse })).json();
+  assert.deepEqual(selected.guests.map((guest: { state?: unknown }) => guest.state), [{ vowel: 'a' }, { swing: 0.3 }], 'the choir goes back to the verse; the kit, which the verse knows nothing of, stays as it is');
+  await post('/scenes/select', { sceneId: chorus });
+  assert.deepEqual(guests().map(guest => guest.state), [{ vowel: 'o' }, { swing: 0.3 }]);
+
+  const stored = (await (await service.request('/scenes')).json()).scenes as Array<{ id: string; guests?: Record<string, unknown> }>;
+  assert.deepEqual(stored.find(scene => scene.id === verse)!.guests, { [choir]: { vowel: 'a' }, [kit]: { swing: 0.3 } }, 'leaving the verse recorded what both guests were set to there');
+  assert.deepEqual(stored.find(scene => scene.id === chorus)!.guests, { [choir]: { vowel: 'o' }, [kit]: { swing: 0.3 } });
+
+  // It travels in a project file, checked on the way back in.
+  const read = service.readProjectFile(JSON.parse(JSON.stringify(service.exportProject())));
+  assert.ok(read.ok);
+  if (read.ok) assert.deepEqual(read.project.scenes.find(scene => scene.id === verse)!.guests?.[choir], { vowel: 'a' });
+  assert.deepEqual(sanitizeSceneGuests({ [choir]: { a: 1 }, 'not-an-id': { b: 2 }, [kit]: 'x'.repeat(MAX_GUEST_STATE_CHARS + 1) }), { [choir]: { a: 1 } });
+  assert.equal(sanitizeSceneGuests('nope'), undefined);
+  assert.equal(sanitizeSceneGuests({}), undefined);
+
+  // Removing a guest removes its settings from every scene.
+  await post(`/guests/${choir}`, {}, 'DELETE');
+  const after = (await (await service.request('/scenes')).json()).scenes as Array<{ guests?: Record<string, unknown> }>;
+  assert.ok(after.every(scene => !scene.guests || !(choir in scene.guests)));
+  assert.ok(after.every(scene => scene.guests && kit in scene.guests));
+});

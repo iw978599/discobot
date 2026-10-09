@@ -200,3 +200,58 @@ test('a guest whose sound arrives late is still heard, and is then asked to play
   expect(Number(await unit.getAttribute('data-audio-blocks'))).toBeGreaterThan(50);
   await page.getByRole('button', { name: /Stop All/ }).click();
 });
+
+test('a guest\'s settings belong to the scene, and change with it when a song moves on', async ({ page }, testInfo) => {
+  const baseURL = String(testInfo.project.use.baseURL);
+  await menu(page, 'Add Guest Instrument');
+  const dialog = page.getByRole('dialog', { name: 'Add a guest instrument', exact: true });
+  await dialog.getByLabel('Address of the instrument\'s page', { exact: true }).fill(guestAddress(baseURL));
+  await dialog.getByRole('button', { name: 'Add Guest', exact: true }).click();
+  const unit = page.getByRole('region', { name: /^Guest instrument / });
+  await expect(unit).toHaveAttribute('data-status', 'ready');
+  const note = unit.frameLocator('iframe').getByLabel('Note', { exact: true });
+  const sceneGuests = async () => (await stored(page)).scenes.map((scene: { name: string; guests?: Record<string, { note: string }> }) => [scene.name, Object.values(scene.guests ?? {})[0]?.note]);
+
+  // Scene 1 has the guest on G4.
+  await note.selectOption('G4');
+  await expect.poll(async () => (await stored(page)).guests[0].state?.note).toBe('G4');
+
+  // A copy of the scene starts the same, and is then given A4.
+  await page.getByRole('button', { name: '+ Copy', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Scene: Scene 2', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(note).toHaveValue('G4');
+  await note.selectOption('A4');
+  await expect.poll(async () => (await stored(page)).guests[0].state?.note).toBe('A4');
+
+  // Opening a scene puts the guest back to how that scene left it.
+  await page.getByRole('button', { name: 'Scene: Scene 1', exact: true }).click();
+  await expect(note).toHaveValue('G4');
+  await page.getByRole('button', { name: 'Scene: Scene 2', exact: true }).click();
+  await expect(note).toHaveValue('A4');
+  expect(await sceneGuests()).toEqual([['Scene 1', 'G4'], ['Scene 2', 'A4']]);
+
+  // It survives a reload, for both scenes.
+  await page.reload();
+  await expect(unit).toHaveAttribute('data-status', 'ready');
+  await expect(note).toHaveValue('A4');
+  await page.getByRole('button', { name: 'Scene: Scene 1', exact: true }).click();
+  await expect(note).toHaveValue('G4');
+
+  // In song mode the guest changes with the scenes as they play.
+  await page.locator('.tempo-led').click();
+  await page.locator('.tempo-led-input').fill('240');
+  await page.locator('.tempo-led-input').press('Enter');
+  // The song starts as Scene 1; the open scene is what the Add button adds.
+  await page.getByRole('button', { name: 'Scene: Scene 2', exact: true }).click();
+  await page.getByRole('button', { name: '+ Add Scene 2', exact: true }).click();
+  await page.getByRole('button', { name: 'More repeats for block 1', exact: true }).click();
+  await page.getByRole('button', { name: 'More repeats for block 2', exact: true }).click();
+  await page.getByRole('group', { name: 'Play mode' }).getByRole('button', { name: 'Song', exact: true }).click();
+  await page.getByRole('group', { name: 'Song block 1: Scene 1', exact: true }).getByRole('button', { name: /Scene 1/ }).click();
+  await page.getByRole('button', { name: /Play All/ }).click();
+  await expect(note, 'the first scene plays with its own setting').toHaveValue('G4');
+  await expect(page.getByRole('button', { name: 'Scene: Scene 2', exact: true })).toHaveAttribute('aria-pressed', 'true', { timeout: 10_000 });
+  await expect(note, 'and the guest follows the song into the second').toHaveValue('A4');
+  await expect(page.getByRole('button', { name: /Play All/ })).toBeVisible({ timeout: 10_000 });
+  expect(await sceneGuests(), 'playing through did not mix the two up').toEqual([['Scene 1', 'G4'], ['Scene 2', 'A4']]);
+});
