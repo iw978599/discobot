@@ -9,8 +9,9 @@ requests. Delete this file once everything below is finished and merged.
   workflow (GitHub Models, the service it called, was retired on 30 July 2026)
   and corrects the WebSynth Studio preset translator. Its `test` check passed
   before the two removal commits; it has not been merged.
-- `feat/effects` (this branch, a draft PR) is stacked on #80 and holds three
-  finished commits. Merging it brings in #80 as well.
+- `draft/handoff-effects-midi` (this branch, a draft PR) is stacked on #80. It
+  holds three finished commits of features, then this file and the skills in
+  `.claude/skills/`. Merging it brings in #80 as well. Carry on from here.
 
 ## Finished on this branch
 
