@@ -1,7 +1,7 @@
 # Discobot accounts API
 
-A Cloudflare Worker with a D1 database. It holds accounts and nothing else yet;
-project sync and public song pages come later
+A Cloudflare Worker with a D1 database. It holds accounts and a copy of each
+synced project. Public song pages come later
 (see `docs/STORAGE_AND_ACCOUNTS_PLAN.md`).
 
 ## What it stores
@@ -11,6 +11,10 @@ project sync and public song pages come later
 - **Sessions:** a hash of a random token per signed-in browser, with an expiry
   90 days out.
 - **Invite codes:** the code, who made it, and who used it.
+- **Projects:** id, owner, name, revision number, last-changed time, and the
+  project itself in the project-file format. Up to 100 per account, 400 KB
+  each. A deleted project leaves a marker with no contents, so other browsers
+  learn it was deleted. Deleting the account deletes all of them.
 - **Failed sign-ins:** a username and a time, deleted after fifteen minutes.
 
 No email addresses, names or IP addresses. Passwords, session tokens and

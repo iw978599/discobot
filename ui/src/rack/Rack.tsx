@@ -11,7 +11,8 @@ import SongModule from './SongModule';
 import Dialog from './Dialog';
 import ProjectsDialog from './ProjectsDialog';
 import ShareDialog from './ShareDialog';
-import AccountDialog from './AccountDialog';
+import AccountDialog, { useSyncStatus } from './AccountDialog';
+import { projectSync } from '../services/projectSync';
 import MidiImportDialog from './MidiImportDialog';
 import { HelpModal } from './HeaderParts';
 import '@fontsource/barlow-condensed/latin-500.css';
@@ -28,6 +29,7 @@ export default function Rack({ studio }: { studio: Studio }) {
   const [shareOpen, setShareOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const { midiState } = studio;
+  const sync = useSyncStatus();
 
   return (
     <div className="rack-page">
@@ -46,6 +48,15 @@ export default function Rack({ studio }: { studio: Studio }) {
               <button className="rack-btn" onClick={studio.loadOtherTabVersion}>Load the other tab's version</button>
               <button className="rack-btn" onClick={studio.keepThisTabVersion}>Keep this tab's version</button>
             </span>
+          </div>
+        )}
+        {sync.keptBoth.length > 0 && (
+          <div role="alert" className="app-alert">
+            <span>
+              {sync.keptBoth.map(name => `“${name}”`).join(' and ')} {sync.keptBoth.length === 1 ? 'was' : 'were'} also changed in another browser.
+              Both versions are kept: the one from this browser is named “… (this browser's version)”.
+            </span>
+            <button className="rack-btn" onClick={projectSync.dismissKeptBoth} aria-label="Dismiss sync message">✕</button>
           </div>
         )}
         {studio.storageError && (

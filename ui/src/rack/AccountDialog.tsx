@@ -1,8 +1,10 @@
 import { useEffect, useId, useState, useSyncExternalStore, type FormEvent, type ReactNode } from 'react';
 import { account, currentUser, subscribeAccount, type Invite, type Member } from '../services/account';
+import { projectSync } from '../services/projectSync';
 import Dialog from './Dialog';
 
 export const useAccountUser = () => useSyncExternalStore(subscribeAccount, currentUser);
+export const useSyncStatus = () => useSyncExternalStore(projectSync.subscribe, projectSync.status);
 
 const day = (time: number) => new Date(time).toLocaleDateString(undefined, { dateStyle: 'medium' });
 
@@ -105,7 +107,7 @@ function SignedOut({ onRecoveryCode }: { onRecoveryCode: (code: string) => void 
       <p className="rack-empty">
         An account is optional, and Discobot works the same without one. An account stores your username, a scrambled form of your
         password and recovery code, the date you joined and the invite code you used. No email address, no name, nothing else.
-        Projects do not sync between devices yet; they stay in this browser.
+        Signed in, your projects are also kept in your account, so they follow you to any browser you sign in on.
       </p>
     </>
   );
@@ -171,6 +173,7 @@ function SignedIn({ username, owner, onRecoveryCode }: { username: string; owner
   const [newPassword, setNewPassword] = useState('');
   const [notice, setNotice] = useState('');
   const { busy, error, run } = useAction();
+  const sync = useSyncStatus();
   const open = (next: typeof panel) => { setPanel(panel === next ? '' : next); setPassword(''); setNewPassword(''); setNotice(''); };
 
   // The one request made without being asked: check the session is still good when the dialog opens.
@@ -178,7 +181,27 @@ function SignedIn({ username, owner, onRecoveryCode }: { username: string; owner
 
   return (
     <>
-      <p>Signed in as <strong>{username}</strong>. Projects do not sync between devices yet; they stay in this browser.</p>
+      <p>Signed in as <strong>{username}</strong>.</p>
+      <div className="rack-list-row" role="group" aria-label="Project sync">
+        <span>
+          <strong>Project sync</strong>
+          <small>
+            {sync.state === 'syncing' ? 'Syncing…'
+              : sync.state === 'error' ? `Not synced: ${sync.error}`
+                : sync.lastSyncedAt ? `Up to date · ${sync.inAccount.length} in your account · checked ${new Date(sync.lastSyncedAt).toLocaleTimeString(undefined, { timeStyle: 'short' })}` : 'Waiting to sync'}
+          </small>
+        </span>
+        <button className="rack-btn" disabled={sync.state === 'syncing'} onClick={() => { void projectSync.sync(); }}>Sync Now</button>
+      </div>
+      {sync.browserOnly.length > 0 && (
+        <div className="rack-list-row" role="group" aria-label="Projects not in your account">
+          <span>
+            <strong>{sync.browserOnly.length === 1 ? '1 project is' : `${sync.browserOnly.length} projects are`} only in this browser</strong>
+            <small>They were here before you signed in. Add them to keep them in your account too, or choose one at a time under Projects.</small>
+          </span>
+          <button className="rack-btn" disabled={sync.state === 'syncing'} onClick={() => { void projectSync.addToAccount(sync.browserOnly); }}>Add Them All</button>
+        </div>
+      )}
       <div className="account-actions">
         <button className="rack-btn go" disabled={busy} onClick={() => { void run(account.signOut); }}>Sign Out</button>
         <button className="rack-btn" disabled={busy} title="Sign out of every browser where this account is signed in" onClick={() => { void run(account.signOutEverywhere); }}>Sign Out Everywhere</button>
@@ -203,7 +226,7 @@ function SignedIn({ username, owner, onRecoveryCode }: { username: string; owner
       )}
       {panel === 'delete' && (
         <Form error={error} onSubmit={() => { void run(async () => { await account.deleteAccount(password); }); }}>
-          <p>Removes your account and everything stored with it on the server. Projects in this browser are not touched. This cannot be undone.</p>
+          <p>Removes your account and the copies of your projects stored with it. Projects in this browser are not touched. This cannot be undone.</p>
           <Field label="Password" value={password} onChange={setPassword} type="password" autoComplete="current-password" />
           <div className="rack-dialog-actions start"><button className="rack-btn danger" type="submit" disabled={busy}>Delete My Account</button></div>
         </Form>

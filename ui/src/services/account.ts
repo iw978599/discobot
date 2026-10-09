@@ -41,7 +41,7 @@ function setSession(next: Session | null) {
 export const subscribeAccount = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
 export const currentUser = () => session?.user ?? null;
 
-async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown, signedIn = true): Promise<T> {
+async function call<T>(method: 'GET' | 'POST' | 'PUT', path: string, body?: unknown, signedIn = true): Promise<T> {
   const headers: Record<string, string> = {};
   if (signedIn && session) headers.Authorization = `Bearer ${session.token}`;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -59,6 +59,22 @@ async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown, sig
   }
   return data as T;
 }
+
+export interface RemoteProject { id: string; name: string; revision: number; updatedAt: number; deleted: boolean }
+
+// A refused save or delete is an answer, not a failure: the project changed somewhere else.
+const unlessChanged = async <T,>(work: Promise<T>): Promise<T | 'changed'> => {
+  try { return await work; } catch (error) { if (error instanceof AccountError && error.status === 409) return 'changed'; throw error; }
+};
+
+export const projectsApi = {
+  list: async () => (await call<{ projects: RemoteProject[] }>('GET', '/projects')).projects,
+  get: async (id: string) => (await call<{ project: unknown }>('GET', `/projects/${id}`)).project,
+  put: (id: string, name: string, baseRevision: number, project: unknown) =>
+    unlessChanged(call<{ revision: number }>('PUT', `/projects/${id}`, { name, baseRevision, project }).then(result => result.revision)),
+  remove: (id: string, baseRevision: number) => unlessChanged(call('POST', `/projects/${id}/delete`, { baseRevision }).then(() => 'removed' as const)),
+};
+export type ProjectsApi = typeof projectsApi;
 
 type Started = { token: string; user: AccountUser; recoveryCode?: string };
 const start = (result: Started) => { setSession({ token: result.token, user: result.user }); return result.recoveryCode ?? ''; };

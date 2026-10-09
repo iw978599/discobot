@@ -68,6 +68,7 @@ export class LocalProjectService {
   private library: ProjectLibrary = createMemoryLibrary();
   // False until a stored working copy was found, so a first run can adopt a library project instead.
   private hadWorkingCopy = false;
+  private writeListeners = new Set<() => void>();
 
   initialize(defaults: Defaults) {
     if (this.state) return;
@@ -322,6 +323,88 @@ export class LocalProjectService {
 
   listProjects(): Promise<ProjectInfo[]> { return this.library.list(); }
 
+  // --- What project sync needs. Sync never reaches into the state itself.
+
+  subscribeWrites(listener: () => void) {
+    this.writeListeners.add(listener);
+    return () => { this.writeListeners.delete(listener); };
+  }
+
+  // Every project as it stands now, or null while another tab's change is unresolved.
+  async syncRecords(): Promise<ProjectRecord[] | null> {
+    if (this.paused) return null;
+    this.flush();
+    await this.library.put(this.currentRecord());
+    const records = await Promise.all((await this.library.list()).map(project => this.library.get(project.id)));
+    return records.filter((entry): entry is ProjectRecord => entry !== undefined);
+  }
+
+  private recordFor(state: State): ProjectRecord {
+    const keep = this.state!;
+    // currentRecord and the scene helpers read this.state, so borrow it.
+    this.state = state;
+    if (!state.synths.some(s => s.synthId === 1)) state.synths.unshift(this.createSynth(1));
+    this.ensureScenes();
+    const made = this.currentRecord();
+    this.state = keep;
+    return made;
+  }
+
+  // Stores a project downloaded from the account under its own id, replacing this browser's
+  // copy if there is one. Like a file, it is untrusted and goes through restore().
+  async syncReceive(id: string, file: unknown): Promise<ProjectRecord | null> {
+    const input = record(file);
+    if (input.format !== PROJECT_FILE_FORMAT || this.paused) return null;
+    try {
+      const { state } = this.restore({ savedPatterns: [], ...record(input.project) });
+      state.savedPatterns = [];
+      state.projectId = id;
+      state.name = await this.uniqueName(projectName(state.name), id);
+      if (id === this.state!.projectId) {
+        this.activate(state);
+        await this.library.put(this.currentRecord());
+      } else {
+        await this.library.put(this.recordFor(state));
+      }
+      await this.announceProjects();
+      return (await this.library.get(id)) ?? null;
+    } catch { return null; }
+  }
+
+  // Gives a project a new identity, so the account's version can take the old one. Used when
+  // the same project was changed in two places: both are kept.
+  async syncFork(id: string, name: string): Promise<string | null> {
+    try {
+      const nextId = crypto.randomUUID(), nextName = await this.uniqueName(projectName(name));
+      if (id === this.state!.projectId) {
+        Object.assign(this.state!, { projectId: nextId, name: nextName });
+        this.write();
+        await this.library.put(this.currentRecord());
+      } else {
+        const found = await this.library.get(id);
+        if (!found) return null;
+        await this.library.put({ ...found, id: nextId, name: nextName, project: { ...(found.project as object), projectId: nextId, name: nextName } });
+      }
+      await this.library.remove(id);
+      await this.announceProjects();
+      return nextId;
+    } catch { return null; }
+  }
+
+  // A project as this version of the app would store it. Opening a project fills in settings
+  // that newer versions added, so two copies are compared in this form or an untouched
+  // project would look edited.
+  normalized(project: unknown): unknown {
+    try {
+      return this.recordFor(this.restore({ savedPatterns: [], ...record(project) }).state).project;
+    } catch { return project; }
+  }
+
+  // The project file for any project in the library, for uploading.
+  fileFor(found: ProjectRecord): ProjectFile {
+    return { format: PROJECT_FILE_FORMAT, formatVersion: 1, exportedAt: new Date(found.updatedAt).toISOString(), project: found.project as State };
+  }
+
   // Two projects may not share a name, or they could not be told apart in the list.
   private async uniqueName(base: string, ignoreId?: string): Promise<string> {
     const taken = new Set((await this.library.list()).filter(project => project.id !== ignoreId).map(project => project.name.toLowerCase()));
@@ -533,6 +616,7 @@ export class LocalProjectService {
       // Keep the library's record of this project in step. It is asynchronous and may not finish
       // if the tab is closing; the working copy just written is what a reload reads.
       this.library.put(this.currentRecord()).catch(() => {});
+      this.writeListeners.forEach(listener => listener());
       return true;
     } catch {
       this.unsaved = true;

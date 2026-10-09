@@ -26,6 +26,8 @@ export const SESSION_DAYS = 90;
 export const MAX_FAILURES = 8;
 export const FAILURE_WINDOW_MS = 15 * 60_000;
 export const MAX_OPEN_INVITES = 50;
+export const MAX_PROJECTS = 100;
+export const MAX_PROJECT_BYTES = 400_000;
 const MAX_BODY_BYTES = 4096;
 const DAY_MS = 86_400_000;
 
@@ -38,9 +40,9 @@ const json = (status: number, body: unknown, headers: HeadersInit = {}) => new R
   headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...headers },
 });
 
-async function readBody(request: Request): Promise<Record<string, unknown>> {
+async function readBody(request: Request, limit = MAX_BODY_BYTES): Promise<Record<string, unknown>> {
   const text = await request.text();
-  if (text.length > MAX_BODY_BYTES) throw new Refusal(413, 'That request is too large.');
+  if (text.length > limit) throw new Refusal(413, 'That request is too large.');
   if (!text) return {};
   try {
     const value: unknown = JSON.parse(text);
@@ -98,6 +100,7 @@ let decoyHash: Promise<string> | null = null;
 async function removeUser(env: Env, userId: string) {
   await env.DB.batch([
     env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId),
+    env.DB.prepare('DELETE FROM projects WHERE owner_id = ?').bind(userId),
     env.DB.prepare('DELETE FROM invites WHERE created_by = ? AND used_by IS NULL').bind(userId),
     env.DB.prepare('UPDATE invites SET used_by = NULL WHERE used_by = ?').bind(userId),
     env.DB.prepare('DELETE FROM users WHERE id = ?').bind(userId),
@@ -187,6 +190,66 @@ async function confirmPassword(env: Env, user: UserRow, password: string, now: n
   }
 }
 
+interface ProjectRow { id: string; name: string; revision: number; updated_at: number; deleted: number; data: string }
+const PROJECT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const CHANGED_ELSEWHERE = 'This project was changed somewhere else.';
+const revisionOf = (value: unknown) => (Number.isInteger(value) ? value as number : -1);
+
+// Projects are stored as the browser sent them. The browser sanitizes whatever it downloads,
+// exactly as it does for a project file, so the server only checks size and shape.
+async function projects(request: Request, env: Env, now: number, rest: string): Promise<Response> {
+  const { user } = await sessionUser(env, request, now);
+  const method = request.method;
+  if (rest === '' && method === 'GET') {
+    const { results } = await env.DB.prepare('SELECT id, name, revision, updated_at, deleted FROM projects WHERE owner_id = ? ORDER BY updated_at DESC').bind(user.id).all<ProjectRow>();
+    return json(200, { projects: results.map(row => ({ id: row.id, name: row.name, revision: row.revision, updatedAt: row.updated_at, deleted: row.deleted === 1 })) });
+  }
+
+  const [, id, action] = /^\/([^/]+)(\/delete)?$/.exec(rest) || [];
+  if (!id || !PROJECT_ID.test(id)) throw new Refusal(404, 'Not found.');
+  const row = await env.DB.prepare('SELECT id, name, revision, updated_at, deleted, data FROM projects WHERE owner_id = ? AND id = ?').bind(user.id, id).first<ProjectRow>();
+
+  if (method === 'GET' && !action) {
+    if (!row || row.deleted === 1) throw new Refusal(404, 'That project is not in your account.');
+    return json(200, { id: row.id, name: row.name, revision: row.revision, updatedAt: row.updated_at, project: JSON.parse(row.data) });
+  }
+
+  if (method === 'POST' && action) {
+    const base = revisionOf((await readBody(request)).baseRevision);
+    if (!row || row.deleted === 1) return json(200, { ok: true });
+    const removed = await env.DB.prepare("UPDATE projects SET deleted = 1, data = '', revision = revision + 1, updated_at = ? WHERE owner_id = ? AND id = ? AND revision = ?").bind(now, user.id, id, base).run();
+    if (removed.meta.changes !== 1) return json(409, { error: CHANGED_ELSEWHERE, revision: row.revision });
+    return json(200, { ok: true });
+  }
+
+  if (method === 'PUT' && !action) {
+    const body = await readBody(request, MAX_PROJECT_BYTES + 2048);
+    const project = body.project;
+    const base = revisionOf(body.baseRevision);
+    const name = text(body.name).trim().slice(0, 60);
+    if (!name || !project || typeof project !== 'object' || Array.isArray(project) || (project as { format?: unknown }).format !== 'discobot-project') throw new Refusal(400, 'That is not a Discobot project.');
+    const data = JSON.stringify(project);
+    if (data.length > MAX_PROJECT_BYTES) throw new Refusal(413, 'This project is too large to sync.');
+    if (!row) {
+      if (base !== 0) return json(409, { error: CHANGED_ELSEWHERE, revision: 0 });
+      const count = await env.DB.prepare('SELECT COUNT(*) AS live FROM projects WHERE owner_id = ? AND deleted = 0').bind(user.id).first<{ live: number }>();
+      if ((count?.live ?? 0) >= MAX_PROJECTS) throw new Refusal(507, `An account holds up to ${MAX_PROJECTS} projects. Delete some to sync more.`);
+      try {
+        await env.DB.prepare('INSERT INTO projects (owner_id, id, name, revision, updated_at, deleted, data) VALUES (?, ?, ?, 1, ?, 0, ?)').bind(user.id, id, name, now, data).run();
+      } catch {
+        return json(409, { error: CHANGED_ELSEWHERE, revision: 1 });
+      }
+      return json(201, { revision: 1 });
+    }
+    // One statement checks the revision and writes, so two browsers cannot both win.
+    const saved = await env.DB.prepare('UPDATE projects SET name = ?, data = ?, deleted = 0, revision = revision + 1, updated_at = ? WHERE owner_id = ? AND id = ? AND revision = ?').bind(name, data, now, user.id, id, base).run();
+    if (saved.meta.changes !== 1) return json(409, { error: CHANGED_ELSEWHERE, revision: row.revision });
+    return json(200, { revision: row.revision + 1 });
+  }
+
+  throw new Refusal(404, 'Not found.');
+}
+
 async function route(request: Request, env: Env, now: number): Promise<Response> {
   const { pathname } = new URL(request.url);
   const method = request.method;
@@ -196,6 +259,8 @@ async function route(request: Request, env: Env, now: number): Promise<Response>
   if (is('POST', '/signup')) return signUp(env, await readBody(request), now);
   if (is('POST', '/signin')) return signIn(env, await readBody(request), now);
   if (is('POST', '/recover')) return recover(env, await readBody(request), now);
+
+  if (pathname === '/projects' || pathname.startsWith('/projects/')) return projects(request, env, now, pathname.slice('/projects'.length));
 
   if (is('GET', '/me')) return json(200, { user: publicUser((await sessionUser(env, request, now)).user) });
 
@@ -287,7 +352,7 @@ export async function handle(request: Request, env: Env, now = Date.now()): Prom
   const origin = request.headers.get('Origin');
   const allowed = (env.ALLOWED_ORIGINS || '').split(',').map(entry => entry.trim()).filter(Boolean);
   const cors: Record<string, string> = origin && allowed.includes(origin)
-    ? { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Max-Age': '86400', Vary: 'Origin' }
+    ? { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS', 'Access-Control-Max-Age': '86400', Vary: 'Origin' }
     : { Vary: 'Origin' };
   const withCors = (response: Response) => {
     for (const [name, value] of Object.entries(cors)) response.headers.set(name, value);

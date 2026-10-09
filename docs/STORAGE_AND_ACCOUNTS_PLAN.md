@@ -22,8 +22,13 @@ Status: proposed, nothing built. Written 2026-10-08; stage 3 revised the same da
   `https://discobot-api.discobot-server.workers.dev`. Only the owner creates
   invite codes. Samples will not sync at first: Cloudflare's file storage (R2)
   needs a payment card, so projects go in the database and samples wait.
-- **Stage 3, steps 3 to 5 (sync, public pages, samples): not started.**
-  Signing in does not sync anything yet.
+- **Stage 3, step 3 (project sync): built.** Projects made while signed in
+  are kept in the account and follow it to other browsers. Projects that were
+  in the browser before signing in are added by hand. A project changed in
+  two browsers is kept twice. An account holds up to 100 projects of up to
+  400 KB each. Sync runs a few seconds after an edit, when the page comes
+  back into view, every two minutes, and from a Sync Now button.
+- **Stage 3, steps 4 and 5 (public pages, samples): not started.**
 
 ## Where things were when this was written
 
