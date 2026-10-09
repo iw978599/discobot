@@ -8,13 +8,17 @@ const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.ro
 
 interface SharedSongPageProps {
   file: unknown;
+  // Set for a published song: the username it was published under.
+  author?: string;
+  // Why a published song could not be fetched.
+  error?: string;
   onOpenCopy: () => void;
   onLeave: () => void;
 }
 
 // What someone sees when they open a share link: the song, a way to hear it, and a way to
 // keep it. Nothing here touches the visitor's own projects until they ask for a copy.
-export default function SharedSongPage({ file, onOpenCopy, onLeave }: SharedSongPageProps) {
+export default function SharedSongPage({ file, author, error: fetchError, onOpenCopy, onLeave }: SharedSongPageProps) {
   const read = useMemo(() => localService.readProjectFile(file), [file]);
   const [audioUrl, setAudioUrl] = useState('');
   const [status, setStatus] = useState<'idle' | 'rendering' | 'failed'>('idle');
@@ -27,7 +31,7 @@ export default function SharedSongPage({ file, onOpenCopy, onLeave }: SharedSong
       <div className="rack-page shared-page">
         <main className="rack-unit shared-card">
           <h1>This link could not be opened</h1>
-          <p role="alert">{read.error}</p>
+          <p role="alert">{fetchError || read.error}</p>
           <button className="rack-btn go" onClick={onLeave}>Go to Discobot</button>
         </main>
       </div>
@@ -61,7 +65,7 @@ export default function SharedSongPage({ file, onOpenCopy, onLeave }: SharedSong
   return (
     <div className="rack-page shared-page">
       <main className="rack-unit shared-card" aria-label="Shared song">
-        <span className="shared-eyebrow">A song shared from Discobot</span>
+        <span className="shared-eyebrow">{author ? `A song by ${author}, made in Discobot` : 'A song shared from Discobot'}</span>
         <h1>{project.name}</h1>
         <p className="shared-facts">
           {project.tempo} BPM · {bars} {bars === 1 ? 'bar' : 'bars'} · {clock(bars * 240 / project.tempo)}
@@ -86,7 +90,7 @@ export default function SharedSongPage({ file, onOpenCopy, onLeave }: SharedSong
           <button className="rack-btn" onClick={onLeave}>Go to My Projects</button>
         </div>
         <p className="rack-hint">
-          This song travelled inside the link you opened. It is played by your own browser and has not been saved here;
+          {author ? 'This song was published from Discobot.' : 'This song travelled inside the link you opened.'} It is played by your own browser and has not been saved here;
           choose “Open a Copy to Edit” to keep it.
         </p>
       </main>
