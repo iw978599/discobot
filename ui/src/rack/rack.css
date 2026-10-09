@@ -18,10 +18,14 @@
   --plate: 124px;
   --side: 86px;
   --knobs: 256px;
-  min-height: 100vh;
+  /* The page itself is the scrolling area, so the transport can stay put at its top. */
+  height: 100vh;
+  height: 100dvh;
+  box-sizing: border-box;
   background: #0b0c0d;
-  padding: 14px 12px 40px;
-  overflow-x: auto;
+  /* No padding above: the sticky transport sits against the top edge, with nothing showing over it. */
+  padding: 0 12px 40px;
+  overflow: auto;
   color: var(--legend);
   font-family: var(--panel-font);
   font-weight: 600;
@@ -34,7 +38,7 @@
   width: 100%;
   max-width: 1400px;
   min-width: 1060px;
-  margin: 0 auto;
+  margin: 14px auto 0;
   padding: 10px 28px;
   display: flex;
   flex-direction: column;
@@ -412,6 +416,10 @@
 .shared-card .rack-btn { text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
 .shared-card p { margin: 0; }
 .rack-empty { color: var(--dim); }
+.import-notes { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.rack .preset-import { cursor: pointer; display: inline-flex; align-items: center; }
+/* The transport stays in reach while the rest of the rack scrolls under it. */
+.rack-unit.transport { position: sticky; top: 0; z-index: 40; box-shadow: 0 6px 14px rgba(0, 0, 0, 0.45); }
 .guest-unit .rack-plate { width: var(--plate); flex: none; }
 .guest-status { flex: 0 1 auto; min-width: 0; }
 .guest-frame { width: 100%; height: 560px; border: 1px solid var(--edge-strong); border-radius: 2px; background: #fff; }
