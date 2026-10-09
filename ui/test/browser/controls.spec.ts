@@ -13,6 +13,13 @@ async function menu(page: Page, name: 'Project' | 'Export', item: string) {
   await page.getByRole('button', { name: `${name} ▾`, exact: true }).click();
   await page.getByRole('menuitem', { name: item, exact: true }).click();
 }
+async function openProject(page: Page, name: string) {
+  await page.getByRole('button', { name: /^Project: / }).click();
+  const dialog = page.getByRole('dialog', { name: 'Projects', exact: true });
+  await dialog.getByRole('group', { name: `Project ${name}`, exact: true }).getByRole('button', { name: 'Open', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole('button', { name: `Project: ${name}`, exact: true })).toBeVisible();
+}
 const openMidi = (page: Page) => page.getByRole('button', { name: 'MIDI and samples', exact: true }).click();
 
 async function project(page: Page) {
@@ -80,7 +87,7 @@ test.afterEach(async ({ page }, testInfo) => {
   expect(audited.auditRequests, 'Only static requests beneath the deployed /discobot/ base path').toEqual([]);
 });
 
-test('full musical arrangement survives save, editing, load and reload', async ({ page }) => {
+test('full musical arrangement survives a kept copy, editing, reopening and reload', async ({ page }) => {
   const synth = page.locator('.synth-controls-panel');
   await page.locator('.tempo-led').click();
   await edit(page.locator('.tempo-led-input'), '96');
@@ -109,17 +116,11 @@ test('full musical arrangement survives save, editing, load and reload', async (
   const effects = page.locator('.effects-panel');
   await effects.getByLabel('Phaser enabled', { exact: true }).check();
   await edit(effects.locator('.effects-block').filter({ has: page.getByRole('heading', { name: 'Delay', exact: true }) }).getByLabel('Time value'), '320ms');
-  await page.getByRole('button', { name: '+ Save', exact: true }).click();
-  await page.locator('.save-name-input').fill('Browser groove');
-  await page.locator('.save-name-input').press('Enter');
-  await expect(page.getByText('Saved!', { exact: false })).toBeVisible();
-  const before = await project(page);
-  expect(before.savedPatterns).toHaveLength(1);
-  const saved = before.savedPatterns[0];
+  const saved = await project(page);
   expect(saved.tempo).toBe(96);
-  expect(saved.steps[0].note).toBe('C3');
-  expect(saved.steps[4].note).toBe('G3');
-  expect(saved.steps[4].velocity).toBeCloseTo(0.55);
+  expect(saved.synths[0].pattern.steps[0].note).toBe('C3');
+  expect(saved.synths[0].pattern.steps[4].note).toBe('G3');
+  expect(saved.synths[0].pattern.steps[4].velocity).toBeCloseTo(0.55);
   expect(saved.synths[0].synthParams.gain).toBeCloseTo(0.63);
   expect(saved.synths[0].synthParams.pan).toBeCloseTo(-0.25);
   expect(saved.synths[0].synthParams.filter.frequency).toBe(1200);
@@ -127,18 +128,21 @@ test('full musical arrangement survives save, editing, load and reload', async (
   expect(saved.drumState.kick.stepVelocities[0]).toBeCloseTo(0.4);
   expect(saved.drumState.kick.settings.pan).toBeCloseTo(0.4);
   expect(saved.drumSwing).toBeCloseTo(0.25);
-  expect(saved.drumKitId).toBe('tr-808');
+  expect(saved.selectedDrumKitId).toBe('tr-808');
   expect(saved.drumFx.sends.reverb).toBeCloseTo(0.45);
   expect(saved.drumMasterVolume).toBeCloseTo(0.76);
   expect(saved.drumFx.returnLevel).toBeCloseTo(0.55);
   expect(saved.effectsLoop.returns.drums).toBeCloseTo(0.53);
   expect(saved.effectsLoop.delay.time).toBeCloseTo(0.32);
   expect(saved.effectsLoop.phaser.enabled).toBe(true);
+  // Keep a copy, wreck the open project, then go back to the copy.
+  await menu(page, 'Project', 'Save a Copy');
   await page.getByRole('button', { name: 'Clear', exact: true }).click();
   await tab(page, 'Amp');
   await edit(synth.getByLabel('Gain value', { exact: true }), '20%');
   await page.getByRole('button', { name: 'Kick step 1', exact: true }).click();
-  await page.locator('.load-select').selectOption(saved.id);
+  await openProject(page, 'Untitled copy');
+  await tab(page, 'Amp');
   await expect(synth.getByLabel('Gain value', { exact: true })).toHaveValue('63%');
   await expect(page.getByLabel('Synth 1 level value', { exact: true })).toHaveValue('63%');
   await tab(page, 'Notes');
@@ -153,7 +157,10 @@ test('full musical arrangement survives save, editing, load and reload', async (
   await tab(page, 'Amp');
   await expect(page.getByLabel('Gain value', { exact: true })).toHaveValue('63%');
   await expect(page.getByRole('button', { name: 'Kick step 1', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  expect((await project(page)).savedPatterns[0]).toEqual(saved);
+  await expect(page.getByRole('button', { name: 'Project: Untitled copy', exact: true }), 'the project that was open is still open after a reload').toBeVisible();
+  await openProject(page, 'Untitled');
+  await tab(page, 'Amp');
+  await expect(page.getByLabel('Gain value', { exact: true }), 'the original still has the edit made after the copy').toHaveValue('20%');
 });
 
 test('rotary keyboard bounds, typed units, cancellation and pointer cleanup', async ({ page, isMobile }) => {
@@ -317,28 +324,42 @@ test('piano-roll keyboard navigation, 32-step editing and cancelled painting pre
   expect((await project(page)).synths[0].pattern.steps).toHaveLength(16);
 });
 
-test('saved-pattern manager refreshes, traps focus, closes with Escape and deletes local data', async ({ page }) => {
-  await page.getByRole('button', { name: '+ Save', exact: true }).click();
-  await page.locator('.save-name-input').fill('Manager arrangement');
-  await page.locator('.save-name-input').press('Enter');
-  await expect(page.getByText('Saved!', { exact: false })).toBeVisible();
-  const projectMenu = page.getByRole('button', { name: 'Project ▾', exact: true });
-  await menu(page, 'Project', 'Manage Saved');
-  const dialog = page.getByRole('dialog', { name: 'Saved Patterns', exact: true });
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole('button', { name: 'Close saved patterns', exact: true })).toBeFocused();
+test('projects dialog traps focus, closes with Escape, and renames, copies and deletes projects', async ({ page }) => {
+  const opener = page.getByRole('button', { name: /^Project: / });
+  await opener.click();
+  const dialog = page.getByRole('dialog', { name: 'Projects', exact: true });
+  await expect(dialog.getByRole('button', { name: 'Close projects', exact: true })).toBeFocused();
+  await expect(dialog.getByRole('group', { name: 'Project Untitled', exact: true })).toContainText('Open now');
   await page.keyboard.press('Shift+Tab');
-  await expect(dialog.getByRole('button', { name: 'Delete', exact: true })).toBeFocused();
+  await expect(dialog.getByRole('button', { name: 'Delete', exact: true }).last()).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
-  await expect(projectMenu).toBeFocused();
-  await menu(page, 'Project', 'Manage Saved');
-  await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
-  await expect(dialog.getByText('No saved patterns yet.', { exact: true })).toBeVisible();
-  expect((await project(page)).savedPatterns).toHaveLength(0);
+  await expect(opener).toBeFocused();
+
+  await opener.click();
+  await dialog.getByRole('button', { name: 'Rename', exact: true }).click();
+  await dialog.getByLabel('Project name', { exact: true }).fill('Friday jam');
+  await dialog.getByLabel('Project name', { exact: true }).press('Enter');
+  await expect(page.getByRole('button', { name: 'Project: Friday jam', exact: true })).toBeVisible();
+  expect((await project(page)).name).toBe('Friday jam');
+
+  await dialog.getByRole('button', { name: 'Copy', exact: true }).click();
+  const copy = dialog.getByRole('group', { name: 'Project Friday jam copy', exact: true });
+  await expect(copy).toBeVisible();
+  page.once('dialog', confirm => { void confirm.accept(); });
+  await copy.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(copy).toHaveCount(0);
+
+  // Deleting the only project leaves a fresh one, never nothing.
+  const first = (await project(page)).projectId;
+  page.once('dialog', confirm => { void confirm.accept(); });
+  await dialog.getByRole('group', { name: 'Project Friday jam', exact: true }).getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(dialog.getByRole('group', { name: 'Project Untitled', exact: true })).toBeVisible();
+  await expect(dialog.getByRole('group')).toHaveCount(1);
+  expect((await project(page)).projectId).not.toBe(first);
   await page.keyboard.press('Escape');
-  await expect(dialog).toHaveCount(0);
-  await expect(page.locator('.load-select option').filter({ hasText: 'Manager arrangement' })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Project: Untitled', exact: true })).toBeVisible();
 });
 
 test('all synth, effects and mixer control families update durable project state', async ({ page }) => {

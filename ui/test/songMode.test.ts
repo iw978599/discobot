@@ -165,36 +165,6 @@ test('scenes can be renamed and deleted, and the song follows', async () => {
   assert.equal((await post(store, '/scenes/delete', { sceneId: a })).status, 400, 'the last scene cannot be deleted');
 });
 
-test('saved arrangements and project files carry every scene and the song', async () => {
-  const store = service();
-  await setNote(store, 'C3');
-  const a = store.snapshot().currentSceneId;
-  const b = (await post(store, '/scenes/create', { name: 'Chorus' })).data.currentSceneId;
-  await setNote(store, 'A3');
-  await post(store, '/song', { entries: [{ sceneId: a, repeats: 4 }, { sceneId: b, repeats: 2 }], loop: true });
-  const lane = store.snapshot().synths[0];
-  const saved = (await post(store, '/patterns/save', { name: 'Whole song', steps: lane.pattern.steps, synthParams: lane.synthParams, tempo: 120, drumState: store.snapshot().drumState })).data;
-  assert.deepEqual(saved.scenes.map((scene: Scene) => scene.name), ['Scene 1', 'Chorus']);
-  assert.equal(saved.scenes[1].lanes[1][0].note, 'A3', 'the open scene is saved with its latest edits');
-  assert.deepEqual([saved.song.entries.length, saved.song.loop, saved.currentSceneId], [2, true, b]);
-
-  const file = JSON.parse(JSON.stringify(store.exportProject()));
-  const other = service();
-  assert.equal(other.importProject(file).ok, true);
-  assert.deepEqual(other.snapshot().scenes.map(scene => scene.name), ['Scene 1', 'Chorus']);
-  assert.equal(firstNote(other), 'A3');
-  assert.equal(other.snapshot().song.loop, true);
-
-  // Loading a saved arrangement sets the lanes first, then hands over its scenes.
-  const target = service();
-  await setNote(target, 'A3');
-  const replaced = (await post(target, '/scenes/replace', { scenes: saved.scenes, song: saved.song, currentSceneId: saved.currentSceneId })).data;
-  assert.deepEqual([replaced.scenes.length, replaced.currentSceneId, replaced.song.entries[0].repeats], [2, b, 4]);
-  const old = (await post(target, '/scenes/replace', {})).data;
-  assert.equal(old.scenes.length, 1, 'an arrangement saved before scenes existed loads as a single scene');
-  assert.equal(old.scenes[0].lanes[1][0].note, 'A3');
-});
-
 test('scenes and songs from a file are repaired or refused', () => {
   const kit = drums();
   assert.equal(sanitizeScenes('nope', kit), null);

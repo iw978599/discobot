@@ -201,65 +201,6 @@ test('the zip writer produces a readable stored archive', () => {
   assert.equal(new TextDecoder().decode(zip.subarray(secondOffset + 30, secondOffset + 39)), 'drums.wav');
 });
 
-test('a project file round-trips the whole project into another browser profile', async () => {
-  const source = service();
-  await post(source, '/synth/create', { synthId: 2 });
-  await post(source, '/synth/2/parameters', { filter: { frequency: 777 } });
-  await post(source, '/tempo', { tempo: 97 });
-  await post(source, '/drum/step', { instrument: 'kick', step: 2, active: true });
-  await post(source, '/drum/step-detail', { instrument: 'kick', step: 2, ratchet: 2 });
-  const steps = source.snapshot().synths[0].pattern.steps;
-  await post(source, '/patterns/save', { name: 'Keeper', steps, synthParams: createDefaultSynthParameters(), tempo: 97, drumState: source.snapshot().drumState });
-  await post(source, '/sequencer/play', { synthId: 1 });
-  const file = JSON.parse(JSON.stringify(source.exportProject()));
-  assert.equal(file.format, 'discobot-project');
-  assert.equal(file.project.synths[0].isPlaying, false, 'a file never carries a running transport');
-  assert.equal(source.snapshot().synths[0].isPlaying, true, 'exporting does not disturb the live project');
-
-  const target = service();
-  await post(target, '/synth/create', { synthId: 3 });
-  const messages: string[] = [];
-  target.subscribe(message => messages.push(message.type));
-  messages.length = 0;
-  assert.deepEqual(target.importProject(file), { ok: true, repaired: false });
-  assert.deepEqual(messages, ['init', 'savedPatternsChanged']);
-  const state = target.snapshot();
-  assert.deepEqual(state.synths.map(synth => synth.synthId), [1, 2], 'lanes not in the file are gone');
-  assert.equal(state.synths[1].synthParams.filter.frequency, 777);
-  assert.equal(state.tempo, 97);
-  assert.equal(state.drumState.kick.steps[2], true);
-  assert.equal(state.drumState.kick.stepRatchets![2], 2);
-  assert.equal(state.savedPatterns[0].name, 'Keeper');
-  const reloaded = new LocalProjectService();
-  reloaded.initialize(defaults());
-  assert.equal(reloaded.snapshot().tempo, 97, 'the imported project is what is stored');
-});
-
-test('a bad project file is refused and leaves the current project alone', async () => {
-  const store = service();
-  await post(store, '/tempo', { tempo: 150 });
-  const good = JSON.parse(JSON.stringify(store.exportProject()));
-  await post(store, '/tempo', { tempo: 88 });
-  for (const bad of [null, [], 'text', {}, { format: 'other', formatVersion: 1, project: good.project },
-    { ...good, formatVersion: 2 }, { ...good, project: { version: 1 } }, { ...good, project: null }]) {
-    const result = store.importProject(bad);
-    assert.equal(result.ok, false);
-    assert.equal(store.snapshot().tempo, 88);
-  }
-  const hostile = structuredClone(good);
-  hostile.project.tempo = 1e9;
-  hostile.project.synths[0].synthParams.gain = 'loud';
-  hostile.project.synths.push({ synthId: 9 });
-  assert.deepEqual(store.importProject(hostile), { ok: true, repaired: true });
-  assert.equal(store.snapshot().tempo, 400, 'values from a file are clamped like values from storage');
-  assert.equal(store.snapshot().synths.length, 1);
-
-  await post(store, '/tempo', { tempo: 88 });
-  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { setItem() { throw new Error('QuotaExceededError'); } } });
-  assert.equal(store.importProject(good).ok, false);
-  assert.equal(store.snapshot().tempo, 88, 'a project that cannot be stored is not half-applied');
-});
-
 test('the app ships a web manifest, icons and a service worker built from the real file list', () => {
   const root = new URL('../', import.meta.url);
   const read = (path: string) => readFileSync(new URL(path, root), 'utf8');

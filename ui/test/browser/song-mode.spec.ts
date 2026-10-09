@@ -8,6 +8,13 @@ type Hit = { type: string; instrument?: string; time?: number };
 const hits = (page: Page) => page.evaluate(() => (window as unknown as { drumHits: Hit[] }).drumHits.filter(hit => typeof hit.time === 'number'));
 const scene = (page: Page, name: string) => page.getByRole('button', { name: `Scene: ${name}`, exact: true });
 const drum = (page: Page, name: string) => page.getByRole('button', { name, exact: true });
+async function openProject(page: Page, name: string) {
+  await page.getByRole('button', { name: /^Project: / }).click();
+  const dialog = page.getByRole('dialog', { name: 'Projects', exact: true });
+  await dialog.getByRole('group', { name: `Project ${name}`, exact: true }).getByRole('button', { name: 'Open', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole('button', { name: `Project: ${name}`, exact: true })).toBeVisible();
+}
 async function menu(page: Page, name: 'Project' | 'Export', item: string) {
   await page.getByRole('button', { name: `${name} ▾`, exact: true }).click();
   await page.getByRole('menuitem', { name: item, exact: true }).click();
@@ -164,7 +171,7 @@ test('the whole song exports as WAV and as MIDI with section markers', async ({ 
   await expect(page.locator('.app-alert')).toHaveCount(0);
 });
 
-test('undo returns to the scene the edit was made in, and saved arrangements bring their scenes back', async ({ page }) => {
+test('undo returns to the scene the edit was made in, and a copy of the project brings its scenes back', async ({ page }) => {
   await drum(page, 'Kick step 1').click();
   await page.getByRole('button', { name: '+ Empty', exact: true }).click();
   await drum(page, 'Snare step 5').click();
@@ -185,19 +192,14 @@ test('undo returns to the scene the edit was made in, and saved arrangements bri
   await expect(drum(page, 'Snare step 5')).toHaveAttribute('aria-pressed', 'true');
 
   await page.getByRole('button', { name: '+ Add Scene 2', exact: true }).click();
-  await page.getByRole('button', { name: '+ Save', exact: true }).click();
-  await page.locator('.save-name-input').fill('Two scenes');
-  await page.locator('.save-name-input').press('Enter');
-  await expect(page.getByText('Saved!', { exact: false })).toBeVisible();
-  const saved = (await project(page)).savedPatterns[0];
-  expect(saved.scenes).toHaveLength(2);
+  await menu(page, 'Project', 'Save a Copy');
 
   await menu(page, 'Project', 'Reset All');
   await expect(scene(page, 'Scene 2')).toHaveCount(0);
   await expect(page.locator('.scene-chip')).toHaveCount(1);
   await expect(page.locator('.drum-step-btn.active')).toHaveCount(0);
 
-  await page.locator('.load-select').selectOption(saved.id);
+  await openProject(page, 'Untitled copy');
   await expect(scene(page, 'Scene 2')).toHaveAttribute('aria-pressed', 'true');
   await expect(drum(page, 'Snare step 5')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.song-block')).toHaveCount(2);

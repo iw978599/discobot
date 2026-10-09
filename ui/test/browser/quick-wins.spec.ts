@@ -5,6 +5,18 @@ const PROJECT_KEY = 'discobot_browser_project_v1';
 const project = (page: Page) => page.evaluate(key => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem(key) || '{}')), PROJECT_KEY);
 
 type Captured = { type: string; note?: string; instrument?: string; time?: number };
+async function openProject(page: Page, name: string) {
+  await page.getByRole('button', { name: /^Project: / }).click();
+  const dialog = page.getByRole('dialog', { name: 'Projects', exact: true });
+  await dialog.getByRole('group', { name: `Project ${name}`, exact: true }).getByRole('button', { name: 'Open', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole('button', { name: `Project: ${name}`, exact: true })).toBeVisible();
+}
+async function setTempoTo(page: Page, bpm: number) {
+  await page.locator('.tempo-led').click();
+  await page.locator('.tempo-led-input').fill(String(bpm));
+  await page.locator('.tempo-led-input').press('Enter');
+}
 async function menu(page: Page, name: 'Project' | 'Export', item: string) {
   await page.getByRole('button', { name: `${name} ▾`, exact: true }).click();
   await page.getByRole('menuitem', { name: item, exact: true }).click();
@@ -61,11 +73,12 @@ test('the computer keyboard plays the selected synth, shifts octave and stays ou
   await expect.poll(async () => (await project(page)).synths[0].pattern.steps[2].note).toBe('E4');
 
   const before = (await messages(page)).filter(m => m.type === 'noteOn').length;
-  await page.getByRole('button', { name: '+ Save', exact: true }).click();
-  await page.locator('.save-name-input').pressSequentially('sad face');
-  await expect(page.locator('.save-name-input')).toHaveValue('sad face');
+  await page.locator('.song-module').getByRole('button', { name: 'Rename', exact: true }).click();
+  await page.getByLabel('Scene name', { exact: true }).fill('');
+  await page.getByLabel('Scene name', { exact: true }).pressSequentially('sad face');
+  await expect(page.getByLabel('Scene name', { exact: true })).toHaveValue('sad face');
   expect((await messages(page)).filter(m => m.type === 'noteOn').length, 'typing a name plays nothing').toBe(before);
-  await page.locator('.save-name-input').press('Escape');
+  await page.getByLabel('Scene name', { exact: true }).press('Escape');
 
   // The second lane has its own octave and gets the notes once it is selected.
   await page.getByRole('button', { name: /^Synth 2/ }).click();
@@ -160,10 +173,6 @@ test('a project file restores lanes, drums, saved arrangements and presets over 
   await page.getByLabel('Snare step 5 repeats', { exact: true }).selectOption('3');
   await page.getByLabel('Preset name', { exact: true }).fill('Travel keys');
   await page.locator('.preset-controls').getByRole('button', { name: 'Save', exact: true }).click();
-  await page.getByRole('button', { name: '+ Save', exact: true }).click();
-  await page.locator('.save-name-input').fill('Backed up');
-  await page.locator('.save-name-input').press('Enter');
-  await expect(page.getByText('Saved!', { exact: false })).toBeVisible();
 
   const download = page.waitForEvent('download');
   await menu(page, 'Project', 'Export Project');
@@ -181,36 +190,39 @@ test('a project file restores lanes, drums, saved arrangements and presets over 
   await expect(page.getByRole('heading', { name: 'Discobot', exact: true })).toBeVisible();
   await expect(page.locator('.app-alert')).toHaveCount(0);
 
-  // Wipe the browser, as if this were another device.
-  await page.evaluate(() => localStorage.clear());
-  await page.reload();
+  // Start something else, then bring the file in: it arrives as its own project.
+  await menu(page, 'Project', 'New Project');
   await expect(page.locator('.tempo-led-value')).toHaveText('120');
+  await expect(page.getByRole('button', { name: 'Project: Untitled 2', exact: true })).toBeVisible();
+  await page.getByLabel('Synth preset', { exact: true }).locator('option').filter({ hasText: 'Travel keys' }).first().waitFor({ state: 'attached' });
+  await page.locator('.preset-controls').getByLabel('Synth preset', { exact: true }).selectOption({ label: 'Travel keys' });
+  await page.locator('.preset-controls').getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(page.getByLabel('Synth preset', { exact: true }).locator('option').filter({ hasText: 'Travel keys' })).toHaveCount(0);
+  await setTempoTo(page, 150);
 
   const input = page.locator('input[aria-label="Import project file"]');
-  const refused = page.waitForEvent('dialog');
   await input.setInputFiles(path);
-  await (await refused).dismiss();
-  await expect(page.locator('.tempo-led-value')).toHaveText('120');
-
-  const confirmed = page.waitForEvent('dialog');
-  await input.setInputFiles(path);
-  await (await confirmed).accept();
   await expect(page.locator('.tempo-led-value')).toHaveText('96');
+  await expect(page.getByRole('button', { name: 'Project: Untitled 3', exact: true }), 'a name already in use gets a number').toBeVisible();
   await expect(page.getByRole('button', { name: 'G3 step 2', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'Select Snare', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Snare step 5', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('button', { name: 'Snare step 5', exact: true })).toContainText('×3');
-  await expect(page.locator('.load-select option').filter({ hasText: 'Backed up' })).toHaveCount(1);
   await expect(page.getByLabel('Synth preset', { exact: true }).locator('option').filter({ hasText: 'Travel keys' })).toHaveCount(1);
   await expect(page.locator('.app-alert')).toHaveCount(0);
-  const stored = await project(page);
-  expect(stored.tempo).toBe(96);
-  expect(stored.savedPatterns).toHaveLength(1);
+  expect((await project(page)).tempo).toBe(96);
+
+  // Nothing was replaced: the project started before the import is still there.
+  await page.getByRole('button', { name: /^Project: / }).click();
+  const projects = page.getByRole('dialog', { name: 'Projects', exact: true });
+  await expect(projects.getByRole('group')).toHaveCount(3);
+  await page.keyboard.press('Escape');
+  await openProject(page, 'Untitled 2');
+  await expect(page.locator('.tempo-led-value')).toHaveText('150');
 
   await input.setInputFiles({ name: 'notes.json', mimeType: 'application/json', buffer: Buffer.from('{"hello":"world"}') });
   await expect(page.locator('.app-alert')).toContainText('not a Discobot project file');
-  expect((await project(page)).tempo, 'a file that is not a project changes nothing').toBe(96);
+  expect((await project(page)).tempo, 'a file that is not a project changes nothing').toBe(150);
 });
 
 test('the app installs a service worker and opens with no network', async ({ page, context }) => {

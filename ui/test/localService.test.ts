@@ -50,24 +50,6 @@ test('local synth state merges nested controls, isolates lanes, persists across 
   assert.equal((await service.request('/synth/1', { method: 'DELETE' })).status, 400);
 });
 
-test('patterns save, overwrite, load and delete entirely locally', async () => {
-  const service = setup();
-  const initial = service.snapshot();
-  const body = { name: 'My arrangement', steps: initial.synths[0].pattern.steps, synthParams: initial.synths[0].synthParams, tempo: 120,
-    drumState: initial.drumState, synths: [{ id: 1, steps: initial.synths[0].pattern.steps, synthParams: initial.synths[0].synthParams }], drumSwing: .25 };
-  const saved = await (await mutate(service, '/patterns/save', body)).json();
-  const conflict = await mutate(service, '/patterns/save', { ...body, name: 'my arrangement' });
-  assert.equal(conflict.status, 409);
-  await mutate(service, '/patterns/save', { ...body, tempo: 140, overwriteId: saved.id });
-  const restored = new LocalProjectService(); restored.initialize(defaults());
-  const loaded = await (await restored.request(`/patterns/saved/${saved.id}`)).json();
-  assert.equal(loaded.tempo, 140);
-  assert.equal(loaded.drumSwing, .25);
-  assert.equal(loaded.synths.length, 1);
-  await restored.request(`/patterns/saved/${saved.id}`, { method: 'DELETE' });
-  assert.deepEqual(await (await restored.request('/patterns/saved')).json(), []);
-});
-
 test('drum kits, velocity, pan, mute, swing, effects and tempo are functional state', async () => {
   const service = setup();
   const kits = await (await service.request('/drum/kits')).json();
@@ -109,19 +91,6 @@ test('imported pattern becomes active and transport never resumes automatically 
   assert.equal(restored.snapshot().synths[0].isPlaying, false);
 });
 
-test('quota failures do not claim successful arrangement saves', async () => {
-  const service = setup();
-  const messages: string[] = [];
-  service.subscribe(message => messages.push(message.type));
-  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
-    setItem() { throw new Error('QuotaExceededError'); },
-  } });
-  const result = await mutate(service, '/patterns/save', { name: 'Lost', steps: [] });
-  assert.equal(result.status, 507);
-  assert.deepEqual(service.snapshot().savedPatterns, []);
-  assert.ok(messages.includes('storageError'));
-});
-
 test('an intact project reloads without a damage warning; a broken drum grid is reported', async () => {
   const service = setup();
   await mutate(service, '/drum/step', { instrument: 'kick', step: 3, active: true });
@@ -150,16 +119,6 @@ test('damaged stored projects recover to a usable local synth and announce the e
   assert.equal(service.snapshot().synths[0].synthId, 1);
   assert.equal(service.snapshot().restored, false);
   assert.ok(messages.includes('storageError'));
-});
-
-test('failed deletes leave the saved arrangement available', async () => {
-  const service = setup();
-  const saved = await (await mutate(service, '/patterns/save', { name: 'Keep', steps: [] })).json();
-  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
-    setItem() { throw new Error('QuotaExceededError'); },
-  } });
-  assert.equal((await service.request(`/patterns/saved/${saved.id}`, { method: 'DELETE' })).status, 507);
-  assert.equal(service.snapshot().savedPatterns.length, 1);
 });
 
 test('WAV encoding writes valid interleaved stereo PCM and sanitizes nonfinite samples', () => {

@@ -9,7 +9,8 @@ import SynthModule from './SynthModule';
 import DrumModule from './DrumModule';
 import SongModule from './SongModule';
 import Dialog from './Dialog';
-import PatternManager from './PatternManager';
+import ProjectsDialog from './ProjectsDialog';
+import ShareDialog from './ShareDialog';
 import MidiImportDialog from './MidiImportDialog';
 import { HelpModal } from './HeaderParts';
 import '@fontsource/barlow-condensed/latin-500.css';
@@ -22,7 +23,8 @@ import './rack.css';
 // the drum grid, then the shared effects.
 export default function Rack({ studio }: { studio: Studio }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [managerOpen, setManagerOpen] = useState(false);
+  const [projectsOpen, setProjectsOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const { midiState } = studio;
 
   return (
@@ -31,7 +33,8 @@ export default function Rack({ studio }: { studio: Studio }) {
         <TransportUnit
           studio={studio}
           onOpenSettings={() => setSettingsOpen(true)}
-          onOpenManager={() => { void studio.refreshSavedPatterns(); setManagerOpen(true); }}
+          onOpenProjects={() => setProjectsOpen(true)}
+          onShare={() => setShareOpen(true)}
         />
         {studio.changedElsewhere && (
           <div role="alert" className="app-alert">
@@ -58,14 +61,8 @@ export default function Rack({ studio }: { studio: Studio }) {
 
       <HelpModal open={studio.helpOpen} onClose={() => studio.setHelpOpen(false)} />
       <MidiImportDialog studio={studio} />
-      {managerOpen && (
-        <PatternManager
-          saved={studio.savedPatterns}
-          onLoad={(id) => { void studio.handleLoadGlobal(id); }}
-          onChanged={() => { void studio.refreshSavedPatterns(); }}
-          onClose={() => setManagerOpen(false)}
-        />
-      )}
+      {projectsOpen && <ProjectsDialog studio={studio} onClose={() => setProjectsOpen(false)} />}
+      {shareOpen && <ShareDialog onClose={() => setShareOpen(false)} />}
       {settingsOpen && (
         <Dialog title="MIDI and samples" closeLabel="Close MIDI and samples" onClose={() => setSettingsOpen(false)}>
           <h3>MIDI controller</h3>

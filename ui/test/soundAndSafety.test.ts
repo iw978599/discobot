@@ -150,9 +150,8 @@ test('a burst of edits is one write, made shortly after the last edit or when fl
   assert.equal(writes(), 2, 'the pending timer was cancelled by the flush');
 
   await post(service, '/tempo', { tempo: 91 });
-  const saved = await post(service, '/patterns/save', { name: 'Now', steps: [] });
-  assert.equal(saved.status, 200);
-  assert.deepEqual([writes(), tempo()], [3, 91], 'saving an arrangement writes immediately, pending edits included');
+  assert.equal((await service.copyProject(service.snapshot().projectId)).ok, true);
+  assert.deepEqual([writes(), tempo()], [3, 91], 'keeping a copy writes immediately, pending edits included');
 });
 
 test('when another tab has changed the project, this one stops saving until told to keep its version', async () => {

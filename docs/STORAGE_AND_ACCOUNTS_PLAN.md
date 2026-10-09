@@ -2,7 +2,23 @@
 
 Status: proposed, nothing built. Written 2026-10-08; stage 3 revised the same day after the owner's decisions.
 
-## Where things are today
+## Progress
+
+- **Stage 1, items 1 to 3: built** on `feat/project-library`. Every project is a
+  record in IndexedDB; "saved arrangements" became projects; the Projects
+  dialog lists, opens, renames, copies and deletes them, and asks the browser
+  for persistent storage. One difference from the plan: the open project also
+  keeps a working copy in `localStorage`, because that can be written at the
+  instant a tab closes and IndexedDB cannot. The library record is updated
+  alongside it.
+- **Stage 1, item 4 (automatic versions): not built.** "Save a Copy" is the
+  manual version of it.
+- **Stage 1, items 5 to 7: not built.**
+- **Stage 2, share by link: built.** A link carries the song; opening it shows
+  a page that plays it and offers a copy. No account and no server.
+- **Stage 3: not started.**
+
+## Where things were when this was written
 
 - A project lives in one browser profile: `localStorage` for the project and
   saved arrangements, IndexedDB for imported samples.
