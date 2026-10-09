@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Studio } from '../studio/useStudio';
 import { createGuestPlayer, type GuestPlayer } from '../hooks/guestAudio';
 import {
-  GUEST_LATENCY_MS, GUEST_PROTOCOL, guestLink, guestOrigin, isTrustedOrigin, trustOrigin,
+  GUEST_LATENCY_MS, GUEST_PROTOCOL, guestCapture, guestLink, guestOrigin, isTrustedOrigin, trustOrigin,
   type Guest, type GuestTransport,
 } from '../services/guests';
 import Knob from '../components/Knob';
@@ -68,7 +68,11 @@ export default function GuestModule({ studio, guest }: { studio: Studio; guest: 
       } else if (data.type === 'audio') {
         playerRef.current ??= createGuestPlayer();
         playerRef.current.setVolume(guestRef.current.muted ? 0 : guestRef.current.volume);
-        if (playerRef.current.push(data.wall, data.sampleRate, data.left, data.right)) setBlocks(playerRef.current.blocks);
+        if (playerRef.current.push(data.wall, data.sampleRate, data.left, data.right)) {
+          setBlocks(playerRef.current.blocks);
+          // While an export is being recorded, the same audio is kept for it.
+          guestCapture.feed(guestRef.current.id, data.wall as number, data.sampleRate as number, data.left as Float32Array, data.right as Float32Array);
+        }
       }
     };
     window.addEventListener('message', onMessage);
@@ -150,7 +154,7 @@ export default function GuestModule({ studio, guest }: { studio: Studio; guest: 
             allow="autoplay"
             referrerPolicy="no-referrer"
           />
-          <p className="rack-hint">A guest plays live. It is not included in WAV or MIDI export, and it needs a connection to its own site.</p>
+          <p className="rack-hint">A guest plays live and needs a connection to its own site. Download WAV and Song WAV record it by playing through once; it is not in Loop WAV, stems or MIDI.</p>
         </>
       )}
     </section>

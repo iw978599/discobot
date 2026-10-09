@@ -117,10 +117,11 @@ mono/slide and the drum voices. What it leaves open:
    (per-scene mutes, copy and paste between scenes, sharing a part between
    scenes).
 
-2. **Longer patterns and per-lane length.** (M)
-   Patterns are one bar. Allowing 2, 4 or 8 bars, and lanes of different
-   lengths running against each other, makes far more music possible than any
-   single synthesis feature.
+2. **Longer patterns and per-lane length.** Done: each synth lane and the
+   drum grid can be 1, 2, 4 or 8 bars, and lanes of different lengths loop
+   against each other. Still open: lengths that are not a whole number of
+   bars (a 12-step lane against 16), copying one bar to another, and MIDI
+   import of more than one bar.
 
 3. **Polyphonic steps and note length.** Done: up to six notes per step and
    a per-step length, in the piano roll, live playback, WAV and MIDI export

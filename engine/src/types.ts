@@ -179,6 +179,8 @@ export interface Pattern {
   name: string;
   steps: SequencerStep[];
   tempo: number;
+  // how many bars the steps cover: 1, 2, 4 or 8. Absent means one.
+  bars?: number;
 }
 
 export type DrumInstrument = 'kick' | 'snare' | 'openHH' | 'closedHH' | 'ride' | 'crash' | 'snare2' | 'clap';
@@ -246,6 +248,8 @@ export interface Scene {
   // steps per synth lane id; a missing lane is silent in this scene
   lanes: Record<number, SequencerStep[]>;
   drums: Record<DrumInstrument, DrumLanePattern>;
+  // bars per synth lane id, for lanes longer than one bar
+  laneBars?: Record<number, number>;
 }
 
 // The order scenes play in when the transport is in song mode.

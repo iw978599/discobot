@@ -68,7 +68,7 @@ test('chords and lengths read from storage are checked', () => {
   assert.deepEqual(chord, { active: true, note: 'C3', velocity: 0.5, notes: ['E3', 'G3'], length: 3 });
   assert.deepEqual(junk, { active: true, note: 'C3', velocity: 0.5 });
   assert.equal(stepNotes(long).length, MAX_STEP_NOTES);
-  assert.equal(long.length, 32);
+  assert.equal(long.length, 14, 'a note cannot be longer than what is left of the pattern');
   assert.deepEqual(silent, { active: false, velocity: 0.5 }, 'a step with no main note has no chord');
 });
 

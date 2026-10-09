@@ -53,12 +53,12 @@ test('a bar number maps to the right scene, repeat and block; a song ends unless
   const song: Song = { loop: false, entries: [{ sceneId: 'a', repeats: 2 }, { sceneId: 'b', repeats: 1 }, { sceneId: 'a', repeats: 3 }] };
   assert.equal(songLengthBars(song), 6);
   assert.deepEqual([0, 1, 2, 3, 5].map(bar => sceneAtBar(song, bar)), [
-    { sceneId: 'a', entryIndex: 0, repeat: 0 }, { sceneId: 'a', entryIndex: 0, repeat: 1 },
-    { sceneId: 'b', entryIndex: 1, repeat: 0 }, { sceneId: 'a', entryIndex: 2, repeat: 0 }, { sceneId: 'a', entryIndex: 2, repeat: 2 },
+    { sceneId: 'a', entryIndex: 0, repeat: 0, bar: 0 }, { sceneId: 'a', entryIndex: 0, repeat: 1, bar: 0 },
+    { sceneId: 'b', entryIndex: 1, repeat: 0, bar: 0 }, { sceneId: 'a', entryIndex: 2, repeat: 0, bar: 0 }, { sceneId: 'a', entryIndex: 2, repeat: 2, bar: 0 },
   ]);
   assert.equal(sceneAtBar(song, 6), null, 'past the end');
   assert.equal(sceneAtBar(song, -1), null);
-  assert.deepEqual(sceneAtBar({ ...song, loop: true }, 8), { sceneId: 'b', entryIndex: 1, repeat: 0 }, 'a looping song wraps');
+  assert.deepEqual(sceneAtBar({ ...song, loop: true }, 8), { sceneId: 'b', entryIndex: 1, repeat: 0, bar: 0 }, 'a looping song wraps');
   assert.deepEqual([0, 1, 2, 3].map(index => entryStartBar(song, index)), [0, 2, 3, 6]);
   assert.equal(sceneAtBar({ entries: [], loop: true }, 0), null);
   const scenes = [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }] as Scene[];

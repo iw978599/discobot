@@ -192,9 +192,12 @@ audio into the mixer with level and mute, settings saved in the project, and
 asking before loading a guest that arrives with someone else's song. The
 protocol is `GUEST_PROTOCOL.md`, a working example guest is
 `guest-example.html`, and `GUEST_PROMPT_FOR_JAM_LINK_APPS.md` is a prompt the
-creator of Choir can give to Claude to add the guest side. Not built:
-recording a guest into the project for export, effect sends for a guest, and
-settings per scene.
+creator of Choir can give to Claude to add the guest side. The creator of Choir has since added guest support to four instruments
+(Choir, Logic Rhythm, Boolean Melody Machine, Tape Loop Deck), and with
+permission they are offered by name in the Add Guest dialog. Download WAV and
+Song WAV now record guests by playing through once. Not built: guests in
+loops and stems, effect sends for a guest, settings per scene, and a way for
+a guest to save audio of its own (Tape Loop Deck's loops) with the project.
 
 ## How creators would link an instrument
 

@@ -14,7 +14,16 @@ export interface Guest {
   state?: unknown;
 }
 
-export const MAX_GUESTS = 2;
+export const MAX_GUESTS = 4;
+
+// Instruments whose creators have agreed to be offered here by name. Each is still another
+// site's page, loaded only when the user adds it.
+export const FEATURED_GUESTS: Array<{ name: string; by: string; about: string; url: string }> = [
+  { name: 'Choir', by: 'Aaron Van Dorn', about: 'A generative choral synthesizer: a melody that slowly mutates, sung in vowels', url: 'https://aaronvandorn.github.io/Choir/' },
+  { name: 'Logic Rhythm', by: 'Aaron Van Dorn', about: 'A drum machine sequenced by logic gates', url: 'https://aaronvandorn.github.io/Logic-Rhythm/' },
+  { name: 'Boolean Melody Machine', by: 'Aaron Van Dorn', about: 'Melody and harmony from Boolean logic and Euclidean clocks', url: 'https://aaronvandorn.github.io/Boolean-Melody-Machine/' },
+  { name: 'Tape Loop Deck', by: 'Aaron Van Dorn', about: 'A tape loop simulator with a mixing deck and effects', url: 'https://aaronvandorn.github.io/Tape-Loop-Deck/' },
+];
 export const MAX_GUEST_STATE_CHARS = 100_000;
 export const GUEST_PROTOCOL = 1;
 // How far ahead of the beat a guest plays, and how long its audio is held before it is heard.
@@ -152,3 +161,42 @@ export function resample(input: Float32Array, from: number, to: number): Float32
   }
   return output;
 }
+
+// ---- recording guests for export
+//
+// An export is rendered faster than real time, and a guest cannot do that. So for an export
+// the arrangement is played through once and each guest's audio is kept as it arrives, placed
+// by its time stamp against the start of the transport.
+
+export interface GuestTake { left: Float32Array; right: Float32Array }
+
+let capture: { anchorWall: number; sampleRate: number; frames: number; takes: Map<string, GuestTake>; expected: Map<string, number> } | null = null;
+
+export const guestCapture = {
+  active: () => capture !== null,
+  // `anchorWall` is when the arrangement's first beat is heard.
+  start(anchorWall: number, seconds: number, sampleRate = 44100) {
+    capture = { anchorWall, sampleRate, frames: Math.ceil(seconds * sampleRate), takes: new Map(), expected: new Map() };
+  },
+  feed(guestId: string, wall: number, rate: number, left: Float32Array, right: Float32Array) {
+    if (!capture) return;
+    let take = capture.takes.get(guestId);
+    if (!take) { take = { left: new Float32Array(capture.frames), right: new Float32Array(capture.frames) }; capture.takes.set(guestId, take); }
+    const l = resample(left, rate, capture.sampleRate), r = resample(right, rate, capture.sampleRate);
+    // The guest played this early by the agreed latency; add it back to get the time in the song.
+    const target = (wall + GUEST_LATENCY_MS - capture.anchorWall) / 1000 * capture.sampleRate;
+    const start = placeBlock(capture.expected.get(guestId) ?? null, target, capture.sampleRate);
+    capture.expected.set(guestId, start + l.length);
+    for (let index = 0; index < l.length; index++) {
+      const frame = start + index;
+      if (frame < 0 || frame >= capture.frames) continue;
+      take.left[frame] = l[index];
+      take.right[frame] = r[index];
+    }
+  },
+  stop(): Map<string, GuestTake> {
+    const takes = capture?.takes ?? new Map<string, GuestTake>();
+    capture = null;
+    return takes;
+  },
+};

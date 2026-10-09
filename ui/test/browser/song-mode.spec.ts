@@ -206,3 +206,42 @@ test('undo returns to the scene the edit was made in, and a copy of the project 
   await scene(page, 'Scene 1').click();
   await expect(drum(page, 'Kick step 1')).toHaveAttribute('aria-pressed', 'true');
 });
+
+test('a song plays a two-bar scene for both its bars before moving on', async ({ page }) => {
+  const drumsUnit = page.getByRole('region', { name: 'Drums module', exact: true });
+  // Scene 1 is two bars: a kick on the first beat, and one on the second beat of bar two.
+  await drum(page, 'Kick step 1').click();
+  await drumsUnit.getByLabel('Drum bars', { exact: true }).selectOption('2');
+  await drumsUnit.getByRole('button', { name: 'Drum bar 2', exact: true }).click();
+  await drum(page, 'Kick step 17').click();
+  await drum(page, 'Kick step 21').click();
+  await expect(page.locator('.song-row .rack-plate')).toContainText('2 bars · 0:04');
+
+  // The Break is one bar with a snare.
+  await page.getByRole('button', { name: '+ Empty', exact: true }).click();
+  await page.getByRole('button', { name: 'Rename', exact: true }).click();
+  await page.getByLabel('Scene name', { exact: true }).fill('Break');
+  await page.getByLabel('Scene name', { exact: true }).press('Enter');
+  await drumsUnit.getByLabel('Drum bars', { exact: true }).selectOption('1');
+  await drum(page, 'Snare step 1').click();
+  await page.getByRole('button', { name: '+ Add Break', exact: true }).click();
+  await expect(page.locator('.song-row .rack-plate'), 'two bars of Scene 1 and one of the Break').toContainText('3 bars · 0:06');
+
+  await page.getByRole('group', { name: 'Play mode' }).getByRole('button', { name: 'Song', exact: true }).click();
+  await page.getByRole('group', { name: 'Song block 1: Scene 1', exact: true }).getByRole('button', { name: /Scene 1/ }).click();
+  await page.evaluate(() => { (window as unknown as { drumHits: unknown[] }).drumHits.length = 0; });
+  await page.getByRole('button', { name: /Play All/ }).click();
+  await expect(scene(page, 'Break')).toHaveAttribute('aria-pressed', 'true', { timeout: 10_000 });
+  await expect(page.getByRole('button', { name: /Play All/ }), 'the song stops after its three bars').toBeVisible({ timeout: 10_000 });
+
+  const played = await hits(page);
+  expect(played.map(hit => hit.instrument)).toEqual(['kick', 'kick', 'snare']);
+  expect(played[1].time! - played[0].time!, 'the second kick is one beat into bar two').toBeCloseTo(2.5, 2);
+  expect(played[2].time! - played[0].time!, 'the Break starts after both bars of Scene 1').toBeCloseTo(4, 2);
+
+  // The whole song exports at the same length.
+  const download = page.waitForEvent('download');
+  await menu(page, 'Export', 'Song MIDI');
+  const midi = await readFile((await (await download).path())!);
+  expect(midi.subarray(0, 4).toString()).toBe('MThd');
+});

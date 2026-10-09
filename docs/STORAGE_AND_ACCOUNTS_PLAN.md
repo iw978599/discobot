@@ -16,6 +16,10 @@ Status: proposed, nothing built. Written 2026-10-08; stage 3 revised the same da
 - **Stage 1, items 5 to 7: not built.**
 - **Stage 2, share by link: built.** A link carries the song; opening it shows
   a page that plays it and offers a copy. No account and no server.
+- **Stage 1, item 4 (automatic versions): built.** Up to 20 per project,
+  kept on opening, every five minutes of editing, and before a sync download
+  or a restore replaces the project. Project → Version History restores one
+  or saves it as a separate project.
 - **Stage 3, step 2 (the API and accounts): built.** Sign up with an invite
   code, sign in, sign out, recovery codes, change password, delete account,
   and the owner's invite codes and member list. The API runs on Cloudflare at

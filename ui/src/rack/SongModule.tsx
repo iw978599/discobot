@@ -13,7 +13,7 @@ export default function SongModule({ studio }: { studio: Studio }) {
   const [draftName, setDraftName] = useState('');
   const current = scenes.find(scene => scene.id === currentSceneId);
   const nameOf = (sceneId: string) => scenes.find(scene => scene.id === sceneId)?.name ?? '?';
-  const bars = songLengthBars(song);
+  const bars = songLengthBars(song, studio.sceneLength);
   const setEntries = (entries: Song['entries']) => studio.handleSongChange({ entries });
 
   const commitRename = () => {
@@ -27,7 +27,7 @@ export default function SongModule({ studio }: { studio: Studio }) {
       <div className="rack-row">
         <div className="rack-plate static">
           <b>Scenes</b>
-          <span>One bar each</span>
+          <span>Sections of the song</span>
         </div>
         <div className="scene-strip" role="group" aria-label="Scenes">
           {scenes.map(scene => (renaming === scene.id ? (

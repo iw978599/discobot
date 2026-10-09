@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { listSamples, saveSample } from '../services/sampleStore';
+import { BAR_CHOICES, drumBars } from '../services/patternLength';
 import type { Studio } from '../studio/useStudio';
 import { DrumInstrument, DrumKitId, DrumState, CymbalType } from '../types';
 import DrumKnob from '../components/DrumKnob';
@@ -62,6 +63,15 @@ export default function DrumModule({ studio }: { studio: Studio }) {
   const [selectedStep, setSelectedStep] = useState(0);
   const [showMore, setShowMore] = useState(false);
   const [showSends, setShowSends] = useState(false);
+  // A drum pattern longer than one bar is shown a bar at a time. `base` is the first step on show.
+  const bars = drumBars(drumState);
+  const [viewBar, setViewBar] = useState(0);
+  const [follow, setFollow] = useState(true);
+  const playingBar = studio.isAnyPlaying ? Math.floor(studio.drumCurrentStep / 16) : null;
+  const shownBar = Math.min(bars - 1, follow && playingBar !== null ? playingBar : viewBar);
+  const base = shownBar * 16;
+  // A pattern made shorter can leave the selected step past its end.
+  useEffect(() => { if (selectedStep >= bars * 16) setSelectedStep(0); }, [bars, selectedStep]);
   // Imported samples a lane can play instead of its built-in sound.
   const [samples, setSamples] = useState<Array<{ id: string; name: string }>>([]);
   const sampleFileRef = useRef<HTMLInputElement>(null);
@@ -84,6 +94,9 @@ export default function DrumModule({ studio }: { studio: Studio }) {
   const handleStepClick = (instrument: DrumInstrument, step: number, shiftKey: boolean) => {
     setSelected(instrument);
     setSelectedStep(step);
+    // Editing a bar holds the view on it.
+    setViewBar(Math.floor(step / 16));
+    setFollow(false);
     const row = drumState[instrument];
     if (shiftKey && row.steps[step]) {
       const levels = [0.25, 0.5, 0.75, 1.0];
@@ -97,10 +110,11 @@ export default function DrumModule({ studio }: { studio: Studio }) {
   };
 
   // The pattern tools move steps around; velocity, chance and repeats travel with their step.
+  // They work on the bar on show.
   const rearrange = (sourceFor: (step: number) => number) => {
-    const steps = STEPS.map((step) => track.steps[sourceFor(step)]);
-    STEPS.forEach((step) => {
-      const from = sourceFor(step);
+    const steps = STEPS.map((column) => track.steps[base + sourceFor(column)]);
+    STEPS.forEach((column) => {
+      const step = base + column, from = base + sourceFor(column);
       if (track.stepVelocities) onStepVelocity(selected, step, track.stepVelocities[from] ?? 1);
       if (track.stepProbabilities || track.stepRatchets) {
         const probability = track.stepProbabilities?.[from] ?? 1, ratchet = track.stepRatchets?.[from] ?? 1;
@@ -108,7 +122,7 @@ export default function DrumModule({ studio }: { studio: Studio }) {
           onStepDetail(selected, step, { probability, ratchet });
         }
       }
-      if (steps[step] !== track.steps[step]) onStepToggle(selected, step, steps[step]);
+      if (steps[column] !== track.steps[step]) onStepToggle(selected, step, steps[column]);
     });
   };
 
@@ -152,8 +166,8 @@ export default function DrumModule({ studio }: { studio: Studio }) {
             <span />
             <span />
             <div className="drum-cells">
-              {STEPS.map((step) => (
-                <span key={step} className={`drum-step-indicator ${studio.isAnyPlaying && studio.drumCurrentStep === step ? 'active' : ''}`}>{step + 1}</span>
+              {STEPS.map((column) => (
+                <span key={column} className={`drum-step-indicator ${studio.isAnyPlaying && studio.drumCurrentStep === base + column ? 'active' : ''}`}>{column + 1}</span>
               ))}
             </div>
           </div>
@@ -194,7 +208,8 @@ export default function DrumModule({ studio }: { studio: Studio }) {
                   </button>
                 </div>
                 <div className="drum-cells">
-                  {STEPS.map((step) => {
+                  {STEPS.map((column) => {
+                    const step = base + column;
                     const active = row.steps[step];
                     const velocity = row.stepVelocities?.[step] ?? 1;
                     const chance = row.stepProbabilities?.[step] ?? 1;
@@ -203,7 +218,7 @@ export default function DrumModule({ studio }: { studio: Studio }) {
                     return (
                       <button
                         key={step}
-                        className={`drum-step-btn ${active ? 'active' : ''} ${active && chance < 1 ? 'chance' : ''} ${picked ? 'picked' : ''} ${step % 4 === 0 ? 'beat' : ''} ${studio.isAnyPlaying && studio.drumCurrentStep === step ? 'current' : ''}`}
+                        className={`drum-step-btn ${active ? 'active' : ''} ${active && chance < 1 ? 'chance' : ''} ${picked ? 'picked' : ''} ${column % 4 === 0 ? 'beat' : ''} ${studio.isAnyPlaying && studio.drumCurrentStep === step ? 'current' : ''}`}
                         aria-label={`${LABELS[instrument]} step ${step + 1}`}
                         aria-pressed={active}
                         style={active ? { opacity: 0.45 + velocity * 0.55 } : undefined}
@@ -293,11 +308,34 @@ export default function DrumModule({ studio }: { studio: Studio }) {
         {studio.missingDrumSamples.includes(selected) && (
           <span className="rack-hint" role="status">This lane's sample is not on this device, so its built-in sound is playing.</span>
         )}
+        <label className="drum-sound" title="How many bars the drum pattern lasts">
+          Bars
+          <select aria-label="Drum bars" value={bars} onChange={(event) => { void studio.handleDrumBarsChange(Number(event.target.value)); }}>
+            {BAR_CHOICES.map(choice => <option key={choice} value={choice}>{choice}</option>)}
+          </select>
+        </label>
+        {bars > 1 && (
+          <span className="bar-tabs" role="group" aria-label="Drum bar on show">
+            {Array.from({ length: bars }, (_, bar) => (
+              <button
+                key={bar}
+                className={`rack-btn ${bar === shownBar ? 'on' : ''} ${bar === playingBar ? 'playing' : ''}`}
+                aria-label={`Drum bar ${bar + 1}`}
+                aria-pressed={bar === shownBar}
+                onClick={() => { setViewBar(bar); setFollow(false); setSelectedStep(bar * 16 + (selectedStep % 16)); }}
+              >
+                {bar + 1}
+              </button>
+            ))}
+            <button className={`rack-btn ${follow ? 'on' : ''}`} aria-pressed={follow} title="Show whichever bar is playing" onClick={() => setFollow(value => !value)}>Follow</button>
+          </span>
+        )}
         <div className="drum-tools">
           <button
             className="rack-btn"
             title="Random fill for selected instrument"
-            onClick={() => STEPS.forEach((step) => {
+            onClick={() => STEPS.forEach((column) => {
+              const step = base + column;
               const active = Math.random() < 0.4;
               if (active !== track.steps[step]) onStepToggle(selected, step, active);
             })}

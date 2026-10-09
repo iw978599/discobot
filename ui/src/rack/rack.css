@@ -307,6 +307,10 @@
 .step-tools, .drum-step-details { display: flex; align-items: center; gap: 8px 18px; flex-wrap: wrap; }
 .step-tools label, .drum-step-details label { display: flex; align-items: center; gap: 6px; color: var(--legend); }
 .step-tools-name { color: var(--ink); font-size: 13px; }
+.step-tools-swap { flex: 1 1 520px; min-width: 0; display: grid; align-items: center; }
+.step-tools-swap > * { grid-area: 1 / 1; min-width: 0; }
+.step-tools-controls { display: flex; align-items: center; gap: 8px 18px; flex-wrap: wrap; }
+.step-tools-controls label { display: flex; align-items: center; gap: 6px; color: var(--legend); }
 .rack .keyboard-panel-toggle .octave-shift-value { color: var(--amber); font-family: var(--led-font); }
 .rack .keyboard-container { max-height: none; }
 .rack .key.white { height: 84px; }
@@ -343,6 +347,12 @@
 .drum-strip, .drum-sends { border-top: 1px solid #3c3f42; padding-top: 10px; flex-wrap: wrap; gap: 10px 18px; }
 .drum-strip-name { width: var(--plate); flex: none; display: flex; align-items: center; gap: 8px; color: var(--ink); font-size: 14px; }
 .drum-selected-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--drum-color); box-shadow: 0 0 6px var(--drum-color); flex: none; }
+/* Its options change with the selected step. A fixed width keeps the row from re-wrapping,
+   which would move the piano roll under a pointer that is painting. */
+.note-length-select { width: 12ch; }
+.bar-tabs { display: inline-flex; gap: 3px; align-items: center; }
+.bar-tabs .rack-btn { padding: 3px 8px; min-width: 0; }
+.bar-tabs .rack-btn.playing:not(.on) { border-color: var(--amber); color: var(--amber); }
 .drum-sound { display: flex; align-items: center; gap: 6px; }
 .drum-sound select { max-width: 16ch; }
 .drum-tools, .drum-strip-toggles { display: flex; gap: 4px; }

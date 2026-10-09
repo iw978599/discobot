@@ -1,7 +1,8 @@
 import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, Scene, Song, SynthParameters, SynthModelId, SynthModelParams } from '../types';
 import { MAX_GUESTS, guestUrl, patchGuest, sanitizeGuests, type Guest } from './guests';
 import { emptySteps } from './songPlayback';
-import { createIndexedDbLibrary, createMemoryLibrary, hasIndexedDb, type ProjectInfo, type ProjectLibrary, type ProjectRecord } from './projectLibrary';
+import { BAR_CHOICES, DRUM_STEPS_PER_BAR, laneBars, resizeBars } from './patternLength';
+import { createIndexedDbLibrary, createMemoryLibrary, hasIndexedDb, type ProjectInfo, type ProjectLibrary, type ProjectRecord, type VersionInfo, type VersionReason } from './projectLibrary';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
 import { normalizeSynthModelId } from '../synthModels';
 import { record, number, matchesShape, sanitizePattern, sanitizeSynthParams, sanitizeDrums, sanitizeEffects, sanitizeSends, sanitizeSaved, sanitizeModelParams, sanitizeKit, sanitizeScenes, sanitizeSong, MAX_SCENES } from './projectSanitization';
@@ -47,6 +48,9 @@ const STORAGE_KEY = 'discobot_browser_project_v1';
 const SCHEMA = 5;
 // Edits are written this long after the last one, so dragging a knob is one write, not hundreds.
 const SAVE_DELAY_MS = 300;
+// A version is kept when a project is opened, before anything replaces it, and this often while it is edited.
+const VERSION_INTERVAL_MS = 5 * 60_000;
+export const MAX_VERSIONS = 20;
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
 
 function merge<T>(base: T, patch: Partial<T>): T {
@@ -73,6 +77,11 @@ export class LocalProjectService {
   // False until a stored working copy was found, so a first run can adopt a library project instead.
   private hadWorkingCopy = false;
   private writeListeners = new Set<() => void>();
+  // When each project last had a version kept, and what that version looked like.
+  private versionTimes = new Map<string, number>();
+  private versionContents = new Map<string, string>();
+  // How long edits go on before another version is kept. Public so tests need not wait.
+  versionIntervalMs = VERSION_INTERVAL_MS;
 
   initialize(defaults: Defaults) {
     if (this.state) return;
@@ -180,6 +189,8 @@ export class LocalProjectService {
     return {
       id, name,
       lanes: Object.fromEntries(state.synths.map(synth => [synth.synthId, clone(synth.pattern.steps)])),
+      ...(state.synths.some(synth => (synth.pattern.bars ?? 1) > 1)
+        ? { laneBars: Object.fromEntries(state.synths.filter(synth => (synth.pattern.bars ?? 1) > 1).map(synth => [synth.synthId, synth.pattern.bars!])) } : {}),
       drums: Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => {
         const { steps, stepVelocities, stepProbabilities, stepRatchets } = state.drumState[instrument];
         return [instrument, clone({
@@ -213,7 +224,11 @@ export class LocalProjectService {
   private applyScene(scene: Scene) {
     const state = this.state!;
     state.currentSceneId = scene.id;
-    for (const synth of state.synths) synth.pattern.steps = clone(scene.lanes[synth.synthId] ?? emptySteps());
+    for (const synth of state.synths) {
+      synth.pattern.steps = clone(scene.lanes[synth.synthId] ?? emptySteps());
+      const bars = laneBars(synth.pattern.steps.length, scene.laneBars?.[synth.synthId]);
+      if (bars > 1) synth.pattern.bars = bars; else delete synth.pattern.bars;
+    }
     for (const instrument of DRUM_INSTRUMENTS) {
       const track = state.drumState[instrument], pattern = scene.drums[instrument];
       track.steps = clone(pattern.steps);
@@ -296,6 +311,7 @@ export class LocalProjectService {
         await this.library.put(this.currentRecord());
       }
       this.hadWorkingCopy = true;
+      await this.keepVersion(this.currentRecord(), 'opened').catch(() => {});
       await this.announceProjects();
     } catch {
       this.storageIssue = 'The project library is unavailable in this browser. The open project is still saved, but other projects cannot be listed.';
@@ -315,6 +331,8 @@ export class LocalProjectService {
 
   // Makes a project the open one.
   private activate(state: State, identity?: Pick<ProjectRecord, 'id' | 'name'>) {
+    // Opening a project keeps a version of it as it was found, once the library has stored it.
+    queueMicrotask(() => { if (this.state === state && !this.versionTimes.has(state.projectId)) this.keepVersion(this.currentRecord(), 'opened').catch(() => {}); });
     this.state = state;
     if (identity) { state.projectId = identity.id; state.name = projectName(identity.name); }
     if (!state.synths.some(s => s.synthId === 1)) state.synths.unshift(this.createSynth(1));
@@ -327,6 +345,77 @@ export class LocalProjectService {
   }
 
   listProjects(): Promise<ProjectInfo[]> { return this.library.list(); }
+
+  // --- Versions: earlier states of a project, for mistakes undo cannot reach.
+
+  // What a version is compared by: the project as this version of the app stores it, without
+  // the fields every save changes. Without normalizing, a project would look edited after a reload.
+  private versionContent(project: unknown): string {
+    const { revision: _revision, updatedAt: _updatedAt, currentSceneId: _scene, ...content } = record(this.normalized(project));
+    return JSON.stringify(content);
+  }
+
+  // Keeps a version of a project unless it is identical to the last one kept. Oldest go first
+  // once there are more than MAX_VERSIONS.
+  private async keepVersion(source: ProjectRecord, reason: VersionReason): Promise<void> {
+    const content = this.versionContent(source.project);
+    if (!this.versionContents.has(source.id)) {
+      const [latest] = await this.library.listVersions(source.id);
+      const stored = latest && await this.library.getVersion(latest.id);
+      if (stored) this.versionContents.set(source.id, this.versionContent(stored.project));
+    }
+    this.versionTimes.set(source.id, Date.now());
+    if (this.versionContents.get(source.id) === content) return;
+    this.versionContents.set(source.id, content);
+    await this.library.putVersion({ id: crypto.randomUUID(), projectId: source.id, at: Date.now(), name: source.name, reason, project: source.project });
+    const all = await this.library.listVersions(source.id);
+    for (const old of all.slice(MAX_VERSIONS)) await this.library.removeVersion(old.id);
+  }
+
+  listVersions(projectId = this.state!.projectId): Promise<VersionInfo[]> { return this.library.listVersions(projectId); }
+
+  // Puts a project back to an earlier version. The state it had just before is kept as a
+  // version too, so restoring can itself be taken back.
+  async restoreVersion(versionId: string): Promise<ProjectResult> {
+    try {
+      const version = await this.library.getVersion(versionId);
+      if (!version) return { ok: false, error: 'That version is no longer available.' };
+      const restored = this.restore({ savedPatterns: [], ...record(version.project) });
+      restored.state.savedPatterns = [];
+      restored.state.projectId = version.projectId;
+      if (version.projectId === this.state!.projectId) {
+        this.flush();
+        await this.keepVersion(this.currentRecord(), 'before-restore');
+        restored.state.name = this.state!.name;
+        // What is about to be opened is itself a version already; do not keep it again.
+        this.versionContents.set(version.projectId, this.versionContent(this.recordFor(restored.state).project));
+        this.activate(restored.state);
+        await this.library.put(this.currentRecord());
+      } else {
+        const existing = await this.library.get(version.projectId);
+        if (!existing) return { ok: false, error: 'That project is no longer in the library.' };
+        await this.keepVersion(existing, 'before-restore');
+        restored.state.name = existing.name;
+        await this.library.put({ ...this.recordFor(restored.state), updatedAt: Date.now() });
+      }
+      await this.announceProjects();
+      return { ok: true, repaired: restored.damaged };
+    } catch { return { ok: false, error: 'That version could not be restored.' }; }
+  }
+
+  // An earlier version as a project of its own, leaving the current one alone.
+  async copyVersion(versionId: string): Promise<ProjectResult> {
+    try {
+      const version = await this.library.getVersion(versionId);
+      if (!version) return { ok: false, error: 'That version is no longer available.' };
+      const { state } = this.restore({ savedPatterns: [], ...record(version.project) });
+      const now = Date.now();
+      Object.assign(state, { savedPatterns: [], projectId: crypto.randomUUID(), revision: 0, createdAt: now, updatedAt: now, name: await this.uniqueName(projectName(`${version.name} (earlier version)`)) });
+      await this.library.put(this.recordFor(state));
+      await this.announceProjects();
+      return { ok: true };
+    } catch { return { ok: false, error: 'The copy could not be saved.' }; }
+  }
 
   // --- What project sync needs. Sync never reaches into the state itself.
 
@@ -365,6 +454,9 @@ export class LocalProjectService {
       state.savedPatterns = [];
       state.projectId = id;
       state.name = await this.uniqueName(projectName(state.name), id);
+      // Whatever is about to be replaced is kept: sync must never be the reason work is lost.
+      const replaced = id === this.state!.projectId ? (this.flush(), this.currentRecord()) : await this.library.get(id);
+      if (replaced) await this.keepVersion(replaced, 'before-sync');
       if (id === this.state!.projectId) {
         this.activate(state);
         await this.library.put(this.currentRecord());
@@ -483,6 +575,9 @@ export class LocalProjectService {
   async deleteProject(id: string): Promise<ProjectResult> {
     try {
       await this.library.remove(id);
+      for (const version of await this.library.listVersions(id)) await this.library.removeVersion(version.id);
+      this.versionTimes.delete(id);
+      this.versionContents.delete(id);
       if (id === this.state!.projectId) {
         // The open project was deleted: open the most recent one left, or start a new one.
         const [next] = await this.library.list();
@@ -620,7 +715,11 @@ export class LocalProjectService {
       this.unsaved = false;
       // Keep the library's record of this project in step. It is asynchronous and may not finish
       // if the tab is closing; the working copy just written is what a reload reads.
-      this.library.put(this.currentRecord()).catch(() => {});
+      const saved = this.currentRecord();
+      this.library.put(saved).catch(() => {});
+      // The first save of a session keeps a version of the project as it was opened; after that, one every few minutes of editing.
+      const kept = this.versionTimes.get(saved.id);
+      if (kept !== undefined && Date.now() - kept >= this.versionIntervalMs) this.keepVersion(saved, 'auto').catch(() => {});
       this.writeListeners.forEach(listener => listener());
       return true;
     } catch {
@@ -681,7 +780,8 @@ export class LocalProjectService {
       const scene = this.captureScene(crypto.randomUUID(), name);
       if (body.empty === true) {
         for (const id of Object.keys(scene.lanes)) scene.lanes[Number(id)] = emptySteps(scene.lanes[Number(id)].length);
-        for (const instrument of DRUM_INSTRUMENTS) scene.drums[instrument] = { steps: Array(16).fill(false) };
+        // An empty scene keeps the lengths of the one it was made from.
+        for (const instrument of DRUM_INSTRUMENTS) scene.drums[instrument] = { steps: Array(scene.drums[instrument].steps.length).fill(false) };
       }
       const index = state.scenes.findIndex(entry => entry.id === state.currentSceneId);
       state.scenes.splice(index + 1, 0, scene);
@@ -835,22 +935,35 @@ export class LocalProjectService {
       }
       return update(key === 'drumFx' ? 'drumFxUpdate' : 'effectsLoopUpdate', { [key]: state[key] });
     }
+    if (path === '/drum/bars') {
+      const bars = BAR_CHOICES.find(choice => choice === body.bars);
+      if (!bars) return respond({ error: 'A drum pattern is 1, 2, 4 or 8 bars long' }, 400);
+      for (const instrument of DRUM_INSTRUMENTS) {
+        const lane = state.drumState[instrument];
+        lane.steps = resizeBars(lane.steps, DRUM_STEPS_PER_BAR, bars, () => false);
+        if (lane.stepVelocities) lane.stepVelocities = resizeBars(lane.stepVelocities, DRUM_STEPS_PER_BAR, bars, () => 1);
+        if (lane.stepProbabilities) lane.stepProbabilities = resizeBars(lane.stepProbabilities, DRUM_STEPS_PER_BAR, bars, () => 1);
+        if (lane.stepRatchets) lane.stepRatchets = resizeBars(lane.stepRatchets, DRUM_STEPS_PER_BAR, bars, () => 1);
+      }
+      state.drumState = sanitizeDrums(state.drumState, this.defaults!.drumState);
+      return update('drumFullState', { drumState: state.drumState });
+    }
     const track = state.drumState[body.instrument as keyof DrumState];
     if (track && path.startsWith('/drum/')) {
-      if ((path === '/drum/step' || path === '/drum/step-velocity' || path === '/drum/step-detail') && (!Number.isInteger(body.step) || body.step < 0 || body.step >= 16)) {
+      if ((path === '/drum/step' || path === '/drum/step-velocity' || path === '/drum/step-detail') && (!Number.isInteger(body.step) || body.step < 0 || body.step >= track.steps.length)) {
         return respond({ error: 'Invalid drum step' }, 400);
       }
       if (path === '/drum/step') track.steps[body.step] = Boolean(body.active);
       else if (path === '/drum/step-velocity') {
-        track.stepVelocities ||= Array(16).fill(1);
+        track.stepVelocities ||= Array(track.steps.length).fill(1);
         track.stepVelocities![body.step] = number(body.velocity, 1, 0, 1);
       } else if (path === '/drum/step-detail') {
         if (body.probability !== undefined) {
-          track.stepProbabilities ||= Array(16).fill(1);
+          track.stepProbabilities ||= Array(track.steps.length).fill(1);
           track.stepProbabilities![body.step] = number(body.probability, 1, 0, 1);
         }
         if (body.ratchet !== undefined) {
-          track.stepRatchets ||= Array(16).fill(1);
+          track.stepRatchets ||= Array(track.steps.length).fill(1);
           track.stepRatchets![body.step] = number(body.ratchet, 1, 1, 4);
         }
       } else if (path === '/drum/settings') track.settings = merge(track.settings, record(body.settings));

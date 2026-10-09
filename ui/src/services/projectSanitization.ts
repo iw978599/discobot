@@ -1,6 +1,7 @@
 import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, Scene, Song, SynthParameters, SynthModelParams } from '../types';
 import { DELAY_SYNCS } from './delayTime';
 import { MAX_STEP_NOTES, MAX_STEP_OFFSET } from './noteScheduling';
+import { BAR_CHOICES, DRUM_STEPS_PER_BAR, MAX_BARS, clampLengths, laneBars } from './patternLength';
 import { MAX_REPEATS, MAX_SONG_ENTRIES } from './songPlayback';
 import { normalizeSynthModelId } from '../synthModels';
 import { noteNameToMidi } from '../utils/midiExport';
@@ -105,15 +106,18 @@ export function sanitizeSynthParams(value: unknown, defaults: SynthParameters): 
   return params;
 }
 
-export function sanitizeSteps(value: unknown): Pattern['steps'] {
+// `bars` is how many bars the steps cover; without it they are one bar of 16 or 32 steps.
+export function sanitizeSteps(value: unknown, bars: unknown = 1): Pattern['steps'] {
   const input = Array.isArray(value) ? value : [];
-  return Array.from({ length: input.length > 16 ? 32 : 16 }, (_, index) => {
+  const count = laneBars(input.length, bars);
+  const perBar = count > 1 ? input.length / count : (input.length > 16 ? 32 : 16);
+  return clampLengths(Array.from({ length: perBar * count }, (_, index) => {
     const step = record(input[index]);
     const note = typeof step.note === 'string' && noteNameToMidi(step.note) !== null ? step.note : undefined;
     const extras = note && Array.isArray(step.notes)
       ? [...new Set((step.notes as unknown[]).filter((entry): entry is string => typeof entry === 'string' && noteNameToMidi(entry) !== null && entry !== note))].slice(0, MAX_STEP_NOTES - 1)
       : [];
-    const length = note && Number.isInteger(step.length) ? Math.max(1, Math.min(32, step.length)) : 1;
+    const length = note && Number.isInteger(step.length) ? Math.max(1, Math.min(32 * MAX_BARS, step.length)) : 1;
     return {
       active: step.active === true && Boolean(note), ...(note ? { note } : {}), velocity: number(step.velocity, .7, 0, 1),
       ...(step.slide === true ? { slide: true } : {}),
@@ -122,7 +126,7 @@ export function sanitizeSteps(value: unknown): Pattern['steps'] {
       ...(note && Number.isInteger(step.ratchet) && step.ratchet > 1 ? { ratchet: Math.min(4, step.ratchet) } : {}),
       ...(note && typeof step.offset === 'number' && step.offset > 0 ? { offset: Math.min(MAX_STEP_OFFSET, step.offset) } : {}),
     };
-  });
+  }));
 }
 
 export function sanitizePattern(value: unknown, tempo: number): Pattern | null {
@@ -130,16 +134,20 @@ export function sanitizePattern(value: unknown, tempo: number): Pattern | null {
   if (typeof input.id !== 'string' || !input.id || !Array.isArray(input.steps)) return null;
   return {
     id: input.id.slice(0, 200), name: typeof input.name === 'string' ? input.name.slice(0, 200) : 'Recovered pattern',
-    tempo, steps: sanitizeSteps(input.steps),
+    tempo, steps: sanitizeSteps(input.steps, input.bars),
+    ...(laneBars(input.steps.length, input.bars) > 1 ? { bars: laneBars(input.steps.length, input.bars) } : {}),
   };
 }
 
 export function sanitizeDrums(value: unknown, defaults: DrumState): DrumState {
   const input = record(value);
+  // Every drum lane is as long as the kick's.
+  const kickSteps = record(input.kick).steps;
+  const total = DRUM_STEPS_PER_BAR * (BAR_CHOICES.find(choice => Array.isArray(kickSteps) && kickSteps.length === choice * DRUM_STEPS_PER_BAR) ?? 1);
   return Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => {
     const track = record(input[instrument]), settings = record(track.settings), base = defaults[instrument];
     const state = {
-      steps: Array.from({ length: 16 }, (_, i) => Array.isArray(track.steps) && track.steps[i] === true),
+      steps: Array.from({ length: total }, (_, i) => Array.isArray(track.steps) && track.steps[i] === true),
       muted: track.muted === true, solo: track.solo === true,
       ...(typeof track.sampleId === 'string' && /^[0-9a-f-]{36}$/.test(track.sampleId) ? { sampleId: track.sampleId } : {}),
       settings: {
@@ -152,13 +160,13 @@ export function sanitizeDrums(value: unknown, defaults: DrumState): DrumState {
         ...(settings.cymbalType === 'ride' || settings.cymbalType === 'crash' ? { cymbalType: settings.cymbalType } : {}),
       },
       ...(Array.isArray(track.stepVelocities) ? {
-        stepVelocities: Array.from({ length: 16 }, (_, i) => number(track.stepVelocities[i], 1, 0, 1)),
+        stepVelocities: Array.from({ length: total }, (_, i) => number(track.stepVelocities[i], 1, 0, 1)),
       } : {}),
       ...(Array.isArray(track.stepProbabilities) ? {
-        stepProbabilities: Array.from({ length: 16 }, (_, i) => number(track.stepProbabilities[i], 1, 0, 1)),
+        stepProbabilities: Array.from({ length: total }, (_, i) => number(track.stepProbabilities[i], 1, 0, 1)),
       } : {}),
       ...(Array.isArray(track.stepRatchets) ? {
-        stepRatchets: Array.from({ length: 16 }, (_, i) => Math.round(number(track.stepRatchets[i], 1, 1, MAX_RATCHET))),
+        stepRatchets: Array.from({ length: total }, (_, i) => Math.round(number(track.stepRatchets[i], 1, 1, MAX_RATCHET))),
       } : {}),
     };
     return [instrument, state];
@@ -177,15 +185,20 @@ export function sanitizeScenes(value: unknown, defaults: DrumState): Scene[] | n
     if (typeof input.id !== 'string' || !input.id || seen.has(input.id)) return [];
     seen.add(input.id);
     const lanes: Scene['lanes'] = {};
+    const lengths: Record<number, number> = {};
     for (const id of [1, 2, 3]) {
       const steps = record(input.lanes)[id];
-      if (Array.isArray(steps)) lanes[id] = sanitizeSteps(steps);
+      if (!Array.isArray(steps)) continue;
+      const bars = laneBars(steps.length, record(input.laneBars)[id]);
+      lanes[id] = sanitizeSteps(steps, bars);
+      if (bars > 1) lengths[id] = bars;
     }
     const drums = sanitizeDrums(input.drums, defaults);
     return [{
       id: input.id.slice(0, 200),
       name: (typeof input.name === 'string' && input.name.trim() ? input.name.trim() : 'Scene').slice(0, 40),
       lanes,
+      ...(Object.keys(lengths).length ? { laneBars: lengths } : {}),
       drums: Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => {
         const { steps, stepVelocities, stepProbabilities, stepRatchets } = drums[instrument];
         return [instrument, {

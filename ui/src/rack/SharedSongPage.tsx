@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { localService } from '../services/localService';
 import { songBars, songLengthBars } from '../services/songPlayback';
+import { sceneBars } from '../services/patternLength';
 import { renderArrangementWav } from '../services/wavExport';
 import './rack.css';
 
@@ -39,7 +40,7 @@ export default function SharedSongPage({ file, author, error: fetchError, onOpen
   }
 
   const project = read.project;
-  const bars = songLengthBars(project.song);
+  const bars = songLengthBars(project.song, sceneId => { const scene = project.scenes.find(entry => entry.id === sceneId); return scene ? sceneBars(scene) : 1; });
   const laneCount = project.synths.filter(synth => project.scenes.some(scene => scene.lanes[synth.synthId]?.some(step => step.active && step.note))).length;
 
   const listen = async () => {

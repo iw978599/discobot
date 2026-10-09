@@ -45,7 +45,7 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 | `ui/src/services/browserTransport.ts` | Look-ahead clock. One tick is a 32nd note; 16-step lanes and drums use every second tick |
 | `ui/src/services/sampleStore.ts` | IndexedDB sample storage |
 | `ui/src/services/drumSamples.ts` | Decodes a stored sample for a drum lane, once, mixed to one channel |
-| `ui/src/services/projectLibrary.ts` | The project library: one IndexedDB record per project, with an in-memory stand-in for tests and browsers without IndexedDB |
+| `ui/src/services/projectLibrary.ts` | The project library: one IndexedDB record per project and a store of earlier versions, with an in-memory stand-in for tests and browsers without IndexedDB |
 | `server/src/index.ts` | The whole accounts API: sign up with an invite, sign in, recovery codes, owner tools. `handle(request, env)` is a plain function, so tests call it directly |
 | `server/src/secrets.ts` / `rules.ts` | Password hashing, tokens and codes; username and password rules |
 | `server/src/localDatabase.ts` / `server/dev.ts` | An in-memory SQLite with D1's interface, and a local runner for it. Used by tests and `npm run dev:api`; never deployed |
@@ -68,7 +68,8 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 | `ui/src/hooks/useDrumAudio.ts` | Posts drum hits to the `drum-processor` worklet node |
 | `ui/src/hooks/useMidiInput.ts` | Web MIDI input, per-device held-note tracking |
 | `ui/src/audio/worklet.ts` | Worklet entry: thin `synth-processor` and `drum-processor` wrappers around the engine cores. `vite.config.ts` bundles it to `public/audio-worklet.js` (generated, gitignored) |
-| `ui/src/services/songPlayback.ts` | Pure song helpers: `sceneAtBar` (which scene plays in a bar), `songBars`, `sceneDrumState` |
+| `ui/src/services/songPlayback.ts` | Pure song helpers: `sceneAtBar` (which scene plays in a bar, and where in it), `songBars`, `sceneDrumState` |
+| `ui/src/services/patternLength.ts` | Bars: how long a lane, the drum grid and a scene are, cutting one bar out of a pattern, and growing or shrinking one |
 | `ui/src/rack/SongModule.tsx` | Scene strip, song order and the Scene/Song play mode switch |
 | `ui/src/services/noteScheduling.ts` | `expandStepNotes`: everything one step plays (its chord, its length, arpeggio pulses, slide); used live and by export. `stepNotes` and `withStepNotes` read and write a step's chord |
 | `ui/src/utils/midiExport.ts` / `midiImport.ts` | Standard MIDI File export (PPQ 480, drums on channel 10) and import |
@@ -82,13 +83,20 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 
 ## Behaviour Worth Knowing
 - There are many projects. `localService` holds the open one, with a working copy in `localStorage` (written synchronously, so it survives a closing tab) and a record in the library that is updated after every write. Switching projects goes through `stash()` then `activate()`, which emits `init`. Project operations are async methods on `localService` (`newProject`, `openProject`, `copyProject`, `renameProject`, `deleteProject`, `importProject`), not `localRequest` routes.
+- Each project keeps up to 20 earlier versions in the library (`keepVersion` in `localService.ts`): one when it is opened, one every five minutes of editing, and one before anything replaces it (a sync download, a restore). A version identical to the last one kept is skipped, compared in `normalized()` form. Anything new that overwrites a project must call `keepVersion` first.
+- Versions are in this browser only: not in project files, links or sync. Deleting a project deletes them.
 - Importing a file or opening a share link always creates a new project; nothing overwrites an existing one. Project names are unique.
 - `savedPatterns` only exists to migrate arrangements saved by older versions into projects (`openLibrary`). Do not add to it.
 - Share links and project files are untrusted. Both go through `restore()`; `readProjectFile` does that without opening the project.
-- A project has scenes (one bar of every lane plus the drum grid) and a song (scenes in order, with repeats). The lanes' patterns and `drumState` steps in the store are always the open scene; its slot in `scenes` is only brought up to date by `commitScene()`, which runs before anything reads `scenes`. Never read a scene's stored copy for the open scene: use the live pattern.
+- A project has scenes (every lane's pattern plus the drum grid, each one or more bars) and a song (scenes in order, with repeats). The lanes' patterns and `drumState` steps in the store are always the open scene; its slot in `scenes` is only brought up to date by `commitScene()`, which runs before anything reads `scenes`. Never read a scene's stored copy for the open scene: use the live pattern.
 - Sounds, kit settings, mutes, tempo and effects are project-wide. A scene holds only steps.
 - In song mode the scheduler picks the scene from the transport's bar number (`sceneAtBar`), plays any scene other than the open one from its stored copy, and asks the store to open the playing scene. `localService.request` emits synchronously, and the `sceneChanged` handler updates the refs the scheduler reads straight away; keep both true or a bar would play the wrong scene.
-- Up to 3 synth lanes; Synth 1 cannot be removed. Lanes are 16 or 32 steps over one bar; the drum grid is always 16 steps.
+- Up to 3 synth lanes; Synth 1 cannot be removed. A bar is 16 steps, or 32 on a synth lane set to finer steps; the drum grid is always 16 per bar.
+- A lane's pattern and the drum grid can each be 1, 2, 4 or 8 bars (`Pattern.bars`, `Scene.laneBars`; the drum grid's length is its step count over 16). Lanes of different lengths loop against each other. `patternLength.ts` holds the arithmetic. A 32-step pattern is one fine bar unless `bars` says two: never infer bars from the step count alone, use `laneBars`.
+- A scene lasts as long as its longest part (`sceneBars`). In a song, one repeat of an entry is one pass through its scene, however many bars that is. The song helpers take a `lengthOf` function because the open scene's length has to be read live (`sceneLength` in `useStudio`).
+- Everything that renders works one bar at a time. `sceneAsBars` cuts a scene into one-bar scenes, each lane looping at its own length, and WAV, MIDI and the shared-song page all go through it. Do not teach an exporter about multi-bar patterns; slice first.
+- The editors show one bar of a longer pattern (`firstStep`, `visibleSteps`); step numbers in labels and in state are always counted from the start of the pattern.
+- The step controls under a lane are always laid out, hidden when no step is selected, so selecting a step never changes the row's height. A height change there moves the piano roll under a pointer that has just pressed a cell.
 - Undo/redo is one chronological stack for the whole project (`historyRef` in `useStudio.tsx`). Each entry stores one lane plus the shared drum, tempo and effects state. Loading a saved arrangement clears it.
 - A tempo-synced LFO rate `N` means one cycle per 1/N note (`syncedLfoHz`). Live playback and WAV export both use it.
 - Live playback and WAV export run the same `SynthCore` and `DrumCore`. Never add DSP to the worklet wrapper or to `wavExport.ts`; put it in the engine core so both paths get it.
@@ -174,7 +182,8 @@ npm run migrate --workspace=server  # Apply new database migrations to the live 
 - A guest is never loaded without the user's say-so for that site on this browser (`isTrustedOrigin`). Typing the address in counts; a guest that arrives in a shared or synced project asks first. This is the one place the app loads anything from another site.
 - Messages are accepted only from the guest's own frame at its own origin, and everything in them is untrusted. The guest's `state` is opaque JSON, size-capped, never interpreted.
 - Timing uses the computer's clock, which the frame and the app share. The guest plays `GUEST_LATENCY_MS` early and `createGuestPlayer` holds its audio back by the same amount. When guests are present the transport starts with a longer lead (`GUEST_START_LEAD_SECONDS`) so a guest can catch beat 0.
-- Guests are not in WAV or MIDI export.
+- A guest cannot be rendered offline, so Download WAV and Song WAV play the arrangement through once and record each guest (`guestCapture`, fed from `GuestModule`), then mix the recordings into the normal render as `guestTakes`. Recordings are placed by the guests' time stamps against the transport's first beat. Loop WAV, stems and MIDI leave guests out.
+- `FEATURED_GUESTS` lists instruments offered by name in the Add Guest dialog. Only add one with its creator's permission.
 
 ## Published Songs
 - Publishing stores a slimmed copy of a project on the server behind a ten-character code. It is always an explicit button press, never a side effect of sharing or syncing.
