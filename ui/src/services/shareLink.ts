@@ -45,6 +45,13 @@ export async function decodeShare(payload: string): Promise<unknown> {
   return JSON.parse(new TextDecoder().decode(bytes));
 }
 
+// A published song: the link holds a short code and the song is fetched from the account server.
+export const SHORT_PREFIX = '#s=';
+export const shortUrl = (code: string, base: string) => `${base.split('#')[0]}${SHORT_PREFIX}${code}`;
+export const shortCode = (hash: string) => (hash.startsWith(SHORT_PREFIX) ? hash.slice(SHORT_PREFIX.length).trim().toLowerCase() : null);
+// What gets stored or put in a link: the project without what a listener does not need.
+export const slimProject = (file: unknown) => slim(file);
+
 export const shareUrl = (payload: string, base: string) => `${base.split('#')[0]}${SHARE_PREFIX}${payload}`;
 
 export const sharePayload = (hash: string) => (hash.startsWith(SHARE_PREFIX) ? hash.slice(SHARE_PREFIX.length) : null);

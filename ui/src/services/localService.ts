@@ -1,4 +1,5 @@
 import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, Scene, Song, SynthParameters, SynthModelId, SynthModelParams } from '../types';
+import { MAX_GUESTS, guestUrl, patchGuest, sanitizeGuests, type Guest } from './guests';
 import { emptySteps } from './songPlayback';
 import { createIndexedDbLibrary, createMemoryLibrary, hasIndexedDb, type ProjectInfo, type ProjectLibrary, type ProjectRecord } from './projectLibrary';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
@@ -25,6 +26,8 @@ type State = Defaults & {
   // Which project in the library this is. The copy in localStorage is the working copy of
   // the open project; the library holds one record per project, this one included.
   projectId: string; name: string; revision: number; createdAt: number; updatedAt: number;
+  // Other creators' instruments hosted in a frame. Optional so older projects need no migration.
+  guests?: Guest[];
 };
 type ProjectResult = { ok: true; repaired?: boolean } | { ok: false; error: string };
 const DEFAULT_PROJECT_NAME = 'Untitled';
@@ -37,6 +40,7 @@ export interface ProjectFile {
   project: State;
 }
 const PROJECT_FILE_FORMAT = 'discobot-project';
+const ownOrigin = () => (typeof window !== 'undefined' && window.location ? window.location.origin : undefined);
 const STORAGE_KEY = 'discobot_browser_project_v1';
 // Bumped when synth parameters gain fields. An older project is upgraded with defaults,
 // which is a migration and not damage worth warning about.
@@ -106,7 +110,7 @@ export class LocalProjectService {
       ...clone(this.defaults!), version: 1, schema: SCHEMA, synths: [], tempo: 120,
       selectedDrumKitId: 'clean-analog', drumMasterVolume: 1, drumSwing: 0, savedPatterns: [],
       scenes: [], currentSceneId: '', song: { entries: [], loop: false },
-      projectId: crypto.randomUUID(), name, revision: 0, createdAt: now, updatedAt: now,
+      projectId: crypto.randomUUID(), name, revision: 0, createdAt: now, updatedAt: now, guests: [],
     };
   }
 
@@ -158,6 +162,7 @@ export class LocalProjectService {
       projectId: typeof parsed.projectId === 'string' && parsed.projectId ? parsed.projectId.slice(0, 200) : crypto.randomUUID(),
       name: projectName(parsed.name), revision: Math.round(number(parsed.revision, 0, 0, 1e12)),
       createdAt: number(parsed.createdAt, Date.now(), 0, 1e15), updatedAt: number(parsed.updatedAt, Date.now(), 0, 1e15),
+      guests: sanitizeGuests(parsed.guests, ownOrigin()),
     };
     // Projects from before scenes existed have none: ensureScenes makes one from the live pattern.
     const scenes = sanitizeScenes(parsed.scenes, defaults.drumState);
@@ -793,6 +798,24 @@ export class LocalProjectService {
     if (path === '/drum/reset') {
       state.drumState = clone(this.defaults!.drumState);
       return update('drumFullState', { drumState: state.drumState });
+    }
+    if (path === '/guests' && method === 'POST') {
+      const guests = state.guests ?? [];
+      const url = guestUrl(body.url, ownOrigin());
+      if (!url) return respond({ error: 'That is not an address a guest instrument can be loaded from. It must start with https:// and be on another site.' }, 400);
+      if (guests.length >= MAX_GUESTS) return respond({ error: `A project can hold ${MAX_GUESTS} guest instruments.` }, 409);
+      const [guest] = sanitizeGuests([{ id: crypto.randomUUID(), url, name: body.name }], ownOrigin());
+      state.guests = [...guests, guest];
+      return update('guestsChanged', { guests: state.guests });
+    }
+    const guestMatch = /^\/guests\/([0-9a-f-]{36})$/.exec(path);
+    if (guestMatch) {
+      const guests = state.guests ?? [];
+      if (!guests.some(guest => guest.id === guestMatch[1])) return respond({ error: 'Guest not found' }, 404);
+      state.guests = method === 'DELETE'
+        ? guests.filter(guest => guest.id !== guestMatch[1])
+        : guests.map(guest => (guest.id === guestMatch[1] ? patchGuest(guest, body) : guest));
+      return update('guestsChanged', { guests: state.guests });
     }
     if (path === '/drum/master-volume') {
       state.drumMasterVolume = number(body.volume, state.drumMasterVolume, 0, 1);

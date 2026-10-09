@@ -50,9 +50,11 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 | `server/src/localDatabase.ts` / `server/dev.ts` | An in-memory SQLite with D1's interface, and a local runner for it. Used by tests and `npm run dev:api`; never deployed |
 | `server/migrations/` | The database schema. Add a new numbered file; never edit one that has been applied |
 | `ui/src/services/account.ts` | Browser side of accounts: the session and every API call. `accountsEnabled` is false when the build has no `VITE_API_URL` |
+| `ui/src/services/guests.ts` | Guest instruments: address and data checks, per-site consent, the shared-clock helpers and `guestLink`, which tells guests about the transport |
+| `ui/src/rack/GuestModule.tsx` / `ui/src/hooks/guestAudio.ts` | The guest's rack unit and frame, and the player that brings its audio into the mixer |
 | `ui/src/services/projectSync.ts` | Project sync: `createProjectSync` (the rules, tested against the real API handler) and `startProjectSync` (when it runs) |
 | `ui/src/rack/AccountDialog.tsx` | Sign in, create account, recovery code, and the owner's invite codes and member list |
-| `ui/src/services/shareLink.ts` | Share links: a project deflated into the URL after `#song=` |
+| `ui/src/services/shareLink.ts` | Share links: a project deflated into the URL after `#song=`, and short links (`#s=code`) to a song published on the server |
 | `ui/src/rack/SharedSongPage.tsx` | The page a share link opens: renders the song to audio, plays it, offers a copy |
 | `ui/src/services/wavExport.ts` | Offline arrangement render and WAV encoding: full mix, seamless loop, and per-lane stems zipped by `utils/zip.ts` |
 | `ui/src/services/delayTime.ts` | `delaySeconds`: the shared delay's time, free or tempo-synced |
@@ -146,7 +148,7 @@ npm run migrate --workspace=server  # Apply new database migrations to the live 
 - Engine types are single source of truth (`engine/src/types.ts`), UI re-exports via `ui/src/types.ts`
 - All project mutations go through `localRequest`; components do not write localStorage directly (synth presets in `useStudio.tsx` are the one exception)
 - Sanitize anything read from storage in `projectSanitization.ts` before it reaches audio code
-- The app must work fully with no account and with the API unreachable. Signed out, it makes no request to the API at all; a browser test checks both
+- The app must work fully with no account and with the API unreachable. Signed out, it makes no request to the API at all, with one exception the visitor asks for: opening a short link (`#s=code`) fetches that published song. A browser test checks both
 - The API stores a username, password hash, recovery-code hash, join date and invite code, and nothing else: no email, no names, no IP addresses. Do not add personal data, analytics or logging of request contents
 - Passwords, session tokens and recovery codes are stored only as hashes and never logged. PBKDF2 is capped at 100,000 iterations by Cloudflare
 - The API is called with a bearer token, not cookies, and only answers origins in `ALLOWED_ORIGINS` (`server/wrangler.toml`)
@@ -162,6 +164,20 @@ npm run migrate --workspace=server  # Apply new database migrations to the live 
 - Sync state is in `localStorage` under `discobot_sync_v1`, per username. Signed out, `startProjectSync` sends nothing.
 - The server stores projects as sent and checks only size and shape. Whatever the browser downloads goes through `restore()` like a project file.
 - Imported samples are not synced.
+
+## Guest Instruments
+- A guest is another creator's web page in a frame (`GuestModule`), listed in the project as `guests`. The protocol is `docs/GUEST_PROTOCOL.md`; `docs/guest-example.html` is a complete guest, and the browser tests run against it (served by `server/dev.ts` at `/__guest`). Change the three together.
+- A guest's address must be https on another site (`guestUrl`). Discobot's own origin is refused: the frame is only kept apart from the app because it is a different site. Do not loosen this or the frame's `sandbox`.
+- A guest is never loaded without the user's say-so for that site on this browser (`isTrustedOrigin`). Typing the address in counts; a guest that arrives in a shared or synced project asks first. This is the one place the app loads anything from another site.
+- Messages are accepted only from the guest's own frame at its own origin, and everything in them is untrusted. The guest's `state` is opaque JSON, size-capped, never interpreted.
+- Timing uses the computer's clock, which the frame and the app share. The guest plays `GUEST_LATENCY_MS` early and `createGuestPlayer` holds its audio back by the same amount. When guests are present the transport starts with a longer lead (`GUEST_START_LEAD_SECONDS`) so a guest can catch beat 0.
+- Guests are not in WAV or MIDI export.
+
+## Published Songs
+- Publishing stores a slimmed copy of a project on the server behind a ten-character code. It is always an explicit button press, never a side effect of sharing or syncing.
+- Reading a song needs no account and returns the title, the publisher's username and the project. Never add anything else about the publisher to that response.
+- Publishing the same project again replaces the copy and keeps the code. Unpublishing deletes the row; the site owner can unpublish any song.
+- A published song is untrusted like any project file: `SharedSongPage` reads it through `readProjectFile`.
 
 ## Known Issues
 - `localService` still exposes a REST-shaped `request(path)` API with `Response` objects for edits inside a project, a leftover from the server version

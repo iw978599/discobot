@@ -216,3 +216,46 @@ test('only the listed sites can call the API from a browser', async () => {
   const garbled = await handle(new Request('https://api.example/signin', { method: 'POST', headers: { Origin: ORIGIN }, body: '{not json' }), api().env);
   assert.equal(garbled.status, 400);
 });
+
+test('a published song opens for anyone by its short code, and only its publisher or the owner can remove it', async () => {
+  const { call, owner, invite, env } = api();
+  const ian = await owner();
+  const friend = (await call('POST', '/signup', { username: 'friend', password: PASSWORD, invite: await invite(ian.token) })).data;
+  const projectId = crypto.randomUUID();
+  const project = { format: 'discobot-project', formatVersion: 1, project: { tempo: 133 } };
+
+  assert.equal((await call('POST', '/songs', { projectId, title: 'Night Drive', project })).status, 401, 'publishing needs an account');
+  assert.equal((await call('POST', '/songs', { projectId, title: 'Night Drive', project: { format: 'other' } }, friend.token)).status, 400);
+  assert.equal((await call('POST', '/songs', { projectId: 'nope', title: 'Night Drive', project }, friend.token)).status, 400);
+  assert.equal((await call('POST', '/songs', { projectId, title: 'Huge', project: { ...project, filler: 'x'.repeat(400_001) } }, friend.token)).status, 413);
+
+  const published = await call('POST', '/songs', { projectId, title: 'Night Drive', project }, friend.token);
+  assert.equal(published.status, 201);
+  const code = published.data.code as string;
+  assert.match(code, /^[a-z0-9]{10}$/);
+
+  const page = await call('GET', `/songs/${code}`);
+  assert.equal(page.status, 200, 'no account is needed to open it');
+  assert.deepEqual([page.data.title, page.data.author, page.data.project.project.tempo], ['Night Drive', 'friend', 133]);
+  assert.deepEqual(Object.keys(page.data).sort(), ['author', 'project', 'title', 'updatedAt'], 'the page gives out the username and nothing else about the publisher');
+  assert.equal((await call('GET', '/songs/aaaaaaaaaa')).status, 404);
+  assert.equal((await call('GET', '/songs/not-a-code')).status, 404);
+
+  const again = await call('POST', '/songs', { projectId, title: 'Night Drive II', project: { ...project, project: { tempo: 90 } } }, friend.token);
+  assert.deepEqual([again.status, again.data.code], [200, code], 'publishing the same project again keeps its link');
+  assert.equal((await call('GET', `/songs/${code}`)).data.project.project.tempo, 90);
+  assert.deepEqual((await call('GET', '/songs', undefined, friend.token)).data.songs.map((song: any) => [song.code, song.projectId, song.title]), [[code, projectId, 'Night Drive II']]);
+  assert.deepEqual((await call('GET', '/songs', undefined, ian.token)).data.songs, [], 'the list is the publisher\'s own');
+
+  const mine = (await call('POST', '/songs', { projectId, title: 'Same id, other account', project }, ian.token)).data.code;
+  assert.notEqual(mine, code);
+  assert.equal((await call('POST', `/songs/${mine}/delete`, {}, friend.token)).status, 404, 'nobody else can unpublish it');
+  assert.equal((await call('POST', `/songs/${code}/delete`, {})).status, 401);
+  assert.equal((await call('POST', `/songs/${code}/delete`, {}, ian.token)).status, 200, 'the site owner can take any song down');
+  assert.equal((await call('GET', `/songs/${code}`)).status, 404);
+
+  const second = (await call('POST', '/songs', { projectId, title: 'Back again', project }, friend.token)).data.code;
+  await call('POST', '/account/delete', { password: PASSWORD }, friend.token);
+  assert.equal((await call('GET', `/songs/${second}`)).status, 404, 'deleting an account unpublishes its songs');
+  assert.equal((await env.DB.prepare('SELECT code FROM songs').all()).results.length, 1);
+});

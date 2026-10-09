@@ -66,4 +66,6 @@ function randomCode(groups: number) {
 
 export const newRecoveryCode = () => randomCode(5);
 export const newInviteCode = () => randomCode(3);
+// Short enough to read out, long enough that links cannot be guessed.
+export const newSongCode = () => randomCode(2).replace('-', '').toLowerCase();
 export const normalizeCode = (code: string) => code.toUpperCase().replace(/[^A-Z0-9]/g, '');

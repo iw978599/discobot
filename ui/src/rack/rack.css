@@ -400,6 +400,11 @@
 .shared-card .rack-btn { text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
 .shared-card p { margin: 0; }
 .rack-empty { color: var(--dim); }
+.guest-unit .rack-plate { width: var(--plate); flex: none; }
+.guest-status { flex: 0 1 auto; min-width: 0; }
+.guest-frame { width: 100%; height: 560px; border: 1px solid var(--edge-strong); border-radius: 2px; background: #fff; }
+.guest-ask { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; text-transform: none; letter-spacing: 0; font-weight: 400; font-size: 14px; color: #dcdedf; }
+.guest-ask p { margin: 0; max-width: 70ch; }
 .account-button { max-width: 14ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .account-tabs, .account-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .account-form { display: flex; flex-direction: column; gap: 10px; }

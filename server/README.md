@@ -15,6 +15,9 @@ synced project. Public song pages come later
   project itself in the project-file format. Up to 100 per account, 400 KB
   each. A deleted project leaves a marker with no contents, so other browsers
   learn it was deleted. Deleting the account deletes all of them.
+- **Published songs:** a short code, the publisher, the project it came from,
+  a title and the song. Anyone with the code can read the title, the
+  publisher's username and the song. Up to 50 per account.
 - **Failed sign-ins:** a username and a time, deleted after fifteen minutes.
 
 No email addresses, names or IP addresses. Passwords, session tokens and

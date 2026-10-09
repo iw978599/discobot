@@ -76,6 +76,17 @@ export const projectsApi = {
 };
 export type ProjectsApi = typeof projectsApi;
 
+export interface PublishedSong { code: string; projectId: string; title: string; updatedAt: number }
+export interface SongPage { title: string; author: string; updatedAt: number; project: unknown }
+
+export const songsApi = {
+  // Needs no account: this is what opening a short link does.
+  get: (code: string) => call<SongPage>('GET', `/songs/${encodeURIComponent(code)}`, undefined, false),
+  mine: async () => (await call<{ songs: PublishedSong[] }>('GET', '/songs')).songs,
+  publish: async (projectId: string, title: string, project: unknown) => (await call<{ code: string }>('POST', '/songs', { projectId, title, project })).code,
+  unpublish: async (code: string) => { await call('POST', `/songs/${encodeURIComponent(code)}/delete`, {}); },
+};
+
 type Started = { token: string; user: AccountUser; recoveryCode?: string };
 const start = (result: Started) => { setSession({ token: result.token, user: result.user }); return result.recoveryCode ?? ''; };
 

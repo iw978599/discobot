@@ -8,6 +8,7 @@ import { SongPosition, entryStartBar, sceneAtBar, sceneDrumState, songBars } fro
 import { createDefaultSynthParameters } from '@discobot/engine';
 import { localRequest, localService } from '../services/localService';
 import { projectSync, startProjectSync } from '../services/projectSync';
+import { GUEST_START_LEAD_SECONDS, guestLink, guestOrigin, guestUrl, trustOrigin, wallAtContextTime, type Guest } from '../services/guests';
 import type { ProjectInfo } from '../services/projectLibrary';
 import { sanitizeSynthParams } from '../services/projectSanitization';
 import { expandStep, expandStepNotes, stepNotes, withStepNotes } from '../services/noteScheduling';
@@ -387,6 +388,9 @@ export function useStudio() {
   const [browserVolume, setBrowserVolume] = useState(1.0);
   const [globalTempo, setGlobalTempo] = useState(120);
   const [storageError, setStorageError] = useState<string | null>(null);
+  const [guests, setGuests] = useState<Guest[]>([]);
+  const guestsRef = useRef<Guest[]>([]);
+  guestsRef.current = guests;
   const [changedElsewhere, setChangedElsewhere] = useState(false);
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [currentSceneId, setCurrentSceneId] = useState('');
@@ -803,8 +807,13 @@ export function useStudio() {
         () => globalTempoRef.current,
         tick => scheduleTickRef.current(tick),
       );
-      transportRef.current.start();
+      const transport = transportRef.current, context = getAudioContext();
+      // Guests are told where the beats fall on the computer's clock, which they share with this page.
+      transport.onTempo = (bpm, time, beat) => guestLink.announce({ playing: true, bpm, anchorWall: wallAtContextTime(context, time), anchorBeat: beat });
+      transport.start(guestsRef.current.length > 0 ? GUEST_START_LEAD_SECONDS : undefined);
+      guestLink.announce({ playing: true, bpm: globalTempoRef.current, anchorWall: wallAtContextTime(context, transport.startTime), anchorBeat: 0 });
     } else {
+      if (guestLink.transport().playing) guestLink.announce({ playing: false });
       transportRef.current?.stop();
       setDrumCurrentStep(0);
       synthAudio.stopAllNotes();
@@ -814,7 +823,12 @@ export function useStudio() {
 
   const handleMessage = useCallback((message: any) => {
     switch (message.type) {
+      case 'guestsChanged': {
+        setGuests(message.data.guests ?? []);
+        break;
+      }
       case 'init': {
+        setGuests(message.data.guests ?? []);
         if (message.data.restored) initializedSynthLanesRef.current = true;
         if (message.data.synths) {
           setSynths(message.data.synths.map((s: any) => ({
@@ -1732,6 +1746,20 @@ export function useStudio() {
     );
   }, [songArrangement, drumSwing, drumMasterVolume]);
 
+  // Adds another creator's instrument by its address. Typing it in is the user's say-so to load that site.
+  const handleAddGuest = useCallback(async (url: string): Promise<string | null> => {
+    // Recorded first: the unit appears as soon as the store accepts the guest, and must not ask again.
+    const address = guestUrl(url, window.location.origin);
+    if (address) trustOrigin(guestOrigin(address));
+    const response = await localRequest('/guests', { method: 'POST', body: JSON.stringify({ url }) });
+    if (!response.ok) return (await response.json().catch(() => null) as { error?: string } | null)?.error ?? 'The guest instrument could not be added.';
+    return null;
+  }, []);
+  const handleRemoveGuest = useCallback(async (id: string) => { await localRequest(`/guests/${id}`, { method: 'DELETE' }); }, []);
+  const handleGuestChange = useCallback(async (id: string, patch: Partial<Pick<Guest, 'name' | 'volume' | 'muted' | 'state'>>) => {
+    await localRequest(`/guests/${id}`, { method: 'PUT', body: JSON.stringify(patch) });
+  }, []);
+
   const reportExportError = useCallback((error: unknown) => {
     setStorageError(`Audio export failed: ${error instanceof Error ? error.message : error}`);
   }, []);
@@ -2242,7 +2270,7 @@ export function useStudio() {
     handleMidiImportClick, handleMidiImportFile, handleMidiImportApplyAll, midiImportFileRef, handleRemoveSynth,
     ensureSynthExists, handleOctaveShift, handleTempoChange, handleGlobalPlayStop, handleStepChange, handleStepSelect, handleKeyboardModeChange,
     handlePianoRollNoteAssign, handleClearPatternNotes, handleNotePlay, handleNoteRelease, computerKeyNotes, midiState,
-    handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange,
+    handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange, guests, handleAddGuest, handleRemoveGuest, handleGuestChange,
     handleSynthMixChange, handleSaveSynthPreset, handleLoadSynthPreset, handleDeleteSynthPreset,
     handleExportMidi, currentArrangement, reportExportError, handleExportProject, projectImportFileRef, handleImportProjectFile, handleImportProject,
     handleNewProject, handleOpenProject, handleCopyProject, handleRenameProject, handleDeleteProject, handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail,

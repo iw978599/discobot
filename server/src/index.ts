@@ -1,5 +1,5 @@
 import { checkPassword, checkUsername } from './rules.ts';
-import { hashPassword, newInviteCode, newRecoveryCode, newToken, normalizeCode, sameText, sha256, verifyPassword } from './secrets.ts';
+import { hashPassword, newInviteCode, newRecoveryCode, newSongCode, newToken, normalizeCode, sameText, sha256, verifyPassword } from './secrets.ts';
 
 // The part of Cloudflare's D1 interface this API uses, so tests can stand in a local SQLite.
 export interface Statement {
@@ -28,6 +28,7 @@ export const FAILURE_WINDOW_MS = 15 * 60_000;
 export const MAX_OPEN_INVITES = 50;
 export const MAX_PROJECTS = 100;
 export const MAX_PROJECT_BYTES = 400_000;
+export const MAX_SONGS = 50;
 const MAX_BODY_BYTES = 4096;
 const DAY_MS = 86_400_000;
 
@@ -101,6 +102,7 @@ async function removeUser(env: Env, userId: string) {
   await env.DB.batch([
     env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId),
     env.DB.prepare('DELETE FROM projects WHERE owner_id = ?').bind(userId),
+    env.DB.prepare('DELETE FROM songs WHERE owner_id = ?').bind(userId),
     env.DB.prepare('DELETE FROM invites WHERE created_by = ? AND used_by IS NULL').bind(userId),
     env.DB.prepare('UPDATE invites SET used_by = NULL WHERE used_by = ?').bind(userId),
     env.DB.prepare('DELETE FROM users WHERE id = ?').bind(userId),
@@ -250,6 +252,58 @@ async function projects(request: Request, env: Env, now: number, rest: string): 
   throw new Refusal(404, 'Not found.');
 }
 
+interface SongRow { code: string; owner_id: string; project_id: string; title: string; updated_at: number; data: string }
+const SONG_CODE = /^[a-z0-9]{10}$/;
+
+// Published songs. Reading one needs no account: the code is the key. Everything else is the publisher's.
+async function songs(request: Request, env: Env, now: number, rest: string): Promise<Response> {
+  const method = request.method;
+  const [, code, action] = /^\/([^/]+)(\/delete)?$/.exec(rest) || [];
+
+  if (method === 'GET' && code && !action) {
+    if (!SONG_CODE.test(code)) throw new Refusal(404, 'That song was not found. It may have been unpublished.');
+    const song = await env.DB.prepare('SELECT songs.title, songs.updated_at, songs.data, users.username FROM songs JOIN users ON users.id = songs.owner_id WHERE songs.code = ?').bind(code).first<{ title: string; updated_at: number; data: string; username: string }>();
+    if (!song) throw new Refusal(404, 'That song was not found. It may have been unpublished.');
+    return json(200, { title: song.title, author: song.username, updatedAt: song.updated_at, project: JSON.parse(song.data) });
+  }
+
+  const { user } = await sessionUser(env, request, now);
+
+  if (method === 'GET' && rest === '') {
+    const { results } = await env.DB.prepare('SELECT code, project_id, title, updated_at FROM songs WHERE owner_id = ? ORDER BY updated_at DESC').bind(user.id).all<SongRow>();
+    return json(200, { songs: results.map(row => ({ code: row.code, projectId: row.project_id, title: row.title, updatedAt: row.updated_at })) });
+  }
+
+  if (method === 'POST' && rest === '') {
+    const body = await readBody(request, MAX_PROJECT_BYTES + 2048);
+    const project = body.project, projectId = text(body.projectId), title = text(body.title).trim().slice(0, 60);
+    if (!title || !PROJECT_ID.test(projectId) || !project || typeof project !== 'object' || Array.isArray(project) || (project as { format?: unknown }).format !== 'discobot-project') throw new Refusal(400, 'That is not a Discobot project.');
+    const data = JSON.stringify(project);
+    if (data.length > MAX_PROJECT_BYTES) throw new Refusal(413, 'This project is too large to publish.');
+    const existing = await env.DB.prepare('SELECT code FROM songs WHERE owner_id = ? AND project_id = ?').bind(user.id, projectId).first<{ code: string }>();
+    if (existing) {
+      await env.DB.prepare('UPDATE songs SET title = ?, data = ?, updated_at = ? WHERE code = ?').bind(title, data, now, existing.code).run();
+      return json(200, { code: existing.code });
+    }
+    const count = await env.DB.prepare('SELECT COUNT(*) AS published FROM songs WHERE owner_id = ?').bind(user.id).first<{ published: number }>();
+    if ((count?.published ?? 0) >= MAX_SONGS) throw new Refusal(507, `An account can publish up to ${MAX_SONGS} songs. Unpublish one first.`);
+    const fresh = newSongCode();
+    await env.DB.prepare('INSERT INTO songs (code, owner_id, project_id, title, created_at, updated_at, data) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(fresh, user.id, projectId, title, now, now, data).run();
+    return json(201, { code: fresh });
+  }
+
+  if (method === 'POST' && code && action) {
+    // The site owner can take down any song; everyone else only their own.
+    const removed = user.is_owner === 1
+      ? await env.DB.prepare('DELETE FROM songs WHERE code = ?').bind(code).run()
+      : await env.DB.prepare('DELETE FROM songs WHERE code = ? AND owner_id = ?').bind(code, user.id).run();
+    if (removed.meta.changes !== 1) throw new Refusal(404, 'That song was not found.');
+    return json(200, { ok: true });
+  }
+
+  throw new Refusal(404, 'Not found.');
+}
+
 async function route(request: Request, env: Env, now: number): Promise<Response> {
   const { pathname } = new URL(request.url);
   const method = request.method;
@@ -260,6 +314,7 @@ async function route(request: Request, env: Env, now: number): Promise<Response>
   if (is('POST', '/signin')) return signIn(env, await readBody(request), now);
   if (is('POST', '/recover')) return recover(env, await readBody(request), now);
 
+  if (pathname === '/songs' || pathname.startsWith('/songs/')) return songs(request, env, now, pathname.slice('/songs'.length));
   if (pathname === '/projects' || pathname.startsWith('/projects/')) return projects(request, env, now, pathname.slice('/projects'.length));
 
   if (is('GET', '/me')) return json(200, { user: publicUser((await sessionUser(env, request, now)).user) });

@@ -186,6 +186,16 @@ Limits, which are real:
 Effort: about two weeks on Discobot's side for the unit, sync, audio and
 freeze. On the creator's side, a day or less, and it needs their agreement.
 
+**Progress (2026-10-09).** Discobot's side is built except for freeze:
+Project → Add Guest Instrument, the rack unit, transport and tempo sync,
+audio into the mixer with level and mute, settings saved in the project, and
+asking before loading a guest that arrives with someone else's song. The
+protocol is `GUEST_PROTOCOL.md`, a working example guest is
+`guest-example.html`, and `GUEST_PROMPT_FOR_JAM_LINK_APPS.md` is a prompt the
+creator of Choir can give to Claude to add the guest side. Not built:
+recording a guest into the project for export, effect sends for a guest, and
+settings per scene.
+
 ## How creators would link an instrument
 
 In two stages, the second only if the first gets used.

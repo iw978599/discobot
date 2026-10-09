@@ -1,9 +1,11 @@
+import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { handle, type Env } from './src/index.ts';
 import { createLocalDatabase } from './src/localDatabase.ts';
 
 // Runs the API on this machine with a database that lives in memory, for development and
-// the browser tests. `POST /__reset` empties it; that route does not exist in the Worker.
+// the browser tests. `POST /__reset` empties it and `GET /__guest` serves the example guest
+// instrument; neither route exists in the Worker.
 const port = Number(process.env.PORT || 8787);
 const env = (): Env => ({
   DB: createLocalDatabase(),
@@ -19,7 +21,10 @@ createServer(async (incoming, outgoing) => {
   for (const [name, value] of Object.entries(incoming.headers)) if (typeof value === 'string') headers.set(name, value);
   const method = incoming.method || 'GET';
   let response: Response;
-  if (method === 'POST' && incoming.url === '/__reset') {
+  if (method === 'GET' && incoming.url === '/__guest') {
+    // The example guest instrument, served from this other address so the app can frame it as it would a real one.
+    response = new Response(readFileSync(new URL('../docs/guest-example.html', import.meta.url)), { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+  } else if (method === 'POST' && incoming.url === '/__reset') {
     current = env();
     response = new Response('reset');
   } else {

@@ -12,11 +12,12 @@ interface TransportUnitProps {
   onOpenProjects: () => void;
   onShare: () => void;
   onOpenAccount: () => void;
+  onAddGuest: () => void;
 }
 
 // The top rack unit: tempo, transport, save and load, and the two menus that hold
 // everything you do once per session instead of once per bar.
-export default function TransportUnit({ studio, onOpenSettings, onOpenProjects, onShare, onOpenAccount }: TransportUnitProps) {
+export default function TransportUnit({ studio, onOpenSettings, onOpenProjects, onShare, onOpenAccount, onAddGuest }: TransportUnitProps) {
   const { midiState } = studio;
   const user = useAccountUser();
   const midiStatus = !midiState.supported ? 'MIDI is not available in this browser'
@@ -46,6 +47,7 @@ export default function TransportUnit({ studio, onOpenSettings, onOpenProjects, 
             { label: 'Share Link', title: 'Make a link that plays this song for anyone who opens it', onSelect: onShare },
             { label: 'Export Project', title: 'Download the whole project as a file', onSelect: studio.handleExportProject },
             { label: 'Import Project', title: 'Add a project file to your projects and open it', onSelect: () => studio.projectImportFileRef.current?.click() },
+            { label: 'Add Guest Instrument', title: "Host another creator's web instrument in this project, by its address", onSelect: onAddGuest },
             { label: 'Import MIDI', title: 'Bring notes in from a .mid file', onSelect: studio.handleMidiImportClick },
             { label: 'Reset All', title: 'Clear every lane, the drums and the effects of this project', onSelect: () => { void studio.handleReset(); } },
           ]}
