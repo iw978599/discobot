@@ -119,9 +119,9 @@ mono/slide and the drum voices. What it leaves open:
 
 2. **Longer patterns and per-lane length.** Done: each synth lane and the
    drum grid can be 1, 2, 4 or 8 bars, and lanes of different lengths loop
-   against each other. Still open: lengths that are not a whole number of
-   bars (a 12-step lane against 16), copying one bar to another, and MIDI
-   import of more than one bar.
+   against each other. MIDI files of up to eight bars import at their
+   full length. Still open: lengths that are not a whole number of bars (a
+   12-step lane against 16) and copying one bar to another.
 
 3. **Polyphonic steps and note length.** Done: up to six notes per step and
    a per-step length, in the piano roll, live playback, WAV and MIDI export
@@ -145,9 +145,10 @@ mono/slide and the drum voices. What it leaves open:
    over a section are a large part of electronic arrangement. Depends on the
    typed store.
 
-8. **MIDI output and clock.** (M)
-   Drive external hardware from the sequencer, and send or follow MIDI clock.
-   Web MIDI is already in use for input.
+8. **MIDI output and clock.** Done for sending: the sequencer plays a chosen
+   MIDI output (a channel per lane, drums on 10) and sends clock with start
+   and stop. Still open: following an external clock, sending notes played
+   by hand, and choosing the channels.
 
 9. **Per-step probability and ratchets.** Done, on drums and on synth steps.
 

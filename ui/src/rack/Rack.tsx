@@ -130,6 +130,13 @@ export default function Rack({ studio }: { studio: Studio }) {
             onTargetSynthChange={studio.setMidiTargetSynthId}
             lastMessage={midiState.lastMessage}
             error={midiState.error}
+            outputs={midiState.outputs}
+            selectedOutputId={midiState.selectedOutputId}
+            onOutputChange={midiState.setSelectedOutputId}
+            sendNotes={studio.midiOutNotes}
+            onSendNotesChange={studio.setMidiOutNotes}
+            sendClock={studio.midiOutClock}
+            onSendClockChange={studio.setMidiOutClock}
           />
           <SamplePanel onPlay={sample => playSample(sample.data)} />
         </Dialog>

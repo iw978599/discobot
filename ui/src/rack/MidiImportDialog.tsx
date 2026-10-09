@@ -7,8 +7,9 @@ export default function MidiImportDialog({ studio }: { studio: Studio }) {
   return (
     <Dialog title="Import MIDI" closeLabel="Close MIDI import" onClose={() => setMidiImportData(null)}>
       <p>
-        Detected tempo: <strong>{midiImportData.detectedTempo} BPM</strong> &middot; Step count: <strong>{midiImportData.detectedStepCount}</strong>
+        Detected tempo: <strong>{midiImportData.detectedTempo} BPM</strong> &middot; Length: <strong>{midiImportData.bars} {midiImportData.bars === 1 ? 'bar' : 'bars'}</strong> &middot; Steps per bar: <strong>{midiImportData.detectedStepCount}</strong>
       </p>
+      {midiImportData.truncated && <p role="status">This file is longer than 8 bars. Only its first 8 bars are imported.</p>}
       <p className="rack-empty">Assign each track to a synth or the drums:</p>
       {midiImportData.tracks.map((track, index) => (
         <div key={index} className="rack-list-row">

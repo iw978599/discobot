@@ -3,6 +3,7 @@ import { createNamedSynthPresets } from '../components/SynthControls';
 import { useSynthAudio } from '../hooks/useSynthAudio';
 import { useDrumAudio } from '../hooks/useDrumAudio';
 import { MidiMode, MidiMessage, useMidiInput } from '../hooks/useMidiInput';
+import { MIDI_DRUM_CHANNEL, midiOut } from '../services/midiOutput';
 import { Pattern, SequencerStep, SynthParameters, DrumState, DrumInstrument, DrumSettings, DrumKitDefinition, DrumKitId, EffectsLoopState, FxSendLevels, Scene, Song, SynthModelId, SynthModelParams } from '../types';
 import { SongPosition, applySceneMutes, audibleLanes, entryStartBar, sceneAtBar, sceneDrumState, songBars } from '../services/songPlayback';
 import { createDefaultSynthParameters } from '@discobot/engine';
@@ -23,7 +24,7 @@ import { downloadFile, ExportArrangement } from '../services/wavExport';
 import { expandDrumStep } from '../services/drumScheduling';
 import { useComputerKeyboard } from '../hooks/useComputerKeyboard';
 import { getAudioContext, setMasterVolume, setMasterMuted, setEffectsTempo } from '../hooks/browserAudio';
-import { downloadMidiFile } from '../utils/midiExport';
+import { DRUM_NOTE_MAP, downloadMidiFile, noteNameToMidi } from '../utils/midiExport';
 import { importMidiFile, readFileAsArrayBuffer, MidiImportResult } from '../utils/midiImport';
 import { DEFAULT_SYNTH_MODEL_ID, createDefaultSynthModelParams, mapSynthModelToEngineParams, normalizeSynthModelId, normalizeSynthModelParams } from '../synthModels';
 
@@ -375,6 +376,21 @@ function normalizeEffectsLoop(loop: Partial<EffectsLoopState> | undefined): Effe
   };
 }
 
+// A time on the audio clock as a Web MIDI time stamp, which counts from when the page loaded.
+// It is where the sound leaves the speakers, so hardware plays with them and not ahead.
+// The audio clock moves in small jumps, so the gap between the two clocks is averaged over
+// many readings; otherwise MIDI clock pulses would wobble by a few milliseconds.
+let midiClockGap: number | null = null;
+function midiTime(audioTime: number): number {
+  const context = getAudioContext();
+  const stamp = context.getOutputTimestamp?.();
+  const gap = stamp?.contextTime && stamp.performanceTime
+    ? stamp.performanceTime - stamp.contextTime * 1000
+    : performance.now() - (context.currentTime - (context.outputLatency || 0)) * 1000;
+  midiClockGap = midiClockGap === null ? gap : midiClockGap + (gap - midiClockGap) * 0.02;
+  return midiClockGap + audioTime * 1000;
+}
+
 function midiNoteToName(midi: number): string {
   const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
   const note = notes[((midi % 12) + 12) % 12];
@@ -422,6 +438,10 @@ export function useStudio() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [midiMode, setMidiMode] = useState<MidiMode>('live');
   const [midiChannel, setMidiChannel] = useState(1);
+  // What the sequencer sends to the chosen MIDI output. Kept for the session only.
+  const [midiOutNotes, setMidiOutNotes] = useState(true);
+  const [midiOutClock, setMidiOutClock] = useState(false);
+  useEffect(() => { midiOut.configure({ notes: midiOutNotes, clock: midiOutClock }); }, [midiOutNotes, midiOutClock]);
   const [midiTargetSynthId, setMidiTargetSynthId] = useState<number | null>(1);
   const [projectId, setProjectId] = useState('');
   const [projectName, setProjectName] = useState('');
@@ -756,6 +776,11 @@ export function useStudio() {
     for (const scheduled of expandStepNotes(step, synthParams, windowSeconds, globalTempoRef.current)) {
       void synthAudio.playNote(scheduled.note, synthParams, scheduled.duration, velocity,
         browserMutedRef.current, effectsLoopRef.current, globalTempoRef.current, synthId, scheduledTime + scheduled.offset);
+      // Lane 1 goes out on MIDI channel 1, and so on.
+      if (midiOut.active) {
+        const start = scheduledTime + scheduled.offset, midi = noteNameToMidi(scheduled.note);
+        if (midi !== null) midiOut.note(synthId, midi, velocity, midiTime(start), midiTime(start + scheduled.duration));
+      }
     }
   }, [synthAudio]);
 
@@ -781,6 +806,7 @@ export function useStudio() {
   sceneLengthRef.current = sceneLength;
 
   scheduleTickRef.current = ({ step, bar, time, duration }) => {
+    if (midiOut.active) midiOut.tick(midiTime(time), duration * 1000, bar === 0 && step === 0);
     // Where in its pattern each lane is. In song mode that is counted from the start of the
     // scene's pass; otherwise the bars just keep counting and lanes of different lengths drift.
     let passBar = bar;
@@ -841,6 +867,7 @@ export function useStudio() {
       for (const offset of expandDrumStep(track, drumStep)) {
         const hitTime = time + swingOffset + offset * duration * 2;
         void drumAudio.playDrumHit(instrument, track.settings, velocity, hitTime);
+        if (midiOut.active) midiOut.note(MIDI_DRUM_CHANNEL, DRUM_NOTE_MAP[instrument], velocity, midiTime(hitTime), midiTime(hitTime + 0.06));
         if (instrument !== 'kick') continue;
         for (const synth of lanes) {
           const amount = synth.synthParams?.duck ?? 0;
@@ -867,6 +894,8 @@ export function useStudio() {
     } else {
       if (guestLink.transport().playing) guestLink.announce({ playing: false });
       transportRef.current?.stop();
+      midiOut.stop();
+      midiClockGap = null;
       setDrumCurrentStep(0);
       synthAudio.stopAllNotes();
       drumAudio.stopAllNotes();
@@ -2091,7 +2120,8 @@ export function useStudio() {
       pushHistorySnapshot(synthId, current.id);
       snapshotTaken = true;
       // Replace the lane's steps in place so repeated imports do not pile up stored patterns.
-      const pattern = { ...current, steps: track.pattern.steps, tempo };
+      const { bars: _bars, ...rest } = current;
+      const pattern: Pattern = { ...rest, steps: track.pattern.steps, tempo, ...(track.pattern.bars ? { bars: track.pattern.bars } : {}) };
       setSynths(prev => prev.map(s =>
         s.id === synthId ? { ...s, pattern, selectedStep: null } : s
       ));
@@ -2107,10 +2137,13 @@ export function useStudio() {
       const next = cloneDrumState(drumStateRef.current);
       for (const instrument of Object.keys(next) as DrumInstrument[]) {
         const lanes = importedDrums.map(track => track.drums![instrument]);
-        next[instrument].steps = next[instrument].steps.map((_, step) => lanes.some(lane => lane.steps[step]));
+        // The grid takes the file's length. Chance and repeats belonged to the steps being replaced.
+        next[instrument].steps = lanes[0].steps.map((_, step) => lanes.some(lane => lane.steps[step]));
         next[instrument].stepVelocities = next[instrument].steps.map((_, step) => (
           lanes.find(lane => lane.steps[step])?.stepVelocities[step] ?? 1
         ));
+        delete next[instrument].stepProbabilities;
+        delete next[instrument].stepRatchets;
       }
       setDrumState(next);
       await localRequest('/drum/state', {
@@ -2472,7 +2505,7 @@ export function useStudio() {
     synths, selectedSynthId, setSelectedSynthId, drumState: memoizedDrumState, drumKits, drumKitsLoading, drumKitsError,
     selectedDrumKitId, drumMasterVolume, drumSwing, drumCurrentStep, drumFx, effectsLoop, browserMuted, setBrowserMuted,
     browserVolume, setBrowserVolume, globalTempo, storageError, setStorageError, changedElsewhere, loadOtherTabVersion, keepThisTabVersion, helpOpen, setHelpOpen, midiMode, setMidiMode,
-    midiChannel, setMidiChannel, midiTargetSynthId, setMidiTargetSynthId, projectId, projectName, projects, synthPresets, drumAudio,
+    midiChannel, setMidiChannel, midiOutNotes, setMidiOutNotes, midiOutClock, setMidiOutClock, midiTargetSynthId, setMidiTargetSynthId, projectId, projectName, projects, synthPresets, drumAudio,
     handleUndo, handleRedo, midiImportData, setMidiImportData, midiImportAssignments, setMidiImportAssignments,
     handleMidiImportClick, handleMidiImportFile, handleMidiImportApplyAll, midiImportFileRef, handleRemoveSynth,
     ensureSynthExists, handleOctaveShift, handleTempoChange, handleGlobalPlayStop, handleStepChange, handleStepSelect, handleKeyboardModeChange,

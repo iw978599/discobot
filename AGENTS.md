@@ -67,7 +67,8 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 | `ui/src/hooks/browserAudio.ts` | Shared AudioContext, master limiter, parallel FX buses, sample playback |
 | `ui/src/hooks/useSynthAudio.ts` | Per-lane AudioWorklet nodes, note start/stop, parameter flattening |
 | `ui/src/hooks/useDrumAudio.ts` | Posts drum hits to the `drum-processor` worklet node |
-| `ui/src/hooks/useMidiInput.ts` | Web MIDI input, per-device held-note tracking |
+| `ui/src/hooks/useMidiInput.ts` | Web MIDI input, per-device held-note tracking, and the list of outputs |
+| `ui/src/services/midiOutput.ts` | `midiOut`: the sequencer's notes and MIDI clock to a hardware output |
 | `ui/src/audio/worklet.ts` | Worklet entry: thin `synth-processor` and `drum-processor` wrappers around the engine cores. `vite.config.ts` bundles it to `public/audio-worklet.js` (generated, gitignored) |
 | `ui/src/services/songPlayback.ts` | Pure song helpers: `sceneAtBar` (which scene plays in a bar, and where in it), `songBars`, `sceneDrumState` |
 | `ui/src/services/presetImport.ts` | Synth preset files: Discobot's own (`discobot-preset`), and translators for other synths' presets |
@@ -115,6 +116,8 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 - `createChorus` and `createMasterEq` in `browserAudio.ts` build those effects for live playback and for export. The EQ is on the whole mix and works with the effects loop off.
 - The `vibrato` LFO target is the `pitch` target scaled to one semitone at full depth. `pitch` is still an octave, so stored sounds are unchanged.
 - Two exports of the same project can differ in a few samples by one step of a 16-bit file: the browser's offline renderer rounds a kick through the reverb differently from run to run. Browser tests that compare exports allow for it (`same` in `effects.spec.ts`).
+- MIDI output is sent from the scheduler (`triggerStep`, the drum loop and the top of `scheduleTick`) with time stamps from `midiTime`, which turns an audio-clock time into Web MIDI's clock. Synth lane N is channel N, drums are channel 10 with the notes MIDI export uses, and clock is three pulses per transport tick with start and stop. The chosen output and what it is sent are session settings, not saved with the project. Notes played by hand are not sent, only the sequencer.
+- A MIDI file is imported at the smallest of 1, 2, 4 or 8 bars that holds it (`barsFor`), the same length for every track; anything past eight bars is left out and the dialog says so.
 - The piano roll paints while a pressed pointer moves. It ignores cells that arrive under a pointer that has not moved (selecting a step can shift the layout), or one click would add a second note.
 - A step's `slide` flag holds its note into the next step; a mono lane then glides instead of retriggering. Accent is step velocity routed to the filter (`velocity.filter`).
 - There is no common format for synth presets, so `presetImport.ts` has one translator per source format, each written from that synth's real parameter definitions, and returns a list of what did not carry over. Add a format by adding a translator and a detection rule; never guess at an unknown file. Every result goes through `sanitizeSynthParams`.

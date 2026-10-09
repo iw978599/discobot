@@ -67,3 +67,18 @@
   font-size: 0.75rem;
   line-height: 1.4;
 }
+
+.midi-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.72rem;
+  color: #ddd;
+}
+
+.midi-note {
+  margin: 0.4rem 0 0;
+  font-size: 0.75rem;
+  color: #a8b0bc;
+  max-width: 60ch;
+}
