@@ -8,6 +8,7 @@ import SynthControls, { type SynthTab } from '../components/SynthControls';
 import KeyboardPanel from '../components/KeyboardPanel';
 import StepRow from './StepRow';
 import { usePlayhead } from '../hooks/usePlayhead';
+import { tracked } from '../studio/tracked';
 
 const AMBER = '#ffb000';
 
@@ -29,6 +30,10 @@ const milliseconds = (input: string): number | null => {
 interface SynthModuleProps {
   studio: Studio;
   synthId: number;
+  // This lane, or nothing if it has not been added. It is handed in, not looked up in
+  // `studio.synths`: that list is new whenever any lane changes, and reading it would render
+  // every lane for an edit to one.
+  synth: Studio['synths'][number] | undefined;
 }
 
 // One rack unit per synth lane: name plate, mute and solo, the pattern, and the few knobs
@@ -36,9 +41,8 @@ interface SynthModuleProps {
 // How late a step can start, as a fraction of a step.
 const TIMINGS: Array<[number, string]> = [[0, 'On the step'], [0.25, '¼ step late'], [1 / 3, '⅓ step late'], [0.5, '½ step late'], [2 / 3, '⅔ step late'], [0.75, '¾ step late']];
 
-export default function SynthModule({ studio, synthId }: SynthModuleProps) {
+function SynthModule({ studio, synthId, synth }: SynthModuleProps) {
   const [tab, setTab] = useState<SynthTab>('notes');
-  const synth = studio.synths.find(entry => entry.id === synthId);
   const selected = studio.selectedSynthId === synthId;
   const sectionRef = useRef<HTMLElement>(null);
   const selectedStep = synth?.selectedStep ?? null;
@@ -394,3 +398,5 @@ export default function SynthModule({ studio, synthId }: SynthModuleProps) {
     </section>
   );
 }
+
+export default tracked(SynthModule);

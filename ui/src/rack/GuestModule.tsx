@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Studio } from '../studio/useStudio';
+import { tracked } from '../studio/tracked';
 import { createGuestPlayer, type GuestPlayer } from '../hooks/guestAudio';
 import {
   GUEST_LATENCY_MS, GUEST_PROTOCOL, guestCapture, guestLink, guestOrigin, isTrustedOrigin, trustOrigin,
@@ -20,7 +21,7 @@ interface Readout { blocks: number; late: number; latencyMs: number; failed: boo
 
 // One guest instrument: another creator's page in a frame, kept in time with the transport,
 // with its sound brought into the mixer and its settings saved in the project.
-export default function GuestModule({ studio, guest }: { studio: Studio; guest: Guest }) {
+function GuestModule({ studio, guest }: { studio: Studio; guest: Guest }) {
   const origin = guestOrigin(guest.url);
   const [allowed, setAllowed] = useState(() => isTrustedOrigin(origin));
   const [status, setStatus] = useState<Status>('loading');
@@ -276,3 +277,5 @@ export default function GuestModule({ studio, guest }: { studio: Studio; guest: 
     </section>
   );
 }
+
+export default tracked(GuestModule);
