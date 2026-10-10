@@ -5,6 +5,7 @@ import Menu from './Menu';
 import { TempoDisplay } from './HeaderParts';
 import { accountsEnabled } from '../services/account';
 import { useAccountUser } from './AccountDialog';
+import { enterKidsMode } from '../services/kids';
 
 interface TransportUnitProps {
   studio: Studio;
@@ -63,6 +64,7 @@ export default function TransportUnit({ studio, onOpenSettings, onOpenProjects, 
             { label: 'Import Project', title: 'Add a project file to your projects and open it', onSelect: () => studio.projectImportFileRef.current?.click() },
             { label: 'Add Guest Instrument', title: "Host another creator's web instrument in this project, by its address", onSelect: onAddGuest },
             { label: 'Import MIDI', title: 'Bring notes in from a .mid file', onSelect: studio.handleMidiImportClick },
+            { label: 'Kids Mode', title: 'Big pads and one play button for a small child. It keeps its own tune and cannot change your projects', onSelect: enterKidsMode },
             { label: 'Reset All', title: 'Clear every lane, the drums and the effects of this project', onSelect: () => { void studio.handleReset(); } },
           ]}
         />

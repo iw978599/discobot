@@ -120,6 +120,7 @@ export function HelpModal({ open, onClose }: { open: boolean; onClose: () => voi
             <li><strong>BPM:</strong> click the display to type a tempo (20–400), or tap it in with <strong>Tap</strong>.</li>
             <li><strong>Projects:</strong> click the project's name to see every project in this browser. The open project saves itself as you work; <strong>Copy</strong> keeps a version to go back to. Arrangements saved in earlier versions are now projects.</li>
             <li><strong>Project menu:</strong> start a new project, share a link, export or import a project file (a backup you can move to another device; imported samples are not included), import a MIDI file, or reset the open project.</li>
+            <li><strong>Kids Mode:</strong> in the Project menu. Big pads and one play button for a small child, on a page of its own that cannot change your projects. Hold “Hold to leave” for three seconds to come back.</li>
             <li><strong>Share Link:</strong> makes a link with the whole song inside it. Whoever opens it can listen and keep their own copy. Nothing is uploaded, and no account is needed.</li>
             <li><strong>Export menu:</strong> WAV (one bar with its effect tail), Loop WAV (exactly one bar that repeats seamlessly), Stems (a zip with one WAV per synth lane and one for the drums) and MIDI are of the open scene. Song WAV and Song MIDI are the whole song.</li>
             <li><strong>MIDI:</strong> choose a controller, channel, target lane and live/record/step mode. Imported samples are kept there too.</li>
