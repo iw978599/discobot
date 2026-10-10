@@ -106,11 +106,16 @@ may redistribute.
 
 ## Features
 
-1. **A layout for phones and the installed app.** (L)
-   The rack is one wide panel. On a phone it keeps its desktop width and is
-   scrolled sideways, which works but is not comfortable: the step grids and
-   the knobs are small, and the transport bar is wider than the screen. A
-   layout made for a narrow screen:
+1. **A layout for phones and the installed app.** (L) First part done: at
+   720px wide and under the rack no longer scrolls sideways. Units stack
+   their parts, step grids are eight to a row, buttons are finger-sized, the
+   keyboard slides sideways, menus rise from the bottom, dialogs fill the
+   screen, safe areas are respected, the screen stays awake while playing,
+   and only the tempo and Play stay stuck to the top. It is still every unit
+   on one long page. Still open from the list below: one unit on screen at a
+   time with a bar to move between them, knobs as sliders or a large dial,
+   and a piano roll made for a thumb. None of it has been tried on a real
+   phone. The full list:
    - One unit on screen at a time (a lane, the drums, the song, effects),
      with a bar along the bottom to move between them and the transport
      always in reach.

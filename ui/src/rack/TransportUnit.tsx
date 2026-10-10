@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import type { Studio } from '../studio/useStudio';
 import Knob from '../components/Knob';
 import Menu from './Menu';
@@ -22,8 +23,20 @@ export default function TransportUnit({ studio, onOpenSettings, onOpenProjects, 
   const user = useAccountUser();
   const midiStatus = !midiState.supported ? 'MIDI is not available in this browser'
     : midiState.connected ? 'A MIDI controller is connected' : 'No MIDI controller connected';
+  // On a narrow screen the bar wraps over several lines and only the last, with the tempo and
+  // Play, stays stuck to the top (rack.css). This tells the stylesheet how tall the others are.
+  const barRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const bar = barRef.current, play = bar?.querySelector<HTMLElement>('.play-all-button');
+    if (!bar || !play || typeof ResizeObserver === 'undefined') return;
+    const measure = () => bar.style.setProperty('--transport-tuck', `${Math.max(0, play.offsetTop - 8)}px`);
+    const observer = new ResizeObserver(measure);
+    observer.observe(bar);
+    measure();
+    return () => observer.disconnect();
+  }, []);
   return (
-    <header className="rack-unit transport">
+    <header ref={barRef} className="rack-unit transport">
       <div className="rack-row">
         <div className="rack-plate static brand">
           <h1>Discobot</h1>
