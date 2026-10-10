@@ -16,6 +16,7 @@ import { DRUM_INSTRUMENTS } from '../services/drumKits';
 import type { DrumSample } from '../../../engine/src/drums/DrumCore';
 import { guestCapture, guestLink, guestOrigin, guestUrl, trustOrigin, wallAtContextTime, wallNow, type Guest } from '../services/guests';
 import { playhead } from '../services/playhead';
+import { loadStoredPresets, presetStore } from '../services/presetStore';
 import { downloadArrangementWav, downloadStemsZip } from '../services/wavExport';
 import type { ProjectInfo } from '../services/projectLibrary';
 import { sanitizeSynthParams } from '../services/projectSanitization';
@@ -46,7 +47,6 @@ const DEFAULT_EFFECTS_LOOP: EffectsLoopState = {
 };
 
 const DEFAULT_DRUM_KIT_ID: DrumKitId = 'clean-analog';
-const SYNTH_PRESETS_STORAGE_KEY = 'discobot_synth_presets_v1';
 const MAX_HISTORY = 80;
 // MIDI keys pressed within this long of each other are one chord.
 const CHORD_WINDOW_MS = 60;
@@ -286,15 +286,6 @@ function parseUserPresets(value: unknown): SynthPreset[] {
     }));
 }
 
-function loadUserPresets(): SynthPreset[] {
-  try {
-    const raw = localStorage.getItem(SYNTH_PRESETS_STORAGE_KEY);
-    return raw ? parseUserPresets(JSON.parse(raw)) : [];
-  } catch {
-    return [];
-  }
-}
-
 function normalizeFxSends(sends: Partial<FxSendLevels> | undefined): FxSendLevels {
   return {
     reverb: Math.max(0, Math.min(1, sends?.reverb ?? DEFAULT_DRUM_FX.sends.reverb)),
@@ -448,7 +439,6 @@ export function useStudio() {
   const [synthPresets, setSynthPresets] = useState<SynthPreset[]>(() => [
     ...createBuiltInPresets(),
     ...createNamedSynthPresets(DEFAULT_PARAMS),
-    ...loadUserPresets(),
   ]);
   const synthPresetsRef = useRef(synthPresets);
   synthPresetsRef.current = synthPresets;
@@ -714,7 +704,23 @@ export function useStudio() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [helpOpen, midiImportOpen]);
 
+  // The user's own presets are read once the page is up. Until they have been, nothing is
+  // written back: the first render has none, and saving that would replace what is stored.
+  const presetsLoadedRef = useRef(false);
   useEffect(() => {
+    let current = true;
+    void loadStoredPresets().then((stored) => {
+      if (!current) return;
+      const loaded = parseUserPresets(stored), ids = new Set(loaded.map(preset => preset.id));
+      presetsLoadedRef.current = true;
+      // One saved in the moment before this finished is kept, after the stored ones.
+      setSynthPresets(prev => [...prev.filter(preset => preset.builtIn), ...loaded, ...prev.filter(preset => !preset.builtIn && !ids.has(preset.id))]);
+    }).catch(() => { if (current) setStorageError('Your saved synth presets could not be read from browser storage, so presets saved now will not be kept.'); });
+    return () => { current = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!presetsLoadedRef.current) return;
     const presetsToPersist = synthPresets
       .filter((preset) => !preset.builtIn)
       .map((preset) => ({
@@ -724,11 +730,7 @@ export function useStudio() {
         modelId: preset.modelId,
         modelParams: preset.modelParams,
       }));
-    try {
-      localStorage.setItem(SYNTH_PRESETS_STORAGE_KEY, JSON.stringify(presetsToPersist));
-    } catch {
-      setStorageError('Unable to persist synth presets in browser storage.');
-    }
+    presetStore.save(presetsToPersist).catch(() => setStorageError('Unable to persist synth presets in browser storage.'));
   }, [synthPresets]);
 
   useEffect(() => {
