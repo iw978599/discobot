@@ -101,7 +101,7 @@ export default function Rack({ studio }: { studio: Studio }) {
           </div>
         )}
         <SongModule studio={studio} />
-        {[1, 2, 3].map(id => <SynthModule key={id} studio={studio} synthId={id} />)}
+        {[1, 2, 3].map(id => <SynthModule key={id} studio={studio} synthId={id} synth={studio.synths.find(entry => entry.id === id)} />)}
         {studio.guests.map(guest => <GuestModule key={guest.id} studio={studio} guest={guest} />)}
         <DrumModule studio={studio} />
         <div className="rack-unit effects-unit">
