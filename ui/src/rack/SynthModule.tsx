@@ -399,4 +399,4 @@ function SynthModule({ studio, synthId, synth }: SynthModuleProps) {
   );
 }
 
-export default tracked(SynthModule);
+export default tracked(SynthModule, 'synth');

@@ -542,4 +542,4 @@ function DrumModule({ studio }: { studio: Studio }) {
   );
 }
 
-export default tracked(DrumModule);
+export default tracked(DrumModule, 'drums');

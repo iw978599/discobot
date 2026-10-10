@@ -278,4 +278,4 @@ function GuestModule({ studio, guest }: { studio: Studio; guest: Guest }) {
   );
 }
 
-export default tracked(GuestModule);
+export default tracked(GuestModule, 'guest');
