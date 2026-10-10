@@ -78,6 +78,15 @@ export default function Rack({ studio }: { studio: Studio }) {
             <button className="rack-btn" onClick={projectSync.dismissKeptBoth} aria-label="Dismiss sync message">✕</button>
           </div>
         )}
+        {(sync.updates.length > 0 || sync.ended.length > 0) && (
+          <div role="status" className="app-alert">
+            <span>
+              {sync.updates.map(update => `${update.by} saved “${update.name}”, and this browser now has that version. `).join('')}
+              {sync.ended.length > 0 && `${sync.ended.map(name => `“${name}”`).join(' and ')} ${sync.ended.length === 1 ? 'is' : 'are'} no longer shared with you. Your copy is still here, in this browser only.`}
+            </span>
+            <button className="rack-btn" onClick={projectSync.dismissShared} aria-label="Dismiss sharing message">✕</button>
+          </div>
+        )}
         {studio.guestRecording !== null && (
           <div role="status" className="app-alert">
             <span>

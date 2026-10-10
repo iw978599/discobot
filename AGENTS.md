@@ -56,7 +56,7 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 | `ui/src/services/account.ts` | Browser side of accounts: the session and every API call. `accountsEnabled` is false when the build has no `VITE_API_URL` |
 | `ui/src/services/guests.ts` | Guest instruments: address and data checks, per-site consent, the shared-clock helpers and `guestLink`, which tells guests about the transport |
 | `ui/src/rack/GuestModule.tsx` / `ui/src/hooks/guestAudio.ts` | The guest's rack unit and frame, and the player that brings its audio into the mixer |
-| `ui/src/services/projectSync.ts` | Project sync: `createProjectSync` (the rules, tested against the real API handler) and `startProjectSync` (when it runs) |
+| `ui/src/services/projectSync.ts` | Project sync: `createProjectSync` (the rules, tested against the real API handler) and `startProjectSync` (when it runs). Also keeps a project shared by someone else in step with the owner's copy |
 | `ui/src/rack/AccountDialog.tsx` | Sign in, create account, recovery code, and the owner's invite codes and member list |
 | `ui/src/rack/Walkthrough.tsx` / `ui/src/services/walkthrough.ts` | The tour of the rack shown after a new account's recovery code, and whether this browser has had it |
 | `ui/src/services/shareLink.ts` | Share links: a project deflated into the URL after `#song=`, and short links (`#s=code`) to a song published on the server |
@@ -211,6 +211,16 @@ npm run migrate --workspace=server  # Apply new database migrations to the live 
 - Sync state is in `localStorage` under `discobot_sync_v1`, per username. Signed out, `startProjectSync` sends nothing.
 - The server stores projects as sent and checks only size and shape. Whatever the browser downloads goes through `restore()` like a project file.
 - Imported samples are not synced.
+
+## Working Together
+- Two people work on one project in turns. There is no live connection and no merging: the owner shares a synced project by username, and the people it is shared with read and save the owner's copy under the same revision rule as everything else. This was chosen over live editing because a held-open connection is ruled out below; changing that is the owner's decision.
+- A shared project stays in the owner's account. It is never copied into a member's account, and it only enters a member's browser when they open it from "Shared with you" (`projectSync.join`). Do not download someone else's project unasked.
+- `createProjectSync` settles a project against a `Place`: this account (`/projects`) or the owner's copy (`/shared/<owner>/<id>`). `settle` is the one implementation of the rule for both; do not write a second.
+- When both people changed a shared project at once, the one who syncs second keeps their edits as a project of their own (`syncFork`) and receives the other's version. Nothing is overwritten.
+- When sharing ends (unshared, the project deleted, an account removed) the member's copy stays, as a project of this browser only. Deleting a shared project as a member only removes it here and leaves; only the owner's delete reaches the account.
+- A server that has never heard of `/shared` answers 404. Sync reads that as "nothing is shared" and leaves every link alone; it must not read it as everything having been unshared. The accounts API is deployed by hand, so the site can be ahead of it.
+- Sharing stores which account shared which project with which, and which account saved a project last (`project_shares`, `projects.updated_by`). No names, messages or activity beyond that.
+- With anything shared, sync looks for changes every 20 seconds instead of every two minutes (`CHECK_SHARED_EVERY_MS`).
 
 ## Guest Instruments
 - A guest is another creator's web page in a frame (`GuestModule`), listed in the project as `guests`. The protocol is `docs/GUEST_PROTOCOL.md`; `docs/guest-example.html` is a complete guest, and the browser tests run against it (served by `server/dev.ts` at `/__guest`). Change the three together.
