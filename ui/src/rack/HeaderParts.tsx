@@ -99,10 +99,13 @@ export function TempoDisplay({ tempo, onChange }: { tempo: number; onChange: (bp
   );
 }
 
-export function HelpModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function HelpModal({ open, onClose, onWalkthrough }: { open: boolean; onClose: () => void; onWalkthrough: () => void }) {
   if (!open) return null;
   return (
     <Dialog title="How to use Discobot" closeLabel="Close help" onClose={onClose}>
+      <div className="rack-dialog-actions start">
+        <button className="rack-btn go" title="A short tour of the rack, one part at a time" onClick={onWalkthrough}>Show the Walkthrough</button>
+      </div>
       <div className="help-sections">
         <section>
           <h3>Quick start</h3>
