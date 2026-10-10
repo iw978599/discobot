@@ -142,7 +142,8 @@ may redistribute.
    account or any other site. Decided in building it: it is a separate page,
    not a switch in the transport bar. Still open: whether what a child makes
    can be opened in the full app; trying it with a child and on a real
-   tablet; choosing the sounds by ear; keeping the screen awake.
+   tablet; choosing the sounds by ear; keeping the screen awake. More to do
+   in it is item 10.
 
 3. **Record live playing against the clock.** (M)
    MIDI record mode writes to the step under the playhead. Add a metronome, a
@@ -194,6 +195,18 @@ may redistribute.
 9. **A page listing a user's published songs.** (M)
    Publishing gives each song a short link, and there is no profile page or
    browsable list (`docs/STORAGE_AND_ACCOUNTS_PLAN.md`, stage 3 step 4).
+   Decided 2026-10-10: a page for each user's own songs only. No page that
+   lists everyone's.
+
+10. **A fuller kids mode.** (M)
+    The first version is too simple to hold a child's interest for long.
+    Decided 2026-10-10: it stays a page of its own, and gets
+    - more to play: more pads and more sounds to choose from;
+    - a second activity on another screen, such as a grid of pictures for
+      building a beat.
+    The rules of the first version still hold: no reading needed, nothing
+    can be lost or broken, a capped level, no account and no requests to
+    anywhere.
 
 Done: song mode, with mutes and solos kept per scene; patterns of 1, 2, 4 or
 8 bars per lane, and MIDI files of up to eight bars imported at full length;
@@ -209,11 +222,11 @@ for new accounts.
 - **Did the Firefox guest fixes work?** PRs #76 and #77 changed how a guest
   instrument's audio is timed for Firefox. Nobody has said whether a guest
   now plays in time on a real desktop Firefox.
-- **Tape Loop Deck's loops.** They are not saved with a project. That needs an
+- **Tape Loop Deck.** On hold: the owner took it off the Add Guest list on
+  2026-10-10. Its loops are not saved with a project either, which needs an
   addition to the guest protocol and a new prompt for its author.
-- **Kids mode.** It is a separate page, and what a child makes cannot be
-  opened in the full app. Both were decided in building it and are easy to
-  change.
+- **Kids mode.** Staying a separate page is now decided. Still to answer:
+  whether what a child makes can be opened in the full app.
 
 ## Suggested order
 
@@ -228,7 +241,8 @@ for new accounts.
 5. **The rest of the phone layout** (features 1): one unit on screen at a
    time, knobs as sliders and a piano roll made for a thumb. Do the
    **accessibility pass** (improvements 5) on the new controls as they are
-   made, and move **kids mode** (features 2) onto the same large controls.
+   made, move **kids mode** (features 2) onto the same large controls, and
+   build the **fuller kids mode** (features 10).
 6. **Record live playing** and **more ways to edit patterns** (features 3
    and 4): the two that most change what making a song feels like.
 7. **Samples in project files** (sound 2). Sync for them waits on storage.
