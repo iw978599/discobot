@@ -37,7 +37,7 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 ## Key Files
 | File | Purpose |
 |------|---------|
-| `ui/src/App.tsx` | Five lines: calls `useStudio()` and renders `<Rack>` |
+| `ui/src/App.tsx` | Picks the page from the URL hash before `useStudio` runs: kids mode (`#kids`), one person's published songs (`#u=name`), or the workstation, which shows a shared song's page for `#song=` and `#s=` and otherwise `<Rack>` |
 | `ui/src/studio/useStudio.tsx` | All app state and behaviour: synth lanes, transport scheduling, undo/redo, save/load, MIDI import/export wiring. Returns one `Studio` object; it renders nothing |
 | `ui/src/rack/` | The whole UI. `Rack` stacks `TransportUnit`, three `SynthModule`s, `DrumModule` and the effects unit; `rack.css` holds the look and the shared column layout; `Dialog` and `Menu` are the only modal and dropdown |
 | `ui/src/services/localService.ts` | In-process project store. `localRequest(path, options)` mutates state, persists to localStorage and emits events |
@@ -59,8 +59,9 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 | `ui/src/services/projectSync.ts` | Project sync: `createProjectSync` (the rules, tested against the real API handler) and `startProjectSync` (when it runs). Also keeps a project shared by someone else in step with the owner's copy |
 | `ui/src/rack/AccountDialog.tsx` | Sign in, create account, recovery code, and the owner's invite codes and member list |
 | `ui/src/rack/Walkthrough.tsx` / `ui/src/services/walkthrough.ts` | The tour of the rack shown after a new account's recovery code, and whether this browser has had it |
-| `ui/src/services/shareLink.ts` | Share links: a project deflated into the URL after `#song=`, and short links (`#s=code`) to a song published on the server |
+| `ui/src/services/shareLink.ts` | Share links: a project deflated into the URL after `#song=`, short links (`#s=code`) to a song published on the server, and the link to one person's page of published songs (`#u=name`) |
 | `ui/src/rack/SharedSongPage.tsx` | The page a share link opens: renders the song to audio, plays it, offers a copy |
+| `ui/src/rack/UserSongsPage.tsx` | The page a person's link (`#u=name`) opens: the songs they have published, each a link to its own page |
 | `ui/src/kids/KidsPage.tsx` / `ui/src/services/kids.ts` | Kids mode (`#kids`): nine big pads, sounds chosen by picture and one play button, on a page that never opens the projects |
 | `ui/src/services/wavExport.ts` | Offline arrangement render and WAV encoding: full mix, seamless loop, and per-lane stems zipped by `utils/zip.ts` |
 | `ui/src/services/delayTime.ts` | `delaySeconds`: the shared delay's time, free or tempo-synced |
@@ -253,6 +254,13 @@ npm run migrate --workspace=server  # Apply new database migrations to the live 
 - Reading a song needs no account and returns the title, the publisher's username and the project. Never add anything else about the publisher to that response.
 - Publishing the same project again replaces the copy and keeps the code. Unpublishing deletes the row; the site owner can unpublish any song.
 - A published song is untrusted like any project file: `SharedSongPage` reads it through `readProjectFile`.
+- Each person has a page of the songs they have published, at `#u=name` (`UserSongsPage`). The owner decided on 2026-10-10 that this is all there is: no page of everyone's songs, no browsing, no search and no list of people. Do not add one without asking. The page is reached by its link, from the publisher's name on a song's page, or from Share Link, where a signed-in user copies the link to their own.
+- `GET /users/<name>/songs` needs no account and answers `{ author, songs: [{ code, title, updatedAt }] }`, newest first. Never add anything else to it: no project ids, join date, counts or anything about projects that are not published.
+- A username nobody has, one with nothing published and text that could not be a username all get the same `{ songs: [] }` with status 200, from one query, and `author` is only there when there are songs. Keep it so: the route must not tell anyone which usernames exist.
+- Opening `#u=name` is the second request a signed-out visitor can cause, after opening a short link, and like it is one the visitor asked for. It is sent without the session token even when signed in. A link that could not name a username sends nothing. `user-songs.spec.ts` checks both.
+- The list is other people's text: `readUserSongs` keeps only codes, titles and times of the right shape, caps the titles and the count, and shows the name that was asked for unless the server returns the same name in other capitals. Titles are rendered as text.
+- `App` chooses the page before `useStudio` runs, as it does for kids mode, and moving between it and any other page reloads. The songs on it are plain links to `#s=code`.
+- A server from before the page existed answers 404 for the route, and the page then says such pages are not available yet. The accounts API is deployed by hand, so the site can be ahead of it; a server that cannot be reached gets a different message and a Try Again button.
 
 ## Known Issues
 - `localService` still exposes a REST-shaped `request(path)` API with `Response` objects for edits inside a project, a leftover from the server version

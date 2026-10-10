@@ -25,6 +25,7 @@ test('a published song has a short link that anyone can open, update keeps the l
   await menu(page, 'Share Link');
   let share = page.getByRole('dialog', { name: 'Share this song', exact: true });
   await expect(share).toContainText('Sign in to publish');
+  await expect(share.getByLabel('Your songs page', { exact: true }), 'nobody signed out has a page of songs').toHaveCount(0);
   const long = await share.getByLabel('Share link', { exact: true }).inputValue();
   await page.keyboard.press('Escape');
 

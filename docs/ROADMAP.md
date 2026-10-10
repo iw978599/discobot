@@ -192,11 +192,22 @@ may redistribute.
    the Walkthrough button, and the stop about accounts says they are optional
    to someone who is not signed in.
 
-9. **A page listing a user's published songs.** (M)
-   Publishing gives each song a short link, and there is no profile page or
-   browsable list (`docs/STORAGE_AND_ACCOUNTS_PLAN.md`, stage 3 step 4).
-   Decided 2026-10-10: a page for each user's own songs only. No page that
-   lists everyone's.
+9. **A page listing a user's published songs.** Done, for each user's own
+   songs only, as decided on 2026-10-10: no page that lists everyone's, no
+   browsing, no search and no list of people.
+   - Each person's page is at `#u=name` and lists the songs they have
+     published, newest first, each leading to its own page. It needs no
+     account to open.
+   - The publisher's name on a song's page leads to it, and Share Link shows
+     a signed-in user the link to their own.
+   - The server gives out the username and each song's code, title and time,
+     and nothing else. A name nobody has reads the same as a person with
+     nothing published.
+   - It needs the accounts API deployed (no database change). Until then the
+     page says such pages are not available yet.
+   Still open: a description or picture for a person or a song; choosing the
+   order of the list or leaving a published song off it; playing a song from
+   the list without opening its page.
 
 10. **A fuller kids mode.** (M)
     The first version is too simple to hold a child's interest for long.
