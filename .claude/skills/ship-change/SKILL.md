@@ -53,7 +53,8 @@ description: The checks and steps for finishing a change in Discobot and opening
 - The description states what was run and its result, and plainly lists what
   was not verified. Sound that has not been listened to is "not verified by
   ear".
-- Merging to `main` publishes the site. The accounts API is deployed
+- Merging to `main` publishes the site, once the checks on that merge have
+  passed (about six minutes). If a check fails, nothing is published. The accounts API is deployed
   separately and by hand (`npm run deploy --workspace=server`, then
   `npm run migrate --workspace=server` if there is a new migration).
 

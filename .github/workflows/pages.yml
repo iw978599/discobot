@@ -1,6 +1,11 @@
 name: Publish GitHub Pages
+# Publishes main once its checks have passed. The checks are not repeated here: this starts
+# when "Static app CI" finishes for a push to main, and only goes on if every job in it passed.
+# Run by hand, it publishes main as it stands without waiting for them.
 on:
-  push:
+  workflow_run:
+    workflows: [Static app CI]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 permissions:
@@ -10,27 +15,27 @@ concurrency:
   cancel-in-progress: false
 jobs:
   build:
-    if: github.ref == 'refs/heads/main'
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
+          # The commit the checks passed on, which is not always the newest by the time this runs.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run typecheck
-      - run: npm test
       - run: npm run build
         env:
           # The accounts API (server/). Without this the site has no sign-in at all.
           VITE_API_URL: https://discobot-api.discobot-server.workers.dev
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:browser
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: ui/dist
   deploy:
@@ -44,5 +49,5 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/deploy-pages@v4
+      - uses: actions/deploy-pages@v5
         id: deployment
