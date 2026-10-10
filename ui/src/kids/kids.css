@@ -1,7 +1,7 @@
-/* Kids mode: one screen, nothing to scroll, everything big enough for a small finger. */
+/* Kids mode: one screen at a time, nothing to scroll, everything big enough for a small finger. */
 .kids {
   position: fixed; inset: 0; box-sizing: border-box; overflow: hidden;
-  display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto auto; gap: 12px;
+  display: flex; flex-direction: column; gap: 12px;
   padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
   background: #1b1f3b; color: #fff;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -12,21 +12,33 @@
 
 .kids-top, .kids-bottom { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 .kids-bottom { justify-content: center; gap: 24px; }
-.kids-sounds { display: flex; gap: 10px; }
+.kids-screens { display: flex; gap: 10px; }
+/* On a narrow screen the sounds take a line of their own, under the two activities and the way out. */
+.kids-sounds { order: 1; flex: 1 0 100%; display: flex; justify-content: space-between; gap: clamp(4px, 2vw, 10px); }
+
+/* Square for a place to go, round for a thing to choose. */
+.kids-screen {
+  display: grid; place-items: center; width: clamp(52px, 15vw, 72px); height: clamp(52px, 15vw, 72px); border-radius: 18px;
+  background: #2f3566; box-shadow: 0 4px 0 rgba(0, 0, 0, 0.35);
+}
+.kids-screen svg { width: 68%; height: 68%; }
+.kids-screen.on { background: #fff; box-shadow: 0 0 0 4px #ffd84d, 0 4px 0 rgba(0, 0, 0, 0.35); }
+.kids-screen:active { transform: translateY(3px); }
 
 .kids-round {
-  width: clamp(48px, 13vw, 64px); height: clamp(48px, 13vw, 64px); border-radius: 50%; font-size: clamp(24px, 6.5vw, 32px); line-height: 1;
+  width: clamp(44px, 13vw, 64px); height: clamp(44px, 13vw, 64px); border-radius: 50%; font-size: clamp(22px, 6.5vw, 32px); line-height: 1;
   background: #2f3566; box-shadow: 0 4px 0 rgba(0, 0, 0, 0.35);
 }
 .kids-round.on { background: #fff; box-shadow: 0 0 0 4px #ffd84d, 0 4px 0 rgba(0, 0, 0, 0.35); }
 .kids-round:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35); }
 
+/* Three across on a tall screen and four across on any other, so twelve pads keep their size. */
 .kids-pads {
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(3, minmax(0, 1fr)); gap: 12px;
-  width: min(100%, 720px); min-height: 0; margin: 0 auto;
+  flex: 1 1 0; min-height: 0; align-self: center; width: min(100%, 720px);
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(4, minmax(0, 1fr)); gap: 12px;
 }
 .kids-pad {
-  min-width: 72px; min-height: 72px; border-radius: 24px; font-size: clamp(40px, 11vmin, 96px); line-height: 1;
+  min-width: 64px; min-height: 64px; border-radius: 24px; font-size: clamp(36px, 10vmin, 88px); line-height: 1;
   box-shadow: 0 6px 0 rgba(0, 0, 0, 0.4);
 }
 .kids-pad:active, .kids-pad.lit { transform: translateY(4px); box-shadow: 0 2px 0 rgba(0, 0, 0, 0.4); filter: brightness(1.3); }
@@ -36,6 +48,22 @@
 .kids-dots span.on { background: #8f97d8; }
 .kids-dots span.now { width: 16px; height: 16px; background: #fff; }
 
+/* The beat grid: a picture for each instrument, then eight holes to fill. The markup is one
+   instrument after another; on a wide screen each is a row and the light moves across, and on
+   a tall one each is a column and the light moves down, which keeps a hole finger sized. */
+.kids-grid {
+  flex: 1 1 0; min-height: 0; align-self: center; width: min(100%, 960px);
+  display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); grid-template-rows: repeat(4, minmax(0, 1fr)); gap: 8px;
+}
+.kids-row, .kids-cell { min-width: 0; min-height: 0; border-radius: 16px; font-size: clamp(22px, 6vmin, 52px); line-height: 1; }
+.kids-row { background: var(--pad); box-shadow: 0 4px 0 rgba(0, 0, 0, 0.4); }
+.kids-row:active, .kids-row.lit { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4); filter: brightness(1.3); }
+.kids-cell { background: #262b55; box-shadow: inset 0 4px 0 rgba(0, 0, 0, 0.3); }
+.kids-cell.beat { background: #343a70; }
+.kids-cell.on { background: var(--pad); box-shadow: 0 4px 0 rgba(0, 0, 0, 0.4); }
+.kids-cell.now { box-shadow: inset 0 4px 0 rgba(0, 0, 0, 0.3), 0 0 0 3px #fff; }
+.kids-cell.on.now { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4), 0 0 0 3px #fff; filter: brightness(1.3); }
+
 .kids-play {
   width: 96px; height: 96px; border-radius: 50%; font-size: 44px; line-height: 1;
   background: #46a758; box-shadow: 0 6px 0 rgba(0, 0, 0, 0.4);
@@ -44,16 +72,30 @@
 .kids-play:active { transform: translateY(4px); box-shadow: 0 2px 0 rgba(0, 0, 0, 0.4); }
 
 /* Small on purpose: this one is for the adult. It fills as it is held. */
-.kids-leave { position: relative; overflow: hidden; min-width: 96px; min-height: 44px; padding: 0 14px; border-radius: 22px; background: #2f3566; font-size: 13px; color: #cfd3ff; touch-action: none; }
+.kids-leave { order: 0; position: relative; overflow: hidden; min-width: 96px; min-height: 44px; padding: 0 14px; border-radius: 22px; background: #2f3566; font-size: 13px; color: #cfd3ff; touch-action: none; }
 .kids-leave-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: rgba(255, 255, 255, 0.35); transition: width linear; }
 .kids-leave.holding .kids-leave-fill { width: 100%; }
 .kids-leave-text { position: relative; }
 
-@media (max-height: 520px) {
+@media (min-aspect-ratio: 3/5) {
+  .kids-pads { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(3, minmax(0, 1fr)); width: min(100%, 960px); }
+}
+@media (orientation: portrait) {
+  .kids-grid { grid-auto-flow: column; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(9, minmax(0, 1fr)); gap: 6px; }
+}
+@media (min-width: 760px) {
+  .kids-sounds { order: 0; flex: 0 1 auto; justify-content: flex-start; gap: 10px; }
+}
+@media (max-height: 640px) {
   .kids { gap: 8px; }
+  .kids-play { width: 80px; height: 80px; font-size: 38px; }
+  .kids-pads { gap: 8px; }
+}
+@media (max-height: 520px) {
   .kids-round { width: 52px; height: 52px; font-size: 26px; }
+  .kids-screen { width: 52px; height: 52px; }
   .kids-play { width: 72px; height: 72px; font-size: 34px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .kids-pad:active, .kids-pad.lit, .kids-round:active, .kids-play:active { transform: none; }
+  .kids-pad:active, .kids-pad.lit, .kids-round:active, .kids-play:active, .kids-screen:active, .kids-row:active, .kids-row.lit, .kids-cell.on.now { transform: none; }
 }
