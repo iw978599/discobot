@@ -2,11 +2,13 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Fragment } from 'react';
 import { Pattern } from '../types';
 import { MAX_STEP_NOTES, stepNotes, stepOffset } from '../services/noteScheduling';
+import { usePlayheadMark } from '../hooks/usePlayhead';
 import './PianoRoll.css';
 
 interface PianoRollProps {
   pattern: Pattern | null;
-  currentStep: number;
+  // Whose playhead lights the playing column: the synth lane's id.
+  lane: number;
   isPlaying: boolean;
   selectedStep: number | null;
   octaveShift: number;
@@ -26,7 +28,7 @@ const NOTE_ORDER = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 
 
 export default function PianoRoll({
   pattern,
-  currentStep,
+  lane,
   isPlaying,
   selectedStep,
   octaveShift,
@@ -41,6 +43,8 @@ export default function PianoRoll({
   const [paintMode, setPaintMode] = useState<'assign' | 'erase'>('assign');
   const lastPaintCell = useRef('');
   const pressedAt = useRef({ x: 0, y: 0 });
+  const gridRef = useRef<HTMLDivElement>(null);
+  usePlayheadMark(gridRef, lane, isPlaying, '.piano-roll-cell, .piano-roll-step-header', 'playing');
 
   useEffect(() => {
     const release = () => setMouseDown(false);
@@ -146,6 +150,7 @@ export default function PianoRoll({
       </div>
 
       <div
+        ref={gridRef}
         className="piano-roll-grid"
         style={{ gridTemplateColumns: `minmax(58px, auto) repeat(${columns.length}, minmax(28px, 1fr))` }}
       >
@@ -153,7 +158,8 @@ export default function PianoRoll({
         {columns.map((stepIndex) => (
           <div
             key={`step-header-${stepIndex}`}
-            className={`piano-roll-step-header ${isPlaying && currentStep === stepIndex ? 'playing' : ''} ${selectedStep === stepIndex ? 'selected' : ''}`}
+            className={`piano-roll-step-header ${selectedStep === stepIndex ? 'selected' : ''}`}
+            data-step={stepIndex}
           >
             {stepIndex + 1}
           </div>
@@ -176,7 +182,7 @@ export default function PianoRoll({
               return (
                 <button
                   key={`${note}-${stepIndex}`}
-                  className={`piano-roll-cell ${active ? 'active' : ''} ${late > 0 ? 'late' : ''} ${active && (step.length ?? 1) > 1 ? 'long' : ''} ${sustained ? 'held' : ''} ${isPlaying && currentStep === stepIndex ? 'playing' : ''} ${selectedStep === stepIndex ? 'selected' : ''}`}
+                  className={`piano-roll-cell ${active ? 'active' : ''} ${late > 0 ? 'late' : ''} ${active && (step.length ?? 1) > 1 ? 'long' : ''} ${sustained ? 'held' : ''} ${selectedStep === stepIndex ? 'selected' : ''}`}
                   aria-label={`${note} step ${stepIndex + 1}`}
                   aria-pressed={active}
                   data-note={note}

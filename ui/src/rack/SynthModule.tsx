@@ -7,6 +7,7 @@ import Knob from '../components/Knob';
 import SynthControls, { type SynthTab } from '../components/SynthControls';
 import KeyboardPanel from '../components/KeyboardPanel';
 import StepRow from './StepRow';
+import { usePlayhead } from '../hooks/usePlayhead';
 
 const AMBER = '#ffb000';
 
@@ -54,7 +55,8 @@ export default function SynthModule({ studio, synthId }: SynthModuleProps) {
     setViewBar(Math.floor(selectedStep / perBar));
     setFollow(false);
   }, [selectedStep, perBar]);
-  const playingBar = synth?.isPlaying ? Math.floor(synth.currentStep / perBar) : null;
+  const barAtPlayhead = usePlayhead(synthId, step => Math.floor(step / perBar));
+  const playingBar = synth?.isPlaying ? barAtPlayhead : null;
   const shownBar = Math.min(bars - 1, follow && playingBar !== null ? playingBar : viewBar);
   const firstStep = shownBar * perBar;
   // The step the step controls act on. With nothing selected they are hidden, but still laid out.
@@ -134,7 +136,7 @@ export default function SynthModule({ studio, synthId }: SynthModuleProps) {
           <StepRow
             pattern={synth.pattern}
             isPlaying={synth.isPlaying}
-            currentStep={synth.currentStep}
+            lane={synthId}
             selectedStep={synth.selectedStep}
             firstStep={firstStep}
             visibleSteps={perBar}
@@ -368,7 +370,7 @@ export default function SynthModule({ studio, synthId }: SynthModuleProps) {
                 mode={synth.keyboardMode}
                 onModeChange={(mode) => studio.handleKeyboardModeChange(synthId, mode)}
                 pattern={synth.pattern}
-                currentStep={synth.currentStep}
+                lane={synthId}
                 isPlaying={synth.isPlaying}
                 selectedStep={synth.selectedStep}
                 octaveShift={synth.octaveShift}

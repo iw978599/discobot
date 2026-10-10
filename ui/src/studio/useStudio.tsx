@@ -15,6 +15,7 @@ import { BAR_CHOICES, DRUM_STEPS_PER_BAR, clampLengths, drumBars, laneBars, resi
 import { DRUM_INSTRUMENTS } from '../services/drumKits';
 import type { DrumSample } from '../../../engine/src/drums/DrumCore';
 import { guestCapture, guestLink, guestOrigin, guestUrl, trustOrigin, wallAtContextTime, wallNow, type Guest } from '../services/guests';
+import { playhead } from '../services/playhead';
 import { downloadArrangementWav, downloadStemsZip } from '../services/wavExport';
 import type { ProjectInfo } from '../services/projectLibrary';
 import { sanitizeSynthParams } from '../services/projectSanitization';
@@ -100,7 +101,6 @@ interface SynthState {
   synthModelId: SynthModelId;
   synthModelParams: SynthModelParams;
   isPlaying: boolean;
-  currentStep: number;
   selectedStep: number | null;
   keyboardMode: 'keyboard' | 'piano-roll';
   stepRecordPointer: number;
@@ -410,7 +410,6 @@ export function useStudio() {
   const [selectedDrumKitId, setSelectedDrumKitId] = useState<DrumKitId>(DEFAULT_DRUM_KIT_ID);
   const [drumMasterVolume, setDrumMasterVolume] = useState(1.0);
   const [drumSwing, setDrumSwing] = useState(0);
-  const [drumCurrentStep, setDrumCurrentStep] = useState(0);
   const [drumFx, setDrumFx] = useState(DEFAULT_DRUM_FX);
   const [effectsLoop, setEffectsLoop] = useState(DEFAULT_EFFECTS_LOOP);
   const [browserMuted, setBrowserMuted] = useState(false);
@@ -851,13 +850,14 @@ export function useStudio() {
       if (heard.has(synth.id) && note?.active && note.note) {
         triggerStep(synth.synthParams, note, duration * divisor, synth.id, time);
       }
-      setSynths(prev => prev.map(s => s.id === synth.id ? { ...s, currentStep: index } : s));
+      // The step lights read this themselves. Setting state here would render the whole rack on every step.
+      playhead.set(synth.id, index);
     }
     if (step % 2 !== 0) return;
     const state = scene ? sceneDrumState(scene, drumStateRef.current) : drumStateRef.current;
     const stepInBar = Math.floor(step / 2);
     const drumStep = (passBar % drumBars(state)) * DRUM_STEPS_PER_BAR + stepInBar;
-    setDrumCurrentStep(drumStep);
+    playhead.set('drums', drumStep);
     const drumSolo = (Object.keys(state) as DrumInstrument[]).some(i => state[i].solo);
     const swingOffset = stepInBar % 2 ? drumSwingRef.current * duration * 2 : 0;
     for (const instrument of Object.keys(state) as DrumInstrument[]) {
@@ -896,7 +896,7 @@ export function useStudio() {
       transportRef.current?.stop();
       midiOut.stop();
       midiClockGap = null;
-      setDrumCurrentStep(0);
+      playhead.reset();
       synthAudio.stopAllNotes();
       drumAudio.stopAllNotes();
     }
@@ -920,7 +920,6 @@ export function useStudio() {
             synthModelId: normalizeSynthModelId(s.synthModelId),
             synthModelParams: normalizeSynthModelParams(s.synthModelParams),
             isPlaying: s.isPlaying || false,
-            currentStep: 0,
             selectedStep: null,
             keyboardMode: s.keyboardMode || 'keyboard',
             stepRecordPointer: 0,
@@ -938,7 +937,6 @@ export function useStudio() {
             synthModelId: DEFAULT_SYNTH_MODEL_ID,
             synthModelParams: createDefaultSynthModelParams(),
             isPlaying: false,
-            currentStep: 0,
             selectedStep: null,
             keyboardMode: 'keyboard',
             stepRecordPointer: 0,
@@ -1032,7 +1030,6 @@ export function useStudio() {
             synthModelId: normalizeSynthModelId(synthModelId),
             synthModelParams: normalizeSynthModelParams(synthModelParams),
             isPlaying: Boolean(message.data.isPlaying),
-            currentStep: 0,
             selectedStep: null,
             keyboardMode: 'keyboard',
             stepRecordPointer: 0,
@@ -1087,7 +1084,7 @@ export function useStudio() {
         );
         synthAudio.stopSynth(synthId);
         setSynths(prev => prev.map(s =>
-          s.id === synthId ? { ...s, isPlaying: false, currentStep: 0, forceReleaseSignal: !s.forceReleaseSignal } : s
+          s.id === synthId ? { ...s, isPlaying: false, forceReleaseSignal: !s.forceReleaseSignal } : s
         ));
         break;
       }
@@ -1234,7 +1231,7 @@ export function useStudio() {
         synthParams: normalizeSynthParams(data.synthParams),
         synthModelId: normalizeSynthModelId(data.synthModelId),
         synthModelParams: normalizeSynthModelParams(data.synthModelParams),
-        isPlaying: Boolean(data.isPlaying), currentStep: 0, selectedStep: null,
+        isPlaying: Boolean(data.isPlaying), selectedStep: null,
         keyboardMode: data.keyboardMode || 'keyboard', stepRecordPointer: 0,
         octaveShift: data.octaveShift || 0, muted: Boolean(data.muted),
         solo: Boolean(data.solo), forceReleaseSignal: false,
@@ -1303,9 +1300,10 @@ export function useStudio() {
 
       const startedSynthIds = playResponses.filter((entry) => entry.ok).map((entry) => entry.synthId);
       if (startedSynthIds.length > 0) {
+        for (const id of startedSynthIds) playhead.set(id, 0);
         setSynths(prev => prev.map(s => (
           startedSynthIds.includes(s.id)
-            ? { ...s, isPlaying: true, currentStep: 0 }
+            ? { ...s, isPlaying: true }
             : s
         )));
       }
@@ -1323,7 +1321,7 @@ export function useStudio() {
     if (playingSynthIds.length > 0) {
       setSynths(prev => prev.map(s => (
         playingSynthIds.includes(s.id)
-          ? { ...s, isPlaying: false, currentStep: 0, forceReleaseSignal: !s.forceReleaseSignal }
+          ? { ...s, isPlaying: false, forceReleaseSignal: !s.forceReleaseSignal }
           : s
       )));
     }
@@ -1592,7 +1590,7 @@ export function useStudio() {
     const now = performance.now(), chord = midiChordRef.current;
     const joins = chord !== null && chord.synthId === targetSynth.id && now - chord.at < CHORD_WINDOW_MS;
     const stepIndex = joins ? chord.stepIndex
-      : (mode === 'record' ? targetSynth.currentStep : targetSynth.stepRecordPointer) % pattern.steps.length;
+      : (mode === 'record' ? playhead.get(targetSynth.id) : targetSynth.stepRecordPointer) % pattern.steps.length;
     midiChordRef.current = { synthId: targetSynth.id, stepIndex, at: now };
     void upsertStepNote(targetSynth.id, stepIndex, noteName, velocity, joins);
   }, [handleNoteRelease, upsertStepNote, triggerSynthNote, globalTempo, synthAudio]);
@@ -1664,6 +1662,7 @@ export function useStudio() {
     const nextPattern = { ...synth.pattern, steps: nextSteps };
     stepCount = nextSteps.length as 16 | 32;
 
+    playhead.set(synthId, playhead.get(synthId) % stepCount);
     setSynths(prev => prev.map(s => {
       if (s.id !== synthId) return s;
       const nextSelectedStep = s.selectedStep !== null && s.selectedStep >= stepCount ? null : s.selectedStep;
@@ -1671,7 +1670,6 @@ export function useStudio() {
         ...s,
         pattern: nextPattern,
         selectedStep: nextSelectedStep,
-        currentStep: s.currentStep % stepCount,
       };
     }));
 
@@ -1781,8 +1779,9 @@ export function useStudio() {
     const steps = clampLengths(resizeBars(synth.pattern.steps, perBar, bars, () => ({ active: false, velocity: 0.7 })));
     const { bars: _bars, ...rest } = synth.pattern;
     const nextPattern: Pattern = { ...rest, steps, ...(bars > 1 ? { bars } : {}) };
+    playhead.set(synthId, playhead.get(synthId) % steps.length);
     setSynths(prev => prev.map(s => (s.id === synthId
-      ? { ...s, pattern: nextPattern, selectedStep: s.selectedStep !== null && s.selectedStep >= steps.length ? null : s.selectedStep, currentStep: s.currentStep % steps.length }
+      ? { ...s, pattern: nextPattern, selectedStep: s.selectedStep !== null && s.selectedStep >= steps.length ? null : s.selectedStep }
       : s)));
     // The store drops a bar count that is not sent, so one bar is sent as 1.
     await localRequest(`/synth/${synthId}/patterns/${synth.pattern.id}`, { method: 'PUT', body: JSON.stringify({ ...nextPattern, bars }) });
@@ -2475,7 +2474,6 @@ export function useStudio() {
       synthModelId: DEFAULT_SYNTH_MODEL_ID,
       synthModelParams: createDefaultSynthModelParams(),
       isPlaying: false,
-      currentStep: 0,
       selectedStep: null,
       stepRecordPointer: 0,
       muted: false,
@@ -2506,7 +2504,7 @@ export function useStudio() {
 
   return {
     synths, selectedSynthId, setSelectedSynthId, drumState: memoizedDrumState, drumKits, drumKitsLoading, drumKitsError,
-    selectedDrumKitId, drumMasterVolume, drumSwing, drumCurrentStep, drumFx, effectsLoop, browserMuted, setBrowserMuted,
+    selectedDrumKitId, drumMasterVolume, drumSwing, drumFx, effectsLoop, browserMuted, setBrowserMuted,
     browserVolume, setBrowserVolume, globalTempo, storageError, setStorageError, changedElsewhere, loadOtherTabVersion, keepThisTabVersion, helpOpen, setHelpOpen, midiMode, setMidiMode,
     midiChannel, setMidiChannel, midiOutNotes, setMidiOutNotes, midiOutClock, setMidiOutClock, midiTargetSynthId, setMidiTargetSynthId, projectId, projectName, projects, synthPresets, drumAudio,
     handleUndo, handleRedo, midiImportData, setMidiImportData, midiImportAssignments, setMidiImportAssignments,

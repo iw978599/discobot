@@ -7,7 +7,8 @@ interface KeyboardPanelProps {
   mode: 'keyboard' | 'piano-roll';
   onModeChange: (mode: 'keyboard' | 'piano-roll') => void;
   pattern: Pattern | null;
-  currentStep: number;
+  // Whose playhead the piano roll shows: the synth lane's id.
+  lane: number;
   isPlaying: boolean;
   selectedStep: number | null;
   octaveShift: number;
@@ -29,7 +30,7 @@ export default function KeyboardPanel({
   mode,
   onModeChange,
   pattern,
-  currentStep,
+  lane,
   isPlaying,
   selectedStep,
   octaveShift,
@@ -98,7 +99,7 @@ export default function KeyboardPanel({
       ) : (
         <PianoRoll
           pattern={pattern}
-          currentStep={currentStep}
+          lane={lane}
           isPlaying={isPlaying}
           selectedStep={selectedStep}
           octaveShift={octaveShift}
