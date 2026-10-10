@@ -29,6 +29,7 @@ export const MAX_OPEN_INVITES = 50;
 export const MAX_PROJECTS = 100;
 export const MAX_PROJECT_BYTES = 400_000;
 export const MAX_SONGS = 50;
+export const MAX_SHARED_WITH = 8;
 const MAX_BODY_BYTES = 4096;
 const DAY_MS = 86_400_000;
 
@@ -102,6 +103,7 @@ async function removeUser(env: Env, userId: string) {
   await env.DB.batch([
     env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId),
     env.DB.prepare('DELETE FROM projects WHERE owner_id = ?').bind(userId),
+    env.DB.prepare('DELETE FROM project_shares WHERE owner_id = ? OR member_id = ?').bind(userId, userId),
     env.DB.prepare('DELETE FROM songs WHERE owner_id = ?').bind(userId),
     env.DB.prepare('DELETE FROM invites WHERE created_by = ? AND used_by IS NULL').bind(userId),
     env.DB.prepare('UPDATE invites SET used_by = NULL WHERE used_by = ?').bind(userId),
@@ -192,10 +194,23 @@ async function confirmPassword(env: Env, user: UserRow, password: string, now: n
   }
 }
 
-interface ProjectRow { id: string; name: string; revision: number; updated_at: number; deleted: number; data: string }
+interface ProjectRow { id: string; name: string; revision: number; updated_at: number; deleted: number; data: string; members?: number; updated_by?: string | null; owner?: string }
 const PROJECT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const CHANGED_ELSEWHERE = 'This project was changed somewhere else.';
 const revisionOf = (value: unknown) => (Number.isInteger(value) ? value as number : -1);
+// The username of whoever saved a project last, for the two lists of projects.
+const SAVED_BY = '(SELECT username FROM users WHERE users.id = projects.updated_by) AS updated_by';
+
+// A project being saved: its name, the revision the save is based on, and the file as text.
+async function savedProject(request: Request) {
+  const body = await readBody(request, MAX_PROJECT_BYTES + 2048);
+  const project = body.project;
+  const name = text(body.name).trim().slice(0, 60);
+  if (!name || !project || typeof project !== 'object' || Array.isArray(project) || (project as { format?: unknown }).format !== 'discobot-project') throw new Refusal(400, 'That is not a Discobot project.');
+  const data = JSON.stringify(project);
+  if (data.length > MAX_PROJECT_BYTES) throw new Refusal(413, 'This project is too large to sync.');
+  return { name, data, base: revisionOf(body.baseRevision) };
+}
 
 // Projects are stored as the browser sent them. The browser sanitizes whatever it downloads,
 // exactly as it does for a project file, so the server only checks size and shape.
@@ -203,13 +218,45 @@ async function projects(request: Request, env: Env, now: number, rest: string): 
   const { user } = await sessionUser(env, request, now);
   const method = request.method;
   if (rest === '' && method === 'GET') {
-    const { results } = await env.DB.prepare('SELECT id, name, revision, updated_at, deleted FROM projects WHERE owner_id = ? ORDER BY updated_at DESC').bind(user.id).all<ProjectRow>();
-    return json(200, { projects: results.map(row => ({ id: row.id, name: row.name, revision: row.revision, updatedAt: row.updated_at, deleted: row.deleted === 1 })) });
+    const { results } = await env.DB.prepare(
+      `SELECT id, name, revision, updated_at, deleted, ${SAVED_BY},
+        (SELECT COUNT(*) FROM project_shares WHERE project_shares.owner_id = projects.owner_id AND project_shares.project_id = projects.id) AS members
+       FROM projects WHERE owner_id = ? ORDER BY updated_at DESC`,
+    ).bind(user.id).all<ProjectRow>();
+    return json(200, { projects: results.map(row => ({
+      id: row.id, name: row.name, revision: row.revision, updatedAt: row.updated_at, deleted: row.deleted === 1,
+      // Only there for a project that is shared, so most answers are as they always were.
+      ...(row.members ? { sharedWith: row.members, savedBy: row.updated_by ?? user.username } : {}),
+    })) });
   }
 
-  const [, id, action] = /^\/([^/]+)(\/delete)?$/.exec(rest) || [];
+  const [, id, action] = /^\/([^/]+)(\/delete|\/sharing|\/share|\/unshare)?$/.exec(rest) || [];
   if (!id || !PROJECT_ID.test(id)) throw new Refusal(404, 'Not found.');
   const row = await env.DB.prepare('SELECT id, name, revision, updated_at, deleted, data FROM projects WHERE owner_id = ? AND id = ?').bind(user.id, id).first<ProjectRow>();
+
+  // Sharing is the owner's alone: who else may open and save this project.
+  if (action === '/sharing' || action === '/share' || action === '/unshare') {
+    if (!row || row.deleted === 1) throw new Refusal(404, 'That project is not in your account yet.');
+    if (method === 'GET' && action === '/sharing') {
+      const { results } = await env.DB.prepare(
+        'SELECT users.username FROM project_shares JOIN users ON users.id = project_shares.member_id WHERE project_shares.owner_id = ? AND project_shares.project_id = ? ORDER BY project_shares.created_at, users.username',
+      ).bind(user.id, id).all<{ username: string }>();
+      return json(200, { members: results.map(member => member.username) });
+    }
+    if (method !== 'POST' || action === '/sharing') throw new Refusal(404, 'Not found.');
+    const usernameKey = text((await readBody(request)).username).trim().toLowerCase().slice(0, 40);
+    const member = usernameKey ? await env.DB.prepare('SELECT id FROM users WHERE username_key = ?').bind(usernameKey).first<{ id: string }>() : null;
+    if (!member) throw new Refusal(404, 'No account has that username.');
+    if (action === '/unshare') {
+      await env.DB.prepare('DELETE FROM project_shares WHERE owner_id = ? AND project_id = ? AND member_id = ?').bind(user.id, id, member.id).run();
+      return json(200, { ok: true });
+    }
+    if (member.id === user.id) throw new Refusal(400, 'That is your own account.');
+    const count = await env.DB.prepare('SELECT COUNT(*) AS members FROM project_shares WHERE owner_id = ? AND project_id = ? AND member_id != ?').bind(user.id, id, member.id).first<{ members: number }>();
+    if ((count?.members ?? 0) >= MAX_SHARED_WITH) throw new Refusal(409, `A project can be shared with up to ${MAX_SHARED_WITH} people.`);
+    await env.DB.prepare('INSERT OR IGNORE INTO project_shares (owner_id, project_id, member_id, created_at) VALUES (?, ?, ?, ?)').bind(user.id, id, member.id, now).run();
+    return json(200, { ok: true });
+  }
 
   if (method === 'GET' && !action) {
     if (!row || row.deleted === 1) throw new Refusal(404, 'That project is not in your account.');
@@ -221,30 +268,71 @@ async function projects(request: Request, env: Env, now: number, rest: string): 
     if (!row || row.deleted === 1) return json(200, { ok: true });
     const removed = await env.DB.prepare("UPDATE projects SET deleted = 1, data = '', revision = revision + 1, updated_at = ? WHERE owner_id = ? AND id = ? AND revision = ?").bind(now, user.id, id, base).run();
     if (removed.meta.changes !== 1) return json(409, { error: CHANGED_ELSEWHERE, revision: row.revision });
+    // A deleted project is shared with nobody. The people it was shared with keep their own copies.
+    await env.DB.prepare('DELETE FROM project_shares WHERE owner_id = ? AND project_id = ?').bind(user.id, id).run();
     return json(200, { ok: true });
   }
 
   if (method === 'PUT' && !action) {
-    const body = await readBody(request, MAX_PROJECT_BYTES + 2048);
-    const project = body.project;
-    const base = revisionOf(body.baseRevision);
-    const name = text(body.name).trim().slice(0, 60);
-    if (!name || !project || typeof project !== 'object' || Array.isArray(project) || (project as { format?: unknown }).format !== 'discobot-project') throw new Refusal(400, 'That is not a Discobot project.');
-    const data = JSON.stringify(project);
-    if (data.length > MAX_PROJECT_BYTES) throw new Refusal(413, 'This project is too large to sync.');
+    const { name, data, base } = await savedProject(request);
     if (!row) {
       if (base !== 0) return json(409, { error: CHANGED_ELSEWHERE, revision: 0 });
       const count = await env.DB.prepare('SELECT COUNT(*) AS live FROM projects WHERE owner_id = ? AND deleted = 0').bind(user.id).first<{ live: number }>();
       if ((count?.live ?? 0) >= MAX_PROJECTS) throw new Refusal(507, `An account holds up to ${MAX_PROJECTS} projects. Delete some to sync more.`);
       try {
-        await env.DB.prepare('INSERT INTO projects (owner_id, id, name, revision, updated_at, deleted, data) VALUES (?, ?, ?, 1, ?, 0, ?)').bind(user.id, id, name, now, data).run();
+        await env.DB.prepare('INSERT INTO projects (owner_id, id, name, revision, updated_at, deleted, data, updated_by) VALUES (?, ?, ?, 1, ?, 0, ?, ?)').bind(user.id, id, name, now, data, user.id).run();
       } catch {
         return json(409, { error: CHANGED_ELSEWHERE, revision: 1 });
       }
       return json(201, { revision: 1 });
     }
     // One statement checks the revision and writes, so two browsers cannot both win.
-    const saved = await env.DB.prepare('UPDATE projects SET name = ?, data = ?, deleted = 0, revision = revision + 1, updated_at = ? WHERE owner_id = ? AND id = ? AND revision = ?').bind(name, data, now, user.id, id, base).run();
+    const saved = await env.DB.prepare('UPDATE projects SET name = ?, data = ?, deleted = 0, revision = revision + 1, updated_at = ?, updated_by = ? WHERE owner_id = ? AND id = ? AND revision = ?').bind(name, data, now, user.id, user.id, id, base).run();
+    if (saved.meta.changes !== 1) return json(409, { error: CHANGED_ELSEWHERE, revision: row.revision });
+    return json(200, { revision: row.revision + 1 });
+  }
+
+  throw new Refusal(404, 'Not found.');
+}
+
+const NOT_SHARED = 'That project is not shared with you.';
+
+// Projects other people have shared with this account. A member reads and saves the owner's
+// copy under the same rule as the owner: a save names the revision it was based on and is
+// refused if the project has moved on. A member cannot delete it or share it further.
+async function shared(request: Request, env: Env, now: number, rest: string): Promise<Response> {
+  const { user } = await sessionUser(env, request, now);
+  const method = request.method;
+  if (rest === '' && method === 'GET') {
+    const { results } = await env.DB.prepare(
+      `SELECT projects.id, projects.name, projects.revision, projects.updated_at, owners.username AS owner, ${SAVED_BY}
+       FROM project_shares JOIN projects ON projects.owner_id = project_shares.owner_id AND projects.id = project_shares.project_id
+       JOIN users AS owners ON owners.id = project_shares.owner_id
+       WHERE project_shares.member_id = ? AND projects.deleted = 0 ORDER BY projects.updated_at DESC`,
+    ).bind(user.id).all<ProjectRow>();
+    return json(200, { projects: results.map(row => ({ owner: row.owner, id: row.id, name: row.name, revision: row.revision, updatedAt: row.updated_at, savedBy: row.updated_by ?? row.owner })) });
+  }
+
+  const [, ownerName, id, action] = /^\/([^/]+)\/([^/]+)(\/leave)?$/.exec(rest) || [];
+  if (!ownerName || !id || !PROJECT_ID.test(id)) throw new Refusal(404, 'Not found.');
+  const row = await env.DB.prepare(
+    `SELECT projects.owner_id AS owner, projects.id, projects.name, projects.revision, projects.updated_at, projects.deleted, projects.data
+     FROM project_shares JOIN projects ON projects.owner_id = project_shares.owner_id AND projects.id = project_shares.project_id
+     JOIN users AS owners ON owners.id = project_shares.owner_id
+     WHERE project_shares.member_id = ? AND owners.username_key = ? AND projects.id = ? AND projects.deleted = 0`,
+  ).bind(user.id, ownerName.toLowerCase().slice(0, 40), id).first<ProjectRow>();
+  if (!row) throw new Refusal(404, NOT_SHARED);
+
+  if (method === 'GET' && !action) return json(200, { id: row.id, name: row.name, revision: row.revision, updatedAt: row.updated_at, project: JSON.parse(row.data) });
+
+  if (method === 'POST' && action) {
+    await env.DB.prepare('DELETE FROM project_shares WHERE owner_id = ? AND project_id = ? AND member_id = ?').bind(row.owner, id, user.id).run();
+    return json(200, { ok: true });
+  }
+
+  if (method === 'PUT' && !action) {
+    const { name, data, base } = await savedProject(request);
+    const saved = await env.DB.prepare('UPDATE projects SET name = ?, data = ?, revision = revision + 1, updated_at = ?, updated_by = ? WHERE owner_id = ? AND id = ? AND revision = ? AND deleted = 0').bind(name, data, now, user.id, row.owner, id, base).run();
     if (saved.meta.changes !== 1) return json(409, { error: CHANGED_ELSEWHERE, revision: row.revision });
     return json(200, { revision: row.revision + 1 });
   }
@@ -316,6 +404,7 @@ async function route(request: Request, env: Env, now: number): Promise<Response>
 
   if (pathname === '/songs' || pathname.startsWith('/songs/')) return songs(request, env, now, pathname.slice('/songs'.length));
   if (pathname === '/projects' || pathname.startsWith('/projects/')) return projects(request, env, now, pathname.slice('/projects'.length));
+  if (pathname === '/shared' || pathname.startsWith('/shared/')) return shared(request, env, now, pathname.slice('/shared'.length));
 
   if (is('GET', '/me')) return json(200, { user: publicUser((await sessionUser(env, request, now)).user) });
 

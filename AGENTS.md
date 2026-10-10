@@ -56,7 +56,7 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 | `ui/src/services/account.ts` | Browser side of accounts: the session and every API call. `accountsEnabled` is false when the build has no `VITE_API_URL` |
 | `ui/src/services/guests.ts` | Guest instruments: address and data checks, per-site consent, the shared-clock helpers and `guestLink`, which tells guests about the transport |
 | `ui/src/rack/GuestModule.tsx` / `ui/src/hooks/guestAudio.ts` | The guest's rack unit and frame, and the player that brings its audio into the mixer |
-| `ui/src/services/projectSync.ts` | Project sync: `createProjectSync` (the rules, tested against the real API handler) and `startProjectSync` (when it runs) |
+| `ui/src/services/projectSync.ts` | Project sync: `createProjectSync` (the rules, tested against the real API handler) and `startProjectSync` (when it runs). Also keeps a project shared by someone else in step with the owner's copy |
 | `ui/src/rack/AccountDialog.tsx` | Sign in, create account, recovery code, and the owner's invite codes and member list |
 | `ui/src/rack/Walkthrough.tsx` / `ui/src/services/walkthrough.ts` | The tour of the rack shown after a new account's recovery code, and whether this browser has had it |
 | `ui/src/services/shareLink.ts` | Share links: a project deflated into the URL after `#song=`, and short links (`#s=code`) to a song published on the server |
@@ -212,6 +212,16 @@ npm run migrate --workspace=server  # Apply new database migrations to the live 
 - The server stores projects as sent and checks only size and shape. Whatever the browser downloads goes through `restore()` like a project file.
 - Imported samples are not synced.
 
+## Working Together
+- Two people work on one project in turns. There is no live connection and no merging: the owner shares a synced project by username, and the people it is shared with read and save the owner's copy under the same revision rule as everything else. This was chosen over live editing because a held-open connection is ruled out below; changing that is the owner's decision.
+- A shared project stays in the owner's account. It is never copied into a member's account, and it only enters a member's browser when they open it from "Shared with you" (`projectSync.join`). Do not download someone else's project unasked.
+- `createProjectSync` settles a project against a `Place`: this account (`/projects`) or the owner's copy (`/shared/<owner>/<id>`). `settle` is the one implementation of the rule for both; do not write a second.
+- When both people changed a shared project at once, the one who syncs second keeps their edits as a project of their own (`syncFork`) and receives the other's version. Nothing is overwritten.
+- When sharing ends (unshared, the project deleted, an account removed) the member's copy stays, as a project of this browser only. Deleting a shared project as a member only removes it here and leaves; only the owner's delete reaches the account.
+- A server that has never heard of `/shared` answers 404. Sync reads that as "nothing is shared" and leaves every link alone; it must not read it as everything having been unshared. The accounts API is deployed by hand, so the site can be ahead of it.
+- Sharing stores which account shared which project with which, and which account saved a project last (`project_shares`, `projects.updated_by`). No names, messages or activity beyond that.
+- With anything shared, sync looks for changes every 20 seconds instead of every two minutes (`CHECK_SHARED_EVERY_MS`).
+
 ## Guest Instruments
 - A guest is another creator's web page in a frame (`GuestModule`), listed in the project as `guests`. The protocol is `docs/GUEST_PROTOCOL.md`; `docs/guest-example.html` is a complete guest, and the browser tests run against it (served by `server/dev.ts` at `/__guest`). Change the three together.
 - A guest's address must be https on another site (`guestUrl`). Discobot's own origin is refused: the frame is only kept apart from the app because it is a different site. Do not loosen this or the frame's `sandbox`.
@@ -228,7 +238,7 @@ npm run migrate --workspace=server  # Apply new database migrations to the live 
 - Do not use `window.confirm` for guest actions: a browser can be told to stop showing a page's dialogs, after which it silently answers no.
 - A guest cannot be rendered offline, so every audio export (`handleExportWav`) first plays the arrangement through and records each guest (`guestCapture`, fed from `GuestModule`), then mixes the recordings into the normal render as `guestTakes`, through the guest's sends. Recordings are placed by the guests' time stamps against the transport's first beat. For Loop WAV the pattern is played twice and the second pass kept, and the renderer lays that pass end to end. Stems give each guest a file of its own. MIDI leaves guests out.
 - Two recordings of a guest do not land on the same sample: a take can sit a millisecond or two early, and more on a slow machine. A test that compares two guest exports must not measure a fixed window that ends where a sound begins; measure something that does not move with the take (`quietest` in `guests.spec.ts`). The check run on GitHub failed for exactly this while passing on a faster machine.
-- `FEATURED_GUESTS` lists instruments offered by name in the Add Guest dialog. Only add one with its creator's permission.
+- `FEATURED_GUESTS` lists instruments offered by name in the Add Guest dialog. Only add one with its creator's permission. Tape Loop Deck is on hold and off the list by the owner's decision (2026-10-10); it can still be added by its address. Do not put it back without asking.
 
 ## Kids Mode
 - Kids mode is a page of its own at `#kids`, for a child too young to read. `App` chooses it before `useStudio` runs, so the project store is never opened and nothing there can change, delete, share or publish a project. Keep it that way: do not import `localService`, `account` or anything that reaches them into `ui/src/kids/`. Going in (Project menu) and coming out both reload the page.
