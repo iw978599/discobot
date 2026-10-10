@@ -40,6 +40,9 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('chorus, the reverb shape and the master EQ change the sound, in the export too, and are saved', async ({ page }, testInfo) => {
+  // A dozen audio exports one after another. It takes a quarter of a minute on a free machine
+  // and has run out of the usual time on a busy one, without ever getting an answer wrong.
+  test.slow();
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   const effects = page.locator('.effects-unit');
