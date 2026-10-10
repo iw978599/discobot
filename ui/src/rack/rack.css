@@ -469,6 +469,115 @@
 .tour-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 4px; }
 .tour-skip { margin-right: auto; }
 
+/* Narrow screens: a phone held upright. The rack keeps its order and everything in it, but is
+   no longer one wide panel scrolled sideways. Each unit stacks its parts, the step grids go
+   eight to a row, controls are big enough for a finger, menus rise from the bottom and dialogs
+   fill the screen. Nothing here applies to a wider screen. */
+@media (max-width: 720px) {
+  .rack-page { padding: 0 0 calc(24px + env(safe-area-inset-bottom)); }
+  .rack {
+    min-width: 0; margin: 0; gap: 4px; border-radius: 0; background-image: none;
+    padding: 0 max(4px, env(safe-area-inset-right)) 0 max(4px, env(safe-area-inset-left));
+  }
+  .rack-unit { padding: 8px; }
+  .rack-row { flex-wrap: wrap; gap: 8px; }
+  .rack-grow { display: none; }
+  .rack-plate, .drum-strip-name, .mode-toggle, .guest-unit .rack-plate { width: auto; }
+  .app-alert { flex-wrap: wrap; }
+
+  /* big enough for a finger */
+  .rack-btn, .rack .octave-shift-btn, .rack .keyboard-panel-toggle button { padding: 9px 12px; font-size: 13px; }
+  .rack-btn.go { padding: 9px 16px; }
+  .rack-ms button { width: 36px; height: 36px; font-size: 13px; }
+  .rack-ms.small button { width: 30px; height: 30px; font-size: 12px; }
+  .rack select, .rack-dialog select { padding: 8px 6px; font-size: 13px; }
+  .rack input[type="checkbox"], .rack-dialog input[type="checkbox"] { width: 20px; height: 20px; }
+  .scene-chip { padding: 9px 12px; }
+  .mode-toggle button { flex: none; height: 36px; padding: 0 12px; font-size: 13px; }
+  .song-row .song-chain { flex-basis: 100%; }
+  .song-block-name { padding: 9px 8px 9px 10px; }
+  .song-block-tools button { width: 32px; }
+  .synth-tabs { flex-wrap: wrap; }
+  .synth-tabs button { padding: 9px 12px; }
+  .bar-tabs .rack-btn { padding: 8px 12px; }
+  .step-tools input[type="range"], .drum-step-details input[type="range"] { width: 130px; height: 28px; }
+
+  /* The top bar holds more than fits on one line. Its tempo and Play go last and are the line
+     that stays stuck to the top, clear of a notch; the lines above scroll away with the page.
+     TransportUnit measures how tall those are and sets --transport-tuck. */
+  .rack-unit.transport { padding-top: max(6px, env(safe-area-inset-top)); gap: 6px; top: calc(env(safe-area-inset-top, 0px) - var(--transport-tuck, 0px)); }
+  .transport > .rack-row > .rack-grow { display: block; flex-basis: 100%; height: 0; order: 1; }
+  .transport .tempo-display-group, .transport .tempo-led-input, .transport .play-all-button { order: 2; }
+  .transport .play-all-button { flex: 1; }
+  .transport .brand { min-width: 0; max-width: 40vw; }
+  .rack-plate b, .rack-plate h1 { font-size: 16px; }
+  .tempo-led-value { font-size: 22px; }
+  /* A menu rises from the bottom edge, where a thumb is, and cannot run off the side. */
+  .rack-menu-list {
+    position: fixed; left: 8px; right: 8px; top: auto; bottom: calc(8px + env(safe-area-inset-bottom));
+    max-height: 70dvh; overflow-y: auto; box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.55), 0 10px 24px rgba(0, 0, 0, 0.6);
+  }
+  .rack-menu-list button { padding: 13px 12px; font-size: 14px; }
+
+  /* synth lanes: name and mute on one line, the steps under them eight to a row, then the knobs */
+  .synth-module > .rack-row { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+  .synth-module > .rack-row > .step-row, .synth-module > .rack-row > .rack-knobs { grid-column: 1 / -1; }
+  .synth-module > .rack-row > .rack-knobs { justify-content: space-between; }
+  /* The row sets its own column count inline, for 16 or 32 steps; here it is always eight. */
+  .step-row { grid-template-columns: repeat(8, minmax(0, 1fr)) !important; gap: 4px; }
+  .step-cell { height: 44px; font-size: 12px; }
+  .steps-32 .step-cell { height: 36px; font-size: 11px; }
+
+  /* the sound editor */
+  .rack .synth-controls-panel { padding: 8px; }
+  .rack .synth-header { flex-wrap: wrap; gap: 8px; }
+  .rack .preset-name-input { width: 110px; }
+  .step-tools-swap { flex-basis: 100%; }
+  /* Three octaves do not fit across a phone, so the keyboard slides sideways under the thumb. */
+  .rack .keyboard-container { overflow-x: auto; }
+  .rack .keyboard { min-width: 640px; }
+  .rack .key.white { height: 110px; }
+  .rack .black-keys, .rack .key.black { height: 68px; }
+  .piano-roll-hint { display: none; }
+  .piano-roll-grid { max-height: 46dvh; }
+  .piano-roll-corner, .piano-roll-step-header, .piano-roll-note-label, .piano-roll-cell { min-height: 28px; }
+
+  /* drums: the kit, then the grid eight steps to a row, then the knobs */
+  .drum-top { grid-template-columns: minmax(0, 1fr); }
+  .drum-top .rack-plate { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .drum-top .drum-kit-select { width: auto; flex: 1; min-width: 0; font-size: 13px; }
+  .drum-top > .rack-knobs { justify-content: flex-start; }
+  .drum-grid { gap: 6px; }
+  .drum-grid-row { grid-template-columns: 40px 64px minmax(0, 1fr); align-items: stretch; }
+  .drum-grid-row .rack-ms { align-items: center; }
+  .drum-cells { grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; }
+  .drum-name { height: auto; min-height: 30px; font-size: 12px; }
+  .drum-step-btn { height: 30px; font-size: 11px; }
+  .drum-step-indicator { font-size: 11px; }
+  .drum-sound select { max-width: 60vw; }
+
+  /* effects: one to a row */
+  .effects-unit .effects-panel { grid-template-columns: minmax(0, 1fr); }
+  .effects-unit .effects-panel-header { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .effects-unit .effects-grid { grid-template-columns: minmax(0, 1fr); }
+  .effects-unit .effects-block, .effects-unit .effects-block:nth-child(2), .effects-unit .effects-block:nth-child(5) { grid-column: 1 / -1; }
+  .effects-unit .effects-knobs { flex-wrap: wrap; }
+
+  /* dialogs are the whole screen */
+  .rack-dialog-overlay { padding: 0; place-items: stretch; }
+  .rack-dialog {
+    box-sizing: border-box; width: 100%; height: 100dvh; max-height: none; border: 0; border-radius: 0;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  .rack-dialog-body { flex: 1; }
+  .rack-dialog-header .rack-btn { padding: 10px 14px; }
+  .rack-dialog-body .rack-btn { font-size: 13px; }
+  .rack-list-row { flex-wrap: wrap; }
+
+  .shared-card { padding: 20px 16px; }
+  .shared-card h1 { font-size: 30px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .rack-page * { transition: none !important; }
 }

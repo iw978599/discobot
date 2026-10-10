@@ -1,9 +1,11 @@
+import { useEffect, useRef } from 'react';
 import type { Studio } from '../studio/useStudio';
 import Knob from '../components/Knob';
 import Menu from './Menu';
 import { TempoDisplay } from './HeaderParts';
 import { accountsEnabled } from '../services/account';
 import { useAccountUser } from './AccountDialog';
+import { enterKidsMode } from '../services/kids';
 
 interface TransportUnitProps {
   studio: Studio;
@@ -22,8 +24,20 @@ export default function TransportUnit({ studio, onOpenSettings, onOpenProjects, 
   const user = useAccountUser();
   const midiStatus = !midiState.supported ? 'MIDI is not available in this browser'
     : midiState.connected ? 'A MIDI controller is connected' : 'No MIDI controller connected';
+  // On a narrow screen the bar wraps over several lines and only the last, with the tempo and
+  // Play, stays stuck to the top (rack.css). This tells the stylesheet how tall the others are.
+  const barRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const bar = barRef.current, play = bar?.querySelector<HTMLElement>('.play-all-button');
+    if (!bar || !play || typeof ResizeObserver === 'undefined') return;
+    const measure = () => bar.style.setProperty('--transport-tuck', `${Math.max(0, play.offsetTop - 8)}px`);
+    const observer = new ResizeObserver(measure);
+    observer.observe(bar);
+    measure();
+    return () => observer.disconnect();
+  }, []);
   return (
-    <header className="rack-unit transport">
+    <header ref={barRef} className="rack-unit transport">
       <div className="rack-row">
         <div className="rack-plate static brand">
           <h1>Discobot</h1>
@@ -50,6 +64,7 @@ export default function TransportUnit({ studio, onOpenSettings, onOpenProjects, 
             { label: 'Import Project', title: 'Add a project file to your projects and open it', onSelect: () => studio.projectImportFileRef.current?.click() },
             { label: 'Add Guest Instrument', title: "Host another creator's web instrument in this project, by its address", onSelect: onAddGuest },
             { label: 'Import MIDI', title: 'Bring notes in from a .mid file', onSelect: studio.handleMidiImportClick },
+            { label: 'Kids Mode', title: 'Big pads and one play button for a small child. It keeps its own tune and cannot change your projects', onSelect: enterKidsMode },
             { label: 'Reset All', title: 'Clear every lane, the drums and the effects of this project', onSelect: () => { void studio.handleReset(); } },
           ]}
         />

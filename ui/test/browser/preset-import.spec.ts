@@ -88,7 +88,11 @@ test('the top bar stays in reach when the page is scrolled', async ({ page }) =>
   expect(await page.locator('.rack-page').evaluate(element => element.scrollTop), 'the page has scrolled').toBeGreaterThan(200);
   const box = (await bar.boundingBox())!;
   expect(box.y, 'the bar is at the top of the window').toBeLessThanOrEqual(Math.max(0, top));
-  expect(box.y).toBeGreaterThanOrEqual(-1);
+  // On a narrow screen the bar's upper lines scroll away and the line with Play is what stays.
+  if (page.viewportSize()!.width > 720) expect(box.y).toBeGreaterThanOrEqual(-1);
+  const stuck = (await play.boundingBox())!;
+  expect(stuck.y, 'Play is still at the top of the window').toBeGreaterThanOrEqual(-1);
+  expect(stuck.y).toBeLessThan(40);
   await play.click();
   await expect(page.getByRole('button', { name: /Stop All/ })).toBeVisible();
   await page.getByRole('button', { name: /Stop All/ }).click();

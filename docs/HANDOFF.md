@@ -6,12 +6,12 @@ again. Delete this file once everything below is finished and merged.
 
 ## Branches
 
-- `fix/review-and-websynth-studio` is PR #80. It removes the AI review
-  workflow (GitHub Models, the service it called, was retired on 30 July 2026)
-  and corrects the WebSynth Studio preset translator. Its `test` check passed
-  before the two removal commits; it has not been merged.
-- `draft/handoff-effects-midi` (this branch, PR #81) is stacked on #80.
-  Merging it brings in #80 as well.
+- PRs #80, #81 and #82 were merged into `main` on 2026-10-09, and the site
+  was published with them: items 1 to 6 below are live.
+- `draft/handoff-effects-midi` (this branch) went on after that. It holds
+  items 7 to 9 (PRs #83, #84 and #85, which were merged into this branch, not
+  into `main`), the tidied roadmap and the quicker tests. None of that is on
+  `main` until this branch is merged there.
 
 ## Finished on this branch
 
@@ -30,34 +30,61 @@ again. Delete this file once everything below is finished and merged.
    lights nine parts of the rack in turn with a short explanation of each.
    Show the Walkthrough in the account dialog starts it again. It starts by
    itself once per browser.
+6. **Import Kit.** Several sample files are put on the drum lanes at once,
+   matched by their names and checked in a dialog before anything is stored.
+   This is instead of bundled LinnDrum, DMX and TR-707 recordings: the owner
+   decided none would be bundled, because none were found that the project is
+   clearly allowed to redistribute. It came in as PR #82.
+7. **The playhead out of React state** (PR #83). Playing no longer renders
+   the whole rack on every step; the main thread does a little over half the
+   work it did while playing.
+8. **A phone layout, first part** (PR #84). At 720px wide and under the rack
+   no longer scrolls sideways: units stack, steps are eight to a row, and
+   controls are finger-sized.
+9. **Kids mode, first version** (PR #85). A page of its own with nine big
+   pads and one play button, reached from the Project menu or at `#kids`.
 
 `AGENTS.md` and `docs/ROADMAP.md` describe all of these.
 
 ## Checked, and not checked
 
 - `npm run typecheck`: clean at the last commit.
-- `npm test`: 145 passing at the last commit.
-- `npm run test:browser`: the whole suite passed (126 tests,
-  desktop and phone width) at the last commit.
+- `npm test`: 151 passing at the last commit.
+- `npm run test:browser`: the playhead change, the phone layout and kids mode
+  each passed the whole suite on GitHub apart. Together they have 138 tests.
+  Three local runs of all three together each had one to three failures, in
+  different tests each time, on a laptop that was on battery and in use; every
+  one of those tests passed in another of the runs. The check on GitHub is the
+  one to trust for this branch.
+- The check on GitHub failed on every run of this branch until one guest test
+  was changed: it compared two recordings of a guest in a window that ended
+  where the next bell began. It passes there now.
+- "A guest whose sound arrives late" failed once at phone width in an
+  unusually slow local run and passed six times out of six straight after.
 - Nothing has been listened to. The chorus, the damped reverb and the EQ were
   set by reasoning and measurement, not by ear.
 - MIDI output was tested against a fake device, not real hardware.
-- The walkthrough was looked at in screenshots at desktop and phone width in
-  Chromium only. It has not been tried in Firefox or Safari, on a real phone,
-  or with a screen reader.
+- The walkthrough and Import Kit were looked at in screenshots at desktop and
+  phone width in Chromium only. Neither has been tried in Firefox or Safari,
+  on a real phone, or with a screen reader, and Import Kit has only met
+  generated test tones, not a real sample pack.
+- The phone layout and kids mode were looked at in Chromium's phone emulation
+  only: not on a real phone or tablet, in Safari, in landscape, or as the
+  installed app. Kids mode has not been tried with a child, and its four
+  sounds were set by reasoning.
+- The playhead change was measured in Chromium with a CPU throttle, not on a
+  real phone.
 
 ## Still to do from the same request
 
-1. **Sampled kits (LinnDrum, DMX, TR-707).** Decided by the owner: no
-   recordings are bundled, because none were found that the project is
-   clearly allowed to redistribute. Instead Import Kit, on the branch
-   `feat/kit-import` (stacked on this one), puts several of your own sample
-   files on the drum lanes at once, matched by their names. The kits with
-   those names in the kit menu are synthesized and have not been tuned by ear.
-2. **Added to the roadmap after the pause** (`docs/ROADMAP.md`): collaborative
-   sessions (features item 13), kids mode (item 14) and a layout for phones
-   and the installed app (item 15). None is started; each lists questions to
-   settle first.
+1. **The LinnDrum, DMX and TR-707 kits in the kit menu** are synthesized and
+   have not been tuned by ear against the machines they are named after.
+2. **From the roadmap** (`docs/ROADMAP.md`): collaborative sessions
+   (features item 7) is not started and lists questions to settle first. The
+   phone layout (item 1) and kids mode (item 2) each have a first part here,
+   and their entries say what is left. Two things in kids mode are the
+   owner's to confirm: it is a separate page, and what a child makes cannot
+   be opened in the full app.
 3. **Follow-ups worth offering, not asked for:** following an external MIDI
    clock, sending hand-played notes to MIDI out, choosing output channels;
    running the browser tests as two halves side by side to save time

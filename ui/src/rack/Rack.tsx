@@ -20,6 +20,7 @@ import GuestModule from './GuestModule';
 import AddGuestDialog from './AddGuestDialog';
 import VersionsDialog from './VersionsDialog';
 import { HelpModal } from './HeaderParts';
+import { useWakeLock } from '../hooks/useWakeLock';
 import '@fontsource/barlow-condensed/latin-500.css';
 import '@fontsource/barlow-condensed/latin-600.css';
 import '@fontsource/barlow-condensed/latin-700.css';
@@ -42,6 +43,7 @@ export default function Rack({ studio }: { studio: Studio }) {
     setTourOpen(true);
   };
   const { midiState } = studio;
+  useWakeLock(studio.isAnyPlaying);
   const sync = useSyncStatus();
 
   return (

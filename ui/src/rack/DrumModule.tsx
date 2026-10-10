@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { isAudioFile, listSamples, saveSample } from '../services/sampleStore';
 import { MAX_KIT_FILES } from '../services/kitImport';
 import KitImportDialog from './KitImportDialog';
+import { usePlayhead, usePlayheadMark } from '../hooks/usePlayhead';
 import { BAR_CHOICES, drumBars } from '../services/patternLength';
 import type { Studio } from '../studio/useStudio';
 import { DrumInstrument, DrumKitId, DrumState, CymbalType } from '../types';
@@ -69,7 +70,11 @@ export default function DrumModule({ studio }: { studio: Studio }) {
   const bars = drumBars(drumState);
   const [viewBar, setViewBar] = useState(0);
   const [follow, setFollow] = useState(true);
-  const playingBar = studio.isAnyPlaying ? Math.floor(studio.drumCurrentStep / 16) : null;
+  const barAtPlayhead = usePlayhead('drums', step => Math.floor(step / 16));
+  const playingBar = studio.isAnyPlaying ? barAtPlayhead : null;
+  const gridRef = useRef<HTMLDivElement>(null);
+  usePlayheadMark(gridRef, 'drums', studio.isAnyPlaying, '.drum-step-indicator', 'active');
+  usePlayheadMark(gridRef, 'drums', studio.isAnyPlaying, '.drum-step-btn', 'current');
   const shownBar = Math.min(bars - 1, follow && playingBar !== null ? playingBar : viewBar);
   const base = shownBar * 16;
   // A pattern made shorter can leave the selected step past its end.
@@ -166,13 +171,13 @@ export default function DrumModule({ studio }: { studio: Studio }) {
           {drumKitsError && <span className="rack-hint" role="alert">{drumKitsError}</span>}
         </div>
 
-        <div className="drum-grid">
+        <div className="drum-grid" ref={gridRef}>
           <div className="drum-grid-row header">
             <span />
             <span />
             <div className="drum-cells">
               {STEPS.map((column) => (
-                <span key={column} className={`drum-step-indicator ${studio.isAnyPlaying && studio.drumCurrentStep === base + column ? 'active' : ''}`}>{column + 1}</span>
+                <span key={column} className="drum-step-indicator" data-step={base + column}>{column + 1}</span>
               ))}
             </div>
           </div>
@@ -223,7 +228,8 @@ export default function DrumModule({ studio }: { studio: Studio }) {
                     return (
                       <button
                         key={step}
-                        className={`drum-step-btn ${active ? 'active' : ''} ${active && chance < 1 ? 'chance' : ''} ${picked ? 'picked' : ''} ${column % 4 === 0 ? 'beat' : ''} ${studio.isAnyPlaying && studio.drumCurrentStep === step ? 'current' : ''}`}
+                        className={`drum-step-btn ${active ? 'active' : ''} ${active && chance < 1 ? 'chance' : ''} ${picked ? 'picked' : ''} ${column % 4 === 0 ? 'beat' : ''}`}
+                        data-step={step}
                         aria-label={`${LABELS[instrument]} step ${step + 1}`}
                         aria-pressed={active}
                         style={active ? { opacity: 0.45 + velocity * 0.55 } : undefined}
