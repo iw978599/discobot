@@ -11,7 +11,7 @@ import SongModule from './SongModule';
 import Dialog from './Dialog';
 import ProjectsDialog from './ProjectsDialog';
 import ShareDialog from './ShareDialog';
-import AccountDialog, { useSyncStatus } from './AccountDialog';
+import AccountDialog, { useAccountUser, useSyncStatus } from './AccountDialog';
 import { projectSync } from '../services/projectSync';
 import { markWalkthroughSeen } from '../services/walkthrough';
 import Walkthrough from './Walkthrough';
@@ -39,12 +39,14 @@ export default function Rack({ studio }: { studio: Studio }) {
   const [tourOpen, setTourOpen] = useState(false);
   const startTour = () => {
     setAccountOpen(false);
+    studio.setHelpOpen(false);
     markWalkthroughSeen();
     setTourOpen(true);
   };
   const { midiState } = studio;
   useWakeLock(studio.isAnyPlaying);
   const sync = useSyncStatus();
+  const user = useAccountUser();
 
   return (
     <div className="rack-page">
@@ -107,12 +109,12 @@ export default function Rack({ studio }: { studio: Studio }) {
         </div>
       </div>
 
-      <HelpModal open={studio.helpOpen} onClose={() => studio.setHelpOpen(false)} />
+      <HelpModal open={studio.helpOpen} onClose={() => studio.setHelpOpen(false)} onWalkthrough={startTour} />
       <MidiImportDialog studio={studio} />
       {projectsOpen && <ProjectsDialog studio={studio} onClose={() => setProjectsOpen(false)} />}
       {shareOpen && <ShareDialog onClose={() => setShareOpen(false)} />}
       {accountOpen && <AccountDialog onClose={() => setAccountOpen(false)} onWalkthrough={startTour} />}
-      {tourOpen && <Walkthrough onClose={() => setTourOpen(false)} />}
+      {tourOpen && <Walkthrough onClose={() => setTourOpen(false)} signedIn={user !== null} />}
       {guestOpen && <AddGuestDialog studio={studio} onClose={() => setGuestOpen(false)} />}
       {versionsOpen && <VersionsDialog studio={studio} onClose={() => setVersionsOpen(false)} />}
       {studio.presetImportReport && (

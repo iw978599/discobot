@@ -12,8 +12,12 @@ description: The checks and steps for finishing a change in Discobot and opening
    would otherwise hang the run)
 3. Browser tests. Run the specs the change touches while working
    (`npx playwright test ui/test/browser/<name>.spec.ts`), and the whole suite
-   (`npm run test:browser`, about seven minutes) before the pull request is
-   marked ready.
+   before the pull request is marked ready: `npm run test:browser` (one at a
+   time, nine minutes or more) or `npm run test:browser:fast` (desktop and
+   phone width side by side). A test that fails in a whole run and times real
+   audio or makes many exports may only have been starved: run it again on
+   its own before believing it. The check on GitHub runs each width on a
+   machine of its own and is the steadier of the two.
 4. Update `AGENTS.md` (behaviour a later change must know) and
    `docs/ROADMAP.md` (what is now done, what is still open). Keep
    `docs/GUEST_PROTOCOL.md`, `docs/guest-example.html` and the guest tests in
@@ -49,7 +53,8 @@ description: The checks and steps for finishing a change in Discobot and opening
 - The description states what was run and its result, and plainly lists what
   was not verified. Sound that has not been listened to is "not verified by
   ear".
-- Merging to `main` publishes the site. The accounts API is deployed
+- Merging to `main` publishes the site, once the checks on that merge have
+  passed (about six minutes). If a check fails, nothing is published. The accounts API is deployed
   separately and by hand (`npm run deploy --workspace=server`, then
   `npm run migrate --workspace=server` if there is a new migration).
 

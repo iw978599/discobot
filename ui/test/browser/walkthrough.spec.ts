@@ -131,3 +131,28 @@ test('a browser that has had the walkthrough is not shown it for a second accoun
   await expect(dialog).toContainText('Signed in as Ian');
   await expect(tourCard(page)).toHaveCount(0);
 });
+
+test('someone with no account can have the walkthrough from Help, and it says an account is optional', async ({ page }, testInfo) => {
+  const api = apiUrl(String(testInfo.project.use.baseURL));
+  const asked: string[] = [];
+  page.on('request', request => { if (request.url().startsWith(api)) asked.push(request.url()); });
+  const tour = tourCard(page);
+  const help = page.getByRole('dialog', { name: 'How to use Discobot', exact: true });
+
+  await page.getByRole('button', { name: 'Help', exact: true }).click();
+  await help.getByRole('button', { name: 'Show the Walkthrough', exact: true }).click();
+  await expect(help, 'Help makes way for it').toHaveCount(0);
+  await expect(tour.getByRole('heading', { name: 'Play and tempo', exact: true })).toBeVisible();
+  await expect(tour).toContainText(`Step 1 of ${STOPS.length}`);
+  expect(await page.evaluate(key => localStorage.getItem(key), SEEN_KEY), 'this browser has now had it').not.toBeNull();
+
+  // The account stop is about the button that is there: Sign In, and nothing that is not yet true.
+  for (let stop = 1; stop < STOPS.length - 1; stop++) await page.keyboard.press('ArrowRight');
+  await expect(tour.getByRole('heading', { name: 'An account, if you want one', exact: true })).toBeVisible();
+  await expect(tour).toContainText('Everything works without an account');
+  await page.keyboard.press('ArrowRight');
+  await expect(tour).toContainText('can show this walkthrough again');
+  await tour.getByRole('button', { name: 'Done', exact: true }).click();
+  await expect(tour).toHaveCount(0);
+  expect(asked, 'the tour asks nothing of the accounts API').toEqual([]);
+});

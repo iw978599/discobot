@@ -21,5 +21,22 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+  # The browser tests are most of the time a run takes, and half of them are the same tests at
+  # phone width. Each width gets a machine of its own, so they run at once.
+  browser:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium, mobile-chromium]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:browser
+      - run: npx playwright test --project=${{ matrix.project }}

@@ -46,22 +46,18 @@ slow down every later change.
    long runs of separate tab stops, so add a roving tab index; and nothing,
    the walkthrough included, has been tried with a screen reader.
 
-6. **Type the worklet messages.** (S)
-   Messages to the processors are untyped object literals on one side and
-   `data.type === ...` checks on the other. Share a discriminated union from
-   the engine so a renamed field is a compile error.
+6. **Type the worklet messages.** Done: the hooks that send and the worklet
+   that receives share one set of message types from the engine, so a renamed
+   field or a misspelt message does not compile.
 
-7. **CI housekeeping.** (S)
-   `ci.yml` and `pages.yml` run the same checks on every push to `main`;
-   have Pages depend on CI instead. Bump `configure-pages` and `deploy-pages`
-   off Node 20. The browser tests take about nine minutes one at a time;
-   `PLAYWRIGHT_PORT` already gives a run its own app and API, so the desktop
-   and phone halves could run side by side.
+7. **CI housekeeping.** Done: the check on GitHub runs the browser tests for
+   desktop and phone width on two machines at once, and
+   `npm run test:browser:fast` runs them side by side locally. Publishing no
+   longer repeats the checks: it starts when they pass on `main` and builds
+   the commit they passed on. The Pages actions are on Node 24.
 
-8. **Move synth presets to IndexedDB.** (S)
-   Presets are the one thing still written to `localStorage` from
-   `useStudio.tsx`. Projects and their versions are already IndexedDB
-   records.
+8. **Move synth presets to IndexedDB.** Done: presets have a store of their
+   own, and any saved before are moved there on the next visit.
 
 Done: the rack rebuild that emptied `App.tsx`; the two-tab guard; debounced
 saving; projects as IndexedDB records with version history; the Vibrato LFO
@@ -191,9 +187,9 @@ may redistribute.
    open or is part-way through a turn; sharing by a code or a link instead
    of a username; passing a project to a new owner.
 
-8. **The walkthrough for someone with no account.** (S)
-   It is shown after a new account's recovery code and from the account
-   dialog. Offer it from the Help button too.
+8. **The walkthrough for someone with no account.** Done: Help has a Show
+   the Walkthrough button, and the stop about accounts says they are optional
+   to someone who is not signed in.
 
 9. **A page listing a user's published songs.** (M)
    Publishing gives each song a short link, and there is no profile page or
@@ -208,20 +204,31 @@ the long kind that carries the song and short links to a published one;
 accounts, project sync and version history; guest instruments; the walkthrough
 for new accounts.
 
+## Questions waiting on the owner
+
+- **Did the Firefox guest fixes work?** PRs #76 and #77 changed how a guest
+  instrument's audio is timed for Firefox. Nobody has said whether a guest
+  now plays in time on a real desktop Firefox.
+- **Tape Loop Deck's loops.** They are not saved with a project. That needs an
+  addition to the guest protocol and a new prompt for its author.
+- **Kids mode.** It is a separate page, and what a child makes cannot be
+  opened in the full app. Both were decided in building it and are easy to
+  change.
+
 ## Suggested order
 
 1. **Listen and tune** (sound 1). It needs the owner's ears, not an agent, so
    it can go on alongside everything else.
-2. **The four small ones:** CI housekeeping, typed worklet messages, synth
-   presets to IndexedDB, and the walkthrough from Help. A day each, no
-   decisions needed, and the first makes every later change quicker to check.
+2. Done: the four small ones (CI housekeeping, typed worklet messages, synth
+   presets to IndexedDB, and the walkthrough from Help).
 3. **The typed store** (improvements 1), then **undo in the store**
    (improvements 2). Large and with nothing to show for it, but automation,
    collaborative sessions and most new features get cheaper and safer after.
 4. Done: the playhead out of React state (improvements 3).
-5. **The phone layout** (features 1), with the **accessibility pass**
-   (improvements 5) done on the new controls as they are made, and
-   moving **kids mode** (features 2) onto the same large controls.
+5. **The rest of the phone layout** (features 1): one unit on screen at a
+   time, knobs as sliders and a piano roll made for a thumb. Do the
+   **accessibility pass** (improvements 5) on the new controls as they are
+   made, and move **kids mode** (features 2) onto the same large controls.
 6. **Record live playing** and **more ways to edit patterns** (features 3
    and 4): the two that most change what making a song feels like.
 7. **Samples in project files** (sound 2). Sync for them waits on storage.

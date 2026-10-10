@@ -1,6 +1,6 @@
 import { useRef, useCallback, useEffect, useMemo } from 'react';
 import type { SynthParameters, EffectsLoopState } from '../types';
-import { toVoiceParams } from '@discobot/engine';
+import { toVoiceParams, type SynthWorkletMessage } from '@discobot/engine';
 import { createAudioLane, getAudioContext, ensureAudioReady, loadAudioWorklet, setEffectsLoop } from './browserAudio';
 
 interface SynthLane {
@@ -13,6 +13,8 @@ interface SynthLane {
   // Note-ons still waiting on audio resume or worklet loading, keyed by note name.
   starting: Map<string, Set<number>>;
 }
+
+const send = (node: AudioWorkletNode | undefined, message: SynthWorkletMessage) => node?.port.postMessage(message);
 
 export function useSynthAudio() {
   const lanesRef = useRef(new Map<number, SynthLane>());
@@ -32,7 +34,7 @@ export function useSynthAudio() {
     lane.parameters = parameters;
     lane.bpm = bpm;
     if (loop) setEffectsLoop(loop);
-    lane.node?.port.postMessage({ type: 'params', params: toVoiceParams(parameters, bpm) });
+    send(lane.node, { type: 'params', params: toVoiceParams(parameters, bpm) });
     lane.audio?.setSends(parameters.fxSends, parameters.fxReturn);
   }, []);
 
@@ -50,7 +52,7 @@ export function useSynthAudio() {
         lane.audio = audio;
         lane.node = node;
         if (lane.parameters) {
-          node.port.postMessage({ type: 'params', params: toVoiceParams(lane.parameters, lane.bpm) });
+          send(node, { type: 'params', params: toVoiceParams(lane.parameters, lane.bpm) });
           audio.setSends(lane.parameters.fxSends, lane.parameters.fxReturn);
         }
         return node;
@@ -76,7 +78,7 @@ export function useSynthAudio() {
       else if (loop) setEffectsLoop(loop);
       const node = await getNode(lane);
       if (cancelled()) return;
-      node.port.postMessage({ type: 'noteOn', note, velocity, id, duration, time: scheduledTime });
+      send(node, { type: 'noteOn', note, velocity, id, duration, time: scheduledTime });
     } catch (error) {
       if (generation === lane.generation) console.error('Synth playback failed:', error);
     } finally {
@@ -90,14 +92,14 @@ export function useSynthAudio() {
     const lane = lanesRef.current.get(synthId);
     if (!lane) return;
     lane.starting.delete(note);
-    lane.node?.port.postMessage({ type: 'noteOff', note });
+    send(lane.node, { type: 'noteOff', note });
   }, []);
   const stopSynth = useCallback((synthId: number, release = 0.03) => {
     const lane = lanesRef.current.get(synthId);
     if (!lane) return;
     lane.generation++;
     lane.starting.clear();
-    lane.node?.port.postMessage({ type: 'allNotesOff', release });
+    send(lane.node, { type: 'allNotesOff', release });
   }, []);
   const duck = useCallback((synthId: number, time: number, amount: number) => {
     lanesRef.current.get(synthId)?.audio?.duck(time, amount);

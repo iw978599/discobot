@@ -97,3 +97,51 @@ test('the top bar stays in reach when the page is scrolled', async ({ page }) =>
   await expect(page.getByRole('button', { name: /Stop All/ })).toBeVisible();
   await page.getByRole('button', { name: /Stop All/ }).click();
 });
+
+test('your own presets are kept in IndexedDB, and ones from before are moved there without being lost', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const OLD_KEY = 'discobot_synth_presets_v1';
+  const lane = page.locator('.synth-module').first();
+  const names = () => lane.getByLabel('Synth preset', { exact: true }).locator('option').allTextContents();
+  const inDatabase = () => page.evaluate(() => new Promise<string[]>((resolve, reject) => {
+    const request = indexedDB.open('discobot-presets');
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const all = request.result.transaction('presets').objectStore('presets').getAll();
+      all.onsuccess = () => { resolve((all.result as Array<{ name: string; position: number }>).sort((a, b) => a.position - b.position).map(entry => entry.name)); request.result.close(); };
+    };
+  }));
+
+  // A preset saved now goes to the database, and nothing is written to the old place.
+  await lane.getByLabel('Preset name', { exact: true }).fill('Night Bass');
+  await lane.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect.poll(inDatabase).toEqual(['Night Bass']);
+  expect(await page.evaluate(key => localStorage.getItem(key), OLD_KEY)).toBeNull();
+
+  // One left behind by the version before this is picked up on the next visit, after the one already kept.
+  const old = await page.evaluate(() => new Promise<unknown>((resolve) => {
+    const request = indexedDB.open('discobot-presets');
+    request.onsuccess = () => {
+      const all = request.result.transaction('presets').objectStore('presets').getAll();
+      all.onsuccess = () => { const { position: _position, ...preset } = all.result[0]; request.result.close(); resolve({ ...preset, id: 'user-from-before', name: 'From Before' }); };
+    };
+  }));
+  await page.evaluate(([key, preset]) => localStorage.setItem(key as string, JSON.stringify([preset])), [OLD_KEY, old] as const);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Discobot', exact: true })).toBeVisible();
+  await expect.poll(inDatabase).toEqual(['Night Bass', 'From Before']);
+  await expect.poll(names).toEqual(expect.arrayContaining(['Night Bass', 'From Before']));
+  expect(await page.evaluate(key => localStorage.getItem(key), OLD_KEY), 'the old copy is removed once it has been moved').toBeNull();
+
+  // Both are still there after another reload, and a deleted one stays deleted.
+  await page.reload();
+  await expect.poll(names).toEqual(expect.arrayContaining(['Night Bass', 'From Before']));
+  await lane.getByLabel('Synth preset', { exact: true }).selectOption({ label: 'From Before' });
+  await lane.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect.poll(inDatabase).toEqual(['Night Bass']);
+  await page.reload();
+  await expect.poll(names).toContain('Night Bass');
+  expect(await names()).not.toContain('From Before');
+  expect(errors).toEqual([]);
+});

@@ -45,6 +45,7 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 | `ui/src/services/browserTransport.ts` | Look-ahead clock. One tick is a 32nd note; 16-step lanes and drums use every second tick |
 | `ui/src/services/playhead.ts` / `ui/src/hooks/usePlayhead.ts` | Where each lane's playhead is, kept outside React, and the two hooks that show it: `usePlayheadMark` lights the playing step, `usePlayhead` reads a part of the position such as the bar |
 | `ui/src/services/sampleStore.ts` | IndexedDB sample storage |
+| `ui/src/services/presetStore.ts` | The user's own synth presets, in IndexedDB, and the one-time move of any still in `localStorage` |
 | `ui/src/services/drumSamples.ts` | Decodes a stored sample for a drum lane, once, mixed to one channel |
 | `ui/src/services/kitImport.ts` / `ui/src/rack/KitImportDialog.tsx` | Import Kit: `matchKit` guesses a drum lane for each sample file from its name, and the dialog shows the guesses to be changed before anything is stored |
 | `ui/src/services/projectLibrary.ts` | The project library: one IndexedDB record per project and a store of earlier versions, with an in-memory stand-in for tests and browsers without IndexedDB |
@@ -131,11 +132,17 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 - `useWakeLock` keeps the screen on while anything is playing, where the browser allows it.
 - The UI is one rack read top to bottom. Synth step rows and the drum grid share the column widths `--plate`, `--side` and `--knobs` in `rack.css` so steps line up vertically; change them together.
 - The walkthrough (`Walkthrough.tsx`) is the one overlay that is not a `Dialog`: it lights one part of the rack and puts a card beside it, or along the bottom of a narrow screen. Its card is `aria-modal`, which is what makes the piano keys and the step arrow keys stand down while it is up. It finds each stop by a selector in `STOPS`; renaming one of those classes or labels means changing the stop and `walkthrough.spec.ts` with it. A stop whose part is not on the page shows its card alone.
-- The walkthrough starts by itself only after the recovery code of a new account, and only in a browser that has not had it (`walkthroughSeen`); Show the Walkthrough in the account dialog starts it at any time. Browser tests that sign up set `discobot_walkthrough_v1` first unless the walkthrough is what they test.
+- The walkthrough starts by itself only after the recovery code of a new account, and only in a browser that has not had it (`walkthroughSeen`); Show the Walkthrough, in the account dialog and in Help, starts it at any time, signed in or not. Browser tests that sign up set `discobot_walkthrough_v1` first unless the walkthrough is what they test.
 - A `Dialog` hands focus back to the button that opened it when it closes, after the layout effects of whatever replaces it, and focusing scrolls that button into view. Anything that opens as a dialog closes must place itself and take focus in a mount effect, with `preventScroll` (see `Walkthrough`).
 - The playhead is not React state. The scheduler writes each lane's step to `playhead` many times a second; putting it in state rendered the whole rack on every step, which was most of the main thread's work while playing. Never set state from `scheduleTick` for something that changes every step.
 - The step lights are classes that `usePlayheadMark` switches on the elements themselves: `on` for a step light, `active` for a drum step number, `current` for a drum step, `playing` in the piano roll. Each such element carries `data-step`, and those classes must not appear in its `className`, or React and the hook would fight over them. The hook puts the light back after every render of its component, with no dependency list on purpose: a render can replace the lit element. `playhead.spec.ts` fails if that is changed.
 - A component that needs the position for something other than a light (which bar is playing, for Follow) uses `usePlayhead(lane, select)`, and renders only when what `select` returns changes.
+- The browser tests run one at a time on purpose: specs reset the same accounts API, and the guest and MIDI clock tests time real audio. To go faster, run more than one Playwright at once on different ports (`PLAYWRIGHT_PORT` gives each its own app and API): `scripts/browser-tests.mjs` does it locally, and `ci.yml` gives each width a machine of its own. Do not raise `workers`.
+- Builds must not overlap in one checkout. Every build rewrites `ui/public/audio-worklet.js` and then copies it, so two at once can ship half a file. The script starts its runs one after another for that reason, and tests them together.
+- Test speed here depends on the machine more than on the tests. On a laptop on battery the same suite has taken from 9 to 15 minutes, and tests that time real audio fail when the processor is shared. Before reading a local failure as a bug, run that test again on its own.
+- A message to an audio worklet is one of the types in `engine/src/workletMessages.ts`, sent through the typed `send` in its hook and read by the same type in `worklet.ts`. Add a message by adding it to the type first; do not call `port.postMessage` with a bare object.
+- The user's synth presets are read from `presetStore` after the page is up, not during the first render. Nothing is written back until they have been read (`presetsLoadedRef`), or the empty first list would replace what is stored. Anything else loaded this way needs the same guard.
+- Publishing is `pages.yml`, and it does not run the tests. It starts when `ci.yml` ("Static app CI") finishes for a push to `main`, goes on only if every job passed, and builds the commit that was checked. Renaming the CI workflow means changing its name in `pages.yml` too, or nothing is published.
 - Components take the `Studio` object and call its handlers. They hold only view state (open tab, selected drum, dialog open); anything that must be saved or undone belongs in `useStudio`.
 - Fonts are bundled from `@fontsource`. The app must not load anything from another origin: it works offline and a browser test fails on any outside request.
 - Each lane shows four knobs plus Level. For a synth model with macros those four are the macros; otherwise Cutoff, Reso, Env and Decay.
@@ -176,6 +183,7 @@ npm start            # Static production-build preview
 npm run typecheck    # No build needed: the UI resolves the engine from source
 npm test             # Node unit tests (engine + UI services)
 npm run test:browser # Playwright against the production preview and a local API
+npm run test:browser:fast # The same tests as two runs side by side, desktop and phone width
 npm run dev:api      # The accounts API on http://127.0.0.1:8787, in memory
 npm run deploy --workspace=server   # Publish the API (needs `npx wrangler login`)
 npm run migrate --workspace=server  # Apply new database migrations to the live database
@@ -185,7 +193,7 @@ npm run migrate --workspace=server  # Apply new database migrations to the live 
 - No comments in code unless explaining non-obvious logic
 - `DrumState` always initialized with `createDefaultDrumState()` (never null)
 - Engine types are single source of truth (`engine/src/types.ts`), UI re-exports via `ui/src/types.ts`
-- All project mutations go through `localRequest`; components do not write localStorage directly (synth presets in `useStudio.tsx` are the one exception)
+- All project mutations go through `localRequest`; components do not write localStorage directly
 - Sanitize anything read from storage in `projectSanitization.ts` before it reaches audio code
 - The app must work fully with no account and with the API unreachable. Signed out, it makes no request to the API at all, with one exception the visitor asks for: opening a short link (`#s=code`) fetches that published song. A browser test checks both
 - The API stores a username, password hash, recovery-code hash, join date and invite code, and nothing else: no email, no names, no IP addresses. Do not add personal data, analytics or logging of request contents
@@ -258,7 +266,7 @@ npm run migrate --workspace=server  # Apply new database migrations to the live 
 
 ## Working Rules for Agents
 - Skills for this repository are in `.claude/skills/`: `add-project-field` (anything stored), `ship-change` (checks, commits, pull requests) and `scripted-edits` (editing on Windows). Read the one that fits before starting.
-- `docs/HANDOFF.md`, when it exists, says where unfinished work stopped. Read it first and delete it when that work is merged.
+- `docs/HANDOFF.md`, when it exists, says where unfinished work stopped. Read it first and delete it when that work is merged. Questions it leaves for the owner go to the end of `docs/ROADMAP.md` first.
 - Reproduce a reported bug before fixing it, and see it fixed the same way afterwards. If it cannot be reproduced, say so; do not report a guess as a fix.
 - Find another program's real definitions before translating its files or talking to it (its source, its parameter table). Do not infer units from field names.
 - Anything bundled with the app must be something the project may redistribute. Do not add samples, fonts or data whose licence has not been checked.

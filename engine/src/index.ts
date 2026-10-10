@@ -4,4 +4,5 @@ export { createDefaultSynthParameters, syncedLfoHz, toVoiceParams } from './synt
 export type { VoiceParams } from './synth/voiceParams';
 export { DrumCore } from './drums/DrumCore';
 export type { DrumHitMessage, DrumSample } from './drums/DrumCore';
+export type { DrumWorkletMessage, GuestPlayerMessage, SynthWorkletMessage } from './workletMessages';
 export * from './types';

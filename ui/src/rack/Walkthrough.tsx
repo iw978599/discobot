@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { accountsEnabled } from '../services/account';
 
 interface Stop {
   // What to light up. Several matches are lit as one area; none, and the card stands alone.
@@ -7,8 +8,9 @@ interface Stop {
   text: string;
 }
 
-// In the order the rack is read, top to bottom, then back up to the menus.
-const STOPS: Stop[] = [
+// In the order the rack is read, top to bottom, then back up to the menus. The account stop
+// says what is true for whoever is looking, and is left out of a build that has no accounts.
+const stopsFor = (signedIn: boolean): Stop[] => [
   { target: '.tempo-display-group, .play-all-button', title: 'Play and tempo', text: 'Play All starts every lane and the drums together. Click the BPM display to type a tempo, or tap one in with Tap.' },
   { target: '.song-module', title: 'Scenes and song', text: 'A scene is one pattern of everything: every lane and the drum grid. Add more scenes, then put them in order as a song with + Add.' },
   { target: '.synth-module[aria-label="Synth 1 module"] .step-row', title: 'A lane\'s steps', text: 'Each synth lane is a row of steps. Select a step, then play a key to put a note on it. Click the lane\'s name to open it for editing.' },
@@ -16,8 +18,10 @@ const STOPS: Stop[] = [
   { target: '.drum-grid', title: 'The drum grid', text: 'Click cells to add hits. The strip under the grid edits the drum and the step you last touched.' },
   { target: '.effects-unit', title: 'Effects', text: 'The effects are shared by the whole rack. Each lane and the drums have sends that set how much of them goes through.' },
   { target: '.transport .rack-menu', title: 'Project and Export', text: 'Project has all your projects, earlier versions, share links and imports. Export downloads the open scene or the whole song as audio or MIDI.' },
-  { target: '.account-button', title: 'Your account', text: 'Projects you make while signed in are kept in your account and follow you to any browser you sign in on. This walkthrough can be shown again from here.' },
-  { target: '.transport [aria-label="Help"]', title: 'Help', text: 'The ? button explains every control and lists the keyboard shortcuts. That is all you need to start.' },
+  ...(!accountsEnabled ? [] : [signedIn
+    ? { target: '.account-button', title: 'Your account', text: 'Projects you make while signed in are kept in your account and follow you to any browser you sign in on. This walkthrough can be shown again from here.' }
+    : { target: '.account-button', title: 'An account, if you want one', text: 'Everything works without an account. With one, the projects you make are kept in it and follow you to any browser you sign in on.' }]),
+  { target: '.transport [aria-label="Help"]', title: 'Help', text: 'The ? button explains every control, lists the keyboard shortcuts, and can show this walkthrough again. That is all you need to start.' },
 ];
 
 const GAP = 12;
@@ -27,14 +31,16 @@ const NARROW = 640;
 interface Placement { spot: CSSProperties | null; card: CSSProperties }
 
 // A tour of the rack: one part is lit at a time and a card explains it. Escape or Skip ends it.
-export default function Walkthrough({ onClose }: { onClose: () => void }) {
+export default function Walkthrough({ onClose, signedIn }: { onClose: () => void; signedIn: boolean }) {
   const [index, setIndex] = useState(0);
   const [placement, setPlacement] = useState<Placement>({ spot: null, card: {} });
   const cardRef = useRef<HTMLDivElement>(null);
   const nextRef = useRef<HTMLButtonElement>(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
-  const stop = STOPS[index], last = index === STOPS.length - 1;
+  // Settled when the tour starts, so signing in or out part-way does not change how many stops there are.
+  const stops = useRef(stopsFor(signedIn)).current;
+  const stop = stops[index], last = index === stops.length - 1;
 
   const place = useCallback((scroll: boolean) => {
     const width = window.innerWidth, height = window.innerHeight, narrow = width <= NARROW;
@@ -99,7 +105,7 @@ export default function Walkthrough({ onClose }: { onClose: () => void }) {
     nextRef.current?.focus({ preventScroll: true });
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') { event.preventDefault(); closeRef.current(); }
-      else if (event.key === 'ArrowRight') setIndex(current => Math.min(STOPS.length - 1, current + 1));
+      else if (event.key === 'ArrowRight') setIndex(current => Math.min(stops.length - 1, current + 1));
       else if (event.key === 'ArrowLeft') setIndex(current => Math.max(0, current - 1));
       if (event.key !== 'Tab') return;
       const items = Array.from(cardRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled)') || []);
@@ -120,7 +126,7 @@ export default function Walkthrough({ onClose }: { onClose: () => void }) {
       <div className={`tour-shade ${placement.spot ? '' : 'dark'}`} role="presentation" />
       {placement.spot && <div className="tour-spot" style={placement.spot} />}
       <div ref={cardRef} className="tour-card" role="dialog" aria-modal="true" aria-label="Walkthrough" style={placement.card}>
-        <span className="tour-count">Step {index + 1} of {STOPS.length}</span>
+        <span className="tour-count">Step {index + 1} of {stops.length}</span>
         <h2>{stop.title}</h2>
         <p aria-live="polite">{stop.text}</p>
         <div className="tour-actions">

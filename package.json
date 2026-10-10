@@ -17,6 +17,7 @@
     "typecheck": "tsc --noEmit -p engine/tsconfig.json && tsc --noEmit -p ui/tsconfig.json && tsc --noEmit -p server/tsconfig.json",
     "test": "node --import tsx --test engine/test/*.test.ts ui/test/*.test.ts server/test/*.test.ts",
     "test:browser": "playwright test",
+    "test:browser:fast": "node scripts/browser-tests.mjs",
     "dev:api": "npm run dev --workspace=server"
   },
   "devDependencies": {
