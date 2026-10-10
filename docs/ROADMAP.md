@@ -28,10 +28,12 @@ slow down every later change.
    entry also fixes the current limit that an entry restores only one synth
    lane.
 
-3. **Stop re-rendering the whole app on every step.** (M)
-   The playhead position lives in React state at the top of the tree, so all
-   controls re-render 8 to 16 times a second during playback. Move the
-   playhead to a ref or a small external store read only by the step lights.
+3. **Stop re-rendering the whole app on every step.** Done: the playhead is
+   a small store outside React and the step lights follow it without a
+   render. Playing a three-lane project with drums, the main thread was busy
+   a little over half as long as before, and script time fell to between a
+   fifth and an eighth. Still open: nothing in the rack is memoised, so an
+   edit still renders all of it.
 
 4. **Give the audio layer a single owner.** (M)
    `browserAudio.ts` keeps the context, buses and effects in module-level
@@ -217,8 +219,7 @@ for new accounts.
 3. **The typed store** (improvements 1), then **undo in the store**
    (improvements 2). Large and with nothing to show for it, but automation,
    collaborative sessions and most new features get cheaper and safer after.
-4. **The playhead out of React state** (improvements 3). It matters most on
-   phones, so it comes before the phone layout.
+4. Done: the playhead out of React state (improvements 3).
 5. **The phone layout** (features 1), with the **accessibility pass**
    (improvements 5) done on the new controls as they are made, then
    **kids mode** (features 2), which reuses them.
