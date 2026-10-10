@@ -61,7 +61,7 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 | `ui/src/rack/Walkthrough.tsx` / `ui/src/services/walkthrough.ts` | The tour of the rack shown after a new account's recovery code, and whether this browser has had it |
 | `ui/src/services/shareLink.ts` | Share links: a project deflated into the URL after `#song=`, and short links (`#s=code`) to a song published on the server |
 | `ui/src/rack/SharedSongPage.tsx` | The page a share link opens: renders the song to audio, plays it, offers a copy |
-| `ui/src/kids/KidsPage.tsx` / `ui/src/services/kids.ts` | Kids mode (`#kids`): nine big pads, sounds chosen by picture and one play button, on a page that never opens the projects |
+| `ui/src/kids/KidsPage.tsx` / `ui/src/services/kids.ts` | Kids mode (`#kids`): twelve big pads and a beat grid of pictures on two screens, sounds chosen by picture and one play button, on a page that never opens the projects |
 | `ui/src/services/wavExport.ts` | Offline arrangement render and WAV encoding: full mix, seamless loop, and per-lane stems zipped by `utils/zip.ts` |
 | `ui/src/services/delayTime.ts` | `delaySeconds`: the shared delay's time, free or tempo-synced |
 | `ui/src/services/effectSettings.ts` | Defaults and limits for the chorus, master EQ and reverb shape |
@@ -232,10 +232,16 @@ npm run migrate --workspace=server  # Apply new database migrations to the live 
 
 ## Kids Mode
 - Kids mode is a page of its own at `#kids`, for a child too young to read. `App` chooses it before `useStudio` runs, so the project store is never opened and nothing there can change, delete, share or publish a project. Keep it that way: do not import `localService`, `account` or anything that reaches them into `ui/src/kids/`. Going in (Project menu) and coming out both reload the page.
-- What a child makes is two bars of eighth notes kept under its own key (`discobot_kids_v1`) and read back through `sanitizeKids`. It is not a project and cannot be opened as one; whether it should be is the owner's to decide.
-- Nothing on the page needs reading: no text fields, menus, dialogs, sliders or links, and a browser test checks there are none. The one line of text, "Hold to leave", is for the adult, and that button only works held for `KIDS_LEAVE_HOLD_MS`.
+- There are two activities, each a screen, and one is shown at a time: the pads, and the beat grid. The way between them is two drawings at the top left (`SCREENS` in `KidsPage.tsx`), not words. Play, the speed and the level are shared, and both keep playing whichever screen is open.
+- What a child makes is kept under its own key (`discobot_kids_v1`) and read back through `sanitizeKids`: `notes`, two bars of eighth notes for each pad; `beat`, one bar of eighth notes for each row of the grid; and the sound, the speed and the screen last open. It is not a project and cannot be opened as one; whether it should be is the owner's to decide.
+- The key is still `_v1` because what the first version stored still loads: `sanitizeKids` fills anything missing with its empty value. A stored tune names a pad and a sound by its place in `KIDS_PADS` and `KIDS_SOUNDS`, so add to the end of those lists and never reorder them. Where a pad sits on the screen is `KIDS_PAD_ORDER`. A test holds the first nine pads and four sounds in place.
+- Nothing on the page needs reading: no text fields, menus, dialogs, sliders or links, and a browser test checks there are none. The one line of text, "Hold to leave", is for the adult, and that button only works held for `KIDS_LEAVE_HOLD_MS`. New pictures are emoji or SVG drawn in the component; nothing is bundled for them.
 - A pad acts on `pointerdown`, not on click, so it sounds as it is touched. While the loop plays, a tap is also kept on the nearest step (`stepNearest`), and the loop skips that step once because the tap has already played it.
-- The note pads are six notes of one five-note scale, so no two clash. The level is fixed at `KIDS_VOLUME` and there is no volume control. The four sounds were set by reasoning, not by ear.
+- The note pads are eight notes of one five-note scale, so no two clash, and there are four drum pads. The level is fixed at `KIDS_VOLUME` and there is no volume control. The six sounds were set by reasoning, not by ear.
+- Each row of the beat grid is the drum of one pad (`KIDS_BEAT_ROWS`), with that pad's picture and colour. `padSounds` is the one place that says whether a pad plays on a step, from the taps and the grid together, and both the scheduler and the lights use it; that is why a drum in both is one hit, not two. A hole sounds as it is filled, not as it is emptied. The sponge wipes only the screen it is pressed on.
+- The grid's markup is one instrument after another, a picture then eight holes. CSS alone turns it: instruments are rows on a wide screen and columns on a tall one (`orientation: portrait`), where eight holes across would be too small to touch. The pads are three across on a tall screen and four across otherwise.
+- The lights follow the playhead rule. The scheduler writes the step to `playhead` under the lane `'kids'`, and one layout effect in `KidsPage` switches `now` on the dots and the grid's holes and `lit` on the pads, found by `data-step`, `data-beat` and `data-pad`. Those two classes must not appear in a `className`, and the effect has no dependency list on purpose.
+- A first visit starts with a drum and a clap in the beat grid and no tune (`starterKids`).
 - Kids mode makes no request to the accounts API or to any other site, signed in or not. A browser test checks it.
 
 ## Published Songs
