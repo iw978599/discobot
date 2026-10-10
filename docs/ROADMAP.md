@@ -54,9 +54,10 @@ slow down every later change.
 7. **CI housekeeping.** (S)
    `ci.yml` and `pages.yml` run the same checks on every push to `main`;
    have Pages depend on CI instead. Bump `configure-pages` and `deploy-pages`
-   off Node 20. The browser tests take about nine minutes one at a time;
-   `PLAYWRIGHT_PORT` already gives a run its own app and API, so the desktop
-   and phone halves could run side by side.
+   off Node 20. Done: the check on GitHub runs the browser tests for desktop
+   and phone width on two machines at once, and `npm run test:browser:fast`
+   runs them side by side locally. Still open: Pages runs the whole suite
+   again, one at a time, before every publish.
 
 8. **Move synth presets to IndexedDB.** (S)
    Presets are the one thing still written to `localStorage` from
@@ -220,9 +221,10 @@ for new accounts.
    (improvements 2). Large and with nothing to show for it, but automation,
    collaborative sessions and most new features get cheaper and safer after.
 4. Done: the playhead out of React state (improvements 3).
-5. **The phone layout** (features 1), with the **accessibility pass**
-   (improvements 5) done on the new controls as they are made, and
-   moving **kids mode** (features 2) onto the same large controls.
+5. **The rest of the phone layout** (features 1): one unit on screen at a
+   time, knobs as sliders and a piano roll made for a thumb. Do the
+   **accessibility pass** (improvements 5) on the new controls as they are
+   made, and move **kids mode** (features 2) onto the same large controls.
 6. **Record live playing** and **more ways to edit patterns** (features 3
    and 4): the two that most change what making a song feels like.
 7. **Samples in project files** (sound 2). Sync for them waits on storage.

@@ -136,6 +136,9 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 - The playhead is not React state. The scheduler writes each lane's step to `playhead` many times a second; putting it in state rendered the whole rack on every step, which was most of the main thread's work while playing. Never set state from `scheduleTick` for something that changes every step.
 - The step lights are classes that `usePlayheadMark` switches on the elements themselves: `on` for a step light, `active` for a drum step number, `current` for a drum step, `playing` in the piano roll. Each such element carries `data-step`, and those classes must not appear in its `className`, or React and the hook would fight over them. The hook puts the light back after every render of its component, with no dependency list on purpose: a render can replace the lit element. `playhead.spec.ts` fails if that is changed.
 - A component that needs the position for something other than a light (which bar is playing, for Follow) uses `usePlayhead(lane, select)`, and renders only when what `select` returns changes.
+- The browser tests run one at a time on purpose: specs reset the same accounts API, and the guest and MIDI clock tests time real audio. To go faster, run more than one Playwright at once on different ports (`PLAYWRIGHT_PORT` gives each its own app and API): `scripts/browser-tests.mjs` does it locally, and `ci.yml` gives each width a machine of its own. Do not raise `workers`.
+- Builds must not overlap in one checkout. Every build rewrites `ui/public/audio-worklet.js` and then copies it, so two at once can ship half a file. The script starts its runs one after another for that reason, and tests them together.
+- Test speed here depends on the machine more than on the tests. On a laptop on battery the same suite has taken from 9 to 15 minutes, and tests that time real audio fail when the processor is shared. Before reading a local failure as a bug, run that test again on its own.
 - Components take the `Studio` object and call its handlers. They hold only view state (open tab, selected drum, dialog open); anything that must be saved or undone belongs in `useStudio`.
 - Fonts are bundled from `@fontsource`. The app must not load anything from another origin: it works offline and a browser test fails on any outside request.
 - Each lane shows four knobs plus Level. For a synth model with macros those four are the macros; otherwise Cutoff, Reso, Env and Decay.
@@ -176,6 +179,7 @@ npm start            # Static production-build preview
 npm run typecheck    # No build needed: the UI resolves the engine from source
 npm test             # Node unit tests (engine + UI services)
 npm run test:browser # Playwright against the production preview and a local API
+npm run test:browser:fast # The same tests as two runs side by side, desktop and phone width
 npm run dev:api      # The accounts API on http://127.0.0.1:8787, in memory
 npm run deploy --workspace=server   # Publish the API (needs `npx wrangler login`)
 npm run migrate --workspace=server  # Apply new database migrations to the live database

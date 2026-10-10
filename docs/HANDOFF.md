@@ -6,14 +6,12 @@ again. Delete this file once everything below is finished and merged.
 
 ## Branches
 
-- PRs #80, #81 and #82 were merged into `main` on 2026-10-09, and the site
-  was published with them: items 1 to 6 below are live.
-- `draft/handoff-effects-midi` (this branch) went on after that. It holds
-  items 7 to 9 (PRs #83, #84 and #85, which were merged into this branch, not
-  into `main`), the tidied roadmap and the quicker tests. None of that is on
-  `main` until this branch is merged there.
+Everything below is on `main` and published. PRs #80, #81 and #82 were merged
+on 2026-10-09. PRs #83, #84 and #85 were merged into #81's old branch after
+that, and reached `main` together as PR #86 on 2026-10-10, whose check was
+the first run of all three together: 136 passed, none failed.
 
-## Finished on this branch
+## Finished
 
 1. **Effects.** A stereo chorus (a fifth shared effect, with a send on every
    synth lane, the drum kit and each guest), reverb pre-delay and damping, a
@@ -54,8 +52,8 @@ again. Delete this file once everything below is finished and merged.
   each passed the whole suite on GitHub apart. Together they have 138 tests.
   Three local runs of all three together each had one to three failures, in
   different tests each time, on a laptop that was on battery and in use; every
-  one of those tests passed in another of the runs. The check on GitHub is the
-  one to trust for this branch.
+  one of those tests passed in another of the runs. On GitHub all three
+  together passed: 136 tests, none failed.
 - The check on GitHub failed on every run of this branch until one guest test
   was changed: it compared two recordings of a guest in a window that ended
   where the next bell began. It passes there now.
