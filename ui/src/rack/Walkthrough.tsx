@@ -58,6 +58,8 @@ export default function Walkthrough({ onClose }: { onClose: () => void }) {
     const bar = inBar ? 0 : page?.querySelector('.rack-unit.transport')?.getBoundingClientRect().bottom ?? 0;
     let area = measure();
     if (scroll && page) {
+      // On a narrow screen most of the bar scrolls away with the page, so a stop on it means going back to the top.
+      if (inBar && area.top < 0) page.scrollTop = 0;
       if (!inBar && (area.top < bar + GAP || area.bottom > height - cardHeight - GAP * 2)) page.scrollTop += area.top - bar - GAP;
       if (area.left < GAP || area.right > width - GAP) page.scrollLeft += area.left - GAP;
       area = measure();
