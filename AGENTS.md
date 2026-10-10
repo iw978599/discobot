@@ -59,6 +59,7 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 | `ui/src/rack/Walkthrough.tsx` / `ui/src/services/walkthrough.ts` | The tour of the rack shown after a new account's recovery code, and whether this browser has had it |
 | `ui/src/services/shareLink.ts` | Share links: a project deflated into the URL after `#song=`, and short links (`#s=code`) to a song published on the server |
 | `ui/src/rack/SharedSongPage.tsx` | The page a share link opens: renders the song to audio, plays it, offers a copy |
+| `ui/src/kids/KidsPage.tsx` / `ui/src/services/kids.ts` | Kids mode (`#kids`): nine big pads, sounds chosen by picture and one play button, on a page that never opens the projects |
 | `ui/src/services/wavExport.ts` | Offline arrangement render and WAV encoding: full mix, seamless loop, and per-lane stems zipped by `utils/zip.ts` |
 | `ui/src/services/delayTime.ts` | `delaySeconds`: the shared delay's time, free or tempo-synced |
 | `ui/src/services/effectSettings.ts` | Defaults and limits for the chorus, master EQ and reverb shape |
@@ -213,6 +214,14 @@ npm run migrate --workspace=server  # Apply new database migrations to the live 
 - A guest cannot be rendered offline, so every audio export (`handleExportWav`) first plays the arrangement through and records each guest (`guestCapture`, fed from `GuestModule`), then mixes the recordings into the normal render as `guestTakes`, through the guest's sends. Recordings are placed by the guests' time stamps against the transport's first beat. For Loop WAV the pattern is played twice and the second pass kept, and the renderer lays that pass end to end. Stems give each guest a file of its own. MIDI leaves guests out.
 - Two recordings of a guest do not land on the same sample: a take can sit a millisecond or two early, and more on a slow machine. A test that compares two guest exports must not measure a fixed window that ends where a sound begins; measure something that does not move with the take (`quietest` in `guests.spec.ts`). The check run on GitHub failed for exactly this while passing on a faster machine.
 - `FEATURED_GUESTS` lists instruments offered by name in the Add Guest dialog. Only add one with its creator's permission.
+
+## Kids Mode
+- Kids mode is a page of its own at `#kids`, for a child too young to read. `App` chooses it before `useStudio` runs, so the project store is never opened and nothing there can change, delete, share or publish a project. Keep it that way: do not import `localService`, `account` or anything that reaches them into `ui/src/kids/`. Going in (Project menu) and coming out both reload the page.
+- What a child makes is two bars of eighth notes kept under its own key (`discobot_kids_v1`) and read back through `sanitizeKids`. It is not a project and cannot be opened as one; whether it should be is the owner's to decide.
+- Nothing on the page needs reading: no text fields, menus, dialogs, sliders or links, and a browser test checks there are none. The one line of text, "Hold to leave", is for the adult, and that button only works held for `KIDS_LEAVE_HOLD_MS`.
+- A pad acts on `pointerdown`, not on click, so it sounds as it is touched. While the loop plays, a tap is also kept on the nearest step (`stepNearest`), and the loop skips that step once because the tap has already played it.
+- The note pads are six notes of one five-note scale, so no two clash. The level is fixed at `KIDS_VOLUME` and there is no volume control. The four sounds were set by reasoning, not by ear.
+- Kids mode makes no request to the accounts API or to any other site, signed in or not. A browser test checks it.
 
 ## Published Songs
 - Publishing stores a slimmed copy of a project on the server behind a ten-character code. It is always an explicit button press, never a side effect of sharing or syncing.

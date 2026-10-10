@@ -130,21 +130,16 @@ may redistribute.
    Packaged apps in the phone stores are not planned for now; they would be
    a separate piece of work (a wrapper, store accounts and review).
 
-2. **Kids mode.** (M)
-   A mode a four-year-old can use without reading. A starting point:
-   - A few very large, colourful pads and a big play button; no menus, small
-     knobs, text fields or dialogs.
-   - Everything always sounds good: notes held to one scale, a fixed tempo
-     range, sounds chosen from a handful of pictures.
-   - Tapping makes sound at once (touch first, phone and tablet sized).
-   - Nothing can be lost or broken: it works on its own scratch project, and
-     cannot delete, overwrite, share, publish or reach account settings.
-   - A capped volume.
-   - A way out that a small child will not trigger by accident (press and
-     hold, or a simple sum for the adult).
-   - No account needed and no requests to anywhere, like the rest of the app.
-   To decide: whether what a child makes can be opened later in the full
-   app, and whether it is a separate page or a switch in the transport bar.
+2. **Kids mode.** Done as a first version: a page of its own (Project menu,
+   or `#kids`) with nine big pads, six notes of one scale and three drums,
+   that sound as they are touched; four sounds chosen by picture; one play
+   button that loops what is tapped, at a slow or a fast speed; a fixed,
+   capped level; and a way out that only works held for three seconds. It
+   keeps its own tune, never opens the projects, and asks nothing of the
+   account or any other site. Decided in building it: it is a separate page,
+   not a switch in the transport bar. Still open: whether what a child makes
+   can be opened in the full app; trying it with a child and on a real
+   tablet; choosing the sounds by ear; keeping the screen awake.
 
 3. **Record live playing against the clock.** (M)
    MIDI record mode writes to the step under the playhead. Add a metronome, a
@@ -220,8 +215,8 @@ for new accounts.
 4. **The playhead out of React state** (improvements 3). It matters most on
    phones, so it comes before the phone layout.
 5. **The phone layout** (features 1), with the **accessibility pass**
-   (improvements 5) done on the new controls as they are made, then
-   **kids mode** (features 2), which reuses them.
+   (improvements 5) done on the new controls as they are made, and
+   moving **kids mode** (features 2) onto the same large controls.
 6. **Record live playing** and **more ways to edit patterns** (features 3
    and 4): the two that most change what making a song feels like.
 7. **Samples in project files** (sound 2). Sync for them waits on storage.

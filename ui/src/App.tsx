@@ -4,8 +4,22 @@ import { decodeShare, sharePayload, shortCode } from './services/shareLink';
 import { accountsEnabled, songsApi } from './services/account';
 import Rack from './rack/Rack';
 import SharedSongPage from './rack/SharedSongPage';
+import KidsPage from './kids/KidsPage';
+import { isKidsLink } from './services/kids';
 
+// Kids mode is a page of its own. It is chosen before anything opens the projects, so it
+// cannot change them; going in or out reloads the page.
 export default function App() {
+  const [kids] = useState(() => isKidsLink(window.location.hash));
+  useEffect(() => {
+    const onHashChange = () => { if (isKidsLink(window.location.hash) !== kids) window.location.reload(); };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, [kids]);
+  return kids ? <KidsPage /> : <Workstation />;
+}
+
+function Workstation() {
   const studio = useStudio();
   // A share link opens a page for that song instead of the visitor's own project.
   const [shared, setShared] = useState<{ file: unknown; author?: string; error?: string } | null>(null);

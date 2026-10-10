@@ -62,9 +62,9 @@ again. Delete this file once everything below is finished and merged.
 1. **The LinnDrum, DMX and TR-707 kits in the kit menu** are synthesized and
    have not been tuned by ear against the machines they are named after.
 2. **Added to the roadmap after the pause** (`docs/ROADMAP.md`): collaborative
-   sessions (features item 7), kids mode (item 2) and a layout for phones
-   and the installed app (item 1). None is started; each lists questions to
-   settle first. The roadmap was tidied on 2026-10-10: open work first, a
+   sessions (features item 7) and a layout for phones and the installed app
+   (item 1). Neither is started; each lists questions to settle first. Kids
+   mode (item 2) has a first version on the branch `feat/kids-mode`. The roadmap was tidied on 2026-10-10: open work first, a
    new suggested order, and items that were already done moved out.
 3. **Follow-ups worth offering, not asked for:** following an external MIDI
    clock, sending hand-played notes to MIDI out, choosing output channels;
