@@ -60,7 +60,10 @@ async function call<T>(method: 'GET' | 'POST' | 'PUT', path: string, body?: unkn
   return data as T;
 }
 
-export interface RemoteProject { id: string; name: string; revision: number; updatedAt: number; deleted: boolean }
+// `sharedWith` and `savedBy` are only there for a project the account has shared with someone.
+export interface RemoteProject { id: string; name: string; revision: number; updatedAt: number; deleted: boolean; sharedWith?: number; savedBy?: string }
+// A project someone else has shared with this account. It stays in the owner's account.
+export interface SharedProject { owner: string; id: string; name: string; revision: number; updatedAt: number; savedBy: string }
 
 // A refused save or delete is an answer, not a failure: the project changed somewhere else.
 const unlessChanged = async <T,>(work: Promise<T>): Promise<T | 'changed'> => {
@@ -75,6 +78,21 @@ export const projectsApi = {
   remove: (id: string, baseRevision: number) => unlessChanged(call('POST', `/projects/${id}/delete`, { baseRevision }).then(() => 'removed' as const)),
 };
 export type ProjectsApi = typeof projectsApi;
+
+// Working on a project with someone else, in turns: the owner shares it by username, and the
+// people it is shared with read and save the owner's copy under the same revision rule.
+export const sharingApi = {
+  list: async () => (await call<{ projects: SharedProject[] }>('GET', '/shared')).projects,
+  get: async (owner: string, id: string) => (await call<{ project: unknown }>('GET', `/shared/${encodeURIComponent(owner)}/${id}`)).project,
+  put: (owner: string, id: string, name: string, baseRevision: number, project: unknown) =>
+    unlessChanged(call<{ revision: number }>('PUT', `/shared/${encodeURIComponent(owner)}/${id}`, { name, baseRevision, project }).then(result => result.revision)),
+  leave: async (owner: string, id: string) => { await call('POST', `/shared/${encodeURIComponent(owner)}/${id}/leave`, {}); },
+  // The owner's side.
+  members: async (id: string) => (await call<{ members: string[] }>('GET', `/projects/${id}/sharing`)).members,
+  share: async (id: string, username: string) => { await call('POST', `/projects/${id}/share`, { username }); },
+  unshare: async (id: string, username: string) => { await call('POST', `/projects/${id}/unshare`, { username }); },
+};
+export type SharingApi = typeof sharingApi;
 
 export interface PublishedSong { code: string; projectId: string; title: string; updatedAt: number }
 export interface SongPage { title: string; author: string; updatedAt: number; project: unknown }
