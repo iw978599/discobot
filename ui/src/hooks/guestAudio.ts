@@ -1,6 +1,7 @@
 import { createAudioLane, getAudioContext, loadAudioWorklet } from './browserAudio';
 import { GUEST_LATENCY_MS, NO_SENDS, contextTimeAtWall, latencyAfterLateBlocks, placeBlock, resample } from '../services/guests';
 import type { FxSendLevels } from '../types';
+import type { GuestPlayerMessage } from '@discobot/engine';
 
 const MAX_BLOCK_FRAMES = 16384;
 // Audio that would start sooner than this from now is too late to place where it belongs.
@@ -18,6 +19,8 @@ export interface GuestPlayerStats { blocks: number; late: number; latencyMs: num
 // that arrives after its time is still played, straight away, so a guest is late rather than
 // silent. If that keeps happening the latency is raised by what was missing and `onLatency`
 // is called, so the guest can be told to play that much earlier and land on the beat again.
+const send = (node: AudioWorkletNode | null, message: GuestPlayerMessage) => node?.port.postMessage(message);
+
 export function createGuestPlayer(onLatency: (latencyMs: number) => void, initialLatencyMs = GUEST_LATENCY_MS) {
   const context = getAudioContext();
   const lane = createAudioLane('synth');
@@ -63,10 +66,10 @@ export function createGuestPlayer(onLatency: (latencyMs: number) => void, initia
         lateRun = 0; worstLate = 0;
       }
       expected = frame + l.length;
-      node.port.postMessage({ frame, left: l, right: r });
+      send(node, { type: 'block', frame, left: l, right: r });
       return true;
     },
-    clear() { expected = null; lateRun = 0; worstLate = 0; node?.port.postMessage({ type: 'clear' }); },
+    clear() { expected = null; lateRun = 0; worstLate = 0; send(node, { type: 'clear' }); },
     dispose() {
       disposed = true;
       node?.disconnect();

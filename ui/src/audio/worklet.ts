@@ -2,6 +2,7 @@
 // the DSP itself lives in the engine so offline export runs exactly the same code.
 import { SynthCore } from '../../../engine/src/synth/SynthCore';
 import { DrumCore } from '../../../engine/src/drums/DrumCore';
+import type { DrumWorkletMessage, GuestPlayerMessage, SynthWorkletMessage } from '../../../engine/src/workletMessages';
 
 declare const sampleRate: number;
 declare const currentFrame: number;
@@ -18,7 +19,7 @@ class SynthProcessor extends AudioWorkletProcessor {
 
   constructor() {
     super();
-    this.port.onmessage = ({ data }) => {
+    this.port.onmessage = ({ data }: MessageEvent<SynthWorkletMessage>) => {
       if (data.type === 'params') this.core.setParams(data.params);
       else if (data.type === 'noteOn') this.core.noteOn(data);
       else if (data.type === 'noteOff') this.core.noteOff(data.note, data.id);
@@ -40,7 +41,7 @@ class DrumProcessor extends AudioWorkletProcessor {
 
   constructor() {
     super();
-    this.port.onmessage = ({ data }) => {
+    this.port.onmessage = ({ data }: MessageEvent<DrumWorkletMessage>) => {
       if (data.type === 'hit') this.core.trigger(data);
       else if (data.type === 'sample') this.core.setSample(data.instrument, data.sample);
       else if (data.type === 'stopAll') this.core.stopAll();
@@ -68,7 +69,7 @@ class GuestPlayer extends AudioWorkletProcessor {
 
   constructor() {
     super();
-    this.port.onmessage = ({ data }) => {
+    this.port.onmessage = ({ data }: MessageEvent<GuestPlayerMessage>) => {
       if (data.type === 'clear') { this.filledTo = 0; return; }
       const start = Math.round(data.frame), length = data.left.length;
       // Too late to play any of it, or absurdly far ahead: drop it.
