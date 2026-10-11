@@ -318,11 +318,15 @@ may redistribute.
     flying.
 
 13. **A fault: downloading a song as WAV on a phone does not work
-    properly.** Reported by the owner on 2026-10-11. Not yet reproduced, and
-    what goes wrong has not been described: which phone and browser, whether
-    it is the installed app, whether nothing downloads, the file is empty or
-    cut short, or the sound is wrong. Reproduce it first. Things to look at,
-    none of them confirmed: how a phone browser treats a download started
+    properly.** Reported by the owner on 2026-10-11: in the installed app
+    on a Pixel 9, Song WAV gave a file that was cut short, and the phone
+    showed no notice that anything had been downloaded. Whether the song had
+    a guest instrument is not remembered, and how long the song was and how
+    much of it was in the file are not known. Not yet reproduced. One guess
+    is ruled out by reading the code: the export renders at a fixed 44,100
+    samples a second from start to finish, so the phone's own 48,000 does
+    not shorten it. Reproduce it first. Things to look at, none of them
+    confirmed: how a phone browser treats a download started
     from a page (iPhones in particular, and the installed app, which has
     nowhere obvious to put a file); whether the long render is stopped when
     the screen sleeps or the page goes to the background; memory, for a long
@@ -352,10 +356,11 @@ for new accounts.
   whether what a child makes can be opened in the full app.
 - **Time signatures.** One for the whole project, or one for each scene?
   And which ones should be on offer?
-- **WAV download on a phone.** Which phone and browser, was it the installed
-  app, and what happened: no file, an empty or short one, or wrong sound?
-  Was it Download WAV, Song WAV, Loop or Stems, and did the song have a
-  guest instrument?
+- **WAV download on a phone.** The owner has said: the installed app on a
+  Pixel 9, Song WAV, a file cut short and no download notice. Still to
+  know: how long the song is and how much of it the file held; whether it
+  had a guest instrument; and whether the same song exports whole in Chrome
+  on the phone (not the installed app) and on a computer.
 
 ## Suggested order
 
