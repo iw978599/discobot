@@ -134,28 +134,27 @@ test('each scene keeps its own settings for a guest', async () => {
     effectsLoop: { enabled: true, returns: { synth: .8, drums: .7 }, drive: { enabled: true, amount: .2, tone: .6 }, phaser: { enabled: false, rate: .5, depth: .4, feedback: .2, mix: .2 }, delay: { enabled: true, time: .2, feedback: .3, mix: .3 }, reverb: { enabled: true, decay: 2, mix: .3 } },
   });
   await service.openLibrary(createMemoryLibrary());
-  const post = (path: string, body: unknown, method = 'POST') => service.request(path, { method, body: JSON.stringify(body) });
   const guests = () => service.snapshot().guests as Array<{ id: string; state?: unknown }>;
 
-  await post('/guests', { url: 'https://example.com/choir' });
-  await post('/guests', { url: 'https://example.com/drums' });
+  service.addGuest('https://example.com/choir');
+  service.addGuest('https://example.com/drums');
   const [choir, kit] = guests().map(guest => guest.id);
   const verse = service.snapshot().currentSceneId;
-  await post(`/guests/${choir}`, { state: { vowel: 'a' } }, 'PUT');
+  service.changeGuest(choir, { state: { vowel: 'a' } });
 
   // A second scene starts as a copy, then gets settings of its own.
-  await post('/scenes/create', {});
+  service.createScene();
   const chorus = service.snapshot().currentSceneId;
   assert.deepEqual(guests()[0].state, { vowel: 'a' });
-  await post(`/guests/${choir}`, { state: { vowel: 'o' } }, 'PUT');
-  await post(`/guests/${kit}`, { state: { swing: 0.3 } }, 'PUT');
+  service.changeGuest(choir, { state: { vowel: 'o' } });
+  service.changeGuest(kit, { state: { swing: 0.3 } });
 
-  const selected = await (await post('/scenes/select', { sceneId: verse })).json();
+  const selected = (service.selectScene(verse) as { ok: true; value: { guests: Array<{ state?: unknown }> } }).value;
   assert.deepEqual(selected.guests.map((guest: { state?: unknown }) => guest.state), [{ vowel: 'a' }, { swing: 0.3 }], 'the choir goes back to the verse; the kit, which the verse knows nothing of, stays as it is');
-  await post('/scenes/select', { sceneId: chorus });
+  service.selectScene(chorus);
   assert.deepEqual(guests().map(guest => guest.state), [{ vowel: 'o' }, { swing: 0.3 }]);
 
-  const stored = (await (await service.request('/scenes')).json()).scenes as Array<{ id: string; guests?: Record<string, unknown> }>;
+  const stored = service.getScenes().scenes as unknown as Array<{ id: string; guests?: Record<string, unknown> }>;
   assert.deepEqual(stored.find(scene => scene.id === verse)!.guests, { [choir]: { vowel: 'a' }, [kit]: { swing: 0.3 } }, 'leaving the verse recorded what both guests were set to there');
   assert.deepEqual(stored.find(scene => scene.id === chorus)!.guests, { [choir]: { vowel: 'o' }, [kit]: { swing: 0.3 } });
 
@@ -168,8 +167,8 @@ test('each scene keeps its own settings for a guest', async () => {
   assert.equal(sanitizeSceneGuests({}), undefined);
 
   // Removing a guest removes its settings from every scene.
-  await post(`/guests/${choir}`, {}, 'DELETE');
-  const after = (await (await service.request('/scenes')).json()).scenes as Array<{ guests?: Record<string, unknown> }>;
+  service.removeGuest(choir);
+  const after = service.getScenes().scenes as unknown as Array<{ guests?: Record<string, unknown> }>;
   assert.ok(after.every(scene => !scene.guests || !(choir in scene.guests)));
   assert.ok(after.every(scene => scene.guests && kit in scene.guests));
 });
@@ -189,25 +188,24 @@ test('a scene also keeps each guest\'s level and mute', async () => {
     effectsLoop: { enabled: true, returns: { synth: .8, drums: .7 }, drive: { enabled: true, amount: .2, tone: .6 }, phaser: { enabled: false, rate: .5, depth: .4, feedback: .2, mix: .2 }, delay: { enabled: true, time: .2, feedback: .3, mix: .3 }, reverb: { enabled: true, decay: 2, mix: .3 } },
   });
   await service.openLibrary(createMemoryLibrary());
-  const post = (path: string, body: unknown, method = 'POST') => service.request(path, { method, body: JSON.stringify(body) });
   const mix = () => (service.snapshot().guests as Array<{ volume: number; muted: boolean }>).map(guest => [guest.volume, guest.muted]);
 
-  await post('/guests', { url: 'https://example.com/choir' });
+  service.addGuest('https://example.com/choir');
   const id = service.snapshot().guests[0].id as string;
   const verse = service.snapshot().currentSceneId;
-  await post(`/guests/${id}`, { muted: true, volume: 0.2 }, 'PUT');
-  await post('/scenes/create', {});
+  service.changeGuest(id, { muted: true, volume: 0.2 });
+  service.createScene();
   assert.deepEqual(mix(), [[0.2, true]], 'a copied scene starts the same');
-  await post(`/guests/${id}`, { muted: false, volume: 0.9 }, 'PUT');
-  await post('/scenes/select', { sceneId: verse });
+  service.changeGuest(id, { muted: false, volume: 0.9 });
+  service.selectScene(verse);
   assert.deepEqual(mix(), [[0.2, true]]);
-  const stored = (await (await service.request('/scenes')).json()).scenes as Array<{ guestMix: Record<string, unknown> }>;
+  const stored = service.getScenes().scenes as unknown as Array<{ guestMix: Record<string, unknown> }>;
   assert.deepEqual(stored.map(scene => scene.guestMix[id]), [{ volume: 0.2, muted: true }, { volume: 0.9, muted: false }]);
 
   assert.deepEqual(sanitizeGuestMix({ [id]: { volume: 7, muted: 'yes' }, 'bad-id': { volume: 1, muted: true }, other: 3 }), { [id]: { volume: 1, muted: false } });
   assert.equal(sanitizeGuestMix([]), undefined);
-  await post(`/guests/${id}`, {}, 'DELETE');
-  assert.ok(((await (await service.request('/scenes')).json()).scenes as Array<{ guestMix?: unknown }>).every(scene => !scene.guestMix));
+  service.removeGuest(id);
+  assert.ok((service.getScenes().scenes as unknown as Array<{ guestMix?: unknown }>).every(scene => !scene.guestMix));
 });
 
 test('a song gives a guest each scene\'s own level and mute, bar by bar', async () => {

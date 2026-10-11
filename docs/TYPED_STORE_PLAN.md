@@ -4,11 +4,15 @@ Written 2026-10-11 from a design pass over `localService.ts`, `useStudio.tsx` an
 `storeRoutes.test.ts`. This is roadmap improvement 1. It is done as a sequence of
 pull requests, each leaving `main` working and `storeRoutes.test.ts` green.
 
-Status: pull requests 1 to 7 of 8 are built (the foundation, drum swing and
+Status: all eight pull requests are built (the foundation, drum swing and
 drum master volume; then guests; then the drums; then the effects; then the
 whole of 5, a lane's sound, model, mix and view, and the tempo, and then its
 pattern writes; then lanes coming and going, and the transport; then the
-scenes and the song). 8 is open.
+scenes and the song; then taking `request` away). The migration is done. The
+sections after "What was built" were written before it and still speak of
+`request`, the router, `storeRoutes.test.ts` and `call` as things that exist;
+they are gone, and the list of what pull request 8 found says what became of
+each.
 
 ## What was built, and where it differs from this plan
 
@@ -507,6 +511,79 @@ Found by building pull request 7 (scenes and the song):
   `scene.create` with the same id, but not a `scene.replace` that had no usable
   scenes.
 
+Found by building pull request 8 (taking `request` away):
+
+- **Deleted.** `request`, `localRequest`, `fromApplied`, the branch of `apply`
+  for an operation with no reducer (and its test), and `storeRoutes.test.ts`
+  with the `call` helper it used. `reducers` is a `Reducers`, not a
+  `Partial`, so the compiler fails when an operation has none. Nothing in
+  `ui/src` called `request` any more (the one `.request(` left is the browser's
+  wake lock). `ui/test/storeEdits.test.ts` replaces the route cases.
+- **The pinned cases, counted.** `storeRoutes.test.ts` ran 200 tests. 171 are
+  typed cases in `storeEdits.test.ts`, with the same status, events and saved
+  flag: 164 of the 191 table cases (161 are an operation applied through
+  `apply`; 3 are the reads that have a typed method, `getScenes`, `getTempo` and
+  `getDrumKits`) and seven of the nine other tests (events before return, an
+  event is a copy, a save is scheduled, a read does not save, the
+  built-in-property name, a call before init, and every operation has a case that
+  succeeds). 29 went with the router, because they were about how it parsed a
+  path, a method or a body: 6 for a body that is not an object, 7 for a path no
+  route knows, 2 for a lane resource no route knows or a read of lane 9, 6 reads
+  with no typed method (a lane's parameters, model and patterns; the drum state,
+  the drum sends and the effects loop), 1 for PUT writing a sound as POST did,
+  1 for the `patternsXYZ` path, 1 for a GET on one pattern writing it, 2 for the
+  play and stop that default to lane 1 (`body.synthId || 1`), 1 for a drum state
+  sent as the body itself (`body.state || body`), the test that a GET with a body
+  writes, and the test that read the router's source. Three converted cases lost
+  a half that was the router's: the pattern whose id in the path wins over the
+  one in the body is now an id not seen before; a guest changed with GET is now
+  an empty change; a guest added with a volume and mute in the body no longer
+  has them in it. The body check is still tested where it is typed: a patch that
+  is not an object is a 400 in `storeOps.test.ts`.
+- **The six reads with no typed method were read by nobody.** Everything the app
+  reads comes from `snapshot()`, the events and the three read methods. Nothing
+  was added for them; the project is in `snapshot()`.
+- **`storeOps.test.ts` runs each case once.** The route half is gone from every
+  case (`path`, `body` and `method` with it) and from the runner; the three
+  tests that sent a raw body through the route keep their typed halves. The case
+  that an id in the body is used when the path has none went with the router.
+- **Changed on purpose: an instrument named after a built-in property.** Run in
+  pull request 3 it did three things; now every one of the six edits to a drum
+  lane answers 404 "Unknown local operation" for `constructor`, `toString` and
+  `__proto__`, as for `cowbell`, and writes, saves and sends nothing. Own
+  properties only (`drumLaneEdit`). Its own commit and test.
+- **Went with the router: a GET with a body writing.** There is no method now.
+- **Changed on purpose: undo is one `applyAll`.** `applySnapshot` made twelve
+  edits in two stretches (five, then seven) with a turn between them and one
+  after (it awaited values that were not promises, twice). It is now one synchronous `applyAll`, in the order
+  the calls were made. An undo pressed during another, which was dropped by
+  `isRestoringRef` while the first was between its stretches, now finds no such
+  gap. A click is its own task, so no keyboard or pointer input could land in the
+  old gap; what changes is a second call in the same turn, and that no render
+  can come between two of the twelve. Its own commit; the test reads the source.
+- **Undo's `await Promise.resolve()` after a scene change is kept.** Reasoning:
+  `selectScene` has delivered `sceneChanged`, whose handler writes the refs
+  `getSnapshot` reads, before it returns; `getSnapshot` closes over the tempo,
+  swing and volume of the render the click came from either way; and
+  `lanesBeforeEditRef` falls back to the live lane when a scene change has
+  replaced the pattern. By that reading the turn is not needed. But it cannot be
+  run here (no React in the node tests), and the turn is the only thing that lets
+  a render happen between the scene change and the snapshot, so it stays until a
+  browser test of undo across scenes is written to prove it.
+- **Named in this plan for the last step and not done.** Saving when nothing
+  changed (every "changes nothing but still emits and saves" case in
+  `storeEdits.test.ts`) moves `revision` and version-keeping, and is the
+  owner's decision to make. A one-step drum edit still sends the whole drum state
+  (`drumFullState`), which the drum handlers in `useStudio` apply; changing it
+  changes the event the app is built on, so it belongs with reading by slice.
+- **Still looks wrong, still not fixed.** `synth.create` and `scene.replace` make
+  an id inside the reducer, so they are not repeatable; Stop turns
+  `forceReleaseSignal` over twice; undo and the song scheduler do not collect the
+  guests' settings before leaving a scene; `drum.kit` says it is not undoable
+  though an undo entry holds the kit; undo and Reset send a whole object as a
+  patch, so a chorus or EQ that an entry lacks is left on; a preset load leaves
+  two undo entries; `useStudio.tsx` is 2,190 lines.
+
 ## What is being replaced
 
 Edits inside a project go through `localService.request(path, options)`, a leftover
@@ -556,10 +633,8 @@ export type Applied<V> = { ok: true; value: V } | Rejected;
 `value` is exactly what the route answered, and a copy as that was, so the route
 is `fromApplied(this.apply(...))`. Callers that read `.ok` and `.json().error`
 read `result.ok` and `result.error`. It still throws "Local project has not been
-initialized" before init, and still throws a TypeError for an instrument named
-after a built-in property (`constructor`, `toString`, `__proto__`): both are pinned,
-and the second is fixed on purpose at the end. Until the last pull request it also
-throws for an operation whose route has not moved yet.
+initialized" before init. (It used to throw a TypeError for an instrument named after
+a built-in property, and for an operation with no reducer; both are gone.)
 
 **A refusal** is `{ ok: false, status, error }`, settled with guests, the first
 group that can be refused for more than one reason:
@@ -616,10 +691,11 @@ read after `apply`.
 **Quirks.** Kept for good: synchronous emit; events delivered before return; a
 save that is scheduled, not immediate; `commitScene()` before a scene is read;
 `preferences` saving without an event; play and stop sending an event without
-saving. Kept until the last pull request and then changed on purpose, each in a
-pull request of its own: saving when nothing changed (it moves `revision` and
-version-keeping, so the owner should know); a GET with a body writing; the
-built-in-property throw; a one-step drum edit echoing the whole drum state. Dead code removed in the first
+saving. Kept until the last pull request and then changed on purpose: the
+built-in-property throw (now a 404) and a GET with a body writing (it went with
+the router). Still kept, and open: saving when nothing changed (it moves
+`revision` and version-keeping, so the owner should know), and a one-step drum
+edit echoing the whole drum state. Dead code removed in the first
 pull request: the `drumStep`, `drumStepVelocity`, `drumSettings`, `drumMix` and
 `drumReset` cases in `useStudio`'s message switch, which nothing emits.
 
@@ -751,30 +827,27 @@ localService.setDrumSwing(swing);
 
 The history push before it is unchanged.
 
-Test: `ui/test/storeOps.test.ts` runs each migrated case twice on two fresh
-services, once through `request` and once through the typed helper, and asserts
-the same answer, events, saved flag, written project and snapshot, and that the
-saved flag is what `OP_META` says. Each case also states the answer it expects,
-so the two ways cannot be wrong together. Include a clamped input (a swing of 5
-gives .75), a missing one and one of the wrong type. A group adds its cases to
-the `cases` list there; one test fails if a reducer has no case.
+Test: `ui/test/storeOps.test.ts` runs each case on a fresh service through the
+typed helper and asserts the answer, events and saved flag the case states, and
+that the saved flag is what `OP_META` says. (While `request` existed, each case
+was also run through the route and the two had to agree.) Include a clamped
+input (a swing of 5 gives .75), a missing one and one of the wrong type. A group
+adds its cases to the `cases` list there; one test fails if a reducer has no
+case.
 
 Since pull request 2 a case can also be a refusal (`status` and `error` in place
-of `answer` and `event`): both ways must then answer the same error, emit
-nothing, save nothing and leave the project as it was. A case can name a
-`method`, and its `arrange` can be asynchronous and hand what it made (an id) to
-`path` and `run`. The ids the two stores make differ, so an expected answer is
-written with each id as its place among them (`'id-1'`), which is what
-`comparable` turns them into. An `arrange` uses the typed helpers where they
-exist and `request` for a route that has not moved.
+of `answer` and `event`): the case must then answer that error, emit
+nothing, save nothing and leave the project as it was. A case's `arrange` can
+be asynchronous and hand what it made (an id) to `run`. The ids stores make
+differ, so an expected answer is written with each id as its place among them
+(`'id-1'`), which is what `comparable` turns them into.
 
-The harness is `ui/test/helpers/store.ts`: `setup` and `call` (one request and
-everything it did), moved from `storeRoutes.test.ts` unchanged; `applied`, which
-is `call` for an operation applied directly; and `comparable`, which puts a
-project in a form two separate stores can be compared by (their random ids and
-times differ). `storeRoutes.test.ts` and the thirteen other test files that call
-`request` are not changed until the last pull request: they are the proof that
-nothing changed.
+The harness is `ui/test/helpers/store.ts`: `setup`; `applied`, one edit with
+everything it did (answer, events, whether a save was scheduled); `ok` and
+`statusOf` for tests that only need an answer; and `comparable`, which puts a
+project in a form two stores can be compared by (their random ids and times
+differ). `storeEdits.test.ts` holds the cases that were `storeRoutes.test.ts`; the
+thirteen other test files that edited through `request` call the typed helpers.
 
 ## The pull requests
 
@@ -843,7 +916,7 @@ early updates; adds the two-way tests.
    `await guestLink.captureAll()` still comes first. The scheduler's call is the
    synchronous `localService.selectScene(id)`. Add a test that opens a scene and
    reads the refs on the next line. High, but on its own.
-8. **Take `request` away.** Delete `request`, `localRequest`, `fromApplied` and the
+8. **Take `request` away.** Built; see what pull request 8 found. Delete `request`, `localRequest`, `fromApplied` and the
    parts of `storeRoutes.test.ts` that read the router's source. Make the reducer
    map total and delete the branch of `apply` for a missing reducer. Turn the
    thirteen test files' helpers into `apply`, and the pinned route cases into
@@ -853,7 +926,7 @@ early updates; adds the two-way tests.
 
 ## Hazards
 
-- `storeRoutes.test.ts` reads the router's source: it looks for the
+- (Gone with the router.) `storeRoutes.test.ts` read the router's source: it looked for the
   `async request(path: string, options: RequestInit = {})` line, reads from
   there to the end of the class, and checks every use of `path`, `resource` and
   `method` is a form it knows, with pinned counts. Keep the `path ===` and
@@ -883,14 +956,17 @@ early updates; adds the two-way tests.
   `undefined` and a missing key part ways.
 - An operation carries the ids it creates, so a reducer must refuse an id that
   is malformed or already taken, which a route that made the id never met.
-- Undo (`applySnapshot`) replayed twelve requests while `isRestoringRef` is
-  set; eight are left. Move its calls with their groups, each in the place it
-  had among the others: the store must be changed in the same order.
+- Undo (`applySnapshot`) is one `applyAll` of twelve operations while
+  `isRestoringRef` is set, in the order its requests were made in: the store must
+  be changed in the same order.
 - Pattern writes are read-modify-write from `synthsRef`. Fine for one person; for
   live editing two edits in a frame would clobber each other, and `pattern.step`
   is the answer.
 
 ## After the migration
+
+The migration is finished. Each item below is what it makes possible, and none is
+started. Open things it left behind are in the account of pull request 8 above.
 
 - **Reading.** Give the store a version counter per slice (`lane:<id>`, `drums`,
   `fx`, `effects`, `tempo`, `scenes`, `guests`). Reducers say which slices they
@@ -902,7 +978,10 @@ early updates; adds the two-way tests.
   It fits `tracked` (`ui/src/studio/tracked.tsx`), which already renders a unit
   only when a value it read has changed identity.
 - **Undo in the store** (roadmap improvement 2) listens with `subscribeOps` and
-  records the operations whose `OP_META` says `undoable`.
+  records the operations whose `OP_META` says `undoable`. Replaying needs every
+  operation to carry what it creates: `synth.create` and a `scene.replace` with
+  no usable scenes do not yet, and `drum.kit`'s row says not undoable while an
+  undo entry holds the kit.
 - **Live editing** is the owner's decision to build, last of all, deliberately
   lifting the rule against a WebSocket transport. It sends the operations whose
   `OP_META` says `share`. A `controlKeys(op)` function will flatten a patch into

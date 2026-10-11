@@ -1,9 +1,7 @@
 // The typed way into the project store: `apply(op)`, the typed helpers over it, the read methods
-// and `subscribeOps`. While `request` still exists, each moved route is run both ways on two
-// fresh stores, and the two must agree on everything: the answer, the events, whether a save
-// was scheduled, and the project left behind. storeRoutes.test.ts pins what the routes do; this
-// file pins that the typed way does the same. Each pull request of docs/TYPED_STORE_PLAN.md
-// adds its group to `cases`.
+// and `subscribeOps`. Each operation's typed helper is run on a fresh store, and the answer,
+// the events, whether a save was scheduled and the project left behind are held to what the case
+// says. storeEdits.test.ts pins the same facts by applying each operation directly.
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
@@ -15,26 +13,22 @@ import { MAX_GUESTS } from '../src/services/guests.ts';
 import { MAX_SCENES } from '../src/services/projectSanitization.ts';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from '../src/services/drumKits.ts';
 import type { DrumInstrument, DrumState } from '../src/types.ts';
-import { applied, call, comparable, defaults, setup, storage, type Message } from './helpers/store.ts';
+import { applied, comparable, defaults, setup, storage, type Message } from './helpers/store.ts';
 
 const STORAGE_KEY = 'discobot_browser_project_v1';
 // A value of the wrong type, as an untyped caller or a replayed operation could send.
 const wrong = (value: unknown) => value as never;
 const resolve = (value: unknown, ctx: any) => (typeof value === 'function' ? value(ctx) : value);
 
-// Either way of making an edit, run on a store of its own. An accepted case names what both
-// answer and emit; a refused one names the status and the error, and both must then have
-// emitted nothing, saved nothing and left the project as it was. Ids the stores make differ
-// between the two, so an answer is written with each id as its place among them: 'id-1'.
+// One edit, run on a store of its own. An accepted case names what it answers and emits; a
+// refused one names the status and the error, and must then have emitted nothing, saved
+// nothing and left the project as it was. Ids the stores make differ
+// between runs, so an answer is written with each id as its place among them: 'id-1'.
 interface Case {
   op: Operation['type'];
   title: string;
   // Whatever it returns is handed to `path` and `run`: usually an id it made.
   arrange?: (service: LocalProjectService) => any;
-  method?: string;
-  path: string | ((ctx: any) => string);
-  // Sent to the route; a function is handed what `arrange` returned.
-  body: unknown;
   run: (service: LocalProjectService, ctx: any) => Applied<unknown>;
   // Accepted: what both ways answer and emit, and the event's name. `eventData` when the event
   // carries something other than the answer; `silent` when there is no event at all.
@@ -52,10 +46,10 @@ interface Case {
 }
 
 const swing = (title: string, sent: unknown, answer: number, arrange?: Case['arrange']): Case[] => [
-  { op: 'drum.swing', title, arrange, path: '/drum/swing', body: sent === undefined ? {} : { swing: sent }, run: service => service.setDrumSwing(wrong(sent)), answer: { swing: answer }, event: 'drumSwing', check: project => assert.equal(project.drumSwing, answer) },
+  { op: 'drum.swing', title, arrange, run: service => service.setDrumSwing(wrong(sent)), answer: { swing: answer }, event: 'drumSwing', check: project => assert.equal(project.drumSwing, answer) },
 ];
 const volume = (title: string, sent: unknown, answer: number, arrange?: Case['arrange']): Case[] => [
-  { op: 'drum.masterVolume', title, arrange, path: '/drum/master-volume', body: sent === undefined ? {} : { volume: sent }, run: service => service.setDrumMasterVolume(wrong(sent)), answer: { volume: answer }, event: 'drumMasterVolume', check: project => assert.equal(project.drumMasterVolume, answer) },
+  { op: 'drum.masterVolume', title, arrange, run: service => service.setDrumMasterVolume(wrong(sent)), answer: { volume: answer }, event: 'drumMasterVolume', check: project => assert.equal(project.drumMasterVolume, answer) },
 ];
 const swingSet = (service: LocalProjectService) => { service.setDrumSwing(.4); };
 const volumeSet = (service: LocalProjectService) => { service.setDrumMasterVolume(.6); };
@@ -81,15 +75,14 @@ const dressed = (service: LocalProjectService) => {
 const DRESSED = { name: 'Choir', volume: .5, muted: true, sends: { reverb: .5, delay: 0, drive: 0, phaser: 0, chorus: 0 }, state: { a: 1 } };
 type Outcome = { answer: unknown } | { status: 400 | 404 | 409; error: string };
 const outcome = (result: Outcome) => ('answer' in result ? { answer: result.answer, event: 'guestsChanged' } : result);
-// In a route's body JSON has already left out what is undefined; `body` is what is sent to both.
 const guestAdd = (title: string, body: { url?: unknown; name?: unknown }, result: Outcome, arrange?: Case['arrange']): Case => ({
-  op: 'guest.add', title, arrange, path: '/guests', body, run: service => service.addGuest(wrong(body.url), wrong(body.name)), ...outcome(result),
+  op: 'guest.add', title, arrange, run: service => service.addGuest(wrong(body.url), wrong(body.name)), ...outcome(result),
 });
 const guestChange = (title: string, patch: unknown, result: Outcome, arrange: Case['arrange'] = dressed): Case => ({
-  op: 'guest.patch', title, arrange, method: 'PUT', path: id => `/guests/${id}`, body: patch, run: (service, id) => service.changeGuest(id, wrong(patch)), ...outcome(result),
+  op: 'guest.patch', title, arrange, run: (service, id) => service.changeGuest(id, wrong(patch)), ...outcome(result),
 });
 const guestRemove = (title: string, result: Outcome, arrange: Case['arrange'], check?: Case['check']): Case => ({
-  op: 'guest.remove', title, arrange, method: 'DELETE', path: (ctx: any) => `/guests/${ctx.id ?? ctx}`, body: {}, run: (service, ctx) => service.removeGuest(ctx.id ?? ctx), ...outcome(result), check,
+  op: 'guest.remove', title, arrange, run: (service, ctx) => service.removeGuest(ctx.id ?? ctx), ...outcome(result), check,
 });
 
 // An id a sample can have that `comparable` does not take for one of the store's own.
@@ -126,22 +119,20 @@ const drumsDressed = (changes: Partial<Record<DrumInstrument, LaneChange>> = {},
   snare: { muted: true, ...changes.snare }, clap: { sampleId: SAMPLE },
 }, length);
 type DrumOutcome = { answer: unknown; event?: string } | { status: 400 | 404 | 409; error: string };
-// `body` is sent to the route, where JSON leaves out what is undefined and turns a number that
-// is not finite into null; the helper is handed the same values as they are.
-const drumCase = (op: Case['op'], path: string, run: (service: LocalProjectService, body: any) => Applied<unknown>, method?: string) =>
+const drumCase = (op: Case['op'], run: (service: LocalProjectService, body: any) => Applied<unknown>) =>
   (title: string, body: Record<string, unknown>, result: DrumOutcome, arrange?: Case['arrange']): Case => ({
-    op, title, arrange, method, path, body, run: service => run(service, body), ...('answer' in result ? { event: 'drumFullState', ...result } : result),
+    op, title, arrange, run: service => run(service, body), ...('answer' in result ? { event: 'drumFullState', ...result } : result),
   });
-const drumStep = drumCase('drum.step', '/drum/step', (service, body) => service.setDrumStep(body.instrument, body.step, body.active));
-const drumVelocity = drumCase('drum.stepVelocity', '/drum/step-velocity', (service, body) => service.setDrumStepVelocity(body.instrument, body.step, body.velocity));
-const drumDetail = drumCase('drum.stepDetail', '/drum/step-detail', (service, body) => service.setDrumStepDetail(body.instrument, body.step, { probability: body.probability, ratchet: body.ratchet }));
-const drumSettings = drumCase('drum.settings', '/drum/settings', (service, body) => service.setDrumSettings(body.instrument, body.settings));
-const drumSample = drumCase('drum.sample', '/drum/sample', (service, body) => service.setDrumSample(body.instrument, body.sampleId));
-const drumMix = drumCase('drum.mix', '/drum/mix', (service, body) => service.setDrumMix(body.instrument, { muted: body.muted, solo: body.solo }));
-const drumBars = drumCase('drum.bars', '/drum/bars', (service, body) => service.setDrumBars(body.bars));
-const drumReset = drumCase('drum.reset', '/drum/reset', service => service.resetDrums());
-const drumWhole = drumCase('drum.state', '/drum/state', (service, body) => service.setDrumState(body.state), 'PUT');
-const drumKit = drumCase('drum.kit', '/drum/kit', (service, body) => service.setDrumKit(body.kitId, body.applyDefaults));
+const drumStep = drumCase('drum.step', (service, body) => service.setDrumStep(body.instrument, body.step, body.active));
+const drumVelocity = drumCase('drum.stepVelocity', (service, body) => service.setDrumStepVelocity(body.instrument, body.step, body.velocity));
+const drumDetail = drumCase('drum.stepDetail', (service, body) => service.setDrumStepDetail(body.instrument, body.step, { probability: body.probability, ratchet: body.ratchet }));
+const drumSettings = drumCase('drum.settings', (service, body) => service.setDrumSettings(body.instrument, body.settings));
+const drumSample = drumCase('drum.sample', (service, body) => service.setDrumSample(body.instrument, body.sampleId));
+const drumMix = drumCase('drum.mix', (service, body) => service.setDrumMix(body.instrument, { muted: body.muted, solo: body.solo }));
+const drumBars = drumCase('drum.bars', (service, body) => service.setDrumBars(body.bars));
+const drumReset = drumCase('drum.reset', service => service.resetDrums());
+const drumWhole = drumCase('drum.state', (service, body) => service.setDrumState(body.state));
+const drumKit = drumCase('drum.kit', (service, body) => service.setDrumKit(body.kitId, body.applyDefaults));
 const KIT = DRUM_KITS.find(entry => entry.id === 'tr-808')!;
 // Every lane with the kit's settings laid over it, which is all of a lane's settings.
 const kitted = (changes: Partial<Record<DrumInstrument, LaneChange>> = {}) => ({
@@ -236,10 +227,9 @@ const drumCases: Case[] = [
       settings: { volume: Number.NaN, tone: undefined, pan: Number.POSITIVE_INFINITY, tune: .5 }, stepVelocities: [Number.NaN, Number.POSITIVE_INFINITY, .5, undefined],
     } },
   }, { answer: drums({ kick: { on: [0, 3], settings: { tune: .5 }, stepVelocities: beside({ 2: .5 }) } }) }, dressedDrums),
-  // The route also takes the drum state as the whole body, with no `state` around it.
   {
-    op: 'drum.state', title: 'the route reads a body that is the drum state itself as the helper reads its argument', arrange: dressedDrums, method: 'PUT', path: '/drum/state',
-    body: { snare: { steps: [false, true], muted: true } }, run: service => service.setDrumState(wrong({ snare: { steps: [false, true], muted: true } })),
+    op: 'drum.state', title: 'the helper takes the drum state itself, a lane or two of it, and fills in the rest', arrange: dressedDrums,
+    run: service => service.setDrumState(wrong({ snare: { steps: [false, true], muted: true } })),
     answer: drums({ snare: { on: [1], muted: true } }), event: 'drumFullState',
   },
 
@@ -274,12 +264,12 @@ const shaped = (service: LocalProjectService) => { assert.ok(service.setEffectsL
 const shapedEffects = () => { const next = newEffects(); next.delay.sync = '1/8'; next.chorus = { ...CHORUS }; next.eq = { ...EQ }; Object.assign(next.reverb, { preDelay: .1, damping: .5 }); return next; };
 const wasShaped = (change: (effects: any) => void = () => {}) => effects(change, shapedEffects);
 type PatchOutcome = { answer: unknown } | { status: 400 | 404 | 409; error: string };
-const patchCase = (op: Case['op'], path: string, event: string, run: (service: LocalProjectService, patch: any) => Applied<unknown>) =>
+const patchCase = (op: Case['op'], event: string, run: (service: LocalProjectService, patch: any) => Applied<unknown>) =>
   (title: string, patch: Record<string, unknown>, result: PatchOutcome, arrange?: Case['arrange']): Case => ({
-    op, title, arrange, path, body: patch, run: service => run(service, patch), ...('answer' in result ? { event, ...result } : result),
+    op, title, arrange, run: service => run(service, patch), ...('answer' in result ? { event, ...result } : result),
   });
-const drumFx = patchCase('drum.fx', '/drum/fx', 'drumFxUpdate', (service, patch) => service.setDrumFx(patch));
-const effectsSet = patchCase('effects.set', '/effects-loop', 'effectsLoopUpdate', (service, patch) => service.setEffectsLoop(patch));
+const drumFx = patchCase('drum.fx', 'drumFxUpdate', (service, patch) => service.setDrumFx(patch));
+const effectsSet = patchCase('effects.set', 'effectsLoopUpdate', (service, patch) => service.setEffectsLoop(patch));
 const notObjects: Array<[string, unknown]> = [['text', 'lots'], ['null', null], ['not a number at all', Number.NaN], ['infinity', Number.POSITIVE_INFINITY], ['a number', 7]];
 
 const effectCases: Case[] = [
@@ -340,21 +330,21 @@ const BRIGHT = { gain: 1.5, pan: -.5, spread: .4, filter: { frequency: 1234 }, l
 const bright = (service: LocalProjectService) => { assert.ok(service.setSynthParams(1, BRIGHT).ok); };
 const wasBright = (changes: object = {}) => merge(sound(BRIGHT), changes);
 type LaneOutcome = { answer: unknown; eventData?: unknown; silent?: boolean } | { status: 400 | 404 | 409; error: string };
-const laneCase = (op: Case['op'], resource: string, event: string, run: (service: LocalProjectService, synthId: number, body: any) => Applied<unknown>) =>
+const laneCase = (op: Case['op'], event: string, run: (service: LocalProjectService, synthId: number, body: any) => Applied<unknown>) =>
   (title: string, body: Record<string, unknown>, result: LaneOutcome, arrange?: Case['arrange'], synthId = 1): Case => ({
-    op, title, arrange, path: `/synth/${synthId}/${resource}`, body, run: service => run(service, synthId, body), ...('answer' in result ? { event, ...result } : result),
+    op, title, arrange, run: service => run(service, synthId, body), ...('answer' in result ? { event, ...result } : result),
   });
-const params = laneCase('synth.params', 'parameters', 'synthUpdate', (service, synthId, body) => service.setSynthParams(synthId, body));
+const params = laneCase('synth.params', 'synthUpdate', (service, synthId, body) => service.setSynthParams(synthId, body));
 // The answer is the sound alone; the event names the lane.
 const sounds = (answer: unknown) => ({ answer, eventData: { synthId: 1, parameters: answer } });
-const model = laneCase('synth.model', 'model', 'synthModelUpdate', (service, synthId, body) => service.setSynthModel(synthId, { modelId: body.modelId, modelParams: body.modelParams }));
+const model = laneCase('synth.model', 'synthModelUpdate', (service, synthId, body) => service.setSynthModel(synthId, { modelId: body.modelId, modelParams: body.modelParams }));
 const MACROS = { macro1: .5, macro2: .5, macro3: .5, macro4: .5 };
 const modelled = (modelId: string, macros: object = {}) => ({ answer: { synthId: 1, modelId, modelParams: { ...MACROS, ...macros } } });
 const juno = (service: LocalProjectService) => { assert.ok(service.setSynthModel(1, { modelId: 'juno-106', modelParams: { macro1: .9 } }).ok); };
-const mix = laneCase('synth.mix', 'mix', 'synthMix', (service, synthId, body) => service.setSynthMix(synthId, { muted: body.muted, solo: body.solo }));
+const mix = laneCase('synth.mix', 'synthMix', (service, synthId, body) => service.setSynthMix(synthId, { muted: body.muted, solo: body.solo }));
 const mixed = (muted: boolean, solo: boolean) => ({ answer: { synthId: 1, muted, solo } });
 const soloed = (service: LocalProjectService) => { assert.ok(service.setSynthMix(1, { solo: true }).ok); };
-const prefs = laneCase('synth.prefs', 'preferences', '', (service, synthId, body) => service.setSynthPrefs(synthId, { octaveShift: body.octaveShift, keyboardMode: body.keyboardMode }));
+const prefs = laneCase('synth.prefs', '', (service, synthId, body) => service.setSynthPrefs(synthId, { octaveShift: body.octaveShift, keyboardMode: body.keyboardMode }));
 // A lane as the store answers it: the whole of it, with its pattern's id as its place among the ids.
 const lane = (rest: object = {}) => {
   const pattern = { id: 'id-1', name: 'Synth 1', tempo: 120, steps: Array.from({ length: 16 }, () => ({ active: false, velocity: .7 })) };
@@ -362,7 +352,7 @@ const lane = (rest: object = {}) => {
 };
 const lowPiano = (service: LocalProjectService) => { assert.ok(service.setSynthPrefs(1, { octaveShift: -9, keyboardMode: 'piano-roll' }).ok); };
 const tempoCase = (title: string, tempo: unknown, result: LaneOutcome, arrange?: Case['arrange']): Case => ({
-  op: 'tempo.set', title, arrange, path: '/tempo', body: tempo === undefined ? {} : { tempo }, run: service => service.setTempo(wrong(tempo)), ...('answer' in result ? { event: 'tempoChange', ...result } : result),
+  op: 'tempo.set', title, arrange, run: service => service.setTempo(wrong(tempo)), ...('answer' in result ? { event: 'tempoChange', ...result } : result),
   check: project => {
     const expected = 'answer' in result ? (result.answer as { tempo: number }).tempo : 120;
     assert.equal(project.tempo, expected);
@@ -371,10 +361,9 @@ const tempoCase = (title: string, tempo: unknown, result: LaneOutcome, arrange?:
   },
 });
 // Two lanes, the first with a second pattern, so a tempo has more than one pattern to reach.
-const twoLanes = async (service: LocalProjectService) => {
-  const post = async (path: string, body: object) => assert.equal((await service.request(path, { method: 'POST', body: JSON.stringify(body) })).status, 200);
-  await post('/synth/create', { synthId: 2 });
-  await post('/synth/1/patterns', { name: 'Second', steps: [{ active: true, note: 'C4', velocity: .8 }] });
+const twoLanes = (service: LocalProjectService) => {
+  assert.ok(service.createLane(2).ok);
+  assert.ok(service.writePattern(1, crypto.randomUUID(), { name: 'Second', steps: [{ active: true, note: 'C4', velocity: .8 }] }).ok);
 };
 
 const laneCases: Case[] = [
@@ -433,18 +422,15 @@ const BLANK = (count = 16) => Array.from({ length: count }, () => ({ active: fal
 const stepsWith = (changes: Record<number, object>, count = 16) => BLANK(count).map((step, index) => ({ ...step, ...changes[index] }));
 const kept1 = (rest: object = {}) => ({ id: 'id-1', name: 'Synth 1', tempo: 120, steps: BLANK(), ...rest });
 const SHELF = 'Invalid sequence pattern';
-type Target = 'existing' | 'first' | 'new' | 'body' | string;
+type Target = 'existing' | 'first' | 'new' | string;
 const patternCase = (title: string, patch: unknown, result: LaneOutcome, target: Target = 'existing', arrange?: Case['arrange'], synthId = 1, extra: Partial<Case> = {}): Case => {
   const open = (service: LocalProjectService) => service.snapshot().synths[0];
-  const id = (ctx: any) => (target === 'existing' ? ctx.id : target === 'first' ? ctx.first : target === 'new' || target === 'body' ? '' : target);
-  const bodyId = (patch as { id?: string } | null)?.id;
+  const id = (ctx: any) => (target === 'existing' ? ctx.id : target === 'first' ? ctx.first : target === 'new' ? '' : target);
   const answer = 'answer' in result ? JSON.parse(JSON.stringify(result.answer)) : undefined;
   return {
     op: 'pattern.write', title,
     arrange: async service => { await arrange?.(service); return { id: open(service).pattern.id, first: open(service).patterns[0].id }; },
-    path: ctx => `/synth/${synthId}/patterns${id(ctx) ? `/${id(ctx)}` : ''}`,
-    body: patch,
-    run: (service, ctx) => service.writePattern(synthId, id(ctx) || (target === 'body' ? bodyId : undefined) || crypto.randomUUID(), wrong(patch)),
+    run: (service, ctx) => service.writePattern(synthId, id(ctx) || crypto.randomUUID(), wrong(patch)),
     ...('answer' in result
       ? { event: target === 'existing' || target === 'first' ? 'patternUpdated' : 'patternCreated', eventData: { synthId, pattern: answer }, ...result, answer }
       : result),
@@ -461,9 +447,8 @@ const field = (title: string, change: object, expected: object) =>
 const patternCases: Case[] = [
   patternCase('a new pattern is made from the steps sent, filled out to a bar', { name: 'Second', steps: [noted] }, { answer: kept1({ name: 'Second', steps: stepsWith({ 0: noted }) }) }, 'new'),
   patternCase('a new pattern with no steps takes the open one\'s, and a missing name is "Recovered pattern"', {}, { answer: kept1({ name: 'Recovered pattern', steps: stepsWith({ 0: noted }) }) }, 'new', oneNote),
-  patternCase('a new pattern can be given its id in the path', { steps: [noted] }, { answer: kept1({ id: 'mine', name: 'Recovered pattern', steps: stepsWith({ 0: noted }) }) }, 'mine'),
-  patternCase('an id in the body is used when the path has none', { id: 'theirs', steps: [noted] }, { answer: kept1({ id: 'theirs', name: 'Recovered pattern', steps: stepsWith({ 0: noted }) }) }, 'body'),
-  patternCase('the path\'s id wins over the body\'s', { id: 'theirs', steps: [noted] }, { answer: kept1({ steps: stepsWith({ 0: noted }) }) }),
+  patternCase('a new pattern can be given its own id', { steps: [noted] }, { answer: kept1({ id: 'mine', name: 'Recovered pattern', steps: stepsWith({ 0: noted }) }) }, 'mine'),
+  patternCase('an id inside the patch does not rename the pattern', { id: 'theirs', steps: [noted] }, { answer: kept1({ steps: stepsWith({ 0: noted }) }) }),
   patternCase('an id of 300 characters is cut to 200', { steps: [noted] }, { answer: kept1({ id: 'x'.repeat(200), name: 'Recovered pattern', steps: stepsWith({ 0: noted }) }) }, 'x'.repeat(300)),
   patternCase('an existing pattern is changed in place, keeping its name', { steps: [noted] }, written1(noted)),
   patternCase('a write of nothing keeps the pattern as it was, and still emits and saves', {}, { answer: kept1({ steps: stepsWith({ 0: noted }) }) }, 'existing', oneNote),
@@ -511,9 +496,9 @@ const patternCases: Case[] = [
     patternCase(`steps that are ${what} are refused`, { steps }, { status: 400, error: SHELF })),
   ...([['null', null], ['undefined', undefined], ['not a number at all', Number.NaN], ['infinity', Number.POSITIVE_INFINITY], ['zero', 0], ['empty text', ''], ['false', false]] as const).map(([what, steps]) =>
     patternCase(`steps that are ${what} are the ones the pattern had`, { steps, name: 'Kept' }, { answer: kept1({ name: 'Kept', steps: stepsWith({ 0: noted }) }) }, 'existing', oneNote)),
-  patternCase('a body id that is a number is no id: refused', { id: 5, steps: [noted] }, { status: 400, error: SHELF }, 'body'),
+  patternCase('a pattern id that is a number is no id: refused', { steps: [noted] }, { status: 400, error: SHELF }, 'new', undefined, 1, { run: service => service.writePattern(1, wrong(5), { steps: [noted] }) }),
   patternCase('a pattern for a lane that does not exist is refused', { steps: [noted] }, { status: 404, error: NO_SYNTH }, 'existing', undefined, 3),
-  ...notObjects.map(([what, patch]) => patternCase(`a pattern that is ${what} is refused as a route's body was`, patch, { status: 400, error: 'Invalid local operation data' })),
+  ...notObjects.map(([what, patch]) => patternCase(`a pattern that is ${what} is refused`, patch, { status: 400, error: 'Invalid local operation data' })),
   patternCase('a pattern that is a list is refused', [noted], { status: 400, error: 'Invalid local operation data' }),
   patternCase('a pattern that is not an object is refused before a lane is looked for', 'lots', { status: 400, error: 'Invalid local operation data' }, 'existing', undefined, 3),
 ];
@@ -525,12 +510,12 @@ const madeLane = (synthId: number, rest: object = {}) => {
 };
 const laneIds = (...expected: number[]) => (project: any) => assert.deepEqual(project.synths.map((entry: any) => entry.synthId), expected);
 const makeLane = (title: string, sent: unknown, result: ReturnType<typeof madeLane> | { status: 400 | 404 | 409; error: string }, arrange?: Case['arrange'], check?: Case['check']): Case => ({
-  op: 'synth.create', title, arrange, path: '/synth/create', body: sent === undefined ? {} : { synthId: sent }, run: service => service.createLane(wrong(sent)),
+  op: 'synth.create', title, arrange, run: service => service.createLane(wrong(sent)),
   ...('answer' in result ? { event: 'synthCreated', ...result } : result), check,
 });
 const withLanes = async (service: LocalProjectService) => { assert.ok(service.createLane(2).ok); assert.ok(service.createLane(3).ok); };
 const removeCase = (title: string, synthId: number, result: { answer: unknown } | { status: 400 | 404 | 409; error: string }, arrange?: Case['arrange'], check?: Case['check']): Case => ({
-  op: 'synth.remove', title, arrange, method: 'DELETE', path: `/synth/${synthId}`, body: {}, run: service => service.removeLane(synthId),
+  op: 'synth.remove', title, arrange, run: service => service.removeLane(synthId),
   ...('answer' in result ? { event: 'synthRemoved', ...result } : result), check,
 });
 const twoPatterns = (service: LocalProjectService) => {
@@ -540,7 +525,7 @@ const twoPatterns = (service: LocalProjectService) => {
 const openPattern = (id: string) => (project: any) => assert.equal(project.synths[0].pattern.id, id);
 // Play and stop do not save and send the lane's number. `patternId` is read by both.
 const transportCase = (verb: 'play' | 'stop', title: string, body: { synthId: number; patternId?: string }, result: { answer: unknown; eventData?: unknown; silent?: boolean }, arrange?: Case['arrange'], check?: Case['check']): Case => ({
-  op: verb === 'play' ? 'transport.play' : 'transport.stop', title, arrange, path: `/sequencer/${verb}`, body,
+  op: verb === 'play' ? 'transport.play' : 'transport.stop', title, arrange,
   run: service => service.apply(verb === 'play' ? { type: 'transport.play', synthId: body.synthId, patternId: body.patternId } : { type: 'transport.stop', synthId: body.synthId, patternId: body.patternId }),
   event: verb === 'play' ? 'sequencerPlay' : 'sequencerStop', eventData: { synthId: body.synthId }, ...result, check,
 });
@@ -598,22 +583,22 @@ const sceneAnswer = (project: any) => ({
   synths: project.synths.map((lane: any) => ({ synthId: lane.synthId, pattern: lane.pattern, muted: lane.muted, solo: lane.solo })),
   drumState: project.drumState, guests: project.guests ?? [],
 });
-const sceneChange = (op: Case['op'], path: string, run: (service: LocalProjectService, body: any) => Applied<unknown>) =>
+const sceneChange = (op: Case['op'], run: (service: LocalProjectService, body: any) => Applied<unknown>) =>
   (title: string, body: unknown, arrange?: Case['arrange'], check?: Case['check']): Case =>
-    ({ op, title, arrange, path, body, run: (service, ctx) => run(service, resolve(body, ctx)), event: 'sceneChanged', answerFrom: sceneAnswer, check });
-const sceneRefused = (op: Case['op'], path: string, run: (service: LocalProjectService, body: any) => Applied<unknown>) =>
+    ({ op, title, arrange, run: (service, ctx) => run(service, resolve(body, ctx)), event: 'sceneChanged', answerFrom: sceneAnswer, check });
+const sceneRefused = (op: Case['op'], run: (service: LocalProjectService, body: any) => Applied<unknown>) =>
   (title: string, body: unknown, status: 400 | 404 | 409, error: string, arrange?: Case['arrange']): Case =>
-    ({ op, title, arrange, path, body, run: (service, ctx) => run(service, resolve(body, ctx)), status, error });
-const select = sceneChange('scene.select', '/scenes/select', (service, body) => service.selectScene(body.sceneId));
-const selectRefused = sceneRefused('scene.select', '/scenes/select', (service, body) => service.selectScene(body.sceneId));
-const create = sceneChange('scene.create', '/scenes/create', (service, body) => service.createScene(body));
-const createRefused = sceneRefused('scene.create', '/scenes/create', (service, body) => service.createScene(body));
-const rename = sceneChange('scene.rename', '/scenes/rename', (service, body) => service.renameScene(body.sceneId, body.name));
-const renameRefused = sceneRefused('scene.rename', '/scenes/rename', (service, body) => service.renameScene(body.sceneId, body.name));
-const remove = sceneChange('scene.delete', '/scenes/delete', (service, body) => service.deleteScene(body.sceneId));
-const removeRefused = sceneRefused('scene.delete', '/scenes/delete', (service, body) => service.deleteScene(body.sceneId));
-const replace = sceneChange('scene.replace', '/scenes/replace', (service, body) => service.replaceScenes(body));
-const song = sceneChange('song.set', '/song', (service, body) => service.setSong(body));
+    ({ op, title, arrange, run: (service, ctx) => run(service, resolve(body, ctx)), status, error });
+const select = sceneChange('scene.select', (service, body) => service.selectScene(body.sceneId));
+const selectRefused = sceneRefused('scene.select', (service, body) => service.selectScene(body.sceneId));
+const create = sceneChange('scene.create', (service, body) => service.createScene(body));
+const createRefused = sceneRefused('scene.create', (service, body) => service.createScene(body));
+const rename = sceneChange('scene.rename', (service, body) => service.renameScene(body.sceneId, body.name));
+const renameRefused = sceneRefused('scene.rename', (service, body) => service.renameScene(body.sceneId, body.name));
+const remove = sceneChange('scene.delete', (service, body) => service.deleteScene(body.sceneId));
+const removeRefused = sceneRefused('scene.delete', (service, body) => service.deleteScene(body.sceneId));
+const replace = sceneChange('scene.replace', (service, body) => service.replaceScenes(body));
+const song = sceneChange('song.set', (service, body) => service.setSong(body));
 const unchangedScenes = (project: any) => { assert.equal(project.scenes.length, 1); assert.equal(project.drumState.kick.steps[3], true); };
 const names = (project: any) => project.scenes.map((scene: any) => scene.name);
 
@@ -822,11 +807,11 @@ const cases: Case[] = [
   guestChange('a guest that does not exist cannot be changed', { muted: true }, { status: 404, error: 'Guest not found' }, service => { addGuest(service); return NO_GUEST; }),
 
   guestRemove('removing a guest also takes its settings and level out of every scene', { answer: { guests: [kept(1, { url: 'https://other.example/', name: 'other.example', state: { b: 2 } })] } },
-    async service => {
+    service => {
       const keep = addGuest(service, 'https://other.example/'), id = addGuest(service);
       service.changeGuest(id, { state: { a: 1 } });
       service.changeGuest(keep, { state: { b: 2 } });
-      await service.request('/scenes/create', { method: 'POST', body: '{}' });
+      service.createScene();
       assert.deepEqual(service.getScenes().scenes.map(scene => [Object.keys(scene.guests!).sort(), Object.keys(scene.guestMix!).sort()]), Array(2).fill([[id, keep].sort(), [id, keep].sort()]));
       return { id, keep };
     },
@@ -838,7 +823,7 @@ const cases: Case[] = [
       }
     }),
   guestRemove('removing the only guest leaves the scenes with no guest settings at all', { answer: { guests: [] } },
-    async service => { const id = dressed(service); await service.request('/scenes/create', { method: 'POST', body: '{}' }); return id; },
+    service => { const id = dressed(service); service.createScene(); return id; },
     project => { for (const scene of project.scenes) assert.deepEqual(Object.keys(scene).sort(), ['drums', 'id', 'lanes', 'mutes', 'name']); }),
   guestRemove('a guest that does not exist cannot be removed', { status: 404, error: 'Guest not found' }, service => { addGuest(service); return NO_GUEST; }),
 
@@ -850,47 +835,30 @@ const cases: Case[] = [
   ...sceneCases,
 ];
 
-// What is in storage, or null when nothing has been written yet.
-const written = () => { const text = storage.get(STORAGE_KEY); return text === undefined ? null : JSON.parse(text); };
-
 for (const entry of cases) {
-  test(`${entry.op} | ${entry.title}: the route and the typed helper do the same`, async () => {
-    const one = setup();
-    const routedCtx = await entry.arrange?.(one);
-    one.flush();
-    const routed = await call(one, entry.method ?? 'POST', typeof entry.path === 'string' ? entry.path : entry.path(routedCtx), resolve(entry.body, routedCtx));
-    const routedProject = one.snapshot(), routedStored = written();
+  test(`${entry.op} | ${entry.title}`, async () => {
+    const service = setup();
+    const ctx = await entry.arrange?.(service);
+    service.flush();
+    const before = service.snapshot();
+    const result = applied(service, store => entry.run(store, ctx));
+    const project = service.snapshot();
 
-    const two = setup();
-    const typedCtx = await entry.arrange?.(two);
-    two.flush();
-    const before = two.snapshot();
-    const typed = applied(two, service => entry.run(service, typedCtx));
-    const typedProject = two.snapshot(), typedStored = written();
-
-    assert.notEqual(typed.data, undefined, 'an operation always answers with something');
+    assert.notEqual(result.data, undefined, 'an operation always answers with something');
     if (entry.error !== undefined) {
-      assert.equal(typed.status, entry.status);
-      assert.deepEqual(typed.data, { error: entry.error });
-      assert.deepEqual(typed.events, [], 'a refused operation emits nothing');
-      assert.equal(typed.saved, false, 'and saves nothing');
-      assert.deepEqual(typedProject, before, 'and has changed nothing');
+      assert.equal(result.status, entry.status);
+      assert.deepEqual(result.data, { error: entry.error });
+      assert.deepEqual(result.events, [], 'a refused operation emits nothing');
+      assert.equal(result.saved, false, 'and saves nothing');
+      assert.deepEqual(project, before, 'and has changed nothing');
     } else {
-      assert.equal(typed.status, 200);
-      const answer = entry.answerFrom ? comparable(entry.answerFrom(typedProject)) : entry.answer;
-      assert.deepEqual(comparable(typed.data), answer);
-      assert.deepEqual(comparable(typed.events), entry.silent ? [] : [{ type: entry.event, data: 'eventData' in entry ? entry.eventData : answer }]);
-      assert.equal(typed.saved, OP_META[entry.op].save, 'an accepted operation saves when OP_META says so');
+      assert.equal(result.status, 200);
+      const answer = entry.answerFrom ? comparable(entry.answerFrom(project)) : entry.answer;
+      assert.deepEqual(comparable(result.data), answer);
+      assert.deepEqual(comparable(result.events), entry.silent ? [] : [{ type: entry.event, data: 'eventData' in entry ? entry.eventData : answer }]);
+      assert.equal(result.saved, OP_META[entry.op].save, 'an accepted operation saves when OP_META says so');
     }
-    entry.check?.(typedProject);
-
-    assert.equal(typed.status, routed.status);
-    assert.deepEqual(comparable(typed.data), comparable(routed.data));
-    assert.deepEqual(comparable(typed.events), comparable(routed.events));
-    assert.equal(typed.saved, routed.saved);
-    assert.equal(typedProject.revision, routedProject.revision);
-    assert.deepEqual(comparable(typedProject), comparable(routedProject));
-    assert.deepEqual(comparable(typedStored), comparable(routedStored), 'and the same project was written');
+    entry.check?.(project);
   });
 }
 
@@ -1031,9 +999,8 @@ test('guest.add refuses an id that is not one, and one that is taken', () => {
   service.flush();
 });
 
-// A route's body was always an object: anything else was "Invalid local operation data" before
-// the route was reached. The typed way answers the same for a change that is not an object.
-test('a change to a guest that is not an object is refused as a route\'s body was', async () => {
+// A change must be an object: anything else is "Invalid local operation data", before the guest is looked for.
+test('a change to a guest that is not an object is refused', () => {
   const service = setup();
   const id = dressed(service);
   service.flush();
@@ -1044,14 +1011,10 @@ test('a change to a guest that is not an object is refused as a route\'s body wa
     assert.deepEqual(applied(service, target => target.changeGuest(id, wrong(patch))), { status: 400, data: { error: 'Invalid local operation data' }, events: [], saved: false });
   }
   assert.deepEqual(service.changeGuest(NO_GUEST, wrong(null)), { ok: false, status: 400, error: 'Invalid local operation data' }, 'checked before the guest is looked for, as a body was');
-  for (const raw of ['null', '[]', '7', '"muted"']) {
-    const routed = await call(service, 'PUT', `/guests/${id}`, undefined, raw);
-    assert.deepEqual([routed.status, routed.data, routed.events, routed.saved], [400, { error: 'Invalid local operation data' }, [], false]);
-  }
   assert.deepEqual(service.snapshot(), before);
 });
 
-test('a change to the drum sends or the effects that is not an object is refused as a route\'s body was', async () => {
+test('a change to the drum sends or the effects that is not an object is refused', () => {
   const service = setup();
   fxSet(service);
   shaped(service);
@@ -1064,18 +1027,11 @@ test('a change to the drum sends or the effects that is not an object is refused
     assert.deepEqual(applied(service, target => target.setDrumFx(wrong(patch))), refused);
     assert.deepEqual(applied(service, target => target.setEffectsLoop(wrong(patch))), refused);
   }
-  for (const path of ['/drum/fx', '/effects-loop']) {
-    for (const raw of ['null', '[]', '7', '"sends"']) {
-      const routed = await call(service, 'POST', path, undefined, raw);
-      assert.deepEqual([routed.status, routed.data, routed.events, routed.saved], [400, { error: 'Invalid local operation data' }, [], false]);
-    }
-  }
   assert.deepEqual(service.snapshot(), before);
 });
 
-// A route found the lane from the digits in its path. An operation can name it with anything,
-// and only the lane's own number finds it.
-test('a lane named by anything but its number is not found, and a sound that is not an object is refused first', async () => {
+// An operation can name a lane with anything, and only the lane's own number finds it.
+test('a lane named by anything but its number is not found, and a sound that is not an object is refused first', () => {
   const service = setup();
   bright(service);
   service.flush();
@@ -1093,12 +1049,6 @@ test('a lane named by anything but its number is not found, and a sound that is 
   for (const patch of [null, undefined, [], [{ gain: 1 }], 'gain', 7, Number.NaN, loop, () => ({ gain: 1 })]) {
     assert.deepEqual(applied(service, target => target.setSynthParams(1, wrong(patch))), refused);
     assert.deepEqual(applied(service, target => target.setSynthParams(3, wrong(patch))), refused, 'checked before the lane is looked for, as a body was');
-  }
-  for (const path of ['/synth/1/parameters', '/synth/3/parameters']) {
-    for (const raw of ['null', '[]', '7', '"gain"']) {
-      const routed = await call(service, 'POST', path, undefined, raw);
-      assert.deepEqual([routed.status, routed.data, routed.events, routed.saved], [400, { error: 'Invalid local operation data' }, [], false]);
-    }
   }
   assert.deepEqual(service.snapshot(), before);
 });
@@ -1228,54 +1178,40 @@ test('each drum edit is delivered whole before the next begins, with every earli
   service.flush();
 });
 
-// storeRoutes.test.ts pins that a step sent to an instrument named after a property every object
-// has is not refused but throws. The typed way is left doing the same, for all six edits to one
-// lane, until the last pull request of the plan puts it right.
-test('an instrument named after a built-in property does through the helpers what it does through the routes (looks wrong)', async () => {
+// An instrument named after a property every object has used to find that property: the four
+// edits that read the lane threw (a TypeError, and a SyntaxError for the settings), and the mute
+// and the sample were written onto the property itself, `__proto__` being the object every other
+// object inherits from, and answered as a change that changed no lane. Now each is an unknown
+// instrument, refused like any other, and nothing is touched.
+test('an instrument named after a built-in property is an unknown instrument, and nothing is written onto the property', () => {
+  const builtIns = ['constructor', 'toString', '__proto__'];
+  for (const name of builtIns) assert.ok(({} as Record<string, unknown>)[name], `the old lookup found ${name} on a plain object`);
+  const refused = { status: 404, data: { error: NO_LANE }, events: [], saved: false };
+  const edits: Array<[string, (service: LocalProjectService, name: string) => Applied<unknown>]> = [
+    ['drum.step', (service, name) => service.setDrumStep(wrong(name), 0, true)],
+    ['drum.stepVelocity', (service, name) => service.setDrumStepVelocity(wrong(name), 0, .5)],
+    ['drum.stepDetail', (service, name) => service.setDrumStepDetail(wrong(name), 0, { ratchet: 2 })],
+    ['drum.settings', (service, name) => service.setDrumSettings(wrong(name), { volume: 1 })],
+    ['drum.sample', (service, name) => service.setDrumSample(wrong(name), SAMPLE)],
+    ['drum.mix', (service, name) => service.setDrumMix(wrong(name), { muted: true })],
+  ];
   const service = setup();
   const before = service.snapshot();
-  for (const name of ['constructor', 'toString', '__proto__']) {
-    const post = (path: string, rest: object) => service.request(path, { method: 'POST', body: JSON.stringify({ instrument: name, ...rest }) });
-    assert.throws(() => service.setDrumStep(wrong(name), 0, true), TypeError);
-    assert.throws(() => service.setDrumStepVelocity(wrong(name), 0, .5), TypeError);
-    assert.throws(() => service.setDrumStepDetail(wrong(name), 0, { ratchet: 2 }), TypeError);
-    assert.throws(() => service.setDrumSettings(wrong(name), { volume: 1 }), SyntaxError);
-    await assert.rejects(post('/drum/step', { step: 0, active: true }), TypeError);
-    await assert.rejects(post('/drum/step-velocity', { step: 0, velocity: .5 }), TypeError);
-    await assert.rejects(post('/drum/step-detail', { step: 0, ratchet: 2 }), TypeError);
-    await assert.rejects(post('/drum/settings', { settings: { volume: 1 } }), SyntaxError);
+  for (const name of builtIns) {
+    for (const [op, edit] of edits) assert.deepEqual(applied(service, target => edit(target, name)), refused, `${op} ${name}`);
   }
   assert.deepEqual(service.snapshot(), before);
   assert.equal(service.flush(), true);
   assert.equal(storage.has(STORAGE_KEY), false, 'nothing was scheduled');
-
-  // A mute or a sample does not throw: it is written onto the built-in property itself and
-  // answered as a change that changed no lane. `__proto__` is left out here only because the
-  // property it finds is the one every object in the test run shares.
-  for (const name of ['constructor', 'toString']) {
-    const builtIn = ({} as Record<string, any>)[name];
-    try {
-      const typedMix = applied(setup(), target => target.setDrumMix(wrong(name), { muted: true }));
-      assert.equal(builtIn.muted, true);
-      delete builtIn.muted;
-      const routedMix = await call(setup(), 'POST', '/drum/mix', { instrument: name, muted: true });
-      assert.equal(builtIn.muted, true);
-      delete builtIn.muted;
-      const typedSample = applied(setup(), target => target.setDrumSample(wrong(name), SAMPLE));
-      assert.equal(builtIn.sampleId, SAMPLE);
-      delete builtIn.sampleId;
-      const routedSample = await call(setup(), 'POST', '/drum/sample', { instrument: name, sampleId: SAMPLE });
-      assert.equal(builtIn.sampleId, SAMPLE);
-      const unchanged = { status: 200, data: drums(), events: [{ type: 'drumFullState', data: drums() }], saved: true };
-      for (const result of [typedMix, routedMix, typedSample, routedSample]) assert.deepEqual(result, unchanged);
-    } finally {
-      delete builtIn.muted;
-      delete builtIn.sampleId;
-    }
+  const everyObject = Object.prototype as Record<string, any>;
+  for (const holder of [everyObject, ({} as Record<string, any>).constructor, ({} as Record<string, any>).toString]) {
+    assert.equal(holder.muted, undefined, 'no mute was written onto a built-in property');
+    assert.equal(holder.sampleId, undefined, 'and no sample');
   }
+  assert.equal(({} as Record<string, any>).muted, undefined, 'and every object is as it was');
 });
 
-test('before the service is initialized the typed way throws, with the message request() rejects with', () => {
+test('before the service is initialized the typed way throws', () => {
   const message = /Local project has not been initialized/;
   assert.throws(() => new LocalProjectService().apply({ type: 'drum.swing', swing: .1 }), message);
   assert.throws(() => new LocalProjectService().applyAll([{ type: 'drum.swing', swing: .1 }]), message);
@@ -1345,21 +1281,6 @@ test('pattern.write is saved, undoable and shared', () => {
   assert.deepEqual(OP_META['pattern.write'], { save: true, undoable: true, share: true });
 });
 
-// Every operation has a reducer now, so one is taken away for a moment to try the branch of
-// `apply` for a missing one. The last pull request of the plan deletes the branch and this test.
-test('an operation with no reducer throws, and changes nothing', () => {
-  const service = setup();
-  const before = service.snapshot();
-  const held = reducers['scene.rename'];
-  delete reducers['scene.rename'];
-  try {
-    assert.throws(() => service.apply({ type: 'scene.rename', sceneId: service.getScenes().currentSceneId, name: 'Verse' }), /No reducer for scene\.rename yet/);
-  } finally { reducers['scene.rename'] = held; }
-  assert.deepEqual(service.snapshot(), before);
-  assert.equal(service.flush(), true);
-  assert.equal(storage.has(STORAGE_KEY), false);
-});
-
 test('applyAll applies in order, each delivered before the next, and saves once', () => {
   const service = setup();
   const order: string[] = [];
@@ -1382,20 +1303,17 @@ test('applyAll applies in order, each delivered before the next, and saves once'
   assert.deepEqual(service.applyAll([]), []);
 });
 
-test('the read methods answer what their routes answer, as copies, without saving', async () => {
+test('the read methods answer as copies, without saving', () => {
   const service = setup();
-  await service.request('/drum/step', { method: 'POST', body: JSON.stringify({ instrument: 'kick', step: 3, active: true }) });
+  assert.ok(service.setDrumStep('kick', 3, true).ok);
   service.flush();
   let writes = 0;
   service.subscribeWrites(() => { writes++; });
-  const route = async (path: string) => (await service.request(path)).json();
 
-  assert.deepEqual(service.getTempo(), await route('/tempo'));
   assert.deepEqual(service.getTempo(), { tempo: 120 });
-  assert.deepEqual(service.getDrumKits(), await route('/drum/kits'));
   assert.equal(service.getDrumKits().defaultKitId, 'clean-analog');
+  assert.equal(service.getDrumKits().kits.length, DRUM_KITS.length);
   const scenes = service.getScenes();
-  assert.deepEqual(scenes, await route('/scenes'));
   assert.deepEqual(Object.keys(scenes).sort(), ['currentSceneId', 'scenes', 'song']);
   assert.equal(scenes.scenes[0].drums.kick.steps[3], true, 'the open scene is read from the live pattern');
 
@@ -1545,4 +1463,18 @@ test('the scheduler opens a scene with a plain call, and a scene change waits fo
     assert.match(source, new RegExp(`const ${handler} = useCallback\\(.*sceneChange\\(\\(\\) => localService\\.\\w+\\([^)]*\\)\\), \\[sceneChange\\]\\)`), handler);
   }
   for (const handler of ['handleSceneRename', 'handleSongChange']) assert.match(source, new RegExp(`${handler}[\\s\\S]*?, false\\)`), handler);
+});
+
+// Undo puts a snapshot back with one applyAll, in the order its twelve calls were made in, with
+// nothing awaited between them. The studio is not run here, so this reads its source.
+test('undo puts a snapshot back with one applyAll, and nothing in it waits', () => {
+  const source = readFileSync(new URL('../src/studio/useStudio.tsx', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+  const from = source.indexOf('const applySnapshot = useCallback(');
+  const body = source.slice(from, source.indexOf('const stepHistory = useCallback(', from));
+  assert.equal(body.includes('async'), false, 'applySnapshot is not async');
+  assert.equal(body.includes('await'), false);
+  assert.equal(body.includes('Promise'), false);
+  assert.equal((body.match(/localService\.applyAll\(\[/g) ?? []).length, 1);
+  const order = [...body.matchAll(/\{ type: '([\w.]+)'/g)].map(match => match[1]);
+  assert.deepEqual(order, ['drum.masterVolume', 'drum.swing', 'drum.kit', 'drum.fx', 'effects.set', 'pattern.write', 'synth.params', 'synth.model', 'drum.state', 'tempo.set', 'synth.mix', 'synth.prefs']);
 });

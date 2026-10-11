@@ -11,7 +11,7 @@ slow down every later change.
 
 1. **Replace the REST-shaped store with a typed one, and split `useStudio.tsx`.** (L)
    `localRequest('/synth/1/parameters', { method: 'POST', body: JSON.stringify(...) })`
-   is a leftover from the server version: every edit is serialized to a string,
+   (now deleted) was a leftover from the server version: every edit is serialized to a string,
    routed by regex, parsed, applied, then echoed back as an event that
    `useStudio.tsx` applies a second time on top of its own optimistic update.
    Replace it with a store exposing typed methods
@@ -22,7 +22,7 @@ slow down every later change.
    all wait on it.
 
    The plan is `docs/TYPED_STORE_PLAN.md`: eight pull requests, each leaving
-   the app working. Done: the first seven. An edit is now a typed operation
+   the app working. Done: all eight. An edit is now a typed operation
    handed to one synchronous `apply`, with a reducer for each, and anything
    that wants to record edits can listen for them. Drum swing and drum master
    volume go that way, and `useStudio` applies each once, from the store's
@@ -39,8 +39,13 @@ slow down every later change.
    length, MIDI import and undo), applied once from the store's event.
    Lanes coming and going, play and stop go that way too, and so do the
    scenes and the song, which leaves `useStudio` with no route call at all.
-   Still open: taking `request` away, and after that splitting `useStudio.tsx`,
-   which the plan describes but does not schedule.
+   The last pull request deleted `request`; undo puts a snapshot back with one
+   `applyAll`; and an instrument named after a built-in property is refused
+   like any unknown one. Still open: splitting `useStudio.tsx` (2,190 lines),
+   which the plan describes but does not schedule; saving when nothing changed,
+   which is the owner's to decide; the whole drum state still sent for one step;
+   and the list of things that look wrong at the end of the plan's account of
+   pull request 8.
 
 2. **Make undo a store feature.** (M, after 1)
    Undo snapshots are assembled by hand, and each handler must remember to
@@ -393,7 +398,7 @@ for new accounts.
    it can go on alongside everything else.
 2. Done: the four small ones (CI housekeeping, typed worklet messages, synth
    presets to IndexedDB, and the walkthrough from Help).
-3. **The typed store** (improvements 1), then **undo in the store**
+3. Done: **the typed store** (improvements 1). Next, **undo in the store**
    (improvements 2). Large and with nothing to show for it, but automation,
    collaborative sessions and most new features get cheaper and safer after.
 4. Done: the playhead out of React state (improvements 3).

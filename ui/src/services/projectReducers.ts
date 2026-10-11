@@ -15,7 +15,7 @@ import type { Operation, OpResult, OpType, Outcome, Rejected } from './projectOp
 export interface ReducerContext { state: ProjectState; defaults: ProjectDefaults; origin: string | undefined }
 type Reducers = { [K in OpType]: (ctx: ReducerContext, op: Extract<Operation, { type: K }>) => Outcome<OpResult<K>> };
 
-// What `update(type, data)` was in the router: save, send the event, answer with the same data.
+// Save, send the event, answer with the same data.
 const update = <V>(type: string, data: V): Outcome<V> => ({ ok: true, value: data, save: true, event: { type, data } });
 // What `respond({ error }, status)` was. A reducer refuses before it changes anything.
 const refuse = (status: Rejected['status'], error: string): Rejected => ({ ok: false, status, error });
@@ -25,7 +25,7 @@ const BAD_ADDRESS = 'That is not an address a guest instrument can be loaded fro
 
 // An object in an operation, as a route's body used to arrive: after a trip through JSON, which
 // leaves out what is undefined, turns NaN and infinity into null, and hands the reducer a copy
-// that is nobody else's. Null for anything that is not an object, which `request` answers with
+// that is nobody else's. Null for anything that is not an object, which is refused with
 // "Invalid local operation data".
 const sent = (value: unknown): Record<string, any> | null => {
   try {
@@ -37,18 +37,16 @@ const sent = (value: unknown): Record<string, any> | null => {
 // what JSON cannot carry is undefined.
 const sentValue = (value: unknown): unknown => sent({ value })?.value;
 
-// The router found the lane from a number in the path; an operation can name anything.
+// Only a lane's own number finds it; an operation can name anything.
 const laneOf = (state: ProjectState, synthId: unknown) => state.synths.find(s => s.synthId === synthId);
 
 type DrumLane = DrumState[keyof DrumState];
-// The six edits to one drum lane, as the router made them: find the lane, change it, put the
-// whole drum state through the checks, and send all of it.
-// An instrument named after a property every object has (`constructor`, `toString`,
-// `__proto__`) finds that property instead of a lane, as it did in the router: a step edit or a
-// change of settings then throws, and a sample or a mute is written onto the property itself.
-// storeRoutes.test.ts pins the throw; the last pull request of the plan is where it is put right.
+// The six edits to one drum lane: find the lane, change it, put the whole drum state through the
+// checks, and send all of it. Only a lane the drum state has of its own is found: an instrument
+// named after a property every object has (`constructor`, `toString`, `__proto__`) used to find
+// that property, which a step edit then threw on and a mute or a sample was written onto.
 const drumLaneEdit = ({ state, defaults }: ReducerContext, instrument: unknown, edit: (track: DrumLane) => Rejected | void): Outcome<{ drumState: DrumState }> => {
-  const track = state.drumState[instrument as keyof DrumState];
+  const track = Object.prototype.hasOwnProperty.call(state.drumState, instrument as string) ? state.drumState[instrument as keyof DrumState] : undefined;
   if (!track) return refuse(404, 'Unknown local operation');
   const refused = edit(track);
   if (refused) return refused;
@@ -177,8 +175,8 @@ export const sceneMessage = (state: ProjectState) => {
 };
 const sceneChanged = (state: ProjectState) => update('sceneChanged', sceneMessage(state));
 
-// Partial until every route has moved; `apply` refuses an operation that has no reducer yet.
-export const reducers: Partial<Reducers> = {
+// One reducer for every operation: the compiler fails if one is missing.
+export const reducers: Reducers = {
   'drum.bars': ({ state, defaults }, op) => {
     const bars = BAR_CHOICES.find(choice => choice === op.bars);
     if (!bars) return refuse(400, 'A drum pattern is 1, 2, 4 or 8 bars long');

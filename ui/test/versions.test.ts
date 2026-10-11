@@ -35,7 +35,7 @@ function browser(library: ProjectLibrary = createMemoryLibrary()) {
   return { load, library };
 }
 const tempo = async (service: LocalProjectService, bpm: number) => {
-  await service.request('/tempo', { method: 'POST', body: JSON.stringify({ tempo: bpm }) });
+  service.setTempo(bpm);
   service.flush();
   // Keeping a version is asynchronous; let it finish.
   await new Promise(resolve => setTimeout(resolve, 5));
@@ -71,11 +71,11 @@ test('an earlier version can be restored, and restoring can be taken back', asyn
   service.versionIntervalMs = 0;
   await service.renameProject(service.snapshot().projectId, 'Night Drive');
   await tempo(service, 90);
-  await service.request('/drum/step', { method: 'POST', body: JSON.stringify({ instrument: 'kick', step: 0, active: true }) });
+  service.setDrumStep('kick', 0, true);
   service.flush();
   await new Promise(resolve => setTimeout(resolve, 5));
   await tempo(service, 150);
-  await service.request('/drum/step', { method: 'POST', body: JSON.stringify({ instrument: 'kick', step: 0, active: false }) });
+  service.setDrumStep('kick', 0, false);
   service.flush();
   await new Promise(resolve => setTimeout(resolve, 5));
 

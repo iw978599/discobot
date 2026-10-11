@@ -30,31 +30,30 @@ async function setup() {
     },
   });
   await service.openLibrary(createMemoryLibrary());
-  const post = (path: string, body: unknown, method = 'POST') => service.request(path, { method, body: JSON.stringify(body) });
-  return { service, post };
+  return { service };
 }
 
 test('each scene keeps its own mutes and solos for the synth lanes and the drums', async () => {
-  const { service, post } = await setup();
-  await post('/synth/create', { synthId: 2 });
+  const { service } = await setup();
+  service.createLane(2);
   const lanes = () => Object.fromEntries(service.snapshot().synths.map(synth => [synth.synthId, [synth.muted, synth.solo]]));
   const verse = service.snapshot().currentSceneId;
 
-  await post('/synth/2/mix', { muted: true });
-  await post('/drum/mix', { instrument: 'kick', muted: true });
-  await post('/scenes/create', { name: 'Chorus' });
+  service.setSynthMix(2, { muted: true });
+  service.setDrumMix('kick', { muted: true });
+  service.createScene({ name: 'Chorus' });
   const chorus = service.snapshot().currentSceneId;
   assert.deepEqual(lanes(), { 1: [false, false], 2: [true, false] }, 'a new scene starts as a copy, mutes included');
 
-  await post('/synth/2/mix', { muted: false });
-  await post('/synth/1/mix', { solo: true });
-  await post('/drum/mix', { instrument: 'kick', muted: false });
-  await post('/drum/mix', { instrument: 'snare', solo: true });
+  service.setSynthMix(2, { muted: false });
+  service.setSynthMix(1, { solo: true });
+  service.setDrumMix('kick', { muted: false });
+  service.setDrumMix('snare', { solo: true });
 
-  await post('/scenes/select', { sceneId: verse });
+  service.selectScene(verse);
   assert.deepEqual(lanes(), { 1: [false, false], 2: [true, false] });
   assert.deepEqual([service.snapshot().drumState.kick.muted, service.snapshot().drumState.snare.solo], [true, false]);
-  await post('/scenes/select', { sceneId: chorus });
+  service.selectScene(chorus);
   assert.deepEqual(lanes(), { 1: [false, true], 2: [false, false] });
   assert.deepEqual([service.snapshot().drumState.kick.muted, service.snapshot().drumState.snare.solo], [false, true]);
 
@@ -68,12 +67,12 @@ test('each scene keeps its own mutes and solos for the synth lanes and the drums
   delete file.project.scenes.find((scene: Scene) => scene.id === verse).mutes;
   assert.equal((await service.importProject(file)).ok, true);
   assert.deepEqual(lanes(), { 1: [false, true], 2: [false, false] }, 'the imported project opens on its last scene');
-  await post('/scenes/select', { sceneId: verse });
+  service.selectScene(verse);
   assert.deepEqual(lanes(), { 1: [false, true], 2: [false, false] }, 'nothing stored, so nothing changes');
-  await post('/synth/1/mix', { solo: false });
-  await post('/scenes/select', { sceneId: chorus });
+  service.setSynthMix(1, { solo: false });
+  service.selectScene(chorus);
   assert.deepEqual(lanes(), { 1: [false, true], 2: [false, false] }, 'and from then on it has its own');
-  await post('/scenes/select', { sceneId: verse });
+  service.selectScene(verse);
   assert.deepEqual(lanes(), { 1: [false, false], 2: [false, false] });
 });
 

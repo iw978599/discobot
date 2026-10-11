@@ -73,7 +73,7 @@ async function browser(remote: Awaited<ReturnType<typeof server>>, library: Proj
     service, sync, storage, library, use, run,
     signIn: async () => { token = await remote.signIn(); api = remote.api(token); await run(); },
     signOut: async () => { token = null; await run(); },
-    edit: async (path: string, body: unknown) => { use(); await service.request(path, { method: 'POST', body: JSON.stringify(body) }); service.flush(); },
+    edit: async (change: (service: LocalProjectService) => unknown) => { use(); change(service); service.flush(); },
     names: async () => { use(); return (await service.listProjects()).map(project => project.name).sort(); },
     idOf: async (name: string) => (await service.listProjects()).find(project => project.name === name)!.id,
   };
@@ -86,7 +86,7 @@ test('signing in uploads nothing until asked, then projects follow the account t
   const remote = await server();
   const laptop = await browser(remote);
   await laptop.service.renameProject(laptop.service.snapshot().projectId, 'Old song');
-  await laptop.edit('/tempo', { tempo: 97 });
+  await laptop.edit(s => s.setTempo(97));
 
   await laptop.signIn();
   assert.deepEqual(await accountNames(remote), [], 'projects that were here before signing in stay here');
@@ -94,7 +94,7 @@ test('signing in uploads nothing until asked, then projects follow the account t
 
   laptop.use();
   await laptop.service.newProject('Made signed in');
-  await laptop.edit('/drum/step', { instrument: 'kick', step: 0, active: true });
+  await laptop.edit(s => s.setDrumStep('kick', 0, true));
   await laptop.run();
   assert.deepEqual(await accountNames(remote), ['Made signed in'], 'a project made while signed in is the account\'s');
 
@@ -149,7 +149,7 @@ test('an edit in one browser reaches the other, including the project it has ope
   phone.use();
   await phone.service.openProject(await phone.idOf('Shared'));
 
-  await laptop.edit('/tempo', { tempo: 133 });
+  await laptop.edit(s => s.setTempo(133));
   await laptop.run();
   await phone.run();
   assert.equal(phone.service.snapshot().tempo, 133);
@@ -160,7 +160,7 @@ test('an edit in one browser reaches the other, including the project it has ope
   const tempos = await Promise.all(kept.map(async version => ((await phone.library.getVersion(version.id))!.project as { tempo: number }).tempo));
   assert.ok(tempos.includes(120), 'the copy the phone had before the sync can be restored');
 
-  await phone.edit('/tempo', { tempo: 88 });
+  await phone.edit(s => s.setTempo(88));
   await phone.run();
   await laptop.run();
   assert.equal(laptop.service.snapshot().tempo, 88);
@@ -180,8 +180,8 @@ test('a project changed in two browsers is kept twice, and nothing is overwritte
   phone.use();
   await phone.service.openProject(await phone.idOf('Clash'));
 
-  await laptop.edit('/tempo', { tempo: 100 });
-  await phone.edit('/tempo', { tempo: 150 });
+  await laptop.edit(s => s.setTempo(100));
+  await phone.edit(s => s.setTempo(150));
   await laptop.run();
   await phone.run();
 
@@ -226,7 +226,7 @@ test('deleting a project removes it everywhere, unless it was changed elsewhere 
   // The phone edits a project and syncs; the laptop, not having seen that, deletes it.
   phone.use();
   await phone.service.openProject(await phone.idOf('Rescued'));
-  await phone.edit('/tempo', { tempo: 77 });
+  await phone.edit(s => s.setTempo(77));
   await phone.run();
   await remove(laptop, 'Rescued');
   assert.equal((await laptop.names()).includes('Rescued'), true, 'the newer version comes back instead of being deleted');
@@ -237,7 +237,7 @@ test('deleting a project removes it everywhere, unless it was changed elsewhere 
   // The phone has unsent edits to a project the laptop deletes.
   phone.use();
   await phone.service.openProject(await phone.idOf('Edited then deleted elsewhere'));
-  await phone.edit('/tempo', { tempo: 66 });
+  await phone.edit(s => s.setTempo(66));
   await remove(laptop, 'Edited then deleted elsewhere');
   await phone.run();
   assert.equal(phone.service.snapshot().tempo, 66, 'unsent edits are not thrown away');
@@ -252,7 +252,7 @@ test('losing the browser\'s projects does not delete them from the account', asy
   await laptop.signIn();
   laptop.use();
   await laptop.service.newProject('Precious');
-  await laptop.edit('/tempo', { tempo: 111 });
+  await laptop.edit(s => s.setTempo(111));
   await laptop.run();
 
   // The project library is wiped, but the browser still remembers what it had synced.
@@ -275,7 +275,7 @@ test('signing out leaves the projects here and stops syncing; signing back in re
   assert.equal((await laptop.names()).includes('Mine'), true);
 
   const before = remote.calls.length;
-  await laptop.edit('/tempo', { tempo: 140 });
+  await laptop.edit(s => s.setTempo(140));
   laptop.use();
   await laptop.service.newProject('Made signed out');
   await laptop.run();

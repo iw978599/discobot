@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { LocalProjectService } from '../src/services/localService.ts';
+import { ok, statusOf } from './helpers/store.ts';
 import { DRUM_INSTRUMENTS } from '../src/services/drumKits.ts';
 import { BrowserTransport } from '../src/services/browserTransport.ts';
 import { entryStartBar, sceneAtBar, sceneDrumState, songBars, songLengthBars } from '../src/services/songPlayback.ts';
@@ -38,14 +39,10 @@ function service(fresh = true) {
   created.initialize(defaults());
   return created;
 }
-const post = async (target: LocalProjectService, path: string, body: unknown = {}, method = 'POST') => {
-  const response = await target.request(path, { method, body: JSON.stringify(body) });
-  return { status: response.status, data: await response.json() };
-};
 const setNote = (target: LocalProjectService, note: string | undefined, index = 0) => {
   const pattern = target.snapshot().synths[0].pattern;
   pattern.steps[index] = note ? { active: true, note, velocity: 0.8 } : { active: false, velocity: 0.7 };
-  return post(target, `/synth/1/patterns/${pattern.id}`, pattern, 'PUT');
+  return target.writePattern(1, pattern.id, pattern);
 };
 const firstNote = (target: LocalProjectService) => target.snapshot().synths[0].pattern.steps[0].note;
 
@@ -83,7 +80,7 @@ test('the transport counts bars from when it starts', () => {
 test('a project from before scenes existed becomes one scene and a one-block song', async () => {
   const old = service();
   await setNote(old, 'C3');
-  await post(old, '/drum/step', { instrument: 'kick', step: 4, active: true });
+  old.setDrumStep('kick', 4, true);
   old.flush();
   const stored = JSON.parse(storage.get('discobot_browser_project_v1')!);
   delete stored.scenes; delete stored.song; delete stored.currentSceneId; stored.schema = 3;
@@ -103,39 +100,39 @@ test('a project from before scenes existed becomes one scene and a one-block son
 test('each scene keeps its own notes and drum hits; sounds stay shared', async () => {
   const store = service();
   await setNote(store, 'C3');
-  await post(store, '/drum/step', { instrument: 'kick', step: 0, active: true });
-  await post(store, '/drum/step-detail', { instrument: 'kick', step: 0, ratchet: 2 });
+  store.setDrumStep('kick', 0, true);
+  store.setDrumStepDetail('kick', 0, { ratchet: 2 });
   const first = store.snapshot().currentSceneId;
 
-  const copy = (await post(store, '/scenes/create', {})).data;
+  const copy = ok(store.createScene());
   assert.equal(copy.scenes.length, 2);
   assert.notEqual(copy.currentSceneId, first);
   assert.equal(firstNote(store), 'C3', 'a new scene starts as a copy of the open one');
   await setNote(store, 'G3');
-  await post(store, '/drum/step', { instrument: 'kick', step: 0, active: false });
-  await post(store, '/drum/step', { instrument: 'snare', step: 4, active: true });
-  await post(store, '/synth/1/parameters', { filter: { frequency: 900 } });
-  await post(store, '/drum/settings', { instrument: 'kick', settings: { tone: 0.9 } });
+  store.setDrumStep('kick', 0, false);
+  store.setDrumStep('snare', 4, true);
+  store.setSynthParams(1, { filter: { frequency: 900 } });
+  store.setDrumSettings('kick', { tone: 0.9 });
 
-  const back = (await post(store, '/scenes/select', { sceneId: first })).data;
+  const back = ok(store.selectScene(first));
   assert.equal(firstNote(store), 'C3');
   assert.deepEqual([back.drumState.kick.steps[0], back.drumState.kick.stepRatchets[0], back.drumState.snare.steps[4]], [true, 2, false]);
   assert.equal(store.snapshot().synths[0].synthParams.filter.frequency, 900, 'the sound did not change with the scene');
   assert.equal(back.drumState.kick.settings.tone, 0.9, 'nor did the kit');
 
-  await post(store, '/scenes/select', { sceneId: copy.currentSceneId });
+  store.selectScene(copy.currentSceneId);
   const second = store.snapshot();
   assert.equal(firstNote(store), 'G3');
   assert.deepEqual([second.drumState.kick.steps[0], second.drumState.snare.steps[4]], [false, true]);
   assert.equal(second.drumState.kick.stepRatchets![0], 2, 'the copy brought its step details with it');
 
-  const empty = (await post(store, '/scenes/create', { empty: true, name: '  Break  ' })).data;
+  const empty = ok(store.createScene({ empty: true, name: '  Break  ' }));
   assert.equal(empty.scenes.at(-1).name, 'Break');
   assert.equal(firstNote(store), undefined);
   assert.equal(store.snapshot().drumState.snare.steps[4], false);
   assert.equal(store.snapshot().drumState.kick.stepRatchets, undefined, 'an empty scene has no step details left over');
   assert.equal(store.snapshot().synths[0].pattern.steps.length, 16);
-  assert.equal((await post(store, '/scenes/select', { sceneId: 'nope' })).status, 404);
+  assert.equal(statusOf(store.selectScene('nope')), 404);
 
   store.flush();
   const reloaded = service(false).snapshot();
@@ -148,21 +145,21 @@ test('scenes can be renamed and deleted, and the song follows', async () => {
   const store = service();
   const a = store.snapshot().currentSceneId;
   await setNote(store, 'C3');
-  const b = (await post(store, '/scenes/create', {})).data.currentSceneId;
+  const b = ok(store.createScene()).currentSceneId;
   await setNote(store, 'E3');
-  const song = (await post(store, '/song', { entries: [{ sceneId: a, repeats: 2 }, { sceneId: b, repeats: 500 }, { sceneId: 'gone', repeats: 1 }, { sceneId: a, repeats: 0 }], loop: true })).data.song;
+  const song = ok(store.setSong({ entries: [{ sceneId: a, repeats: 2 }, { sceneId: b, repeats: 500 }, { sceneId: 'gone', repeats: 1 }, { sceneId: a, repeats: 0 }], loop: true })).song;
   assert.deepEqual(song, { entries: [{ sceneId: a, repeats: 2 }, { sceneId: b, repeats: 64 }, { sceneId: a, repeats: 1 }], loop: true }, 'repeats are clamped and unknown scenes dropped');
-  assert.deepEqual((await post(store, '/song', { loop: false })).data.song.entries.length, 3, 'changing one setting keeps the other');
+  assert.deepEqual(ok(store.setSong({ loop: false })).song.entries.length, 3, 'changing one setting keeps the other');
 
-  assert.equal((await post(store, '/scenes/rename', { sceneId: b, name: '   ' })).status, 400);
-  assert.equal((await post(store, '/scenes/rename', { sceneId: b, name: 'Chorus' })).data.scenes[1].name, 'Chorus');
+  assert.equal(statusOf(store.renameScene(b, '   ')), 400);
+  assert.equal(ok(store.renameScene(b, 'Chorus')).scenes[1].name, 'Chorus');
 
-  const afterDelete = (await post(store, '/scenes/delete', { sceneId: b })).data;
+  const afterDelete = ok(store.deleteScene(b));
   assert.deepEqual(afterDelete.scenes.map((scene: Scene) => scene.id), [a]);
   assert.equal(afterDelete.currentSceneId, a, 'deleting the open scene opens its neighbour');
   assert.equal(firstNote(store), 'C3');
   assert.deepEqual(afterDelete.song.entries, [{ sceneId: a, repeats: 2 }, { sceneId: a, repeats: 1 }]);
-  assert.equal((await post(store, '/scenes/delete', { sceneId: a })).status, 400, 'the last scene cannot be deleted');
+  assert.equal(statusOf(store.deleteScene(a)), 400, 'the last scene cannot be deleted');
 });
 
 test('scenes and songs from a file are repaired or refused', () => {
