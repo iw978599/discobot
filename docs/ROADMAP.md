@@ -74,7 +74,7 @@ slow down every later change.
 8. **Move synth presets to IndexedDB.** Done: presets have a store of their
    own, and any saved before are moved there on the next visit.
 
-9. **A design review of the whole interface.** (M) Asked for by the owner on
+9. **A design review of the whole interface, with redesign suggestions.** (M) Asked for by the owner on
    2026-10-11, to be done with the frontend-design plugin. The interface has
    grown a piece at a time: the rack, the dialogs and menus, the phone
    layout, kids mode, and the pages a share link or a person's link opens.
@@ -87,10 +87,17 @@ slow down every later change.
      and labels that are cut short;
    - the phone layout and kids mode as carefully as the desktop rack.
    It needs pictures of the real app at desktop and phone width, which the
-   browser tests on GitHub can take. It ends in a written list of findings in
-   order of how much each matters, agreed with the owner, and then the fixes
-   as small pull requests. It is a review of how the app looks and reads,
-   not a redesign, and not a change to what anything does.
+   browser tests on GitHub can take. It ends in two things for the owner:
+   - a written list of findings in order of how much each matters, which
+     become small pull requests once agreed;
+   - redesign suggestions, which the owner asked for: where a part of the
+     interface would be better made differently and not merely tidied, a
+     proposal for it with a picture or mock-up, what it would cost, and
+     what it would change for someone using the app. These go further than
+     fixes, up to a different look or arrangement for a whole part.
+   Nothing suggested is built until the owner has chosen it. A suggestion
+   may change how something is laid out or reached, but not what the app
+   can do.
 
 Done: the rack rebuild that emptied `App.tsx`; the two-tab guard; debounced
 saving; projects as IndexedDB records with version history; the Vibrato LFO
@@ -311,7 +318,7 @@ for new accounts.
    **accessibility pass** (improvements 5) on the new controls as they are
    made, and move **kids mode** (features 2) onto the same large controls.
    The fuller kids mode (features 10) is done. Then the **design review of
-   the whole interface** (improvements 9), once the phone layout it has to
+   the whole interface, with its redesign suggestions** (improvements 9), once the phone layout it has to
    look at is in place.
 6. **Record live playing** and **more ways to edit patterns** (features 3
    and 4): the two that most change what making a song feels like. **Time
