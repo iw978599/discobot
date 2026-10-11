@@ -4,10 +4,10 @@ Written 2026-10-11 from a design pass over `localService.ts`, `useStudio.tsx` an
 `storeRoutes.test.ts`. This is roadmap improvement 1. It is done as a sequence of
 pull requests, each leaving `main` working and `storeRoutes.test.ts` green.
 
-Status: pull requests 1 to 4 of 8 are built (the foundation, drum swing and
+Status: pull requests 1 to 5 of 8 are built (the foundation, drum swing and
 drum master volume; then guests; then the drums; then the effects), and the
-first half of 5 (a lane's sound, model, mix and view, and the tempo). The
-second half of 5 (pattern writes) and the rest are open.
+the whole of 5 (a lane's sound, model, mix and view, and the tempo; then its
+pattern writes). 6 to 8 are open.
 
 ## What was built, and where it differs from this plan
 
@@ -281,6 +281,68 @@ the tempo):
   `transport.play`; `tempo.set` has a reducer of its own.
 - `useStudio.tsx` makes 23 calls to `localRequest` after this pull request,
   fourteen of them pattern writes.
+
+Found by building pull request 5b (a lane's pattern writes):
+
+- **One reducer, the route's body moved.** `pattern.write` carries the pattern id
+  (the route takes it from the path, then the body, then makes one), and
+  `writePattern(synthId, patternId, patch)` is the helper. The patch goes through
+  `sent`: a name, `bars` or `steps` that is `undefined` would otherwise
+  override the pattern's own where JSON never sent it, and an `offset` of
+  infinity is held to the top where the `null` JSON made of it is none. Without
+  `sent`, 27 cases fail (the undefined name, undefined bars, infinite offset,
+  infinite steps and the patches that are not objects among them). `NaN` and
+  `null` come out the same either way; the cases say so. The project's tempo is
+  written to the pattern, never the one sent, as the route did.
+- **The events set the open pattern.** `patternCreated` and `patternUpdated` both
+  put the pattern in the lane's list and make it the lane's open pattern, which
+  is what the store does. Before, `patternCreated` did not set it and the caller
+  had set it early.
+- **The `commitLanes` sketched here is not what was built.** The plan's
+  `commitLanes(next)` sets the ref and the state from a value worked out from the
+  ref; a change made to each lane (`commitLanes(change)`) is used instead, so
+  nothing another handler asked of the state since the last render is lost.
+  `commitPattern` is the one the two pattern events call. The hand-written ref
+  lines in the piano-roll assign and the note upsert are gone.
+- **Undo needed the trap handled differently from the drums.** `getSnapshot`
+  reads a lane's pattern, sound, mute and octave from `synthsRef`. Moving
+  `synthsRef` on from the pattern events would have changed what a gesture's undo
+  entries hold: a MIDI import onto one lane from two tracks pushes an entry before
+  each write, and the second would hold the lane after the first. A render-time
+  copy like `drumsForUndoRef` cannot be used, because it could not be
+  refreshed from `sceneChanged`, `synthRemoved` and `sequencerStop`, which step 6
+  and 7 own, and because painting needs the opposite: each cell must see the one
+  before. So `lanesBeforeEditRef` keeps, for each lane a pattern event has moved
+  since the last render, the lane as it was before the first of them and the
+  pattern the last of them left. `getSnapshot` reads that lane while the live
+  lane still has that pattern (checked by identity, so a scene change, which
+  replaces it, falls back to the live lane). It is emptied at each render. The
+  two painting writers (`handlePianoRollNoteAssign`, `upsertStepNote`) forget it
+  after each write, so each painted cell is one undo entry, as when they wrote
+  `synthsRef` by hand. Every other handler's entry holds what it held.
+- **Early updates.** The pattern is gone from all fourteen call sites. Kept, because the
+  event cannot carry them: `selectedStep` (step change, assign, clear, upsert,
+  step count, bars, MIDI import, undo), `stepRecordPointer` (upsert), and the
+  `playhead` position (step count, bars). A pattern the store refuses (nothing
+  in the app can send one) no longer shows on screen.
+- **The note play in record mode** no longer sets anything but the write.
+- **`applySnapshot`** keeps its place in the order: the write is first in its
+  `Promise.all`.
+- **Lane bars sends `bars` as 1** for one bar, as before; the comment now says the
+  store keeps the bars it has when none are sent, which is what the merge does.
+- **The `startsWith('patterns')` router line still matches `patternsX`**, pinned.
+- **Nothing in `storeRoutes.test.ts` changed and no pinned count moved.** The
+  `resource?.startsWith('patterns')` and `resource === 'patterns'` forms and the
+  one `method === 'GET'` are where they were.
+- `useStudio.tsx` makes 9 calls to `localRequest` after this pull request: scenes
+  (four, one through `sceneRequest`) and lanes coming and going and the
+  transport (five).
+- **For the builder of step 6:** `synthRemoved`, `sceneChanged` and
+  `sequencerStop` still write `synthsRef` themselves and were not touched.
+  `getSnapshot` falls back to the live lane when a pattern event's lane no longer
+  has the pattern, so they need no change for undo. `commitLanes` maps over
+  `synthsRef.current`, which a `synthUpdate` since the last render has not reached;
+  it heals at the next render and the state is right.
 
 ## What is being replaced
 
@@ -601,9 +663,8 @@ early updates; adds the two-way tests.
    MIDI import's tempo, the three calls Reset makes for each lane and the
    five undo makes. The `synthUpdate` handler is the only thing that sends
    parameters to the audio (`synthAudio.updateParameters`) and is untouched.
-   5b, open: `patterns` and `patterns/:pid` (`pattern.write`), fourteen call
-   sites. Pattern handlers use `commitLanes`, once what undo reads has been
-   checked (see what pull request 3 found).
+   5b, built: `patterns` and `patterns/:pid` (`pattern.write`), with the helper
+   `writePattern`, at fourteen call sites. See what pull request 5b found.
 6. **Lanes coming and going, and the transport.** `/synth/create`, DELETE
    `/synth/:id`, `/sequencer/play`, `/sequencer/stop`. Play and stop still do not
    save. The `synthRemoved` and `sequencerStop` handlers keep their ref writes.
