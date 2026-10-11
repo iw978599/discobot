@@ -5,6 +5,7 @@
 // file pins that the typed way does the same. Each pull request of docs/TYPED_STORE_PLAN.md
 // adds its group to `cases`.
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { LocalProjectService } from '../src/services/localService.ts';
 import { OP_META, type Applied, type OpNotice, type Operation } from '../src/services/projectOps.ts';
@@ -1415,4 +1416,133 @@ test('merge copies its base, goes into objects, replaces lists and skips the key
   assert.deepEqual(base, { a: { b: 1, c: [1, 2] }, d: 'kept' });
   assert.equal((merged as any).x, undefined);
   assert.equal(Object.keys(merged).includes('constructor'), false);
+});
+
+// Song playback changes scene from inside the scheduler's timing loop and reads the lanes and
+// drums on the next line. That works only because the store has delivered sceneChanged, and the
+// handler has written the refs, before the call returns. This stands a listener in for the
+// handler and reads what it wrote with no turn of the event loop in between.
+test('opening a scene is finished when selectScene returns: what the listener keeps holds it on the next line', () => {
+  const service = setup();
+  const ids = twoScenes(service);
+  assert.ok(service.setDrumStep('snare', 5, true).ok);
+  const refs = { scene: '', kick: [] as boolean[], snare: [] as boolean[], scenes: 0, lane: [] as unknown[] };
+  service.subscribe(message => {
+    if (message.type !== 'sceneChanged') return;
+    refs.scene = message.data.currentSceneId;
+    refs.kick = message.data.drumState.kick.steps;
+    refs.snare = message.data.drumState.snare.steps;
+    refs.lane = message.data.synths[0].pattern.steps;
+    refs.scenes = message.data.scenes.length;
+  });
+  const result = service.selectScene(ids.first);
+  assert.ok(!(result instanceof Promise), 'the answer is not a promise');
+  assert.equal(refs.scene, ids.first);
+  assert.deepEqual([refs.kick[3], refs.snare[5], refs.scenes], [true, false, 2]);
+  assert.equal(refs.lane.length, 16);
+  assert.equal(service.snapshot().currentSceneId, ids.first, 'and the store itself has moved on');
+
+  assert.ok(service.selectScene(ids.second).ok);
+  assert.equal(refs.scene, ids.second);
+  assert.deepEqual([refs.kick[3], refs.snare[5]], [false, true]);
+  service.flush();
+});
+
+test('every scene operation is delivered before it returns, and none answers with a promise', () => {
+  const service = setup();
+  const seen: string[] = [];
+  service.subscribe(message => seen.push(message.type));
+  seen.length = 0;
+  const first = service.getScenes().currentSceneId;
+  for (const change of [
+    () => service.createScene(), () => service.renameScene(first, 'Verse'), () => service.setSong({ loop: true }),
+    () => service.selectScene(first), () => service.deleteScene(first), () => service.replaceScenes(),
+  ]) {
+    const result = change();
+    assert.ok(!(result instanceof Promise));
+    assert.ok(result.ok);
+    assert.deepEqual(seen, ['sceneChanged']);
+    seen.length = 0;
+  }
+  service.flush();
+});
+
+test('a new scene\'s id is refused when it is empty, too long, not text or already in the project', () => {
+  const service = setup();
+  const first = service.getScenes().currentSceneId;
+  service.flush();
+  const before = service.snapshot();
+  const seen: Message[] = [];
+  service.subscribe(message => seen.push(message));
+  seen.length = 0;
+  for (const sceneId of ['', 'x'.repeat(201), 7, null, undefined]) {
+    assert.deepEqual(service.apply({ type: 'scene.create', sceneId: wrong(sceneId) }), { ok: false, status: 400, error: 'That is not an id a scene can have.' });
+  }
+  assert.deepEqual(service.apply({ type: 'scene.create', sceneId: first }), { ok: false, status: 409, error: 'That scene is already in the project.' });
+  assert.deepEqual(seen, []);
+  assert.deepEqual(service.snapshot(), before);
+  assert.equal(service.flush(), true);
+  const kept = service.apply({ type: 'scene.create', sceneId: 'x'.repeat(200) });
+  assert.ok(kept.ok && kept.value.currentSceneId === 'x'.repeat(200));
+  assert.equal(service.apply({ type: 'scene.create', sceneId: 'y' }).ok, true);
+  service.flush();
+});
+
+test('the id a scene is given is the one it has, so the same operation makes the same scene', () => {
+  const one = setup(), two = setup();
+  for (const service of [one, two]) {
+    assert.ok(service.setDrumStep('kick', 3, true).ok);
+    assert.ok(service.apply({ type: 'scene.create', sceneId: 'mine', name: 'Same', empty: true }).ok);
+  }
+  assert.equal(one.snapshot().scenes[1].id, 'mine');
+  assert.deepEqual(one.snapshot().scenes[1], two.snapshot().scenes[1]);
+  one.flush(); two.flush();
+});
+
+test('the store keeps nothing of a scene or song operation\'s own objects', () => {
+  const service = setup();
+  const [scene] = service.getScenes().scenes;
+  const scenes = [{ ...scene, id: 'a', name: 'A' }, { ...scene, id: 'b', name: 'B' }];
+  const entries = [{ sceneId: 'a', repeats: 2 }];
+  const replacement = { scenes, currentSceneId: 'a', song: { entries, loop: true } };
+  const result = service.replaceScenes(replacement);
+  assert.ok(result.ok);
+  scenes[1].name = 'changed';
+  scenes[1].drums.kick.steps[0] = true;
+  entries[0].repeats = 9;
+  replacement.song.loop = false;
+  result.value.scenes[1].name = 'also changed';
+  assert.deepEqual(service.getScenes().scenes.map(entry => entry.name), ['A', 'B']);
+  assert.equal(service.snapshot().scenes[1].drums.kick.steps[0], false);
+  assert.deepEqual(service.getScenes().song, { entries: [{ sceneId: 'a', repeats: 2 }], loop: true });
+
+  const next = { entries: [{ sceneId: 'b', repeats: 3 }], loop: false };
+  assert.ok(service.setSong(next).ok);
+  next.entries[0].repeats = 1;
+  next.entries.push({ sceneId: 'a', repeats: 1 });
+  assert.deepEqual(service.getScenes().song, { entries: [{ sceneId: 'b', repeats: 3 }], loop: false });
+  service.flush();
+});
+
+test('scene operations are saved, not undoable, and shared', () => {
+  for (const type of ['scene.select', 'scene.create', 'scene.rename', 'scene.delete', 'scene.replace', 'song.set'] as const) {
+    assert.deepEqual(OP_META[type], { save: true, undoable: false, share: true }, type);
+  }
+});
+
+// The studio is not run by these tests, so the two things the plan asks of it are read from its
+// source: the scheduler's scene change is a plain call with nothing awaited, and a scene handler
+// that leaves the open scene collects the guests' settings before the change.
+test('the scheduler opens a scene with a plain call, and a scene change waits for the guests first', () => {
+  const source = readFileSync(new URL('../src/studio/useStudio.tsx', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+  assert.equal(source.includes('localRequest'), false, 'useStudio makes no route call at all');
+  const from = source.indexOf('scheduleTickRef.current = ');
+  const tick = source.slice(from, source.indexOf('const lanes = synthsRef.current;', from));
+  const calls = (tick.match(/^.*selectScene.*$/gm) ?? []).filter(line => !line.trim().startsWith('//'));
+  assert.deepEqual(calls.map(line => line.trim()), ['localService.selectScene(position.sceneId);']);
+  assert.match(source, /if \(leavesScene\) await guestLink\.captureAll\(\);\n\s+const result = change\(\);/);
+  for (const handler of ['handleSceneSelect', 'handleSceneAdd', 'handleSceneDelete']) {
+    assert.match(source, new RegExp(`const ${handler} = useCallback\\(.*sceneChange\\(\\(\\) => localService\\.\\w+\\([^)]*\\)\\), \\[sceneChange\\]\\)`), handler);
+  }
+  for (const handler of ['handleSceneRename', 'handleSongChange']) assert.match(source, new RegExp(`${handler}[\\s\\S]*?, false\\)`), handler);
 });
