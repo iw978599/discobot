@@ -21,6 +21,17 @@ slow down every later change.
    state-applied-twice bugs, and undo, automation and collaborative sessions
    all wait on it.
 
+   The plan is `docs/TYPED_STORE_PLAN.md`: eight pull requests, each leaving
+   the app working. Done: the first. An edit is now a typed operation handed
+   to one synchronous `apply`, with a reducer for each, and anything that
+   wants to record edits can listen for them. Drum swing and drum master
+   volume go that way, and `useStudio` applies each once, from the store's
+   event; the kit list, the tempo and the scenes are read by typed methods.
+   Still open: the other 31 operations (guests, drums, effects, lanes, the
+   transport, scenes and the song, in that order), then taking `request`
+   away, and after that splitting `useStudio.tsx`, which the plan describes
+   but does not schedule.
+
 2. **Make undo a store feature.** (M, after 1)
    Undo snapshots are assembled by hand, and each handler must remember to
    push one. With a typed store, record every mutation as a patch
@@ -79,10 +90,12 @@ target; removal of the AI review workflow.
    adjustments is the highest-value sound work remaining, and only a person
    can do it.
 
-2. **Samples that travel with a project.** (M for files, more for sync)
-   Imported samples stay in the browser they were imported in. Putting them
-   in project files is self-contained. Syncing them needs file storage on the
-   server, which is waiting on a payment card for Cloudflare R2
+2. **Samples that travel with a project.** (files done; sync still open)
+   A saved project file now carries the audio of the samples its drum lanes
+   use, and opening it on another device puts them in that browser. Share
+   links, published songs, sync and shared projects still carry no audio, so
+   a lane's sample is missing there. Syncing samples needs file storage on
+   the server, which is waiting on a payment card for Cloudflare R2
    (`docs/STORAGE_AND_ACCOUNTS_PLAN.md`, stage 3 step 5).
 
 3. **A sample oscillator in the synth.** (M)
@@ -204,11 +217,22 @@ may redistribute.
    the Walkthrough button, and the stop about accounts says they are optional
    to someone who is not signed in.
 
-9. **A page listing a user's published songs.** (M)
-   Publishing gives each song a short link, and there is no profile page or
-   browsable list (`docs/STORAGE_AND_ACCOUNTS_PLAN.md`, stage 3 step 4).
-   Decided 2026-10-10: a page for each user's own songs only. No page that
-   lists everyone's.
+9. **A page listing a user's published songs.** Done, for each user's own
+   songs only, as decided on 2026-10-10: no page that lists everyone's, no
+   browsing, no search and no list of people.
+   - Each person's page is at `#u=name` and lists the songs they have
+     published, newest first, each leading to its own page. It needs no
+     account to open.
+   - The publisher's name on a song's page leads to it, and Share Link shows
+     a signed-in user the link to their own.
+   - The server gives out the username and each song's code, title and time,
+     and nothing else. A name nobody has reads the same as a person with
+     nothing published.
+   - It needs the accounts API deployed (no database change). Until then the
+     page says such pages are not available yet.
+   Still open: a description or picture for a person or a song; choosing the
+   order of the list or leaving a published song off it; playing a song from
+   the list without opening its page.
 
 10. **A fuller kids mode.** (M)
     The first version is too simple to hold a child's interest for long.

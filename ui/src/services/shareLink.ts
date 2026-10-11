@@ -49,6 +49,17 @@ export async function decodeShare(payload: string): Promise<unknown> {
 export const SHORT_PREFIX = '#s=';
 export const shortUrl = (code: string, base: string) => `${base.split('#')[0]}${SHORT_PREFIX}${code}`;
 export const shortCode = (hash: string) => (hash.startsWith(SHORT_PREFIX) ? hash.slice(SHORT_PREFIX.length).trim().toLowerCase() : null);
+// A person's page: the link holds a username, and the songs published under it are fetched
+// from the account server.
+export const USER_PREFIX = '#u=';
+const USERNAME = /^[A-Za-z0-9][A-Za-z0-9_-]{2,19}$/;
+export const userUrl = (username: string, base: string) => `${base.split('#')[0]}${USER_PREFIX}${username}`;
+// Null when the address is not a person's page, and empty when what it names could not be a username.
+export const userName = (hash: string) => {
+  if (!hash.startsWith(USER_PREFIX)) return null;
+  const name = hash.slice(USER_PREFIX.length).trim();
+  return USERNAME.test(name) ? name : '';
+};
 // What gets stored or put in a link: the project without what a listener does not need.
 export const slimProject = (file: unknown) => slim(file);
 

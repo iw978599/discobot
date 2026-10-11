@@ -16,8 +16,8 @@ export function toDrumSample(channels: Float32Array[], rate: number): DrumSample
 
 const decoded = new Map<string, Promise<DrumSample | null>>();
 
-// The stored sample, decoded once. Null when it is not on this device (samples do not travel
-// with a project) or cannot be decoded; the lane then plays its synthesized voice.
+// The stored sample, decoded once. Null when it is not on this device (samples travel in a
+// project file, but not with sync or a link) or cannot be decoded; the lane then plays its synthesized voice.
 export function loadDrumSample(id: string): Promise<DrumSample | null> {
   let loading = decoded.get(id);
   if (!loading) {

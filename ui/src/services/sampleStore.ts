@@ -70,6 +70,11 @@ export async function saveSample(file: File): Promise<SampleRecord> {
   return sample;
 }
 
+// Stores a sample under the id it already has: one that arrived inside a project file.
+export async function putSample(sample: SampleRecord): Promise<void> {
+  await transaction('readwrite', store => store.put(sample));
+}
+
 export async function deleteSample(id: string): Promise<void> {
   await transaction('readwrite', store => store.delete(id));
 }

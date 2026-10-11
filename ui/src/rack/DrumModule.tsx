@@ -84,7 +84,9 @@ function DrumModule({ studio }: { studio: Studio }) {
   const [samples, setSamples] = useState<Array<{ id: string; name: string }>>([]);
   const sampleFileRef = useRef<HTMLInputElement>(null);
   const refreshSamples = () => listSamples().then(list => setSamples(list.map(({ id, name }) => ({ id, name })))).catch(() => {});
-  useEffect(() => { void refreshSamples(); }, []);
+  // Read again when a lane's sample changes: an imported project file brings its own.
+  const laneSamples = INSTRUMENTS.map(instrument => drumState[instrument].sampleId ?? '').join('|');
+  useEffect(() => { void refreshSamples(); }, [laneSamples, studio.sampleStoreVersion]);
   // Several files picked at once, waiting in the kit import dialog to be given lanes.
   const [kitFiles, setKitFiles] = useState<{ files: File[]; picked: number } | null>(null);
   const kitFileRef = useRef<HTMLInputElement>(null);

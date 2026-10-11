@@ -9,12 +9,35 @@ import { DRUM_KITS } from './drumKits';
 export const KIDS_HASH = '#kids';
 export const isKidsLink = (hash: string) => hash === KIDS_HASH;
 
+// Kids mode lasts for the whole visit to this tab, not only while the address says so. Going
+// back to an earlier address would otherwise be a way out that needs no holding.
+const KIDS_STAY_KEY = 'discobot_kids_stay';
+const staying = () => { try { return sessionStorage.getItem(KIDS_STAY_KEY) === '1'; } catch { return false; } };
+const stay = (on: boolean) => {
+  try {
+    if (on) sessionStorage.setItem(KIDS_STAY_KEY, '1');
+    else sessionStorage.removeItem(KIDS_STAY_KEY);
+  } catch { /* the address alone decides */ }
+};
+const kidsAddress = () => window.location.pathname + window.location.search + KIDS_HASH;
+
+// Whether this visit is kids mode. If it is, the address is put back to say so.
+export function keepKidsMode(): boolean {
+  if (!isKidsLink(window.location.hash) && !staying()) return false;
+  stay(true);
+  if (!isKidsLink(window.location.hash)) window.history.replaceState(null, '', kidsAddress());
+  return true;
+}
+
 // Both go through a reload, so the page being left stops its sound and saves what it has.
+// Going in replaces the address where it stands: it adds nothing to go back to.
 export function enterKidsMode() {
-  window.location.hash = KIDS_HASH;
+  stay(true);
+  window.history.replaceState(null, '', kidsAddress());
   window.location.reload();
 }
 export function leaveKidsMode() {
+  stay(false);
   window.history.replaceState(null, '', window.location.pathname + window.location.search);
   window.location.reload();
 }

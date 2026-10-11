@@ -32,12 +32,13 @@ Status: proposed, nothing built. Written 2026-10-08; stage 3 revised the same da
   two browsers is kept twice. An account holds up to 100 projects of up to
   400 KB each. Sync runs a few seconds after an edit, when the page comes
   back into view, every two minutes, and from a Sync Now button.
-- **Stage 3, step 4 (public pages): partly built.** A signed-in user can
+- **Stage 3, step 4 (public pages): built.** A signed-in user can
   publish a song and get a short link; anyone can open it, listen and keep a
   copy; the page shows the publisher's username. Publish again to update,
   unpublish to remove, and the owner can remove any song. Up to 50 per
-  account. Not built: a profile page listing a user's songs, and any
-  browsable list.
+  account. Each person has a page listing the songs they have published,
+  reached by its link (`#u=name`). Not built, by the owner's decision of
+  2026-10-10: any list of everyone's songs or of people, browsing or search.
 - **Stage 3, step 5 (samples): not started.**
 
 ## Where things were when this was written
