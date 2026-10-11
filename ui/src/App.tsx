@@ -5,14 +5,18 @@ import { accountsEnabled, songsApi } from './services/account';
 import Rack from './rack/Rack';
 import SharedSongPage from './rack/SharedSongPage';
 import KidsPage from './kids/KidsPage';
-import { isKidsLink } from './services/kids';
+import { isKidsLink, keepKidsMode } from './services/kids';
 
 // Kids mode is a page of its own. It is chosen before anything opens the projects, so it
 // cannot change them; going in or out reloads the page.
 export default function App() {
-  const [kids] = useState(() => isKidsLink(window.location.hash));
+  const [kids] = useState(keepKidsMode);
   useEffect(() => {
-    const onHashChange = () => { if (isKidsLink(window.location.hash) !== kids) window.location.reload(); };
+    const onHashChange = () => {
+      // In kids mode a changed address is put back, not followed: the hold is the only way out.
+      if (kids) keepKidsMode();
+      else if (isKidsLink(window.location.hash)) window.location.reload();
+    };
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, [kids]);

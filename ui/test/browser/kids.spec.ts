@@ -286,11 +286,22 @@ test('kids mode is reached from the Project menu, cannot touch the project, and 
   const saved = JSON.parse((await project())!);
   expect(saved.drumState.kick.steps.slice(0, 4)).toEqual([false, false, true, false]);
 
+  const entries = await page.evaluate(() => window.history.length);
   await page.getByRole('button', { name: 'Project ▾', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Kids Mode', exact: true }).click();
   const kids = page.getByRole('main', { name: 'Kids mode', exact: true });
   await expect(kids).toBeVisible();
   expect(page.url()).toMatch(/#kids$/);
+
+  // Going back is not a way out: going in left nothing to go back to, and another address
+  // in this tab is put back to kids mode.
+  expect(await page.evaluate(() => window.history.length), 'going in adds no page to go back to').toBe(entries);
+  await page.evaluate(() => { window.location.hash = ''; });
+  await expect.poll(() => page.url()).toMatch(/#kids$/);
+  await expect(kids).toBeVisible();
+  await page.goto('./');
+  await expect(kids).toBeVisible();
+  await expect.poll(() => page.url()).toMatch(/#kids$/);
   await expect(kids.locator('.kids-dots .on'), 'a first visit has no tune yet').toHaveCount(0);
 
   // Everything a child can press, pressed: the pads and sounds, then every picture and hole of the beat.
