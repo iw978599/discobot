@@ -1164,8 +1164,8 @@ export function useStudio() {
     synthsRef.current = synthsRef.current.map(s => s.id === synthId ? { ...s, isPlaying: false } : s);
     synthAudio.stopSynth(synthId);
     try {
-      await localRequest(`/synth/${synthId}`, { method: 'DELETE' });
-      setSynths(prev => prev.filter(s => s.id !== synthId));
+      // The synthRemoved event takes the lane out of the ref and the state.
+      localService.removeLane(synthId);
     } catch (error) {
       console.error('Failed to remove synth:', error);
     }
@@ -1175,13 +1175,10 @@ export function useStudio() {
     if (synthsRef.current.some(s => s.id === synthId)) return true;
     if (synthId < 2 || synthId > 3) return false;
     try {
-      const res = await localRequest('/synth/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ synthId }),
-      });
+      const res = localService.createLane(synthId);
       if (!res.ok) return false;
-      const data = await res.json();
+      const data = res.value;
+      // The synthCreated event adds the lane to the state; the ref is written here.
       const created: SynthState = {
         id: synthId, pattern: data.pattern, patterns: data.patterns || [],
         synthParams: normalizeSynthParams(data.synthParams),
@@ -1193,7 +1190,6 @@ export function useStudio() {
         solo: Boolean(data.solo), forceReleaseSignal: false,
       };
       if (!synthsRef.current.some(s => s.id === synthId)) synthsRef.current = [...synthsRef.current, created];
-      setSynths(prev => prev.some(s => s.id === synthId) ? prev : [...prev, created]);
       return true;
     } catch {
       return false;
@@ -1240,35 +1236,16 @@ export function useStudio() {
         setStorageError('Audio could not start. Allow audio playback and press Play again.');
         return;
       }
-      const playResponses = await Promise.all(playableSynths.map(async (s) => {
-        const response = await localRequest('/sequencer/play', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ synthId: s.id, patternId: s.pattern!.id }),
-        });
-        return { synthId: s.id, ok: response.ok };
-      }));
-
-      const startedSynthIds = playResponses.filter((entry) => entry.ok).map((entry) => entry.synthId);
-      if (startedSynthIds.length > 0) {
-        for (const id of startedSynthIds) playhead.set(id, 0);
-        setSynths(prev => prev.map(s => (
-          startedSynthIds.includes(s.id)
-            ? { ...s, isPlaying: true }
-            : s
-        )));
-      }
+      // The sequencerPlay event marks each lane as playing.
+      const playResults = localService.applyAll(playableSynths.map(s => ({ type: 'transport.play' as const, synthId: s.id, patternId: s.pattern!.id })));
+      for (const [index, s] of playableSynths.entries()) if (playResults[index].ok) playhead.set(s.id, 0);
       return;
     }
 
     const playingSynthIds = currentSynths.filter(s => s.isPlaying).map((s) => s.id);
-    await Promise.all(currentSynths.filter(s => s.isPlaying).map(s =>
-      localRequest('/sequencer/stop', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ synthId: s.id }),
-      })
-    ));
+    localService.applyAll(currentSynths.filter(s => s.isPlaying).map(s => ({ type: 'transport.stop' as const, synthId: s.id })));
+    // The sequencerStop event has already turned each lane's release signal over once, and this
+    // turns it over again, so the lane ends as it began. Kept as it was.
     if (playingSynthIds.length > 0) {
       setSynths(prev => prev.map(s => (
         playingSynthIds.includes(s.id)
@@ -2156,11 +2133,7 @@ export function useStudio() {
         localService.writePattern(synth.id, synth.pattern.id, cleared);
       }
       if (synth.isPlaying) {
-        await localRequest('/sequencer/stop', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ synthId: synth.id }),
-        });
+        localService.stopLane(synth.id);
       }
     }
     setSynths(prev => prev.map(s => ({

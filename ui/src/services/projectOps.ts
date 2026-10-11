@@ -41,7 +41,7 @@ export type Operation =
   | { type: 'synth.prefs'; synthId: number; octaveShift?: number; keyboardMode?: 'keyboard' | 'piano-roll' }
   | { type: 'pattern.write'; synthId: number; patternId: string; patch: Partial<Pattern> }
   | { type: 'transport.play'; synthId: number; patternId?: string }
-  | { type: 'transport.stop'; synthId: number }
+  | { type: 'transport.stop'; synthId: number; patternId?: string }
   | { type: 'scene.select'; sceneId: string }
   | { type: 'scene.delete'; sceneId: string }
   | { type: 'scene.create'; sceneId: string; name?: string; empty?: boolean }

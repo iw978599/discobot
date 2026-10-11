@@ -8,7 +8,7 @@ import { normalizeSynthModelId } from '../synthModels';
 import { NEW_PROJECT_REVERB } from './effectSettings';
 import { record, number, clone, matchesShape, sanitizePattern, sanitizeSynthParams, sanitizeDrums, sanitizeEffects, sanitizeSends, sanitizeSaved, sanitizeModelParams, sanitizeKit, sanitizeScenes, sanitizeSong, MAX_SCENES } from './projectSanitization';
 import type { Applied, DeepPartial, DrumFxState, GuestPatch, OpNotice, OpResult, Operation, Origin, Outcome } from './projectOps';
-import { reducers, type ReducerContext } from './projectReducers';
+import { newLane, reducers, type ReducerContext } from './projectReducers';
 
 type Message = { type: string; data: any };
 type Listener = (message: Message) => void;
@@ -671,15 +671,7 @@ export class LocalProjectService {
   }
 
   private createSynth(synthId: number): LocalSynth {
-    const pattern: Pattern = {
-      id: crypto.randomUUID(), name: `Synth ${synthId}`, tempo: this.state!.tempo,
-      steps: Array.from({ length: 16 }, () => ({ active: false, velocity: .7 })),
-    };
-    return {
-      synthId, pattern, patterns: [pattern], synthParams: clone(this.defaults!.synthParams),
-      synthModelId: 'generic', synthModelParams: { macro1: .5, macro2: .5, macro3: .5, macro4: .5 },
-      muted: false, solo: false, isPlaying: false,
-    };
+    return newLane(synthId, this.state!.tempo, this.defaults!);
   }
 
   subscribe(listener: Listener) {
@@ -749,18 +741,6 @@ export class LocalProjectService {
     }
   }
 
-  setPlaying(synthId: number, playing: boolean, patternId?: string) {
-    const synth = this.state!.synths.find(s => s.synthId === synthId);
-    if (!synth) return false;
-    if (patternId) {
-      const pattern = synth.patterns.find(p => p.id === patternId);
-      if (pattern) synth.pattern = pattern;
-    }
-    synth.isPlaying = playing;
-    this.emit(playing ? 'sequencerPlay' : 'sequencerStop', { synthId });
-    return true;
-  }
-
   private ready(): State {
     if (!this.state) throw new Error('Local project has not been initialized');
     return this.state;
@@ -822,6 +802,10 @@ export class LocalProjectService {
   setSynthMix(synthId: number, mix: { muted?: boolean; solo?: boolean }) { return this.apply({ type: 'synth.mix', synthId, muted: mix.muted, solo: mix.solo }); }
   setSynthPrefs(synthId: number, prefs: { octaveShift?: number; keyboardMode?: 'keyboard' | 'piano-roll' }) { return this.apply({ type: 'synth.prefs', synthId, octaveShift: prefs.octaveShift, keyboardMode: prefs.keyboardMode }); }
   writePattern(synthId: number, patternId: string, patch: Partial<Pattern>) { return this.apply({ type: 'pattern.write', synthId, patternId, patch }); }
+  createLane(synthId?: number) { return this.apply({ type: 'synth.create', synthId }); }
+  removeLane(synthId: number) { return this.apply({ type: 'synth.remove', synthId }); }
+  playLane(synthId: number, patternId?: string) { return this.apply({ type: 'transport.play', synthId, patternId }); }
+  stopLane(synthId: number) { return this.apply({ type: 'transport.stop', synthId }); }
   addGuest(url: string, name?: string) { return this.apply({ type: 'guest.add', guestId: crypto.randomUUID(), url, name }); }
   changeGuest(guestId: string, patch: GuestPatch) { return this.apply({ type: 'guest.patch', guestId, patch }); }
   removeGuest(guestId: string) { return this.apply({ type: 'guest.remove', guestId }); }
@@ -913,24 +897,14 @@ export class LocalProjectService {
       state.song = sanitizeSong({ entries: body.entries ?? state.song.entries, loop: body.loop ?? state.song.loop }, state.scenes);
       return update('sceneChanged', this.sceneMessage());
     }
-    if (path === '/synth/create') {
-      const id = body.synthId || [1, 2, 3].find(id => !state.synths.some(s => s.synthId === id));
-      if (!Number.isInteger(id) || id < 1 || id > 3) return respond({ error: 'Three synths maximum' }, 400);
-      let synth = state.synths.find(s => s.synthId === id);
-      if (!synth) { synth = this.createSynth(id); state.synths.push(synth); }
-      return update('synthCreated', synth);
-    }
+    if (path === '/synth/create') return fromApplied(this.apply({ type: 'synth.create', synthId: body.synthId }));
     const match = path.match(/^\/synth\/(\d+)(?:\/(.*))?$/);
     if (match) {
       const synthId = Number(match[1]);
       const synth = state.synths.find(s => s.synthId === synthId);
       if (!synth) return respond({ error: 'Synth not found' }, 404);
       const resource = match[2];
-      if (!resource && method === 'DELETE') {
-        if (synthId === 1) return respond({ error: 'Synth 1 cannot be removed' }, 400);
-        state.synths = state.synths.filter(s => s !== synth);
-        return update('synthRemoved', { synthId });
-      }
+      if (!resource && method === 'DELETE') return fromApplied(this.apply({ type: 'synth.remove', synthId }));
       if (resource === 'parameters') {
         if (method === 'GET') return respond(synth.synthParams);
         return fromApplied(this.apply({ type: 'synth.params', synthId, patch: body }));
@@ -951,7 +925,10 @@ export class LocalProjectService {
       return fromApplied(this.apply({ type: 'tempo.set', tempo: body.tempo }));
     }
     if (path === '/sequencer/play' || path === '/sequencer/stop') {
-      return respond({ success: this.setPlaying(body.synthId || 1, path.endsWith('/play'), body.patternId) });
+      const synthId = body.synthId || 1;
+      return fromApplied(this.apply(path.endsWith('/play')
+        ? { type: 'transport.play', synthId, patternId: body.patternId }
+        : { type: 'transport.stop', synthId, patternId: body.patternId }));
     }
     if (path === '/drum/kits') return respond(this.getDrumKits());
     if (path === '/drum/kit') return fromApplied(this.apply({ type: 'drum.kit', kitId: body.kitId, applyDefaults: body.applyDefaults }));
