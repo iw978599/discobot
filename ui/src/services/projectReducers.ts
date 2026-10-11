@@ -1,7 +1,7 @@
 // What each operation does to the project. A reducer is the body of the route it replaces,
 // moved as it was. It changes the state it is handed and says what to save and send; it never
 // emits, saves or reads the clock itself, which is `apply`'s work in localService.ts.
-import { clone, merge, number, sanitizeDrums } from './projectSanitization';
+import { clone, merge, number, sanitizeDrums, sanitizeEffects, sanitizeSends } from './projectSanitization';
 import { MAX_GUESTS, guestUrl, patchGuest, sanitizeGuests } from './guests';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
 import { BAR_CHOICES, DRUM_STEPS_PER_BAR, resizeBars } from './patternLength';
@@ -67,6 +67,14 @@ export const reducers: Partial<Reducers> = {
     state.drumState = sanitizeDrums(state.drumState, defaults.drumState);
     return update('drumFullState', { drumState: state.drumState });
   },
+  // `merge` takes a key that is undefined as a value to set, so the patch is read as sent.
+  'drum.fx': ({ state, defaults }, op) => {
+    const patch = sent(op.patch);
+    if (!patch) return refuse(400, BAD_DATA);
+    const fx = merge(state.drumFx, patch);
+    state.drumFx = { sends: sanitizeSends(fx.sends, defaults.drumFx.sends), returnLevel: number(fx.returnLevel, state.drumFx.returnLevel, 0, 1) };
+    return update('drumFxUpdate', { drumFx: state.drumFx });
+  },
   'drum.kit': ({ state }, op) => {
     const kit = DRUM_KITS.find(k => k.id === op.kitId);
     if (!kit) return refuse(400, 'Unknown kit');
@@ -126,6 +134,12 @@ export const reducers: Partial<Reducers> = {
   'drum.swing': ({ state }, op) => {
     state.drumSwing = number(op.swing, state.drumSwing, 0, .75);
     return update('drumSwing', { swing: state.drumSwing });
+  },
+  'effects.set': ({ state, defaults }, op) => {
+    const patch = sent(op.patch);
+    if (!patch) return refuse(400, BAD_DATA);
+    state.effectsLoop = sanitizeEffects(merge(state.effectsLoop, patch), defaults.effectsLoop);
+    return update('effectsLoopUpdate', { effectsLoop: state.effectsLoop });
   },
   'guest.add': ({ state, origin }, op) => {
     const guests = state.guests ?? [];

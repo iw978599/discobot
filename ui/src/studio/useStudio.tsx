@@ -603,14 +603,13 @@ export function useStudio() {
   );
 
   const applySnapshot = useCallback(async (synthId: number, snapshot: PatternSnapshot) => {
-    setDrumFx(snapshot.drumFx);
-    setEffectsLoop(snapshot.effectsLoop);
     localService.setDrumMasterVolume(snapshot.drumMasterVolume);
     localService.setDrumSwing(snapshot.drumSwing);
     localService.setDrumKit(snapshot.drumKitId, false);
+    // Not requests any more, but still awaited, so what follows runs when it always did.
     await Promise.all([
-      localRequest('/drum/fx', { method: 'POST', body: JSON.stringify(snapshot.drumFx) }),
-      localRequest('/effects-loop', { method: 'POST', body: JSON.stringify(snapshot.effectsLoop) }),
+      localService.setDrumFx(snapshot.drumFx),
+      localService.setEffectsLoop(snapshot.effectsLoop),
     ]);
     setSynths((prev) => prev.map((entry) => (
       entry.id === synthId
@@ -2201,26 +2200,7 @@ export function useStudio() {
       sends: { ...previous.sends, ...(next.sends || {}) },
       returnLevel: next.returnLevel ?? previous.returnLevel,
     });
-    setDrumFx(updated);
-    void (async () => {
-      try {
-        const res = await localRequest('/drum/fx', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updated),
-        });
-        if (!res.ok) {
-          setDrumFx(previous);
-          return;
-        }
-        const data = await res.json();
-        if (data.drumFx) {
-          setDrumFx(normalizeDrumFx(data.drumFx));
-        }
-      } catch {
-        setDrumFx(previous);
-      }
-    })();
+    localService.setDrumFx(updated);
   }, [pushHistorySnapshotThrottled]);
 
   const handleEffectsLoopChange = useCallback((next: Partial<EffectsLoopState>) => {
@@ -2231,26 +2211,7 @@ export function useStudio() {
       ...previous,
       ...next,
     });
-    setEffectsLoop(updated);
-    void (async () => {
-      try {
-        const res = await localRequest('/effects-loop', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updated),
-        });
-        if (!res.ok) {
-          setEffectsLoop(previous);
-          return;
-        }
-        const data = await res.json();
-        if (data.effectsLoop) {
-          setEffectsLoop(normalizeEffectsLoop(data.effectsLoop));
-        }
-      } catch {
-        setEffectsLoop(previous);
-      }
-    })();
+    localService.setEffectsLoop(updated);
   }, [pushHistorySnapshotThrottled]);
 
   const handleDrumMuteAll = useCallback((muted: boolean) => {
@@ -2336,18 +2297,8 @@ export function useStudio() {
       solo: false,
       forceReleaseSignal: !s.forceReleaseSignal,
     })));
-    setDrumFx(DEFAULT_DRUM_FX);
-    void localRequest('/drum/fx', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(DEFAULT_DRUM_FX),
-    });
-    setEffectsLoop(DEFAULT_EFFECTS_LOOP);
-    void localRequest('/effects-loop', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(DEFAULT_EFFECTS_LOOP),
-    });
+    localService.setDrumFx(DEFAULT_DRUM_FX);
+    localService.setEffectsLoop(DEFAULT_EFFECTS_LOOP);
     handleDrumReset();
     historyRef.current = { undo: [], redo: [] };
     // Back to a single empty scene, taken from the lanes and drums that were just cleared.
