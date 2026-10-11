@@ -317,23 +317,19 @@ may redistribute.
     two-finger scroll arrives as wheel events too and must not send values
     flying.
 
-13. **A fault: downloading a song as WAV on a phone does not work
-    properly.** Reported by the owner on 2026-10-11: in the installed app
-    on a Pixel 9, Song WAV gave a file that was cut short, and the phone
-    showed no notice that anything had been downloaded. Whether the song had
-    a guest instrument is not remembered, and how long the song was and how
-    much of it was in the file are not known. Not yet reproduced. One guess
-    is ruled out by reading the code: the export renders at a fixed 44,100
-    samples a second from start to finish, so the phone's own 48,000 does
-    not shorten it. Reproduce it first. Things to look at, none of them
-    confirmed: how a phone browser treats a download started
-    from a page (iPhones in particular, and the installed app, which has
-    nowhere obvious to put a file); whether the long render is stopped when
-    the screen sleeps or the page goes to the background; memory, for a long
-    song; and guest instruments, which are recorded by playing the song
-    through. Offering the phone's own share sheet for the finished file may
-    be the answer. The browser tests cover export at phone width only in a
-    desktop browser, so this needs a real phone to confirm, before and after.
+13. **Show that an export is still being made, and name the WAV exports
+    plainly.** (S) From the owner trying Song WAV in the installed app on a
+    Pixel 9 on 2026-10-11. A long song takes a while to render and the app
+    gives no sign of it, so the owner opened the file early and took it for
+    cut short; waited for, the whole song arrived with its download notice.
+    So: show progress while an export is being made, say when it is done,
+    and stop a second export being started on top of the first. Also asked
+    about and not reproduced: with the switch on Scene, a song download gave
+    only the scene. Song WAV does not look at that switch, and a browser
+    test exports the whole song with it on Scene. The Export menu has both
+    Download WAV, which is the open scene, and Song WAV; if that is what
+    happened, call the first Scene WAV. Waiting on the owner to say which
+    was pressed.
 
 Done: song mode, with mutes and solos kept per scene; patterns of 1, 2, 4 or
 8 bars per lane, and MIDI files of up to eight bars imported at full length;
@@ -356,16 +352,11 @@ for new accounts.
   whether what a child makes can be opened in the full app.
 - **Time signatures.** One for the whole project, or one for each scene?
   And which ones should be on offer?
-- **WAV download on a phone.** The owner has said: the installed app on a
-  Pixel 9, Song WAV, a file cut short and no download notice. Still to
-  know: how long the song is and how much of it the file held; whether it
-  had a guest instrument; and whether the same song exports whole in Chrome
-  on the phone (not the installed app) and on a computer.
+- **A song download that gave only the scene.** Was it Download WAV (the
+  open scene, by design) or Song WAV that was pressed?
 
 ## Suggested order
 
-0. **The WAV download fault on a phone** (features 13), as soon as it can be
-   reproduced: it is the one thing on this list that is broken.
 1. **Listen and tune** (sound 1). It needs the owner's ears, not an agent, so
    it can go on alongside everything else.
 2. Done: the four small ones (CI housekeeping, typed worklet messages, synth
@@ -384,8 +375,9 @@ for new accounts.
 6. **Record live playing** and **more ways to edit patterns** (features 3
    and 4): the two that most change what making a song feels like. **Time
    signatures** (features 11) go with pattern editing, after the typed
-   store. **The scroll wheel on knobs** (features 12) is small and can go
-   in whenever the knob code is next open.
+   store. **The scroll wheel on knobs** (features 12) and **showing that
+   an export is being made** (features 13) are small and can go in at any
+   time.
 7. Done: samples in project files (sound 2). Sync for them waits on storage.
 8. **Parameter automation** (features 5).
 9. **The audio layer's single owner** (improvements 4), then the sound work
