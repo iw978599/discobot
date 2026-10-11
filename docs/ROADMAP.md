@@ -304,6 +304,33 @@ may redistribute.
     To decide: one time signature for the project, or one for each scene so
     a song can change metre part-way; and which signatures to offer.
 
+12. **Turn a knob with the scroll wheel.** (S) Asked for by the owner on
+    2026-10-11: with the pointer over a knob, the wheel turns it, with no
+    click or drag. Knobs have no wheel behaviour today. To settle in
+    building it: the page itself scrolls with the wheel, so a knob that
+    happens to be under the pointer must not swallow a scroll that was meant
+    for the page (turn only after the pointer has rested on the knob, or
+    only when the knob has been clicked or focused, or with a key held); how
+    far one notch turns, and a finer turn with Shift as the arrow keys have;
+    one undo entry for a run of notches, as a drag makes; and the same for
+    the drum knobs and the sliders in the effects panel. A trackpad's
+    two-finger scroll arrives as wheel events too and must not send values
+    flying.
+
+13. **A fault: downloading a song as WAV on a phone does not work
+    properly.** Reported by the owner on 2026-10-11. Not yet reproduced, and
+    what goes wrong has not been described: which phone and browser, whether
+    it is the installed app, whether nothing downloads, the file is empty or
+    cut short, or the sound is wrong. Reproduce it first. Things to look at,
+    none of them confirmed: how a phone browser treats a download started
+    from a page (iPhones in particular, and the installed app, which has
+    nowhere obvious to put a file); whether the long render is stopped when
+    the screen sleeps or the page goes to the background; memory, for a long
+    song; and guest instruments, which are recorded by playing the song
+    through. Offering the phone's own share sheet for the finished file may
+    be the answer. The browser tests cover export at phone width only in a
+    desktop browser, so this needs a real phone to confirm, before and after.
+
 Done: song mode, with mutes and solos kept per scene; patterns of 1, 2, 4 or
 8 bars per lane, and MIDI files of up to eight bars imported at full length;
 chords, note length and late starts; project files; the computer keyboard as a
@@ -325,9 +352,15 @@ for new accounts.
   whether what a child makes can be opened in the full app.
 - **Time signatures.** One for the whole project, or one for each scene?
   And which ones should be on offer?
+- **WAV download on a phone.** Which phone and browser, was it the installed
+  app, and what happened: no file, an empty or short one, or wrong sound?
+  Was it Download WAV, Song WAV, Loop or Stems, and did the song have a
+  guest instrument?
 
 ## Suggested order
 
+0. **The WAV download fault on a phone** (features 13), as soon as it can be
+   reproduced: it is the one thing on this list that is broken.
 1. **Listen and tune** (sound 1). It needs the owner's ears, not an agent, so
    it can go on alongside everything else.
 2. Done: the four small ones (CI housekeeping, typed worklet messages, synth
@@ -346,7 +379,8 @@ for new accounts.
 6. **Record live playing** and **more ways to edit patterns** (features 3
    and 4): the two that most change what making a song feels like. **Time
    signatures** (features 11) go with pattern editing, after the typed
-   store.
+   store. **The scroll wheel on knobs** (features 12) is small and can go
+   in whenever the knob code is next open.
 7. Done: samples in project files (sound 2). Sync for them waits on storage.
 8. **Parameter automation** (features 5).
 9. **The audio layer's single owner** (improvements 4), then the sound work
