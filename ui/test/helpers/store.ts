@@ -1,5 +1,5 @@
 // A project store on its own, and one edit to it with everything the edit did. Shared by the
-// tests that pin the store's behaviour: storeRoutes.test.ts and storeOps.test.ts.
+// tests that pin the store's behaviour: storeEdits.test.ts and storeOps.test.ts.
 import assert from 'node:assert/strict';
 import { LocalProjectService } from '../../src/services/localService.ts';
 import { DRUM_INSTRUMENTS } from '../../src/services/drumKits.ts';
@@ -42,32 +42,9 @@ export const statusOf = (result: Applied<unknown>) => (result.ok ? 200 : result.
 export type Message = { type: string; data: any };
 export type Result = { status: number; data: any; events: Message[]; saved: boolean };
 
-// One request, with everything it did. A save is "scheduled" when the route called persist():
-// nothing is waiting before the request, so flush() afterwards writes exactly when it did.
-export async function call(service: LocalProjectService, method: string, path: string, body?: unknown, raw?: string): Promise<Result> {
-  service.flush();
-  const events: Message[] = [];
-  let listening = false, writes = 0;
-  const stopEvents = service.subscribe(message => { if (listening) events.push(message); });
-  const stopWrites = service.subscribeWrites(() => { writes++; });
-  listening = true;
-  const pending = service.request(path, { method, body: raw ?? (body === undefined ? undefined : JSON.stringify(body)) });
-  const delivered = events.length;
-  assert.equal(writes, 0, 'nothing is written during the request itself');
-  const response = await pending;
-  const data = await response.json();
-  assert.equal(events.length, delivered, 'every event had been delivered before request() returned');
-  assert.equal(response.headers.get('Content-Type'), 'application/json');
-  assert.equal(response.ok, response.status === 200);
-  service.flush();
-  stopEvents();
-  stopWrites();
-  assert.ok(writes <= 1);
-  return { status: response.status, data, events, saved: writes === 1 };
-}
-
-// The same for an operation applied directly: `run` calls `apply` or a typed helper. It is not
-// awaited, so everything it reports had happened by the time `run` returned.
+// One edit, with everything it did: `run` calls `apply` or a typed helper. A save is "scheduled"
+// when the edit called persist(): nothing is waiting before it, so flush() afterwards writes exactly
+// when it did. Everything it reports had happened by the time `run` returned.
 export function applied<V>(service: LocalProjectService, run: (service: LocalProjectService) => Applied<V>): Result {
   service.flush();
   const events: Message[] = [];

@@ -672,8 +672,7 @@ export class LocalProjectService {
   // changed nothing. The answer is a copy, as the events are.
   apply<T extends Operation>(op: T, origin: Origin = 'local'): Applied<OpResult<T['type']>> {
     const ctx = this.ctx();
-    const reduce = reducers[op.type] as ((ctx: ReducerContext, op: Operation) => Outcome<unknown>) | undefined;
-    if (!reduce) throw new Error(`No reducer for ${op.type} yet: it is still a route of request()`);
+    const reduce = reducers[op.type] as (ctx: ReducerContext, op: Operation) => Outcome<unknown>;
     const out = reduce(ctx, op);
     if (!out.ok) return { ok: false, status: out.status, error: out.error };
     // Every route answered with something, and the copy below cannot be made of nothing.
@@ -746,93 +745,6 @@ export class LocalProjectService {
     const { scenes, song, currentSceneId } = this.sceneMessage();
     return clone({ scenes, song, currentSceneId });
   }
-
-  async request(path: string, options: RequestInit = {}): Promise<Response> {
-    if (!this.state) throw new Error('Local project has not been initialized');
-    const state = this.state;
-    const method = options.method || 'GET';
-    const respond = (data: any, status = 200) => new Response(JSON.stringify(data), {
-      status, headers: { 'Content-Type': 'application/json' },
-    });
-    let body: Record<string, any>;
-    try {
-      const parsed = typeof options.body === 'string' ? JSON.parse(options.body) : {};
-      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return respond({ error: 'Invalid local operation data' }, 400);
-      body = parsed;
-    } catch { return respond({ error: 'Invalid local operation data' }, 400); }
-    const fromApplied = (result: Applied<unknown>) => (result.ok ? respond(result.value) : respond({ error: result.error }, result.status));
-    if (path === '/scenes') return respond(this.getScenes());
-    if (path === '/scenes/select') return fromApplied(this.apply({ type: 'scene.select', sceneId: body.sceneId }));
-    if (path === '/scenes/create') return fromApplied(this.apply({ type: 'scene.create', sceneId: crypto.randomUUID(), name: body.name, empty: body.empty }));
-    if (path === '/scenes/rename') return fromApplied(this.apply({ type: 'scene.rename', sceneId: body.sceneId, name: body.name }));
-    if (path === '/scenes/delete') return fromApplied(this.apply({ type: 'scene.delete', sceneId: body.sceneId }));
-    if (path === '/scenes/replace') return fromApplied(this.apply({ type: 'scene.replace', scenes: body.scenes, currentSceneId: body.currentSceneId, song: body.song }));
-    if (path === '/song') return fromApplied(this.apply({ type: 'song.set', entries: body.entries, loop: body.loop }));
-    if (path === '/synth/create') return fromApplied(this.apply({ type: 'synth.create', synthId: body.synthId }));
-    const match = path.match(/^\/synth\/(\d+)(?:\/(.*))?$/);
-    if (match) {
-      const synthId = Number(match[1]);
-      const synth = state.synths.find(s => s.synthId === synthId);
-      if (!synth) return respond({ error: 'Synth not found' }, 404);
-      const resource = match[2];
-      if (!resource && method === 'DELETE') return fromApplied(this.apply({ type: 'synth.remove', synthId }));
-      if (resource === 'parameters') {
-        if (method === 'GET') return respond(synth.synthParams);
-        return fromApplied(this.apply({ type: 'synth.params', synthId, patch: body }));
-      }
-      if (resource === 'model') {
-        if (method === 'GET') return respond({ modelId: synth.synthModelId, modelParams: synth.synthModelParams });
-        return fromApplied(this.apply({ type: 'synth.model', synthId, modelId: body.modelId, modelParams: body.modelParams }));
-      }
-      if (resource === 'mix') return fromApplied(this.apply({ type: 'synth.mix', synthId, muted: body.muted, solo: body.solo }));
-      if (resource === 'preferences') return fromApplied(this.apply({ type: 'synth.prefs', synthId, octaveShift: body.octaveShift, keyboardMode: body.keyboardMode }));
-      if (resource === 'patterns' && method === 'GET') return respond(synth.patterns);
-      if (resource?.startsWith('patterns')) {
-        return fromApplied(this.apply({ type: 'pattern.write', synthId, patternId: resource.split('/')[1] || body.id || crypto.randomUUID(), patch: body }));
-      }
-    }
-    if (path === '/tempo') {
-      if (method === 'GET') return respond(this.getTempo());
-      return fromApplied(this.apply({ type: 'tempo.set', tempo: body.tempo }));
-    }
-    if (path === '/sequencer/play' || path === '/sequencer/stop') {
-      const synthId = body.synthId || 1;
-      return fromApplied(this.apply(path.endsWith('/play')
-        ? { type: 'transport.play', synthId, patternId: body.patternId }
-        : { type: 'transport.stop', synthId, patternId: body.patternId }));
-    }
-    if (path === '/drum/kits') return respond(this.getDrumKits());
-    if (path === '/drum/kit') return fromApplied(this.apply({ type: 'drum.kit', kitId: body.kitId, applyDefaults: body.applyDefaults }));
-    if (path === '/drum/state') {
-      if (method === 'GET') return respond(state.drumState);
-      return fromApplied(this.apply({ type: 'drum.state', state: body.state || body }));
-    }
-    if (path === '/drum/reset') return fromApplied(this.apply({ type: 'drum.reset' }));
-    if (path === '/guests' && method === 'POST') return fromApplied(this.apply({ type: 'guest.add', guestId: crypto.randomUUID(), url: body.url, name: body.name }));
-    const guestMatch = /^\/guests\/([0-9a-f-]{36})$/.exec(path);
-    if (guestMatch) {
-      return fromApplied(method === 'DELETE'
-        ? this.apply({ type: 'guest.remove', guestId: guestMatch[1] })
-        : this.apply({ type: 'guest.patch', guestId: guestMatch[1], patch: body }));
-    }
-    if (path === '/drum/master-volume') return fromApplied(this.apply({ type: 'drum.masterVolume', volume: body.volume }));
-    if (path === '/drum/swing') return fromApplied(this.apply({ type: 'drum.swing', swing: body.swing }));
-    if (path === '/drum/fx' || path === '/effects-loop') {
-      const key = path === '/drum/fx' ? 'drumFx' : 'effectsLoop';
-      if (method === 'GET') return respond(state[key]);
-      return fromApplied(key === 'drumFx' ? this.apply({ type: 'drum.fx', patch: body }) : this.apply({ type: 'effects.set', patch: body }));
-    }
-    if (path === '/drum/bars') return fromApplied(this.apply({ type: 'drum.bars', bars: body.bars }));
-    const { instrument } = body;
-    if (path === '/drum/step') return fromApplied(this.apply({ type: 'drum.step', instrument, step: body.step, active: body.active }));
-    if (path === '/drum/step-velocity') return fromApplied(this.apply({ type: 'drum.stepVelocity', instrument, step: body.step, velocity: body.velocity }));
-    if (path === '/drum/step-detail') return fromApplied(this.apply({ type: 'drum.stepDetail', instrument, step: body.step, probability: body.probability, ratchet: body.ratchet }));
-    if (path === '/drum/settings') return fromApplied(this.apply({ type: 'drum.settings', instrument, settings: body.settings }));
-    if (path === '/drum/sample') return fromApplied(this.apply({ type: 'drum.sample', instrument, sampleId: body.sampleId }));
-    if (path === '/drum/mix') return fromApplied(this.apply({ type: 'drum.mix', instrument, muted: body.muted, solo: body.solo }));
-    return respond({ error: 'Unknown local operation' }, 404);
-  }
 }
 
 export const localService = new LocalProjectService();
-export const localRequest = (path: string, options?: RequestInit) => localService.request(path, options);
