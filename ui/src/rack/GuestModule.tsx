@@ -180,6 +180,7 @@ function GuestModule({ studio, guest }: { studio: Studio; guest: Guest }) {
     <section
       className="rack-unit guest-unit"
       aria-label={`Guest instrument ${name}`}
+      data-unit="guests"
       data-status={allowed ? status : 'asking'}
       data-audio-blocks={readout.blocks}
       data-late-blocks={readout.late}

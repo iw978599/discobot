@@ -9,6 +9,11 @@ const buildDirectory = `../.playwright-build-${port}`;
 mkdirSync('.playwright-runtime', { recursive: true });
 process.env.TMPDIR = resolve('.playwright-runtime');
 
+// A phone shows one unit of the rack at a time, which a browser remembers along with the unit
+// last on show. The specs were written for the whole rack on one page, so at phone width they
+// start with that remembered ("all"); phone-layout.spec.ts forgets it and checks the paging.
+const wholeRack = { cookies: [], origins: [{ origin: `http://127.0.0.1:${port}`, localStorage: [{ name: 'discobot_rack_unit_v1', value: 'all' }] }] };
+
 export default defineConfig({
   testDir: './ui/test/browser',
   fullyParallel: false,
@@ -24,7 +29,7 @@ export default defineConfig({
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'mobile-chromium', use: { ...devices['Pixel 7'] } },
+    { name: 'mobile-chromium', use: { ...devices['Pixel 7'], storageState: wholeRack } },
   ],
   // The second server is the accounts API running on this machine with an in-memory database.
   webServer: [

@@ -59,7 +59,9 @@ slow down every later change.
    hooks.
 
 5. **Accessibility pass on custom controls.** (M)
-   Steps are labelled and dialogs trap focus. Still open: the step grids are
+   Steps are labelled and dialogs trap focus. The phone's bar of units is a
+   named navigation whose switches say which unit is on show, and choosing
+   one moves keyboard focus into that unit. Still open: the step grids are
    long runs of separate tab stops, so add a roving tab index; and nothing,
    the walkthrough included, has been tried with a screen reader.
 
@@ -153,11 +155,17 @@ may redistribute.
    their parts, step grids are eight to a row, buttons are finger-sized, the
    keyboard slides sideways, menus rise from the bottom, dialogs fill the
    screen, safe areas are respected, the screen stays awake while playing,
-   and only the tempo and Play stay stuck to the top. It is still every unit
-   on one long page. Still open from the list below: one unit on screen at a
-   time with a bar to move between them, knobs as sliders or a large dial,
-   and a piano roll made for a thumb. None of it has been tried on a real
-   phone. The full list:
+   and only the tempo and Play stay stuck to the top. Second part done: a
+   narrow screen shows one unit at a time (the song, a lane, the guests, the
+   drums or the effects), with a bar along the bottom to move between them
+   and to go back to the whole rack on one page; the unit last on show is
+   remembered in that browser, units out of sight keep playing, and the
+   walkthrough turns to the unit each stop is about. Still open from the
+   list below: knobs as sliders or a large dial, and a piano roll made for a
+   thumb. None of it has been looked at in a browser by a person, tried on a
+   real phone, or tried with a screen reader: it was built from the
+   stylesheet and is held by browser tests that measure the page. The full
+   list:
    - One unit on screen at a time (a lane, the drums, the song, effects),
      with a bar along the bottom to move between them and the transport
      always in reach.

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { accountsEnabled } from '../services/account';
+import { asRackUnit, type RackUnit } from '../services/rackView';
 
 interface Stop {
   // What to light up. Several matches are lit as one area; none, and the card stands alone.
@@ -30,14 +31,25 @@ const NARROW = 640;
 
 interface Placement { spot: CSSProperties | null; card: CSSProperties }
 
+interface WalkthroughProps {
+  onClose: () => void;
+  signedIn: boolean;
+  // On a screen that shows one unit of the rack at a time: the unit on show, and how to show
+  // another. The tour turns to the unit each stop is in, so no stop is about something out of sight.
+  unit?: RackUnit;
+  onUnit?: (unit: RackUnit) => void;
+}
+
 // A tour of the rack: one part is lit at a time and a card explains it. Escape or Skip ends it.
-export default function Walkthrough({ onClose, signedIn }: { onClose: () => void; signedIn: boolean }) {
+export default function Walkthrough({ onClose, signedIn, unit, onUnit }: WalkthroughProps) {
   const [index, setIndex] = useState(0);
   const [placement, setPlacement] = useState<Placement>({ spot: null, card: {} });
   const cardRef = useRef<HTMLDivElement>(null);
   const nextRef = useRef<HTMLButtonElement>(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
+  const unitRef = useRef(onUnit);
+  unitRef.current = onUnit;
   // Settled when the tour starts, so signing in or out part-way does not change how many stops there are.
   const stops = useRef(stopsFor(signedIn)).current;
   const stop = stops[index], last = index === stops.length - 1;
@@ -79,6 +91,13 @@ export default function Walkthrough({ onClose, signedIn }: { onClose: () => void
         left: Math.max(GAP, Math.min(area.left, width - cardWidth - GAP)),
       },
     });
+    // Placed again when the unit on show changes: the stop's part has only then come on screen.
+  }, [stop.target, unit]);
+
+  // Before the stop is placed, so the turn to its unit and the placing reach the screen together.
+  useLayoutEffect(() => {
+    const home = asRackUnit(document.querySelector<HTMLElement>(stop.target)?.closest<HTMLElement>('[data-unit]')?.dataset.unit);
+    if (home) unitRef.current?.(home);
   }, [stop.target]);
 
   useLayoutEffect(() => {
