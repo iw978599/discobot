@@ -9,6 +9,8 @@ import type { ProjectLane } from './localService';
 
 export type DeepPartial<T> = T extends readonly unknown[] ? T : T extends object ? { [K in keyof T]?: DeepPartial<T[K]> } : T;
 export type DrumFxState = { sends: FxSendLevels; returnLevel: number };
+// What can be changed on a guest. Each is changed only when it is there, and checked.
+export type GuestPatch = Partial<Pick<Guest, 'name' | 'volume' | 'muted' | 'state' | 'sends'>>;
 
 // Where an operation came from: an edit made here, one received from someone else, or undo and redo.
 export type Origin = 'local' | 'remote' | 'history';
@@ -47,7 +49,7 @@ export type Operation =
   | { type: 'scene.replace'; scenes?: unknown; currentSceneId?: string; song?: unknown }
   | { type: 'song.set'; entries?: unknown; loop?: boolean }
   | { type: 'guest.add'; guestId: string; url: string; name?: string }
-  | { type: 'guest.patch'; guestId: string; patch: Record<string, unknown> }
+  | { type: 'guest.patch'; guestId: string; patch: GuestPatch }
   | { type: 'guest.remove'; guestId: string };
 
 export type OpType = Operation['type'];
