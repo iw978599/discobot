@@ -1,22 +1,26 @@
 import { useEffect, useState } from 'react';
 import { useStudio } from './studio/useStudio';
-import { decodeShare, sharePayload, shortCode } from './services/shareLink';
+import { decodeShare, sharePayload, shortCode, userName } from './services/shareLink';
 import { accountsEnabled, songsApi } from './services/account';
 import Rack from './rack/Rack';
 import SharedSongPage from './rack/SharedSongPage';
+import UserSongsPage from './rack/UserSongsPage';
 import KidsPage from './kids/KidsPage';
 import { isKidsLink } from './services/kids';
 
 // Kids mode is a page of its own. It is chosen before anything opens the projects, so it
-// cannot change them; going in or out reloads the page.
+// cannot change them; going in or out reloads the page. The page of one person's published
+// songs (`#u=name`) is chosen the same way, and does not open the projects either.
 export default function App() {
   const [kids] = useState(() => isKidsLink(window.location.hash));
+  const [songsBy] = useState(() => userName(window.location.hash));
   useEffect(() => {
-    const onHashChange = () => { if (isKidsLink(window.location.hash) !== kids) window.location.reload(); };
+    const onHashChange = () => { if (isKidsLink(window.location.hash) !== kids || userName(window.location.hash) !== songsBy) window.location.reload(); };
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
-  }, [kids]);
-  return kids ? <KidsPage /> : <Workstation />;
+  }, [kids, songsBy]);
+  if (kids) return <KidsPage />;
+  return songsBy === null ? <Workstation /> : <UserSongsPage username={songsBy} />;
 }
 
 function Workstation() {

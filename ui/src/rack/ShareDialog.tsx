@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { localService } from '../services/localService';
 import { accountsEnabled, songsApi } from '../services/account';
-import { MAX_SHARE_LENGTH, encodeShare, shareUrl, shortUrl, slimProject } from '../services/shareLink';
+import { MAX_SHARE_LENGTH, encodeShare, shareUrl, shortUrl, slimProject, userUrl } from '../services/shareLink';
 import { useAccountUser } from './AccountDialog';
 import Dialog from './Dialog';
 
@@ -101,6 +101,16 @@ export default function ShareDialog({ onClose }: { onClose: () => void }) {
             </>
           )}
           {published && <p role="status">{published}</p>}
+          {user && (
+            <>
+              <h3>Your songs page</h3>
+              <LinkRow label="Your songs page" link={userUrl(user.username, window.location.href)} onProblem={setProblem} />
+              <p className="rack-empty">
+                A page listing every song you have published, for whoever you give this link to. Your name on a published song leads to it too.
+                Discobot has no list of people and no way to browse or search songs.
+              </p>
+            </>
+          )}
           <h3>Link with the song inside it</h3>
         </>
       )}

@@ -421,6 +421,12 @@
 .shared-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .shared-card .rack-btn { text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
 .shared-card p { margin: 0; }
+.shared-eyebrow a { color: inherit; }
+.shared-songs { list-style: none; margin: 0; padding: 0; width: 100%; display: flex; flex-direction: column; gap: 4px; }
+.shared-songs a { color: var(--ink); text-decoration: none; }
+.shared-songs a:hover { border-color: var(--amber); }
+.shared-songs strong { overflow-wrap: anywhere; }
+.shared-page a:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
 .rack-empty { color: var(--dim); }
 .import-notes { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
 .rack .preset-import { cursor: pointer; display: inline-flex; align-items: center; }

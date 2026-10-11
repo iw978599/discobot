@@ -3,6 +3,7 @@ import { localService } from '../services/localService';
 import { applySceneMutes, songBars, songLengthBars } from '../services/songPlayback';
 import { sceneBars } from '../services/patternLength';
 import { renderArrangementWav } from '../services/wavExport';
+import { USER_PREFIX, userName } from '../services/shareLink';
 import './rack.css';
 
 const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, '0')}`;
@@ -66,7 +67,11 @@ export default function SharedSongPage({ file, author, error: fetchError, onOpen
   return (
     <div className="rack-page shared-page">
       <main className="rack-unit shared-card" aria-label="Shared song">
-        <span className="shared-eyebrow">{author ? `A song by ${author}, made in Discobot` : 'A song shared from Discobot'}</span>
+        <span className="shared-eyebrow">
+          {!author ? 'A song shared from Discobot'
+            : userName(`${USER_PREFIX}${author}`) ? <>A song by <a href={`${USER_PREFIX}${author}`} title={`The songs ${author} has published`}>{author}</a>, made in Discobot</>
+              : `A song by ${author}, made in Discobot`}
+        </span>
         <h1>{project.name}</h1>
         <p className="shared-facts">
           {project.tempo} BPM · {bars} {bars === 1 ? 'bar' : 'bars'} · {clock(bars * 240 / project.tempo)}
