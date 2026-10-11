@@ -1126,8 +1126,8 @@ test('the router\'s source has no path or method check that ROUTES does not list
 
   // The method checks, by the path each one sits under. Found by hand and pinned by count:
   // GET on parameters, model, patterns, /tempo, /drum/state and the line shared by /drum/fx and
-  // /effects-loop; DELETE on a lane and twice on a guest; POST on /guests.
-  assert.deepEqual(methodChecks, { GET: 6, DELETE: 3, POST: 1 });
+  // /effects-loop; DELETE on a lane and on a guest; POST on /guests.
+  assert.deepEqual(methodChecks, { GET: 6, DELETE: 2, POST: 1 });
   const withMethod = (route: string) => ROUTES.filter(entry => entry.endsWith(` ${route}`)).map(entry => entry.split(' ')[0]);
   assert.deepEqual(ROUTES.filter(entry => entry.startsWith('GET ')).length, 7);
   assert.deepEqual(withMethod('/guests'), ['POST']);

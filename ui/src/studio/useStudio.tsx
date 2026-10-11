@@ -8,6 +8,7 @@ import { Pattern, SequencerStep, SynthParameters, DrumState, DrumInstrument, Dru
 import { SongPosition, applySceneMutes, audibleLanes, entryStartBar, guestBarGains, sceneAtBar, sceneDrumState, songBars } from '../services/songPlayback';
 import { createDefaultSynthParameters } from '@discobot/engine';
 import { localRequest, localService } from '../services/localService';
+import type { GuestPatch } from '../services/projectOps';
 import { projectSync, startProjectSync } from '../services/projectSync';
 import { loadDrumSample } from '../services/drumSamples';
 import { MAX_EMBEDDED_TOTAL_BYTES, MAX_PROJECT_FILE_BYTES, adoptSamples, embedSamples } from '../services/projectSamples';
@@ -1860,14 +1861,11 @@ export function useStudio() {
     // Recorded first: the unit appears as soon as the store accepts the guest, and must not ask again.
     const address = guestUrl(url, window.location.origin);
     if (address) trustOrigin(guestOrigin(address));
-    const response = await localRequest('/guests', { method: 'POST', body: JSON.stringify({ url }) });
-    if (!response.ok) return (await response.json().catch(() => null) as { error?: string } | null)?.error ?? 'The guest instrument could not be added.';
-    return null;
+    const result = localService.addGuest(url);
+    return result.ok ? null : result.error;
   }, []);
-  const handleRemoveGuest = useCallback(async (id: string) => { await localRequest(`/guests/${id}`, { method: 'DELETE' }); }, []);
-  const handleGuestChange = useCallback(async (id: string, patch: Partial<Pick<Guest, 'name' | 'volume' | 'muted' | 'state' | 'sends'>>) => {
-    await localRequest(`/guests/${id}`, { method: 'PUT', body: JSON.stringify(patch) });
-  }, []);
+  const handleRemoveGuest = useCallback(async (id: string) => { localService.removeGuest(id); }, []);
+  const handleGuestChange = useCallback(async (id: string, patch: GuestPatch) => { localService.changeGuest(id, patch); }, []);
 
   // Which sample each drum lane uses, as one string, so the effect below only runs when that changes.
   const drumSampleKey = DRUM_INSTRUMENTS.map(instrument => drumState[instrument]?.sampleId ?? '').join('|');

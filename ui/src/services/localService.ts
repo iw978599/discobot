@@ -1,5 +1,5 @@
 import type { DrumKitDefinition, DrumKitId, DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, Scene, Song, SynthParameters, SynthModelId, SynthModelParams } from '../types';
-import { MAX_GUESTS, guestUrl, patchGuest, sanitizeGuests, type Guest } from './guests';
+import { sanitizeGuests, type Guest } from './guests';
 import { emptySteps } from './songPlayback';
 import { BAR_CHOICES, DRUM_STEPS_PER_BAR, laneBars, resizeBars } from './patternLength';
 import { createIndexedDbLibrary, createMemoryLibrary, hasIndexedDb, type ProjectInfo, type ProjectLibrary, type ProjectRecord, type VersionInfo, type VersionReason } from './projectLibrary';
@@ -7,7 +7,7 @@ import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
 import { normalizeSynthModelId } from '../synthModels';
 import { NEW_PROJECT_REVERB } from './effectSettings';
 import { record, number, clone, merge, matchesShape, sanitizePattern, sanitizeSynthParams, sanitizeDrums, sanitizeEffects, sanitizeSends, sanitizeSaved, sanitizeModelParams, sanitizeKit, sanitizeScenes, sanitizeSong, MAX_SCENES } from './projectSanitization';
-import type { Applied, OpNotice, OpResult, Operation, Origin, Outcome } from './projectOps';
+import type { Applied, GuestPatch, OpNotice, OpResult, Operation, Origin, Outcome } from './projectOps';
 import { reducers, type ReducerContext } from './projectReducers';
 
 type Message = { type: string; data: any };
@@ -767,7 +767,7 @@ export class LocalProjectService {
   }
 
   private ctx(): ReducerContext {
-    return { state: this.ready(), defaults: this.defaults! };
+    return { state: this.ready(), defaults: this.defaults!, origin: ownOrigin() };
   }
 
   // The one way an edit reaches the project. It is synchronous and must stay so: the event
@@ -780,6 +780,8 @@ export class LocalProjectService {
     if (!reduce) throw new Error(`No reducer for ${op.type} yet: it is still a route of request()`);
     const out = reduce(ctx, op);
     if (!out.ok) return { ok: false, status: out.status, error: out.error };
+    // Every route answered with something, and the copy below cannot be made of nothing.
+    if (out.value === undefined) throw new Error(`The reducer for ${op.type} answered with nothing`);
     if (out.save) this.persist();
     if (out.event) this.emit(out.event.type, out.event.data);
     const notice: OpNotice = { op, origin, saved: !!out.save };
@@ -802,6 +804,9 @@ export class LocalProjectService {
 
   setDrumSwing(swing: number) { return this.apply({ type: 'drum.swing', swing }); }
   setDrumMasterVolume(volume: number) { return this.apply({ type: 'drum.masterVolume', volume }); }
+  addGuest(url: string, name?: string) { return this.apply({ type: 'guest.add', guestId: crypto.randomUUID(), url, name }); }
+  changeGuest(guestId: string, patch: GuestPatch) { return this.apply({ type: 'guest.patch', guestId, patch }); }
+  removeGuest(guestId: string) { return this.apply({ type: 'guest.remove', guestId }); }
 
   getDrumKits(): { kits: DrumKitDefinition[]; defaultKitId: DrumKitId } {
     return clone({ kits: DRUM_KITS, defaultKitId: 'clean-analog' });
@@ -970,36 +975,12 @@ export class LocalProjectService {
       state.drumState = clone(this.defaults!.drumState);
       return update('drumFullState', { drumState: state.drumState });
     }
-    if (path === '/guests' && method === 'POST') {
-      const guests = state.guests ?? [];
-      const url = guestUrl(body.url, ownOrigin());
-      if (!url) return respond({ error: 'That is not an address a guest instrument can be loaded from. It must start with https:// and be on another site.' }, 400);
-      if (guests.length >= MAX_GUESTS) return respond({ error: `A project can hold ${MAX_GUESTS} guest instruments.` }, 409);
-      const [guest] = sanitizeGuests([{ id: crypto.randomUUID(), url, name: body.name }], ownOrigin());
-      state.guests = [...guests, guest];
-      return update('guestsChanged', { guests: state.guests });
-    }
+    if (path === '/guests' && method === 'POST') return fromApplied(this.apply({ type: 'guest.add', guestId: crypto.randomUUID(), url: body.url, name: body.name }));
     const guestMatch = /^\/guests\/([0-9a-f-]{36})$/.exec(path);
     if (guestMatch) {
-      const guests = state.guests ?? [];
-      if (!guests.some(guest => guest.id === guestMatch[1])) return respond({ error: 'Guest not found' }, 404);
-      state.guests = method === 'DELETE'
-        ? guests.filter(guest => guest.id !== guestMatch[1])
-        : guests.map(guest => (guest.id === guestMatch[1] ? patchGuest(guest, body) : guest));
-      if (method === 'DELETE') {
-        // Its settings go from every scene too.
-        for (const scene of state.scenes) {
-          if (!scene.guests) continue;
-          delete scene.guests[guestMatch[1]];
-          if (Object.keys(scene.guests).length === 0) delete scene.guests;
-        }
-        for (const scene of state.scenes) {
-          if (!scene.guestMix) continue;
-          delete scene.guestMix[guestMatch[1]];
-          if (Object.keys(scene.guestMix).length === 0) delete scene.guestMix;
-        }
-      }
-      return update('guestsChanged', { guests: state.guests });
+      return fromApplied(method === 'DELETE'
+        ? this.apply({ type: 'guest.remove', guestId: guestMatch[1] })
+        : this.apply({ type: 'guest.patch', guestId: guestMatch[1], patch: body }));
     }
     if (path === '/drum/master-volume') return fromApplied(this.apply({ type: 'drum.masterVolume', volume: body.volume }));
     if (path === '/drum/swing') return fromApplied(this.apply({ type: 'drum.swing', swing: body.swing }));

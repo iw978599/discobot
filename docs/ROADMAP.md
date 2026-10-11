@@ -22,13 +22,15 @@ slow down every later change.
    all wait on it.
 
    The plan is `docs/TYPED_STORE_PLAN.md`: eight pull requests, each leaving
-   the app working. Done: the first. An edit is now a typed operation handed
-   to one synchronous `apply`, with a reducer for each, and anything that
-   wants to record edits can listen for them. Drum swing and drum master
+   the app working. Done: the first two. An edit is now a typed operation
+   handed to one synchronous `apply`, with a reducer for each, and anything
+   that wants to record edits can listen for them. Drum swing and drum master
    volume go that way, and `useStudio` applies each once, from the store's
    event; the kit list, the tempo and the scenes are read by typed methods.
-   Still open: the other 31 operations (guests, drums, effects, lanes, the
-   transport, scenes and the song, in that order), then taking `request`
+   Adding, changing and removing a guest instrument go that way too, and with
+   them an edit the store refuses (a bad address, a fifth guest) has its
+   settled form. Still open: the other 28 operations (drums, effects, lanes,
+   the transport, scenes and the song, in that order), then taking `request`
    away, and after that splitting `useStudio.tsx`, which the plan describes
    but does not schedule.
 
