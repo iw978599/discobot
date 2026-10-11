@@ -226,7 +226,7 @@ export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0, h
           <button className="rack-btn keyboard-reach" aria-label="Higher keys" disabled={reach.at >= reach.max} onClick={() => showOctave(reach.at + 1)}>▶</button>
         )}
       </div>
-      <div className="keyboard" ref={stripRef} onContextMenu={(event) => { if (['touch', 'pen'].includes((event.nativeEvent as PointerEvent).pointerType)) event.preventDefault(); }}>
+      <div className="keyboard" ref={stripRef} onContextMenu={(event) => { if (pointers.current.size > 0 || ['touch', 'pen'].includes((event.nativeEvent as PointerEvent).pointerType)) event.preventDefault(); }}>
         {octaves.map((octave) => (
           <div key={octave} className="octave">
             <div className="white-keys">

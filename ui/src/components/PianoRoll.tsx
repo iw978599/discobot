@@ -72,11 +72,17 @@ export default function PianoRoll({
   // The one cell of the grid the Tab key stops on: the last one that had the keyboard.
   const [cursor, setCursor] = useState<{ note: string; step: number } | null>(null);
 
+  // The finger that was waiting on a note has lifted. Soon enough, that was a tap.
+  const settleTap = (pointerId: number, timeStamp: number) => {
+    const tap = waiting.current;
+    if (!tap || tap.id !== pointerId) return;
+    waiting.current = null;
+    if (timeStamp - tap.at < TAP_HOLD_MS) onNoteAssignRef.current(tap.step, tap.note, false);
+  };
   useEffect(() => {
     const release = (event: Event) => {
-      const tap = waiting.current;
+      if (event.type === 'pointerup') settleTap((event as PointerEvent).pointerId, event.timeStamp);
       waiting.current = null;
-      if (tap && event.type === 'pointerup' && (event as PointerEvent).pointerId === tap.id && event.timeStamp - tap.at < TAP_HOLD_MS) onNoteAssignRef.current(tap.step, tap.note, false);
       painting.current = null;
       pressing.current = false;
     };
@@ -282,7 +288,9 @@ export default function PianoRoll({
           const next = { note: cell.dataset.note, step: Number(cell.dataset.step) };
           setCursor(now => (now && now.note === next.note && now.step === next.step ? now : next));
         }}
-        onContextMenu={(event) => { if (['touch', 'pen'].includes((event.nativeEvent as PointerEvent).pointerType)) event.preventDefault(); }}
+        // A finger held on the grid is editing, not asking for the browser's menu, which would
+        // also take the touch that follows it.
+        onContextMenu={(event) => { if (pressing.current || ['touch', 'pen'].includes((event.nativeEvent as PointerEvent).pointerType)) event.preventDefault(); }}
       >
         <div className="piano-roll-corner" />
         {columns.map((stepIndex) => (
@@ -329,6 +337,7 @@ export default function PianoRoll({
                     }
                     handleCellDown(stepIndex, note, event.clientX, event.clientY, event.altKey);
                   }}
+                  onPointerUp={(event) => settleTap(event.pointerId, event.timeStamp)}
                   onPointerEnter={(event) => handleCellEnter(stepIndex, note, event.clientX, event.clientY)}
                   onPointerMove={(event) => {
                     if (event.pointerType === 'mouse') return;

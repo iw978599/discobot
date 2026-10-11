@@ -3,6 +3,16 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'requestMIDIAccess', { configurable: true, value: undefined });
+    // The pointer events the page was sent, to say what happened when a touch does not do what
+    // a test expects: nobody can watch these run.
+    const trail: string[] = [];
+    (window as unknown as { pointerTrail: string[] }).pointerTrail = trail;
+    for (const type of ['pointerdown', 'pointerup', 'pointercancel', 'lostpointercapture', 'contextmenu', 'click']) {
+      window.addEventListener(type, (event) => {
+        const target = event.target as Element | null;
+        trail.push(`${type} ${(event as PointerEvent).pointerType || '-'}#${(event as PointerEvent).pointerId ?? '-'} ${target?.getAttribute?.('aria-label') ?? target?.className ?? ''}`);
+      }, true);
+    }
     // Everything sent to the synth, so a test can tell which notes are sounding.
     const sent: Array<{ type: string; note?: string }> = [];
     (window as unknown as { audioMessages: typeof sent }).audioMessages = sent;
@@ -45,6 +55,7 @@ const sounding = (page: Page) => page.evaluate(() => {
   }
   return [...on].sort();
 });
+const trail = async (page: Page) => `the last pointer events were: ${(await page.evaluate(() => (window as unknown as { pointerTrail: string[] }).pointerTrail.slice(-14))).join(' | ')}`;
 const started = (page: Page, note: string) => page.evaluate(wanted => (window as unknown as { audioMessages: Array<{ type: string; note?: string }> }).audioMessages.some(message => message.type === 'noteOn' && message.note === wanted), note);
 
 // Fingers on the screen. Each call says where every finger now is: one that is new has landed,
@@ -619,9 +630,21 @@ test('on a phone the keyboard is played with fingers: wide keys, several at once
   await expect(key('C4'), 'the second finger does not let the first key go').toHaveAttribute('aria-pressed', 'true');
   await expect.poll(() => sounding(page), 'both notes sound').toEqual(['C4', 'E4']);
 
-  // Lifting one stops only that one.
+  // Both lifted, both stop.
+  await hand.touch();
+  await expect.poll(pressed, await trail(page)).toEqual([]);
+  await expect.poll(() => sounding(page)).toEqual([]);
+
+  // Lifting one of two stops only that one. The test's touches can only be lifted all at once,
+  // so here one key is held by a finger and the other by a mouse, which is lifted first.
   await hand.touch(second);
-  await expect(key('C4')).toHaveAttribute('aria-pressed', 'false');
+  await expect(key('E4')).toHaveAttribute('aria-pressed', 'true');
+  await page.mouse.move(first.x, first.y);
+  await page.mouse.down();
+  await expect.poll(pressed, await trail(page)).toEqual(['C4', 'E4']);
+  await expect.poll(() => sounding(page)).toEqual(['C4', 'E4']);
+  await page.mouse.up();
+  await expect(key('C4'), await trail(page)).toHaveAttribute('aria-pressed', 'false');
   await expect(key('E4')).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(() => sounding(page)).toEqual(['E4']);
 
@@ -648,7 +671,7 @@ test('on a phone the keyboard is played with fingers: wide keys, several at once
   await expect(key('A4'), 'the bar taking the keyboard focus lets nothing go').toHaveAttribute('aria-pressed', 'true');
   await page.keyboard.press('Enter');
   await expect(lane).toBeHidden();
-  await expect.poll(() => sounding(page), 'no note is left sounding behind the drums').toEqual([]);
+  await expect.poll(() => sounding(page), `no note is left sounding behind the drums; ${await trail(page)}`).toEqual([]);
   await hand.touch();
   await tab(page, 'Show Synth 1').click();
   await expect(lane.locator('.key.active')).toHaveCount(0);
@@ -746,29 +769,31 @@ test('on a phone the piano roll is edited with a finger: a tap, a drag, a held n
   await hand.touch();
   for (const step of [2, 3, 4]) await on('G3', step, true);
 
-  // A finger held still on a note keeps it, and selects its step for the controls underneath.
-  await hand.touch(await at(cell('G3', 2)));
-  await page.waitForTimeout(800);
-  await hand.touch();
-  await page.waitForTimeout(300);
-  await on('G3', 2, true);
-  await expect(lane.getByRole('button', { name: 'Select step 2 G3', exact: true }), 'its step is selected').toHaveAttribute('aria-pressed', 'true');
-  await expect(lane.getByLabel('Step 2 chance', { exact: true }), 'and the step controls are for it').toBeVisible();
-
   // A tap on a note takes it out. A drag that begins on a note rubs out along the row.
   await cell('G3', 2).tap();
-  await on('G3', 2, false);
+  await expect(cell('G3', 2), `a tapped note is taken out; ${await trail(page)}`).toHaveAttribute('aria-pressed', 'false');
   const rub = await at(cell('G3', 3));
   await hand.touch(rub);
   await hand.slide(rub, await at(cell('G3', 4)));
   await hand.touch();
-  for (const step of [3, 4]) await on('G3', step, false);
+  for (const step of [3, 4]) await expect(cell('G3', step), `G3 step ${step} is rubbed out; ${await trail(page)}`).toHaveAttribute('aria-pressed', 'false');
   await on('C3', 1, true);
+
+  // A finger held still on a note keeps it, and selects its step for the controls underneath.
+  await expect(lane.getByRole('button', { name: 'Select step 1 C3', exact: true })).toHaveAttribute('aria-pressed', 'false');
+  await hand.touch(await at(cell('C3', 1)));
+  await page.waitForTimeout(800);
+  await hand.touch();
+  await page.waitForTimeout(300);
+  await on('C3', 1, true);
+  await expect(lane.getByRole('button', { name: 'Select step 1 C3', exact: true }), 'its step is selected').toHaveAttribute('aria-pressed', 'true');
+  await expect(lane.getByLabel('Step 1 chance', { exact: true }), 'and the step controls are for it').toBeVisible();
   expect(await places(), 'neither the page nor the grid moved under the finger').toEqual(still);
 
-  // The rest of the bar is reached with the two buttons, a beat at a time.
+  // The rest of the bar is reached with the two buttons, a beat at a time. The touch after a
+  // held one is an ordinary touch: the browser's own menu did not come up and take it.
   await lane.getByRole('button', { name: 'Later steps', exact: true }).tap();
-  expect(await steps()).toEqual([5, to + 4 > 16 ? 16 : to + 4]);
+  await expect.poll(steps, await trail(page)).toEqual([5, to + 4 > 16 ? 16 : to + 4]);
   expect(within(await box(head(5)), frame, label)).toBe(true);
   expect(within(await box(head(1)), frame, label), 'the first steps have gone off the edge').toBe(false);
   for (let press = 0; press < 4 && await lane.getByRole('button', { name: 'Later steps', exact: true }).isEnabled(); press += 1) await lane.getByRole('button', { name: 'Later steps', exact: true }).tap();
@@ -794,7 +819,7 @@ test('on a phone the piano roll is edited with a finger: a tap, a drag, a held n
   await hand.touch(name);
   await hand.slide(name, { x: name.x, y: name.y + 150 });
   await hand.touch();
-  await expect.poll(() => grid.evaluate(element => element.scrollTop), 'the grid went up to higher notes').toBeLessThan(low - 50);
+  await expect.poll(() => grid.evaluate(element => element.scrollTop), `the grid went up to higher notes; ${await trail(page)}`).toBeLessThan(low - 50);
   expect(await grid.evaluate(element => element.scrollLeft), 'and not sideways').toBe(still[2]);
 
   // While it plays, the light is on the playing step, on whichever part of the bar holds it.
@@ -868,9 +893,13 @@ test('a phone on its side has the phone arrangement, with the width used and the
     expect(area.height, note).toBeGreaterThanOrEqual(100);
     expect(within(area, { x: 0, width: view.width }), `${note} is on screen`).toBe(true);
   }
-  await key('C5').tap();
-  await expect.poll(() => started(page, 'C5'), 'a tapped key plays').toBe(true);
+  const hand = await fingers(page);
+  await hand.touch(await at(key('C5'), 0, 0.5, 0.85));
+  await expect(key('C5')).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(() => started(page, 'C5'), 'a touched key plays').toBe(true);
+  await hand.touch();
   await expect(lane.locator('.key.active')).toHaveCount(0);
+  await expect.poll(() => sounding(page)).toEqual([]);
 
   // The piano roll shows more of the bar than it does upright, in squares as big, and fits
   // between the transport and the bar with several rows of notes on show.
