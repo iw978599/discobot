@@ -3,6 +3,7 @@ import { isAudioFile, listSamples, saveSample } from '../services/sampleStore';
 import { MAX_KIT_FILES } from '../services/kitImport';
 import KitImportDialog from './KitImportDialog';
 import { usePlayhead, usePlayheadMark } from '../hooks/usePlayhead';
+import { tracked } from '../studio/tracked';
 import { BAR_CHOICES, drumBars } from '../services/patternLength';
 import type { Studio } from '../studio/useStudio';
 import { DrumInstrument, DrumKitId, DrumState, CymbalType } from '../types';
@@ -56,7 +57,7 @@ const percentText = (value: number) => `${Math.round(value * 100)}%`;
 
 // The whole drum kit as one grid: eight instruments down, sixteen steps across, lined up
 // with the synth lanes above. The strip underneath edits the instrument and step you last touched.
-export default function DrumModule({ studio }: { studio: Studio }) {
+function DrumModule({ studio }: { studio: Studio }) {
   const {
     drumState, drumAudio, drumKits, drumKitsLoading, drumKitsError, selectedDrumKitId, drumFx, drumMasterVolume, drumSwing,
     handleDrumStepToggle: onStepToggle, handleDrumStepVelocity: onStepVelocity, handleDrumStepDetail: onStepDetail,
@@ -542,3 +543,5 @@ export default function DrumModule({ studio }: { studio: Studio }) {
     </section>
   );
 }
+
+export default tracked(DrumModule, 'drums');

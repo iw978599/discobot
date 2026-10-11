@@ -2,7 +2,7 @@
 // a second, so it is kept out of React state, where every change would render the whole rack.
 // Components read it through the hooks in `hooks/usePlayhead.ts`.
 
-export type PlayheadLane = number | 'drums';
+export type PlayheadLane = number | 'drums' | 'kids';
 
 const steps = new Map<PlayheadLane, number>();
 const listeners = new Map<PlayheadLane, Set<() => void>>();

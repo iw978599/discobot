@@ -2,9 +2,9 @@ import { createDefaultSynthParameters } from '@discobot/engine';
 import type { DrumInstrument, DrumSettings, SynthParameters } from '../types';
 import { DRUM_KITS } from './drumKits';
 
-// Kids mode: a page of big pads for a small child. It is a page of its own (`#kids`) that never
-// opens the projects, so nothing made there can change, delete or share one. What a child makes
-// is kept in this browser under its own key and is not a project.
+// Kids mode: big pads and a picture grid for a small child. It is a page of its own (`#kids`)
+// that never opens the projects, so nothing made there can change, delete or share one. What a
+// child makes is kept in this browser under its own key and is not a project.
 
 export const KIDS_HASH = '#kids';
 export const isKidsLink = (hash: string) => hash === KIDS_HASH;
@@ -25,12 +25,15 @@ export const KIDS_LEAVE_HOLD_MS = 3000;
 export const KIDS_VOLUME = 0.5;
 // The loop is two bars of eighth notes: slow enough that a tap lands where it was meant.
 export const KIDS_STEPS = 16;
+// The beat grid is one bar of them, so it goes round twice for each turn of the loop.
+export const KIDS_BEAT_STEPS = 8;
 export const KIDS_TEMPOS = { slow: 80, fast: 110 } as const;
 export type KidsTempo = keyof typeof KIDS_TEMPOS;
 
 export type KidsPad = { label: string; picture: string; color: string } & ({ note: string } | { drum: DrumInstrument });
 
-// Six notes of one five-note scale, low to high, so no two pads clash, then three drums.
+// Notes of one five-note scale, so no two pads clash, and drums. A stored tune names a pad by
+// its place in this list, so a new pad goes on the end: moving one would move every saved tune.
 export const KIDS_PADS: KidsPad[] = [
   { label: 'Bear', picture: '🐻', color: '#e5484d', note: 'C4' },
   { label: 'Dog', picture: '🐶', color: '#f76b15', note: 'D4' },
@@ -41,13 +44,23 @@ export const KIDS_PADS: KidsPad[] = [
   { label: 'Drum', picture: '🥁', color: '#f2f2f2', drum: 'kick' },
   { label: 'Clap', picture: '👏', color: '#ffb3c7', drum: 'clap' },
   { label: 'Sparkle', picture: '✨', color: '#9be7e0', drum: 'closedHH' },
+  { label: 'Frog', picture: '🐸', color: '#e93d82', note: 'D5' },
+  { label: 'Bee', picture: '🐝', color: '#12a594', note: 'E5' },
+  { label: 'Bang', picture: '💥', color: '#ffe08a', drum: 'snare' },
 ];
+
+// Where each pad sits on the screen: the notes from low to high, then the drums.
+export const KIDS_PAD_ORDER = [0, 1, 2, 3, 4, 5, 9, 10, 6, 11, 8, 7];
+// The rows of the beat grid, top to bottom. Each is the drum of one pad, so a row and its pad
+// are one instrument with one picture, and the two never play the same hit twice.
+export const KIDS_BEAT_ROWS = [6, 11, 8, 7];
 
 const sound = (changes: Partial<SynthParameters>): SynthParameters => ({
   ...createDefaultSynthParameters(), gain: 0.8, fxSends: { reverb: 0, delay: 0, drive: 0, phaser: 0, chorus: 0 }, ...changes,
 });
 
-// The sounds a child picks from, by picture. Set by reasoning, not by ear.
+// The sounds a child picks from, by picture. Set by reasoning, not by ear. A stored tune names
+// its sound by its place here, so a new one goes on the end.
 export const KIDS_SOUNDS: Array<{ label: string; picture: string; params: SynthParameters }> = [
   { label: 'Bell', picture: '🔔', params: sound({
     engine: 'fm', fm: { algorithm: 1, ratio: 3.5, index: 0.6, decay: 0.4, feedback: 0 },
@@ -68,9 +81,21 @@ export const KIDS_SOUNDS: Array<{ label: string; picture: string; params: SynthP
     filter: { frequency: 2500, q: 1, type: 'lowpass', envAmount: 0, keyTracking: 0, drive: 0, slope: 12 },
     envelope: { attack: 0.01, decay: 0.3, sustain: 0.5, release: 0.3 },
   }) },
+  { label: 'Guitar', picture: '🎸', params: sound({
+    oscillator: { type: 'sawtooth', detune: 0, pulseWidth: 0.5 },
+    filter: { frequency: 700, q: 1.5, type: 'lowpass', envAmount: 0.5, keyTracking: 0, drive: 0, slope: 12 },
+    filterEnvelope: { attack: 0.001, decay: 0.18, sustain: 0, release: 0.2 },
+    envelope: { attack: 0.002, decay: 0.5, sustain: 0, release: 0.3 },
+  }) },
+  { label: 'Ghost', picture: '👻', params: sound({
+    lfo1: { enabled: true, target: 'vibrato', waveform: 'sine', rate: 5, depth: 0.35, sync: false, retrigger: true },
+    envelope: { attack: 0.08, decay: 0.2, sustain: 0.8, release: 0.5 },
+  }) },
 ];
 
 export const kidsDrumSettings = (drum: DrumInstrument): DrumSettings => DRUM_KITS[0].instrumentDefaults[drum];
+
+export type KidsScreen = 'pads' | 'beat';
 
 export interface KidsState {
   // which of KIDS_SOUNDS the note pads play
@@ -78,33 +103,44 @@ export interface KidsState {
   tempo: KidsTempo;
   // notes[pad][step]: whether that pad plays on that step of the loop
   notes: boolean[][];
+  // beat[row][step]: whether that row of the beat grid plays on that step of its bar
+  beat: boolean[][];
+  // the activity that was last open
+  screen: KidsScreen;
 }
 
 export const blankKids = (): KidsState => ({
   sound: 0, tempo: 'slow', notes: KIDS_PADS.map(() => Array<boolean>(KIDS_STEPS).fill(false)),
+  beat: KIDS_BEAT_ROWS.map(() => Array<boolean>(KIDS_BEAT_STEPS).fill(false)), screen: 'pads',
 });
 
-// What a first visit starts with: a drum and a clap to play along to, so Play does something at once.
+// What a first visit starts with: a drum and a clap in the beat grid, so Play does something
+// at once and the grid shows how it was made.
 export function starterKids(): KidsState {
   const state = blankKids();
-  const pad = (drum: DrumInstrument) => KIDS_PADS.findIndex(entry => 'drum' in entry && entry.drum === drum);
-  for (const step of [0, 4, 8, 12]) state.notes[pad('kick')][step] = true;
-  for (const step of [2, 6, 10, 14]) state.notes[pad('clap')][step] = true;
+  const row = (drum: DrumInstrument) => KIDS_BEAT_ROWS.findIndex(pad => { const entry = KIDS_PADS[pad]; return 'drum' in entry && entry.drum === drum; });
+  for (const step of [0, 4]) state.beat[row('kick')][step] = true;
+  for (const step of [2, 6]) state.beat[row('clap')][step] = true;
   return state;
 }
 
-// Storage is not trusted: anything that is not the right shape becomes the blank value for its place.
+// Storage is not trusted: anything that is not the right shape becomes the blank value for its
+// place. A tune kept before there was a beat grid, or with fewer pads, has nothing for the new
+// places and gets them empty.
 export function sanitizeKids(input: unknown): KidsState {
   const blank = blankKids();
   if (!input || typeof input !== 'object') return blank;
-  const { sound: chosen, tempo, notes } = input as Record<string, unknown>;
+  const { sound: chosen, tempo, notes, beat, screen } = input as Record<string, unknown>;
+  const rows = (empty: boolean[][], stored: unknown) => empty.map((row, index) => {
+    const kept = Array.isArray(stored) ? stored[index] : null;
+    return row.map((_, step) => Array.isArray(kept) && kept[step] === true);
+  });
   return {
     sound: Number.isInteger(chosen) && (chosen as number) >= 0 && (chosen as number) < KIDS_SOUNDS.length ? chosen as number : 0,
     tempo: tempo === 'fast' ? 'fast' : 'slow',
-    notes: blank.notes.map((row, pad) => {
-      const stored = Array.isArray(notes) ? notes[pad] : null;
-      return row.map((_, step) => Array.isArray(stored) && stored[step] === true);
-    }),
+    notes: rows(blank.notes, notes),
+    beat: rows(blank.beat, beat),
+    screen: screen === 'beat' ? 'beat' : 'pads',
   };
 }
 
@@ -112,6 +148,18 @@ export const withNote = (state: KidsState, pad: number, step: number): KidsState
   state.notes[pad]?.[step] !== false ? state
     : { ...state, notes: state.notes.map((row, index) => (index === pad ? row.map((on, at) => on || at === step) : row)) }
 );
+
+export const withBeatToggled = (state: KidsState, row: number, step: number): KidsState => (
+  typeof state.beat[row]?.[step] !== 'boolean' ? state
+    : { ...state, beat: state.beat.map((cells, index) => (index === row ? cells.map((on, at) => (at === step ? !on : on)) : cells)) }
+);
+
+// Whether a pad sounds on a step counted from when Play was pressed: because it was tapped
+// there, or because its row of the beat grid has a hit there.
+export function padSounds(state: KidsState, pad: number, count: number): boolean {
+  if (state.notes[pad]?.[count % KIDS_STEPS]) return true;
+  return state.beat[KIDS_BEAT_ROWS.indexOf(pad)]?.[count % KIDS_BEAT_STEPS] === true;
+}
 
 // The last step the loop scheduled: how many steps in, when it sounds, and how long a step is.
 export interface KidsStep { count: number; time: number; duration: number }
