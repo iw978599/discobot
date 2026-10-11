@@ -21,6 +21,17 @@ slow down every later change.
    state-applied-twice bugs, and undo, automation and collaborative sessions
    all wait on it.
 
+   The plan is `docs/TYPED_STORE_PLAN.md`: eight pull requests, each leaving
+   the app working. Done: the first. An edit is now a typed operation handed
+   to one synchronous `apply`, with a reducer for each, and anything that
+   wants to record edits can listen for them. Drum swing and drum master
+   volume go that way, and `useStudio` applies each once, from the store's
+   event; the kit list, the tempo and the scenes are read by typed methods.
+   Still open: the other 31 operations (guests, drums, effects, lanes, the
+   transport, scenes and the song, in that order), then taking `request`
+   away, and after that splitting `useStudio.tsx`, which the plan describes
+   but does not schedule.
+
 2. **Make undo a store feature.** (M, after 1)
    Undo snapshots are assembled by hand, and each handler must remember to
    push one. With a typed store, record every mutation as a patch

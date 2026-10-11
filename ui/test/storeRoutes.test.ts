@@ -10,8 +10,7 @@ import { LocalProjectService } from '../src/services/localService.ts';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from '../src/services/drumKits.ts';
 import { MAX_GUESTS } from '../src/services/guests.ts';
 import { MAX_SCENES } from '../src/services/projectSanitization.ts';
-import { createDefaultSynthParameters } from '../../engine/src/synth/voiceParams.ts';
-import type { DrumState, EffectsLoopState } from '../src/types.ts';
+import { call, defaults, setup, storage, type Message, type Result } from './helpers/store.ts';
 
 // Every branch of the router, in the order the router tries them. A name with no method is a
 // branch that does not look at the method. The last test fails if a branch here has no case,
@@ -38,56 +37,6 @@ const GUEST_URL = 'https://guest.example/synth';
 const NO_GUEST = '00000000-0000-4000-8000-000000000000';
 const SAMPLE = '11111111-2222-4333-8444-555555555555';
 
-const storage = new Map<string, string>();
-const defaults = () => ({
-  synthParams: createDefaultSynthParameters(),
-  drumState: Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => [instrument, {
-    steps: Array(16).fill(false), settings: { volume: .5, tone: .5, extra: .5 }, muted: false, solo: false,
-  }])) as DrumState,
-  drumFx: { sends: { reverb: .2, delay: .1, drive: .1, phaser: 0 }, returnLevel: .7 },
-  effectsLoop: {
-    enabled: true, returns: { synth: .8, drums: .7 }, drive: { enabled: true, amount: .2, tone: .6 },
-    phaser: { enabled: false, rate: .5, depth: .4, feedback: .2, mix: .2 },
-    delay: { enabled: true, time: .2, feedback: .3, mix: .3 }, reverb: { enabled: true, decay: 2, mix: .3 },
-  } satisfies EffectsLoopState,
-});
-function setup() {
-  storage.clear();
-  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
-    getItem: (key: string) => storage.get(key) ?? null,
-    setItem: (key: string, value: string) => { storage.set(key, value); },
-  } });
-  const service = new LocalProjectService();
-  service.initialize(defaults());
-  return service;
-}
-
-type Message = { type: string; data: any };
-type Result = { status: number; data: any; events: Message[]; saved: boolean };
-
-// One request, with everything it did. A save is "scheduled" when the route called persist():
-// nothing is waiting before the request, so flush() afterwards writes exactly when it did.
-async function call(service: LocalProjectService, method: string, path: string, body?: unknown, raw?: string): Promise<Result> {
-  service.flush();
-  const events: Message[] = [];
-  let listening = false, writes = 0;
-  const stopEvents = service.subscribe(message => { if (listening) events.push(message); });
-  const stopWrites = service.subscribeWrites(() => { writes++; });
-  listening = true;
-  const pending = service.request(path, { method, body: raw ?? (body === undefined ? undefined : JSON.stringify(body)) });
-  const delivered = events.length;
-  assert.equal(writes, 0, 'nothing is written during the request itself');
-  const response = await pending;
-  const data = await response.json();
-  assert.equal(events.length, delivered, 'every event had been delivered before request() returned');
-  assert.equal(response.headers.get('Content-Type'), 'application/json');
-  assert.equal(response.ok, response.status === 200);
-  service.flush();
-  stopEvents();
-  stopWrites();
-  assert.ok(writes <= 1);
-  return { status: response.status, data, events, saved: writes === 1 };
-}
 const send = async (service: LocalProjectService, path: string, body: unknown = {}, method = 'POST') => {
   const result = await call(service, method, path, body);
   assert.equal(result.status, 200, `${method} ${path} while arranging`);
