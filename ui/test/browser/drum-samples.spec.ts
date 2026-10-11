@@ -84,6 +84,89 @@ test('a drum lane plays an imported sample, in playback and export, and falls ba
   expect(errors).toEqual([]);
 });
 
+test('a saved project file carries its samples to a browser that has never had them', async ({ page, browser, baseURL }, testInfo) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.getByRole('button', { name: 'Snare step 5', exact: true }).click();
+  const builtIn = await exportWav(page, testInfo.outputPath('built-in.wav'));
+  await page.getByLabel('Import drum sample', { exact: true }).setInputFiles({ name: 'beep.wav', mimeType: 'audio/wav', buffer: toneWav() });
+  await expect(page.getByLabel('Snare sound', { exact: true }).locator('option:checked')).toHaveText('beep.wav');
+  await expect.poll(async () => (await exportWav(page, testInfo.outputPath('sampled.wav'))).equals(builtIn), { message: 'the export changes once the sample has loaded' }).toBe(false);
+  const sampled = await readFile(testInfo.outputPath('sampled.wav'));
+  const sampleId = (await stored(page)).drumState.snare.sampleId;
+
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Project ▾', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Export Project', exact: true }).click();
+  const saved = await download;
+  expect(saved.suggestedFilename()).toMatch(/^discobot-project-\d{4}-\d{2}-\d{2}\.json$/);
+  const path = testInfo.outputPath('project.json');
+  await saved.saveAs(path);
+  const file = JSON.parse(await readFile(path, 'utf8'));
+  expect(file.samples.map((sample: { id: string; name: string; type: string }) => [sample.id, sample.name, sample.type])).toEqual([[sampleId, 'beep.wav', 'audio/wav']]);
+  expect(Buffer.from(file.samples[0].data, 'base64').equals(toneWav()), 'the file holds the audio as it was imported').toBe(true);
+  expect('samples' in file.project).toBe(false);
+  await expect(page.locator('.app-alert')).toHaveCount(0);
+  // The audio went into the file and nowhere else in this browser's project storage.
+  const kept = await page.evaluate(() => (window.dispatchEvent(new Event('pagehide')), Object.values({ ...localStorage }).join('')));
+  expect(kept.includes(file.samples[0].data.slice(0, 80))).toBe(false);
+
+  // Another browser: empty storage, no samples.
+  const otherContext = await browser.newContext({ baseURL, acceptDownloads: true });
+  const other = await otherContext.newPage();
+  other.on('pageerror', error => errors.push(error.message));
+  await other.addInitScript(() => {
+    Object.defineProperty(navigator, 'requestMIDIAccess', { configurable: true, value: undefined });
+  });
+  await other.goto('./');
+  await expect(other.getByRole('heading', { name: 'Discobot', exact: true })).toBeVisible();
+
+  // First the same project without its audio, as a file from before this would be: the lane falls back.
+  const { samples: _audio, ...bare } = file;
+  const importFile = other.locator('input[aria-label="Import project file"]');
+  await importFile.setInputFiles({ name: 'bare.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(bare)) });
+  await expect(other.getByRole('button', { name: 'Snare step 5', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await other.getByRole('button', { name: 'Select Snare', exact: true }).click();
+  await expect(other.getByLabel('Snare sound', { exact: true }).locator('option:checked')).toHaveText('Sample not on this device');
+  await expect(other.locator('.drum-strip').getByRole('status')).toContainText('not on this device');
+  expect((await exportWav(other, testInfo.outputPath('other-missing.wav'))).equals(builtIn), 'without the audio the built-in snare plays').toBe(true);
+
+  // Then the saved file. The lane that was missing its sample now has it, under the same id.
+  await importFile.setInputFiles(path);
+  await expect(other.getByRole('button', { name: /^Project: .* 2$/ })).toBeVisible();
+  await expect(other.locator('.app-alert')).toHaveCount(0);
+  await other.getByRole('button', { name: 'Select Snare', exact: true }).click();
+  await expect(other.getByLabel('Snare sound', { exact: true }).locator('option:checked')).toHaveText('beep.wav');
+  await expect(other.locator('.drum-strip').getByRole('status')).toHaveCount(0);
+  expect((await stored(other)).drumState.snare.sampleId).toBe(sampleId);
+  await expect.poll(async () => (await exportWav(other, testInfo.outputPath('other-sampled.wav'))).equals(sampled), { message: 'the export plays the sample that came in the file' }).toBe(true);
+
+  await other.getByRole('button', { name: /Play All/ }).click();
+  await other.waitForTimeout(700);
+  await other.getByRole('button', { name: /Stop All/ }).click();
+
+  // Importing it again adds a project, not a second copy of the sample.
+  await importFile.setInputFiles(path);
+  await expect(other.getByRole('button', { name: /^Project: .* 3$/ })).toBeVisible();
+  await other.getByRole('button', { name: 'MIDI and samples', exact: true }).click();
+  await expect(other.getByRole('button', { name: 'Delete sample beep.wav', exact: true })).toHaveCount(1);
+  await other.keyboard.press('Escape');
+
+  // A file whose audio is not audio still opens, says so, and the lane plays its own sound.
+  await other.getByRole('button', { name: 'MIDI and samples', exact: true }).click();
+  await other.getByRole('button', { name: 'Delete sample beep.wav', exact: true }).click();
+  await expect(other.getByRole('button', { name: 'Delete sample beep.wav', exact: true })).toHaveCount(0);
+  await other.keyboard.press('Escape');
+  await importFile.setInputFiles({ name: 'broken.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ ...file, samples: [{ ...file.samples[0], data: 'not audio at all!' }] })) });
+  await expect(other.getByRole('button', { name: /^Project: .* 4$/ })).toBeVisible();
+  await expect(other.locator('.app-alert').filter({ hasText: 'one of its samples could not be read' })).toBeVisible();
+  await other.getByRole('button', { name: 'Select Snare', exact: true }).click();
+  await expect(other.getByRole('button', { name: 'Snare step 5', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(other.locator('.drum-strip').getByRole('status')).toContainText('not on this device');
+  await otherContext.close();
+  expect(errors).toEqual([]);
+});
+
 test('a kit of sample files is put on the lanes in one go, matched by name and corrected by hand', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));

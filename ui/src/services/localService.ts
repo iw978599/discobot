@@ -274,7 +274,8 @@ export class LocalProjectService {
   }
 
   // Everything in the project store as one portable object. Samples live in IndexedDB
-  // and are not part of it.
+  // and are not part of it: links, publishing and sync all use this, and none may carry
+  // audio. Only saving a project file adds them, beside the project (projectSamples.ts).
   exportProject(): ProjectFile {
     this.commitScene();
     const project = clone(this.state!);
