@@ -150,6 +150,24 @@ target; removal of the AI review workflow.
    The reverb is a convolver with a shaped impulse. Insert effects are easier
    once the audio layer has a single owner (improvements item 4).
 
+7. **More presets, grouped by kind, and more synth models.** (M) Asked for
+   by the owner on 2026-10-11.
+   - More presets to start from, and the presets menu nested by what a
+     sound is for (bass, lead, pad, keys, pluck, effects and so on), not
+     one long list. A person's own saved presets keep a group of their own.
+     A preset needs a kind recorded with it; the ones that exist get one,
+     and imported ones go under a kind chosen at import or "other".
+   - More synth models in the manner of well-known instruments, beside the
+     ones there now, each with its four macros. A model is this synth's own
+     voice set up and limited to behave like the instrument it is named
+     for; it is not that instrument's circuit. Some will want things the
+     voice does not have yet (the ladder filter, item 5, for anything
+     Moog-like; a sample oscillator, item 3; the modulation matrix, item 4),
+     so which models are possible depends on which of those are done.
+   Presets and models are sound, and sound cannot be checked by a test:
+   every one of these needs the owner's ears before it is called done. To
+   decide: which instruments to model, and the list of kinds.
+
 Done: the voice rewrite (oscillators, filter, envelopes, FM, mono and slide,
 drum voices); unison and the 24 dB filter slope; a sample on any drum lane,
 live and in export; Import Kit, which puts several sample files on the lanes
@@ -306,6 +324,32 @@ may redistribute.
     To decide: one time signature for the project, or one for each scene so
     a song can change metre part-way; and which signatures to offer.
 
+12. **Turn a knob with the scroll wheel.** (S) Asked for by the owner on
+    2026-10-11: with the pointer over a knob, the wheel turns it, with no
+    click or drag. Knobs have no wheel behaviour today. To settle in
+    building it: the page itself scrolls with the wheel, so a knob that
+    happens to be under the pointer must not swallow a scroll that was meant
+    for the page (turn only after the pointer has rested on the knob, or
+    only when the knob has been clicked or focused, or with a key held); how
+    far one notch turns, and a finer turn with Shift as the arrow keys have;
+    one undo entry for a run of notches, as a drag makes; and the same for
+    the drum knobs and the sliders in the effects panel. A trackpad's
+    two-finger scroll arrives as wheel events too and must not send values
+    flying.
+
+13. **Show that an export is still being made, and name the WAV exports
+    plainly.** (S) From the owner trying Song WAV in the installed app on a
+    Pixel 9 on 2026-10-11. A long song takes a while to render and the app
+    gives no sign of it, so the owner opened the file early and took it for
+    cut short; waited for, the whole song arrived with its download notice.
+    So: show progress while an export is being made, say when it is done,
+    and stop a second export being started on top of the first. The owner
+    also once got only the scene from what was meant to be a song download,
+    and puts it down to pressing the wrong thing: the Export menu has both
+    Download WAV, which is the open scene, and Song WAV. Call the first
+    Scene WAV, and its MIDI neighbour Scene MIDI, so the two kinds read as
+    a pair.
+
 Done: song mode, with mutes and solos kept per scene; patterns of 1, 2, 4 or
 8 bars per lane, and MIDI files of up to eight bars imported at full length;
 chords, note length and late starts; project files; the computer keyboard as a
@@ -327,6 +371,8 @@ for new accounts.
   whether what a child makes can be opened in the full app.
 - **Time signatures.** One for the whole project, or one for each scene?
   And which ones should be on offer?
+- **Presets and synth models.** Which instruments should the new models be
+  in the manner of, and are the kinds of preset above the right ones?
 
 ## Suggested order
 
@@ -348,12 +394,17 @@ for new accounts.
 6. **Record live playing** and **more ways to edit patterns** (features 3
    and 4): the two that most change what making a song feels like. **Time
    signatures** (features 11) go with pattern editing, after the typed
-   store.
+   store. **The scroll wheel on knobs** (features 12) and **showing that
+   an export is being made** (features 13) are small and can go in at any
+   time.
 7. Done: samples in project files (sound 2). Sync for them waits on storage.
 8. **Parameter automation** (features 5).
 9. **The audio layer's single owner** (improvements 4), then the sound work
    that builds on it: **insert effects, the reverb, the ladder filter, the
-   modulation matrix and the sample oscillator** (sound 3 to 6).
+   modulation matrix and the sample oscillator** (sound 3 to 6). **More
+   presets and synth models** (sound 7) come after those, since the new
+   models lean on them; the grouping of the presets menu does not, and can
+   be done at any time.
 10. **More MIDI** (features 6), when there is hardware to test with.
 11. **Live collaborative sessions** (the rest of features 7), after the
     typed store. The published-songs page (features 9) is done.
