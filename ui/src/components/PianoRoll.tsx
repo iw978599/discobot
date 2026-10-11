@@ -412,7 +412,9 @@ export default function PianoRoll({
                         };
                         onStepSelect(noteStart!);
                       }}
-                      onClick={(event) => event.stopPropagation()}
+                      // No click handler here. One would make the handle something to click, and a
+                      // browser steers a finger that lands near such a thing onto it, off the note.
+                      // The cell acts on a click only when it comes from the keyboard.
                     />
                   )}
                 </button>
