@@ -7,13 +7,14 @@ import { useState, type ReactNode } from 'react';
 import { createDefaultSynthParameters } from '@discobot/engine';
 import { SynthParameters, OscillatorType, SynthModelId } from '../types';
 import { SYNTH_MODELS } from '../synthModels';
+import { groupPresets, type PresetKind } from '../services/presetKinds';
 import Knob from './Knob';
 import './SynthControls.css';
 
 interface SynthControlsProps {
   parameters: SynthParameters;
   onParameterChange: (params: Partial<SynthParameters>) => void;
-  presets: Array<{ id: string; name: string; builtIn?: boolean }>;
+  presets: Array<{ id: string; name: string; builtIn?: boolean; kind?: PresetKind }>;
   onSavePreset: (name: string) => void;
   onLoadPreset: (presetId: string) => void;
   onDeletePreset: (presetId: string) => void;
@@ -131,9 +132,11 @@ export function createNamedSynthPresets(base: SynthParameters) {
   return sounds.map(([name, type, frequency, q, attack, decay, sustain, release], index) => {
     const pad = name.startsWith('Pad');
     const bass = name.startsWith('Bass');
+    const kind: PresetKind = pad ? 'pad' : bass ? 'bass' : name.startsWith('Lead') ? 'lead' : 'pluck';
     return {
       id: `builtin-named-${index}`,
       name,
+      kind,
       builtIn: true,
       modelId: 'generic' as SynthModelId,
       modelParams: { macro1: 0.5, macro2: 0.5, macro3: 0.5, macro4: 0.5 },
@@ -301,10 +304,14 @@ export default function SynthControls({
               }}
             >
               <option value="" disabled>Preset...</option>
-              {presets.map((preset) => (
-                <option key={preset.id} value={preset.id}>
-                  {preset.name}{preset.builtIn ? ' *' : ''}
-                </option>
+              {groupPresets(presets).map((group) => (
+                <optgroup key={group.label} label={group.label}>
+                  {group.presets.map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.name}{preset.builtIn ? ' *' : ''}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
             <input

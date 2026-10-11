@@ -22,6 +22,7 @@ import { loadStoredPresets, presetStore } from '../services/presetStore';
 import { downloadArrangementWav, downloadStemsZip } from '../services/wavExport';
 import type { ProjectInfo } from '../services/projectLibrary';
 import { sanitizeSynthParams } from '../services/projectSanitization';
+import type { PresetKind } from '../services/presetKinds';
 import { expandStep, expandStepNotes, stepNotes, withStepNotes } from '../services/noteScheduling';
 import { BrowserTransport, TransportTick } from '../services/browserTransport';
 import { downloadFile, ExportArrangement } from '../services/wavExport';
@@ -56,6 +57,8 @@ const CHORD_WINDOW_MS = 60;
 interface SynthPreset {
   id: string;
   name: string;
+  // What the preset is for. Built-in presets all have one; a person's own do not.
+  kind?: PresetKind;
   params: SynthParameters;
   modelId: SynthModelId;
   modelParams: SynthModelParams;
@@ -162,11 +165,12 @@ function cloneSynthModelParams(params: SynthModelParams | null | undefined): Syn
   };
 }
 
-function createBuiltInPresets(): SynthPreset[] {
+function createBuiltInPresets(): Array<SynthPreset & { kind: PresetKind }> {
   return [
     {
       id: 'builtin-pad',
       name: 'Pad',
+      kind: 'pad',
       builtIn: true,
       modelId: DEFAULT_SYNTH_MODEL_ID,
       modelParams: createDefaultSynthModelParams(),
@@ -187,6 +191,7 @@ function createBuiltInPresets(): SynthPreset[] {
     {
       id: 'builtin-bass',
       name: 'Bass',
+      kind: 'bass',
       builtIn: true,
       modelId: 'minimoog-model-d',
       modelParams: { macro1: 0.72, macro2: 0.64, macro3: 0.35, macro4: 0.45 },
@@ -208,6 +213,7 @@ function createBuiltInPresets(): SynthPreset[] {
     {
       id: 'builtin-lead',
       name: 'Lead',
+      kind: 'lead',
       builtIn: true,
       modelId: 'prophet-5',
       modelParams: { macro1: 0.63, macro2: 0.55, macro3: 0.58, macro4: 0.44 },
@@ -227,6 +233,7 @@ function createBuiltInPresets(): SynthPreset[] {
     {
       id: 'builtin-pluck',
       name: 'Pluck',
+      kind: 'pluck',
       builtIn: true,
       modelId: 'dx7',
       modelParams: { macro1: 0.52, macro2: 0.68, macro3: 0.74, macro4: 0.86 },
@@ -246,6 +253,7 @@ function createBuiltInPresets(): SynthPreset[] {
     {
       id: 'builtin-grand-piano',
       name: 'Electric Piano',
+      kind: 'keys',
       builtIn: true,
       modelId: 'dx7',
       modelParams: { macro1: 0.95, macro2: 0.2, macro3: 0.45, macro4: 0.5 },
