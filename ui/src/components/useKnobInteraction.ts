@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { KeyboardEvent, PointerEvent } from 'react';
+import { useKnobWheel } from './knobWheel';
 
 // How far a finger may wander and still be a tap. A mouse has no such allowance: it turns the
 // knob from its first movement, as it always has.
@@ -29,6 +30,7 @@ export function useKnobInteraction(value: number, min: number, max: number, step
     if (!disabled) tapRef.current?.();
   };
   const normalize = (next: number) => Math.max(min, Math.min(max, Number((Math.round((next - min) / step) * step + min).toFixed(8))));
+  const wheelRef = useKnobWheel({ value, min, max, step, disabled, normalize, onChange });
   useEffect(() => {
     if (disabled) drag.current = null;
   }, [disabled]);
@@ -45,6 +47,7 @@ export function useKnobInteraction(value: number, min: number, max: number, step
   }, []);
   return {
     normalize,
+    ref: wheelRef,
     onPointerDown: (event: PointerEvent<HTMLDivElement>) => {
       if (disabled || event.button !== 0) return;
       event.preventDefault();

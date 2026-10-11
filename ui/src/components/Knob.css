@@ -111,3 +111,6 @@
     min-width: 40px;
   }
 }
+
+/* The wheel will turn this knob (knobWheel.ts) */
+.knob-rotary[data-wheel="ready"] { cursor: ns-resize; }

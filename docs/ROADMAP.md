@@ -377,6 +377,14 @@ may redistribute.
     the drum knobs and the sliders in the effects panel. A trackpad's
     two-finger scroll arrives as wheel events too and must not send values
     flying.
+    Built, as a draft: the wheel turns a knob once the pointer has rested on
+    it for a third of a second and the page was not just being scrolled (the
+    first of the options above; the owner has not confirmed it), a notch is a
+    fiftieth of the range, Shift is one step, a trackpad's small events add up
+    and no event is more than a notch, a quick run is one undo entry, and it
+    works on the synth, drum and effects knobs. Still open: the owner's say on
+    the resting rule, a visible cue that a knob is ready (only the cursor
+    changes), and a notch size per knob where 2% is wrong.
 
 13. **Show that an export is still being made, and name the WAV exports
     plainly.** (S) From the owner trying Song WAV in the installed app on a
