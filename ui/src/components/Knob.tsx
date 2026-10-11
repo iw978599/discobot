@@ -3,8 +3,9 @@
  * Based on DrumKnob but more generic and flexible
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useKnobInteraction } from './useKnobInteraction';
+import KnobSheet from './KnobSheet';
 import './Knob.css';
 
 interface KnobProps {
@@ -41,6 +42,10 @@ export default function Knob({
   const [localVal, setLocalVal] = useState(value);
   const [isEditing, setIsEditing] = useState(false);
   const [inputValue, setInputValue] = useState('');
+  const rootRef = useRef<HTMLDivElement>(null);
+  // Set while the large slider is open: the page it is put on.
+  const [sheetHost, setSheetHost] = useState<HTMLElement | null>(null);
+  const openSheet = () => setSheetHost(rootRef.current?.closest<HTMLElement>('.rack-page') ?? document.body);
 
   const computedDisplay = displayValue ?? localVal.toFixed(step >= 1 ? 0 : step >= 0.1 ? 1 : 2);
 
@@ -54,7 +59,7 @@ export default function Knob({
   const { normalize, ...interaction } = useKnobInteraction(localVal, min, max, step, (next) => {
     setLocalVal(next);
     onChange(next);
-  }, disabled);
+  }, disabled, openSheet);
 
   const svgDeg = -240 + pct * 300;
 
@@ -86,7 +91,7 @@ export default function Knob({
   }, [disabled, isEditing, inputValue, parseInputValue, min, max, step, onChange]);
 
   return (
-    <div className={`knob knob-${size} ${disabled ? 'knob-disabled' : ''}`}>
+    <div ref={rootRef} className={`knob knob-${size} ${disabled ? 'knob-disabled' : ''}`}>
       <div
         className="knob-rotary"
         {...interaction}
@@ -156,6 +161,21 @@ export default function Knob({
         }}
         disabled={disabled}
       />
+      {sheetHost && (
+        <KnobSheet
+          host={sheetHost}
+          name={ariaLabel}
+          hint={tooltip}
+          value={localVal}
+          min={min}
+          max={max}
+          step={step}
+          display={computedDisplay}
+          normalize={normalize}
+          onChange={(next) => { setLocalVal(next); onChange(next); }}
+          onClose={() => setSheetHost(null)}
+        />
+      )}
     </div>
   );
 }

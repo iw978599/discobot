@@ -5,18 +5,22 @@ interface DialogProps {
   closeLabel: string;
   onClose: () => void;
   children: ReactNode;
+  // A short panel docked to the bottom edge, where a thumb is, instead of the whole screen.
+  sheet?: boolean;
+  // What takes focus when it opens, as a selector. The first button, unless told otherwise.
+  initialFocus?: string;
 }
 
 // One modal for the whole app: traps Tab, closes on Escape or a click outside, and puts
 // focus back where it came from.
-export default function Dialog({ title, closeLabel, onClose, children }: DialogProps) {
+export default function Dialog({ title, closeLabel, onClose, children, sheet = false, initialFocus = 'button' }: DialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
 
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
-    dialogRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
+    dialogRef.current?.querySelector<HTMLElement>(initialFocus)?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
@@ -38,7 +42,7 @@ export default function Dialog({ title, closeLabel, onClose, children }: DialogP
   }, []);
 
   return (
-    <div className="rack-dialog-overlay" onClick={onClose} role="presentation">
+    <div className={sheet ? 'rack-dialog-overlay sheet' : 'rack-dialog-overlay'} onClick={onClose} role="presentation">
       <div ref={dialogRef} className="rack-dialog" role="dialog" aria-modal="true" aria-label={title} onClick={(event) => event.stopPropagation()}>
         <div className="rack-dialog-header">
           <h2>{title}</h2>

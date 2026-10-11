@@ -113,6 +113,10 @@ test('a wide screen keeps the rack as one panel', async ({ page }, testInfo) => 
   expect((await step(16)).y, 'sixteen steps in one row').toBeCloseTo((await step(1)).y, 0);
   expect((await box(page.getByRole('button', { name: 'Kick step 16', exact: true }))).y).toBeCloseTo((await box(page.getByRole('button', { name: 'Kick step 1', exact: true }))).y, 0);
   expect(await page.locator('.rack').evaluate(element => getComputedStyle(element).minWidth)).toBe('1060px');
+  await expect(page.getByRole('navigation', { name: 'Rack units', exact: true }), 'no bar of units').toHaveCount(0);
+  await expect(page.locator('.rack > [data-unit]:visible'), 'every unit is on the page').toHaveCount(6);
+  await page.getByRole('slider', { name: 'Synth 1 level', exact: true }).click();
+  await expect(page.getByRole('dialog'), 'a mouse click on a knob opens nothing').toHaveCount(0);
   await page.getByRole('button', { name: 'Help', exact: true }).click();
   expect((await box(page.getByRole('dialog', { name: 'How to use Discobot', exact: true }))).width, 'a dialog is a panel, not the whole screen').toBeLessThanOrEqual(680);
 });
@@ -307,4 +311,94 @@ test('on a phone the walkthrough turns to the unit each stop is about', async ({
   await page.keyboard.press('Escape');
   await expect(tour).toHaveCount(0);
   await expect(page.locator('.effects-unit'), 'the rack is left on the unit the tour ended at').toBeVisible();
+});
+
+test('on a phone a knob is set by touch: a tap opens a large slider, and a drag still turns it', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium', 'this is the narrow layout');
+  await paged(page);
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const view = page.viewportSize()!;
+  const knob = page.locator('[data-unit="synth-1"]').getByRole('slider', { name: 'Synth 1 level', exact: true });
+  const figure = page.getByLabel('Synth 1 level value', { exact: true });
+  const percent = async () => Number.parseInt(await figure.inputValue(), 10);
+  const sheet = page.getByRole('dialog', { name: 'Synth 1 level', exact: true });
+  const slider = sheet.getByRole('slider', { name: 'Synth 1 level', exact: true });
+  const button = (name: string) => sheet.getByRole('button', { name: `${name} Synth 1 level`, exact: true });
+
+  // The knob itself is as big as a fingertip. A tap on it turns nothing and opens the sheet.
+  const dial = await box(knob);
+  expect(dial.width).toBeGreaterThanOrEqual(44);
+  expect(dial.height).toBeGreaterThanOrEqual(44);
+  const before = await percent();
+  await knob.tap();
+  await expect(sheet).toBeVisible();
+  await expect(slider, 'the slider has the keyboard').toBeFocused();
+  expect(await percent(), 'a tap turns nothing').toBe(before);
+  await expect(sheet.locator('.knob-sheet-value')).toHaveText(`${before}%`);
+
+  // The sheet is along the bottom, on screen, and everything in it is big enough to touch.
+  const [panel, track] = [await box(sheet), await box(slider)];
+  expect(panel.x).toBeGreaterThanOrEqual(0);
+  expect(panel.x + panel.width).toBeLessThanOrEqual(view.width);
+  expect(panel.y, 'in the lower half').toBeGreaterThan(view.height / 2);
+  expect(panel.y + panel.height).toBeLessThanOrEqual(view.height);
+  expect(track.width).toBeGreaterThanOrEqual(200);
+  expect(track.height).toBeGreaterThanOrEqual(44);
+  for (const name of ['Lower', 'Raise', 'Close']) {
+    const area = await box(button(name));
+    expect(area.width, name).toBeGreaterThanOrEqual(44);
+    expect(area.height, name).toBeGreaterThanOrEqual(44);
+  }
+
+  // A touch along the slider sets the value, and the lane's own figure follows.
+  await page.touchscreen.tap(track.x + track.width * 0.9, track.y + track.height / 2);
+  await expect.poll(percent, 'near the top of its range').toBeGreaterThan(150);
+  await page.touchscreen.tap(track.x + track.width * 0.1, track.y + track.height / 2);
+  await expect.poll(percent, 'near the bottom').toBeLessThan(50);
+
+  // It is a slider to the keyboard and to a screen reader: keys step it, and it says its value in words.
+  await slider.press('Home');
+  await expect.poll(percent).toBe(0);
+  await slider.press('ArrowRight');
+  await expect.poll(percent).toBe(1);
+  await expect(slider).toHaveAttribute('aria-valuetext', '1%');
+  await button('Raise').tap();
+  await expect.poll(percent).toBe(2);
+  await button('Lower').tap();
+  await expect.poll(percent).toBe(1);
+  await expect(sheet.locator('.knob-sheet-value')).toHaveText('1%');
+  await expect.poll(() => page.evaluate(() => {
+    window.dispatchEvent(new Event('pagehide'));
+    const project = JSON.parse(localStorage.getItem('discobot_browser_project_v1')!);
+    return project.synths.find((lane: { synthId: number }) => lane.synthId === 1).synthParams.gain;
+  }), 'and it is saved like any turn of the knob').toBeCloseTo(0.01, 5);
+
+  // Closed, the knob has the keyboard again and shows what was set.
+  await button('Close').tap();
+  await expect(sheet).toHaveCount(0);
+  await expect(knob).toBeFocused();
+  await expect(knob).toHaveAttribute('aria-valuetext', '1%');
+
+  // A finger dragged up the knob turns it as a mouse does, and opens nothing.
+  const at = await box(knob), x = at.x + at.width / 2, y = at.y + at.height / 2;
+  const touch = await page.context().newCDPSession(page);
+  await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+  for (const rise of [10, 30, 60]) await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y - rise }] });
+  await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await expect.poll(percent, 'sixty pixels is two fifths of the range').toBeGreaterThan(50);
+  await expect(sheet).toHaveCount(0);
+
+  // A drum knob the same, with the hint a mouse would get by hovering. Escape closes it.
+  await tab(page, 'Show Drums').click();
+  const swing = page.locator('[data-unit="drums"]').getByRole('slider', { name: 'Swing', exact: true });
+  const swingSheet = page.getByRole('dialog', { name: 'Swing', exact: true });
+  await swing.tap();
+  await expect(swingSheet).toContainText('delays off-beat steps');
+  await swingSheet.getByRole('slider', { name: 'Swing', exact: true }).press('End');
+  await expect(page.getByLabel('Swing value', { exact: true })).toHaveValue('75%');
+  await page.keyboard.press('Escape');
+  await expect(swingSheet).toHaveCount(0);
+  await expect(swing).toBeFocused();
+  expect(errors).toEqual([]);
 });
