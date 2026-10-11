@@ -18,7 +18,7 @@ function toneWav(): Buffer {
 async function exportWav(page: Page, path: string) {
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export ▾', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Download WAV', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Scene WAV', exact: true }).click();
   await (await download).saveAs(path);
   return readFile(path);
 }

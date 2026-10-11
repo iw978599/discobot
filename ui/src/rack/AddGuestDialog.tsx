@@ -48,7 +48,7 @@ export default function AddGuestDialog({ studio, onClose, onAdded }: { studio: S
       </form>
       <p className="rack-empty">
         Adding a guest opens that site's page inside Discobot, so your browser contacts that site whenever this project is open.
-        The page cannot read your projects or your account. Its settings are saved with the project. Its sound is recorded into Download WAV and Song WAV by playing through once.
+        The page cannot read your projects or your account. Its settings are saved with the project. Its sound is recorded into Scene WAV and Song WAV by playing through once.
       </p>
     </Dialog>
   );

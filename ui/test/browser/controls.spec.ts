@@ -509,7 +509,7 @@ test('MIDI export/import and WAV download produce real local files', async ({ pa
   await page.getByRole('button', { name: 'Piano Roll', exact: true }).click();
   await page.getByRole('button', { name: 'C4 step 1', exact: true }).click();
   const midiDownload = page.waitForEvent('download');
-  await menu(page, 'Export', 'Export MIDI');
+  await menu(page, 'Export', 'Scene MIDI');
   const midi = await midiDownload;
   const midiPath = testInfo.outputPath('arrangement.mid');
   await midi.saveAs(midiPath);
@@ -517,7 +517,7 @@ test('MIDI export/import and WAV download produce real local files', async ({ pa
   expect(midiBytes.subarray(0, 4).toString()).toBe('MThd');
   expect(midiBytes.length).toBeGreaterThan(30);
   const wavDownload = page.waitForEvent('download');
-  await menu(page, 'Export', 'Download WAV');
+  await menu(page, 'Export', 'Scene WAV');
   const wav = await wavDownload;
   const wavPath = testInfo.outputPath('arrangement.wav');
   await wav.saveAs(wavPath);

@@ -173,6 +173,16 @@ export default function Rack({ studio }: { studio: Studio }) {
             </span>
           </div>
         )}
+        {studio.exportStatus && studio.guestRecording === null && (
+          <div role="status" className="app-alert export-status" data-phase={studio.exportStatus.phase}>
+            <span>
+              {studio.exportStatus.phase === 'working'
+                ? `Making ${studio.exportStatus.what}${studio.exportStatus.part ? ` (${studio.exportStatus.part})` : ''}. A long song takes a while; the file downloads when it is done.`
+                : `${studio.exportStatus.what} finished. The file has been downloaded.`}
+            </span>
+            {studio.exportStatus.phase === 'done' && <button className="rack-btn" onClick={studio.dismissExportStatus} aria-label="Dismiss export message">✕</button>}
+          </div>
+        )}
         {studio.storageError && (
           <div role="alert" className="app-alert">
             <span>{studio.storageError}</span>

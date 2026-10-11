@@ -131,11 +131,11 @@ test('MIDI and WAV exports create local downloadable files', async ({ page }) =>
   await page.getByRole('button', { name: 'Piano Roll', exact: true }).click();
   await page.getByRole('button', { name: 'C3 step 1', exact: true }).click();
   const midiPromise = page.waitForEvent('download');
-  await menu(page, 'Export', 'Export MIDI');
+  await menu(page, 'Export', 'Scene MIDI');
   const midi = await midiPromise;
   expect(midi.suggestedFilename()).toMatch(/\.mid$/);
   const wavPromise = page.waitForEvent('download');
-  await menu(page, 'Export', 'Download WAV');
+  await menu(page, 'Export', 'Scene WAV');
   const wav = await wavPromise;
   expect(wav.suggestedFilename()).toMatch(/\.wav$/);
   expect(await wav.failure()).toBeNull();

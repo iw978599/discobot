@@ -417,6 +417,10 @@ export function useStudio() {
   const [guests, setGuests] = useState<Guest[]>([]);
   // Set while an export is playing the arrangement through to record its guests: how long it will take.
   const [guestRecording, setGuestRecording] = useState<number | null>(null);
+  // An audio export in progress, or just finished. handleExportWav refuses a second while one is working.
+  const [exportStatus, setExportStatus] = useState<{ phase: 'working' | 'done'; what: string; part?: string } | null>(null);
+  const exportingRef = useRef(false);
+  const doneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const guestsRef = useRef<Guest[]>([]);
   guestsRef.current = guests;
   const [changedElsewhere, setChangedElsewhere] = useState(false);
@@ -1788,7 +1792,7 @@ export function useStudio() {
   // real time so their sound can be recorded; then the export is rendered as usual. A loop is
   // played through twice and the second pass kept: by then what rings on from the end of the
   // pattern is sounding over its start, which is what makes the loop seamless.
-  const handleExportWav = useCallback(async (kind: boolean | 'pattern' | 'song' | 'loop' | 'stems') => {
+  const exportWav = useCallback(async (kind: boolean | 'pattern' | 'song' | 'loop' | 'stems', onPart: (part: string) => void) => {
     const wholeSong = kind === true || kind === 'song', loop = kind === 'loop';
     let arrangement: ExportArrangement = wholeSong ? await songArrangement() : currentArrangementRef.current();
     // A song gives each guest its scene's own level and mute bar by bar, so a guest is recorded
@@ -1835,9 +1839,30 @@ export function useStudio() {
         setSongStartEntry(startEntry);
       }
     }
-    if (kind === 'stems') await downloadStemsZip(arrangement);
+    if (kind === 'stems') await downloadStemsZip(arrangement, (done, total) => onPart(`file ${done + 1} of ${total}`));
     else await downloadArrangementWav(arrangement, loop ? { loop: true } : {});
   }, [songArrangement]);
+
+  const handleExportWav = useCallback(async (kind: boolean | 'pattern' | 'song' | 'loop' | 'stems') => {
+    if (exportingRef.current) return;
+    exportingRef.current = true;
+    if (doneTimerRef.current) clearTimeout(doneTimerRef.current);
+    const what = kind === true || kind === 'song' ? 'Song WAV' : kind === 'loop' ? 'Loop WAV' : kind === 'stems' ? 'Stems' : 'Scene WAV';
+    setExportStatus({ phase: 'working', what });
+    // A moment for the message to be painted before the render takes the page's thread.
+    await new Promise(resolve => setTimeout(resolve, 50));
+    try {
+      await exportWav(kind, part => setExportStatus({ phase: 'working', what, part }));
+      setExportStatus({ phase: 'done', what });
+      doneTimerRef.current = setTimeout(() => setExportStatus(null), 12000);
+    } catch (error) {
+      setExportStatus(null);
+      throw error;
+    } finally {
+      exportingRef.current = false;
+    }
+  }, [exportWav]);
+  const dismissExportStatus = useCallback(() => setExportStatus(null), []);
 
   const reportExportError = useCallback((error: unknown) => {
     setStorageError(`Audio export failed: ${error instanceof Error ? error.message : error}`);
@@ -2175,7 +2200,7 @@ export function useStudio() {
     handleMidiImportClick, handleMidiImportFile, handleMidiImportApplyAll, midiImportFileRef, handleRemoveSynth,
     ensureSynthExists, handleOctaveShift, handleTempoChange, handleGlobalPlayStop, handleStepChange, handleStepSelect, handleKeyboardModeChange,
     handlePianoRollNoteAssign, handleClearPatternNotes, handleNotePlay, handleNoteRelease, computerKeyNotes, midiState,
-    handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange, guests, handleAddGuest, handleRemoveGuest, handleGuestChange, guestRecording, handleExportWav, missingDrumSamples, sampleStoreVersion, handleDrumSampleChange, handleLaneBarsChange, handleDrumBarsChange, sceneLength,
+    handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange, guests, handleAddGuest, handleRemoveGuest, handleGuestChange, guestRecording, handleExportWav, exportStatus, dismissExportStatus, missingDrumSamples, sampleStoreVersion, handleDrumSampleChange, handleLaneBarsChange, handleDrumBarsChange, sceneLength,
     handleSynthMixChange, handleSaveSynthPreset, handleLoadSynthPreset, handleDeleteSynthPreset,
     handleExportMidi, currentArrangement, reportExportError, handleExportProject, projectImportFileRef, handleImportProjectFile, handleImportProject,
     handleNewProject, handleOpenProject, handleCopyProject, handleRenameProject, handleDeleteProject, handleRestoreVersion, handleCopyVersion, handleImportSynthPreset, handleExportSynthPreset, presetImportReport, setPresetImportReport, handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail,

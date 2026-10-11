@@ -201,7 +201,7 @@ protocol is `GUEST_PROTOCOL.md`, a working example guest is
 creator of Choir can give to Claude to add the guest side. The creator of Choir has since added guest support to four instruments
 (Choir, Logic Rhythm, Boolean Melody Machine, Tape Loop Deck), and with
 permission they are offered by name in the Add Guest dialog (all but Tape
-Loop Deck, which the owner put on hold on 2026-10-10). Download WAV and
+Loop Deck, which the owner put on hold on 2026-10-10). Scene WAV and
 Song WAV now record guests by playing through once. A guest's settings are kept per scene and follow a song from scene to scene.
 Guests are in Loop WAV and stems too, and each has sends to the shared effects.
 Not built: a way for

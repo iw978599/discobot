@@ -21,6 +21,7 @@ interface TransportUnitProps {
 // everything you do once per session instead of once per bar.
 export default function TransportUnit({ studio, onOpenSettings, onOpenProjects, onShare, onOpenAccount, onAddGuest, onOpenVersions }: TransportUnitProps) {
   const { midiState } = studio;
+  const exporting = studio.exportStatus?.phase === 'working';
   const user = useAccountUser();
   const midiStatus = !midiState.supported ? 'MIDI is not available in this browser'
     : midiState.connected ? 'A MIDI controller is connected' : 'No MIDI controller connected';
@@ -71,11 +72,11 @@ export default function TransportUnit({ studio, onOpenSettings, onOpenProjects, 
         <Menu
           label="Export"
           items={[
-            { label: 'Download WAV', title: 'The open scene: one bar with its effect tail', onSelect: () => { void studio.handleExportWav('pattern').catch(studio.reportExportError); } },
-            { label: 'Loop WAV', title: 'One bar that loops seamlessly, with effect tails wrapped in', onSelect: () => { void studio.handleExportWav('loop').catch(studio.reportExportError); } },
-            { label: 'Stems', title: 'Each synth lane, the drums and each guest instrument as separate WAV files in a zip', onSelect: () => { void studio.handleExportWav('stems').catch(studio.reportExportError); } },
-            { label: 'Export MIDI', title: 'A Standard MIDI File of the open scene', onSelect: studio.handleExportMidi },
-            { label: 'Song WAV', title: 'The whole song, start to finish, as one audio file', onSelect: () => { void studio.handleExportWav('song').catch(studio.reportExportError); } },
+            { label: 'Scene WAV', title: 'The open scene: one bar with its effect tail', disabled: exporting, onSelect: () => { void studio.handleExportWav('pattern').catch(studio.reportExportError); } },
+            { label: 'Loop WAV', title: 'One bar that loops seamlessly, with effect tails wrapped in', disabled: exporting, onSelect: () => { void studio.handleExportWav('loop').catch(studio.reportExportError); } },
+            { label: 'Stems', title: 'Each synth lane, the drums and each guest instrument as separate WAV files in a zip', disabled: exporting, onSelect: () => { void studio.handleExportWav('stems').catch(studio.reportExportError); } },
+            { label: 'Scene MIDI', title: 'A Standard MIDI File of the open scene', onSelect: studio.handleExportMidi },
+            { label: 'Song WAV', title: 'The whole song, start to finish, as one audio file', disabled: exporting, onSelect: () => { void studio.handleExportWav('song').catch(studio.reportExportError); } },
             { label: 'Song MIDI', title: 'The whole song as a MIDI file, with a marker at each section', onSelect: () => { void studio.handleExportSongMidi().catch(studio.reportExportError); } },
           ]}
         />

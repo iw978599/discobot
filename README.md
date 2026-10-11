@@ -114,11 +114,13 @@ while online.
 - **Import MIDI:** choose a `.mid` file and a track; imported notes and detected
   tempo are mapped to the sequencer. MIDI file import/export does not require
   Web MIDI or a connected controller.
-- **Export MIDI:** download a Standard MIDI File containing synth lanes, tempo
+- **Scene MIDI:** download a Standard MIDI File containing synth lanes, tempo
   and drums on channel 10. MIDI stores note events, not synthesized audio.
-- **Download WAV:** render the current arrangement locally to a stereo audio file:
+- **Scene WAV:** render the current arrangement locally to a stereo audio file:
   one bar followed by its effect tail. The export runs the same synth and drum
-  code as live playback, offline.
+  code as live playback, offline. While any WAV export is being made a message
+  at the top says so, the other WAV exports wait, and the message changes when
+  the file has downloaded.
 - **Song WAV / Song MIDI:** the whole song from start to finish. The MIDI file
   has a marker at the start of each section. Song audio is limited to 8 minutes.
 - **Loop WAV:** exactly one bar that repeats seamlessly. The pattern is rendered

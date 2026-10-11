@@ -76,7 +76,7 @@ test('a lane and the drums can be several bars long, are edited a bar at a time,
   await page.getByRole('button', { name: /Stop All/ }).click();
 
   // Exports cover both bars.
-  const full = await exportWav(page, 'Download WAV', testInfo.outputPath('two-bars.wav'));
+  const full = await exportWav(page, 'Scene WAV', testInfo.outputPath('two-bars.wav'));
   expect(seconds(full), 'two one-second bars and a tail').toBeGreaterThan(2.9);
   const loop = await exportWav(page, 'Loop WAV', testInfo.outputPath('two-bar-loop.wav'));
   expect(seconds(loop), 'a loop is exactly the pattern').toBeCloseTo(2, 3);

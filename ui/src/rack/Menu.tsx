@@ -4,6 +4,7 @@ export interface MenuItem {
   label: string;
   title?: string;
   onSelect: () => void;
+  disabled?: boolean;
 }
 
 // A panel button that drops a short list of actions, like a function key with a legend.
@@ -48,6 +49,7 @@ export default function Menu({ label, items }: { label: string; items: MenuItem[
               key={item.label}
               role="menuitem"
               title={item.title}
+              disabled={item.disabled}
               onClick={() => {
                 setOpen(false);
                 // Focus goes back to the menu button so a dialog opened from here can return it there.
