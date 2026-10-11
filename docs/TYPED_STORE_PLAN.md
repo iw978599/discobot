@@ -4,8 +4,9 @@ Written 2026-10-11 from a design pass over `localService.ts`, `useStudio.tsx` an
 `storeRoutes.test.ts`. This is roadmap improvement 1. It is done as a sequence of
 pull requests, each leaving `main` working and `storeRoutes.test.ts` green.
 
-Status: pull requests 1, 2 and 3 of 8 are built (the foundation, drum swing and
-drum master volume; then guests; then the drums). The rest is open.
+Status: pull requests 1 to 4 of 8 are built (the foundation, drum swing and
+drum master volume; then guests; then the drums; then the effects). The rest
+is open.
 
 ## What was built, and where it differs from this plan
 
@@ -173,6 +174,52 @@ Found by building pull request 3 (drums):
   Reading by slice (see "After the migration") is the answer if it shows.
 - `useStudio.tsx` makes 45 calls to `localRequest` after this pull request.
 
+Found by building pull request 4 (effects):
+
+- **Both patches go through `sent`, and only `undefined` needed it.** `merge`
+  sets a key that is `undefined`, where JSON never sent it. So a typed
+  `{ delay: { sync: undefined } }` took a synced delay's sync off,
+  `{ chorus: undefined }` took the chorus away, and
+  `{ sends: { reverb: undefined } }` put that send back to its default.
+  With `sent` taken out, exactly those cases fail (nine, with the test for a
+  patch that is not an object). `NaN`, infinity and `null` come out the same
+  with or without it, because the checks after `merge` (`number`,
+  `sanitizeShape`, `typeof ... === 'object'`) take them alike; the cases are
+  there to say so.
+- **The optional parts behave as the route's.** A delay's `sync` is kept only
+  when it is a note value: `'off'`, anything else and `null` take it off, and
+  a patch that does not name it leaves it. A chorus or an EQ is added whole
+  from one value, kept when the patch does not name it, and taken away by a
+  value that is not an object (a list puts it back as new, switched off). The
+  reverb's pre-delay and damping are each taken away at zero or by a value
+  that is not a number. None of them is in the defaults; `sanitizeEffects`
+  still adds them back by hand. A drum send the defaults do not name
+  (`chorus`, in the tests' defaults) is dropped, as before.
+- **A patch that is not an object is refused with 400** "Invalid local
+  operation data", as a route's body was, before anything else.
+- **The handlers still send the whole of what they built.** `handleDrumFxChange`
+  and `handleEffectsLoopChange` lay the change over `drumFxRef` or
+  `effectsLoopRef` and send all of it, with `sync: 'off'` and a pre-delay and
+  damping of zero always there, which is how turning one off reaches the
+  store through a merge. That is unchanged: only the early `setState`, the
+  third apply from the answer and the rollback are gone.
+- **`drumFxRef` and `effectsLoopRef` are still assigned only at render.** The
+  events do not write them, so undo's "before" is what it was, and so is the
+  old limit that two effect changes made before one render are both laid over
+  the same starting point (the second keeps its own field and the store
+  merges, so nothing is lost in the store).
+- **Undo and Reset send a whole object as a patch**, as they did. Because it
+  is merged, an undo entry or the reset defaults that hold no chorus or EQ
+  leave the ones the project has. That is how it was; roadmap improvement 2
+  is where undo is put right.
+- **`applySnapshot` still awaits the two calls** (`await Promise.all` of two
+  values that are not promises), so the lane, tempo and pattern calls after
+  it run one turn later, as they did. Pull request 8 makes all of it one
+  `applyAll`.
+- **Nothing in `storeRoutes.test.ts` changed, and no pinned count moved.** The
+  two paths keep their shared line and its one `method === 'GET'`.
+- `useStudio.tsx` makes 39 calls to `localRequest` after this pull request.
+
 ## What is being replaced
 
 Edits inside a project go through `localService.request(path, options)`, a leftover
@@ -285,8 +332,7 @@ save that is scheduled, not immediate; `commitScene()` before a scene is read;
 saving. Kept until the last pull request and then changed on purpose, each in a
 pull request of its own: saving when nothing changed (it moves `revision` and
 version-keeping, so the owner should know); a GET with a body writing; the
-built-in-property throw; the rollback in the effects handlers that can never run;
-a one-step drum edit echoing the whole drum state. Dead code removed in the first
+built-in-property throw; a one-step drum edit echoing the whole drum state. Dead code removed in the first
 pull request: the `drumStep`, `drumStepVelocity`, `drumSettings`, `drumMix` and
 `drumReset` cases in `useStudio`'s message switch, which nothing emits.
 
@@ -477,9 +523,12 @@ early updates; adds the two-way tests.
    `drumKitChanged` handlers write `drumStateRef`, and undo reads
    `drumsForUndoRef` (see what was found, above). Every history push is where
    it was, with its key. `drumKitsLoading` and `drumKitsError` are removed.
-4. **Effects.** `/drum/fx`, `/effects-loop`. Delete the second apply from the
-   response and the rollback that cannot run. The helpers take a patch, not a whole
-   object. Low.
+4. **Effects.** Built. `/drum/fx` and `/effects-loop` are `drum.fx` and
+   `effects.set`, with the helpers `setDrumFx` and `setEffectsLoop`, each
+   taking a patch. In `useStudio`: `handleDrumFxChange`,
+   `handleEffectsLoopChange`, the two calls undo makes and the two Reset
+   makes; the `drumFxUpdate` and `effectsLoopUpdate` handlers are as they
+   were and are the one place each is applied.
 5. **Lanes.** `parameters`, `model`, `mix`, `preferences`, `patterns`, `/tempo`.
    The highest risk: the `synthUpdate` handler is the only thing that sends
    parameters to the audio (`synthAudio.updateParameters`) and must keep doing so;

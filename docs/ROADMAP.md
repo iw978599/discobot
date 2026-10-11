@@ -22,7 +22,7 @@ slow down every later change.
    all wait on it.
 
    The plan is `docs/TYPED_STORE_PLAN.md`: eight pull requests, each leaving
-   the app working. Done: the first three. An edit is now a typed operation
+   the app working. Done: the first four. An edit is now a typed operation
    handed to one synchronous `apply`, with a reducer for each, and anything
    that wants to record edits can listen for them. Drum swing and drum master
    volume go that way, and `useStudio` applies each once, from the store's
@@ -32,9 +32,10 @@ slow down every later change.
    settled form. Every drum edit goes that way as well (steps, velocity,
    chance and repeats, a drum's settings, mute, solo and sample, the pattern's
    length, the kit, reset), and the drums on screen are set once, from the
-   store's event. Still open: the other 18 operations (effects, lanes, the
-   transport, scenes and the song, in that order), then taking `request`
-   away, and after that splitting `useStudio.tsx`, which the plan describes
+   store's event. The drum sends and the shared effects go that way too, each
+   as a change laid over what is there. Still open: the other 16 operations
+   (lanes, the transport, scenes and the song, in that order), then taking
+   `request` away, and after that splitting `useStudio.tsx`, which the plan describes
    but does not schedule.
 
 2. **Make undo a store feature.** (M, after 1)
