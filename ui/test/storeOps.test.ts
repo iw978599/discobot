@@ -1178,40 +1178,37 @@ test('each drum edit is delivered whole before the next begins, with every earli
   service.flush();
 });
 
-// An instrument named after a property every object has is not refused: the four edits that read
-// the lane throw, and the mute and the sample write onto the property itself. Left as it was
-// until the next commit puts it right.
-test('an instrument named after a built-in property is not refused (looks wrong)', () => {
+// An instrument named after a property every object has used to find that property: the four
+// edits that read the lane threw (a TypeError, and a SyntaxError for the settings), and the mute
+// and the sample were written onto the property itself, `__proto__` being the object every other
+// object inherits from, and answered as a change that changed no lane. Now each is an unknown
+// instrument, refused like any other, and nothing is touched.
+test('an instrument named after a built-in property is an unknown instrument, and nothing is written onto the property', () => {
+  const builtIns = ['constructor', 'toString', '__proto__'];
+  for (const name of builtIns) assert.ok(({} as Record<string, unknown>)[name], `the old lookup found ${name} on a plain object`);
+  const refused = { status: 404, data: { error: NO_LANE }, events: [], saved: false };
+  const edits: Array<[string, (service: LocalProjectService, name: string) => Applied<unknown>]> = [
+    ['drum.step', (service, name) => service.setDrumStep(wrong(name), 0, true)],
+    ['drum.stepVelocity', (service, name) => service.setDrumStepVelocity(wrong(name), 0, .5)],
+    ['drum.stepDetail', (service, name) => service.setDrumStepDetail(wrong(name), 0, { ratchet: 2 })],
+    ['drum.settings', (service, name) => service.setDrumSettings(wrong(name), { volume: 1 })],
+    ['drum.sample', (service, name) => service.setDrumSample(wrong(name), SAMPLE)],
+    ['drum.mix', (service, name) => service.setDrumMix(wrong(name), { muted: true })],
+  ];
   const service = setup();
   const before = service.snapshot();
-  for (const name of ['constructor', 'toString', '__proto__']) {
-    assert.throws(() => service.setDrumStep(wrong(name), 0, true), TypeError);
-    assert.throws(() => service.setDrumStepVelocity(wrong(name), 0, .5), TypeError);
-    assert.throws(() => service.setDrumStepDetail(wrong(name), 0, { ratchet: 2 }), TypeError);
-    assert.throws(() => service.setDrumSettings(wrong(name), { volume: 1 }), SyntaxError);
+  for (const name of builtIns) {
+    for (const [op, edit] of edits) assert.deepEqual(applied(service, target => edit(target, name)), refused, `${op} ${name}`);
   }
   assert.deepEqual(service.snapshot(), before);
   assert.equal(service.flush(), true);
   assert.equal(storage.has(STORAGE_KEY), false, 'nothing was scheduled');
-
-  // A mute or a sample does not throw: it is written onto the built-in property itself and
-  // answered as a change that changed no lane. `__proto__` is left out here only because the
-  // property it finds is the one every object in the test run shares.
-  for (const name of ['constructor', 'toString']) {
-    const builtIn = ({} as Record<string, any>)[name];
-    try {
-      const mix = applied(setup(), target => target.setDrumMix(wrong(name), { muted: true }));
-      assert.equal(builtIn.muted, true);
-      delete builtIn.muted;
-      const sample = applied(setup(), target => target.setDrumSample(wrong(name), SAMPLE));
-      assert.equal(builtIn.sampleId, SAMPLE);
-      const unchanged = { status: 200, data: drums(), events: [{ type: 'drumFullState', data: drums() }], saved: true };
-      for (const result of [mix, sample]) assert.deepEqual(result, unchanged);
-    } finally {
-      delete builtIn.muted;
-      delete builtIn.sampleId;
-    }
+  const everyObject = Object.prototype as Record<string, any>;
+  for (const holder of [everyObject, ({} as Record<string, any>).constructor, ({} as Record<string, any>).toString]) {
+    assert.equal(holder.muted, undefined, 'no mute was written onto a built-in property');
+    assert.equal(holder.sampleId, undefined, 'and no sample');
   }
+  assert.equal(({} as Record<string, any>).muted, undefined, 'and every object is as it was');
 });
 
 test('before the service is initialized the typed way throws', () => {

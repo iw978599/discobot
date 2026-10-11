@@ -41,14 +41,12 @@ const sentValue = (value: unknown): unknown => sent({ value })?.value;
 const laneOf = (state: ProjectState, synthId: unknown) => state.synths.find(s => s.synthId === synthId);
 
 type DrumLane = DrumState[keyof DrumState];
-// The six edits to one drum lane, as the router made them: find the lane, change it, put the
-// whole drum state through the checks, and send all of it.
-// An instrument named after a property every object has (`constructor`, `toString`,
-// `__proto__`) finds that property instead of a lane, as it did in the router: a step edit or a
-// change of settings then throws, and a sample or a mute is written onto the property itself.
-// storeEdits.test.ts and storeOps.test.ts pin the throw.
+// The six edits to one drum lane: find the lane, change it, put the whole drum state through the
+// checks, and send all of it. Only a lane the drum state has of its own is found: an instrument
+// named after a property every object has (`constructor`, `toString`, `__proto__`) used to find
+// that property, which a step edit then threw on and a mute or a sample was written onto.
 const drumLaneEdit = ({ state, defaults }: ReducerContext, instrument: unknown, edit: (track: DrumLane) => Rejected | void): Outcome<{ drumState: DrumState }> => {
-  const track = state.drumState[instrument as keyof DrumState];
+  const track = Object.prototype.hasOwnProperty.call(state.drumState, instrument as string) ? state.drumState[instrument as keyof DrumState] : undefined;
   if (!track) return refuse(404, 'Unknown local operation');
   const refused = edit(track);
   if (refused) return refused;

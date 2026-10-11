@@ -987,11 +987,12 @@ test('an operation that does not save leaves earlier edits waiting, and a read d
   assert.equal(storage.has(STORAGE_KEY), false);
 });
 
-test('an instrument name that is a built-in property of every object is not refused: the edit throws (looks wrong)', () => {
+test('an instrument name that is a built-in property of every object is an unknown instrument, not a throw', () => {
   const service = setup();
   const before = service.snapshot();
   for (const instrument of ['constructor', 'toString', '__proto__']) {
-    assert.throws(() => service.setDrumStep(wrong(instrument), 0, true), TypeError);
+    const result = applied(service, store => store.setDrumStep(wrong(instrument), 0, true));
+    assert.deepEqual([result.status, result.data, result.events, result.saved], [404, { error: NO_LANE }, [], false]);
   }
   assert.deepEqual(service.snapshot(), before);
   assert.equal(service.flush(), true);
