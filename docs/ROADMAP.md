@@ -74,6 +74,31 @@ slow down every later change.
 8. **Move synth presets to IndexedDB.** Done: presets have a store of their
    own, and any saved before are moved there on the next visit.
 
+9. **A design review of the whole interface, with redesign suggestions.** (M) Asked for by the owner on
+   2026-10-11, to be done with the frontend-design plugin. The interface has
+   grown a piece at a time: the rack, the dialogs and menus, the phone
+   layout, kids mode, and the pages a share link or a person's link opens.
+   Nobody has looked across all of it at once. The review covers:
+   - whether the pieces read as one thing: type sizes and weights, spacing,
+     the colours and where each is used, corners, borders and shadows;
+   - every state of every control: resting, hovered, pressed, focused, on,
+     disabled, and the empty and error states of lists and pages;
+   - what is hard to read or to hit: contrast, small text, small targets,
+     and labels that are cut short;
+   - the phone layout and kids mode as carefully as the desktop rack.
+   It needs pictures of the real app at desktop and phone width, which the
+   browser tests on GitHub can take. It ends in two things for the owner:
+   - a written list of findings in order of how much each matters, which
+     become small pull requests once agreed;
+   - redesign suggestions, which the owner asked for: where a part of the
+     interface would be better made differently and not merely tidied, a
+     proposal for it with a picture or mock-up, what it would cost, and
+     what it would change for someone using the app. These go further than
+     fixes, up to a different look or arrangement for a whole part.
+   Nothing suggested is built until the owner has chosen it. A suggestion
+   may change how something is laid out or reached, but not what the app
+   can do.
+
 Done: the rack rebuild that emptied `App.tsx`; the two-tab guard; debounced
 saving; projects as IndexedDB records with version history; the Vibrato LFO
 target; removal of the AI review workflow.
@@ -226,15 +251,35 @@ may redistribute.
    order of the list or leaving a published song off it; playing a song from
    the list without opening its page.
 
-10. **A fuller kids mode.** (M)
-    The first version is too simple to hold a child's interest for long.
-    Decided 2026-10-10: it stays a page of its own, and gets
-    - more to play: more pads and more sounds to choose from;
-    - a second activity on another screen, such as a grid of pictures for
-      building a beat.
-    The rules of the first version still hold: no reading needed, nothing
-    can be lost or broken, a capped level, no account and no requests to
-    anywhere.
+10. **A fuller kids mode.** Done: twelve pads, more sounds to choose from,
+    and a second screen where a beat is built on a grid of pictures. It is
+    still a page of its own, as decided on 2026-10-10, and the rules of the
+    first version still hold. Kids mode now lasts for the whole visit to a
+    tab, so going back in the browser is not a way out. Still open: trying it
+    with a child and on a real tablet, including that swipe back; choosing
+    the sounds by ear; whether twelve pads are cramped on a phone held
+    sideways.
+
+11. **Time signatures.** (L) Asked for by the owner on 2026-10-11. Everything
+    is in four-four today: a bar is sixteen steps (thirty-two on a lane set
+    to finer steps), the drum grid is sixteen to a bar, and the transport,
+    the song, the exports and the bar tabs all count in bars of that length.
+    Being able to change it means, at least, three-four, six-eight, five-four
+    and seven-eight:
+    - a bar's length in steps comes from the time signature, for lanes and
+      for the drum grid, with the grids drawn and grouped to match (beats of
+      three in six-eight, say);
+    - the transport, the playhead, the metronome when there is one, song
+      mode's bar counting and the delay's tempo sync all follow it;
+    - WAV, loop, stem and MIDI export, and MIDI import, carry it (a MIDI file
+      has a place for a time signature);
+    - older projects open as four-four, unchanged.
+    It reaches into most of what counts steps (`patternLength.ts`,
+    `browserTransport.ts`, `songPlayback.ts`, the exporters), so it should
+    come after the typed store. It overlaps with pattern lengths that are not
+    a whole number of bars (item 4) and the two should be designed together.
+    To decide: one time signature for the project, or one for each scene so
+    a song can change metre part-way; and which signatures to offer.
 
 Done: song mode, with mutes and solos kept per scene; patterns of 1, 2, 4 or
 8 bars per lane, and MIDI files of up to eight bars imported at full length;
@@ -255,6 +300,8 @@ for new accounts.
   addition to the guest protocol and a new prompt for its author.
 - **Kids mode.** Staying a separate page is now decided. Still to answer:
   whether what a child makes can be opened in the full app.
+- **Time signatures.** One for the whole project, or one for each scene?
+  And which ones should be on offer?
 
 ## Suggested order
 
@@ -269,15 +316,19 @@ for new accounts.
 5. **The rest of the phone layout** (features 1): one unit on screen at a
    time, knobs as sliders and a piano roll made for a thumb. Do the
    **accessibility pass** (improvements 5) on the new controls as they are
-   made, move **kids mode** (features 2) onto the same large controls, and
-   build the **fuller kids mode** (features 10).
+   made, and move **kids mode** (features 2) onto the same large controls.
+   The fuller kids mode (features 10) is done. Then the **design review of
+   the whole interface, with its redesign suggestions** (improvements 9), once the phone layout it has to
+   look at is in place.
 6. **Record live playing** and **more ways to edit patterns** (features 3
-   and 4): the two that most change what making a song feels like.
-7. **Samples in project files** (sound 2). Sync for them waits on storage.
+   and 4): the two that most change what making a song feels like. **Time
+   signatures** (features 11) go with pattern editing, after the typed
+   store.
+7. Done: samples in project files (sound 2). Sync for them waits on storage.
 8. **Parameter automation** (features 5).
 9. **The audio layer's single owner** (improvements 4), then the sound work
    that builds on it: **insert effects, the reverb, the ladder filter, the
    modulation matrix and the sample oscillator** (sound 3 to 6).
 10. **More MIDI** (features 6), when there is hardware to test with.
 11. **Live collaborative sessions** (the rest of features 7), after the
-    typed store, and the **published-songs page** (features 9).
+    typed store. The published-songs page (features 9) is done.
