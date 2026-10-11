@@ -40,7 +40,9 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 | `ui/src/App.tsx` | Picks the page from the URL hash before `useStudio` runs: kids mode (`#kids`), one person's published songs (`#u=name`), or the workstation, which shows a shared song's page for `#song=` and `#s=` and otherwise `<Rack>` |
 | `ui/src/studio/useStudio.tsx` | All app state and behaviour: synth lanes, transport scheduling, undo/redo, save/load, MIDI import/export wiring. Returns one `Studio` object; it renders nothing |
 | `ui/src/rack/` | The whole UI. `Rack` stacks `TransportUnit`, three `SynthModule`s, `DrumModule` and the effects unit; `rack.css` holds the look and the shared column layout; `Dialog` and `Menu` are the only modal and dropdown |
-| `ui/src/services/localService.ts` | In-process project store. `localRequest(path, options)` mutates state, persists to localStorage and emits events |
+| `ui/src/services/localService.ts` | In-process project store. `apply(op)` is the one way an edit changes the project: it runs the reducer, schedules the save and emits the event. `localRequest(path, options)` is the older route form, which the routes not yet moved still use |
+| `ui/src/services/projectOps.ts` | The edits a project accepts, as types: `Operation`, what each answers (`OpResult`), a refusal (`Rejected`), and `OP_META`, which says whether each is saved, undone and shared |
+| `ui/src/services/projectReducers.ts` | What each operation does to the project: one reducer for each, the body of the route it replaced |
 | `ui/src/services/projectSanitization.ts` | Validation and clamping for everything read from storage or saved arrangements |
 | `ui/src/services/browserTransport.ts` | Look-ahead clock. One tick is a 32nd note; 16-step lanes and drums use every second tick |
 | `ui/src/services/playhead.ts` / `ui/src/hooks/usePlayhead.ts` | Where each lane's playhead is, kept outside React, and the two hooks that show it: `usePlayheadMark` lights the playing step, `usePlayhead` reads a part of the position such as the bar |
@@ -101,6 +103,8 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 - Sounds, kit settings, tempo and effects are project-wide. A scene holds steps, and which lanes and drums are muted or soloed (`scene.mutes`): `captureScene` records them and `applyScene` puts them back on the lanes and the drum state, so everything else still reads `muted` and `solo` where it always did. A scene saved before this holds none and leaves the lanes as they are.
 - A song export applies each scene's mutes bar by bar (`applySceneMutes` empties the silent lanes, `sceneDrumState` carries the drum flags) and then hands the lanes to the exporter unmuted. Never filter a song export by the open scene's mutes.
 - In song mode the scheduler picks the scene from the transport's bar number (`sceneAtBar`), plays any scene other than the open one from its stored copy, and asks the store to open the playing scene. `localService.request` emits synchronously, and the `sceneChanged` handler updates the refs the scheduler reads straight away; keep both true or a bar would play the wrong scene.
+- Edits inside a project are becoming typed operations (`docs/TYPED_STORE_PLAN.md`, eight pull requests, the first done). An edit is an `Operation` handed to `localService.apply`, usually through a one-line typed helper such as `setDrumSwing`. `apply` is synchronous and must never be `async`: the event has been delivered before it returns. It answers `{ ok, value }` or `{ ok: false, status, error }` and does not throw for a refusal. Until the last pull request a route in `request` is a thin call into `apply`, and `apply` throws for an operation whose route has not moved.
+- Reducers (`projectReducers.ts`) only change the state they are handed and say what to save and send. They never emit, save or read the clock; `apply` does the first two and `write()` stamps the time. `useStudio` does not set its own state before calling a typed helper: the event is the one place a value is applied, and it carries the value as the store kept it (a drum master volume is held to 0 to 1). `storeOps.test.ts` runs every moved route both ways and fails if they differ.
 - Up to 3 synth lanes; Synth 1 cannot be removed. A bar is 16 steps, or 32 on a synth lane set to finer steps; the drum grid is always 16 per bar.
 - A lane's pattern and the drum grid can each be 1, 2, 4 or 8 bars (`Pattern.bars`, `Scene.laneBars`; the drum grid's length is its step count over 16). Lanes of different lengths loop against each other. `patternLength.ts` holds the arithmetic. A 32-step pattern is one fine bar unless `bars` says two: never infer bars from the step count alone, use `laneBars`.
 - A scene lasts as long as its longest part (`sceneBars`). In a song, one repeat of an entry is one pass through its scene, however many bars that is. The song helpers take a `lengthOf` function because the open scene's length has to be read live (`sceneLength` in `useStudio`).
@@ -198,7 +202,7 @@ npm run migrate --workspace=server  # Apply new database migrations to the live 
 - No comments in code unless explaining non-obvious logic
 - `DrumState` always initialized with `createDefaultDrumState()` (never null)
 - Engine types are single source of truth (`engine/src/types.ts`), UI re-exports via `ui/src/types.ts`
-- All project mutations go through `localRequest`; components do not write localStorage directly
+- All project mutations go through `localService`: a typed helper over `apply` where the route has moved (`docs/TYPED_STORE_PLAN.md`), `localRequest` where it has not. Do not add a route; add an operation and its reducer. Components do not write localStorage directly
 - Sanitize anything read from storage in `projectSanitization.ts` before it reaches audio code
 - The app must work fully with no account and with the API unreachable. Signed out, it makes no request to the API at all, with one exception the visitor asks for: opening a short link (`#s=code`) fetches that published song. A browser test checks both
 - The API stores a username, password hash, recovery-code hash, join date and invite code, and nothing else: no email, no names, no IP addresses. Do not add personal data, analytics or logging of request contents
@@ -273,7 +277,7 @@ npm run migrate --workspace=server  # Apply new database migrations to the live 
 - A server from before the page existed answers 404 for the route, and the page then says such pages are not available yet. The accounts API is deployed by hand, so the site can be ahead of it; a server that cannot be reached gets a different message and a Try Again button.
 
 ## Known Issues
-- `localService` still exposes a REST-shaped `request(path)` API with `Response` objects for edits inside a project, a leftover from the server version
+- `localService` still exposes a REST-shaped `request(path)` API with `Response` objects for most edits inside a project, a leftover from the server version. It is being replaced a group of routes at a time (`docs/TYPED_STORE_PLAN.md`); drum swing, drum master volume and three reads have moved
 - `useStudio.tsx` is about 2,300 lines and owns most state; the UI is separate from it, but the state itself is not yet split by concern
 - Firefox/Safari lack Web MIDI API support
 
