@@ -341,13 +341,12 @@ may redistribute.
     gives no sign of it, so the owner opened the file early and took it for
     cut short; waited for, the whole song arrived with its download notice.
     So: show progress while an export is being made, say when it is done,
-    and stop a second export being started on top of the first. Also asked
-    about and not reproduced: with the switch on Scene, a song download gave
-    only the scene. Song WAV does not look at that switch, and a browser
-    test exports the whole song with it on Scene. The Export menu has both
-    Download WAV, which is the open scene, and Song WAV; if that is what
-    happened, call the first Scene WAV. Waiting on the owner to say which
-    was pressed.
+    and stop a second export being started on top of the first. The owner
+    also once got only the scene from what was meant to be a song download,
+    and puts it down to pressing the wrong thing: the Export menu has both
+    Download WAV, which is the open scene, and Song WAV. Call the first
+    Scene WAV, and its MIDI neighbour Scene MIDI, so the two kinds read as
+    a pair.
 
 Done: song mode, with mutes and solos kept per scene; patterns of 1, 2, 4 or
 8 bars per lane, and MIDI files of up to eight bars imported at full length;
@@ -372,8 +371,6 @@ for new accounts.
   And which ones should be on offer?
 - **Presets and synth models.** Which instruments should the new models be
   in the manner of, and are the kinds of preset above the right ones?
-- **A song download that gave only the scene.** Was it Download WAV (the
-  open scene, by design) or Song WAV that was pressed?
 
 ## Suggested order
 
