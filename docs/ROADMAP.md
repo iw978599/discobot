@@ -152,7 +152,7 @@ target; removal of the AI review workflow.
 
 7. **More presets, grouped by kind, and more synth models.** (L in all)
    Asked for by the owner on 2026-10-11. The plan is
-   .
+   `docs/SYNTH_MODELS_PLAN.md`.
    - More presets to start from, and the presets menu nested by what a
      sound is for: bass, lead, pad, keys, pluck, effects. The kinds are
      agreed. A person's own saved presets keep a group of their own, and an
@@ -415,7 +415,7 @@ for new accounts.
 9. **The audio layer's single owner** (improvements 4), then the sound work
    that builds on it: **insert effects, the reverb, the ladder filter, the
    modulation matrix and the sample oscillator** (sound 3 to 6). **More
-   presets and synth models** (sound 7) follow :
+   presets and synth models** (sound 7) follow `docs/SYNTH_MODELS_PLAN.md`:
    the grouped presets menu and the seven models that need nothing new can
    be done at any time; the other seven come after the sound work each
    leans on.
