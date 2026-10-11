@@ -158,10 +158,13 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 - Drum steps carry optional `stepProbabilities` and `stepRatchets` arrays next to `stepVelocities`. Anything that moves or copies drum steps must move all three.
 - Exports must be repeatable: use `seededRandom` for anything random in WAV or MIDI export, never `Math.random`. That includes the reverb's noise (`reverbImpulse` takes a random source).
 - A drum lane can play an imported sample instead of its synthesized voice (`DrumTrack.sampleId`). The sample is played by `DrumCore` (`setSample`), so playback and export match; it is one channel, at most ten seconds, and skips the kit's colouring. `drumSamples.ts` decodes and caches by id; `useStudio` keeps the decoded samples for the worklet and for export.
-- Samples live in this browser only. A lane whose sample is not on the device plays its synthesized voice and says so; never treat a missing sample as an error.
+- Samples live in this browser's sample store and travel only inside a saved project file. A lane whose sample is not on the device plays its synthesized voice and says so; never treat a missing sample as an error.
+- A saved project file carries the audio of every sample its drum lanes use, as base64 in a top-level `samples` list beside `project` (`projectSamples.ts`). `handleExportProject` adds it with `embedSamples` and `handleImportProjectFile` takes it out with `adoptSamples` before the file reaches `importProject`; nothing else may do either. `sampleId` exists only on `drumState` lanes, which are project-wide, so a lane silent in the open scene still counts. Give `usedSampleIds` and the renaming in `adoptSamples` any new place a sample id is stored.
+- A sample from a file is the same sample when its bytes are the same; the id is only what the lanes call it, and a file can say anything. Audio already in the store is not stored again (the lanes are pointed at the copy that is there), and an id already taken by different audio is never overwritten (the incoming sample gets a new id and the lanes follow).
+- Embedded audio is untrusted and bounded: 4 MB a sample, 12 MB and 32 samples a file, an audio type or file name, valid base64. Anything else is dropped, the project still opens and the user is told how many were left out. The file is kept under the 20 MB an import accepts, which is also the limit in versions before this, and an older version reads only `project`, so it opens a new file with its samples missing. Do not raise the caps past that limit or move `samples` inside `project`.
 - Import Kit puts several sample files on the drum lanes at once. `matchKit` reads only the file names, so every guess is shown in the dialog and can be changed; nothing is stored or changed until it is confirmed, and only files given a lane are stored. Add a naming convention by adding to `guess` in `kitImport.ts` and a name to its test.
 - No drum machine's recordings are bundled with the app. The owner decided this on 2026-10-09: no LinnDrum, DMX or TR-707 recordings were found that the project is clearly allowed to redistribute. The kits with those names in the kit menu are synthesized. Do not add recordings without the owner's say-so and a checked licence.
-- `localService.exportProject()` / `importProject()` are the project file format (`format: 'discobot-project'`). Import goes through the same `restore()` sanitizing as a reload; never trust a file's contents.
+- `localService.exportProject()` / `importProject()` are the project file format (`format: 'discobot-project'`). Import goes through the same `restore()` sanitizing as a reload; never trust a file's contents. `exportProject()` is also what share links, published songs, sync and sharing are made from, so it must never hold audio: only the saved file gains its `samples`, in `useStudio`.
 - The service worker serves hashed files under `assets/` cache-first and everything else network-first. Keep unhashed files (the page, `audio-worklet.js`) network-first, or an update would pair a new app with a stale worklet.
 
 ## Drum Instrument Details
@@ -212,7 +215,7 @@ npm run migrate --workspace=server  # Apply new database migrations to the live 
 - Signing in uploads nothing that was already in the browser; those projects are listed as "this browser only" until the user adds them. Projects made while signed in are the account's.
 - Sync state is in `localStorage` under `discobot_sync_v1`, per username. Signed out, `startProjectSync` sends nothing.
 - The server stores projects as sent and checks only size and shape. Whatever the browser downloads goes through `restore()` like a project file.
-- Imported samples are not synced.
+- Imported samples are not synced. `fileFor`, `contentHash`, the working copy, the library and kept versions hold a sample's id and never its audio; a test in `projectSamples.test.ts` checks each. Syncing samples needs file storage on the server.
 
 ## Working Together
 - Two people work on one project in turns. There is no live connection and no merging: the owner shares a synced project by username, and the people it is shared with read and save the owner's copy under the same revision rule as everything else. This was chosen over live editing because a held-open connection is ruled out below; changing that is the owner's decision.
@@ -277,7 +280,7 @@ npm run migrate --workspace=server  # Apply new database migrations to the live 
 ## Potential Next Steps
 - Replace the REST-shaped facade with typed service methods and split `useStudio.tsx` into hooks per concern
 - See `docs/ROADMAP.md` and `docs/STORAGE_AND_ACCOUNTS_PLAN.md`
-- Use imported samples as a synth source, and include samples in project files and sync
+- Use imported samples as a synth source, and sync samples (project files already carry them)
 
 ## Working Rules for Agents
 - Skills for this repository are in `.claude/skills/`: `add-project-field` (anything stored), `ship-change` (checks, commits, pull requests) and `scripted-edits` (editing on Windows). Read the one that fits before starting.
