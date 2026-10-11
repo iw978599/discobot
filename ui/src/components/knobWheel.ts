@@ -25,14 +25,15 @@ export function notchSize(min: number, max: number, step: number, fine: boolean)
   return fine ? step : Math.max(step, (max - min) * WHEEL_NOTCH_SHARE);
 }
 
-// The page's wheel events, so a knob can tell a scroll under way from a deliberate turn. `prev` is
-// the one before the event being handled, since this listener runs first.
-let pageWheel = { prev: -Infinity, last: -Infinity };
+// When the page last took a wheel event (one no knob turned), so a knob can tell a scroll under
+// way from a deliberate turn. It is set after the knobs have seen an event, so a knob reads the
+// one before.
+let pageWheelAt = -Infinity;
 let listening = false;
 function listenToPageWheel() {
   if (listening || typeof window === 'undefined') return;
   listening = true;
-  window.addEventListener('wheel', event => { pageWheel = { prev: pageWheel.last, last: event.timeStamp }; }, { capture: true, passive: true });
+  window.addEventListener('wheel', event => { if (!event.defaultPrevented) pageWheelAt = event.timeStamp; }, { passive: true });
 }
 
 export interface WheelKnob {
@@ -87,7 +88,7 @@ export function useKnobWheel(knob: WheelKnob) {
       // Ctrl and the wheel is the browser's zoom.
       if (state.disabled || event.ctrlKey || !ready) return;
       const running = event.timeStamp - run.at < WHEEL_GAP_MS && run.seen.has(state.value);
-      if (!running && event.timeStamp - pageWheel.prev < WHEEL_GAP_MS) return;
+      if (!running && event.timeStamp - pageWheelAt < WHEEL_GAP_MS) return;
       event.preventDefault();
       const notches = wheelNotches(event);
       if (!running) run.seen = new Set([state.value]);
