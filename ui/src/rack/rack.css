@@ -198,6 +198,12 @@
   color: #ffd9cc; text-transform: none; letter-spacing: 0.02em; font-weight: 500; font-size: 14px;
 }
 
+.export-status {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  background: #1a1b1c; border: 1px solid var(--amber); border-radius: 2px; padding: 8px 14px;
+  color: var(--ink); text-transform: none; letter-spacing: 0.02em; font-weight: 500; font-size: 14px;
+}
+
 /* scenes and song */
 .scene-strip, .song-chain { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
 .song-chain { flex: 1; }

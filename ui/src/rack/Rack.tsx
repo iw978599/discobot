@@ -174,7 +174,7 @@ export default function Rack({ studio }: { studio: Studio }) {
           </div>
         )}
         {studio.exportStatus && studio.guestRecording === null && (
-          <div role="status" className="app-alert export-status" data-phase={studio.exportStatus.phase}>
+          <div role="status" className="export-status" data-phase={studio.exportStatus.phase}>
             <span>
               {studio.exportStatus.phase === 'working'
                 ? `Making ${studio.exportStatus.what}${studio.exportStatus.part ? ` (${studio.exportStatus.part})` : ''}. A long song takes a while; the file downloads when it is done.`
