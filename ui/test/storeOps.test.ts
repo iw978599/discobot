@@ -250,6 +250,77 @@ const drumCases: Case[] = [
     drumKit(`a kit ${what} is refused`, { kitId }, { status: 400, error: 'Unknown kit' }, kickPanned)),
 ];
 
+// The drum sends and the shared effects are each changed by a patch laid over what is there.
+const FX = defaults().drumFx;
+const sends = (changes: object = {}, returnLevel = FX.returnLevel) => ({ drumFx: { sends: { ...FX.sends, ...changes }, returnLevel } });
+const fxSet = (service: LocalProjectService) => { assert.ok(service.setDrumFx({ sends: { reverb: .9, phaser: .4 }, returnLevel: .4 }).ok); };
+const FX_SET = sends({ reverb: .9, phaser: .4 }, .4);
+// A new project's effects: the defaults, with a shaped reverb.
+const newEffects = () => { const effects: any = defaults().effectsLoop; Object.assign(effects.reverb, { preDelay: .02, damping: .35 }); return effects; };
+const effects = (change: (effects: any) => void = () => {}, from: () => any = newEffects) => { const next = from(); change(next); return { effectsLoop: next }; };
+const CHORUS = { enabled: true, rate: 2, depth: .3, mix: .4 }, EQ = { enabled: true, low: 3, mid: -2, high: 1 };
+// Every part that a project saved before it existed does not have: a synced delay, a chorus, an EQ and a shaped reverb.
+const shaped = (service: LocalProjectService) => { assert.ok(service.setEffectsLoop({ delay: { sync: '1/8' }, chorus: CHORUS, eq: EQ, reverb: { preDelay: .1, damping: .5 } }).ok); };
+const shapedEffects = () => { const next = newEffects(); next.delay.sync = '1/8'; next.chorus = { ...CHORUS }; next.eq = { ...EQ }; Object.assign(next.reverb, { preDelay: .1, damping: .5 }); return next; };
+const wasShaped = (change: (effects: any) => void = () => {}) => effects(change, shapedEffects);
+type PatchOutcome = { answer: unknown } | { status: 400 | 404 | 409; error: string };
+const patchCase = (op: Case['op'], path: string, event: string, run: (service: LocalProjectService, patch: any) => Applied<unknown>) =>
+  (title: string, patch: Record<string, unknown>, result: PatchOutcome, arrange?: Case['arrange']): Case => ({
+    op, title, arrange, path, body: patch, run: service => run(service, patch), ...('answer' in result ? { event, ...result } : result),
+  });
+const drumFx = patchCase('drum.fx', '/drum/fx', 'drumFxUpdate', (service, patch) => service.setDrumFx(patch));
+const effectsSet = patchCase('effects.set', '/effects-loop', 'effectsLoopUpdate', (service, patch) => service.setEffectsLoop(patch));
+const notObjects: Array<[string, unknown]> = [['text', 'lots'], ['null', null], ['not a number at all', Number.NaN], ['infinity', Number.POSITIVE_INFINITY], ['a number', 7]];
+
+const effectCases: Case[] = [
+  drumFx('drum sends are laid over what is there and held to 0 to 1; what is not a send is dropped', { sends: { reverb: .9, delay: 7, chorus: .5 }, bogus: 1 }, { answer: sends({ reverb: .9, delay: 1 }) }),
+  drumFx('the drum return level is held at 1 and keeps the sends', { returnLevel: 4 }, { answer: sends({ reverb: .9, phaser: .4 }, 1) }, fxSet),
+  drumFx('a send and a return level below zero are held at 0', { sends: { drive: -1 }, returnLevel: -2 }, { answer: sends({ drive: 0 }, 0) }),
+  drumFx('a change of nothing leaves the sends as they were, and still emits and saves', {}, { answer: FX_SET }, fxSet),
+  ...notNumbers.map(([what, returnLevel]) => drumFx(`a return level that is ${what} leaves it as it was`, { returnLevel }, { answer: FX_SET }, fxSet)),
+  drumFx('a send that is undefined is not a change: JSON never sent it', { sends: { reverb: undefined, delay: .5 } }, { answer: sends({ reverb: .9, phaser: .4, delay: .5 }, .4) }, fxSet),
+  drumFx('sends that are undefined are not a change either', { sends: undefined, returnLevel: .5 }, { answer: sends({ reverb: .9, phaser: .4 }, .5) }, fxSet),
+  drumFx('a send that is not a number goes back to where a new project has it', { sends: { reverb: Number.NaN, phaser: 'lots', drive: null, delay: Number.POSITIVE_INFINITY } }, { answer: sends({}, .4) },
+    service => { assert.ok(service.setDrumFx({ sends: { reverb: .9, phaser: .4, drive: .8, delay: .6 }, returnLevel: .4 }).ok); }),
+  ...[...notObjects, ['a list', [.5, .5]] as [string, unknown]].map(([what, value]) => drumFx(`sends that are ${what} all go back to where a new project has them`, { sends: value }, { answer: sends({}, .4) }, fxSet)),
+
+  effectsSet('an effects change is laid over what is there, then checked', { delay: { feedback: 7, sync: '1/8' }, phaser: { enabled: true }, enabled: 'no', bogus: 1 },
+    { answer: effects(next => { next.delay.feedback = .85; next.delay.sync = '1/8'; next.phaser.enabled = true; }) }),
+  effectsSet('each value is held to its range', { returns: { synth: 4, drums: -1 }, drive: { amount: 9, tone: -1 }, phaser: { rate: 99, feedback: 1 }, delay: { time: 0, mix: 2 }, reverb: { decay: 99, mix: -1 } },
+    { answer: effects(next => { next.returns = { synth: 1, drums: 0 }; Object.assign(next.drive, { amount: 1, tone: 0 }); Object.assign(next.phaser, { rate: 8, feedback: .75 }); Object.assign(next.delay, { time: .01, mix: 1 }); Object.assign(next.reverb, { decay: 8, mix: 0 }); }) }),
+  effectsSet('a change of nothing leaves every effect as it was, the later ones too, and still emits and saves', {}, { answer: wasShaped() }, shaped),
+  effectsSet('one value of an effect changes only that', { reverb: { mix: .1 } }, { answer: wasShaped(next => { next.reverb.mix = .1; }) }, shaped),
+  ...notNumbers.map(([what, value]) => effectsSet(`a value that is ${what} leaves it as it was, or puts back what a new project has`, { drive: { amount: value } }, { answer: wasShaped(next => { next.drive.amount = value === undefined ? .9 : .2; }) },
+    service => { shaped(service); assert.ok(service.setEffectsLoop({ drive: { amount: .9 } }).ok); })),
+  ...notObjects.map(([what, value]) => effectsSet(`an effect that is ${what} goes back to what a new project has, without what came later`, { delay: value, reverb: value },
+    { answer: wasShaped(next => { next.delay = defaults().effectsLoop.delay; next.reverb = defaults().effectsLoop.reverb; }) },
+    service => { shaped(service); assert.ok(service.setEffectsLoop({ delay: { time: 1 }, reverb: { decay: 5 } }).ok); })),
+  effectsSet('an effect that is undefined is not a change', { delay: undefined, reverb: undefined, chorus: undefined, eq: undefined }, { answer: wasShaped() }, shaped),
+
+  effectsSet('the delay follows the tempo once it is told a note value', { delay: { sync: '1/8d' } }, { answer: effects(next => { next.delay.sync = '1/8d'; }) }),
+  effectsSet('a delay told "off" has no sync at all, as in a project saved before there was one', { delay: { sync: 'off' } }, { answer: wasShaped(next => { delete next.delay.sync; }) }, shaped),
+  ...([['a note value there is none of', '1/3'], ['null', null], ['not a number at all', Number.NaN], ['a number', 8]] as const).map(([what, sync]) =>
+    effectsSet(`a sync that is ${what} takes the sync off`, { delay: { sync } }, { answer: wasShaped(next => { delete next.delay.sync; }) }, shaped)),
+  effectsSet('a sync that is undefined is not a change: JSON never sent it', { delay: { sync: undefined, mix: .9 } }, { answer: wasShaped(next => { next.delay.mix = .9; }) }, shaped),
+  effectsSet('a delay with no sync stays without one', { delay: { mix: .9 } }, { answer: effects(next => { next.delay.mix = .9; }) }),
+
+  effectsSet('a chorus is added whole from one value, each held to its range', { chorus: { enabled: true, rate: 99 } }, { answer: effects(next => { next.chorus = { enabled: true, rate: 8, depth: .5, mix: .6 }; }) }),
+  effectsSet('a chorus that is there keeps what the change does not name; only true switches it on', { chorus: { mix: 2, enabled: 'yes' } }, { answer: wasShaped(next => { next.chorus = { ...CHORUS, enabled: false, mix: 1 }; }) }, shaped),
+  effectsSet('inside a chorus, what is undefined is not a change and what is not a number is put back', { chorus: { rate: undefined, depth: Number.NaN, mix: null } }, { answer: wasShaped(next => { next.chorus = { ...CHORUS, depth: .5, mix: .6 }; }) }, shaped),
+  ...notObjects.map(([what, value]) => effectsSet(`a chorus and an EQ that are ${what} are taken away`, { chorus: value, eq: value }, { answer: wasShaped(next => { delete next.chorus; delete next.eq; }) }, shaped)),
+  effectsSet('a chorus and an EQ that are lists are put back as new and switched off', { chorus: [1], eq: [1] }, { answer: wasShaped(next => { next.chorus = { enabled: false, rate: .6, depth: .5, mix: .6 }; next.eq = { enabled: false, low: 0, mid: 0, high: 0 }; }) }, shaped),
+  effectsSet('a project with no chorus and no EQ stays without them', { phaser: { mix: .5 } }, { answer: effects(next => { next.phaser.mix = .5; }) }),
+
+  effectsSet('an EQ is added whole from one band', { eq: { low: -3 } }, { answer: effects(next => { next.eq = { enabled: false, low: -3, mid: 0, high: 0 }; }) }),
+  effectsSet('inside an EQ, a band is held to 12 either way, one not a number is flat and one undefined is kept', { eq: { low: 99, mid: Number.NaN, high: undefined } }, { answer: wasShaped(next => { next.eq = { ...EQ, low: 12, mid: 0 }; }) }, shaped),
+
+  effectsSet('the reverb\'s pre-delay and damping are held to their ranges', { reverb: { preDelay: 9, damping: 7 } }, { answer: effects(next => { Object.assign(next.reverb, { preDelay: .25, damping: 1 }); }) }),
+  effectsSet('a pre-delay of zero is taken away and the damping stays', { reverb: { preDelay: 0 } }, { answer: wasShaped(next => { delete next.reverb.preDelay; }) }, shaped),
+  effectsSet('damping below zero is taken away and the pre-delay stays', { reverb: { damping: -1 } }, { answer: wasShaped(next => { delete next.reverb.damping; }) }, shaped),
+  effectsSet('a pre-delay that is not a number is taken away; damping that is undefined is kept', { reverb: { preDelay: Number.NaN, damping: undefined } }, { answer: wasShaped(next => { delete next.reverb.preDelay; }) }, shaped),
+  effectsSet('pre-delay and damping that are null or text are taken away', { reverb: { preDelay: null, damping: 'lots' } }, { answer: wasShaped(next => { delete next.reverb.preDelay; delete next.reverb.damping; }) }, shaped),
+];
+
 const cases: Case[] = [
   ...swing('a swing in range is kept as sent', .3, .3),
   ...swing('a swing past the top is held at .75', 5, .75),
@@ -316,6 +387,7 @@ const cases: Case[] = [
   guestRemove('a guest that does not exist cannot be removed', { status: 404, error: 'Guest not found' }, service => { addGuest(service); return NO_GUEST; }),
 
   ...drumCases,
+  ...effectCases,
 ];
 
 // What is in storage, or null when nothing has been written yet.
@@ -377,7 +449,7 @@ test('apply is synchronous: the event has arrived and the store has changed befo
   assert.equal(service.snapshot().drumSwing, .3);
   for (const method of [
     'apply', 'applyAll', 'setDrumSwing', 'setDrumMasterVolume', 'setDrumKit', 'setDrumState', 'resetDrums', 'setDrumBars', 'setDrumStep', 'setDrumStepVelocity', 'setDrumStepDetail',
-    'setDrumSettings', 'setDrumSample', 'setDrumMix', 'addGuest', 'changeGuest', 'removeGuest', 'getScenes', 'getTempo', 'getDrumKits',
+    'setDrumSettings', 'setDrumSample', 'setDrumMix', 'setDrumFx', 'setEffectsLoop', 'addGuest', 'changeGuest', 'removeGuest', 'getScenes', 'getTempo', 'getDrumKits',
   ] as const) {
     assert.equal(LocalProjectService.prototype[method].constructor.name, 'Function', `${method} is not async`);
   }
@@ -516,6 +588,46 @@ test('a change to a guest that is not an object is refused as a route\'s body wa
   assert.deepEqual(service.snapshot(), before);
 });
 
+test('a change to the drum sends or the effects that is not an object is refused as a route\'s body was', async () => {
+  const service = setup();
+  fxSet(service);
+  shaped(service);
+  service.flush();
+  const before = service.snapshot();
+  const loop: Record<string, unknown> = {};
+  loop.loop = loop;
+  const refused = { status: 400, data: { error: 'Invalid local operation data' }, events: [], saved: false };
+  for (const patch of [null, undefined, [], [{ returnLevel: 1 }], 'sends', 7, Number.NaN, loop, () => ({ returnLevel: 1 })]) {
+    assert.deepEqual(applied(service, target => target.setDrumFx(wrong(patch))), refused);
+    assert.deepEqual(applied(service, target => target.setEffectsLoop(wrong(patch))), refused);
+  }
+  for (const path of ['/drum/fx', '/effects-loop']) {
+    for (const raw of ['null', '[]', '7', '"sends"']) {
+      const routed = await call(service, 'POST', path, undefined, raw);
+      assert.deepEqual([routed.status, routed.data, routed.events, routed.saved], [400, { error: 'Invalid local operation data' }, [], false]);
+    }
+  }
+  assert.deepEqual(service.snapshot(), before);
+});
+
+test('the store keeps nothing of an effects operation\'s own objects', () => {
+  const service = setup();
+  const fx = { sends: { reverb: .9, delay: .1, drive: .1, phaser: 0 }, returnLevel: .5 };
+  const fxResult = service.setDrumFx(fx);
+  assert.ok(fxResult.ok);
+  fx.sends.reverb = 0;
+  fxResult.value.drumFx.sends.delay = 1;
+  const patch = { chorus: { enabled: true, rate: 2, depth: .3, mix: .4 }, delay: { sync: '1/8' as const } };
+  const result = service.setEffectsLoop(patch);
+  assert.ok(result.ok);
+  patch.chorus.rate = 7;
+  result.value.effectsLoop.chorus!.mix = 0;
+  result.value.effectsLoop.delay.time = 1;
+  const kept = service.snapshot();
+  assert.deepEqual([kept.drumFx.sends.reverb, kept.drumFx.sends.delay, kept.effectsLoop.chorus.rate, kept.effectsLoop.chorus.mix, kept.effectsLoop.delay.time], [.9, .1, 2, .4, .2]);
+  service.flush();
+});
+
 test('the store keeps nothing of an operation\'s own objects', () => {
   const service = setup();
   const id = addGuest(service);
@@ -643,6 +755,8 @@ test('before the service is initialized the typed way throws, with the message r
   assert.throws(() => new LocalProjectService().setDrumKit(KIT.id), message);
   assert.throws(() => new LocalProjectService().setDrumState(defaults().drumState), message);
   assert.throws(() => new LocalProjectService().resetDrums(), message);
+  assert.throws(() => new LocalProjectService().setDrumFx({}), message);
+  assert.throws(() => new LocalProjectService().setEffectsLoop({}), message);
   assert.throws(() => new LocalProjectService().getTempo(), message);
   assert.throws(() => new LocalProjectService().getScenes(), message);
 });

@@ -7,7 +7,7 @@ import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
 import { normalizeSynthModelId } from '../synthModels';
 import { NEW_PROJECT_REVERB } from './effectSettings';
 import { record, number, clone, merge, matchesShape, sanitizePattern, sanitizeSynthParams, sanitizeDrums, sanitizeEffects, sanitizeSends, sanitizeSaved, sanitizeModelParams, sanitizeKit, sanitizeScenes, sanitizeSong, MAX_SCENES } from './projectSanitization';
-import type { Applied, GuestPatch, OpNotice, OpResult, Operation, Origin, Outcome } from './projectOps';
+import type { Applied, DeepPartial, DrumFxState, GuestPatch, OpNotice, OpResult, Operation, Origin, Outcome } from './projectOps';
 import { reducers, type ReducerContext } from './projectReducers';
 
 type Message = { type: string; data: any };
@@ -814,6 +814,8 @@ export class LocalProjectService {
   setDrumSettings(instrument: DrumInstrument, settings: Partial<DrumSettings>) { return this.apply({ type: 'drum.settings', instrument, settings }); }
   setDrumSample(instrument: DrumInstrument, sampleId?: string) { return this.apply({ type: 'drum.sample', instrument, sampleId }); }
   setDrumMix(instrument: DrumInstrument, mix: { muted?: boolean; solo?: boolean }) { return this.apply({ type: 'drum.mix', instrument, muted: mix.muted, solo: mix.solo }); }
+  setDrumFx(patch: DeepPartial<DrumFxState>) { return this.apply({ type: 'drum.fx', patch }); }
+  setEffectsLoop(patch: DeepPartial<EffectsLoopState>) { return this.apply({ type: 'effects.set', patch }); }
   addGuest(url: string, name?: string) { return this.apply({ type: 'guest.add', guestId: crypto.randomUUID(), url, name }); }
   changeGuest(guestId: string, patch: GuestPatch) { return this.apply({ type: 'guest.patch', guestId, patch }); }
   removeGuest(guestId: string) { return this.apply({ type: 'guest.remove', guestId }); }
@@ -985,12 +987,7 @@ export class LocalProjectService {
     if (path === '/drum/fx' || path === '/effects-loop') {
       const key = path === '/drum/fx' ? 'drumFx' : 'effectsLoop';
       if (method === 'GET') return respond(state[key]);
-      if (key === 'effectsLoop') state.effectsLoop = sanitizeEffects(merge(state.effectsLoop, body), this.defaults!.effectsLoop);
-      else {
-        const fx = merge(state.drumFx, body);
-        state.drumFx = { sends: sanitizeSends(fx.sends, this.defaults!.drumFx.sends), returnLevel: number(fx.returnLevel, state.drumFx.returnLevel, 0, 1) };
-      }
-      return update(key === 'drumFx' ? 'drumFxUpdate' : 'effectsLoopUpdate', { [key]: state[key] });
+      return fromApplied(key === 'drumFx' ? this.apply({ type: 'drum.fx', patch: body }) : this.apply({ type: 'effects.set', patch: body }));
     }
     if (path === '/drum/bars') return fromApplied(this.apply({ type: 'drum.bars', bars: body.bars }));
     const { instrument } = body;
