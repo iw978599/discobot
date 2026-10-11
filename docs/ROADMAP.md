@@ -150,24 +150,30 @@ target; removal of the AI review workflow.
    The reverb is a convolver with a shaped impulse. Insert effects are easier
    once the audio layer has a single owner (improvements item 4).
 
-7. **More presets, grouped by kind, and more synth models.** (M) Asked for
-   by the owner on 2026-10-11.
+7. **More presets, grouped by kind, and more synth models.** (L in all)
+   Asked for by the owner on 2026-10-11. The plan is
+   `docs/SYNTH_MODELS_PLAN.md`.
    - More presets to start from, and the presets menu nested by what a
-     sound is for (bass, lead, pad, keys, pluck, effects and so on), not
-     one long list. A person's own saved presets keep a group of their own.
-     A preset needs a kind recorded with it; the ones that exist get one,
-     and imported ones go under a kind chosen at import or "other".
-   - More synth models in the manner of well-known instruments, beside the
-     ones there now, each with its four macros. A model is this synth's own
-     voice set up and limited to behave like the instrument it is named
-     for; it is not that instrument's circuit. Some will want things the
-     voice does not have yet (the ladder filter, item 5, for anything
-     Moog-like; a sample oscillator, item 3; the modulation matrix, item 4),
-     so which models are possible depends on which of those are done.
-   Presets and models are sound, and sound cannot be checked by a test:
-   every one of these needs the owner's ears before it is called done. To
-   decide: which instruments to model. The list of kinds above is agreed
-   (owner, 2026-10-11).
+     sound is for: bass, lead, pad, keys, pluck, effects. The kinds are
+     agreed. A person's own saved presets keep a group of their own, and an
+     imported preset goes under a kind chosen at import, or "other".
+   - Fourteen more synth models, which the owner chose to have all of. A
+     model is this synth's own voice set up to behave like the instrument it
+     is named for; it is not that instrument's circuit and does not use its
+     samples. They fall in three groups by what they need:
+     - with the voice as it is: SH-101, Pro-One, Jupiter-8, OB-Xa, Polysix,
+       Mono/Poly, JP-8000;
+     - after planned sound work: MS-20 (filter models, with the ladder
+       filter, item 5), ARP Odyssey, CS-80 and Virus (the modulation matrix,
+       item 4);
+     - after the sample oscillator (item 3), and only with waveforms the
+       project may redistribute: D-50, M1, Wavestation. Their makers'
+       samples cannot be used, so these will be the furthest from their
+       namesakes, and one may be left out if no usable waveforms are found.
+   The model menu is grouped too, since it grows to nineteen. Presets and
+   models are sound, and sound cannot be checked by a test: each needs the
+   owner's ears before it is called done, with a listening session after the
+   first group.
 
 Done: the voice rewrite (oscillators, filter, envelopes, FM, mono and slide,
 drum voices); unison and the 24 dB filter slope; a sample on any drum lane,
@@ -377,8 +383,9 @@ for new accounts.
   addition to the guest protocol and a new prompt for its author.
 - **Kids mode.** Staying a separate page is now decided. Still to answer:
   whether what a child makes can be opened in the full app.
-- **Synth models.** Which instruments should the new models be in the
-  manner of? A list of candidates was given to the owner on 2026-10-11.
+- **The Polysix model and the chorus.** The chorus is one shared effect
+  with a send for each lane. May a model turn up its lane's send, or should
+  that model wait until a lane can have effects of its own?
 
 ## Suggested order
 
@@ -408,9 +415,10 @@ for new accounts.
 9. **The audio layer's single owner** (improvements 4), then the sound work
    that builds on it: **insert effects, the reverb, the ladder filter, the
    modulation matrix and the sample oscillator** (sound 3 to 6). **More
-   presets and synth models** (sound 7) come after those, since the new
-   models lean on them; the grouping of the presets menu does not, and can
-   be done at any time.
+   presets and synth models** (sound 7) follow `docs/SYNTH_MODELS_PLAN.md`:
+   the grouped presets menu and the seven models that need nothing new can
+   be done at any time; the other seven come after the sound work each
+   leans on.
 10. **More MIDI** (features 6), when there is hardware to test with.
 11. **Live collaborative sessions** (the rest of features 7), after the
     typed store. The published-songs page (features 9) is done.
