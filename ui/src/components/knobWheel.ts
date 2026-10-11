@@ -60,9 +60,10 @@ export function useKnobWheel(knob: WheelKnob) {
     listenToPageWheel();
     let ready = false;
     let timer: number | null = null;
-    // The last event this knob took, the value it sent then (the props may not have caught up) and
-    // what is left of a turn smaller than a step.
-    const run = { at: -Infinity, sent: 0, left: 0 };
+    // The last event this knob took, the value it sent then (the props may not have caught up), the
+    // values this run has had (a value from outside it, typed or from a key, ends the run) and what
+    // is left of a turn smaller than a step.
+    const run = { at: -Infinity, sent: 0, left: 0, seen: new Set<number>() };
     const stopTimer = () => { if (timer !== null) window.clearTimeout(timer); timer = null; };
     const rest = () => {
       stopTimer();
@@ -85,19 +86,21 @@ export function useKnobWheel(knob: WheelKnob) {
       const state = latest.current;
       // Ctrl and the wheel is the browser's zoom.
       if (state.disabled || event.ctrlKey || !ready) return;
-      const running = event.timeStamp - run.at < WHEEL_GAP_MS;
+      const running = event.timeStamp - run.at < WHEEL_GAP_MS && run.seen.has(state.value);
       if (!running && event.timeStamp - pageWheel.prev < WHEEL_GAP_MS) return;
       event.preventDefault();
       const notches = wheelNotches(event);
+      if (!running) run.seen = new Set([state.value]);
       if (!running || (run.left !== 0 && Math.sign(run.left) !== Math.sign(notches))) run.left = 0;
       run.at = event.timeStamp;
       run.left += notches * notchSize(state.min, state.max, state.step, event.shiftKey);
-      const steps = Math.trunc(run.left / state.step + 1e-9);
+      const steps = Math.trunc(run.left / state.step + Math.sign(run.left) * 1e-9);
       if (steps === 0) return;
       run.left -= steps * state.step;
       const base = running ? run.sent : state.value;
       const next = state.normalize(base + steps * state.step);
       run.sent = next;
+      run.seen.add(next);
       if (next !== base) state.onChange(next);
     };
     element.addEventListener('pointerenter', onEnter);
