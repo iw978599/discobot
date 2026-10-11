@@ -1,4 +1,4 @@
-import { expect, test, type Locator } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -10,7 +10,19 @@ test.beforeEach(async ({ page }) => {
 
 const box = async (locator: Locator) => (await locator.first().boundingBox())!;
 
-test('on a phone the rack fits the screen, with steps eight to a row and controls a finger can hit', async ({ page }, testInfo) => {
+// At phone width the specs start with the whole rack on one page (playwright.config.ts). This
+// starts as a phone does that has never been here: one unit at a time.
+const UNIT_KEY = 'discobot_rack_unit_v1';
+const paged = async (page: Page) => {
+  await page.evaluate(key => localStorage.removeItem(key), UNIT_KEY);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Discobot', exact: true })).toBeVisible();
+};
+const bar = (page: Page) => page.getByRole('navigation', { name: 'Rack units', exact: true });
+const tab = (page: Page, name: string) => bar(page).getByRole('button', { name, exact: true });
+const ALL = 'Show all units on one page';
+
+test('on a phone showing the whole rack it fits the screen, with steps eight to a row and controls a finger can hit', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-chromium', 'this is the narrow layout');
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -103,4 +115,196 @@ test('a wide screen keeps the rack as one panel', async ({ page }, testInfo) => 
   expect(await page.locator('.rack').evaluate(element => getComputedStyle(element).minWidth)).toBe('1060px');
   await page.getByRole('button', { name: 'Help', exact: true }).click();
   expect((await box(page.getByRole('dialog', { name: 'How to use Discobot', exact: true }))).width, 'a dialog is a panel, not the whole screen').toBeLessThanOrEqual(680);
+});
+
+test('on a phone one unit is on screen at a time, and a bar along the bottom moves between them', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium', 'this is the narrow layout');
+  await paged(page);
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const view = page.viewportSize()!;
+  const scroller = page.locator('.rack-page');
+  const song = page.getByRole('region', { name: 'Song module', exact: true });
+  const lane = page.getByRole('region', { name: 'Synth 1 module', exact: true });
+  const drums = page.getByRole('region', { name: 'Drums module', exact: true });
+  const effects = page.locator('.effects-unit');
+  const onShow = page.locator('.rack > [data-unit]:visible');
+  const play = page.getByRole('button', { name: /Play All/ });
+
+  // It opens on the lane that is open for editing, with its editor, and nothing else.
+  await expect(tab(page, 'Show Synth 1')).toHaveAttribute('aria-current', 'true');
+  await expect(bar(page).locator('[aria-current]')).toHaveCount(1);
+  await expect(lane).toBeVisible();
+  await expect(lane.locator('.synth-controls-panel')).toBeVisible();
+  await expect(onShow).toHaveCount(1);
+  for (const hidden of ['song', 'synth-2', 'synth-3', 'drums', 'effects']) await expect(page.locator(`[data-unit="${hidden}"]`), hidden).toBeHidden();
+
+  // The bar is the bottom edge of the screen, and each of its switches is big enough for a thumb.
+  const strip = await box(bar(page));
+  expect(strip.x).toBeCloseTo(0, 0);
+  expect(strip.width).toBeCloseTo(view.width, 0);
+  expect(strip.y + strip.height).toBeCloseTo(view.height, 0);
+  await expect(bar(page).getByRole('button')).toHaveCount(7);
+  for (const button of await bar(page).getByRole('button').all()) {
+    const area = (await button.boundingBox())!;
+    expect(area.width).toBeGreaterThanOrEqual(44);
+    expect(area.height).toBeGreaterThanOrEqual(44);
+    expect(area.x).toBeGreaterThanOrEqual(0);
+    expect(area.x + area.width).toBeLessThanOrEqual(view.width + 1);
+  }
+
+  // A tap shows that unit instead, says so, and puts the keyboard inside it.
+  await tab(page, 'Show Drums').click();
+  await expect(drums).toBeVisible();
+  await expect(lane).toBeHidden();
+  await expect(tab(page, 'Show Drums')).toHaveAttribute('aria-current', 'true');
+  await expect(bar(page).locator('[aria-current]')).toHaveCount(1);
+  await expect(drums, 'focus goes to the unit that was asked for').toBeFocused();
+  await page.keyboard.press('Tab');
+  expect(await page.evaluate(() => document.activeElement?.closest('[data-unit]')?.getAttribute('data-unit')), 'and the next Tab is inside it').toBe('drums');
+  await page.getByRole('button', { name: 'Kick step 9', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Kick step 9', exact: true })).toHaveAttribute('aria-pressed', 'true');
+
+  // From the keyboard too. Whichever unit is on show, and however far the last one was scrolled,
+  // it starts just under the transport, and Play is still there.
+  for (const [name, part] of [['Show Song', song], ['Show Effects', effects], ['Show Synth 1', lane], ['Show Drums', drums]] as const) {
+    await scroller.evaluate(element => element.scrollTo(0, element.scrollHeight));
+    await tab(page, name).focus();
+    await page.keyboard.press('Enter');
+    await expect(part, name).toBeVisible();
+    await expect(part, name).toBeFocused();
+    await expect(onShow, name).toHaveCount(1);
+    await expect(tab(page, name)).toHaveAttribute('aria-current', 'true');
+    const [go, top] = [await box(play), await box(part)];
+    expect(go.x, name).toBeGreaterThanOrEqual(0);
+    expect(go.x + go.width, name).toBeLessThanOrEqual(view.width);
+    expect(go.y, name).toBeGreaterThanOrEqual(0);
+    expect(go.y + go.height, name).toBeLessThan(view.height / 2);
+    expect(top.y, `${name}: the unit starts under the transport`).toBeGreaterThanOrEqual(go.y + go.height - 1);
+    expect(top.y, name).toBeLessThan(view.height * 0.6);
+    expect(await scroller.evaluate(element => element.scrollWidth - element.clientWidth), `${name}: no sideways scrolling`).toBeLessThanOrEqual(1);
+  }
+
+  // The whole rack is one of the choices, and the choice is remembered.
+  await tab(page, ALL).click();
+  await expect(tab(page, ALL)).toHaveAttribute('aria-current', 'true');
+  for (const part of [song, lane, drums, effects]) await expect(part).toBeVisible();
+  await page.reload();
+  await expect(tab(page, ALL)).toHaveAttribute('aria-current', 'true');
+  await expect(drums).toBeVisible();
+  await tab(page, 'Show Effects').click();
+  await page.reload();
+  await expect(effects).toBeVisible();
+  await expect(onShow).toHaveCount(1);
+  expect(errors).toEqual([]);
+});
+
+test('a lane that is not on screen keeps playing, and its light is on the right step when it is shown again', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium', 'this is the narrow layout');
+  await paged(page);
+  const light = page.locator('[data-unit="synth-1"] .step-light.on');
+  const drumLight = page.locator('.drum-step-indicator.active');
+  const at = async (lit: Locator) => Number(await lit.getAttribute('data-step'));
+
+  // As slow as it goes, so a step lasts three quarters of a second.
+  await page.locator('.tempo-led').click();
+  await page.locator('.tempo-led-input').fill('20');
+  await page.locator('.tempo-led-input').press('Enter');
+  await page.getByRole('button', { name: /Play All/ }).click();
+  await expect(light).toHaveCount(1);
+  await expect(light).toBeVisible();
+
+  // Off screen its playhead goes on, in step with the drums that are now on it.
+  await tab(page, 'Show Drums').click();
+  await expect(page.locator('[data-unit="synth-1"]')).toBeHidden();
+  await expect(drumLight).toBeVisible();
+  const first = await at(light);
+  await expect.poll(() => at(light), 'the hidden lane moves on').not.toBe(first);
+  await expect.poll(async () => await at(light) === await at(drumLight)).toBe(true);
+
+  // Shown again, one step is lit and it is the one being played.
+  await tab(page, 'Show Synth 1').click();
+  await expect(light).toHaveCount(1);
+  await expect(light).toBeVisible();
+  await expect(drumLight, 'and now the drums are the hidden ones').toBeHidden();
+  await expect.poll(async () => await at(light) === await at(drumLight), 'lit on the step being played').toBe(true);
+  const second = await at(light);
+  await expect.poll(() => at(light)).not.toBe(second);
+
+  await page.getByRole('button', { name: /Stop All/ }).click();
+  await expect(page.locator('.step-light.on, .drum-step-indicator.active, .drum-step-btn.current')).toHaveCount(0);
+});
+
+test('a guest keeps its page and its sound while another unit is on screen', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium', 'this is the narrow layout');
+  await paged(page);
+  const baseURL = String(testInfo.project.use.baseURL);
+  const unit = page.locator('[data-unit="guests"]');
+  const frame = unit.locator('iframe');
+  const blocks = async () => Number(await unit.getAttribute('data-audio-blocks'));
+
+  await expect(tab(page, 'Show Guests'), 'no switch for guests until there is one').toHaveCount(0);
+  await page.getByRole('button', { name: 'Project ▾', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Add Guest Instrument', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Add a guest instrument', exact: true });
+  await dialog.getByLabel('Address of the instrument\'s page', { exact: true }).fill(`http://127.0.0.1:${Number(new URL(baseURL).port) + 1000}/__guest`);
+  await dialog.getByRole('button', { name: 'Add Guest', exact: true }).click();
+
+  // The guest that was just added is the unit on show.
+  await expect(unit).toHaveAttribute('data-status', 'ready');
+  await expect(tab(page, 'Show Guests')).toHaveAttribute('aria-current', 'true');
+  await expect(frame).toBeVisible();
+  await frame.evaluate(element => { (element as HTMLIFrameElement & { kept?: boolean }).kept = true; });
+  await page.getByRole('button', { name: /Play All/ }).click();
+  await expect.poll(blocks, { message: 'its sound arrives' }).toBeGreaterThan(10);
+
+  // Another unit on screen: the guest is out of sight and its sound goes on arriving.
+  await tab(page, 'Show Drums').click();
+  await expect(unit).toBeHidden();
+  const heard = await blocks();
+  await expect.poll(blocks, { message: 'sound still arrives from the hidden guest' }).toBeGreaterThan(heard + 10);
+
+  // Back again, it is the same frame, not a page loaded afresh.
+  await tab(page, 'Show Guests').click();
+  await expect(frame).toBeVisible();
+  expect(await frame.evaluate(element => (element as HTMLIFrameElement & { kept?: boolean }).kept), 'the frame was never taken out of the page').toBe(true);
+  await expect(unit).toHaveAttribute('data-status', 'ready');
+  await page.getByRole('button', { name: /Stop All/ }).click();
+});
+
+test('on a phone the walkthrough turns to the unit each stop is about', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium', 'this is the narrow layout');
+  await paged(page);
+  const view = page.viewportSize()!;
+  const tour = page.getByRole('dialog', { name: 'Walkthrough', exact: true });
+  const spot = page.locator('.tour-spot');
+  // Each stop's title, the first thing it lights up, and the switch that should be lit with it.
+  const stops = [
+    ['Play and tempo', '.tempo-display-group', 'Show Drums'],
+    ['Scenes and song', '.song-module', 'Show Song'],
+    ['A lane\'s steps', '.synth-module[aria-label="Synth 1 module"] .step-row', 'Show Synth 1'],
+    ['The sound editor', '.synth-controls-panel', 'Show Synth 1'],
+    ['The drum grid', '.drum-grid', 'Show Drums'],
+    ['Effects', '.effects-unit', 'Show Effects'],
+    ['Project and Export', '.transport .rack-menu', 'Show Effects'],
+  ] as const;
+
+  await tab(page, 'Show Drums').click();
+  await page.getByRole('button', { name: 'Help', exact: true }).click();
+  await page.getByRole('dialog', { name: 'How to use Discobot', exact: true }).getByRole('button', { name: 'Show the Walkthrough', exact: true }).click();
+  for (const [title, target, current] of stops) {
+    await expect(tour.getByRole('heading', { name: title, exact: true })).toBeVisible();
+    await expect(tab(page, current), title).toHaveAttribute('aria-current', 'true');
+    await expect(page.locator(target).first(), `${title}: its part is on the page`).toBeVisible();
+    await expect(spot, title).toBeVisible();
+    await expect(tour.getByRole('button', { name: 'Next', exact: true }), 'the way on has the keyboard').toBeFocused();
+    await expect.poll(async () => Math.abs((await box(spot)).x - (await box(page.locator(target))).x), `${title}: the light is on its part`).toBeLessThan(8);
+    const part = await box(page.locator(target));
+    expect(part.y, title).toBeGreaterThanOrEqual(0);
+    expect(part.y, title).toBeLessThan(view.height);
+    await page.keyboard.press('ArrowRight');
+  }
+  await page.keyboard.press('Escape');
+  await expect(tour).toHaveCount(0);
+  await expect(page.locator('.effects-unit'), 'the rack is left on the unit the tour ended at').toBeVisible();
 });

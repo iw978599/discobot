@@ -143,7 +143,7 @@ function DrumModule({ studio }: { studio: Studio }) {
   };
 
   return (
-    <section className="rack-unit drum-machine" aria-label="Drums module">
+    <section className="rack-unit drum-machine" aria-label="Drums module" data-unit="drums">
       <div className="rack-row drum-top">
         <div className="rack-plate static">
           <b>Drums</b>

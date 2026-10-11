@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Studio } from '../studio/useStudio';
 import { playSample } from '../hooks/browserAudio';
 import EffectsPanel from '../components/EffectsPanel';
@@ -21,6 +21,9 @@ import AddGuestDialog from './AddGuestDialog';
 import VersionsDialog from './VersionsDialog';
 import { HelpModal } from './HeaderParts';
 import { useWakeLock } from '../hooks/useWakeLock';
+import { useNarrow } from '../hooks/useNarrow';
+import { laneUnit, storeRackUnit, storedRackUnit, unitLane, type RackUnit } from '../services/rackView';
+import UnitBar from './UnitBar';
 import '@fontsource/barlow-condensed/latin-500.css';
 import '@fontsource/barlow-condensed/latin-600.css';
 import '@fontsource/barlow-condensed/latin-700.css';
@@ -48,16 +51,60 @@ export default function Rack({ studio }: { studio: Studio }) {
   const sync = useSyncStatus();
   const user = useAccountUser();
 
+  // A narrow screen shows one unit at a time. Which one is view state, kept here and handed to
+  // the stylesheet as an attribute: the units themselves are not told, so none of them renders
+  // again when another is shown, and a unit that is off screen is hidden, never taken away.
+  const narrow = useNarrow();
+  const pageRef = useRef<HTMLDivElement>(null);
+  const [unit, setUnit] = useState<RackUnit>(() => storedRackUnit() ?? laneUnit(studio.selectedSynthId));
+  const hasGuests = studio.guests.length > 0;
+  const shown = unit === 'guests' && !hasGuests ? laneUnit(studio.selectedSynthId) : unit;
+  const paged = narrow && shown !== 'all';
+  // Counts the times a unit was asked for from the bar, so the page can settle after each.
+  const [moves, setMoves] = useState(0);
+  const show = (next: RackUnit) => {
+    const lane = unitLane(next);
+    if (lane !== null && studio.synths.some(synth => synth.id === lane)) studio.setSelectedSynthId(lane);
+    setUnit(next);
+    storeRackUnit(next);
+    setMoves(count => count + 1);
+  };
+  useLayoutEffect(() => {
+    const page = pageRef.current;
+    if (!page || moves === 0) return;
+    // The new unit starts just under the line of the transport that stays, or lower if the
+    // page had not been scrolled that far.
+    const tuck = Number.parseFloat(page.querySelector<HTMLElement>('.rack-unit.transport')?.style.getPropertyValue('--transport-tuck') ?? '') || 0;
+    page.scrollTop = Math.min(page.scrollTop, tuck);
+    // Focus goes into the unit that was asked for, so the next Tab is inside it and a screen
+    // reader says where it is. The whole rack has no one place to go, and focus stays on the bar.
+    if (shown === 'all') return;
+    const target = page.querySelector<HTMLElement>(`.rack > [data-unit="${shown}"]`);
+    if (!target) return;
+    target.tabIndex = -1;
+    target.focus({ preventScroll: true });
+  }, [moves]);
+  // A guest added from the menu is shown, since it would otherwise arrive out of sight.
+  const addingGuest = useRef(false);
+  const guestCount = useRef(studio.guests.length);
+  useEffect(() => {
+    if (studio.guests.length > guestCount.current && addingGuest.current) {
+      addingGuest.current = false;
+      setUnit(current => (current === 'all' ? current : 'guests'));
+    }
+    guestCount.current = studio.guests.length;
+  }, [studio.guests.length]);
+
   return (
-    <div className="rack-page">
-      <div className="rack">
+    <div ref={pageRef} className={narrow ? 'rack-page has-unit-bar' : 'rack-page'}>
+      <div className="rack" data-shown={paged ? shown : undefined}>
         <TransportUnit
           studio={studio}
           onOpenSettings={() => setSettingsOpen(true)}
           onOpenProjects={() => setProjectsOpen(true)}
           onShare={() => setShareOpen(true)}
           onOpenAccount={() => setAccountOpen(true)}
-          onAddGuest={() => setGuestOpen(true)}
+          onAddGuest={() => { addingGuest.current = true; setGuestOpen(true); }}
           onOpenVersions={() => setVersionsOpen(true)}
         />
         {studio.changedElsewhere && (
@@ -104,17 +151,18 @@ export default function Rack({ studio }: { studio: Studio }) {
         {[1, 2, 3].map(id => <SynthModule key={id} studio={studio} synthId={id} synth={studio.synths.find(entry => entry.id === id)} />)}
         {studio.guests.map(guest => <GuestModule key={guest.id} studio={studio} guest={guest} />)}
         <DrumModule studio={studio} />
-        <div className="rack-unit effects-unit">
+        <div className="rack-unit effects-unit" data-unit="effects">
           <EffectsPanel effectsLoop={studio.effectsLoop} onChange={studio.handleEffectsLoopChange} />
         </div>
       </div>
+      {narrow && <UnitBar shown={shown} lanes={studio.synths.map(synth => synth.id)} guests={hasGuests} onShow={show} />}
 
       <HelpModal open={studio.helpOpen} onClose={() => studio.setHelpOpen(false)} onWalkthrough={startTour} />
       <MidiImportDialog studio={studio} />
       {projectsOpen && <ProjectsDialog studio={studio} onClose={() => setProjectsOpen(false)} />}
       {shareOpen && <ShareDialog onClose={() => setShareOpen(false)} />}
       {accountOpen && <AccountDialog onClose={() => setAccountOpen(false)} onWalkthrough={startTour} />}
-      {tourOpen && <Walkthrough onClose={() => setTourOpen(false)} signedIn={user !== null} />}
+      {tourOpen && <Walkthrough onClose={() => setTourOpen(false)} signedIn={user !== null} unit={paged ? shown : undefined} onUnit={paged ? setUnit : undefined} />}
       {guestOpen && <AddGuestDialog studio={studio} onClose={() => setGuestOpen(false)} />}
       {versionsOpen && <VersionsDialog studio={studio} onClose={() => setVersionsOpen(false)} />}
       {studio.presetImportReport && (

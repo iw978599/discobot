@@ -23,7 +23,7 @@ export default function SongModule({ studio }: { studio: Studio }) {
   };
 
   return (
-    <section className="rack-unit song-module" aria-label="Song module">
+    <section className="rack-unit song-module" aria-label="Song module" data-unit="song">
       <div className="rack-row">
         <div className="rack-plate static">
           <b>Scenes</b>

@@ -478,6 +478,11 @@
    fill the screen. Nothing here applies to a wider screen. */
 @media (max-width: 720px) {
   .rack-page { padding: 0 0 calc(24px + env(safe-area-inset-bottom)); }
+  /* The scroll padding keeps whatever is scrolled to, or tabbed to, clear of the bar along the bottom. */
+  .rack-page.has-unit-bar {
+    --unit-bar: 54px; padding-bottom: calc(var(--unit-bar) + 16px + env(safe-area-inset-bottom));
+    scroll-padding-bottom: calc(var(--unit-bar) + 8px + env(safe-area-inset-bottom));
+  }
   .rack {
     min-width: 0; margin: 0; gap: 4px; border-radius: 0; background-image: none;
     padding: 0 max(4px, env(safe-area-inset-right)) 0 max(4px, env(safe-area-inset-left));
@@ -565,6 +570,39 @@
   .effects-unit .effects-grid { grid-template-columns: minmax(0, 1fr); }
   .effects-unit .effects-block, .effects-unit .effects-block:nth-child(2), .effects-unit .effects-block:nth-child(5) { grid-column: 1 / -1; }
   .effects-unit .effects-knobs { flex-wrap: wrap; }
+
+  /* One unit on screen at a time. Rack puts the unit on show in data-shown, and every other
+     unit is hidden here, not taken out of the page: a hidden lane keeps its step lights and a
+     hidden guest keeps its frame, so both are right the moment they are shown again. With
+     "all" on show the attribute is absent and the rack is the one long page above. */
+  .rack[data-shown="song"] > [data-unit]:not([data-unit="song"]),
+  .rack[data-shown="synth-1"] > [data-unit]:not([data-unit="synth-1"]),
+  .rack[data-shown="synth-2"] > [data-unit]:not([data-unit="synth-2"]),
+  .rack[data-shown="synth-3"] > [data-unit]:not([data-unit="synth-3"]),
+  .rack[data-shown="guests"] > [data-unit]:not([data-unit="guests"]),
+  .rack[data-shown="drums"] > [data-unit]:not([data-unit="drums"]),
+  .rack[data-shown="effects"] > [data-unit]:not([data-unit="effects"]) { display: none; }
+  .rack > [data-unit]:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px; }
+  /* The bar that moves between them: a strip of selector switches along the bottom edge, each
+     with a lamp over its legend. It sits under an open menu and under any dialog. */
+  .unit-bar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 35; display: flex; overflow-x: auto;
+    padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    background: linear-gradient(var(--unit-top), var(--unit-bottom)); border-top: 1px solid var(--edge-strong);
+    box-shadow: 0 -6px 14px rgba(0, 0, 0, 0.45);
+  }
+  .unit-tab {
+    flex: 1 0 auto; min-width: 44px; height: var(--unit-bar); padding: 0 5px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px;
+    background: none; border: 0; border-right: 1px solid #232527; border-radius: 0;
+    color: var(--dim); font: inherit; font-size: 12px; text-transform: inherit; letter-spacing: 0.04em; white-space: nowrap; cursor: pointer;
+  }
+  .unit-tab:last-child { border-right: 0; }
+  .unit-tab-led { width: 7px; height: 7px; border-radius: 50%; background: #3a2a10; border: 1px solid #000; }
+  .unit-tab.empty .unit-tab-name { opacity: 0.6; }
+  .unit-tab[aria-current] { background: var(--well); color: var(--ink); box-shadow: inset 0 2px 0 var(--amber); }
+  .unit-tab[aria-current] .unit-tab-led { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+  .unit-bar .unit-tab:focus-visible { outline-offset: -3px; }
 
   /* dialogs are the whole screen */
   .rack-dialog-overlay { padding: 0; place-items: stretch; }
