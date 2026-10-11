@@ -1,10 +1,11 @@
 // What each operation does to the project. A reducer is the body of the route it replaces,
 // moved as it was. It changes the state it is handed and says what to save and send; it never
 // emits, saves or reads the clock itself, which is `apply`'s work in localService.ts.
-import { clone, merge, number, sanitizeDrums } from './projectSanitization';
+import { clone, merge, number, sanitizeDrums, sanitizeEffects, sanitizeModelParams, sanitizePattern, sanitizeSends, sanitizeSynthParams } from './projectSanitization';
 import { MAX_GUESTS, guestUrl, patchGuest, sanitizeGuests } from './guests';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
 import { BAR_CHOICES, DRUM_STEPS_PER_BAR, resizeBars } from './patternLength';
+import { normalizeSynthModelId } from '../synthModels';
 import type { DrumState } from '../types';
 import type { ProjectDefaults, ProjectState } from './localService';
 import type { Operation, OpResult, OpType, Outcome, Rejected } from './projectOps';
@@ -18,6 +19,7 @@ const update = <V>(type: string, data: V): Outcome<V> => ({ ok: true, value: dat
 // What `respond({ error }, status)` was. A reducer refuses before it changes anything.
 const refuse = (status: Rejected['status'], error: string): Rejected => ({ ok: false, status, error });
 const BAD_DATA = 'Invalid local operation data';
+const NO_SYNTH = 'Synth not found';
 const BAD_ADDRESS = 'That is not an address a guest instrument can be loaded from. It must start with https:// and be on another site.';
 
 // An object in an operation, as a route's body used to arrive: after a trip through JSON, which
@@ -33,6 +35,9 @@ const sent = (value: unknown): Record<string, any> | null => {
 // One value in an operation, after the same trip: a number that is not finite is null, and
 // what JSON cannot carry is undefined.
 const sentValue = (value: unknown): unknown => sent({ value })?.value;
+
+// The router found the lane from a number in the path; an operation can name anything.
+const laneOf = (state: ProjectState, synthId: unknown) => state.synths.find(s => s.synthId === synthId);
 
 type DrumLane = DrumState[keyof DrumState];
 // The six edits to one drum lane, as the router made them: find the lane, change it, put the
@@ -66,6 +71,14 @@ export const reducers: Partial<Reducers> = {
     }
     state.drumState = sanitizeDrums(state.drumState, defaults.drumState);
     return update('drumFullState', { drumState: state.drumState });
+  },
+  // `merge` takes a key that is undefined as a value to set, so the patch is read as sent.
+  'drum.fx': ({ state, defaults }, op) => {
+    const patch = sent(op.patch);
+    if (!patch) return refuse(400, BAD_DATA);
+    const fx = merge(state.drumFx, patch);
+    state.drumFx = { sends: sanitizeSends(fx.sends, defaults.drumFx.sends), returnLevel: number(fx.returnLevel, state.drumFx.returnLevel, 0, 1) };
+    return update('drumFxUpdate', { drumFx: state.drumFx });
   },
   'drum.kit': ({ state }, op) => {
     const kit = DRUM_KITS.find(k => k.id === op.kitId);
@@ -127,6 +140,12 @@ export const reducers: Partial<Reducers> = {
     state.drumSwing = number(op.swing, state.drumSwing, 0, .75);
     return update('drumSwing', { swing: state.drumSwing });
   },
+  'effects.set': ({ state, defaults }, op) => {
+    const patch = sent(op.patch);
+    if (!patch) return refuse(400, BAD_DATA);
+    state.effectsLoop = sanitizeEffects(merge(state.effectsLoop, patch), defaults.effectsLoop);
+    return update('effectsLoopUpdate', { effectsLoop: state.effectsLoop });
+  },
   'guest.add': ({ state, origin }, op) => {
     const guests = state.guests ?? [];
     const url = guestUrl(op.url, origin);
@@ -163,5 +182,62 @@ export const reducers: Partial<Reducers> = {
       if (Object.keys(scene.guestMix).length === 0) delete scene.guestMix;
     }
     return update('guestsChanged', { guests: state.guests });
+  },
+  // The pattern written becomes the lane's open one. The id is the operation's own: the route
+  // took it from the path, then from the body, then made one. An id that is not text, or is
+  // empty, is no pattern's, and is refused by the same check that refuses steps that are no list.
+  'pattern.write': ({ state }, op) => {
+    const patch = sent(op.patch);
+    if (!patch) return refuse(400, BAD_DATA);
+    const synth = laneOf(state, op.synthId);
+    if (!synth) return refuse(404, NO_SYNTH);
+    const id = op.patternId;
+    const previous = synth.patterns.find(p => p.id === id);
+    const pattern = sanitizePattern({ ...previous, ...patch, id, steps: patch.steps || previous?.steps || synth.pattern.steps }, state.tempo);
+    if (!pattern) return refuse(400, 'Invalid sequence pattern');
+    synth.patterns = [...synth.patterns.filter(p => p.id !== id), pattern];
+    synth.pattern = pattern;
+    return { ok: true, value: pattern, save: true, event: { type: previous ? 'patternUpdated' : 'patternCreated', data: { synthId: synth.synthId, pattern } } };
+  },
+  // Checked with `typeof`, which takes what JSON would have dropped or nulled as it takes nothing.
+  'synth.mix': ({ state }, op) => {
+    const synth = laneOf(state, op.synthId);
+    if (!synth) return refuse(404, NO_SYNTH);
+    if (typeof op.muted === 'boolean') synth.muted = op.muted;
+    if (typeof op.solo === 'boolean') synth.solo = op.solo;
+    return update('synthMix', { synthId: synth.synthId, muted: synth.muted, solo: synth.solo });
+  },
+  // The model's name is taken when it counts as true, and infinity does where the null JSON made
+  // of it does not; `merge` takes a macro that is undefined as a value to set.
+  'synth.model': ({ state }, op) => {
+    const synth = laneOf(state, op.synthId);
+    if (!synth) return refuse(404, NO_SYNTH);
+    synth.synthModelId = normalizeSynthModelId(sentValue(op.modelId) || synth.synthModelId);
+    synth.synthModelParams = sanitizeModelParams(merge(synth.synthModelParams, sent(op.modelParams) ?? {}));
+    return update('synthModelUpdate', { synthId: synth.synthId, modelId: synth.synthModelId, modelParams: synth.synthModelParams });
+  },
+  // The event names the lane; the answer is the sound alone.
+  'synth.params': ({ state, defaults }, op) => {
+    const patch = sent(op.patch);
+    if (!patch) return refuse(400, BAD_DATA);
+    const synth = laneOf(state, op.synthId);
+    if (!synth) return refuse(404, NO_SYNTH);
+    synth.synthParams = sanitizeSynthParams(merge(synth.synthParams, patch), defaults.synthParams);
+    return { ok: true, value: synth.synthParams, save: true, event: { type: 'synthUpdate', data: { synthId: synth.synthId, parameters: synth.synthParams } } };
+  },
+  // Saved, and sent to nobody: the octave and the keyboard are this person's view of the lane.
+  'synth.prefs': ({ state }, op) => {
+    const synth = laneOf(state, op.synthId);
+    if (!synth) return refuse(404, NO_SYNTH);
+    synth.octaveShift = Math.round(number(op.octaveShift, synth.octaveShift ?? 0, -2, 2));
+    synth.keyboardMode = op.keyboardMode === 'piano-roll' ? 'piano-roll' : op.keyboardMode === 'keyboard' ? 'keyboard' : synth.keyboardMode;
+    return { ok: true, value: synth, save: true };
+  },
+  'tempo.set': ({ state }, op) => {
+    const { tempo } = op;
+    if (!Number.isFinite(tempo) || tempo < 20 || tempo > 400) return refuse(400, 'Invalid tempo');
+    state.tempo = tempo;
+    state.synths.forEach(s => { s.pattern.tempo = tempo; s.patterns.forEach(p => { p.tempo = tempo; }); });
+    return update('tempoChange', { tempo: state.tempo });
   },
 };

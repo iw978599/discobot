@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { LocalProjectService } from '../src/services/localService.ts';
 import { OP_META, type Applied, type OpNotice, type Operation } from '../src/services/projectOps.ts';
 import { reducers } from '../src/services/projectReducers.ts';
-import { merge } from '../src/services/projectSanitization.ts';
+import { merge, sanitizeSynthParams } from '../src/services/projectSanitization.ts';
 import { MAX_GUESTS } from '../src/services/guests.ts';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from '../src/services/drumKits.ts';
 import type { DrumInstrument, DrumState } from '../src/types.ts';
@@ -32,9 +32,12 @@ interface Case {
   path: string | ((ctx: any) => string);
   body: unknown;
   run: (service: LocalProjectService, ctx: any) => Applied<unknown>;
-  // Accepted: what both ways answer and emit, and the event's name.
+  // Accepted: what both ways answer and emit, and the event's name. `eventData` when the event
+  // carries something other than the answer; `silent` when there is no event at all.
   answer?: unknown;
   event?: string;
+  eventData?: unknown;
+  silent?: boolean;
   // Refused: the status and the error both ways answer with.
   status?: 400 | 404 | 409;
   error?: string;
@@ -250,6 +253,264 @@ const drumCases: Case[] = [
     drumKit(`a kit ${what} is refused`, { kitId }, { status: 400, error: 'Unknown kit' }, kickPanned)),
 ];
 
+// The drum sends and the shared effects are each changed by a patch laid over what is there.
+const FX = defaults().drumFx;
+const sends = (changes: object = {}, returnLevel = FX.returnLevel) => ({ drumFx: { sends: { ...FX.sends, ...changes }, returnLevel } });
+const fxSet = (service: LocalProjectService) => { assert.ok(service.setDrumFx({ sends: { reverb: .9, phaser: .4 }, returnLevel: .4 }).ok); };
+const FX_SET = sends({ reverb: .9, phaser: .4 }, .4);
+// A new project's effects: the defaults, with a shaped reverb.
+const newEffects = () => { const effects: any = defaults().effectsLoop; Object.assign(effects.reverb, { preDelay: .02, damping: .35 }); return effects; };
+const effects = (change: (effects: any) => void = () => {}, from: () => any = newEffects) => { const next = from(); change(next); return { effectsLoop: next }; };
+const CHORUS = { enabled: true, rate: 2, depth: .3, mix: .4 }, EQ = { enabled: true, low: 3, mid: -2, high: 1 };
+// Every part that a project saved before it existed does not have: a synced delay, a chorus, an EQ and a shaped reverb.
+const shaped = (service: LocalProjectService) => { assert.ok(service.setEffectsLoop({ delay: { sync: '1/8' }, chorus: CHORUS, eq: EQ, reverb: { preDelay: .1, damping: .5 } }).ok); };
+const shapedEffects = () => { const next = newEffects(); next.delay.sync = '1/8'; next.chorus = { ...CHORUS }; next.eq = { ...EQ }; Object.assign(next.reverb, { preDelay: .1, damping: .5 }); return next; };
+const wasShaped = (change: (effects: any) => void = () => {}) => effects(change, shapedEffects);
+type PatchOutcome = { answer: unknown } | { status: 400 | 404 | 409; error: string };
+const patchCase = (op: Case['op'], path: string, event: string, run: (service: LocalProjectService, patch: any) => Applied<unknown>) =>
+  (title: string, patch: Record<string, unknown>, result: PatchOutcome, arrange?: Case['arrange']): Case => ({
+    op, title, arrange, path, body: patch, run: service => run(service, patch), ...('answer' in result ? { event, ...result } : result),
+  });
+const drumFx = patchCase('drum.fx', '/drum/fx', 'drumFxUpdate', (service, patch) => service.setDrumFx(patch));
+const effectsSet = patchCase('effects.set', '/effects-loop', 'effectsLoopUpdate', (service, patch) => service.setEffectsLoop(patch));
+const notObjects: Array<[string, unknown]> = [['text', 'lots'], ['null', null], ['not a number at all', Number.NaN], ['infinity', Number.POSITIVE_INFINITY], ['a number', 7]];
+
+const effectCases: Case[] = [
+  drumFx('drum sends are laid over what is there and held to 0 to 1; what is not a send is dropped', { sends: { reverb: .9, delay: 7, chorus: .5 }, bogus: 1 }, { answer: sends({ reverb: .9, delay: 1 }) }),
+  drumFx('the drum return level is held at 1 and keeps the sends', { returnLevel: 4 }, { answer: sends({ reverb: .9, phaser: .4 }, 1) }, fxSet),
+  drumFx('a send and a return level below zero are held at 0', { sends: { drive: -1 }, returnLevel: -2 }, { answer: sends({ drive: 0 }, 0) }),
+  drumFx('a change of nothing leaves the sends as they were, and still emits and saves', {}, { answer: FX_SET }, fxSet),
+  ...notNumbers.map(([what, returnLevel]) => drumFx(`a return level that is ${what} leaves it as it was`, { returnLevel }, { answer: FX_SET }, fxSet)),
+  drumFx('a send that is undefined is not a change: JSON never sent it', { sends: { reverb: undefined, delay: .5 } }, { answer: sends({ reverb: .9, phaser: .4, delay: .5 }, .4) }, fxSet),
+  drumFx('sends that are undefined are not a change either', { sends: undefined, returnLevel: .5 }, { answer: sends({ reverb: .9, phaser: .4 }, .5) }, fxSet),
+  drumFx('a send that is not a number goes back to where a new project has it', { sends: { reverb: Number.NaN, phaser: 'lots', drive: null, delay: Number.POSITIVE_INFINITY } }, { answer: sends({}, .4) },
+    service => { assert.ok(service.setDrumFx({ sends: { reverb: .9, phaser: .4, drive: .8, delay: .6 }, returnLevel: .4 }).ok); }),
+  ...[...notObjects, ['a list', [.5, .5]] as [string, unknown]].map(([what, value]) => drumFx(`sends that are ${what} all go back to where a new project has them`, { sends: value }, { answer: sends({}, .4) }, fxSet)),
+
+  effectsSet('an effects change is laid over what is there, then checked', { delay: { feedback: 7, sync: '1/8' }, phaser: { enabled: true }, enabled: 'no', bogus: 1 },
+    { answer: effects(next => { next.delay.feedback = .85; next.delay.sync = '1/8'; next.phaser.enabled = true; }) }),
+  effectsSet('each value is held to its range', { returns: { synth: 4, drums: -1 }, drive: { amount: 9, tone: -1 }, phaser: { rate: 99, feedback: 1 }, delay: { time: 0, mix: 2 }, reverb: { decay: 99, mix: -1 } },
+    { answer: effects(next => { next.returns = { synth: 1, drums: 0 }; Object.assign(next.drive, { amount: 1, tone: 0 }); Object.assign(next.phaser, { rate: 8, feedback: .75 }); Object.assign(next.delay, { time: .01, mix: 1 }); Object.assign(next.reverb, { decay: 8, mix: 0 }); }) }),
+  effectsSet('a change of nothing leaves every effect as it was, the later ones too, and still emits and saves', {}, { answer: wasShaped() }, shaped),
+  effectsSet('one value of an effect changes only that', { reverb: { mix: .1 } }, { answer: wasShaped(next => { next.reverb.mix = .1; }) }, shaped),
+  ...notNumbers.map(([what, value]) => effectsSet(`a value that is ${what} leaves it as it was, or puts back what a new project has`, { drive: { amount: value } }, { answer: wasShaped(next => { next.drive.amount = value === undefined ? .9 : .2; }) },
+    service => { shaped(service); assert.ok(service.setEffectsLoop({ drive: { amount: .9 } }).ok); })),
+  ...notObjects.map(([what, value]) => effectsSet(`an effect that is ${what} goes back to what a new project has, without what came later`, { delay: value, reverb: value },
+    { answer: wasShaped(next => { next.delay = defaults().effectsLoop.delay; next.reverb = defaults().effectsLoop.reverb; }) },
+    service => { shaped(service); assert.ok(service.setEffectsLoop({ delay: { time: 1 }, reverb: { decay: 5 } }).ok); })),
+  effectsSet('an effect that is undefined is not a change', { delay: undefined, reverb: undefined, chorus: undefined, eq: undefined }, { answer: wasShaped() }, shaped),
+
+  effectsSet('the delay follows the tempo once it is told a note value', { delay: { sync: '1/8d' } }, { answer: effects(next => { next.delay.sync = '1/8d'; }) }),
+  effectsSet('a delay told "off" has no sync at all, as in a project saved before there was one', { delay: { sync: 'off' } }, { answer: wasShaped(next => { delete next.delay.sync; }) }, shaped),
+  ...([['a note value there is none of', '1/3'], ['null', null], ['not a number at all', Number.NaN], ['a number', 8]] as const).map(([what, sync]) =>
+    effectsSet(`a sync that is ${what} takes the sync off`, { delay: { sync } }, { answer: wasShaped(next => { delete next.delay.sync; }) }, shaped)),
+  effectsSet('a sync that is undefined is not a change: JSON never sent it', { delay: { sync: undefined, mix: .9 } }, { answer: wasShaped(next => { next.delay.mix = .9; }) }, shaped),
+  effectsSet('a delay with no sync stays without one', { delay: { mix: .9 } }, { answer: effects(next => { next.delay.mix = .9; }) }),
+
+  effectsSet('a chorus is added whole from one value, each held to its range', { chorus: { enabled: true, rate: 99 } }, { answer: effects(next => { next.chorus = { enabled: true, rate: 8, depth: .5, mix: .6 }; }) }),
+  effectsSet('a chorus that is there keeps what the change does not name; only true switches it on', { chorus: { mix: 2, enabled: 'yes' } }, { answer: wasShaped(next => { next.chorus = { ...CHORUS, enabled: false, mix: 1 }; }) }, shaped),
+  effectsSet('inside a chorus, what is undefined is not a change and what is not a number is put back', { chorus: { rate: undefined, depth: Number.NaN, mix: null } }, { answer: wasShaped(next => { next.chorus = { ...CHORUS, depth: .5, mix: .6 }; }) }, shaped),
+  ...notObjects.map(([what, value]) => effectsSet(`a chorus and an EQ that are ${what} are taken away`, { chorus: value, eq: value }, { answer: wasShaped(next => { delete next.chorus; delete next.eq; }) }, shaped)),
+  effectsSet('a chorus and an EQ that are lists are put back as new and switched off', { chorus: [1], eq: [1] }, { answer: wasShaped(next => { next.chorus = { enabled: false, rate: .6, depth: .5, mix: .6 }; next.eq = { enabled: false, low: 0, mid: 0, high: 0 }; }) }, shaped),
+  effectsSet('a project with no chorus and no EQ stays without them', { phaser: { mix: .5 } }, { answer: effects(next => { next.phaser.mix = .5; }) }),
+
+  effectsSet('an EQ is added whole from one band', { eq: { low: -3 } }, { answer: effects(next => { next.eq = { enabled: false, low: -3, mid: 0, high: 0 }; }) }),
+  effectsSet('inside an EQ, a band is held to 12 either way, one not a number is flat and one undefined is kept', { eq: { low: 99, mid: Number.NaN, high: undefined } }, { answer: wasShaped(next => { next.eq = { ...EQ, low: 12, mid: 0 }; }) }, shaped),
+
+  effectsSet('the reverb\'s pre-delay and damping are held to their ranges', { reverb: { preDelay: 9, damping: 7 } }, { answer: effects(next => { Object.assign(next.reverb, { preDelay: .25, damping: 1 }); }) }),
+  effectsSet('a pre-delay of zero is taken away and the damping stays', { reverb: { preDelay: 0 } }, { answer: wasShaped(next => { delete next.reverb.preDelay; }) }, shaped),
+  effectsSet('damping below zero is taken away and the pre-delay stays', { reverb: { damping: -1 } }, { answer: wasShaped(next => { delete next.reverb.damping; }) }, shaped),
+  effectsSet('a pre-delay that is not a number is taken away; damping that is undefined is kept', { reverb: { preDelay: Number.NaN, damping: undefined } }, { answer: wasShaped(next => { delete next.reverb.preDelay; }) }, shaped),
+  effectsSet('pre-delay and damping that are null or text are taken away', { reverb: { preDelay: null, damping: 'lots' } }, { answer: wasShaped(next => { delete next.reverb.preDelay; delete next.reverb.damping; }) }, shaped),
+];
+
+// A lane's sound, model, mix and view, and the tempo. A new store has lane 1 and no other.
+const NO_SYNTH = 'Synth not found';
+// The sound once it has been through the checks with nothing changed, and what a case names laid over it.
+const CHECKED_SOUND = sanitizeSynthParams(defaults().synthParams, defaults().synthParams);
+const sound = (changes: object = {}) => merge(CHECKED_SOUND, changes);
+const BRIGHT = { gain: 1.5, pan: -.5, spread: .4, filter: { frequency: 1234 }, lfo1: { sync: true, rate: 40 } };
+const bright = (service: LocalProjectService) => { assert.ok(service.setSynthParams(1, BRIGHT).ok); };
+const wasBright = (changes: object = {}) => merge(sound(BRIGHT), changes);
+type LaneOutcome = { answer: unknown; eventData?: unknown; silent?: boolean } | { status: 400 | 404 | 409; error: string };
+const laneCase = (op: Case['op'], resource: string, event: string, run: (service: LocalProjectService, synthId: number, body: any) => Applied<unknown>) =>
+  (title: string, body: Record<string, unknown>, result: LaneOutcome, arrange?: Case['arrange'], synthId = 1): Case => ({
+    op, title, arrange, path: `/synth/${synthId}/${resource}`, body, run: service => run(service, synthId, body), ...('answer' in result ? { event, ...result } : result),
+  });
+const params = laneCase('synth.params', 'parameters', 'synthUpdate', (service, synthId, body) => service.setSynthParams(synthId, body));
+// The answer is the sound alone; the event names the lane.
+const sounds = (answer: unknown) => ({ answer, eventData: { synthId: 1, parameters: answer } });
+const model = laneCase('synth.model', 'model', 'synthModelUpdate', (service, synthId, body) => service.setSynthModel(synthId, { modelId: body.modelId, modelParams: body.modelParams }));
+const MACROS = { macro1: .5, macro2: .5, macro3: .5, macro4: .5 };
+const modelled = (modelId: string, macros: object = {}) => ({ answer: { synthId: 1, modelId, modelParams: { ...MACROS, ...macros } } });
+const juno = (service: LocalProjectService) => { assert.ok(service.setSynthModel(1, { modelId: 'juno-106', modelParams: { macro1: .9 } }).ok); };
+const mix = laneCase('synth.mix', 'mix', 'synthMix', (service, synthId, body) => service.setSynthMix(synthId, { muted: body.muted, solo: body.solo }));
+const mixed = (muted: boolean, solo: boolean) => ({ answer: { synthId: 1, muted, solo } });
+const soloed = (service: LocalProjectService) => { assert.ok(service.setSynthMix(1, { solo: true }).ok); };
+const prefs = laneCase('synth.prefs', 'preferences', '', (service, synthId, body) => service.setSynthPrefs(synthId, { octaveShift: body.octaveShift, keyboardMode: body.keyboardMode }));
+// A lane as the store answers it: the whole of it, with its pattern's id as its place among the ids.
+const lane = (rest: object = {}) => {
+  const pattern = { id: 'id-1', name: 'Synth 1', tempo: 120, steps: Array.from({ length: 16 }, () => ({ active: false, velocity: .7 })) };
+  return { answer: { synthId: 1, pattern, patterns: [pattern], synthParams: defaults().synthParams, synthModelId: 'generic', synthModelParams: MACROS, muted: false, solo: false, isPlaying: false, ...rest }, silent: true };
+};
+const lowPiano = (service: LocalProjectService) => { assert.ok(service.setSynthPrefs(1, { octaveShift: -9, keyboardMode: 'piano-roll' }).ok); };
+const tempoCase = (title: string, tempo: unknown, result: LaneOutcome, arrange?: Case['arrange']): Case => ({
+  op: 'tempo.set', title, arrange, path: '/tempo', body: tempo === undefined ? {} : { tempo }, run: service => service.setTempo(wrong(tempo)), ...('answer' in result ? { event: 'tempoChange', ...result } : result),
+  check: project => {
+    const expected = 'answer' in result ? (result.answer as { tempo: number }).tempo : 120;
+    assert.equal(project.tempo, expected);
+    assert.equal(project.synths.length, 2);
+    for (const entry of project.synths) assert.deepEqual([entry.pattern.tempo, ...entry.patterns.map((pattern: any) => pattern.tempo)], Array(entry.patterns.length + 1).fill(expected));
+  },
+});
+// Two lanes, the first with a second pattern, so a tempo has more than one pattern to reach.
+const twoLanes = async (service: LocalProjectService) => {
+  const post = async (path: string, body: object) => assert.equal((await service.request(path, { method: 'POST', body: JSON.stringify(body) })).status, 200);
+  await post('/synth/create', { synthId: 2 });
+  await post('/synth/1/patterns', { name: 'Second', steps: [{ active: true, note: 'C4', velocity: .8 }] });
+};
+
+const laneCases: Case[] = [
+  params('a sound change is laid over what is there, then checked', { filter: { frequency: 1234, q: 999 }, gain: 5, oscillator: { type: 'noise' }, lfo1: { sync: true }, bogus: 1 },
+    sounds(sound({ filter: { frequency: 1234, q: 30 }, gain: 2, lfo1: { sync: true } }))),
+  params('a change of nothing leaves the sound as it was, and still emits and saves', {}, sounds(wasBright()), bright),
+  params('one value inside a part changes only that', { filter: { q: 5 } }, sounds(wasBright({ filter: { q: 5 } })), bright),
+  ...notNumbers.map(([what, gain]) => params(`a level that is ${what} leaves it as it was, or puts back what a new lane has`, { gain }, sounds(wasBright({ gain: gain === undefined ? 1.5 : 1 })), bright)),
+  params('inside a part, what is undefined is not a change: JSON never sent it', { filter: { frequency: undefined, q: 5 }, pan: undefined }, sounds(wasBright({ filter: { q: 5 } })), bright),
+  params('a spread that is undefined is kept; one that is null goes back to none', { spread: undefined }, sounds(wasBright()), bright),
+  params('a spread that is not a number at all arrives as null, and goes back to none', { spread: Number.NaN }, sounds(wasBright({ spread: 0 })), bright),
+  params('an LFO whose sync is undefined keeps it, and the faster rate sync allows', { lfo1: { sync: undefined, depth: .9 } }, sounds(wasBright({ lfo1: { depth: .9 } })), bright),
+  params('an LFO whose sync is not true is not synced, and its rate is held to what that allows', { lfo1: { sync: Number.POSITIVE_INFINITY } }, sounds(wasBright({ lfo1: { sync: false, rate: 30 } })), bright),
+  ...notObjects.map(([what, value]) => params(`a part that is ${what} goes back to what a new lane has`, { filter: value }, sounds(wasBright({ filter: CHECKED_SOUND.filter })), bright)),
+  params('a part that is undefined is not a change', { filter: undefined, lfo1: undefined, gain: 1.2 }, sounds(wasBright({ gain: 1.2 })), bright),
+  params('a sound for a lane that does not exist is refused', { gain: 1 }, { status: 404, error: NO_SYNTH }, bright, 3),
+
+  model('a model change sets the model and lays its macros over the lane\'s, each held to 0 to 1', { modelId: 'tb-303', modelParams: { macro1: .9, macro2: 7, macro3: 'x', extra: 1 } }, modelled('tb-303', { macro1: .9, macro2: 1 })),
+  model('macros alone keep the model', { modelParams: { macro4: .1 } }, modelled('juno-106', { macro1: .9, macro4: .1 }), juno),
+  model('a model alone keeps the macros', { modelId: 'dx7' }, modelled('dx7', { macro1: .9 }), juno),
+  model('a model that does not exist puts the lane back on the generic one, not the one it had', { modelId: 'nope' }, modelled('generic', { macro1: .9 }), juno),
+  model('a change of nothing leaves the model as it was, and still emits and saves', {}, modelled('juno-106', { macro1: .9 }), juno),
+  ...([['undefined', undefined], ['null', null], ['not a number at all', Number.NaN], ['infinity', Number.POSITIVE_INFINITY], ['empty', ''], ['zero', 0]] as const).map(([what, modelId]) =>
+    model(`a model that is ${what} keeps the one the lane has`, { modelId }, modelled('juno-106', { macro1: .9 }), juno)),
+  model('a model that is a number puts the lane on the generic one', { modelId: 7 }, modelled('generic', { macro1: .9 }), juno),
+  model('a macro that is undefined is not a change: JSON never sent it', { modelParams: { macro1: undefined, macro2: .2 } }, modelled('juno-106', { macro1: .9, macro2: .2 }), juno),
+  model('a macro that is not a number goes back to the middle', { modelParams: { macro1: Number.NaN, macro2: null, macro3: 'x', macro4: Number.POSITIVE_INFINITY } }, modelled('juno-106'), service => { assert.ok(service.setSynthModel(1, { modelId: 'juno-106', modelParams: { macro1: .9, macro2: .9, macro3: .9, macro4: .9 } }).ok); }),
+  ...[...notObjects, ['a list', [.1, .2]] as [string, unknown], ['undefined', undefined] as [string, unknown]].map(([what, modelParams]) =>
+    model(`macros that are ${what} leave them as they were`, { modelParams }, modelled('juno-106', { macro1: .9 }), juno)),
+  model('a model for a lane that does not exist is refused', { modelId: 'dx7' }, { status: 404, error: NO_SYNTH }, juno, 3),
+
+  mix('mute and solo are set when they are true or false, and left otherwise', { muted: true, solo: 'yes' }, mixed(true, false)),
+  mix('both can change together', { muted: true, solo: false }, mixed(true, false), soloed),
+  mix('a change of nothing leaves the mix as it was, and still emits and saves', {}, mixed(false, true), soloed),
+  mix('what is undefined is not a change', { muted: undefined, solo: undefined }, mixed(false, true), soloed),
+  mix('what is not a number at all, infinity, null and a number are not a mute or a solo', { muted: Number.NaN, solo: Number.POSITIVE_INFINITY }, mixed(false, true), soloed),
+  mix('null and a number are not either', { muted: 1, solo: null }, mixed(false, true), soloed),
+  mix('a mix for a lane that does not exist is refused', { muted: true }, { status: 404, error: NO_SYNTH }, soloed, 3),
+
+  prefs('the octave and the keyboard are saved without an event; the answer is the whole lane', { octaveShift: 1.6, keyboardMode: 'piano-roll' }, lane({ octaveShift: 2, keyboardMode: 'piano-roll' })),
+  prefs('the octave is held to two either way', { octaveShift: 9, keyboardMode: 'keyboard' }, lane({ octaveShift: 2, keyboardMode: 'keyboard' }), lowPiano),
+  prefs('on a lane that has neither yet, a change of nothing sets the octave to 0 and no keyboard', {}, lane({ octaveShift: 0 })),
+  ...notNumbers.map(([what, octaveShift]) => prefs(`an octave that is ${what} keeps what was there`, { octaveShift }, lane({ octaveShift: -2, keyboardMode: 'piano-roll' }), lowPiano)),
+  ...([['undefined', undefined], ['one there is none of', 'harp'], ['null', null], ['not a number at all', Number.NaN], ['infinity', Number.POSITIVE_INFINITY]] as const).map(([what, keyboardMode]) =>
+    prefs(`a keyboard that is ${what} keeps what was there`, { octaveShift: 1, keyboardMode }, lane({ octaveShift: 1, keyboardMode: 'piano-roll' }), lowPiano)),
+  prefs('a view of a lane that does not exist is refused', { octaveShift: 1 }, { status: 404, error: NO_SYNTH }, lowPiano, 3),
+
+  tempoCase('a tempo is kept as sent, fractions too, and set on every pattern of every lane', 137.5, { answer: { tempo: 137.5 } }, twoLanes),
+  ...[20, 400].map(tempo => tempoCase(`a tempo of ${tempo} is allowed`, tempo, { answer: { tempo } }, twoLanes)),
+  ...([['just under 20', 19.9], ['just over 400', 400.1], ['text', '120'], ['null', null], ['missing', undefined], ['not a number at all', Number.NaN], ['infinity', Number.POSITIVE_INFINITY], ['less than nothing', Number.NEGATIVE_INFINITY]] as const).map(([what, tempo]) =>
+    tempoCase(`a tempo that is ${what} is refused, and no pattern is touched`, tempo, { status: 400, error: 'Invalid tempo' }, twoLanes)),
+];
+
+// A pattern write. A new store has lane 1 with one pattern, named Synth 1 and open: id-1.
+const BLANK = (count = 16) => Array.from({ length: count }, () => ({ active: false, velocity: .7 }));
+const stepsWith = (changes: Record<number, object>, count = 16) => BLANK(count).map((step, index) => ({ ...step, ...changes[index] }));
+const kept1 = (rest: object = {}) => ({ id: 'id-1', name: 'Synth 1', tempo: 120, steps: BLANK(), ...rest });
+const SHELF = 'Invalid sequence pattern';
+type Target = 'existing' | 'first' | 'new' | 'body' | string;
+const patternCase = (title: string, patch: unknown, result: LaneOutcome, target: Target = 'existing', arrange?: Case['arrange'], synthId = 1, extra: Partial<Case> = {}): Case => {
+  const open = (service: LocalProjectService) => service.snapshot().synths[0];
+  const id = (ctx: any) => (target === 'existing' ? ctx.id : target === 'first' ? ctx.first : target === 'new' || target === 'body' ? '' : target);
+  const bodyId = (patch as { id?: string } | null)?.id;
+  const answer = 'answer' in result ? JSON.parse(JSON.stringify(result.answer)) : undefined;
+  return {
+    op: 'pattern.write', title,
+    arrange: async service => { await arrange?.(service); return { id: open(service).pattern.id, first: open(service).patterns[0].id }; },
+    path: ctx => `/synth/${synthId}/patterns${id(ctx) ? `/${id(ctx)}` : ''}`,
+    body: patch,
+    run: (service, ctx) => service.writePattern(synthId, id(ctx) || (target === 'body' ? bodyId : undefined) || crypto.randomUUID(), wrong(patch)),
+    ...('answer' in result
+      ? { event: target === 'existing' || target === 'first' ? 'patternUpdated' : 'patternCreated', eventData: { synthId, pattern: answer }, ...result, answer }
+      : result),
+    ...extra,
+  };
+};
+const noted = { active: true, note: 'C4', velocity: .8 };
+const written1 = (step: object, changes: object = {}) => ({ answer: kept1({ ...changes, steps: stepsWith({ 0: step }) }) });
+const longPattern = (service: LocalProjectService) => { assert.ok(service.writePattern(1, service.snapshot().synths[0].pattern.id, wrong({ steps: BLANK(32), bars: 2 })).ok); };
+const oneNote = (service: LocalProjectService) => { assert.ok(service.writePattern(1, service.snapshot().synths[0].pattern.id, { steps: stepsWith({ 0: noted }) }).ok); };
+const field = (title: string, change: object, expected: object) =>
+  patternCase(title, { steps: [{ active: true, note: 'C4', velocity: .8, ...change }] }, written1({ ...noted, ...expected }));
+
+const patternCases: Case[] = [
+  patternCase('a new pattern is made from the steps sent, filled out to a bar', { name: 'Second', steps: [noted] }, { answer: kept1({ name: 'Second', steps: stepsWith({ 0: noted }) }) }, 'new'),
+  patternCase('a new pattern with no steps takes the open one\'s, and a missing name is "Recovered pattern"', {}, { answer: kept1({ name: 'Recovered pattern', steps: stepsWith({ 0: noted }) }) }, 'new', oneNote),
+  patternCase('a new pattern can be given its id in the path', { steps: [noted] }, { answer: kept1({ id: 'mine', name: 'Recovered pattern', steps: stepsWith({ 0: noted }) }) }, 'mine'),
+  patternCase('an id in the body is used when the path has none', { id: 'theirs', steps: [noted] }, { answer: kept1({ id: 'theirs', name: 'Recovered pattern', steps: stepsWith({ 0: noted }) }) }, 'body'),
+  patternCase('the path\'s id wins over the body\'s', { id: 'theirs', steps: [noted] }, { answer: kept1({ steps: stepsWith({ 0: noted }) }) }),
+  patternCase('an id of 300 characters is cut to 200', { steps: [noted] }, { answer: kept1({ id: 'x'.repeat(200), name: 'Recovered pattern', steps: stepsWith({ 0: noted }) }) }, 'x'.repeat(300)),
+  patternCase('an existing pattern is changed in place, keeping its name', { steps: [noted] }, written1(noted)),
+  patternCase('a write of nothing keeps the pattern as it was, and still emits and saves', {}, { answer: kept1({ steps: stepsWith({ 0: noted }) }) }, 'existing', oneNote),
+  patternCase('the written pattern goes last in the lane\'s list and becomes the open one', { name: 'First again' }, { answer: kept1({ name: 'First again' }) }, 'first',
+    service => { assert.ok(service.writePattern(1, crypto.randomUUID(), { name: 'Second', steps: [noted] }).ok); }, 1,
+    { check: project => { assert.deepEqual(project.synths[0].patterns.map((pattern: any) => pattern.name), ['Second', 'First again']); assert.equal(project.synths[0].pattern.name, 'First again'); } }),
+  patternCase('a pattern of two bars keeps them when no bars are sent', { name: 'Again' }, { answer: kept1({ name: 'Again', steps: BLANK(32), bars: 2 }) }, 'existing', longPattern),
+  patternCase('bars that are undefined are not sent: JSON dropped them, and the pattern\'s own stay', { name: 'Again', bars: undefined }, { answer: kept1({ name: 'Again', steps: BLANK(32), bars: 2 }) }, 'existing', longPattern),
+  patternCase('steps sent with bars are that many bars long', { steps: BLANK(32), bars: 2 }, { answer: kept1({ steps: BLANK(32), bars: 2 }) }),
+  patternCase('bars that are infinity are none', { steps: BLANK(32), bars: Number.POSITIVE_INFINITY }, { answer: kept1({ steps: BLANK(32) }) }),
+  patternCase('bars that are text are none', { steps: BLANK(32), bars: '2' }, { answer: kept1({ steps: BLANK(32) }) }),
+  patternCase('a pattern\'s own tempo is not taken: the project\'s is written', { tempo: 200, steps: [noted] }, { answer: kept1({ tempo: 150, steps: stepsWith({ 0: noted }) }) }, 'existing',
+    service => { assert.ok(service.setTempo(150).ok); }),
+
+  ...([['longer than 200 characters', 'n'.repeat(250), 'n'.repeat(200)], ['that is a number', 7, 'Recovered pattern'], ['that is null', null, 'Recovered pattern'], ['that is not a number at all', Number.NaN, 'Recovered pattern'], ['that is infinity', Number.POSITIVE_INFINITY, 'Recovered pattern'], ['that is undefined, which JSON never sent: the old name stays', undefined, 'Synth 1']] as const).map(([what, name, expected]) =>
+    patternCase(`a name ${what}`, { name }, { answer: kept1({ name: expected }) })),
+
+  field('a velocity past the top is held at 1', { velocity: 3 }, { velocity: 1 }),
+  field('a velocity below zero is held at 0', { velocity: -2 }, { velocity: 0 }),
+  ...notNumbers.map(([what, velocity]) => field(`a velocity that is ${what} is .7`, { velocity }, { velocity: .7 })),
+  field('a note that is not one is no note, and the step is off', { note: 'H9' }, { active: false, note: undefined }),
+  field('a note that is not text is no note', { note: 60 }, { active: false, note: undefined }),
+  field('a step that is on with no note is off', { note: undefined }, { active: false, note: undefined }),
+  field('a step that is "on" but not true is off', { active: 'yes' }, { active: false }),
+  field('a chord keeps its other notes once each, leaving out the lowest and what is no note', { notes: ['E4', 'G4', 'E4', 'C4', 'X', 7] }, { notes: ['E4', 'G4'] }),
+  field('a chord holds six notes in all', { notes: ['D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'C5'] }, { notes: ['D4', 'E4', 'F4', 'G4', 'A4'] }),
+  field('notes that are not a list are none', { notes: 'E4' }, {}),
+  field('a slide is kept when it is true', { slide: true }, { slide: true }),
+  ...([['yes', 'yes'], ['undefined', undefined], ['null', null], ['1', 1]] as const).map(([what, slide]) => field(`a slide that is ${what} is none`, { slide }, {})),
+  field('a length of four is kept', { length: 4 }, { length: 4 }),
+  field('a length is held to what is left of the pattern', { length: 999 }, { length: 16 }),
+  ...([['a fraction', 1.5], ['one', 1], ['infinity', Number.POSITIVE_INFINITY], ['not a number at all', Number.NaN], ['null', null], ['undefined', undefined], ['text', '4']] as const).map(([what, length]) => field(`a length that is ${what} is one step`, { length }, {})),
+  field('a chance below one is kept', { probability: .5 }, { probability: .5 }),
+  ...([['one', 1], ['more than one', 2], ['below zero', -.5], ['infinity', Number.POSITIVE_INFINITY], ['not a number at all', Number.NaN], ['null', null], ['undefined', undefined], ['text', '.5']] as const).map(([what, probability]) => field(`a chance that is ${what} is none`, { probability }, {})),
+  field('a repeat count is kept', { ratchet: 3 }, { ratchet: 3 }),
+  field('a repeat count is held to four', { ratchet: 9 }, { ratchet: 4 }),
+  ...([['a fraction', 1.5], ['one', 1], ['infinity', Number.POSITIVE_INFINITY], ['not a number at all', Number.NaN], ['null', null], ['undefined', undefined]] as const).map(([what, ratchet]) => field(`a repeat count that is ${what} is none`, { ratchet }, {})),
+  field('a late start is kept', { offset: .5 }, { offset: .5 }),
+  field('a late start is held below one step', { offset: 4 }, { offset: .95 }),
+  ...([['infinity: JSON made it null, so it is none', Number.POSITIVE_INFINITY], ['zero', 0], ['below zero', -.5], ['not a number at all', Number.NaN], ['null', null], ['undefined', undefined], ['text', '.5']] as const).map(([what, offset]) => field(`a late start that is ${what} is none`, { offset }, {})),
+  patternCase('a step that is not an object is a blank one, and steps past a bar are cut', { steps: [null, 'x', 7, undefined, noted, ...BLANK(30)] }, { answer: kept1({ steps: stepsWith({ 4: noted }, 32) }) }),
+  patternCase('a step whose fields are all undefined is a blank one', { steps: [{ active: undefined, note: undefined, velocity: undefined, notes: undefined, length: undefined }] }, { answer: kept1() }),
+
+  ...([['text', 'abc'], ['an object', {}], ['a number', 7]] as const).map(([what, steps]) =>
+    patternCase(`steps that are ${what} are refused`, { steps }, { status: 400, error: SHELF })),
+  ...([['null', null], ['undefined', undefined], ['not a number at all', Number.NaN], ['infinity', Number.POSITIVE_INFINITY], ['zero', 0], ['empty text', ''], ['false', false]] as const).map(([what, steps]) =>
+    patternCase(`steps that are ${what} are the ones the pattern had`, { steps, name: 'Kept' }, { answer: kept1({ name: 'Kept', steps: stepsWith({ 0: noted }) }) }, 'existing', oneNote)),
+  patternCase('a body id that is a number is no id: refused', { id: 5, steps: [noted] }, { status: 400, error: SHELF }, 'body'),
+  patternCase('a pattern for a lane that does not exist is refused', { steps: [noted] }, { status: 404, error: NO_SYNTH }, 'existing', undefined, 3),
+  ...notObjects.map(([what, patch]) => patternCase(`a pattern that is ${what} is refused as a route's body was`, patch, { status: 400, error: 'Invalid local operation data' })),
+  patternCase('a pattern that is a list is refused', [noted], { status: 400, error: 'Invalid local operation data' }),
+  patternCase('a pattern that is not an object is refused before a lane is looked for', 'lots', { status: 400, error: 'Invalid local operation data' }, 'existing', undefined, 3),
+];
+
 const cases: Case[] = [
   ...swing('a swing in range is kept as sent', .3, .3),
   ...swing('a swing past the top is held at .75', 5, .75),
@@ -316,6 +577,9 @@ const cases: Case[] = [
   guestRemove('a guest that does not exist cannot be removed', { status: 404, error: 'Guest not found' }, service => { addGuest(service); return NO_GUEST; }),
 
   ...drumCases,
+  ...effectCases,
+  ...laneCases,
+  ...patternCases,
 ];
 
 // What is in storage, or null when nothing has been written yet.
@@ -346,7 +610,7 @@ for (const entry of cases) {
     } else {
       assert.equal(typed.status, 200);
       assert.deepEqual(comparable(typed.data), entry.answer);
-      assert.deepEqual(comparable(typed.events), [{ type: entry.event, data: entry.answer }]);
+      assert.deepEqual(comparable(typed.events), entry.silent ? [] : [{ type: entry.event, data: 'eventData' in entry ? entry.eventData : entry.answer }]);
       assert.equal(typed.saved, OP_META[entry.op].save, 'an accepted operation saves when OP_META says so');
     }
     entry.check?.(typedProject);
@@ -377,7 +641,7 @@ test('apply is synchronous: the event has arrived and the store has changed befo
   assert.equal(service.snapshot().drumSwing, .3);
   for (const method of [
     'apply', 'applyAll', 'setDrumSwing', 'setDrumMasterVolume', 'setDrumKit', 'setDrumState', 'resetDrums', 'setDrumBars', 'setDrumStep', 'setDrumStepVelocity', 'setDrumStepDetail',
-    'setDrumSettings', 'setDrumSample', 'setDrumMix', 'addGuest', 'changeGuest', 'removeGuest', 'getScenes', 'getTempo', 'getDrumKits',
+    'setDrumSettings', 'setDrumSample', 'setDrumMix', 'setDrumFx', 'setEffectsLoop', 'setTempo', 'setSynthParams', 'setSynthModel', 'setSynthMix', 'setSynthPrefs', 'addGuest', 'changeGuest', 'removeGuest', 'getScenes', 'getTempo', 'getDrumKits',
   ] as const) {
     assert.equal(LocalProjectService.prototype[method].constructor.name, 'Function', `${method} is not async`);
   }
@@ -405,20 +669,20 @@ test('an operation listener hears each accepted operation after its event, with 
 // These stand a reducer in for one that has not moved yet, to try what no real reducer does:
 // an outcome that is refused and yet names an event and a save, one that does not save, and one
 // with no answer. They are about `apply`, not about the operation named.
-function standIn<T>(type: 'tempo.set' | 'transport.play', reducer: (...args: any[]) => unknown, run: (service: LocalProjectService) => T): T {
+function standIn<T>(type: 'transport.stop' | 'transport.play', reducer: (...args: any[]) => unknown, run: (service: LocalProjectService) => T): T {
   assert.equal(type in reducers, false, `${type} has a reducer of its own now: stand in for another`);
   (reducers as Record<string, unknown>)[type] = reducer;
   try { return run(setup()); } finally { delete (reducers as Record<string, unknown>)[type]; }
 }
 
 test('a refused operation is answered, not thrown: no event, no notice, no save', () => {
-  standIn('tempo.set', () => ({ ok: false, status: 400, error: 'Invalid tempo', save: true, event: { type: 'tempoChange', data: {} } }), service => {
+  standIn('transport.stop', () => ({ ok: false, status: 400, error: 'Not now', save: true, event: { type: 'sequencerStop', data: {} } }), service => {
     const before = service.snapshot();
     let notices = 0;
     service.subscribeOps(() => { notices++; });
-    const result = applied(service, target => target.apply({ type: 'tempo.set', tempo: 5 }));
-    assert.deepEqual(result, { status: 400, data: { error: 'Invalid tempo' }, events: [], saved: false });
-    assert.deepEqual(service.apply({ type: 'tempo.set', tempo: 5 }), { ok: false, status: 400, error: 'Invalid tempo' });
+    const result = applied(service, target => target.apply({ type: 'transport.stop', synthId: 1 }));
+    assert.deepEqual(result, { status: 400, data: { error: 'Not now' }, events: [], saved: false });
+    assert.deepEqual(service.apply({ type: 'transport.stop', synthId: 1 }), { ok: false, status: 400, error: 'Not now' });
     assert.equal(notices, 0);
     assert.deepEqual(service.snapshot(), before);
   });
@@ -514,6 +778,122 @@ test('a change to a guest that is not an object is refused as a route\'s body wa
     assert.deepEqual([routed.status, routed.data, routed.events, routed.saved], [400, { error: 'Invalid local operation data' }, [], false]);
   }
   assert.deepEqual(service.snapshot(), before);
+});
+
+test('a change to the drum sends or the effects that is not an object is refused as a route\'s body was', async () => {
+  const service = setup();
+  fxSet(service);
+  shaped(service);
+  service.flush();
+  const before = service.snapshot();
+  const loop: Record<string, unknown> = {};
+  loop.loop = loop;
+  const refused = { status: 400, data: { error: 'Invalid local operation data' }, events: [], saved: false };
+  for (const patch of [null, undefined, [], [{ returnLevel: 1 }], 'sends', 7, Number.NaN, loop, () => ({ returnLevel: 1 })]) {
+    assert.deepEqual(applied(service, target => target.setDrumFx(wrong(patch))), refused);
+    assert.deepEqual(applied(service, target => target.setEffectsLoop(wrong(patch))), refused);
+  }
+  for (const path of ['/drum/fx', '/effects-loop']) {
+    for (const raw of ['null', '[]', '7', '"sends"']) {
+      const routed = await call(service, 'POST', path, undefined, raw);
+      assert.deepEqual([routed.status, routed.data, routed.events, routed.saved], [400, { error: 'Invalid local operation data' }, [], false]);
+    }
+  }
+  assert.deepEqual(service.snapshot(), before);
+});
+
+// A route found the lane from the digits in its path. An operation can name it with anything,
+// and only the lane's own number finds it.
+test('a lane named by anything but its number is not found, and a sound that is not an object is refused first', async () => {
+  const service = setup();
+  bright(service);
+  service.flush();
+  const before = service.snapshot();
+  const missing = { status: 404, data: { error: 'Synth not found' }, events: [], saved: false };
+  for (const synthId of ['1', 1.5, 0, -1, 9, Number.NaN, undefined, null, [1], true]) {
+    assert.deepEqual(applied(service, target => target.setSynthParams(wrong(synthId), { gain: 1 })), missing);
+    assert.deepEqual(applied(service, target => target.setSynthModel(wrong(synthId), { modelId: 'dx7' })), missing);
+    assert.deepEqual(applied(service, target => target.setSynthMix(wrong(synthId), { muted: true })), missing);
+    assert.deepEqual(applied(service, target => target.setSynthPrefs(wrong(synthId), { octaveShift: 1 })), missing);
+  }
+  const loop: Record<string, unknown> = {};
+  loop.loop = loop;
+  const refused = { status: 400, data: { error: 'Invalid local operation data' }, events: [], saved: false };
+  for (const patch of [null, undefined, [], [{ gain: 1 }], 'gain', 7, Number.NaN, loop, () => ({ gain: 1 })]) {
+    assert.deepEqual(applied(service, target => target.setSynthParams(1, wrong(patch))), refused);
+    assert.deepEqual(applied(service, target => target.setSynthParams(3, wrong(patch))), refused, 'checked before the lane is looked for, as a body was');
+  }
+  for (const path of ['/synth/1/parameters', '/synth/3/parameters']) {
+    for (const raw of ['null', '[]', '7', '"gain"']) {
+      const routed = await call(service, 'POST', path, undefined, raw);
+      assert.deepEqual([routed.status, routed.data, routed.events, routed.saved], [400, { error: 'Invalid local operation data' }, [], false]);
+    }
+  }
+  assert.deepEqual(service.snapshot(), before);
+});
+
+test('the store keeps nothing of a lane operation\'s own objects', () => {
+  const service = setup();
+  const patch = { filter: { frequency: 1234 }, fxSends: { reverb: .5, delay: 0, drive: 0, phaser: 0, chorus: 0 } };
+  const result = service.setSynthParams(1, patch);
+  assert.ok(result.ok);
+  patch.filter.frequency = 99;
+  patch.fxSends.reverb = 0;
+  result.value.filter.frequency = 50;
+  const macros = { macro1: .9 };
+  const modelResult = service.setSynthModel(1, { modelId: 'juno-106', modelParams: macros });
+  assert.ok(modelResult.ok);
+  macros.macro1 = 0;
+  modelResult.value.modelParams.macro2 = 0;
+  const viewed = service.setSynthPrefs(1, { octaveShift: 1 });
+  assert.ok(viewed.ok);
+  viewed.value.pattern.steps[0].active = true;
+  viewed.value.synthParams.gain = 0;
+  const kept = service.snapshot().synths[0];
+  assert.deepEqual([kept.synthParams.filter.frequency, kept.synthParams.fxSends.reverb, kept.synthModelParams.macro1, kept.synthModelParams.macro2, kept.pattern.steps[0].active, kept.synthParams.gain], [1234, .5, .9, .5, false, 1]);
+  service.flush();
+});
+
+// useStudio hears a sound only through the synthUpdate event, which is also the one thing that
+// hands the sound to the audio. A model change is followed by its macros' sound, and undo sends
+// the sound, the model, the tempo and the mix one after another: each must have arrived whole,
+// with the lane's number, before the next begins, and the view must send nothing.
+test('each lane edit is delivered before the next begins, and a view change sends nothing', () => {
+  const service = setup();
+  const heard: Message[] = [];
+  service.subscribe(message => heard.push(message));
+  heard.length = 0;
+  service.setSynthModel(1, { modelId: 'juno-106' });
+  assert.deepEqual(heard.map(message => message.type), ['synthModelUpdate']);
+  service.setSynthParams(1, { filter: { frequency: 900 } });
+  assert.deepEqual(heard.map(message => message.type), ['synthModelUpdate', 'synthUpdate']);
+  assert.deepEqual([heard[1].data.synthId, heard[1].data.parameters.filter.frequency], [1, 900]);
+  assert.deepEqual(heard[1].data.parameters, service.snapshot().synths[0].synthParams);
+  service.setTempo(90);
+  service.setSynthMix(1, { muted: true });
+  service.setSynthPrefs(1, { octaveShift: 2, keyboardMode: 'piano-roll' });
+  assert.deepEqual(heard.map(message => message.type), ['synthModelUpdate', 'synthUpdate', 'tempoChange', 'synthMix']);
+  assert.deepEqual(heard[3].data, { synthId: 1, muted: true, solo: false });
+  assert.equal(service.snapshot().synths[0].octaveShift, 2);
+  service.flush();
+});
+
+test('the store keeps nothing of an effects operation\'s own objects', () => {
+  const service = setup();
+  const fx = { sends: { reverb: .9, delay: .1, drive: .1, phaser: 0 }, returnLevel: .5 };
+  const fxResult = service.setDrumFx(fx);
+  assert.ok(fxResult.ok);
+  fx.sends.reverb = 0;
+  fxResult.value.drumFx.sends.delay = 1;
+  const patch = { chorus: { enabled: true, rate: 2, depth: .3, mix: .4 }, delay: { sync: '1/8' as const } };
+  const result = service.setEffectsLoop(patch);
+  assert.ok(result.ok);
+  patch.chorus.rate = 7;
+  result.value.effectsLoop.chorus!.mix = 0;
+  result.value.effectsLoop.delay.time = 1;
+  const kept = service.snapshot();
+  assert.deepEqual([kept.drumFx.sends.reverb, kept.drumFx.sends.delay, kept.effectsLoop.chorus.rate, kept.effectsLoop.chorus.mix, kept.effectsLoop.delay.time], [.9, .1, 2, .4, .2]);
+  service.flush();
 });
 
 test('the store keeps nothing of an operation\'s own objects', () => {
@@ -643,8 +1023,55 @@ test('before the service is initialized the typed way throws, with the message r
   assert.throws(() => new LocalProjectService().setDrumKit(KIT.id), message);
   assert.throws(() => new LocalProjectService().setDrumState(defaults().drumState), message);
   assert.throws(() => new LocalProjectService().resetDrums(), message);
+  assert.throws(() => new LocalProjectService().setDrumFx({}), message);
+  assert.throws(() => new LocalProjectService().setEffectsLoop({}), message);
+  assert.throws(() => new LocalProjectService().setTempo(120), message);
+  assert.throws(() => new LocalProjectService().setSynthParams(1, {}), message);
+  assert.throws(() => new LocalProjectService().setSynthModel(1, {}), message);
+  assert.throws(() => new LocalProjectService().setSynthMix(1, {}), message);
+  assert.throws(() => new LocalProjectService().setSynthPrefs(1, {}), message);
   assert.throws(() => new LocalProjectService().getTempo(), message);
   assert.throws(() => new LocalProjectService().getScenes(), message);
+});
+
+test('the store keeps nothing of a pattern operation\'s own objects', () => {
+  const service = setup();
+  const id = service.snapshot().synths[0].pattern.id;
+  const patch = { name: 'Mine', steps: stepsWith({ 0: { active: true, note: 'C4', velocity: .8, notes: ['E4'] } }) };
+  const result = service.writePattern(1, id, patch);
+  assert.ok(result.ok);
+  patch.steps[0].notes![0] = 'G4';
+  patch.steps[0].active = false;
+  patch.steps.pop();
+  patch.name = 'Changed';
+  result.value.steps[0].velocity = 0;
+  result.value.steps[1].active = true;
+  const kept = service.snapshot().synths[0];
+  assert.deepEqual([kept.pattern.name, kept.pattern.steps.length, kept.pattern.steps[0], kept.pattern.steps[1].active], ['Mine', 16, { active: true, note: 'C4', velocity: .8, notes: ['E4'] }, false]);
+  assert.deepEqual(kept.patterns, [kept.pattern]);
+  service.flush();
+});
+
+// Two cells painted in one frame: the second is built from the pattern the first left, which
+// the first's event has already put in front of the listener, with nothing else changed.
+test('each pattern write is delivered whole before the next begins, and a second write builds on the first', () => {
+  const service = setup();
+  const id = service.snapshot().synths[0].pattern.id;
+  let open = service.snapshot().synths[0].pattern;
+  const seen: Message[] = [];
+  service.subscribe(message => { seen.push(message); if (message.type === 'patternUpdated') open = message.data.pattern; });
+  for (const index of [0, 5, 9]) {
+    const next = { ...open, steps: open.steps.map((step, at) => (at === index ? { ...step, active: true, note: 'C4' } : step)) };
+    assert.ok(service.writePattern(1, id, next).ok);
+    assert.deepEqual(open.steps.flatMap((step, at) => (step.active ? [at] : [])), [0, 5, 9].filter(at => at <= index));
+  }
+  assert.deepEqual(seen.slice(1).map(message => message.type), Array(3).fill('patternUpdated'));
+  assert.equal(service.snapshot().synths[0].patterns.length, 1);
+  service.flush();
+});
+
+test('pattern.write is saved, undoable and shared', () => {
+  assert.deepEqual(OP_META['pattern.write'], { save: true, undoable: true, share: true });
 });
 
 // Until the last pull request of the plan every operation is in the type but only some have a

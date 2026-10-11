@@ -447,8 +447,19 @@ export function useStudio() {
   const browserMutedRef = useRef(browserMuted);
   browserMutedRef.current = browserMuted;
 
+  // Assigned here, and moved on by the handlers of the store's pattern events (and of the scene,
+  // lane and transport events), so that the scheduler and a handler making a second edit before
+  // React has rendered see the first.
   const synthsRef = useRef(synths);
   synthsRef.current = synths;
+  // The lanes an undo entry records as "before", where a pattern event has moved synthsRef on
+  // since the last render: each such lane as it was before the first of them, with the pattern
+  // the last of them left. Undo read synthsRef when only a render moved it, and an entry pushed
+  // after an edit that has not rendered yet (a MIDI import putting two tracks on one lane) still
+  // holds the lane from before that edit. Painting the piano roll forgets its lane here, since
+  // each painted cell is undone by itself.
+  const lanesBeforeEditRef = useRef(new Map<number, { lane: SynthState; left: Pattern }>());
+  if (lanesBeforeEditRef.current.size > 0) lanesBeforeEditRef.current.clear();
   const midiModeRef = useRef(midiMode);
   midiModeRef.current = midiMode;
   const midiChannelRef = useRef(midiChannel);
@@ -558,8 +569,30 @@ export function useStudio() {
     };
   }, [synthAudio, drumAudio]);
 
+  // A change to the lanes that the next line must be able to read: the ref is moved on with the
+  // state. The change is made to each, not worked out from the ref and set, so that nothing
+  // another handler has asked of the state since the last render is lost.
+  const commitLanes = useCallback((change: (lane: SynthState) => SynthState) => {
+    synthsRef.current = synthsRef.current.map(change);
+    setSynths(prev => prev.map(change));
+  }, []);
+
+  // A pattern the store has kept, put on its lane. What undo should read for the lane is kept
+  // beside it: see lanesBeforeEditRef.
+  const commitPattern = useCallback((synthId: number, pattern: Pattern, change: (lane: SynthState) => SynthState) => {
+    const before = synthsRef.current.find(s => s.id === synthId);
+    commitLanes(s => (s.id === synthId ? change(s) : s));
+    if (!before) return;
+    const held = lanesBeforeEditRef.current.get(synthId);
+    lanesBeforeEditRef.current.set(synthId, { lane: held && held.left === before.pattern ? held.lane : before, left: pattern });
+  }, [commitLanes]);
+
   const getSnapshot = useCallback((synthId: number, patternId: string): PatternSnapshot | null => {
-    const synth = synthsRef.current.find((entry) => entry.id === synthId && entry.pattern?.id === patternId);
+    const live = synthsRef.current.find((entry) => entry.id === synthId);
+    const held = lanesBeforeEditRef.current.get(synthId);
+    // Only while the lane still has the pattern that edit left: a scene change replaces it.
+    const before = live && held && held.left === live.pattern ? held.lane : undefined;
+    const synth = [before, live].find((entry) => entry?.pattern?.id === patternId);
     if (!synth?.pattern) return null;
     return {
       pattern: clonePattern(synth.pattern),
@@ -603,65 +636,33 @@ export function useStudio() {
   );
 
   const applySnapshot = useCallback(async (synthId: number, snapshot: PatternSnapshot) => {
-    setDrumFx(snapshot.drumFx);
-    setEffectsLoop(snapshot.effectsLoop);
     localService.setDrumMasterVolume(snapshot.drumMasterVolume);
     localService.setDrumSwing(snapshot.drumSwing);
     localService.setDrumKit(snapshot.drumKitId, false);
+    // Not requests any more, but still awaited, so what follows runs when it always did.
     await Promise.all([
-      localRequest('/drum/fx', { method: 'POST', body: JSON.stringify(snapshot.drumFx) }),
-      localRequest('/effects-loop', { method: 'POST', body: JSON.stringify(snapshot.effectsLoop) }),
+      localService.setDrumFx(snapshot.drumFx),
+      localService.setEffectsLoop(snapshot.effectsLoop),
     ]);
     setSynths((prev) => prev.map((entry) => (
       entry.id === synthId
         ? {
           ...entry,
-          pattern: clonePattern(snapshot.pattern),
-          synthParams: cloneSynthParams(snapshot.synthParams),
-          synthModelId: snapshot.synthModelId,
-          synthModelParams: cloneSynthModelParams(snapshot.synthModelParams),
           selectedStep: null,
-          muted: snapshot.muted ?? entry.muted,
-          solo: snapshot.solo ?? entry.solo,
           octaveShift: snapshot.octaveShift ?? entry.octaveShift,
         }
         : entry
     )));
-    setGlobalTempo(snapshot.tempo);
     await Promise.all([
-      localRequest(`/synth/${synthId}/patterns/${snapshot.pattern.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(snapshot.pattern),
-      }),
-      localRequest(`/synth/${synthId}/parameters`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(snapshot.synthParams || DEFAULT_PARAMS),
-      }),
-      localRequest(`/synth/${synthId}/model`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          modelId: snapshot.synthModelId,
-          modelParams: snapshot.synthModelParams,
-        }),
-      }),
-      // Not a request, but kept in its place among them: the drums go back after the lane's model and before the tempo.
+      // Not requests, but each kept in its place: the store is changed in the order it always was.
+      localService.writePattern(synthId, snapshot.pattern.id, snapshot.pattern),
+      localService.setSynthParams(synthId, snapshot.synthParams || DEFAULT_PARAMS),
+      localService.setSynthModel(synthId, { modelId: snapshot.synthModelId, modelParams: snapshot.synthModelParams }),
       localService.setDrumState(snapshot.drumState),
-      localRequest('/tempo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tempo: snapshot.tempo }),
-      }),
-      localRequest(`/synth/${synthId}/mix`, {
-        method: 'POST',
-        body: JSON.stringify({ muted: snapshot.muted ?? false, solo: snapshot.solo ?? false }),
-      }),
-      localRequest(`/synth/${synthId}/preferences`, {
-        method: 'POST',
-        body: JSON.stringify({ octaveShift: snapshot.octaveShift ?? 0 }),
-      }),
+      localService.setTempo(snapshot.tempo),
+      localService.setSynthMix(synthId, { muted: snapshot.muted ?? false, solo: snapshot.solo ?? false }),
+      // The octave is saved and sent to nobody, so it is set on the lane above as well.
+      localService.setSynthPrefs(synthId, { octaveShift: snapshot.octaveShift ?? 0 }),
     ]);
   }, []);
 
@@ -1007,21 +1008,16 @@ export function useStudio() {
         ));
         break;
       }
+      // The one place a pattern edit is applied. The store has made the pattern it was sent the
+      // lane's open one, as checked and kept, and the next edit is built on it.
       case 'patternCreated': {
         const { synthId, pattern } = message.data;
-        setSynths(prev => prev.map(s =>
-          s.id === synthId ? { ...s, patterns: [...s.patterns, pattern] } : s
-        ));
+        commitPattern(synthId, pattern, s => ({ ...s, patterns: [...s.patterns, pattern], pattern }));
         break;
       }
       case 'patternUpdated': {
         const { synthId, pattern } = message.data;
-        setSynths(prev => prev.map(s => {
-          if (s.id !== synthId) return s;
-          const patterns = s.patterns.map(p => p.id === pattern.id ? pattern : p);
-          const currentPattern = s.pattern?.id === pattern.id ? pattern : s.pattern;
-          return { ...s, patterns, pattern: currentPattern };
-        }));
+        commitPattern(synthId, pattern, s => ({ ...s, patterns: s.patterns.map(p => (p.id === pattern.id ? pattern : p)), pattern }));
         break;
       }
       case 'synthCreated': {
@@ -1148,7 +1144,7 @@ export function useStudio() {
         break;
       }
     }
-  }, [synthAudio, drumAudio, triggerSynthNote, globalTempo]);
+  }, [synthAudio, drumAudio, triggerSynthNote, globalTempo, commitPattern]);
 
   const messageHandlerRef = useRef(handleMessage);
   messageHandlerRef.current = handleMessage;
@@ -1208,7 +1204,7 @@ export function useStudio() {
     const synth = synthsRef.current.find(s => s.id === synthId);
     if (!synth) return;
     const shift = Math.max(-2, Math.min(2, synth.octaveShift + (direction === 'up' ? 1 : -1)));
-    void localRequest(`/synth/${synthId}/preferences`, { method: 'POST', body: JSON.stringify({ octaveShift: shift }) });
+    localService.setSynthPrefs(synthId, { octaveShift: shift });
     setSynths(prev => prev.map(s => {
       if (s.id !== synthId) return s;
       const newShift = direction === 'up'
@@ -1221,16 +1217,11 @@ export function useStudio() {
   const handleTempoChange = useCallback(async (bpm: number) => {
     const firstSynth = synthsRef.current[0];
     if (firstSynth?.pattern) pushHistorySnapshot(firstSynth.id, firstSynth.pattern.id);
-    setGlobalTempo(bpm);
+    // The tempoChange event sets the tempo; nothing sends the lanes their patterns' copy of it.
     setSynths(prev => prev.map(s =>
       s.pattern ? { ...s, pattern: { ...s.pattern, tempo: bpm } } : s
     ));
-
-    await localRequest('/tempo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tempo: bpm }),
-    });
+    localService.setTempo(bpm);
   }, [pushHistorySnapshot]);
 
   const handleGlobalPlayStop = useCallback(async () => {
@@ -1350,14 +1341,9 @@ export function useStudio() {
       };
 
       setSynths(prev => prev.map(s => (
-        s.id === synthId ? { ...s, pattern: updatedPattern, selectedStep: null } : s
+        s.id === synthId ? { ...s, selectedStep: null } : s
       )));
-
-      await localRequest(`/synth/${synthId}/patterns/${pattern.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedPattern),
-      });
+      localService.writePattern(synthId, pattern.id, updatedPattern);
       return;
     }
 
@@ -1373,7 +1359,7 @@ export function useStudio() {
   }, []);
 
   const handleKeyboardModeChange = useCallback((synthId: number, mode: 'keyboard' | 'piano-roll') => {
-    void localRequest(`/synth/${synthId}/preferences`, { method: 'POST', body: JSON.stringify({ keyboardMode: mode }) });
+    localService.setSynthPrefs(synthId, { keyboardMode: mode });
     setSynths(prev => prev.map(s => (
       s.id === synthId ? { ...s, keyboardMode: mode } : s
     )));
@@ -1396,17 +1382,14 @@ export function useStudio() {
       }),
     };
 
-    // Two cells painted in one frame must both land, so the next call has to see this one.
-    synthsRef.current = synthsRef.current.map(s => (s.id === synthId ? { ...s, pattern: updatedPattern } : s));
     setSynths(prev => prev.map(s => (
-      s.id === synthId ? { ...s, pattern: updatedPattern, selectedStep: stepIndex } : s
+      s.id === synthId ? { ...s, selectedStep: stepIndex } : s
     )));
-
-    await localRequest(`/synth/${synthId}/patterns/${synth.pattern.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updatedPattern),
-    });
+    // Two cells painted in one frame must both land: the patternUpdated event has moved
+    // synthsRef on by the time this returns, so the next call sees this one. Its undo entry
+    // holds this one too, so each cell is undone by itself.
+    localService.writePattern(synthId, synth.pattern.id, updatedPattern);
+    lanesBeforeEditRef.current.delete(synthId);
   }, [pushHistorySnapshot]);
 
   const handleClearPatternNotes = useCallback(async (synthId: number) => {
@@ -1418,13 +1401,9 @@ export function useStudio() {
       steps: synth.pattern.steps.map((step) => withStepNotes(step, [])),
     };
     setSynths(prev => prev.map(s => (
-      s.id === synthId ? { ...s, pattern: updatedPattern, selectedStep: null } : s
+      s.id === synthId ? { ...s, selectedStep: null } : s
     )));
-    await localRequest(`/synth/${synthId}/patterns/${synth.pattern.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updatedPattern),
-    });
+    localService.writePattern(synthId, synth.pattern.id, updatedPattern);
   }, [pushHistorySnapshot]);
 
   // Writes a note to a step. `add` joins it to the chord already there instead of replacing it.
@@ -1440,19 +1419,15 @@ export function useStudio() {
         idx === stepIndex ? withStepNotes({ ...step, velocity: boundedVelocity }, add ? [...stepNotes(step), note] : [note]) : step
       )),
     };
-    synthsRef.current = synthsRef.current.map(s => (s.id === synthId ? { ...s, pattern: updatedPattern } : s));
 
     setSynths(prev => prev.map(s => {
       if (s.id !== synthId) return s;
       const nextPointer = (stepIndex + 1) % updatedPattern.steps.length;
-      return { ...s, pattern: updatedPattern, selectedStep: stepIndex, stepRecordPointer: nextPointer };
+      return { ...s, selectedStep: stepIndex, stepRecordPointer: nextPointer };
     }));
-
-    await localRequest(`/synth/${synthId}/patterns/${synth.pattern.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updatedPattern),
-    });
+    // The next note's undo entry holds this one, as with a painted cell.
+    localService.writePattern(synthId, synth.pattern.id, updatedPattern);
+    lanesBeforeEditRef.current.delete(synthId);
   }, [pushHistorySnapshot]);
 
   const handleNotePlay = useCallback(async (synthId: number, note: string) => {
@@ -1479,15 +1454,7 @@ export function useStudio() {
       steps: pattern.steps.map((s, i) => i === step ? { ...s, note, active: true } : s),
     };
 
-    setSynths(prev => prev.map(s =>
-      s.id === synthId ? { ...s, pattern: updated } : s
-    ));
-
-    await localRequest(`/synth/${synthId}/patterns/${pattern.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updated),
-    });
+    localService.writePattern(synthId, pattern.id, updated);
   }, [synthAudio, triggerSynthNote, globalTempo, pushHistorySnapshot]);
 
   const handleNoteRelease = useCallback(async (synthId: number, note: string) => {
@@ -1560,11 +1527,7 @@ export function useStudio() {
   const handleParameterChange = useCallback(async (synthId: number, params: Partial<SynthParameters>) => {
     const synth = synthsRef.current.find((entry) => entry.id === synthId);
     if (synth?.pattern) pushHistorySnapshotThrottled(synthId, synth.pattern.id, `synth-params-${synthId}`);
-    await localRequest(`/synth/${synthId}/parameters`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(params),
-    });
+    localService.setSynthParams(synthId, params);
   }, [pushHistorySnapshotThrottled]);
 
   const handleSynthModelChange = useCallback(async (
@@ -1580,31 +1543,13 @@ export function useStudio() {
       ...synth.synthModelParams,
       ...modelParams,
     });
-    setSynths((prev) => prev.map((entry) => (
-      entry.id === synthId
-        ? {
-          ...entry,
-          synthModelId: normalizedModelId,
-          synthModelParams: normalizedModelParams,
-        }
-        : entry
-    )));
-    await localRequest(`/synth/${synthId}/model`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        modelId: normalizedModelId,
-        modelParams: normalizedModelParams,
-      }),
-    });
+    localService.setSynthModel(synthId, { modelId: normalizedModelId, modelParams: normalizedModelParams });
+    // The macros' parameters went a turn later when these were requests, after React had rendered
+    // the model for a click. A preset load pushes its second undo entry after this returns, and
+    // that entry holds what was rendered then: the new model with the sound from before it.
+    await Promise.resolve();
     const mapped = mapSynthModelToEngineParams(normalizedModelId, normalizedModelParams);
-    if (Object.keys(mapped).length > 0) {
-      await localRequest(`/synth/${synthId}/parameters`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(mapped),
-      });
-    }
+    if (Object.keys(mapped).length > 0) localService.setSynthParams(synthId, mapped);
   }, [pushHistorySnapshot]);
 
   const handleStepCountChange = useCallback(async (synthId: number, stepCount: 16 | 32) => {
@@ -1628,16 +1573,10 @@ export function useStudio() {
       const nextSelectedStep = s.selectedStep !== null && s.selectedStep >= stepCount ? null : s.selectedStep;
       return {
         ...s,
-        pattern: nextPattern,
         selectedStep: nextSelectedStep,
       };
     }));
-
-    await localRequest(`/synth/${synthId}/patterns/${synth.pattern.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(nextPattern),
-    });
+    localService.writePattern(synthId, synth.pattern.id, nextPattern);
   }, [pushHistorySnapshot]);
 
   const handleStepVelocityChange = useCallback(async (synthId: number, stepIndex: number, velocity: number) => {
@@ -1651,14 +1590,7 @@ export function useStudio() {
         index === stepIndex ? { ...step, velocity: normalizedVelocity } : step
       )),
     };
-    setSynths((prev) => prev.map((entry) => (
-      entry.id === synthId ? { ...entry, pattern: nextPattern } : entry
-    )));
-    await localRequest(`/synth/${synthId}/patterns/${synth.pattern.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(nextPattern),
-    });
+    localService.writePattern(synthId, synth.pattern.id, nextPattern);
   }, [pushHistorySnapshotThrottled]);
 
   const handleStepSlideChange = useCallback(async (synthId: number, stepIndex: number, slide: boolean) => {
@@ -1669,13 +1601,7 @@ export function useStudio() {
       ...synth.pattern,
       steps: synth.pattern.steps.map((step, index) => (index === stepIndex ? { ...step, slide } : step)),
     };
-    setSynths((prev) => prev.map((entry) => (
-      entry.id === synthId ? { ...entry, pattern: nextPattern } : entry
-    )));
-    await localRequest(`/synth/${synthId}/patterns/${synth.pattern.id}`, {
-      method: 'PUT',
-      body: JSON.stringify(nextPattern),
-    });
+    localService.writePattern(synthId, synth.pattern.id, nextPattern);
   }, [pushHistorySnapshot]);
 
   const handleStepLengthChange = useCallback(async (synthId: number, stepIndex: number, length: number) => {
@@ -1692,13 +1618,7 @@ export function useStudio() {
         return bounded > 1 ? { ...rest, length: bounded } : rest;
       }),
     };
-    setSynths((prev) => prev.map((entry) => (
-      entry.id === synthId ? { ...entry, pattern: nextPattern } : entry
-    )));
-    await localRequest(`/synth/${synthId}/patterns/${synth.pattern.id}`, {
-      method: 'PUT',
-      body: JSON.stringify(nextPattern),
-    });
+    localService.writePattern(synthId, synth.pattern.id, nextPattern);
   }, [pushHistorySnapshot]);
 
   // Chance and repeats for one step.
@@ -1719,13 +1639,7 @@ export function useStudio() {
         };
       }),
     };
-    setSynths((prev) => prev.map((entry) => (
-      entry.id === synthId ? { ...entry, pattern: nextPattern } : entry
-    )));
-    await localRequest(`/synth/${synthId}/patterns/${synth.pattern.id}`, {
-      method: 'PUT',
-      body: JSON.stringify(nextPattern),
-    });
+    localService.writePattern(synthId, synth.pattern.id, nextPattern);
   }, [pushHistorySnapshot]);
 
   // How many bars a lane's pattern lasts. A longer one starts as the old one repeated.
@@ -1741,10 +1655,10 @@ export function useStudio() {
     const nextPattern: Pattern = { ...rest, steps, ...(bars > 1 ? { bars } : {}) };
     playhead.set(synthId, playhead.get(synthId) % steps.length);
     setSynths(prev => prev.map(s => (s.id === synthId
-      ? { ...s, pattern: nextPattern, selectedStep: s.selectedStep !== null && s.selectedStep >= steps.length ? null : s.selectedStep }
+      ? { ...s, selectedStep: s.selectedStep !== null && s.selectedStep >= steps.length ? null : s.selectedStep }
       : s)));
-    // The store drops a bar count that is not sent, so one bar is sent as 1.
-    await localRequest(`/synth/${synthId}/patterns/${synth.pattern.id}`, { method: 'PUT', body: JSON.stringify({ ...nextPattern, bars }) });
+    // The store keeps the bar count it has when none is sent, so one bar is sent as 1.
+    localService.writePattern(synthId, synth.pattern.id, { ...nextPattern, bars });
   }, [pushHistorySnapshot]);
 
   const handleDrumBarsChange = useCallback(async (bars: number) => {
@@ -1754,14 +1668,7 @@ export function useStudio() {
   }, [pushHistorySnapshot]);
 
   const handleSynthMixChange = useCallback(async (synthId: number, mix: { muted?: boolean; solo?: boolean }) => {
-    setSynths(prev => prev.map(s =>
-      s.id === synthId ? { ...s, ...mix } : s
-    ));
-    await localRequest(`/synth/${synthId}/mix`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(mix),
-    });
+    localService.setSynthMix(synthId, mix);
   }, []);
 
   const handleSaveSynthPreset = useCallback((synthId: number, name: string) => {
@@ -2095,12 +2002,9 @@ export function useStudio() {
       const { bars: _bars, ...rest } = current;
       const pattern: Pattern = { ...rest, steps: track.pattern.steps, tempo, ...(track.pattern.bars ? { bars: track.pattern.bars } : {}) };
       setSynths(prev => prev.map(s =>
-        s.id === synthId ? { ...s, pattern, selectedStep: null } : s
+        s.id === synthId ? { ...s, selectedStep: null } : s
       ));
-      await localRequest(`/synth/${synthId}/patterns/${pattern.id}`, {
-        method: 'PUT',
-        body: JSON.stringify(pattern),
-      });
+      localService.writePattern(synthId, pattern.id, pattern);
     }
 
     const firstSynth = synthsRef.current[0];
@@ -2120,11 +2024,7 @@ export function useStudio() {
       localService.setDrumState(next);
     }
 
-    setGlobalTempo(tempo);
-    await localRequest('/tempo', {
-      method: 'POST',
-      body: JSON.stringify({ tempo }),
-    });
+    localService.setTempo(tempo);
     setMidiImportData(null);
     setMidiImportAssignments({});
   }, [midiImportData, midiImportAssignments, ensureSynthExists, pushHistorySnapshot]);
@@ -2201,26 +2101,7 @@ export function useStudio() {
       sends: { ...previous.sends, ...(next.sends || {}) },
       returnLevel: next.returnLevel ?? previous.returnLevel,
     });
-    setDrumFx(updated);
-    void (async () => {
-      try {
-        const res = await localRequest('/drum/fx', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updated),
-        });
-        if (!res.ok) {
-          setDrumFx(previous);
-          return;
-        }
-        const data = await res.json();
-        if (data.drumFx) {
-          setDrumFx(normalizeDrumFx(data.drumFx));
-        }
-      } catch {
-        setDrumFx(previous);
-      }
-    })();
+    localService.setDrumFx(updated);
   }, [pushHistorySnapshotThrottled]);
 
   const handleEffectsLoopChange = useCallback((next: Partial<EffectsLoopState>) => {
@@ -2231,26 +2112,7 @@ export function useStudio() {
       ...previous,
       ...next,
     });
-    setEffectsLoop(updated);
-    void (async () => {
-      try {
-        const res = await localRequest('/effects-loop', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updated),
-        });
-        if (!res.ok) {
-          setEffectsLoop(previous);
-          return;
-        }
-        const data = await res.json();
-        if (data.effectsLoop) {
-          setEffectsLoop(normalizeEffectsLoop(data.effectsLoop));
-        }
-      } catch {
-        setEffectsLoop(previous);
-      }
-    })();
+    localService.setEffectsLoop(updated);
   }, [pushHistorySnapshotThrottled]);
 
   const handleDrumMuteAll = useCallback((muted: boolean) => {
@@ -2283,34 +2145,15 @@ export function useStudio() {
     transportRef.current?.stop();
     const currentSynths = synthsRef.current;
     for (const synth of currentSynths) {
-      await localRequest(`/synth/${synth.id}/parameters`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(DEFAULT_PARAMS),
-      });
-      await localRequest(`/synth/${synth.id}/model`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          modelId: DEFAULT_SYNTH_MODEL_ID,
-          modelParams: createDefaultSynthModelParams(),
-        }),
-      });
-      await localRequest(`/synth/${synth.id}/mix`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ muted: false, solo: false }),
-      });
+      localService.setSynthParams(synth.id, DEFAULT_PARAMS);
+      localService.setSynthModel(synth.id, { modelId: DEFAULT_SYNTH_MODEL_ID, modelParams: createDefaultSynthModelParams() });
+      localService.setSynthMix(synth.id, { muted: false, solo: false });
       if (synth.pattern) {
         const cleared = {
           ...synth.pattern,
           steps: synth.pattern.steps.map(s => ({ ...s, active: false, note: undefined })),
         };
-        await localRequest(`/synth/${synth.id}/patterns/${synth.pattern.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(cleared),
-        });
+        localService.writePattern(synth.id, synth.pattern.id, cleared);
       }
       if (synth.isPlaying) {
         await localRequest('/sequencer/stop', {
@@ -2336,18 +2179,8 @@ export function useStudio() {
       solo: false,
       forceReleaseSignal: !s.forceReleaseSignal,
     })));
-    setDrumFx(DEFAULT_DRUM_FX);
-    void localRequest('/drum/fx', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(DEFAULT_DRUM_FX),
-    });
-    setEffectsLoop(DEFAULT_EFFECTS_LOOP);
-    void localRequest('/effects-loop', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(DEFAULT_EFFECTS_LOOP),
-    });
+    localService.setDrumFx(DEFAULT_DRUM_FX);
+    localService.setEffectsLoop(DEFAULT_EFFECTS_LOOP);
     handleDrumReset();
     historyRef.current = { undo: [], redo: [] };
     // Back to a single empty scene, taken from the lanes and drums that were just cleared.

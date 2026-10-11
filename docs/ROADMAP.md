@@ -22,7 +22,7 @@ slow down every later change.
    all wait on it.
 
    The plan is `docs/TYPED_STORE_PLAN.md`: eight pull requests, each leaving
-   the app working. Done: the first three. An edit is now a typed operation
+   the app working. Done: the first five. An edit is now a typed operation
    handed to one synchronous `apply`, with a reducer for each, and anything
    that wants to record edits can listen for them. Drum swing and drum master
    volume go that way, and `useStudio` applies each once, from the store's
@@ -32,9 +32,14 @@ slow down every later change.
    settled form. Every drum edit goes that way as well (steps, velocity,
    chance and repeats, a drum's settings, mute, solo and sample, the pattern's
    length, the kit, reset), and the drums on screen are set once, from the
-   store's event. Still open: the other 18 operations (effects, lanes, the
-   transport, scenes and the song, in that order), then taking `request`
-   away, and after that splitting `useStudio.tsx`, which the plan describes
+   store's event. The drum sends and the shared effects go that way too, each
+   as a change laid over what is there. So do a lane's sound, its synth model
+   and macros, its mute and solo, its octave and keyboard, and the tempo,
+   and so does every write to a lane's pattern (the piano roll, step controls,
+   length, MIDI import and undo), applied once from the store's event.
+   Still open: the other 10 operations (lanes coming and
+   going, the transport, scenes and the song, in that order), then taking
+   `request` away, and after that splitting `useStudio.tsx`, which the plan describes
    but does not schedule.
 
 2. **Make undo a store feature.** (M, after 1)
@@ -150,6 +155,31 @@ target; removal of the AI review workflow.
 6. **An algorithmic reverb, and insert effects per lane.** (M each)
    The reverb is a convolver with a shaped impulse. Insert effects are easier
    once the audio layer has a single owner (improvements item 4).
+
+7. **More presets, grouped by kind, and more synth models.** (L in all)
+   Asked for by the owner on 2026-10-11. The plan is
+   `docs/SYNTH_MODELS_PLAN.md`.
+   - More presets to start from, and the presets menu nested by what a
+     sound is for: bass, lead, pad, keys, pluck, effects. The kinds are
+     agreed. A person's own saved presets keep a group of their own, and an
+     imported preset goes under a kind chosen at import, or "other".
+   - Fourteen more synth models, which the owner chose to have all of. A
+     model is this synth's own voice set up to behave like the instrument it
+     is named for; it is not that instrument's circuit and does not use its
+     samples. They fall in three groups by what they need:
+     - with the voice as it is: SH-101, Pro-One, Jupiter-8, OB-Xa, Polysix,
+       Mono/Poly, JP-8000;
+     - after planned sound work: MS-20 (filter models, with the ladder
+       filter, item 5), ARP Odyssey, CS-80 and Virus (the modulation matrix,
+       item 4);
+     - after the sample oscillator (item 3), and only with waveforms the
+       project may redistribute: D-50, M1, Wavestation. Their makers'
+       samples cannot be used, so these will be the furthest from their
+       namesakes, and one may be left out if no usable waveforms are found.
+   The model menu is grouped too, since it grows to nineteen. Presets and
+   models are sound, and sound cannot be checked by a test: each needs the
+   owner's ears before it is called done, with a listening session after the
+   first group.
 
 Done: the voice rewrite (oscillators, filter, envelopes, FM, mono and slide,
 drum voices); unison and the 24 dB filter slope; a sample on any drum lane,
@@ -318,8 +348,41 @@ may redistribute.
     `browserTransport.ts`, `songPlayback.ts`, the exporters), so it should
     come after the typed store. It overlaps with pattern lengths that are not
     a whole number of bars (item 4) and the two should be designed together.
-    To decide: one time signature for the project, or one for each scene so
-    a song can change metre part-way; and which signatures to offer.
+    Decided by the owner on 2026-10-11: each scene has its own time
+    signature, so a song can change metre from one section to the next, and
+    the ones on offer are four-four, three-four and six-eight, with
+    five-four, seven-eight and twelve-eight added as worth having
+    (five-four and seven-eight are the odd metres people most reach for;
+    twelve-eight is the slow shuffle, and costs little once six-eight is
+    there). Because it is per scene, a scene's length in a song, the bar
+    counting in song mode and every export have to take each scene's own bar
+    length, where today one length serves the whole song.
+
+12. **Turn a knob with the scroll wheel.** (S) Asked for by the owner on
+    2026-10-11: with the pointer over a knob, the wheel turns it, with no
+    click or drag. Knobs have no wheel behaviour today. To settle in
+    building it: the page itself scrolls with the wheel, so a knob that
+    happens to be under the pointer must not swallow a scroll that was meant
+    for the page (turn only after the pointer has rested on the knob, or
+    only when the knob has been clicked or focused, or with a key held); how
+    far one notch turns, and a finer turn with Shift as the arrow keys have;
+    one undo entry for a run of notches, as a drag makes; and the same for
+    the drum knobs and the sliders in the effects panel. A trackpad's
+    two-finger scroll arrives as wheel events too and must not send values
+    flying.
+
+13. **Show that an export is still being made, and name the WAV exports
+    plainly.** (S) From the owner trying Song WAV in the installed app on a
+    Pixel 9 on 2026-10-11. A long song takes a while to render and the app
+    gives no sign of it, so the owner opened the file early and took it for
+    cut short; waited for, the whole song arrived with its download notice.
+    So: show progress while an export is being made, say when it is done,
+    and stop a second export being started on top of the first. The owner
+    also once got only the scene from what was meant to be a song download,
+    and puts it down to pressing the wrong thing: the Export menu has both
+    Download WAV, which is the open scene, and Song WAV. Call the first
+    Scene WAV, and its MIDI neighbour Scene MIDI, so the two kinds read as
+    a pair.
 
 Done: song mode, with mutes and solos kept per scene; patterns of 1, 2, 4 or
 8 bars per lane, and MIDI files of up to eight bars imported at full length;
@@ -340,8 +403,9 @@ for new accounts.
   addition to the guest protocol and a new prompt for its author.
 - **Kids mode.** Staying a separate page is now decided. Still to answer:
   whether what a child makes can be opened in the full app.
-- **Time signatures.** One for the whole project, or one for each scene?
-  And which ones should be on offer?
+- **The Polysix model and the chorus.** The chorus is one shared effect
+  with a send for each lane. May a model turn up its lane's send, or should
+  that model wait until a lane can have effects of its own?
 
 ## Suggested order
 
@@ -363,12 +427,18 @@ for new accounts.
 6. **Record live playing** and **more ways to edit patterns** (features 3
    and 4): the two that most change what making a song feels like. **Time
    signatures** (features 11) go with pattern editing, after the typed
-   store.
+   store. **The scroll wheel on knobs** (features 12) and **showing that
+   an export is being made** (features 13) are small and can go in at any
+   time.
 7. Done: samples in project files (sound 2). Sync for them waits on storage.
 8. **Parameter automation** (features 5).
 9. **The audio layer's single owner** (improvements 4), then the sound work
    that builds on it: **insert effects, the reverb, the ladder filter, the
-   modulation matrix and the sample oscillator** (sound 3 to 6).
+   modulation matrix and the sample oscillator** (sound 3 to 6). **More
+   presets and synth models** (sound 7) follow `docs/SYNTH_MODELS_PLAN.md`:
+   the grouped presets menu and the seven models that need nothing new can
+   be done at any time; the other seven come after the sound work each
+   leans on.
 10. **More MIDI** (features 6), when there is hardware to test with.
 11. **Live collaborative sessions** (the rest of features 7), after the
     typed store. The published-songs page (features 9) is done.

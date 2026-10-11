@@ -4,8 +4,10 @@ Written 2026-10-11 from a design pass over `localService.ts`, `useStudio.tsx` an
 `storeRoutes.test.ts`. This is roadmap improvement 1. It is done as a sequence of
 pull requests, each leaving `main` working and `storeRoutes.test.ts` green.
 
-Status: pull requests 1, 2 and 3 of 8 are built (the foundation, drum swing and
-drum master volume; then guests; then the drums). The rest is open.
+Status: pull requests 1 to 5 of 8 are built (the foundation, drum swing and
+drum master volume; then guests; then the drums; then the effects), and the
+the whole of 5 (a lane's sound, model, mix and view, and the tempo; then its
+pattern writes). 6 to 8 are open.
 
 ## What was built, and where it differs from this plan
 
@@ -173,6 +175,175 @@ Found by building pull request 3 (drums):
   Reading by slice (see "After the migration") is the answer if it shows.
 - `useStudio.tsx` makes 45 calls to `localRequest` after this pull request.
 
+Found by building pull request 4 (effects):
+
+- **Both patches go through `sent`, and only `undefined` needed it.** `merge`
+  sets a key that is `undefined`, where JSON never sent it. So a typed
+  `{ delay: { sync: undefined } }` took a synced delay's sync off,
+  `{ chorus: undefined }` took the chorus away, and
+  `{ sends: { reverb: undefined } }` put that send back to its default.
+  With `sent` taken out, exactly those cases fail (nine, with the test for a
+  patch that is not an object). `NaN`, infinity and `null` come out the same
+  with or without it, because the checks after `merge` (`number`,
+  `sanitizeShape`, `typeof ... === 'object'`) take them alike; the cases are
+  there to say so.
+- **The optional parts behave as the route's.** A delay's `sync` is kept only
+  when it is a note value: `'off'`, anything else and `null` take it off, and
+  a patch that does not name it leaves it. A chorus or an EQ is added whole
+  from one value, kept when the patch does not name it, and taken away by a
+  value that is not an object (a list puts it back as new, switched off). The
+  reverb's pre-delay and damping are each taken away at zero or by a value
+  that is not a number. None of them is in the defaults; `sanitizeEffects`
+  still adds them back by hand. A drum send the defaults do not name
+  (`chorus`, in the tests' defaults) is dropped, as before.
+- **A patch that is not an object is refused with 400** "Invalid local
+  operation data", as a route's body was, before anything else.
+- **The handlers still send the whole of what they built.** `handleDrumFxChange`
+  and `handleEffectsLoopChange` lay the change over `drumFxRef` or
+  `effectsLoopRef` and send all of it, with `sync: 'off'` and a pre-delay and
+  damping of zero always there, which is how turning one off reaches the
+  store through a merge. That is unchanged: only the early `setState`, the
+  third apply from the answer and the rollback are gone.
+- **`drumFxRef` and `effectsLoopRef` are still assigned only at render.** The
+  events do not write them, so undo's "before" is what it was, and so is the
+  old limit that two effect changes made before one render are both laid over
+  the same starting point: the second is sent whole, built without the
+  first, and so puts the first back. No control makes two in one go.
+- **Undo and Reset send a whole object as a patch**, as they did. Because it
+  is merged, an undo entry or the reset defaults that hold no chorus or EQ
+  leave the ones the project has. That is how it was; roadmap improvement 2
+  is where undo is put right.
+- **`applySnapshot` still awaits the two calls** (`await Promise.all` of two
+  values that are not promises), so the lane, tempo and pattern calls after
+  it run one turn later, as they did. Pull request 8 makes all of it one
+  `applyAll`.
+- **Nothing in `storeRoutes.test.ts` changed, and no pinned count moved.** The
+  two paths keep their shared line and its one `method === 'GET'`.
+- `useStudio.tsx` makes 39 calls to `localRequest` after this pull request.
+
+Found by building pull request 5a (a lane's sound, model, mix and view, and
+the tempo):
+
+- **Three guards, each with its own cases.** `synth.params` reads its patch
+  through `sent`: `merge` sets a key that is `undefined`, and
+  `sanitizeSynthParams` asks whether `spread` and an LFO's `sync` are there
+  (`!== undefined`). `synth.model` reads the model's name through
+  `sentValue`, because the route takes it with `||` and infinity counts as
+  true where the `null` JSON made of it does not; and its macros through
+  `sent`, for `merge` again. Taking each guard out fails exactly its cases
+  (six, one and one). `synth.mix`, `synth.prefs` and `tempo.set` check with
+  `typeof`, `number`, `===` and `Number.isFinite`, which need nothing; the
+  cases say so.
+- **A lane is found by its number and nothing else.** The router took the
+  lane from the digits of the path, so it was always a whole number. An
+  operation that names a lane with text, a fraction or nothing answers 404
+  "Synth not found", after the check that a sound patch is an object (400),
+  which is the order a body check and a route had.
+- **`synth.params` and `synth.prefs` write their outcome out in full.** The
+  first answers the sound and sends `{ synthId, parameters }`; the second
+  saves and sends nothing, and answers the whole lane (which `apply` copies).
+  The two-way harness gained `eventData` and `silent` for them.
+- **The `synthUpdate` handler is untouched** and is still the only caller of
+  `synthAudio.updateParameters`: for a knob, a macro, a preset, undo and
+  Reset alike. Parameters were echo-only before and still are.
+- **One turn is kept in `handleSynthModelChange`** (`await Promise.resolve()`
+  between the model and its macros' parameters). As requests, the parameters
+  went one turn after the model, and for a click React rendered the model in
+  between. A preset load calls the model change and then the parameter
+  change, whose (throttled) undo entry reads `synthsRef`: it held the new
+  model with the sound from before the macros were laid over it. With both
+  calls in one turn it would hold the sound after them. Kept as it was; a
+  preset load still leaves two undo entries (one if a parameter was changed
+  less than 250 ms before). Roadmap improvement 2 is where that is put right.
+- **What is still set early, and why.** The octave and the keyboard
+  (`handleOctaveShift`, `handleKeyboardModeChange`, and the octave in
+  `applySnapshot`), because `synth.prefs` sends no event, as the plan keeps
+  for good. The lanes' own copy of the tempo in `pattern.tempo`
+  (`handleTempoChange`), because the `tempoChange` event carries only the
+  tempo; the store ignores a pattern's tempo on a write (`sanitizePattern`
+  is handed the project's), so that copy is only what React shows. And
+  `handleReset`'s `setSynths` after its calls, which is late, not early, and
+  also clears view state. `applySnapshot` no longer sets the sound, the
+  model, the mute, the solo or the tempo itself; it still sets the pattern
+  (5b), clears the selected step and sets the octave.
+- **A tempo the store refuses no longer shows.** `handleTempoChange` used to
+  set the tempo on screen before asking; a tempo outside 20 to 400 would have
+  shown while the store kept the old one. Nothing can send one: the tempo
+  box, tap tempo and MIDI import all hold it to 20 to 400.
+- **Undo reads what it did.** `getSnapshot` reads `synthsRef` and the
+  `globalTempo` it closed over, both as last rendered; nothing in 5a writes
+  `synthsRef` from an event, so every undo entry holds what it held.
+- **Nothing in `storeRoutes.test.ts` changed, and no pinned count moved.**
+  The `resource === '...'` lines and the three `method === 'GET'` checks
+  (parameters, model, `/tempo`) are where they were. A GET to `mix` or
+  `preferences` with a body still writes, as pinned.
+- **The stand-in tests** now stand in for `transport.stop` and
+  `transport.play`; `tempo.set` has a reducer of its own.
+- `useStudio.tsx` makes 23 calls to `localRequest` after this pull request,
+  fourteen of them pattern writes.
+
+Found by building pull request 5b (a lane's pattern writes):
+
+- **One reducer, the route's body moved.** `pattern.write` carries the pattern id
+  (the route takes it from the path, then the body, then makes one), and
+  `writePattern(synthId, patternId, patch)` is the helper. The patch goes through
+  `sent`: a name, `bars` or `steps` that is `undefined` would otherwise
+  override the pattern's own where JSON never sent it, and an `offset` of
+  infinity is held to the top where the `null` JSON made of it is none. Without
+  `sent`, 27 cases fail (the undefined name, undefined bars, infinite offset,
+  infinite steps and the patches that are not objects among them). `NaN` and
+  `null` come out the same either way; the cases say so. The project's tempo is
+  written to the pattern, never the one sent, as the route did.
+- **The events set the open pattern.** `patternCreated` and `patternUpdated` both
+  put the pattern in the lane's list and make it the lane's open pattern, which
+  is what the store does. Before, `patternCreated` did not set it and the caller
+  had set it early.
+- **The `commitLanes` sketched here is not what was built.** The plan's
+  `commitLanes(next)` sets the ref and the state from a value worked out from the
+  ref; a change made to each lane (`commitLanes(change)`) is used instead, so
+  nothing another handler asked of the state since the last render is lost.
+  `commitPattern` is the one the two pattern events call. The hand-written ref
+  lines in the piano-roll assign and the note upsert are gone.
+- **Undo needed the trap handled differently from the drums.** `getSnapshot`
+  reads a lane's pattern, sound, mute and octave from `synthsRef`. Moving
+  `synthsRef` on from the pattern events would have changed what a gesture's undo
+  entries hold: a MIDI import onto one lane from two tracks pushes an entry before
+  each write, and the second would hold the lane after the first. A render-time
+  copy like `drumsForUndoRef` cannot be used, because it could not be
+  refreshed from `sceneChanged`, `synthRemoved` and `sequencerStop`, which step 6
+  and 7 own, and because painting needs the opposite: each cell must see the one
+  before. So `lanesBeforeEditRef` keeps, for each lane a pattern event has moved
+  since the last render, the lane as it was before the first of them and the
+  pattern the last of them left. `getSnapshot` reads that lane while the live
+  lane still has that pattern (checked by identity, so a scene change, which
+  replaces it, falls back to the live lane). It is emptied at each render. The
+  two painting writers (`handlePianoRollNoteAssign`, `upsertStepNote`) forget it
+  after each write, so each painted cell is one undo entry, as when they wrote
+  `synthsRef` by hand. Every other handler's entry holds what it held.
+- **Early updates.** The pattern is gone from all fourteen call sites. Kept, because the
+  event cannot carry them: `selectedStep` (step change, assign, clear, upsert,
+  step count, bars, MIDI import, undo), `stepRecordPointer` (upsert), and the
+  `playhead` position (step count, bars). A pattern the store refuses (nothing
+  in the app can send one) no longer shows on screen.
+- **The note play in record mode** no longer sets anything but the write.
+- **`applySnapshot`** keeps its place in the order: the write is first in its
+  `Promise.all`.
+- **Lane bars sends `bars` as 1** for one bar, as before; the comment now says the
+  store keeps the bars it has when none are sent, which is what the merge does.
+- **The `startsWith('patterns')` router line still matches `patternsX`**, pinned.
+- **Nothing in `storeRoutes.test.ts` changed and no pinned count moved.** The
+  `resource?.startsWith('patterns')` and `resource === 'patterns'` forms and the
+  one `method === 'GET'` are where they were.
+- `useStudio.tsx` makes 9 calls to `localRequest` after this pull request: scenes
+  (four, one through `sceneRequest`) and lanes coming and going and the
+  transport (five).
+- **For the builder of step 6:** `synthRemoved`, `sceneChanged` and
+  `sequencerStop` still write `synthsRef` themselves and were not touched.
+  `getSnapshot` falls back to the live lane when a pattern event's lane no longer
+  has the pattern, so they need no change for undo. `commitLanes` maps over
+  `synthsRef.current`, which a `synthUpdate` since the last render has not reached;
+  it heals at the next render and the state is right.
+
 ## What is being replaced
 
 Edits inside a project go through `localService.request(path, options)`, a leftover
@@ -285,8 +456,7 @@ save that is scheduled, not immediate; `commitScene()` before a scene is read;
 saving. Kept until the last pull request and then changed on purpose, each in a
 pull request of its own: saving when nothing changed (it moves `revision` and
 version-keeping, so the owner should know); a GET with a body writing; the
-built-in-property throw; the rollback in the effects handlers that can never run;
-a one-step drum edit echoing the whole drum state. Dead code removed in the first
+built-in-property throw; a one-step drum edit echoing the whole drum state. Dead code removed in the first
 pull request: the `drumStep`, `drumStepVelocity`, `drumSettings`, `drumMix` and
 `drumReset` cases in `useStudio`'s message switch, which nothing emits.
 
@@ -477,15 +647,24 @@ early updates; adds the two-way tests.
    `drumKitChanged` handlers write `drumStateRef`, and undo reads
    `drumsForUndoRef` (see what was found, above). Every history push is where
    it was, with its key. `drumKitsLoading` and `drumKitsError` are removed.
-4. **Effects.** `/drum/fx`, `/effects-loop`. Delete the second apply from the
-   response and the rollback that cannot run. The helpers take a patch, not a whole
-   object. Low.
-5. **Lanes.** `parameters`, `model`, `mix`, `preferences`, `patterns`, `/tempo`.
-   The highest risk: the `synthUpdate` handler is the only thing that sends
-   parameters to the audio (`synthAudio.updateParameters`) and must keep doing so;
-   pattern handlers use `commitLanes`; `/tempo` rewrites every pattern's tempo.
-   Split into 5a (everything but patterns) and 5b (patterns, thirteen call sites)
-   if it is too large.
+4. **Effects.** Built. `/drum/fx` and `/effects-loop` are `drum.fx` and
+   `effects.set`, with the helpers `setDrumFx` and `setEffectsLoop`, each
+   taking a patch. In `useStudio`: `handleDrumFxChange`,
+   `handleEffectsLoopChange`, the two calls undo makes and the two Reset
+   makes; the `drumFxUpdate` and `effectsLoopUpdate` handlers are as they
+   were and are the one place each is applied.
+5. **Lanes.** In two halves.
+   5a, built: `parameters`, `model`, `mix`, `preferences` and the `/tempo`
+   write are `synth.params`, `synth.model`, `synth.mix`, `synth.prefs` and
+   `tempo.set`, with the helpers `setSynthParams`, `setSynthModel`,
+   `setSynthMix`, `setSynthPrefs` and `setTempo`. In `useStudio`:
+   `handleParameterChange`, `handleSynthModelChange`, `handleSynthMixChange`,
+   `handleOctaveShift`, `handleKeyboardModeChange`, `handleTempoChange`, the
+   MIDI import's tempo, the three calls Reset makes for each lane and the
+   five undo makes. The `synthUpdate` handler is the only thing that sends
+   parameters to the audio (`synthAudio.updateParameters`) and is untouched.
+   5b, built: `patterns` and `patterns/:pid` (`pattern.write`), with the helper
+   `writePattern`, at fourteen call sites. See what pull request 5b found.
 6. **Lanes coming and going, and the transport.** `/synth/create`, DELETE
    `/synth/:id`, `/sequencer/play`, `/sequencer/stop`. Play and stop still do not
    save. The `synthRemoved` and `sequencerStop` handlers keep their ref writes.
