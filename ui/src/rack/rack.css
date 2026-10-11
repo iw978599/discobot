@@ -506,8 +506,10 @@
 /* Narrow screens: a phone held upright. The rack keeps its order and everything in it, but is
    no longer one wide panel scrolled sideways. Each unit stacks its parts, the step grids go
    eight to a row, controls are big enough for a finger, menus rise from the bottom and dialogs
-   fill the screen. Nothing here applies to a wider screen. */
-@media (max-width: 720px) {
+   fill the screen. A phone on its side is wider than that and very short, and gets the same
+   arrangement (and a few rules of its own after this block). Nothing here applies to any
+   other screen. useNarrow holds the same condition; keep the two the same. */
+@media (max-width: 720px), (max-width: 960px) and (max-height: 500px) and (orientation: landscape) {
   .rack-page { padding: 0 0 calc(24px + env(safe-area-inset-bottom)); }
   /* The scroll padding keeps whatever is scrolled to, or tabbed to, clear of the bar along the bottom. */
   .rack-page.has-unit-bar {
@@ -572,14 +574,52 @@
   .rack .synth-header { flex-wrap: wrap; gap: 8px; }
   .rack .preset-name-input { width: 110px; }
   .step-tools-swap { flex-basis: 100%; }
-  /* Three octaves do not fit across a phone, so the keyboard slides sideways under the thumb. */
-  .rack .keyboard-container { overflow-x: auto; }
-  .rack .keyboard { min-width: 640px; }
-  .rack .key.white { height: 110px; }
-  .rack .black-keys, .rack .key.black { height: 68px; }
-  .piano-roll-hint { display: none; }
-  .piano-roll-grid { max-height: 46dvh; }
-  .piano-roll-corner, .piano-roll-step-header, .piano-roll-note-label, .piano-roll-cell { min-height: 28px; }
+  /* The keyboard is made for a thumb: one octave across, each white key a finger wide and as
+     tall as the screen allows. The strip of three octaves is moved an octave at a time by the
+     buttons over it (Keyboard reads how far it can go). It never slides under a finger: a
+     finger that moves across the keys is playing them. */
+  .rack .keyboard-container { --key-h: clamp(110px, calc(100dvh - 215px), 170px); padding: 6px 0 0; background: none; }
+  .rack .keyboard-header { justify-content: flex-start; gap: 6px; margin-bottom: 6px; }
+  .rack .keyboard-header h2 { margin-right: auto; }
+  .rack .keyboard-reach { min-width: 44px; min-height: 44px; padding: 0; font-size: 15px; }
+  .rack .keyboard-range { min-width: 9ch; text-align: center; font-family: var(--led-font); font-size: 15px; letter-spacing: 0; color: var(--amber); }
+  .rack .keyboard { overflow: hidden; padding-bottom: 8px; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+  .rack .octave { flex: 0 0 100%; }
+  @media (min-width: 660px) {
+    .rack .octave { flex-basis: 50%; }
+  }
+  .rack .key.white { height: var(--key-h); }
+  .rack .black-keys, .rack .key.black { height: calc(var(--key-h) * 0.6); }
+  .rack .key.black { width: calc(100% / 7 * 0.72); margin-left: calc(100% / 7 * -0.085); }
+  .rack .key-label { font-size: 13px; }
+  /* The piano roll is made for one too: squares at least 44px each way, as many steps across
+     as fit at that width (PianoRoll counts them and sets --roll-fit, and the grid sets its own
+     columns inline, so this rule needs its !important), the rest of the bar reached with the
+     two buttons over the grid, and the note names and step numbers staying put at its edges.
+     Only the note names slide the grid, and only up and down: a finger on a square is always
+     editing, so the page never moves under it. */
+  .rack .piano-roll { padding: 6px 0 0; background: none; }
+  .piano-roll-header { flex-wrap: wrap; gap: 6px; }
+  .piano-roll-header h2 { margin-right: auto; }
+  .piano-roll-hint { order: 1; flex: 0 0 100%; margin: 0; text-align: left; font-size: 12px; }
+  .piano-roll-pager { display: flex; align-items: center; gap: 4px; }
+  .piano-roll-pager .rack-btn, .rack .piano-roll-action { min-width: 44px; min-height: 44px; padding: 0 10px; font-size: 14px; }
+  .piano-roll-window {
+    min-width: 6ch; padding: 5px 6px; text-align: center; background: #0a0b0a; border: 1px solid #000; border-radius: 2px;
+    font-family: var(--led-font); font-size: 16px; letter-spacing: 0; color: var(--amber);
+  }
+  .piano-roll-grid {
+    --roll-label: 46px;
+    grid-template-columns: var(--roll-label) repeat(var(--roll-columns), calc((100% - var(--roll-label) - var(--roll-fit) * 1px) / var(--roll-fit))) !important;
+    max-height: max(230px, calc(100dvh - 215px)); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain;
+    scroll-padding: 30px 0 0 var(--roll-label); user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  }
+  .piano-roll-cell, .piano-roll-note-label { min-height: 44px; }
+  .piano-roll-corner, .piano-roll-step-header { min-height: 28px; position: sticky; top: 0; z-index: 2; font-size: 12px; }
+  .piano-roll-note-label { position: sticky; left: 0; z-index: 1; font-size: 12px; }
+  .piano-roll-corner { left: 0; z-index: 3; background: #1a1a1a; }
+  /* under half of the narrowest cell, so the middle of a note is the note and not its end */
+  .piano-roll-resize { width: 20px; background: linear-gradient(90deg, rgba(255, 255, 255, 0.2) calc(100% - 6px), rgba(255, 255, 255, 0.8) calc(100% - 6px)); }
 
   /* drums: the kit, then the grid eight steps to a row, then the knobs */
   .drum-top { grid-template-columns: minmax(0, 1fr); }
@@ -665,8 +705,23 @@
   .shared-card h1 { font-size: 30px; }
 }
 
+/* A phone on its side. It is the arrangement above with some of the height given back: a
+   lower bar of units with each lamp beside its legend, a bar of steps in one row where they
+   are still wide enough, and the piano roll's heading on one line. */
+@media (max-width: 960px) and (max-height: 500px) and (orientation: landscape) {
+  .rack-page.has-unit-bar { --unit-bar: 44px; }
+  .unit-tab { flex-direction: row; gap: 6px; }
+  .piano-roll-header { flex-wrap: nowrap; }
+  .piano-roll-header h2 { margin-right: 0; }
+  .piano-roll-hint { order: 0; flex: 1 1 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .piano-roll-grid { max-height: max(180px, calc(100dvh - 150px)); }
+}
+@media (min-width: 700px) and (max-width: 960px) and (max-height: 500px) and (orientation: landscape) {
+  .step-row { grid-template-columns: repeat(16, minmax(0, 1fr)) !important; }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .rack-page * { transition: none !important; }
+  .rack-page * { transition: none !important; scroll-behavior: auto !important; }
 }
 
 .rack .synth-header-tools { flex-direction: row; justify-content: flex-end; }

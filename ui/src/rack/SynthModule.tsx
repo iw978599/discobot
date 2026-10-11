@@ -144,6 +144,7 @@ function SynthModule({ studio, synthId, synth }: SynthModuleProps) {
             selectedStep={synth.selectedStep}
             firstStep={firstStep}
             visibleSteps={perBar}
+            arrowsWalk={selected && synth.selectedStep !== null}
             onStepClick={(step) => {
               studio.setSelectedSynthId(synthId);
               void studio.handleStepChange(synthId, step);

@@ -3,12 +3,12 @@ import type { KeyboardEvent, PointerEvent } from 'react';
 
 // How far a finger may wander and still be a tap. A mouse has no such allowance: it turns the
 // knob from its first movement, as it always has.
-const TAP_SLOP = 6;
+export const TAP_SLOP = 6;
 // How long a tap waits for its click before it is acted on without one.
 const TAP_WAIT_MS = 300;
 // A finger held longer than this was not tapping: it was stopping the page as it scrolled, or
 // pressing for a menu. A browser sends no click after those, so nothing else would tell them apart.
-const TAP_HOLD_MS = 500;
+export const TAP_HOLD_MS = 500;
 
 // `onTap` is called for a knob that was touched and let go without being turned. Only a finger
 // or a pen taps; a mouse click does nothing, as before.

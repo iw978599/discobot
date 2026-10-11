@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Fragment } from 'react';
 import { Pattern } from '../types';
 import { MAX_STEP_NOTES, stepNotes, stepOffset } from '../services/noteScheduling';
 import { usePlayheadMark } from '../hooks/usePlayhead';
+import { useNarrow } from '../hooks/useNarrow';
+import { TAP_HOLD_MS, TAP_SLOP } from './useKnobInteraction';
 import './PianoRoll.css';
 
 interface PianoRollProps {
@@ -25,6 +27,11 @@ interface PianoRollProps {
 }
 
 const NOTE_ORDER = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+// On a phone: the narrowest a cell may be, how many steps may be across at once, and how far
+// the two buttons move along the bar.
+const MIN_CELL = 44;
+const ACROSS = [32, 16, 12, 8, 6, 4];
+const TURN = 4;
 
 export default function PianoRoll({
   pattern,
@@ -39,15 +46,46 @@ export default function PianoRoll({
   firstStep = 0,
   visibleSteps,
 }: PianoRollProps) {
-  const [mouseDown, setMouseDown] = useState(false);
-  const [paintMode, setPaintMode] = useState<'assign' | 'erase'>('assign');
+  // What a pressed pointer is doing as it moves over cells, if anything.
+  const painting = useRef<'assign' | 'erase' | null>(null);
+  // Whether a pointer is down on the grid. Nothing may move the grid while one is.
+  const pressing = useRef(false);
+  // A finger on a note that is already there. Lifted soon, it takes the note out; moved, it
+  // rubs out as it goes; held still, it leaves the note alone, with its step selected.
+  const waiting = useRef<{ id: number; step: number; note: string; x: number; y: number; at: number } | null>(null);
   const lastPaintCell = useRef('');
   const pressedAt = useRef({ x: 0, y: 0 });
   const gridRef = useRef<HTMLDivElement>(null);
   usePlayheadMark(gridRef, lane, isPlaying, '.piano-roll-cell, .piano-roll-step-header', 'playing');
+  const onNoteAssignRef = useRef(onNoteAssign);
+  onNoteAssignRef.current = onNoteAssign;
 
+  const narrow = useNarrow();
+  const total = pattern?.steps.length ?? 0;
+  const count = Math.max(0, Math.min(visibleSteps ?? total, total - firstStep));
+  // A narrow screen shows as many steps of the bar as fit at a finger's width, and the grid is
+  // moved along under them. `first` is the column at its left edge, read back from the grid.
+  const [across, setAcross] = useState(0);
+  const [first, setFirst] = useState(0);
+  const fit = narrow && across > 0 ? Math.min(across, count) : count;
+  const paged = fit < count;
+  // The one cell of the grid the Tab key stops on: the last one that had the keyboard.
+  const [cursor, setCursor] = useState<{ note: string; step: number } | null>(null);
+
+  // The finger that was waiting on a note has lifted. Soon enough, that was a tap.
+  const settleTap = (pointerId: number, timeStamp: number) => {
+    const tap = waiting.current;
+    if (!tap || tap.id !== pointerId) return;
+    waiting.current = null;
+    if (timeStamp - tap.at < TAP_HOLD_MS) onNoteAssignRef.current(tap.step, tap.note, false);
+  };
   useEffect(() => {
-    const release = () => setMouseDown(false);
+    const release = (event: Event) => {
+      if (event.type === 'pointerup') settleTap((event as PointerEvent).pointerId, event.timeStamp);
+      waiting.current = null;
+      painting.current = null;
+      pressing.current = false;
+    };
     window.addEventListener('pointerup', release);
     window.addEventListener('pointercancel', release);
     window.addEventListener('blur', release);
@@ -79,8 +117,10 @@ export default function PianoRoll({
     });
     return cells;
   }, [pattern]);
-  // The note being stretched by its end: where it starts and how long it was last set to.
-  const resizing = useRef<{ start: number; length: number } | null>(null);
+  // The note being stretched by its end: where it starts and how long it was last set to. A
+  // finger that lands on the end of a one-step note may only be tapping the note: `tap` is
+  // that touch, until it moves.
+  const resizing = useRef<{ start: number; length: number; tap?: { id: number; note: string; x: number; y: number; at: number } } | null>(null);
   const onNoteLengthRef = useRef(onNoteLength);
   onNoteLengthRef.current = onNoteLength;
 
@@ -90,6 +130,10 @@ export default function PianoRoll({
     const move = (event: PointerEvent) => {
       const drag = resizing.current;
       if (!drag) return;
+      if (drag.tap && drag.tap.id === event.pointerId) {
+        if (Math.hypot(event.clientX - drag.tap.x, event.clientY - drag.tap.y) < TAP_SLOP) return;
+        drag.tap = undefined;
+      }
       const under = document.elementsFromPoint(event.clientX, event.clientY).find(element => element.classList.contains('piano-roll-cell')) as HTMLElement | undefined;
       if (!under?.dataset.step) return;
       const length = Math.max(1, Number(under.dataset.step) - drag.start + 1);
@@ -97,7 +141,14 @@ export default function PianoRoll({
       drag.length = length;
       onNoteLengthRef.current(drag.start, length);
     };
-    const end = () => { resizing.current = null; };
+    const end = (event: PointerEvent) => {
+      const drag = resizing.current;
+      resizing.current = null;
+      // Lifted soon without having moved, the finger was not stretching the note. That was a
+      // tap, and a tap on a note takes it out.
+      const tap = drag?.tap;
+      if (tap && event.type === 'pointerup' && tap.id === event.pointerId && event.timeStamp - tap.at < TAP_HOLD_MS) onNoteAssignRef.current(drag.start, tap.note, false);
+    };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', end);
     window.addEventListener('pointercancel', end);
@@ -107,6 +158,74 @@ export default function PianoRoll({
       window.removeEventListener('pointercancel', end);
     };
   }, []);
+
+  // Puts a column of the bar at the left edge of the grid, beside the note names.
+  const firstStepRef = useRef(firstStep);
+  firstStepRef.current = firstStep;
+  const place = (column: number) => {
+    const grid = gridRef.current;
+    const head = grid?.querySelector<HTMLElement>(`.piano-roll-step-header[data-step="${firstStepRef.current + column}"]`);
+    const corner = grid?.firstElementChild;
+    if (!grid || !head || !corner) return;
+    grid.scrollLeft += head.getBoundingClientRect().left - corner.getBoundingClientRect().right - 1;
+  };
+  const firstRef = useRef(first);
+  firstRef.current = first;
+
+  // How many steps fit across, measured whenever the grid changes size: first shown, the phone
+  // turned, its unit brought back by the bar. The grid also starts at its lowest notes, the
+  // octave the octave setting names, with the higher ones above to be scrolled to.
+  useLayoutEffect(() => {
+    const grid = gridRef.current;
+    if (!narrow || !grid || typeof ResizeObserver === 'undefined') {
+      setAcross(0);
+      return;
+    }
+    let width = 0;
+    const settle = () => {
+      const now = grid.clientWidth;
+      if (now === width) return;
+      const shown = width === 0;
+      width = now;
+      if (now === 0) return;
+      const label = grid.firstElementChild?.getBoundingClientRect().width ?? 0;
+      const room = Math.floor((now - label) / (MIN_CELL + 1));
+      setAcross(ACROSS.find(steps => steps <= room) ?? ACROSS[ACROSS.length - 1]);
+      if (shown) grid.scrollTop = grid.scrollHeight;
+      place(firstRef.current);
+    };
+    const read = () => {
+      const heads = grid.querySelectorAll<HTMLElement>('.piano-roll-step-header');
+      if (heads.length < 2 || grid.clientWidth === 0) return;
+      const stride = heads[1].getBoundingClientRect().left - heads[0].getBoundingClientRect().left;
+      if (stride > 0) setFirst(Math.max(0, Math.round(grid.scrollLeft / stride)));
+    };
+    const observer = new ResizeObserver(settle);
+    observer.observe(grid);
+    // Counted here as well, before the first paint, or the bar would show squeezed for a moment.
+    settle();
+    grid.addEventListener('scroll', read);
+    return () => {
+      observer.disconnect();
+      grid.removeEventListener('scroll', read);
+    };
+  }, [narrow, Boolean(pattern)]);
+  // Once the number across is known the columns have their width, and the grid can be lined up.
+  useLayoutEffect(() => {
+    if (narrow) place(Math.min(firstRef.current, Math.max(0, count - fit)));
+  }, [narrow, fit, count]);
+  useLayoutEffect(() => {
+    const grid = gridRef.current;
+    if (narrow && grid) grid.scrollTop = grid.scrollHeight;
+  }, [narrow, octaveShift]);
+  // A step selected somewhere else (the row of steps, the arrow keys) is brought on show. Not
+  // one selected by pressing the grid itself: that would move the grid under the finger.
+  useLayoutEffect(() => {
+    if (!paged || pressing.current || selectedStep === null) return;
+    const column = selectedStep - firstStep;
+    if (column < 0 || column >= count || (column >= first && column < first + fit)) return;
+    place(Math.max(0, Math.min(count - fit, Math.floor(column / TURN) * TURN)));
+  }, [selectedStep]);
 
   if (!pattern) {
     return <div className="piano-roll">Loading...</div>;
@@ -122,37 +241,69 @@ export default function PianoRoll({
     pressedAt.current = { x, y };
     lastPaintCell.current = `${stepIndex}:${note}`;
     const nextMode: 'assign' | 'erase' = has(stepIndex, note) ? 'erase' : 'assign';
-    setPaintMode(nextMode);
-    setMouseDown(true);
+    painting.current = nextMode;
+    pressing.current = true;
     onStepSelect(stepIndex);
     if (nextMode === 'erase' || !full(stepIndex)) onNoteAssign(stepIndex, note, nextMode === 'assign', late ? 0.5 : 0);
   };
 
   const handleCellEnter = (stepIndex: number, note: string, x: number, y: number) => {
-    if (!mouseDown) return;
+    const mode = painting.current;
+    if (!mode) return;
     // Selecting a step can move the grid under a pointer that is holding still. Only a pointer
     // that has itself moved is painting; otherwise one click would add a second note.
     if (Math.hypot(x - pressedAt.current.x, y - pressedAt.current.y) < 4) return;
     const cell = `${stepIndex}:${note}`;
     if (lastPaintCell.current === cell) return;
     lastPaintCell.current = cell;
-    if (paintMode === 'assign' ? has(stepIndex, note) || full(stepIndex) : !has(stepIndex, note)) return;
+    if (mode === 'assign' ? has(stepIndex, note) || full(stepIndex) : !has(stepIndex, note)) return;
     onStepSelect(stepIndex);
-    onNoteAssign(stepIndex, note, paintMode === 'assign');
+    onNoteAssign(stepIndex, note, mode === 'assign');
   };
+
+  const lastFirst = Math.max(0, count - fit);
+  const turn = (direction: 1 | -1) => {
+    const next = direction > 0 ? Math.floor(first / TURN) * TURN + TURN : Math.ceil(first / TURN) * TURN - TURN;
+    place(Math.max(0, Math.min(lastFirst, next)));
+  };
+  const from = Math.min(first, lastFirst);
+
+  const stopStep = cursor && columns.includes(cursor.step) ? cursor.step : selectedStep !== null && columns.includes(selectedStep) ? selectedStep : columns[0];
+  const stopNote = cursor && columns.includes(cursor.step) && notes.includes(cursor.note) ? cursor.note
+    : (stopStep === undefined ? [] : stepNotes(pattern.steps[stopStep])).find(note => notes.includes(note)) ?? notes[notes.length - 1];
 
   return (
     <div className="piano-roll">
       <div className="piano-roll-header">
         <h2>Piano Roll</h2>
-        <span className="piano-roll-hint">Click notes in one column for a chord · drag a note's right edge to lengthen it · Alt+click starts a note halfway to the next step</span>
+        {narrow
+          ? <span className="piano-roll-hint">Tap a square to add a note or take it out, or drag to paint. Hold a note to select its step and keep it. Drag a note's bright end to make it longer, and the note names to reach higher notes.</span>
+          : <span className="piano-roll-hint">Click notes in one column for a chord · drag a note's right edge to lengthen it · Alt+click starts a note halfway to the next step</span>}
+        {paged && (
+          <div className="piano-roll-pager" role="group" aria-label="Steps on show">
+            <button className="rack-btn" type="button" aria-label="Earlier steps" disabled={from <= 0} onClick={() => turn(-1)}>◀</button>
+            <output className="piano-roll-window">{firstStep + from + 1}–{firstStep + from + fit}</output>
+            <button className="rack-btn" type="button" aria-label="Later steps" disabled={from >= lastFirst} onClick={() => turn(1)}>▶</button>
+          </div>
+        )}
         <button className="piano-roll-action" onClick={onClear}>Clear</button>
       </div>
 
       <div
         ref={gridRef}
         className="piano-roll-grid"
-        style={{ gridTemplateColumns: `minmax(58px, auto) repeat(${columns.length}, minmax(28px, 1fr))` }}
+        role="group"
+        aria-label="Piano roll notes"
+        style={{ gridTemplateColumns: `minmax(58px, auto) repeat(${columns.length}, minmax(28px, 1fr))`, '--roll-columns': columns.length, '--roll-fit': Math.max(1, fit) } as CSSProperties}
+        onFocus={(event) => {
+          const cell = (event.target as HTMLElement).closest<HTMLElement>('.piano-roll-cell');
+          if (!cell?.dataset.note || !cell.dataset.step) return;
+          const next = { note: cell.dataset.note, step: Number(cell.dataset.step) };
+          setCursor(now => (now && now.note === next.note && now.step === next.step ? now : next));
+        }}
+        // A finger held on the grid is editing, not asking for the browser's menu, which would
+        // also take the touch that follows it.
+        onContextMenu={(event) => { if (pressing.current || ['touch', 'pen'].includes((event.nativeEvent as PointerEvent).pointerType)) event.preventDefault(); }}
       >
         <div className="piano-roll-corner" />
         {columns.map((stepIndex) => (
@@ -185,16 +336,34 @@ export default function PianoRoll({
                   className={`piano-roll-cell ${active ? 'active' : ''} ${late > 0 ? 'late' : ''} ${active && (step.length ?? 1) > 1 ? 'long' : ''} ${sustained ? 'held' : ''} ${selectedStep === stepIndex ? 'selected' : ''}`}
                   aria-label={`${note} step ${stepIndex + 1}`}
                   aria-pressed={active}
+                  tabIndex={stopStep === stepIndex && stopNote === note ? 0 : -1}
                   data-note={note}
                   data-step={stepIndex}
                   onPointerDown={(event) => {
                     if (event.button !== 0) return;
                     event.preventDefault();
+                    if (event.pointerType !== 'mouse' && active) {
+                      pressing.current = true;
+                      waiting.current = { id: event.pointerId, step: stepIndex, note, x: event.clientX, y: event.clientY, at: event.timeStamp };
+                      onStepSelect(stepIndex);
+                      return;
+                    }
                     handleCellDown(stepIndex, note, event.clientX, event.clientY, event.altKey);
                   }}
+                  onPointerUp={(event) => settleTap(event.pointerId, event.timeStamp)}
                   onPointerEnter={(event) => handleCellEnter(stepIndex, note, event.clientX, event.clientY)}
                   onPointerMove={(event) => {
-                    if (event.pointerType === 'mouse' || !mouseDown) return;
+                    if (event.pointerType === 'mouse') return;
+                    const tap = waiting.current;
+                    if (tap && tap.id === event.pointerId) {
+                      if (Math.hypot(event.clientX - tap.x, event.clientY - tap.y) < TAP_SLOP) return;
+                      waiting.current = null;
+                      // Moved after being held still, the finger is only leaving. Moved straight
+                      // away, it rubs out the note it began on and whatever it crosses.
+                      if (event.timeStamp - tap.at < TAP_HOLD_MS && has(tap.step, tap.note)) handleCellDown(tap.step, tap.note, tap.x, tap.y);
+                      return;
+                    }
+                    if (!painting.current) return;
                     const cell = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLButtonElement>('.piano-roll-cell');
                     if (cell?.dataset.note && cell.dataset.step) handleCellEnter(Number(cell.dataset.step), cell.dataset.note, event.clientX, event.clientY);
                   }}
@@ -230,10 +399,22 @@ export default function PianoRoll({
                         if (event.button !== 0) return;
                         event.preventDefault();
                         event.stopPropagation();
-                        resizing.current = { start: noteStart!, length: noteLength };
+                        // A finger's events would go on arriving at this handle, which is taken
+                        // away as the note grows. They are sent to the grid, which stays.
+                        if (event.pointerType !== 'mouse') {
+                          try { gridRef.current?.setPointerCapture(event.pointerId); } catch { /* the drag is still followed on the window */ }
+                        }
+                        pressing.current = true;
+                        resizing.current = {
+                          start: noteStart!,
+                          length: noteLength,
+                          tap: event.pointerType !== 'mouse' && active ? { id: event.pointerId, note, x: event.clientX, y: event.clientY, at: event.timeStamp } : undefined,
+                        };
                         onStepSelect(noteStart!);
                       }}
-                      onClick={(event) => event.stopPropagation()}
+                      // No click handler here. One would make the handle something to click, and a
+                      // browser steers a finger that lands near such a thing onto it, off the note.
+                      // The cell acts on a click only when it comes from the keyboard.
                     />
                   )}
                 </button>

@@ -29,12 +29,17 @@ export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0, h
     [clickedNotes, computerKeyNotes],
   );
   const notesRef = useRef(new Set<string>());
+  // Each finger on the keys and the note under it, or nothing while it is between or off them.
+  const pointers = useRef(new Map<number, string | null>());
   const clickTimers = useRef(new Set<number>());
   const releaseRef = useRef(onNoteRelease);
   releaseRef.current = onNoteRelease;
+  const holdRef = useRef(holdEnabled);
+  holdRef.current = holdEnabled;
   const releaseAll = () => {
     clickTimers.current.forEach(window.clearTimeout);
     clickTimers.current.clear();
+    pointers.current.clear();
     notesRef.current.forEach((note) => releaseRef.current(note));
     notesRef.current.clear();
     setActiveNotes(new Set());
@@ -43,6 +48,15 @@ export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0, h
   const baseOctave = 3 + octaveShift;
 
   const octaves = useMemo(() => [baseOctave, baseOctave + 1, baseOctave + 2], [baseOctave]);
+
+  // On a phone the strip of keys is wider than the screen and shows part of itself: which
+  // octave it starts on, and how many further ones there are to move to.
+  const stripRef = useRef<HTMLDivElement>(null);
+  const [reach, setReach] = useState({ at: 0, max: 0 });
+  const showOctave = (index: number) => {
+    const strip = stripRef.current;
+    if (strip) strip.scrollLeft = index * (strip.firstElementChild?.getBoundingClientRect().width ?? 0);
+  };
 
   useEffect(() => {
     if (!holdEnabled) releaseAll();
@@ -67,6 +81,47 @@ export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0, h
     };
   }, []);
 
+  useEffect(() => {
+    const strip = stripRef.current;
+    if (!strip || typeof ResizeObserver === 'undefined') return;
+    const octaveWidth = () => strip.firstElementChild?.getBoundingClientRect().width || 1;
+    let at = 0, max = -1, width = -1;
+    const read = () => {
+      if (strip.clientWidth === 0) return;
+      at = Math.min(Math.max(0, max), Math.round(strip.scrollLeft / octaveWidth()));
+      setReach(now => (now.at === at && now.max === Math.max(0, max) ? now : { at, max: Math.max(0, max) }));
+    };
+    const settle = () => {
+      const now = strip.clientWidth;
+      // The keys have changed size under the fingers: their unit was switched away on the bar
+      // (it is hidden, not removed, so no pointer event says so) or the phone was turned. A
+      // finger that was on a key is no longer on that key, so what it held is let go.
+      if (now !== width && pointers.current.size > 0) {
+        const held = [...pointers.current.values()];
+        pointers.current.clear();
+        if (!holdRef.current) {
+          for (const note of held) if (note && notesRef.current.delete(note)) releaseRef.current(note);
+          setActiveNotes(new Set(notesRef.current));
+        }
+      }
+      width = now;
+      if (now === 0) return;
+      const reachable = Math.max(0, Math.round((strip.scrollWidth - now) / octaveWidth()));
+      // First shown, or the number of octaves across has changed: start on the middle one.
+      if (reachable !== max) at = Math.min(1, reachable);
+      max = reachable;
+      strip.scrollLeft = at * octaveWidth();
+      read();
+    };
+    const observer = new ResizeObserver(settle);
+    observer.observe(strip);
+    strip.addEventListener('scroll', read);
+    return () => {
+      observer.disconnect();
+      strip.removeEventListener('scroll', read);
+    };
+  }, []);
+
   const handleNoteDown = (note: string) => {
     if (notesRef.current.has(note)) {
       if (holdEnabled) {
@@ -88,25 +143,51 @@ export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0, h
     onNoteRelease(note);
   };
 
+  const fingerOn = (note: string) => [...pointers.current.values()].includes(note);
+  // A finger has left the key it was on, by lifting or by sliding off. The note stops unless
+  // another finger is on the same key.
+  const leave = (pointerId: number) => {
+    const note = pointers.current.get(pointerId);
+    pointers.current.delete(pointerId);
+    if (note && !fingerOn(note)) handleNoteUp(note);
+  };
+
   const keyEvents = (note: string) => ({
     'aria-label': `Play ${note}`,
     'aria-pressed': activeNotes.has(note),
+    'data-note': note,
     style: { touchAction: 'none' },
     onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => {
       if (event.button !== 0) return;
       event.preventDefault();
-      event.currentTarget.focus();
+      // Focusing may scroll a key into view, which must not happen under a finger.
+      event.currentTarget.focus({ preventScroll: event.pointerType !== 'mouse' });
       event.currentTarget.setPointerCapture(event.pointerId);
-      handleNoteDown(note);
+      const shared = fingerOn(note);
+      pointers.current.set(event.pointerId, note);
+      // A second finger on a key that is already held adds nothing, and with hold on must not
+      // switch the note off again.
+      if (!shared) handleNoteDown(note);
     },
-    onPointerUp: () => handleNoteUp(note),
-    onPointerCancel: () => {
-      if (notesRef.current.delete(note)) {
-        onNoteRelease(note);
-        setActiveNotes(new Set(notesRef.current));
-      }
+    // A finger that slides plays each key it crosses. Its events go on arriving at the key it
+    // first pressed, so the key under it is looked up. A mouse holds the key it pressed, as it
+    // always has, and with hold on a slide would switch every key it crossed.
+    onPointerMove: (event: React.PointerEvent<HTMLButtonElement>) => {
+      if (event.pointerType === 'mouse' || holdEnabled) return;
+      const from = pointers.current.get(event.pointerId);
+      if (from === undefined) return;
+      const key = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('.key');
+      const to = key && stripRef.current?.contains(key) ? key.dataset.note ?? null : null;
+      if (to === from) return;
+      pointers.current.set(event.pointerId, null);
+      if (from && !fingerOn(from)) handleNoteUp(from);
+      const shared = to !== null && fingerOn(to);
+      pointers.current.set(event.pointerId, to);
+      if (to && !shared) handleNoteDown(to);
     },
-    onLostPointerCapture: () => handleNoteUp(note),
+    onPointerUp: (event: React.PointerEvent<HTMLButtonElement>) => leave(event.pointerId),
+    onPointerCancel: (event: React.PointerEvent<HTMLButtonElement>) => leave(event.pointerId),
+    onLostPointerCapture: (event: React.PointerEvent<HTMLButtonElement>) => leave(event.pointerId),
     onKeyDown: (event: React.KeyboardEvent<HTMLButtonElement>) => {
       if (![' ', 'Enter'].includes(event.key)) return;
       event.preventDefault();
@@ -117,7 +198,8 @@ export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0, h
       event.preventDefault();
       handleNoteUp(note);
     },
-    onBlur: () => handleNoteUp(note),
+    // A second finger takes the focus from the first one's key, which is still held.
+    onBlur: () => { if (!fingerOn(note)) handleNoteUp(note); },
     onClick: (event: React.MouseEvent<HTMLButtonElement>) => {
       if (event.detail !== 0) return;
       handleNoteDown(note);
@@ -130,15 +212,21 @@ export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0, h
     },
   });
 
-  const rangeLabel = `${WHITE_KEYS[0]}${baseOctave} - ${WHITE_KEYS[WHITE_KEYS.length - 1]}${baseOctave + 2}`;
+  const rangeLabel = `${WHITE_KEYS[0]}${baseOctave + reach.at} - ${WHITE_KEYS[WHITE_KEYS.length - 1]}${baseOctave + reach.at + 2 - reach.max}`;
 
   return (
     <div className="keyboard-container">
       <div className="keyboard-header">
         <h2>Keyboard</h2>
+        {reach.max > 0 && (
+          <button className="rack-btn keyboard-reach" aria-label="Lower keys" disabled={reach.at <= 0} onClick={() => showOctave(reach.at - 1)}>◀</button>
+        )}
         <span className="keyboard-range" title="Computer keyboard: A–L row plays white keys, W E T Y U O P black keys, Z and X shift the octave">{rangeLabel}</span>
+        {reach.max > 0 && (
+          <button className="rack-btn keyboard-reach" aria-label="Higher keys" disabled={reach.at >= reach.max} onClick={() => showOctave(reach.at + 1)}>▶</button>
+        )}
       </div>
-      <div className="keyboard">
+      <div className="keyboard" ref={stripRef} onContextMenu={(event) => { if (pointers.current.size > 0 || ['touch', 'pen'].includes((event.nativeEvent as PointerEvent).pointerType)) event.preventDefault(); }}>
         {octaves.map((octave) => (
           <div key={octave} className="octave">
             <div className="white-keys">

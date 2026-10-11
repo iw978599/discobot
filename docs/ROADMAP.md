@@ -76,9 +76,15 @@ slow down every later change.
    named navigation whose switches say which unit is on show, and choosing
    one moves keyboard focus into that unit. The large slider a touched knob
    opens is a native slider in a dialog: it has a name, a value in words,
-   arrow, Home and End keys, and gives focus back to its knob. Still open: the step grids are
-   long runs of separate tab stops, so add a roving tab index; and nothing,
-   the walkthrough included, has been tried with a screen reader.
+   arrow, Home and End keys, and gives focus back to its knob. A lane's row
+   of steps, the drum grid and the piano roll are each one stop for the Tab
+   key, with the arrow keys, Home and End moving inside; the on-screen
+   keyboard's keys and the roll's squares have names and say whether they
+   are pressed, and the buttons that move the roll and the keyboard along
+   are named. Still open: the three octaves of the on-screen keyboard are
+   still a tab stop for every key; the step numbers over the piano roll are
+   not column headers to a screen reader; and nothing, the walkthrough
+   included, has been tried with a screen reader.
 
 6. **Type the worklet messages.** Done: the hooks that send and the worklet
    that receives share one set of message types from the engine, so a renamed
@@ -204,8 +210,24 @@ may redistribute.
    tapped with a finger opens a large slider along the bottom of the screen,
    with its value in big figures, a step button either side and the hint a
    mouse would get by hovering; dragging a knob still turns it, and knobs on
-   a narrow screen are as big as a fingertip. Still open from the list
-   below: a piano roll and keyboard made for a thumb. Smaller things left:
+   a narrow screen are as big as a fingertip. Fourth part done: the
+   on-screen keyboard shows one octave with keys a finger wide (two octaves
+   on a phone on its side) and buttons to move to the others, follows each
+   finger on its own, plays the keys a finger slides across, and lets
+   everything go when a finger leaves the keys, the unit is switched away or
+   the phone is turned. The piano roll has squares of 44px or more and shows
+   as many steps of the bar as fit, with two buttons to move along it a beat
+   at a time and the note names to slide it to higher notes; a tap adds or
+   removes a note, a drag paints or rubs out, a finger held on a note keeps
+   it and selects its step, and a note's end is a handle wide enough to
+   drag. A phone on its side gets the phone arrangement with a lower bar of
+   units. Everything in the list below is now built. Smaller things left:
+   a note cannot be dragged longer than the steps on show (the Note length
+   menu can), the piano roll does not turn to follow the playhead within a
+   bar, the drum grid is still eight to a row on a phone on its side, the
+   walkthrough places its card by width alone, two fingers on the piano
+   roll at once get in each other's way (one lifting drops the other's tap,
+   and either can move a length the other is dragging),
    buttons whose only explanation is a hover hint, and the figure under a
    knob, which an iPhone may zoom the page to type in. None of it has been looked at in a browser by a person, tried on a
    real phone, or tried with a screen reader: it was built from the
