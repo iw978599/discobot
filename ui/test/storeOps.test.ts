@@ -11,6 +11,7 @@ import { OP_META, type Applied, type OpNotice, type Operation } from '../src/ser
 import { reducers } from '../src/services/projectReducers.ts';
 import { merge, sanitizeSynthParams } from '../src/services/projectSanitization.ts';
 import { MAX_GUESTS } from '../src/services/guests.ts';
+import { MAX_SCENES } from '../src/services/projectSanitization.ts';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from '../src/services/drumKits.ts';
 import type { DrumInstrument, DrumState } from '../src/types.ts';
 import { applied, call, comparable, defaults, setup, storage, type Message } from './helpers/store.ts';
@@ -18,6 +19,7 @@ import { applied, call, comparable, defaults, setup, storage, type Message } fro
 const STORAGE_KEY = 'discobot_browser_project_v1';
 // A value of the wrong type, as an untyped caller or a replayed operation could send.
 const wrong = (value: unknown) => value as never;
+const resolve = (value: unknown, ctx: any) => (typeof value === 'function' ? value(ctx) : value);
 
 // Either way of making an edit, run on a store of its own. An accepted case names what both
 // answer and emit; a refused one names the status and the error, and both must then have
@@ -30,11 +32,15 @@ interface Case {
   arrange?: (service: LocalProjectService) => any;
   method?: string;
   path: string | ((ctx: any) => string);
+  // Sent to the route; a function is handed what `arrange` returned.
   body: unknown;
   run: (service: LocalProjectService, ctx: any) => Applied<unknown>;
   // Accepted: what both ways answer and emit, and the event's name. `eventData` when the event
   // carries something other than the answer; `silent` when there is no event at all.
   answer?: unknown;
+  // For an answer too large to write out: what the project holds afterwards. The answer and the
+  // event must both be that, and the two ways must still agree.
+  answerFrom?: (project: any) => unknown;
   event?: string;
   eventData?: unknown;
   silent?: boolean;
@@ -574,6 +580,202 @@ const comingAndGoingCases: Case[] = [
   }),
 ];
 
+// A second scene, empty and open; the first holds a kick on step 3.
+const twoScenes = (service: LocalProjectService) => {
+  assert.ok(service.setDrumStep('kick', 3, true).ok);
+  const first = service.getScenes().currentSceneId;
+  const made = service.createScene({ empty: true });
+  assert.ok(made.ok);
+  return { first, second: made.value.currentSceneId };
+};
+type Ids = { first: string; second: string };
+const openScene = (service: LocalProjectService) => service.getScenes().currentSceneId;
+// What a scene change answers and sends: the scenes, the song, the open scene, and the lanes and
+// drums as that scene left them.
+const sceneAnswer = (project: any) => ({
+  scenes: project.scenes, song: project.song, currentSceneId: project.currentSceneId,
+  synths: project.synths.map((lane: any) => ({ synthId: lane.synthId, pattern: lane.pattern, muted: lane.muted, solo: lane.solo })),
+  drumState: project.drumState, guests: project.guests ?? [],
+});
+const sceneChange = (op: Case['op'], path: string, run: (service: LocalProjectService, body: any) => Applied<unknown>) =>
+  (title: string, body: unknown, arrange?: Case['arrange'], check?: Case['check']): Case =>
+    ({ op, title, arrange, path, body, run: (service, ctx) => run(service, resolve(body, ctx)), event: 'sceneChanged', answerFrom: sceneAnswer, check });
+const sceneRefused = (op: Case['op'], path: string, run: (service: LocalProjectService, body: any) => Applied<unknown>) =>
+  (title: string, body: unknown, status: 400 | 404 | 409, error: string, arrange?: Case['arrange']): Case =>
+    ({ op, title, arrange, path, body, run: (service, ctx) => run(service, resolve(body, ctx)), status, error });
+const select = sceneChange('scene.select', '/scenes/select', (service, body) => service.selectScene(body.sceneId));
+const selectRefused = sceneRefused('scene.select', '/scenes/select', (service, body) => service.selectScene(body.sceneId));
+const create = sceneChange('scene.create', '/scenes/create', (service, body) => service.createScene(body));
+const createRefused = sceneRefused('scene.create', '/scenes/create', (service, body) => service.createScene(body));
+const rename = sceneChange('scene.rename', '/scenes/rename', (service, body) => service.renameScene(body.sceneId, body.name));
+const renameRefused = sceneRefused('scene.rename', '/scenes/rename', (service, body) => service.renameScene(body.sceneId, body.name));
+const remove = sceneChange('scene.delete', '/scenes/delete', (service, body) => service.deleteScene(body.sceneId));
+const removeRefused = sceneRefused('scene.delete', '/scenes/delete', (service, body) => service.deleteScene(body.sceneId));
+const replace = sceneChange('scene.replace', '/scenes/replace', (service, body) => service.replaceScenes(body));
+const song = sceneChange('song.set', '/song', (service, body) => service.setSong(body));
+const unchangedScenes = (project: any) => { assert.equal(project.scenes.length, 1); assert.equal(project.drumState.kick.steps[3], true); };
+const names = (project: any) => project.scenes.map((scene: any) => scene.name);
+
+const sceneCases: Case[] = [
+  selectRefused('a scene that does not exist', { sceneId: 'nope' }, 404, 'Scene not found'),
+  selectRefused('no scene named', {}, 404, 'Scene not found'),
+  select('selecting the open scene changes nothing but still emits and saves', (id: string) => ({ sceneId: id }), service => { kickOn(service); return openScene(service); }, unchangedScenes),
+  select('selecting another scene keeps the edits to the one left and opens the other, with its mutes', (ids: Ids) => ({ sceneId: ids.first }), service => {
+    const ids = twoScenes(service);
+    assert.ok(service.setDrumStep('snare', 5, true).ok);
+    assert.ok(service.setSynthMix(1, { muted: true }).ok);
+    assert.ok(service.setDrumMix('clap', { solo: true }).ok);
+    return ids;
+  }, project => {
+    assert.equal(project.drumState.kick.steps[3], true);
+    assert.equal(project.drumState.snare.steps[5], false);
+    assert.equal(project.drumState.clap.solo, false);
+    assert.equal(project.synths[0].muted, false);
+    assert.deepEqual(project.scenes[1].mutes.lanes[1], { muted: true, solo: false });
+    assert.equal(project.scenes[1].drums.snare.steps[5], true);
+  }),
+  select('a guest takes the settings the scene holds for it', (ids: Ids) => ({ sceneId: ids.first }), service => {
+    const guest = addGuest(service);
+    assert.ok(service.changeGuest(guest, { state: { first: true }, volume: .3 }).ok);
+    const ids = twoScenes(service);
+    assert.ok(service.changeGuest(guest, { state: { second: true }, muted: true }).ok);
+    return ids;
+  }, project => assert.deepEqual([project.guests[0].state, project.guests[0].volume, project.guests[0].muted], [{ first: true }, .3, false])),
+
+  create('a new scene is a copy of the open one, placed after it and opened', {}, service => { kickOn(service); kickSoft(service); oneNote(service); }, project => {
+    assert.deepEqual(names(project), ['Scene 1', 'Scene 2']);
+    assert.equal(project.currentSceneId, project.scenes[1].id);
+    assert.deepEqual({ ...project.scenes[1], id: 0, name: 0 }, { ...project.scenes[0], id: 0, name: 0 });
+    assert.equal(project.scenes[1].drums.kick.stepVelocities[3], .5);
+  }),
+  create('an empty new scene has no notes or hits, keeps the lengths, and takes its name trimmed', { empty: true, name: '  Break  ' }, service => {
+    assert.ok(service.setDrumBars(2).ok);
+    assert.ok(service.setDrumStep('kick', 20, true).ok);
+    assert.ok(service.writePattern(1, service.snapshot().synths[0].pattern.id, { steps: [...BLANK(31), noted] }).ok);
+  }, project => {
+    assert.equal(project.scenes[1].name, 'Break');
+    assert.deepEqual(project.scenes[1].lanes[1], BLANK(32));
+    assert.deepEqual(project.scenes[1].drums.kick, { steps: Array(32).fill(false) });
+    assert.equal(project.scenes[0].drums.kick.steps[20], true);
+    assert.equal(project.scenes[0].lanes[1][31].note, 'C4');
+    assert.deepEqual(project.synths[0].pattern.steps, BLANK(32));
+  }),
+  create('a scene name is cut to 40 characters', { name: 'n'.repeat(50) }, undefined, project => assert.equal(project.scenes[1].name, 'n'.repeat(40))),
+  create('a blank or missing name is numbered from how many scenes there are', { name: '   ' }, twoScenes, project => assert.deepEqual(names(project), ['Scene 1', 'Scene 2', 'Scene 3'])),
+  create('a name that is not text is numbered too', { name: 7 }, undefined, project => assert.deepEqual(names(project), ['Scene 1', 'Scene 2'])),
+  create('a new scene goes straight after the open one, not at the end', { name: 'Middle' }, service => {
+    const ids = twoScenes(service);
+    assert.ok(service.selectScene(ids.first).ok);
+    return ids;
+  }, project => assert.deepEqual(names(project), ['Scene 1', 'Middle', 'Scene 2'])),
+  create('a flag that is not exactly true makes a copy', { empty: 1 }, kickOn, project => assert.equal(project.drumState.kick.steps[3], true)),
+  createRefused(`a project holds at most ${MAX_SCENES} scenes`, {}, 400, `A project can hold ${MAX_SCENES} scenes`, service => { for (let count = 1; count < MAX_SCENES; count++) assert.ok(service.createScene().ok); }),
+
+  rename('renaming trims the name and cuts it to 40 characters', (ids: Ids) => ({ sceneId: ids.first, name: `  ${'v'.repeat(50)}  ` }), twoScenes, project => {
+    assert.deepEqual(names(project), ['v'.repeat(40), 'Scene 2']);
+    assert.equal(project.currentSceneId, project.scenes[1].id, 'renaming does not open the scene');
+  }),
+  renameRefused('a scene that does not exist is a 400 about the name, not a 404 (looks wrong)', { sceneId: 'nope', name: 'Verse' }, 400, 'A scene needs a name'),
+  renameRefused('a blank name', (id: string) => ({ sceneId: id, name: '   ' }), 400, 'A scene needs a name', openScene),
+  renameRefused('a name that is not text', (id: string) => ({ sceneId: id, name: 7 }), 400, 'A scene needs a name', openScene),
+  renameRefused('no name at all', (id: string) => ({ sceneId: id }), 400, 'A scene needs a name', openScene),
+
+  removeRefused('a scene that does not exist, even when only one is left', { sceneId: 'nope' }, 404, 'Scene not found'),
+  removeRefused('the last scene cannot be deleted', (id: string) => ({ sceneId: id }), 400, 'A project needs at least one scene', openScene),
+  remove('deleting the open scene opens the one before it and takes it out of the song', (ids: Ids) => ({ sceneId: ids.second }), service => {
+    const ids = twoScenes(service);
+    assert.ok(service.setSong({ entries: [{ sceneId: ids.first, repeats: 2 }, { sceneId: ids.second, repeats: 3 }], loop: true }).ok);
+    return ids;
+  }, project => {
+    assert.equal(project.scenes.length, 1);
+    assert.equal(project.currentSceneId, project.scenes[0].id);
+    assert.equal(project.drumState.kick.steps[3], true);
+    assert.deepEqual(project.song, { entries: [{ sceneId: project.scenes[0].id, repeats: 2 }], loop: true });
+  }),
+  remove('deleting the open first scene opens the one that takes its place', (ids: Ids) => ({ sceneId: ids.first }), service => {
+    const ids = twoScenes(service);
+    assert.ok(service.selectScene(ids.first).ok);
+    return ids;
+  }, project => {
+    assert.equal(project.currentSceneId, project.scenes[0].id);
+    assert.equal(project.drumState.kick.steps[3], false);
+  }),
+  remove('deleting another scene leaves the open one open; a song left empty plays the first scene once', (ids: Ids) => ({ sceneId: ids.first }), service => {
+    const ids = twoScenes(service);
+    assert.ok(service.setSong({ entries: [{ sceneId: ids.first, repeats: 4 }] }).ok);
+    assert.ok(service.setDrumStep('snare', 5, true).ok);
+    return ids;
+  }, project => {
+    assert.equal(project.drumState.snare.steps[5], true);
+    assert.deepEqual(project.song, { entries: [{ sceneId: project.scenes[0].id, repeats: 1 }], loop: false });
+  }),
+
+  replace('replacing with nothing leaves one new scene made from the live pattern', {}, service => {
+    twoScenes(service);
+    assert.ok(service.setDrumStep('snare', 5, true).ok);
+  }, project => {
+    assert.deepEqual(names(project), ['Scene 1']);
+    assert.equal(project.drumState.snare.steps[5], true);
+    assert.deepEqual(project.song, { entries: [{ sceneId: project.scenes[0].id, repeats: 1 }], loop: false });
+  }),
+  replace('replacing takes the scenes and song given, except the open scene, which stays the live pattern', (body: any) => body, service => {
+    twoScenes(service);
+    const [a, b] = service.getScenes().scenes;
+    a.drums.kick.steps[7] = true;
+    b.drums.kick.steps[9] = true;
+    return {
+      scenes: [{ ...a, id: 'a', name: 'A' }, { ...b, id: 'b', name: 'B' }, { ...b, id: 'a', name: 'Twice' }, { name: 'No id' }],
+      currentSceneId: 'b', song: { entries: [{ sceneId: 'b', repeats: 3 }, { sceneId: 'gone', repeats: 1 }], loop: true },
+    };
+  }, project => {
+    assert.deepEqual(project.scenes.map((scene: any) => [scene.id, scene.name]), [['a', 'A'], ['b', 'B']]);
+    assert.equal(project.currentSceneId, 'b');
+    assert.deepEqual(project.song, { entries: [{ sceneId: 'b', repeats: 3 }], loop: true });
+    assert.equal(project.scenes[0].drums.kick.steps[7], true);
+    assert.equal(project.scenes[1].drums.kick.steps[9], false, 'the open scene is not read from the body');
+  }),
+  replace('replacing with an open scene that is not among them opens the first', (body: any) => body, service => {
+    const [scene] = service.getScenes().scenes;
+    return { scenes: [{ ...scene, id: 'a' }, { ...scene, id: 'b' }], currentSceneId: 'zzz' };
+  }, project => {
+    assert.equal(project.currentSceneId, 'a');
+    assert.deepEqual(project.song, { entries: [{ sceneId: 'a', repeats: 1 }], loop: false });
+  }),
+  replace('what JSON would have dropped or changed is dropped or changed: an undefined name, a repeat of infinity', (body: any) => body, service => {
+    const [scene] = service.getScenes().scenes;
+    return {
+      scenes: [{ ...scene, id: 'a', name: undefined }, { ...scene, id: 'b', name: 'B' }], currentSceneId: undefined,
+      song: { entries: [{ sceneId: 'b', repeats: Number.POSITIVE_INFINITY }, { sceneId: 'a', repeats: Number.NaN }], loop: undefined },
+    };
+  }, project => {
+    assert.deepEqual(project.scenes.map((scene: any) => [scene.id, scene.name]), [['a', 'Scene'], ['b', 'B']]);
+    assert.equal(project.currentSceneId, 'a');
+    assert.deepEqual(project.song, { entries: [{ sceneId: 'b', repeats: 1 }, { sceneId: 'a', repeats: 1 }], loop: false });
+  }),
+  replace('scenes that are not a list leave one new scene, like none', { scenes: 'many' }, undefined, project => assert.deepEqual(names(project), ['Scene 1'])),
+
+  song('the song takes entries for scenes that exist, with whole repeats from 1 to 64', (ids: Ids) => ({
+    entries: [{ sceneId: ids.second, repeats: 2.6 }, { sceneId: 'gone', repeats: 2 }, { sceneId: ids.first, repeats: 999 }, { sceneId: ids.first }], loop: true,
+  }), twoScenes, project => {
+    const [first, second] = project.scenes.map((scene: any) => scene.id);
+    assert.deepEqual(project.song, { entries: [{ sceneId: second, repeats: 3 }, { sceneId: first, repeats: 64 }, { sceneId: first, repeats: 1 }], loop: true });
+  }),
+  song('the song keeps whichever of entries and loop is not sent', { loop: false }, service => {
+    const ids = twoScenes(service);
+    assert.ok(service.setSong({ entries: [{ sceneId: ids.second, repeats: 2 }], loop: true }).ok);
+    assert.ok(service.setSong({ entries: [{ sceneId: ids.first, repeats: 5 }] }).ok);
+  }, project => assert.deepEqual(project.song, { entries: [{ sceneId: project.scenes[0].id, repeats: 5 }], loop: false })),
+  song('an empty song is the first scene once; a loop that is not exactly true is off', { entries: [], loop: 'yes' }, twoScenes,
+    project => assert.deepEqual(project.song, { entries: [{ sceneId: project.scenes[0].id, repeats: 1 }], loop: false })),
+  song('entries that are not a list are an empty song', { entries: 'all of them', loop: true }, undefined,
+    project => assert.deepEqual(project.song, { entries: [{ sceneId: project.scenes[0].id, repeats: 1 }], loop: true })),
+  song('a song request with nothing in it changes nothing but still emits and saves', {}, kickOn, unchangedScenes),
+  song('a key that is undefined is not sent: it keeps what the song has', { entries: undefined, loop: undefined }, service => {
+    const ids = twoScenes(service);
+    assert.ok(service.setSong({ entries: [{ sceneId: ids.second, repeats: 2 }], loop: true }).ok);
+  }, project => assert.deepEqual(project.song, { entries: [{ sceneId: project.scenes[1].id, repeats: 2 }], loop: true })),
+];
+
 const cases: Case[] = [
   ...swing('a swing in range is kept as sent', .3, .3),
   ...swing('a swing past the top is held at .75', 5, .75),
@@ -644,6 +846,7 @@ const cases: Case[] = [
   ...laneCases,
   ...patternCases,
   ...comingAndGoingCases,
+  ...sceneCases,
 ];
 
 // What is in storage, or null when nothing has been written yet.
@@ -654,7 +857,7 @@ for (const entry of cases) {
     const one = setup();
     const routedCtx = await entry.arrange?.(one);
     one.flush();
-    const routed = await call(one, entry.method ?? 'POST', typeof entry.path === 'string' ? entry.path : entry.path(routedCtx), entry.body);
+    const routed = await call(one, entry.method ?? 'POST', typeof entry.path === 'string' ? entry.path : entry.path(routedCtx), resolve(entry.body, routedCtx));
     const routedProject = one.snapshot(), routedStored = written();
 
     const two = setup();
@@ -673,8 +876,9 @@ for (const entry of cases) {
       assert.deepEqual(typedProject, before, 'and has changed nothing');
     } else {
       assert.equal(typed.status, 200);
-      assert.deepEqual(comparable(typed.data), entry.answer);
-      assert.deepEqual(comparable(typed.events), entry.silent ? [] : [{ type: entry.event, data: 'eventData' in entry ? entry.eventData : entry.answer }]);
+      const answer = entry.answerFrom ? comparable(entry.answerFrom(typedProject)) : entry.answer;
+      assert.deepEqual(comparable(typed.data), answer);
+      assert.deepEqual(comparable(typed.events), entry.silent ? [] : [{ type: entry.event, data: 'eventData' in entry ? entry.eventData : answer }]);
       assert.equal(typed.saved, OP_META[entry.op].save, 'an accepted operation saves when OP_META says so');
     }
     entry.check?.(typedProject);
@@ -705,7 +909,7 @@ test('apply is synchronous: the event has arrived and the store has changed befo
   assert.equal(service.snapshot().drumSwing, .3);
   for (const method of [
     'apply', 'applyAll', 'setDrumSwing', 'setDrumMasterVolume', 'setDrumKit', 'setDrumState', 'resetDrums', 'setDrumBars', 'setDrumStep', 'setDrumStepVelocity', 'setDrumStepDetail',
-    'setDrumSettings', 'setDrumSample', 'setDrumMix', 'setDrumFx', 'setEffectsLoop', 'setTempo', 'setSynthParams', 'setSynthModel', 'setSynthMix', 'setSynthPrefs', 'writePattern', 'createLane', 'removeLane', 'playLane', 'stopLane', 'addGuest', 'changeGuest', 'removeGuest', 'getScenes', 'getTempo', 'getDrumKits',
+    'setDrumSettings', 'setDrumSample', 'setDrumMix', 'setDrumFx', 'setEffectsLoop', 'setTempo', 'setSynthParams', 'setSynthModel', 'setSynthMix', 'setSynthPrefs', 'writePattern', 'createLane', 'removeLane', 'playLane', 'stopLane', 'addGuest', 'changeGuest', 'removeGuest', 'selectScene', 'createScene', 'renameScene', 'deleteScene', 'replaceScenes', 'setSong', 'getScenes', 'getTempo', 'getDrumKits',
   ] as const) {
     assert.equal(LocalProjectService.prototype[method].constructor.name, 'Function', `${method} is not async`);
   }
@@ -730,13 +934,15 @@ test('an operation listener hears each accepted operation after its event, with 
   service.flush();
 });
 
-// These stand a reducer in for one that has not moved yet, to try what no real reducer does:
+// These put a reducer in the place of a real one for a moment, to try what no real reducer does:
 // an outcome that is refused and yet names an event and a save, one that does not save, and one
-// with no answer. They are about `apply`, not about the operation named.
+// with no answer. They are about `apply`, not about the operation named. Every operation has a
+// reducer now, so the real one is put back afterwards.
 function standIn<T>(type: 'scene.select' | 'scene.delete', reducer: (...args: any[]) => unknown, run: (service: LocalProjectService) => T): T {
-  assert.equal(type in reducers, false, `${type} has a reducer of its own now: stand in for another`);
+  const held = (reducers as Record<string, unknown>)[type];
+  assert.equal(typeof held, 'function', `${type} has no reducer to stand in for`);
   (reducers as Record<string, unknown>)[type] = reducer;
-  try { return run(setup()); } finally { delete (reducers as Record<string, unknown>)[type]; }
+  try { return run(setup()); } finally { (reducers as Record<string, unknown>)[type] = held; }
 }
 
 test('a refused operation is answered, not thrown: no event, no notice, no save', () => {
@@ -1138,12 +1344,16 @@ test('pattern.write is saved, undoable and shared', () => {
   assert.deepEqual(OP_META['pattern.write'], { save: true, undoable: true, share: true });
 });
 
-// Until the last pull request of the plan every operation is in the type but only some have a
-// reducer. When scene.rename gains one, name another here; when all have one, delete this.
-test('an operation whose route has not moved yet throws, and changes nothing', () => {
+// Every operation has a reducer now, so one is taken away for a moment to try the branch of
+// `apply` for a missing one. The last pull request of the plan deletes the branch and this test.
+test('an operation with no reducer throws, and changes nothing', () => {
   const service = setup();
   const before = service.snapshot();
-  assert.throws(() => service.apply({ type: 'scene.rename', sceneId: service.getScenes().currentSceneId, name: 'Verse' }), /No reducer for scene\.rename yet/);
+  const held = reducers['scene.rename'];
+  delete reducers['scene.rename'];
+  try {
+    assert.throws(() => service.apply({ type: 'scene.rename', sceneId: service.getScenes().currentSceneId, name: 'Verse' }), /No reducer for scene\.rename yet/);
+  } finally { reducers['scene.rename'] = held; }
   assert.deepEqual(service.snapshot(), before);
   assert.equal(service.flush(), true);
   assert.equal(storage.has(STORAGE_KEY), false);

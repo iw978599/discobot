@@ -1,14 +1,12 @@
 import type { DrumInstrument, DrumKitDefinition, DrumKitId, DrumSettings, DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, Scene, Song, SynthParameters, SynthModelId, SynthModelParams } from '../types';
 import { sanitizeGuests, type Guest } from './guests';
-import { emptySteps } from './songPlayback';
-import { laneBars } from './patternLength';
 import { createIndexedDbLibrary, createMemoryLibrary, hasIndexedDb, type ProjectInfo, type ProjectLibrary, type ProjectRecord, type VersionInfo, type VersionReason } from './projectLibrary';
-import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
+import { DRUM_KITS } from './drumKits';
 import { normalizeSynthModelId } from '../synthModels';
 import { NEW_PROJECT_REVERB } from './effectSettings';
-import { record, number, clone, matchesShape, sanitizePattern, sanitizeSynthParams, sanitizeDrums, sanitizeEffects, sanitizeSends, sanitizeSaved, sanitizeModelParams, sanitizeKit, sanitizeScenes, sanitizeSong, MAX_SCENES } from './projectSanitization';
+import { record, number, clone, matchesShape, sanitizePattern, sanitizeSynthParams, sanitizeDrums, sanitizeEffects, sanitizeSends, sanitizeSaved, sanitizeModelParams, sanitizeKit, sanitizeScenes, sanitizeSong } from './projectSanitization';
 import type { Applied, DeepPartial, DrumFxState, GuestPatch, OpNotice, OpResult, Operation, Origin, Outcome } from './projectOps';
-import { newLane, reducers, type ReducerContext } from './projectReducers';
+import { commitScene, ensureScenes, newLane, reducers, sceneMessage, type ReducerContext } from './projectReducers';
 
 type Message = { type: string; data: any };
 type Listener = (message: Message) => void;
@@ -178,93 +176,11 @@ export class LocalProjectService {
     return { state, damaged };
   }
 
-  // The live lanes and drum grid as a scene.
-  private captureScene(id: string, name: string): Scene {
-    const state = this.state!;
-    return {
-      id, name,
-      lanes: Object.fromEntries(state.synths.map(synth => [synth.synthId, clone(synth.pattern.steps)])),
-      ...(state.synths.some(synth => (synth.pattern.bars ?? 1) > 1)
-        ? { laneBars: Object.fromEntries(state.synths.filter(synth => (synth.pattern.bars ?? 1) > 1).map(synth => [synth.synthId, synth.pattern.bars!])) } : {}),
-      ...(state.guests?.some(guest => guest.state !== undefined)
-        ? { guests: Object.fromEntries(state.guests.filter(guest => guest.state !== undefined).map(guest => [guest.id, clone(guest.state)])) } : {}),
-      ...(state.guests?.length ? { guestMix: Object.fromEntries(state.guests.map(guest => [guest.id, { volume: guest.volume, muted: guest.muted }])) } : {}),
-      mutes: {
-        lanes: Object.fromEntries(state.synths.map(synth => [synth.synthId, { muted: synth.muted, solo: synth.solo }])),
-        drums: Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => [instrument, { muted: state.drumState[instrument].muted, solo: state.drumState[instrument].solo }])),
-      },
-      drums: Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => {
-        const { steps, stepVelocities, stepProbabilities, stepRatchets } = state.drumState[instrument];
-        return [instrument, clone({
-          steps, ...(stepVelocities ? { stepVelocities } : {}), ...(stepProbabilities ? { stepProbabilities } : {}),
-          ...(stepRatchets ? { stepRatchets } : {}),
-        })];
-      })) as Scene['drums'],
-    };
-  }
-
-  private ensureScenes() {
-    const state = this.state!;
-    if (state.scenes.length === 0) {
-      const scene = this.captureScene(crypto.randomUUID(), 'Scene 1');
-      state.scenes = [scene];
-      state.currentSceneId = scene.id;
-    }
-    if (!state.scenes.some(scene => scene.id === state.currentSceneId)) state.currentSceneId = state.scenes[0].id;
-    state.song = sanitizeSong(state.song, state.scenes);
-  }
-
-  // Copies the live pattern into the current scene's slot. Edits go to the live lanes and
-  // drums, so this runs before anything reads `scenes`: saving, switching, exporting.
-  private commitScene() {
-    const state = this.state!;
-    const index = state.scenes.findIndex(scene => scene.id === state.currentSceneId);
-    if (index >= 0) state.scenes[index] = this.captureScene(state.currentSceneId, state.scenes[index].name);
-  }
-
-  // Makes a scene the live pattern.
-  private applyScene(scene: Scene) {
-    const state = this.state!;
-    state.currentSceneId = scene.id;
-    for (const synth of state.synths) {
-      synth.pattern.steps = clone(scene.lanes[synth.synthId] ?? emptySteps());
-      const bars = laneBars(synth.pattern.steps.length, scene.laneBars?.[synth.synthId]);
-      if (bars > 1) synth.pattern.bars = bars; else delete synth.pattern.bars;
-      // Mutes and solos are the scene's. A scene from before they were kept holds none, and
-      // the lanes carry on as they are.
-      const flags = scene.mutes?.lanes?.[synth.synthId];
-      if (flags) { synth.muted = flags.muted; synth.solo = flags.solo; }
-    }
-    // A guest takes the settings this scene holds for it. A scene from before the guest was added
-    // holds none, and the guest carries on as it is.
-    if (state.guests) {
-      state.guests = state.guests.map(guest => ({
-        ...guest,
-        ...(scene.guests && guest.id in scene.guests ? { state: clone(scene.guests[guest.id]) } : {}),
-        ...(scene.guestMix?.[guest.id] ?? {}),
-      }));
-    }
-    for (const instrument of DRUM_INSTRUMENTS) {
-      const track = state.drumState[instrument], pattern = scene.drums[instrument];
-      const flags = scene.mutes?.drums?.[instrument];
-      if (flags) { track.muted = flags.muted; track.solo = flags.solo; }
-      track.steps = clone(pattern.steps);
-      for (const key of ['stepVelocities', 'stepProbabilities', 'stepRatchets'] as const) {
-        if (pattern[key]) track[key] = clone(pattern[key]);
-        else delete track[key];
-      }
-    }
-  }
-
-  private sceneMessage() {
-    const state = this.state!;
-    this.commitScene();
-    return {
-      scenes: state.scenes, song: state.song, currentSceneId: state.currentSceneId,
-      synths: state.synths.map(synth => ({ synthId: synth.synthId, pattern: synth.pattern, muted: synth.muted, solo: synth.solo })), drumState: state.drumState,
-      guests: state.guests ?? [],
-    };
-  }
+  // The scene functions work on the state they are handed, so the scene reducers can use them
+  // (projectReducers.ts); these are the service's own, on its open project.
+  private ensureScenes() { ensureScenes(this.state!); }
+  private commitScene() { commitScene(this.state!); }
+  private sceneMessage() { return sceneMessage(this.state!); }
 
   // Everything in the project store as one portable object. Samples live in IndexedDB
   // and are not part of it: links, publishing and sync all use this, and none may carry
@@ -809,6 +725,15 @@ export class LocalProjectService {
   addGuest(url: string, name?: string) { return this.apply({ type: 'guest.add', guestId: crypto.randomUUID(), url, name }); }
   changeGuest(guestId: string, patch: GuestPatch) { return this.apply({ type: 'guest.patch', guestId, patch }); }
   removeGuest(guestId: string) { return this.apply({ type: 'guest.remove', guestId }); }
+  // Synchronous end to end: the sceneChanged event has been delivered, and the listeners have
+  // written what they keep, before this returns. Song playback opens the playing scene with it
+  // and reads the lanes on the next line.
+  selectScene(sceneId: string) { return this.apply({ type: 'scene.select', sceneId }); }
+  createScene(options: { name?: string; empty?: boolean } = {}) { return this.apply({ type: 'scene.create', sceneId: crypto.randomUUID(), name: options.name, empty: options.empty }); }
+  renameScene(sceneId: string, name: string) { return this.apply({ type: 'scene.rename', sceneId, name }); }
+  deleteScene(sceneId: string) { return this.apply({ type: 'scene.delete', sceneId }); }
+  replaceScenes(replacement: { scenes?: unknown; currentSceneId?: string; song?: unknown } = {}) { return this.apply({ type: 'scene.replace', scenes: replacement.scenes, currentSceneId: replacement.currentSceneId, song: replacement.song }); }
+  setSong(song: { entries?: unknown; loop?: boolean }) { return this.apply({ type: 'song.set', entries: song.entries, loop: song.loop }); }
 
   getDrumKits(): { kits: DrumKitDefinition[]; defaultKitId: DrumKitId } {
     return clone({ kits: DRUM_KITS, defaultKitId: 'clean-analog' });
@@ -835,68 +760,14 @@ export class LocalProjectService {
       if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return respond({ error: 'Invalid local operation data' }, 400);
       body = parsed;
     } catch { return respond({ error: 'Invalid local operation data' }, 400); }
-    const update = (type: string, data: any, response: any = data) => {
-      this.persist();
-      this.emit(type, data);
-      return respond(response);
-    };
     const fromApplied = (result: Applied<unknown>) => (result.ok ? respond(result.value) : respond({ error: result.error }, result.status));
     if (path === '/scenes') return respond(this.getScenes());
-    if (path === '/scenes/select') {
-      const target = state.scenes.find(scene => scene.id === body.sceneId);
-      if (!target) return respond({ error: 'Scene not found' }, 404);
-      if (target.id !== state.currentSceneId) {
-        this.commitScene();
-        this.applyScene(target);
-      }
-      return update('sceneChanged', this.sceneMessage());
-    }
-    if (path === '/scenes/create') {
-      if (state.scenes.length >= MAX_SCENES) return respond({ error: `A project can hold ${MAX_SCENES} scenes` }, 400);
-      this.commitScene();
-      const name = (typeof body.name === 'string' && body.name.trim() ? body.name.trim() : `Scene ${state.scenes.length + 1}`).slice(0, 40);
-      const scene = this.captureScene(crypto.randomUUID(), name);
-      if (body.empty === true) {
-        for (const id of Object.keys(scene.lanes)) scene.lanes[Number(id)] = emptySteps(scene.lanes[Number(id)].length);
-        // An empty scene keeps the lengths of the one it was made from.
-        for (const instrument of DRUM_INSTRUMENTS) scene.drums[instrument] = { steps: Array(scene.drums[instrument].steps.length).fill(false) };
-      }
-      const index = state.scenes.findIndex(entry => entry.id === state.currentSceneId);
-      state.scenes.splice(index + 1, 0, scene);
-      this.applyScene(scene);
-      return update('sceneChanged', this.sceneMessage());
-    }
-    if (path === '/scenes/rename') {
-      const target = state.scenes.find(scene => scene.id === body.sceneId);
-      const name = typeof body.name === 'string' ? body.name.trim().slice(0, 40) : '';
-      if (!target || !name) return respond({ error: 'A scene needs a name' }, 400);
-      target.name = name;
-      return update('sceneChanged', this.sceneMessage());
-    }
-    if (path === '/scenes/delete') {
-      const index = state.scenes.findIndex(scene => scene.id === body.sceneId);
-      if (index < 0) return respond({ error: 'Scene not found' }, 404);
-      if (state.scenes.length === 1) return respond({ error: 'A project needs at least one scene' }, 400);
-      this.commitScene();
-      state.scenes.splice(index, 1);
-      if (body.sceneId === state.currentSceneId) this.applyScene(state.scenes[Math.max(0, index - 1)]);
-      state.song = sanitizeSong({ ...state.song, entries: state.song.entries.filter(entry => entry.sceneId !== body.sceneId) }, state.scenes);
-      return update('sceneChanged', this.sceneMessage());
-    }
-    if (path === '/scenes/replace') {
-      // Used when a saved arrangement is loaded: the lanes and drums have already been set to
-      // its current scene, so that scene is taken from the live pattern.
-      const scenes = sanitizeScenes(body.scenes, this.defaults!.drumState);
-      state.scenes = scenes ?? [];
-      state.currentSceneId = scenes?.some(scene => scene.id === body.currentSceneId) ? body.currentSceneId : scenes?.[0].id ?? '';
-      state.song = scenes ? sanitizeSong(body.song, scenes) : { entries: [], loop: false };
-      this.ensureScenes();
-      return update('sceneChanged', this.sceneMessage());
-    }
-    if (path === '/song') {
-      state.song = sanitizeSong({ entries: body.entries ?? state.song.entries, loop: body.loop ?? state.song.loop }, state.scenes);
-      return update('sceneChanged', this.sceneMessage());
-    }
+    if (path === '/scenes/select') return fromApplied(this.apply({ type: 'scene.select', sceneId: body.sceneId }));
+    if (path === '/scenes/create') return fromApplied(this.apply({ type: 'scene.create', sceneId: crypto.randomUUID(), name: body.name, empty: body.empty }));
+    if (path === '/scenes/rename') return fromApplied(this.apply({ type: 'scene.rename', sceneId: body.sceneId, name: body.name }));
+    if (path === '/scenes/delete') return fromApplied(this.apply({ type: 'scene.delete', sceneId: body.sceneId }));
+    if (path === '/scenes/replace') return fromApplied(this.apply({ type: 'scene.replace', scenes: body.scenes, currentSceneId: body.currentSceneId, song: body.song }));
+    if (path === '/song') return fromApplied(this.apply({ type: 'song.set', entries: body.entries, loop: body.loop }));
     if (path === '/synth/create') return fromApplied(this.apply({ type: 'synth.create', synthId: body.synthId }));
     const match = path.match(/^\/synth\/(\d+)(?:\/(.*))?$/);
     if (match) {
