@@ -97,7 +97,25 @@ export type SharingApi = typeof sharingApi;
 export interface PublishedSong { code: string; projectId: string; title: string; updatedAt: number }
 export interface SongPage { title: string; author: string; updatedAt: number; project: unknown }
 
+export interface ListedSong { code: string; title: string; updatedAt: number }
+export interface UserSongs { author: string; songs: ListedSong[] }
+
+// A list of someone's songs is text from other people, by way of the server: keep only what a
+// list of songs is, and cap its size. The name shown is the one asked for unless the server
+// gives the same name back in the publisher's own capitals.
+export function readUserSongs(answer: unknown, asked: string): UserSongs {
+  const data = (answer && typeof answer === 'object' ? answer : {}) as { author?: unknown; songs?: unknown };
+  const songs = (Array.isArray(data.songs) ? data.songs as unknown[] : []).slice(0, 50).flatMap((entry): ListedSong[] => {
+    const song = (entry && typeof entry === 'object' ? entry : {}) as { code?: unknown; title?: unknown; updatedAt?: unknown };
+    if (typeof song.code !== 'string' || !/^[a-z0-9]{10}$/.test(song.code) || typeof song.title !== 'string') return [];
+    return [{ code: song.code, title: song.title.slice(0, 60), updatedAt: typeof song.updatedAt === 'number' && Number.isFinite(song.updatedAt) ? song.updatedAt : 0 }];
+  });
+  return { author: typeof data.author === 'string' && data.author.toLowerCase() === asked.toLowerCase() ? data.author : asked, songs };
+}
+
 export const songsApi = {
+  // Needs no account either: this is what opening the link to someone's page does.
+  by: async (username: string) => readUserSongs(await call<unknown>('GET', `/users/${encodeURIComponent(username)}/songs`, undefined, false), username),
   // Needs no account: this is what opening a short link does.
   get: (code: string) => call<SongPage>('GET', `/songs/${encodeURIComponent(code)}`, undefined, false),
   mine: async () => (await call<{ songs: PublishedSong[] }>('GET', '/songs')).songs,
