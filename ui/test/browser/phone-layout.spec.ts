@@ -67,9 +67,9 @@ test('on a phone showing the whole rack it fits the screen, with steps eight to 
   expect(kick.height).toBeGreaterThanOrEqual(28);
   expect((await box(page.getByRole('button', { name: 'Mute Kick', exact: true }))).height).toBeGreaterThanOrEqual(28);
 
-  // The keyboard is wider than the screen and slides, so a key is wide enough to play.
-  expect(await page.locator('.keyboard-container').evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
-  expect((await box(page.locator('.key.white'))).width).toBeGreaterThanOrEqual(24);
+  // The keyboard shows one octave of its three, so a key is wide enough to play.
+  expect(await page.locator('.keyboard').evaluate(element => element.scrollWidth > element.clientWidth * 2)).toBe(true);
+  expect((await box(page.locator('.key.white'))).width).toBeGreaterThanOrEqual(44);
 
   // Play is on screen without scrolling sideways, and stays there when the rack is scrolled.
   const play = page.getByRole('button', { name: /Play All/ });

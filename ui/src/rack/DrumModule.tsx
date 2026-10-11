@@ -4,6 +4,7 @@ import { MAX_KIT_FILES } from '../services/kitImport';
 import KitImportDialog from './KitImportDialog';
 import { usePlayhead, usePlayheadMark } from '../hooks/usePlayhead';
 import { tracked } from '../studio/tracked';
+import { gridKeyTarget } from './gridKeys';
 import { BAR_CHOICES, drumBars } from '../services/patternLength';
 import type { Studio } from '../studio/useStudio';
 import { DrumInstrument, DrumKitId, DrumState, CymbalType } from '../types';
@@ -78,6 +79,9 @@ function DrumModule({ studio }: { studio: Studio }) {
   usePlayheadMark(gridRef, 'drums', studio.isAnyPlaying, '.drum-step-btn', 'current');
   const shownBar = Math.min(bars - 1, follow && playingBar !== null ? playingBar : viewBar);
   const base = shownBar * 16;
+  // The grid's steps are one stop for the Tab key, on the step the keyboard was last on.
+  const [gridCursor, setGridCursor] = useState<{ instrument: DrumInstrument; step: number } | null>(null);
+  const gridStop = gridCursor && gridCursor.step >= base && gridCursor.step < base + 16 ? gridCursor : { instrument: selected, step: selectedStep >= base && selectedStep < base + 16 ? selectedStep : base };
   // A pattern made shorter can leave the selected step past its end.
   useEffect(() => { if (selectedStep >= bars * 16) setSelectedStep(0); }, [bars, selectedStep]);
   // Imported samples a lane can play instead of its built-in sound.
@@ -172,7 +176,21 @@ function DrumModule({ studio }: { studio: Studio }) {
           </div>
         </div>
 
-        <div className="drum-grid" ref={gridRef}>
+        <div
+          className="drum-grid"
+          ref={gridRef}
+          role="group"
+          aria-label="Drum steps"
+          onKeyDown={(event) => {
+            if (event.ctrlKey || event.metaKey || event.altKey) return;
+            const cell = (event.target as HTMLElement).closest<HTMLElement>('.drum-step-btn');
+            const lanes = [...event.currentTarget.querySelectorAll<HTMLElement>('.drum-grid-row:not(.header) .drum-cells')].map(row => [...row.querySelectorAll<HTMLElement>('.drum-step-btn')]);
+            const next = cell && gridKeyTarget(event.key, lanes, cell);
+            if (!next) return;
+            event.preventDefault();
+            next.focus();
+          }}
+        >
           <div className="drum-grid-row header">
             <span />
             <span />
@@ -233,6 +251,8 @@ function DrumModule({ studio }: { studio: Studio }) {
                         data-step={step}
                         aria-label={`${LABELS[instrument]} step ${step + 1}`}
                         aria-pressed={active}
+                        tabIndex={gridStop.instrument === instrument && gridStop.step === step ? 0 : -1}
+                        onFocus={() => setGridCursor(now => (now && now.instrument === instrument && now.step === step ? now : { instrument, step }))}
                         style={active ? { opacity: 0.45 + velocity * 0.55 } : undefined}
                         onClick={(event) => handleStepClick(instrument, step, event.shiftKey)}
                         title={active ? `Velocity ${percentText(velocity)} (Shift+click to change) · Chance ${percentText(chance)} · Repeats ${repeats}` : ''}
