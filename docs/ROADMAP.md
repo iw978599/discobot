@@ -22,7 +22,7 @@ slow down every later change.
    all wait on it.
 
    The plan is `docs/TYPED_STORE_PLAN.md`: eight pull requests, each leaving
-   the app working. Done: the first four and half of the fifth. An edit is now a typed operation
+   the app working. Done: the first five. An edit is now a typed operation
    handed to one synchronous `apply`, with a reducer for each, and anything
    that wants to record edits can listen for them. Drum swing and drum master
    volume go that way, and `useStudio` applies each once, from the store's
@@ -34,8 +34,10 @@ slow down every later change.
    length, the kit, reset), and the drums on screen are set once, from the
    store's event. The drum sends and the shared effects go that way too, each
    as a change laid over what is there. So do a lane's sound, its synth model
-   and macros, its mute and solo, its octave and keyboard, and the tempo.
-   Still open: the other 11 operations (a lane's pattern, lanes coming and
+   and macros, its mute and solo, its octave and keyboard, and the tempo,
+   and so does every write to a lane's pattern (the piano roll, step controls,
+   length, MIDI import and undo), applied once from the store's event.
+   Still open: the other 10 operations (lanes coming and
    going, the transport, scenes and the song, in that order), then taking
    `request` away, and after that splitting `useStudio.tsx`, which the plan describes
    but does not schedule.

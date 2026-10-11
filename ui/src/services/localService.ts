@@ -821,6 +821,7 @@ export class LocalProjectService {
   setSynthModel(synthId: number, model: { modelId?: SynthModelId; modelParams?: Partial<SynthModelParams> }) { return this.apply({ type: 'synth.model', synthId, modelId: model.modelId, modelParams: model.modelParams }); }
   setSynthMix(synthId: number, mix: { muted?: boolean; solo?: boolean }) { return this.apply({ type: 'synth.mix', synthId, muted: mix.muted, solo: mix.solo }); }
   setSynthPrefs(synthId: number, prefs: { octaveShift?: number; keyboardMode?: 'keyboard' | 'piano-roll' }) { return this.apply({ type: 'synth.prefs', synthId, octaveShift: prefs.octaveShift, keyboardMode: prefs.keyboardMode }); }
+  writePattern(synthId: number, patternId: string, patch: Partial<Pattern>) { return this.apply({ type: 'pattern.write', synthId, patternId, patch }); }
   addGuest(url: string, name?: string) { return this.apply({ type: 'guest.add', guestId: crypto.randomUUID(), url, name }); }
   changeGuest(guestId: string, patch: GuestPatch) { return this.apply({ type: 'guest.patch', guestId, patch }); }
   removeGuest(guestId: string) { return this.apply({ type: 'guest.remove', guestId }); }
@@ -942,13 +943,7 @@ export class LocalProjectService {
       if (resource === 'preferences') return fromApplied(this.apply({ type: 'synth.prefs', synthId, octaveShift: body.octaveShift, keyboardMode: body.keyboardMode }));
       if (resource === 'patterns' && method === 'GET') return respond(synth.patterns);
       if (resource?.startsWith('patterns')) {
-        const id = resource.split('/')[1] || body.id || crypto.randomUUID();
-        const previous = synth.patterns.find(p => p.id === id);
-        const pattern = sanitizePattern({ ...previous, ...body, id, steps: body.steps || previous?.steps || synth.pattern.steps }, state.tempo);
-        if (!pattern) return respond({ error: 'Invalid sequence pattern' }, 400);
-        synth.patterns = [...synth.patterns.filter(p => p.id !== id), pattern];
-        synth.pattern = pattern;
-        return update(previous ? 'patternUpdated' : 'patternCreated', { synthId, pattern }, pattern);
+        return fromApplied(this.apply({ type: 'pattern.write', synthId, patternId: resource.split('/')[1] || body.id || crypto.randomUUID(), patch: body }));
       }
     }
     if (path === '/tempo') {

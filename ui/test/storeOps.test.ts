@@ -421,6 +421,96 @@ const laneCases: Case[] = [
     tempoCase(`a tempo that is ${what} is refused, and no pattern is touched`, tempo, { status: 400, error: 'Invalid tempo' }, twoLanes)),
 ];
 
+// A pattern write. A new store has lane 1 with one pattern, named Synth 1 and open: id-1.
+const BLANK = (count = 16) => Array.from({ length: count }, () => ({ active: false, velocity: .7 }));
+const stepsWith = (changes: Record<number, object>, count = 16) => BLANK(count).map((step, index) => ({ ...step, ...changes[index] }));
+const kept1 = (rest: object = {}) => ({ id: 'id-1', name: 'Synth 1', tempo: 120, steps: BLANK(), ...rest });
+const SHELF = 'Invalid sequence pattern';
+type Target = 'existing' | 'first' | 'new' | 'body' | string;
+const patternCase = (title: string, patch: unknown, result: LaneOutcome, target: Target = 'existing', arrange?: Case['arrange'], synthId = 1, extra: Partial<Case> = {}): Case => {
+  const open = (service: LocalProjectService) => service.snapshot().synths[0];
+  const id = (ctx: any) => (target === 'existing' ? ctx.id : target === 'first' ? ctx.first : target === 'new' || target === 'body' ? '' : target);
+  const bodyId = (patch as { id?: string } | null)?.id;
+  const answer = 'answer' in result ? JSON.parse(JSON.stringify(result.answer)) : undefined;
+  return {
+    op: 'pattern.write', title,
+    arrange: async service => { await arrange?.(service); return { id: open(service).pattern.id, first: open(service).patterns[0].id }; },
+    path: ctx => `/synth/${synthId}/patterns${id(ctx) ? `/${id(ctx)}` : ''}`,
+    body: patch,
+    run: (service, ctx) => service.writePattern(synthId, id(ctx) || (target === 'body' ? bodyId : undefined) || crypto.randomUUID(), wrong(patch)),
+    ...('answer' in result
+      ? { event: target === 'existing' || target === 'first' ? 'patternUpdated' : 'patternCreated', eventData: { synthId, pattern: answer }, ...result, answer }
+      : result),
+    ...extra,
+  };
+};
+const noted = { active: true, note: 'C4', velocity: .8 };
+const written1 = (step: object, changes: object = {}) => ({ answer: kept1({ ...changes, steps: stepsWith({ 0: step }) }) });
+const longPattern = (service: LocalProjectService) => { assert.ok(service.writePattern(1, service.snapshot().synths[0].pattern.id, wrong({ steps: BLANK(32), bars: 2 })).ok); };
+const oneNote = (service: LocalProjectService) => { assert.ok(service.writePattern(1, service.snapshot().synths[0].pattern.id, { steps: stepsWith({ 0: noted }) }).ok); };
+const field = (title: string, change: object, expected: object) =>
+  patternCase(title, { steps: [{ active: true, note: 'C4', velocity: .8, ...change }] }, written1({ ...noted, ...expected }));
+
+const patternCases: Case[] = [
+  patternCase('a new pattern is made from the steps sent, filled out to a bar', { name: 'Second', steps: [noted] }, { answer: kept1({ name: 'Second', steps: stepsWith({ 0: noted }) }) }, 'new'),
+  patternCase('a new pattern with no steps takes the open one\'s, and a missing name is "Recovered pattern"', {}, { answer: kept1({ name: 'Recovered pattern', steps: stepsWith({ 0: noted }) }) }, 'new', oneNote),
+  patternCase('a new pattern can be given its id in the path', { steps: [noted] }, { answer: kept1({ id: 'mine', name: 'Recovered pattern', steps: stepsWith({ 0: noted }) }) }, 'mine'),
+  patternCase('an id in the body is used when the path has none', { id: 'theirs', steps: [noted] }, { answer: kept1({ id: 'theirs', name: 'Recovered pattern', steps: stepsWith({ 0: noted }) }) }, 'body'),
+  patternCase('the path\'s id wins over the body\'s', { id: 'theirs', steps: [noted] }, { answer: kept1({ steps: stepsWith({ 0: noted }) }) }),
+  patternCase('an id of 300 characters is cut to 200', { steps: [noted] }, { answer: kept1({ id: 'x'.repeat(200), name: 'Recovered pattern', steps: stepsWith({ 0: noted }) }) }, 'x'.repeat(300)),
+  patternCase('an existing pattern is changed in place, keeping its name', { steps: [noted] }, written1(noted)),
+  patternCase('a write of nothing keeps the pattern as it was, and still emits and saves', {}, { answer: kept1({ steps: stepsWith({ 0: noted }) }) }, 'existing', oneNote),
+  patternCase('the written pattern goes last in the lane\'s list and becomes the open one', { name: 'First again' }, { answer: kept1({ name: 'First again' }) }, 'first',
+    service => { assert.ok(service.writePattern(1, crypto.randomUUID(), { name: 'Second', steps: [noted] }).ok); }, 1,
+    { check: project => { assert.deepEqual(project.synths[0].patterns.map((pattern: any) => pattern.name), ['Second', 'First again']); assert.equal(project.synths[0].pattern.name, 'First again'); } }),
+  patternCase('a pattern of two bars keeps them when no bars are sent', { name: 'Again' }, { answer: kept1({ name: 'Again', steps: BLANK(32), bars: 2 }) }, 'existing', longPattern),
+  patternCase('bars that are undefined are not sent: JSON dropped them, and the pattern\'s own stay', { name: 'Again', bars: undefined }, { answer: kept1({ name: 'Again', steps: BLANK(32), bars: 2 }) }, 'existing', longPattern),
+  patternCase('steps sent with bars are that many bars long', { steps: BLANK(32), bars: 2 }, { answer: kept1({ steps: BLANK(32), bars: 2 }) }),
+  patternCase('bars that are infinity are none', { steps: BLANK(32), bars: Number.POSITIVE_INFINITY }, { answer: kept1({ steps: BLANK(32) }) }),
+  patternCase('bars that are text are none', { steps: BLANK(32), bars: '2' }, { answer: kept1({ steps: BLANK(32) }) }),
+  patternCase('a pattern\'s own tempo is not taken: the project\'s is written', { tempo: 200, steps: [noted] }, { answer: kept1({ tempo: 150, steps: stepsWith({ 0: noted }) }) }, 'existing',
+    service => { assert.ok(service.setTempo(150).ok); }),
+
+  ...([['longer than 200 characters', 'n'.repeat(250), 'n'.repeat(200)], ['that is a number', 7, 'Recovered pattern'], ['that is null', null, 'Recovered pattern'], ['that is not a number at all', Number.NaN, 'Recovered pattern'], ['that is infinity', Number.POSITIVE_INFINITY, 'Recovered pattern'], ['that is undefined, which JSON never sent: the old name stays', undefined, 'Synth 1']] as const).map(([what, name, expected]) =>
+    patternCase(`a name ${what}`, { name }, { answer: kept1({ name: expected }) })),
+
+  field('a velocity past the top is held at 1', { velocity: 3 }, { velocity: 1 }),
+  field('a velocity below zero is held at 0', { velocity: -2 }, { velocity: 0 }),
+  ...notNumbers.map(([what, velocity]) => field(`a velocity that is ${what} is .7`, { velocity }, { velocity: .7 })),
+  field('a note that is not one is no note, and the step is off', { note: 'H9' }, { active: false, note: undefined }),
+  field('a note that is not text is no note', { note: 60 }, { active: false, note: undefined }),
+  field('a step that is on with no note is off', { note: undefined }, { active: false, note: undefined }),
+  field('a step that is "on" but not true is off', { active: 'yes' }, { active: false }),
+  field('a chord keeps its other notes once each, leaving out the lowest and what is no note', { notes: ['E4', 'G4', 'E4', 'C4', 'X', 7] }, { notes: ['E4', 'G4'] }),
+  field('a chord holds six notes in all', { notes: ['D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'C5'] }, { notes: ['D4', 'E4', 'F4', 'G4', 'A4'] }),
+  field('notes that are not a list are none', { notes: 'E4' }, {}),
+  field('a slide is kept when it is true', { slide: true }, { slide: true }),
+  ...([['yes', 'yes'], ['undefined', undefined], ['null', null], ['1', 1]] as const).map(([what, slide]) => field(`a slide that is ${what} is none`, { slide }, {})),
+  field('a length of four is kept', { length: 4 }, { length: 4 }),
+  field('a length is held to what is left of the pattern', { length: 999 }, { length: 16 }),
+  ...([['a fraction', 1.5], ['one', 1], ['infinity', Number.POSITIVE_INFINITY], ['not a number at all', Number.NaN], ['null', null], ['undefined', undefined], ['text', '4']] as const).map(([what, length]) => field(`a length that is ${what} is one step`, { length }, {})),
+  field('a chance below one is kept', { probability: .5 }, { probability: .5 }),
+  ...([['one', 1], ['more than one', 2], ['below zero', -.5], ['infinity', Number.POSITIVE_INFINITY], ['not a number at all', Number.NaN], ['null', null], ['undefined', undefined], ['text', '.5']] as const).map(([what, probability]) => field(`a chance that is ${what} is none`, { probability }, {})),
+  field('a repeat count is kept', { ratchet: 3 }, { ratchet: 3 }),
+  field('a repeat count is held to four', { ratchet: 9 }, { ratchet: 4 }),
+  ...([['a fraction', 1.5], ['one', 1], ['infinity', Number.POSITIVE_INFINITY], ['not a number at all', Number.NaN], ['null', null], ['undefined', undefined]] as const).map(([what, ratchet]) => field(`a repeat count that is ${what} is none`, { ratchet }, {})),
+  field('a late start is kept', { offset: .5 }, { offset: .5 }),
+  field('a late start is held below one step', { offset: 4 }, { offset: .95 }),
+  ...([['infinity: JSON made it null, so it is none', Number.POSITIVE_INFINITY], ['zero', 0], ['below zero', -.5], ['not a number at all', Number.NaN], ['null', null], ['undefined', undefined], ['text', '.5']] as const).map(([what, offset]) => field(`a late start that is ${what} is none`, { offset }, {})),
+  patternCase('a step that is not an object is a blank one, and steps past a bar are cut', { steps: [null, 'x', 7, undefined, noted, ...BLANK(30)] }, { answer: kept1({ steps: stepsWith({ 4: noted }, 32) }) }),
+  patternCase('a step whose fields are all undefined is a blank one', { steps: [{ active: undefined, note: undefined, velocity: undefined, notes: undefined, length: undefined }] }, { answer: kept1() }),
+
+  ...([['text', 'abc'], ['an object', {}], ['a number', 7]] as const).map(([what, steps]) =>
+    patternCase(`steps that are ${what} are refused`, { steps }, { status: 400, error: SHELF })),
+  ...([['null', null], ['undefined', undefined], ['not a number at all', Number.NaN], ['infinity', Number.POSITIVE_INFINITY], ['zero', 0], ['empty text', ''], ['false', false]] as const).map(([what, steps]) =>
+    patternCase(`steps that are ${what} are the ones the pattern had`, { steps, name: 'Kept' }, { answer: kept1({ name: 'Kept', steps: stepsWith({ 0: noted }) }) }, 'existing', oneNote)),
+  patternCase('a body id that is a number is no id: refused', { id: 5, steps: [noted] }, { status: 400, error: SHELF }, 'body'),
+  patternCase('a pattern for a lane that does not exist is refused', { steps: [noted] }, { status: 404, error: NO_SYNTH }, 'existing', undefined, 3),
+  ...notObjects.map(([what, patch]) => patternCase(`a pattern that is ${what} is refused as a route's body was`, patch, { status: 400, error: 'Invalid local operation data' })),
+  patternCase('a pattern that is a list is refused', [noted], { status: 400, error: 'Invalid local operation data' }),
+  patternCase('a pattern that is not an object is refused before a lane is looked for', 'lots', { status: 400, error: 'Invalid local operation data' }, 'existing', undefined, 3),
+];
+
 const cases: Case[] = [
   ...swing('a swing in range is kept as sent', .3, .3),
   ...swing('a swing past the top is held at .75', 5, .75),
@@ -489,6 +579,7 @@ const cases: Case[] = [
   ...drumCases,
   ...effectCases,
   ...laneCases,
+  ...patternCases,
 ];
 
 // What is in storage, or null when nothing has been written yet.
@@ -941,6 +1032,46 @@ test('before the service is initialized the typed way throws, with the message r
   assert.throws(() => new LocalProjectService().setSynthPrefs(1, {}), message);
   assert.throws(() => new LocalProjectService().getTempo(), message);
   assert.throws(() => new LocalProjectService().getScenes(), message);
+});
+
+test('the store keeps nothing of a pattern operation\'s own objects', () => {
+  const service = setup();
+  const id = service.snapshot().synths[0].pattern.id;
+  const patch = { name: 'Mine', steps: stepsWith({ 0: { active: true, note: 'C4', velocity: .8, notes: ['E4'] } }) };
+  const result = service.writePattern(1, id, patch);
+  assert.ok(result.ok);
+  patch.steps[0].notes![0] = 'G4';
+  patch.steps[0].active = false;
+  patch.steps.pop();
+  patch.name = 'Changed';
+  result.value.steps[0].velocity = 0;
+  result.value.steps[1].active = true;
+  const kept = service.snapshot().synths[0];
+  assert.deepEqual([kept.pattern.name, kept.pattern.steps.length, kept.pattern.steps[0], kept.pattern.steps[1].active], ['Mine', 16, { active: true, note: 'C4', velocity: .8, notes: ['E4'] }, false]);
+  assert.deepEqual(kept.patterns, [kept.pattern]);
+  service.flush();
+});
+
+// Two cells painted in one frame: the second is built from the pattern the first left, which
+// the first's event has already put in front of the listener, with nothing else changed.
+test('each pattern write is delivered whole before the next begins, and a second write builds on the first', () => {
+  const service = setup();
+  const id = service.snapshot().synths[0].pattern.id;
+  let open = service.snapshot().synths[0].pattern;
+  const seen: Message[] = [];
+  service.subscribe(message => { seen.push(message); if (message.type === 'patternUpdated') open = message.data.pattern; });
+  for (const index of [0, 5, 9]) {
+    const next = { ...open, steps: open.steps.map((step, at) => (at === index ? { ...step, active: true, note: 'C4' } : step)) };
+    assert.ok(service.writePattern(1, id, next).ok);
+    assert.deepEqual(open.steps.flatMap((step, at) => (step.active ? [at] : [])), [0, 5, 9].filter(at => at <= index));
+  }
+  assert.deepEqual(seen.slice(1).map(message => message.type), Array(3).fill('patternUpdated'));
+  assert.equal(service.snapshot().synths[0].patterns.length, 1);
+  service.flush();
+});
+
+test('pattern.write is saved, undoable and shared', () => {
+  assert.deepEqual(OP_META['pattern.write'], { save: true, undoable: true, share: true });
 });
 
 // Until the last pull request of the plan every operation is in the type but only some have a
