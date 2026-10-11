@@ -1,10 +1,11 @@
 // What each operation does to the project. A reducer is the body of the route it replaces,
 // moved as it was. It changes the state it is handed and says what to save and send; it never
 // emits, saves or reads the clock itself, which is `apply`'s work in localService.ts.
-import { clone, merge, number, sanitizeDrums, sanitizeEffects, sanitizeSends } from './projectSanitization';
+import { clone, merge, number, sanitizeDrums, sanitizeEffects, sanitizeModelParams, sanitizeSends, sanitizeSynthParams } from './projectSanitization';
 import { MAX_GUESTS, guestUrl, patchGuest, sanitizeGuests } from './guests';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
 import { BAR_CHOICES, DRUM_STEPS_PER_BAR, resizeBars } from './patternLength';
+import { normalizeSynthModelId } from '../synthModels';
 import type { DrumState } from '../types';
 import type { ProjectDefaults, ProjectState } from './localService';
 import type { Operation, OpResult, OpType, Outcome, Rejected } from './projectOps';
@@ -18,6 +19,7 @@ const update = <V>(type: string, data: V): Outcome<V> => ({ ok: true, value: dat
 // What `respond({ error }, status)` was. A reducer refuses before it changes anything.
 const refuse = (status: Rejected['status'], error: string): Rejected => ({ ok: false, status, error });
 const BAD_DATA = 'Invalid local operation data';
+const NO_SYNTH = 'Synth not found';
 const BAD_ADDRESS = 'That is not an address a guest instrument can be loaded from. It must start with https:// and be on another site.';
 
 // An object in an operation, as a route's body used to arrive: after a trip through JSON, which
@@ -33,6 +35,9 @@ const sent = (value: unknown): Record<string, any> | null => {
 // One value in an operation, after the same trip: a number that is not finite is null, and
 // what JSON cannot carry is undefined.
 const sentValue = (value: unknown): unknown => sent({ value })?.value;
+
+// The router found the lane from a number in the path; an operation can name anything.
+const laneOf = (state: ProjectState, synthId: unknown) => state.synths.find(s => s.synthId === synthId);
 
 type DrumLane = DrumState[keyof DrumState];
 // The six edits to one drum lane, as the router made them: find the lane, change it, put the
@@ -177,5 +182,46 @@ export const reducers: Partial<Reducers> = {
       if (Object.keys(scene.guestMix).length === 0) delete scene.guestMix;
     }
     return update('guestsChanged', { guests: state.guests });
+  },
+  // Checked with `typeof`, which takes what JSON would have dropped or nulled as it takes nothing.
+  'synth.mix': ({ state }, op) => {
+    const synth = laneOf(state, op.synthId);
+    if (!synth) return refuse(404, NO_SYNTH);
+    if (typeof op.muted === 'boolean') synth.muted = op.muted;
+    if (typeof op.solo === 'boolean') synth.solo = op.solo;
+    return update('synthMix', { synthId: synth.synthId, muted: synth.muted, solo: synth.solo });
+  },
+  // The model's name is taken when it counts as true, and infinity does where the null JSON made
+  // of it does not; `merge` takes a macro that is undefined as a value to set.
+  'synth.model': ({ state }, op) => {
+    const synth = laneOf(state, op.synthId);
+    if (!synth) return refuse(404, NO_SYNTH);
+    synth.synthModelId = normalizeSynthModelId(sentValue(op.modelId) || synth.synthModelId);
+    synth.synthModelParams = sanitizeModelParams(merge(synth.synthModelParams, sent(op.modelParams) ?? {}));
+    return update('synthModelUpdate', { synthId: synth.synthId, modelId: synth.synthModelId, modelParams: synth.synthModelParams });
+  },
+  // The event names the lane; the answer is the sound alone.
+  'synth.params': ({ state, defaults }, op) => {
+    const patch = sent(op.patch);
+    if (!patch) return refuse(400, BAD_DATA);
+    const synth = laneOf(state, op.synthId);
+    if (!synth) return refuse(404, NO_SYNTH);
+    synth.synthParams = sanitizeSynthParams(merge(synth.synthParams, patch), defaults.synthParams);
+    return { ok: true, value: synth.synthParams, save: true, event: { type: 'synthUpdate', data: { synthId: synth.synthId, parameters: synth.synthParams } } };
+  },
+  // Saved, and sent to nobody: the octave and the keyboard are this person's view of the lane.
+  'synth.prefs': ({ state }, op) => {
+    const synth = laneOf(state, op.synthId);
+    if (!synth) return refuse(404, NO_SYNTH);
+    synth.octaveShift = Math.round(number(op.octaveShift, synth.octaveShift ?? 0, -2, 2));
+    synth.keyboardMode = op.keyboardMode === 'piano-roll' ? 'piano-roll' : op.keyboardMode === 'keyboard' ? 'keyboard' : synth.keyboardMode;
+    return { ok: true, value: synth, save: true };
+  },
+  'tempo.set': ({ state }, op) => {
+    const { tempo } = op;
+    if (!Number.isFinite(tempo) || tempo < 20 || tempo > 400) return refuse(400, 'Invalid tempo');
+    state.tempo = tempo;
+    state.synths.forEach(s => { s.pattern.tempo = tempo; s.patterns.forEach(p => { p.tempo = tempo; }); });
+    return update('tempoChange', { tempo: state.tempo });
   },
 };

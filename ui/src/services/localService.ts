@@ -6,7 +6,7 @@ import { createIndexedDbLibrary, createMemoryLibrary, hasIndexedDb, type Project
 import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
 import { normalizeSynthModelId } from '../synthModels';
 import { NEW_PROJECT_REVERB } from './effectSettings';
-import { record, number, clone, merge, matchesShape, sanitizePattern, sanitizeSynthParams, sanitizeDrums, sanitizeEffects, sanitizeSends, sanitizeSaved, sanitizeModelParams, sanitizeKit, sanitizeScenes, sanitizeSong, MAX_SCENES } from './projectSanitization';
+import { record, number, clone, matchesShape, sanitizePattern, sanitizeSynthParams, sanitizeDrums, sanitizeEffects, sanitizeSends, sanitizeSaved, sanitizeModelParams, sanitizeKit, sanitizeScenes, sanitizeSong, MAX_SCENES } from './projectSanitization';
 import type { Applied, DeepPartial, DrumFxState, GuestPatch, OpNotice, OpResult, Operation, Origin, Outcome } from './projectOps';
 import { reducers, type ReducerContext } from './projectReducers';
 
@@ -816,6 +816,11 @@ export class LocalProjectService {
   setDrumMix(instrument: DrumInstrument, mix: { muted?: boolean; solo?: boolean }) { return this.apply({ type: 'drum.mix', instrument, muted: mix.muted, solo: mix.solo }); }
   setDrumFx(patch: DeepPartial<DrumFxState>) { return this.apply({ type: 'drum.fx', patch }); }
   setEffectsLoop(patch: DeepPartial<EffectsLoopState>) { return this.apply({ type: 'effects.set', patch }); }
+  setTempo(tempo: number) { return this.apply({ type: 'tempo.set', tempo }); }
+  setSynthParams(synthId: number, patch: DeepPartial<SynthParameters>) { return this.apply({ type: 'synth.params', synthId, patch }); }
+  setSynthModel(synthId: number, model: { modelId?: SynthModelId; modelParams?: Partial<SynthModelParams> }) { return this.apply({ type: 'synth.model', synthId, modelId: model.modelId, modelParams: model.modelParams }); }
+  setSynthMix(synthId: number, mix: { muted?: boolean; solo?: boolean }) { return this.apply({ type: 'synth.mix', synthId, muted: mix.muted, solo: mix.solo }); }
+  setSynthPrefs(synthId: number, prefs: { octaveShift?: number; keyboardMode?: 'keyboard' | 'piano-roll' }) { return this.apply({ type: 'synth.prefs', synthId, octaveShift: prefs.octaveShift, keyboardMode: prefs.keyboardMode }); }
   addGuest(url: string, name?: string) { return this.apply({ type: 'guest.add', guestId: crypto.randomUUID(), url, name }); }
   changeGuest(guestId: string, patch: GuestPatch) { return this.apply({ type: 'guest.patch', guestId, patch }); }
   removeGuest(guestId: string) { return this.apply({ type: 'guest.remove', guestId }); }
@@ -927,26 +932,14 @@ export class LocalProjectService {
       }
       if (resource === 'parameters') {
         if (method === 'GET') return respond(synth.synthParams);
-        synth.synthParams = sanitizeSynthParams(merge(synth.synthParams, body), this.defaults!.synthParams);
-        return update('synthUpdate', { synthId, parameters: synth.synthParams }, synth.synthParams);
+        return fromApplied(this.apply({ type: 'synth.params', synthId, patch: body }));
       }
       if (resource === 'model') {
         if (method === 'GET') return respond({ modelId: synth.synthModelId, modelParams: synth.synthModelParams });
-        synth.synthModelId = normalizeSynthModelId(body.modelId || synth.synthModelId);
-        synth.synthModelParams = sanitizeModelParams(merge(synth.synthModelParams, record(body.modelParams)));
-        return update('synthModelUpdate', { synthId, modelId: synth.synthModelId, modelParams: synth.synthModelParams });
+        return fromApplied(this.apply({ type: 'synth.model', synthId, modelId: body.modelId, modelParams: body.modelParams }));
       }
-      if (resource === 'mix') {
-        if (typeof body.muted === 'boolean') synth.muted = body.muted;
-        if (typeof body.solo === 'boolean') synth.solo = body.solo;
-        return update('synthMix', { synthId, muted: synth.muted, solo: synth.solo });
-      }
-      if (resource === 'preferences') {
-        synth.octaveShift = Math.round(number(body.octaveShift, synth.octaveShift ?? 0, -2, 2));
-        synth.keyboardMode = body.keyboardMode === 'piano-roll' ? 'piano-roll' : body.keyboardMode === 'keyboard' ? 'keyboard' : synth.keyboardMode;
-        this.persist();
-        return respond(synth);
-      }
+      if (resource === 'mix') return fromApplied(this.apply({ type: 'synth.mix', synthId, muted: body.muted, solo: body.solo }));
+      if (resource === 'preferences') return fromApplied(this.apply({ type: 'synth.prefs', synthId, octaveShift: body.octaveShift, keyboardMode: body.keyboardMode }));
       if (resource === 'patterns' && method === 'GET') return respond(synth.patterns);
       if (resource?.startsWith('patterns')) {
         const id = resource.split('/')[1] || body.id || crypto.randomUUID();
@@ -960,10 +953,7 @@ export class LocalProjectService {
     }
     if (path === '/tempo') {
       if (method === 'GET') return respond(this.getTempo());
-      if (!Number.isFinite(body.tempo) || body.tempo < 20 || body.tempo > 400) return respond({ error: 'Invalid tempo' }, 400);
-      state.tempo = body.tempo;
-      state.synths.forEach(s => { s.pattern.tempo = body.tempo; s.patterns.forEach(p => { p.tempo = body.tempo; }); });
-      return update('tempoChange', { tempo: state.tempo });
+      return fromApplied(this.apply({ type: 'tempo.set', tempo: body.tempo }));
     }
     if (path === '/sequencer/play' || path === '/sequencer/stop') {
       return respond({ success: this.setPlaying(body.synthId || 1, path.endsWith('/play'), body.patternId) });

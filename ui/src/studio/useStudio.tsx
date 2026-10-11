@@ -616,51 +616,25 @@ export function useStudio() {
         ? {
           ...entry,
           pattern: clonePattern(snapshot.pattern),
-          synthParams: cloneSynthParams(snapshot.synthParams),
-          synthModelId: snapshot.synthModelId,
-          synthModelParams: cloneSynthModelParams(snapshot.synthModelParams),
           selectedStep: null,
-          muted: snapshot.muted ?? entry.muted,
-          solo: snapshot.solo ?? entry.solo,
           octaveShift: snapshot.octaveShift ?? entry.octaveShift,
         }
         : entry
     )));
-    setGlobalTempo(snapshot.tempo);
     await Promise.all([
       localRequest(`/synth/${synthId}/patterns/${snapshot.pattern.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(snapshot.pattern),
       }),
-      localRequest(`/synth/${synthId}/parameters`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(snapshot.synthParams || DEFAULT_PARAMS),
-      }),
-      localRequest(`/synth/${synthId}/model`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          modelId: snapshot.synthModelId,
-          modelParams: snapshot.synthModelParams,
-        }),
-      }),
-      // Not a request, but kept in its place among them: the drums go back after the lane's model and before the tempo.
+      // Not requests, but each kept in its place after the pattern: the store is changed in the order it always was.
+      localService.setSynthParams(synthId, snapshot.synthParams || DEFAULT_PARAMS),
+      localService.setSynthModel(synthId, { modelId: snapshot.synthModelId, modelParams: snapshot.synthModelParams }),
       localService.setDrumState(snapshot.drumState),
-      localRequest('/tempo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tempo: snapshot.tempo }),
-      }),
-      localRequest(`/synth/${synthId}/mix`, {
-        method: 'POST',
-        body: JSON.stringify({ muted: snapshot.muted ?? false, solo: snapshot.solo ?? false }),
-      }),
-      localRequest(`/synth/${synthId}/preferences`, {
-        method: 'POST',
-        body: JSON.stringify({ octaveShift: snapshot.octaveShift ?? 0 }),
-      }),
+      localService.setTempo(snapshot.tempo),
+      localService.setSynthMix(synthId, { muted: snapshot.muted ?? false, solo: snapshot.solo ?? false }),
+      // The octave is saved and sent to nobody, so it is set on the lane above as well.
+      localService.setSynthPrefs(synthId, { octaveShift: snapshot.octaveShift ?? 0 }),
     ]);
   }, []);
 
@@ -1207,7 +1181,7 @@ export function useStudio() {
     const synth = synthsRef.current.find(s => s.id === synthId);
     if (!synth) return;
     const shift = Math.max(-2, Math.min(2, synth.octaveShift + (direction === 'up' ? 1 : -1)));
-    void localRequest(`/synth/${synthId}/preferences`, { method: 'POST', body: JSON.stringify({ octaveShift: shift }) });
+    localService.setSynthPrefs(synthId, { octaveShift: shift });
     setSynths(prev => prev.map(s => {
       if (s.id !== synthId) return s;
       const newShift = direction === 'up'
@@ -1220,16 +1194,11 @@ export function useStudio() {
   const handleTempoChange = useCallback(async (bpm: number) => {
     const firstSynth = synthsRef.current[0];
     if (firstSynth?.pattern) pushHistorySnapshot(firstSynth.id, firstSynth.pattern.id);
-    setGlobalTempo(bpm);
+    // The tempoChange event sets the tempo; nothing sends the lanes their patterns' copy of it.
     setSynths(prev => prev.map(s =>
       s.pattern ? { ...s, pattern: { ...s.pattern, tempo: bpm } } : s
     ));
-
-    await localRequest('/tempo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tempo: bpm }),
-    });
+    localService.setTempo(bpm);
   }, [pushHistorySnapshot]);
 
   const handleGlobalPlayStop = useCallback(async () => {
@@ -1372,7 +1341,7 @@ export function useStudio() {
   }, []);
 
   const handleKeyboardModeChange = useCallback((synthId: number, mode: 'keyboard' | 'piano-roll') => {
-    void localRequest(`/synth/${synthId}/preferences`, { method: 'POST', body: JSON.stringify({ keyboardMode: mode }) });
+    localService.setSynthPrefs(synthId, { keyboardMode: mode });
     setSynths(prev => prev.map(s => (
       s.id === synthId ? { ...s, keyboardMode: mode } : s
     )));
@@ -1559,11 +1528,7 @@ export function useStudio() {
   const handleParameterChange = useCallback(async (synthId: number, params: Partial<SynthParameters>) => {
     const synth = synthsRef.current.find((entry) => entry.id === synthId);
     if (synth?.pattern) pushHistorySnapshotThrottled(synthId, synth.pattern.id, `synth-params-${synthId}`);
-    await localRequest(`/synth/${synthId}/parameters`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(params),
-    });
+    localService.setSynthParams(synthId, params);
   }, [pushHistorySnapshotThrottled]);
 
   const handleSynthModelChange = useCallback(async (
@@ -1579,31 +1544,13 @@ export function useStudio() {
       ...synth.synthModelParams,
       ...modelParams,
     });
-    setSynths((prev) => prev.map((entry) => (
-      entry.id === synthId
-        ? {
-          ...entry,
-          synthModelId: normalizedModelId,
-          synthModelParams: normalizedModelParams,
-        }
-        : entry
-    )));
-    await localRequest(`/synth/${synthId}/model`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        modelId: normalizedModelId,
-        modelParams: normalizedModelParams,
-      }),
-    });
+    localService.setSynthModel(synthId, { modelId: normalizedModelId, modelParams: normalizedModelParams });
+    // The macros' parameters went a turn later when these were requests, after React had rendered
+    // the model for a click. A preset load pushes its second undo entry after this returns, and
+    // that entry holds what was rendered then: the new model with the sound from before it.
+    await Promise.resolve();
     const mapped = mapSynthModelToEngineParams(normalizedModelId, normalizedModelParams);
-    if (Object.keys(mapped).length > 0) {
-      await localRequest(`/synth/${synthId}/parameters`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(mapped),
-      });
-    }
+    if (Object.keys(mapped).length > 0) localService.setSynthParams(synthId, mapped);
   }, [pushHistorySnapshot]);
 
   const handleStepCountChange = useCallback(async (synthId: number, stepCount: 16 | 32) => {
@@ -1753,14 +1700,7 @@ export function useStudio() {
   }, [pushHistorySnapshot]);
 
   const handleSynthMixChange = useCallback(async (synthId: number, mix: { muted?: boolean; solo?: boolean }) => {
-    setSynths(prev => prev.map(s =>
-      s.id === synthId ? { ...s, ...mix } : s
-    ));
-    await localRequest(`/synth/${synthId}/mix`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(mix),
-    });
+    localService.setSynthMix(synthId, mix);
   }, []);
 
   const handleSaveSynthPreset = useCallback((synthId: number, name: string) => {
@@ -2119,11 +2059,7 @@ export function useStudio() {
       localService.setDrumState(next);
     }
 
-    setGlobalTempo(tempo);
-    await localRequest('/tempo', {
-      method: 'POST',
-      body: JSON.stringify({ tempo }),
-    });
+    localService.setTempo(tempo);
     setMidiImportData(null);
     setMidiImportAssignments({});
   }, [midiImportData, midiImportAssignments, ensureSynthExists, pushHistorySnapshot]);
@@ -2244,24 +2180,9 @@ export function useStudio() {
     transportRef.current?.stop();
     const currentSynths = synthsRef.current;
     for (const synth of currentSynths) {
-      await localRequest(`/synth/${synth.id}/parameters`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(DEFAULT_PARAMS),
-      });
-      await localRequest(`/synth/${synth.id}/model`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          modelId: DEFAULT_SYNTH_MODEL_ID,
-          modelParams: createDefaultSynthModelParams(),
-        }),
-      });
-      await localRequest(`/synth/${synth.id}/mix`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ muted: false, solo: false }),
-      });
+      localService.setSynthParams(synth.id, DEFAULT_PARAMS);
+      localService.setSynthModel(synth.id, { modelId: DEFAULT_SYNTH_MODEL_ID, modelParams: createDefaultSynthModelParams() });
+      localService.setSynthMix(synth.id, { muted: false, solo: false });
       if (synth.pattern) {
         const cleared = {
           ...synth.pattern,
