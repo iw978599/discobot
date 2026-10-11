@@ -89,7 +89,7 @@ function SynthModule({ studio, synthId, synth }: SynthModuleProps) {
 
   if (!synth) {
     return (
-      <section className="rack-unit empty" aria-label={`Synth ${synthId}`}>
+      <section className="rack-unit empty" aria-label={`Synth ${synthId}`} data-unit={`synth-${synthId}`}>
         <button
           className="rack-btn"
           onClick={() => { void studio.ensureSynthExists(synthId).then(created => { if (created) studio.setSelectedSynthId(synthId); }); }}
@@ -106,7 +106,7 @@ function SynthModule({ studio, synthId, synth }: SynthModuleProps) {
   const change = studio.handleParameterChange;
 
   return (
-    <section ref={sectionRef} className={`rack-unit synth-module ${selected ? 'selected' : ''}`} aria-label={`Synth ${synthId} module`}>
+    <section ref={sectionRef} className={`rack-unit synth-module ${selected ? 'selected' : ''}`} aria-label={`Synth ${synthId} module`} data-unit={`synth-${synthId}`}>
       <div className="rack-row">
         <button
           className="rack-plate"
