@@ -40,9 +40,10 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test --project=${{ matrix.project }}
-      # Nobody watches these run. When one fails, what Playwright kept for it (a screenshot, the
-      # page as it stood and a trace of every step) is kept for a week.
-      - if: failure()
+      # Nobody watches these run. When a test fails, what Playwright kept for it (a screenshot,
+      # the page as it stood and a trace of every step) is kept for a week. That is done even when
+      # the job passes, because a test that failed and then passed on its second go leaves them too.
+      - if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ matrix.project }}

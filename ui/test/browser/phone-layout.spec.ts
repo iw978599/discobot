@@ -64,16 +64,31 @@ type Finger = { id: number; x: number; y: number };
 const fingers = async (page: Page) => {
   const session = await page.context().newCDPSession(page);
   let down = false;
+  let sent = 0;
+  // A touch is sent and the browser answers when the page has had it. Now and then it never
+  // answers, and the test would wait out its whole time saying nothing: so say which touch.
+  const send = async (type: 'touchStart' | 'touchMove' | 'touchEnd', touchPoints: Array<{ id: number; x: number; y: number }>) => {
+    sent += 1;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const late = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`the browser did not answer touch ${sent} of this test, a ${type} at ${JSON.stringify(touchPoints)}, within 10 seconds`)), 10_000);
+    });
+    try {
+      await Promise.race([session.send('Input.dispatchTouchEvent', { type, touchPoints }), late]);
+    } finally {
+      clearTimeout(timer);
+    }
+  };
   return {
     async touch(...points: Finger[]) {
-      if (points.length === 0) await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-      else await session.send('Input.dispatchTouchEvent', { type: down ? 'touchMove' : 'touchStart', touchPoints: points });
+      if (points.length === 0) await send('touchEnd', []);
+      else await send(down ? 'touchMove' : 'touchStart', points);
       down = points.length > 0;
     },
     // One finger moved in a line, a little at a time, as a finger moves.
     async slide(from: Finger, to: { x: number; y: number }, others: Finger[] = []) {
       for (let part = 1; part <= 8; part += 1) {
-        await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [...others, { id: from.id, x: from.x + (to.x - from.x) * part / 8, y: from.y + (to.y - from.y) * part / 8 }] });
+        await send('touchMove', [...others, { id: from.id, x: from.x + (to.x - from.x) * part / 8, y: from.y + (to.y - from.y) * part / 8 }]);
       }
     },
   };
