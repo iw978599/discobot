@@ -115,12 +115,11 @@ test('the store keeps the new effect settings, and only a new project starts wit
     drumFx: { sends: { reverb: .2, delay: .1, drive: .1, phaser: 0, chorus: 0 }, returnLevel: .7 },
     effectsLoop: loop,
   });
-  const post = (path: string, body: unknown) => service.request(path, { method: 'POST', body: JSON.stringify(body) });
   assert.deepEqual(service.snapshot().effectsLoop.reverb, { ...loop.reverb, preDelay: 0.02, damping: 0.35 }, 'a new project gets a gap and some damping');
 
-  await post('/effects-loop', { chorus: { enabled: true, rate: 0.8, depth: 0.4, mix: 0.9 }, eq: { enabled: true, low: 2, mid: 0, high: -3 } });
-  await post('/effects-loop', { reverb: { ...loop.reverb, preDelay: 0, damping: 0 } });
-  await post('/drum/fx', { sends: { chorus: 0.4 } });
+  service.setEffectsLoop({ chorus: { enabled: true, rate: 0.8, depth: 0.4, mix: 0.9 }, eq: { enabled: true, low: 2, mid: 0, high: -3 } });
+  service.setEffectsLoop({ reverb: { ...loop.reverb, preDelay: 0, damping: 0 } });
+  service.setDrumFx({ sends: { chorus: 0.4 } });
   const state = service.snapshot();
   assert.deepEqual(state.effectsLoop.chorus, { enabled: true, rate: 0.8, depth: 0.4, mix: 0.9 });
   assert.deepEqual(state.effectsLoop.eq, { enabled: true, low: 2, mid: 0, high: -3 });

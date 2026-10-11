@@ -31,6 +31,14 @@ export function setup() {
   return service;
 }
 
+// What an edit that is meant to be accepted answered; fails the test if it was refused.
+export const ok = (result: Applied<unknown>): any => {
+  assert.ok(result.ok, `expected the edit to be accepted: ${result.ok ? '' : result.error}`);
+  return result.value;
+};
+// The status a route would have answered: 200 for an accepted edit.
+export const statusOf = (result: Applied<unknown>) => (result.ok ? 200 : result.status);
+
 export type Message = { type: string; data: any };
 export type Result = { status: number; data: any; events: Message[]; saved: boolean };
 

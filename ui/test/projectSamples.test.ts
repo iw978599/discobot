@@ -47,7 +47,7 @@ async function browser() {
     held.set(id, { id, name, type: 'audio/wav', data: bytes.slice().buffer });
     return id;
   };
-  const lane = (instrument: string, sampleId: string | null) => service.request('/drum/sample', { method: 'POST', body: JSON.stringify({ instrument, sampleId }) });
+  const lane = (instrument: string, sampleId: string | null) => service.setDrumSample(instrument as never, sampleId ?? undefined);
   // What Export Project writes, after the trip through a file.
   const save = async () => {
     const file = service.exportProject();
@@ -147,8 +147,8 @@ test('every lane\'s sample is saved, whichever scene is open, and nothing the pr
   const used = first.keep(noise(2000, 1), 'used.wav'), unused = first.keep(noise(2000, 2), 'unused.wav');
   await first.lane('crash', used);
   // The crash plays only in the first scene; the file is saved with an empty second scene open.
-  await first.service.request('/drum/step', { method: 'POST', body: JSON.stringify({ instrument: 'crash', step: 0, active: true }) });
-  await first.service.request('/scenes/create', { method: 'POST', body: JSON.stringify({ empty: true }) });
+  first.service.setDrumStep('crash', 0, true);
+  first.service.createScene({ empty: true });
   assert.equal(first.drumState().crash.steps[0], false, 'the open scene has no crash');
   const { file } = await first.save();
   assert.deepEqual(file.samples.map((sample: EmbeddedSample) => sample.id), [used]);
@@ -305,7 +305,7 @@ test('audio is in a saved file and nowhere else: not the working copy, the libra
   const second = await browser();
   const before = second.service.exportProject();
   assert.equal((await second.open(file)).result.ok, true);
-  await second.service.request('/tempo', { method: 'POST', body: JSON.stringify({ tempo: 97 }) });
+  second.service.setTempo(97);
   second.service.flush();
   await new Promise(resolve => setTimeout(resolve, 10));
   const clean = (what: string, value: unknown) => {
@@ -337,7 +337,7 @@ test('audio is in a saved file and nowhere else: not the working copy, the libra
     const { projectId: _id, name: _name, createdAt: _made, ...project } = b.service.normalized(b.service.exportProject().project) as Record<string, unknown>;
     return contentHash(project);
   };
-  await third.service.request('/tempo', { method: 'POST', body: JSON.stringify({ tempo: 97 }) });
+  third.service.setTempo(97);
   assert.equal(await content(second), await content(third), 'the content hash does not see the audio');
   assert.equal(before.project.drumState.kick.sampleId, undefined);
 });

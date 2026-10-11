@@ -84,13 +84,13 @@ async function browser(remote: Remote, username: 'Ian' | 'Dana', sharing: Pick<S
     tempo: async (name: string, bpm?: number) => {
       use();
       await service.openProject(await idOf(name));
-      if (bpm !== undefined) { await service.request('/tempo', { method: 'POST', body: JSON.stringify({ tempo: bpm }) }); service.flush(); }
+      if (bpm !== undefined) { service.setTempo(bpm); service.flush(); }
       return service.snapshot().tempo;
     },
     make: async (name: string, bpm: number) => {
       use();
       await service.newProject(name);
-      await service.request('/tempo', { method: 'POST', body: JSON.stringify({ tempo: bpm }) });
+      service.setTempo(bpm);
       service.flush();
       await sync.sync();
       return service.snapshot().projectId;

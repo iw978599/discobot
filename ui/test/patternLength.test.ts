@@ -5,6 +5,7 @@ import { entryStartBar, sceneAtBar, songBars, songLengthBars } from '../src/serv
 import { sanitizeDrums, sanitizePattern, sanitizeScenes } from '../src/services/projectSanitization.ts';
 import { renderPlan, renderSynthBars, renderDrums } from '../src/services/wavExport.ts';
 import { LocalProjectService } from '../src/services/localService.ts';
+import { statusOf } from './helpers/store.ts';
 import { createMemoryLibrary } from '../src/services/projectLibrary.ts';
 import { DRUM_INSTRUMENTS } from '../src/services/drumKits.ts';
 import { createDefaultSynthParameters } from '../../engine/src/synth/voiceParams.ts';
@@ -135,31 +136,29 @@ test('the project store keeps bar counts through scenes, drum resizing and a pro
   const service = new LocalProjectService();
   service.initialize({ synthParams: createDefaultSynthParameters(), drumState: drums(), drumFx: { sends: { reverb: .2, delay: .1, drive: .1, phaser: 0 }, returnLevel: .7 }, effectsLoop });
   await service.openLibrary(createMemoryLibrary());
-  const post = (path: string, body: unknown, method = 'POST') => service.request(path, { method, body: JSON.stringify(body) });
-  await post('/synth/1/ensure', {});
   const lane = () => service.snapshot().synths.find((synth: any) => synth.synthId === 1).pattern;
 
-  await post(`/synth/1/patterns/${lane().id}`, { ...lane(), bars: 2, steps: steps(32, { 17: on('C3') }) }, 'PUT');
+  service.writePattern(1, lane().id, { ...lane(), bars: 2, steps: steps(32, { 17: on('C3') }) });
   assert.deepEqual([lane().bars, lane().steps.length, lane().steps[17].note], [2, 32, 'C3']);
 
-  assert.equal((await post('/drum/bars', { bars: 3 })).status, 400);
-  await post('/drum/step', { instrument: 'kick', step: 3, active: true });
-  await post('/drum/step-velocity', { instrument: 'kick', step: 3, velocity: 0.4 });
-  assert.equal((await post('/drum/step', { instrument: 'kick', step: 16, active: true })).status, 400, 'a one-bar grid has no step 17');
-  await post('/drum/bars', { bars: 2 });
+  assert.equal(statusOf(service.setDrumBars(3)), 400);
+  service.setDrumStep('kick', 3, true);
+  service.setDrumStepVelocity('kick', 3, 0.4);
+  assert.equal(statusOf(service.setDrumStep('kick', 16, true)), 400, 'a one-bar grid has no step 17');
+  service.setDrumBars(2);
   const grid = () => service.snapshot().drumState;
   assert.deepEqual([grid().kick.steps.length, grid().snare.steps.length, grid().kick.steps[19], grid().kick.stepVelocities[19]], [32, 32, true, 0.4], 'growing repeats the bar, details included');
-  assert.equal((await post('/drum/step', { instrument: 'kick', step: 19, active: false })).status, 200);
-  assert.equal((await post('/drum/step', { instrument: 'kick', step: 32, active: true })).status, 400);
+  assert.equal(statusOf(service.setDrumStep('kick', 19, false)), 200);
+  assert.equal(statusOf(service.setDrumStep('kick', 32, true)), 400);
 
   // A second scene made empty keeps the lengths; switching back restores the first, bars and all.
   const first = service.snapshot().currentSceneId;
-  await post('/scenes/create', { empty: true });
+  service.createScene({ empty: true });
   assert.deepEqual([lane().bars, lane().steps.length, lane().steps[17].note, grid().kick.steps.length, grid().kick.steps[3]], [2, 32, undefined, 32, false]);
-  await post(`/synth/1/patterns/${lane().id}`, { ...lane(), bars: 1, steps: steps(16) }, 'PUT');
-  await post('/drum/bars', { bars: 1 });
+  service.writePattern(1, lane().id, { ...lane(), bars: 1, steps: steps(16) });
+  service.setDrumBars(1);
   assert.deepEqual([lane().bars, lane().steps.length, grid().kick.steps.length], [undefined, 16, 16]);
-  await post('/scenes/select', { sceneId: first });
+  service.selectScene(first);
   assert.deepEqual([lane().bars, lane().steps.length, lane().steps[17].note, grid().kick.steps.length, grid().kick.steps[3], grid().kick.steps[19]], [2, 32, 'C3', 32, true, false]);
 
   const file = service.exportProject();

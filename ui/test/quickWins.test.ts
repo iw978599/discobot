@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { LocalProjectService } from '../src/services/localService.ts';
+import { statusOf } from './helpers/store.ts';
 import { DRUM_INSTRUMENTS } from '../src/services/drumKits.ts';
 import { expandDrumStep, seededRandom } from '../src/services/drumScheduling.ts';
 import { sanitizeDrums } from '../src/services/projectSanitization.ts';
@@ -41,8 +42,6 @@ function service() {
   created.initialize(defaults());
   return created;
 }
-const post = (target: LocalProjectService, path: string, body: unknown, method = 'POST') =>
-  target.request(path, { method, body: JSON.stringify(body) });
 
 test('the computer keyboard maps the home row to a chromatic octave and a bit, by physical key', () => {
   assert.equal(noteForKey('KeyA', 0), 'C4');
@@ -96,10 +95,10 @@ test('drum chance and repeats are clamped on load and absent from untouched proj
 
 test('the project store saves drum chance and repeats per step', async () => {
   const store = service();
-  await post(store, '/drum/step', { instrument: 'snare', step: 4, active: true });
-  await post(store, '/drum/step-detail', { instrument: 'snare', step: 4, probability: 0.5 });
-  await post(store, '/drum/step-detail', { instrument: 'snare', step: 4, ratchet: 3 });
-  assert.equal((await post(store, '/drum/step-detail', { instrument: 'snare', step: 16, ratchet: 2 })).status, 400);
+  store.setDrumStep('snare', 4, true);
+  store.setDrumStepDetail('snare', 4, { probability: 0.5 });
+  store.setDrumStepDetail('snare', 4, { ratchet: 3 });
+  assert.equal(statusOf(store.setDrumStepDetail('snare', 16, { ratchet: 2 })), 400);
   store.flush();
   const reloaded = new LocalProjectService();
   reloaded.initialize(defaults());

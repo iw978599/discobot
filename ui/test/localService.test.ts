@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { LocalProjectService } from '../src/services/localService.ts';
+import { statusOf } from './helpers/store.ts';
 import { DRUM_INSTRUMENTS } from '../src/services/drumKits.ts';
 import { BrowserTransport } from '../src/services/browserTransport.ts';
 import { encodeWav } from '../src/services/wavExport.ts';
@@ -30,13 +31,11 @@ function setup() {
   service.initialize(defaults());
   return service;
 }
-const mutate = (service: LocalProjectService, path: string, body: unknown, method = 'POST') =>
-  service.request(path, { method, body: JSON.stringify(body) });
 
 test('local synth state merges nested controls, isolates lanes, persists across reload', async () => {
   const service = setup();
-  await mutate(service, '/synth/create', { synthId: 2 });
-  await mutate(service, '/synth/1/parameters', { filter: { frequency: 1234 }, lfo1: { sync: true } });
+  service.createLane(2);
+  service.setSynthParams(1, { filter: { frequency: 1234 }, lfo1: { sync: true } });
   const state = service.snapshot();
   assert.equal(state.synths[0].synthParams.filter.frequency, 1234);
   assert.equal(state.synths[0].synthParams.filter.q, defaults().synthParams.filter.q);
@@ -47,21 +46,21 @@ test('local synth state merges nested controls, isolates lanes, persists across 
   restored.initialize(defaults());
   assert.equal(restored.snapshot().synths[0].synthParams.filter.frequency, 1234);
   assert.equal(restored.snapshot().synths.length, 2);
-  assert.equal((await service.request('/synth/1', { method: 'DELETE' })).status, 400);
+  assert.equal(statusOf(service.removeLane(1)), 400);
 });
 
 test('drum kits, velocity, pan, mute, swing, effects and tempo are functional state', async () => {
   const service = setup();
-  const kits = await (await service.request('/drum/kits')).json();
+  const kits = service.getDrumKits();
   assert.equal(kits.kits.length, 8);
-  await mutate(service, '/drum/step', { instrument: 'kick', step: 3, active: true });
-  await mutate(service, '/drum/step-velocity', { instrument: 'kick', step: 3, velocity: .33 });
-  await mutate(service, '/drum/settings', { instrument: 'kick', settings: { pan: -.5, tune: .4 } });
-  await mutate(service, '/drum/mix', { instrument: 'kick', muted: true });
-  await mutate(service, '/drum/swing', { swing: .3 });
-  await mutate(service, '/drum/master-volume', { volume: .6 });
-  await mutate(service, '/effects-loop', { delay: { feedback: .7 } });
-  await mutate(service, '/tempo', { tempo: 137 }, 'PUT');
+  service.setDrumStep('kick', 3, true);
+  service.setDrumStepVelocity('kick', 3, .33);
+  service.setDrumSettings('kick', { pan: -.5, tune: .4 });
+  service.setDrumMix('kick', { muted: true });
+  service.setDrumSwing(.3);
+  service.setDrumMasterVolume(.6);
+  service.setEffectsLoop({ delay: { feedback: .7 } });
+  service.setTempo(137);
   let state = service.snapshot();
   assert.equal(state.drumState.kick.steps[3], true);
   assert.equal(state.drumState.kick.stepVelocities[3], .33);
@@ -72,7 +71,7 @@ test('drum kits, velocity, pan, mute, swing, effects and tempo are functional st
   assert.equal(state.effectsLoop.delay.feedback, .7);
   assert.equal(state.effectsLoop.delay.time, .2);
   assert.equal(state.synths[0].pattern.tempo, 137);
-  await mutate(service, '/drum/kit', { kitId: 'tr-808' });
+  service.setDrumKit('tr-808');
   state = service.snapshot();
   assert.equal(state.drumState.kick.settings.volume, .75);
   assert.equal(state.drumState.kick.steps[3], true);
@@ -81,10 +80,10 @@ test('drum kits, velocity, pan, mute, swing, effects and tempo are functional st
 test('imported pattern becomes active and transport never resumes automatically on reload', async () => {
   const service = setup();
   const pattern = { id: 'midi-import', name: 'Imported', tempo: 90, steps: [{ active: true, note: 'C4', velocity: .8 }] };
-  await mutate(service, '/synth/1/patterns/midi-import', pattern, 'PUT');
-  await mutate(service, '/sequencer/play', { synthId: 1, patternId: pattern.id });
+  service.writePattern(1, 'midi-import', pattern);
+  service.playLane(1, pattern.id);
   assert.equal(service.snapshot().synths[0].isPlaying, true);
-  await mutate(service, '/synth/1/parameters', { gain: .7 });
+  service.setSynthParams(1, { gain: .7 });
   service.flush();
   const restored = new LocalProjectService(); restored.initialize(defaults());
   assert.equal(restored.snapshot().synths[0].pattern.id, pattern.id);
@@ -93,7 +92,7 @@ test('imported pattern becomes active and transport never resumes automatically 
 
 test('an intact project reloads without a damage warning; a broken drum grid is reported', async () => {
   const service = setup();
-  await mutate(service, '/drum/step', { instrument: 'kick', step: 3, active: true });
+  service.setDrumStep('kick', 3, true);
   service.flush();
   const reload = () => {
     const restored = new LocalProjectService();

@@ -38,8 +38,6 @@ function browser() {
   };
   return { storage, library, load, use };
 }
-const post = (service: LocalProjectService, path: string, body: unknown, method = 'POST') =>
-  service.request(path, { method, body: JSON.stringify(body) });
 const names = async (service: LocalProjectService) => (await service.listProjects()).map(project => project.name);
 
 test('a first visit starts one project, and it is in the library', async () => {
@@ -55,8 +53,8 @@ test('projects can be created, opened, copied, renamed and deleted, each keeping
   const { load, library } = browser();
   const service = await load();
   const first = service.snapshot().projectId;
-  await post(service, '/tempo', { tempo: 97 });
-  await post(service, '/drum/step', { instrument: 'kick', step: 0, active: true });
+  service.setTempo(97);
+  service.setDrumStep('kick', 0, true);
   assert.equal((await service.renameProject(first, '  Night drive  ')).ok, true);
   assert.equal((await service.renameProject(first, '   ')).ok, false, 'a project needs a name');
 
@@ -69,7 +67,7 @@ test('projects can be created, opened, copied, renamed and deleted, each keeping
   assert.notEqual(second.projectId, first);
   assert.deepEqual([second.name, second.tempo, second.drumState.kick.steps[0], second.synths.length], ['Second', 120, false, 3]);
   assert.equal((await library.get(first))!.name, 'Night drive', 'the project that was open was put away first');
-  await post(service, '/tempo', { tempo: 140 });
+  service.setTempo(140);
 
   assert.equal((await service.openProject(first)).ok, true);
   assert.deepEqual([service.snapshot().name, service.snapshot().tempo, service.snapshot().drumState.kick.steps[0]], ['Night drive', 97, true]);
@@ -78,10 +76,10 @@ test('projects can be created, opened, copied, renamed and deleted, each keeping
   assert.equal(service.snapshot().projectId, first, 'a failed open changes nothing');
 
   // A copy is a version to go back to: the open project stays open.
-  await post(service, '/tempo', { tempo: 101 });
+  service.setTempo(101);
   assert.equal((await service.copyProject(first)).ok, true);
   assert.equal(service.snapshot().projectId, first);
-  await post(service, '/tempo', { tempo: 60 });
+  service.setTempo(60);
   const copy = (await service.listProjects()).find(project => project.name === 'Night drive copy')!;
   assert.equal((await library.get(copy.id) as { project: { tempo: number } }).project.tempo, 101, 'the copy has the project as it was, with edits not yet written');
   assert.deepEqual((await names(service)).sort(), ['Night drive', 'Night drive copy', 'Second']);
@@ -98,9 +96,9 @@ test('projects can be created, opened, copied, renamed and deleted, each keeping
 test('the open project and the library both survive a reload', async () => {
   const { load } = browser();
   const service = await load();
-  await post(service, '/tempo', { tempo: 88 });
+  service.setTempo(88);
   await service.newProject('B');
-  await post(service, '/tempo', { tempo: 133 });
+  service.setTempo(133);
   service.flush();
   const reloaded = await load();
   assert.deepEqual([reloaded.snapshot().name, reloaded.snapshot().tempo], ['B', 133]);
@@ -111,7 +109,7 @@ test('the open project and the library both survive a reload', async () => {
 test('if only the working copy is lost, the latest project in the library is reopened', async () => {
   const { load, storage } = browser();
   const service = await load();
-  await post(service, '/tempo', { tempo: 77 });
+  service.setTempo(77);
   await service.renameProject(service.snapshot().projectId, 'Keeper');
   storage.clear();
   const reloaded = await load();
@@ -124,7 +122,7 @@ test('arrangements saved by older versions become projects, and only leave the w
   use();
   const seed = new LocalProjectService();
   seed.initialize(defaults());
-  await post(seed, '/tempo', { tempo: 111 });
+  seed.setTempo(111);
   seed.flush();
   const stored = JSON.parse(storage.get(KEY)!);
   const lane = stored.synths[0];
@@ -168,20 +166,20 @@ test('arrangements saved by older versions become projects, and only leave the w
 
 test('a project file is added as a new project; the open one is kept', async () => {
   const source = await browser().load();
-  await post(source, '/synth/create', { synthId: 2 });
-  await post(source, '/synth/2/parameters', { filter: { frequency: 777 } });
-  await post(source, '/tempo', { tempo: 97 });
-  await post(source, '/drum/step-detail', { instrument: 'kick', step: 2, ratchet: 2 });
+  source.createLane(2);
+  source.setSynthParams(2, { filter: { frequency: 777 } });
+  source.setTempo(97);
+  source.setDrumStepDetail('kick', 2, { ratchet: 2 });
   await source.renameProject(source.snapshot().projectId, 'From my laptop');
-  await post(source, '/scenes/create', { name: 'Chorus' });
-  await post(source, '/sequencer/play', { synthId: 1 });
+  source.createScene({ name: 'Chorus' });
+  source.playLane(1);
   const file = JSON.parse(JSON.stringify(source.exportProject()));
   assert.equal(file.format, 'discobot-project');
   assert.equal(file.project.synths[0].isPlaying, false, 'a file never carries a running transport');
   assert.equal(source.snapshot().synths[0].isPlaying, true, 'exporting does not disturb the live project');
 
   const target = await browser().load();
-  await post(target, '/tempo', { tempo: 150 });
+  target.setTempo(150);
   const mine = target.snapshot().projectId;
   assert.deepEqual(await target.importProject(file), { ok: true, repaired: false });
   const state = target.snapshot();
@@ -199,7 +197,7 @@ test('a project file is added as a new project; the open one is kept', async () 
 test('a bad project file is refused and changes nothing; hostile values are repaired', async () => {
   const { load, use } = browser();
   const service = await load();
-  await post(service, '/tempo', { tempo: 88 });
+  service.setTempo(88);
   const good = JSON.parse(JSON.stringify(service.exportProject()));
   const id = service.snapshot().projectId;
   for (const bad of [null, [], 'text', {}, { format: 'other', formatVersion: 1, project: good.project },
@@ -229,12 +227,12 @@ test('a bad project file is refused and changes nothing; hostile values are repa
 
 test('a share link carries a whole song and survives being pasted around', async () => {
   const service = await browser().load();
-  await post(service, '/tempo', { tempo: 128 });
+  service.setTempo(128);
   await service.renameProject(service.snapshot().projectId, 'Friday');
   const pattern = service.snapshot().synths[0].pattern;
   pattern.steps[0] = { active: true, note: 'A3', velocity: 0.9 };
-  await post(service, `/synth/1/patterns/${pattern.id}`, pattern, 'PUT');
-  await post(service, '/scenes/create', { name: 'Drop' });
+  service.writePattern(1, pattern.id, pattern);
+  service.createScene({ name: 'Drop' });
 
   const payload = await encodeShare(service.exportProject());
   assert.match(payload, /^[A-Za-z0-9_-]+$/, 'only characters that are safe in an address');

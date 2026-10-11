@@ -131,17 +131,16 @@ function store() {
   const tempo = () => { const raw = storage.get('discobot_browser_project_v1'); return raw ? JSON.parse(raw).tempo : null; };
   return { service, storage, tempo, writes: () => writes };
 }
-const post = (service: LocalProjectService, path: string, body: unknown) => service.request(path, { method: 'POST', body: JSON.stringify(body) });
 
 test('a burst of edits is one write, made shortly after the last edit or when flushed', async () => {
   const { service, tempo, writes } = store();
-  for (let bpm = 100; bpm <= 140; bpm++) await post(service, '/tempo', { tempo: bpm });
+  for (let bpm = 100; bpm <= 140; bpm++) service.setTempo(bpm);
   assert.equal(writes(), 0, 'dragging a control does not write on every change');
   assert.equal(service.snapshot().tempo, 140, 'the live project is already up to date');
   await new Promise(resolve => setTimeout(resolve, 400));
   assert.deepEqual([writes(), tempo()], [1, 140]);
 
-  await post(service, '/tempo', { tempo: 90 });
+  service.setTempo(90);
   assert.equal(service.flush(), true);
   assert.deepEqual([writes(), tempo()], [2, 90], 'closing the page writes at once');
   service.flush();
@@ -149,7 +148,7 @@ test('a burst of edits is one write, made shortly after the last edit or when fl
   await new Promise(resolve => setTimeout(resolve, 400));
   assert.equal(writes(), 2, 'the pending timer was cancelled by the flush');
 
-  await post(service, '/tempo', { tempo: 91 });
+  service.setTempo(91);
   assert.equal((await service.copyProject(service.snapshot().projectId)).ok, true);
   assert.deepEqual([writes(), tempo()], [3, 91], 'keeping a copy writes immediately, pending edits included');
 });
@@ -165,7 +164,7 @@ test('when another tab has changed the project, this one stops saving until told
     const { service, storage, tempo, writes } = store();
     const messages: string[] = [];
     service.subscribe(message => messages.push(message.type));
-    await post(service, '/tempo', { tempo: 100 });
+    service.setTempo(100);
     service.flush();
     listeners.get('storage')!({ key: 'something-else' });
     assert.equal(service.savingPaused, false, 'other keys are not our project');
@@ -176,7 +175,7 @@ test('when another tab has changed the project, this one stops saving until told
     assert.equal(service.savingPaused, true);
     assert.ok(messages.includes('externalChange'));
     const before = writes();
-    await post(service, '/tempo', { tempo: 110 });
+    service.setTempo(110);
     service.flush();
     listeners.get('pagehide')!({ key: '' });
     assert.deepEqual([writes(), tempo()], [before, 150], 'edits here no longer overwrite the other tab, even on reload');
