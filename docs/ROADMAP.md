@@ -22,7 +22,7 @@ slow down every later change.
    all wait on it.
 
    The plan is `docs/TYPED_STORE_PLAN.md`: eight pull requests, each leaving
-   the app working. Done: the first six. An edit is now a typed operation
+   the app working. Done: the first seven. An edit is now a typed operation
    handed to one synchronous `apply`, with a reducer for each, and anything
    that wants to record edits can listen for them. Drum swing and drum master
    volume go that way, and `useStudio` applies each once, from the store's
@@ -37,10 +37,10 @@ slow down every later change.
    and macros, its mute and solo, its octave and keyboard, and the tempo,
    and so does every write to a lane's pattern (the piano roll, step controls,
    length, MIDI import and undo), applied once from the store's event.
-   Lanes coming and going, play and stop go that way too. Still open: the
-   other 6 operations (scenes and the song), then taking
-   `request` away, and after that splitting `useStudio.tsx`, which the plan describes
-   but does not schedule.
+   Lanes coming and going, play and stop go that way too, and so do the
+   scenes and the song, which leaves `useStudio` with no route call at all.
+   Still open: taking `request` away, and after that splitting `useStudio.tsx`,
+   which the plan describes but does not schedule.
 
 2. **Make undo a store feature.** (M, after 1)
    Undo snapshots are assembled by hand, and each handler must remember to

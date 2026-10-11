@@ -4,11 +4,11 @@ Written 2026-10-11 from a design pass over `localService.ts`, `useStudio.tsx` an
 `storeRoutes.test.ts`. This is roadmap improvement 1. It is done as a sequence of
 pull requests, each leaving `main` working and `storeRoutes.test.ts` green.
 
-Status: pull requests 1 to 6 of 8 are built (the foundation, drum swing and
+Status: pull requests 1 to 7 of 8 are built (the foundation, drum swing and
 drum master volume; then guests; then the drums; then the effects; then the
 whole of 5, a lane's sound, model, mix and view, and the tempo, and then its
-pattern writes; then lanes coming and going, and the transport). 7 and 8 are
-open.
+pattern writes; then lanes coming and going, and the transport; then the
+scenes and the song). 8 is open.
 
 ## What was built, and where it differs from this plan
 
@@ -414,6 +414,99 @@ Found by building pull request 6 (lanes coming and going, and the transport):
   writes in `sceneChanged` are the things to leave alone. The scheduler's
   `/scenes/select` is the one `void localRequest` call.
 
+Found by building pull request 7 (scenes and the song):
+
+- **Six operations, one reducer each**, the route's body moved: `scene.select`,
+  `scene.create`, `scene.rename`, `scene.delete`, `scene.replace` and `song.set`,
+  with the helpers `selectScene`, `createScene`, `renameScene`, `deleteScene`,
+  `replaceScenes` and `setSong`. All 33 operations now have a reducer. The map is
+  still `Partial<Reducers>`; making it total is step 8.
+- **The scene functions are not private methods of the service**, as the
+  Decisions section said they would stay. A reducer cannot call a method of the
+  service, so `captureScene`, `ensureScenes`, `commitScene`, `applyScene` and
+  `sceneMessage` are functions in `projectReducers.ts` that take the state, as
+  the lane helpers do. The service keeps private `ensureScenes`, `commitScene`
+  and `sceneMessage` that call them on the open project, because `restore`, the
+  library code, `exportProject` and `getScenes` still use those.
+- **`scene.create` carries its id**, made by the helper and by the route with
+  `crypto.randomUUID()`, as the plan said. Refused after the check on how many
+  scenes there are (which came first in the route): an id that is empty, longer
+  than 200 characters or not text is 400 "That is not an id a scene can have."
+  and an id already in the project is 409 "That scene is already in the
+  project." No route can make either. The limit of 200 is what
+  `sanitizeScenes` cuts an id to.
+- **`scene.replace` is not repeatable.** Given nothing usable, it leaves one
+  new scene whose id is made inside the reducer (`ensureScenes`), as
+  `synth.create` makes a pattern id. The operation carries no id for it. Not
+  changed; live editing or undo in the store has to settle it. `scene.replace`
+  and `song.set` read their fields through `sent`: without it a repeat of
+  infinity is held to 64 where the `null` JSON made of it is 1, and a key that is
+  `undefined` would not fall back to what the song has. The tests for both fail
+  without it. The other four need no guard: ids are compared with `===`, a name
+  with `typeof`, the empty flag with `=== true`.
+- **Every pinned oddity is as it was.** Renaming a scene that is not there is a
+  400 about the name, not a 404; selecting the open scene still saves and
+  emits; a song request with nothing in it still saves and emits; a scene
+  replacement takes its open scene from the live pattern, not from what it was
+  given; deleting the open scene opens the one before it. Nothing in
+  `storeRoutes.test.ts` changed, and no pinned count moved: the six routes kept
+  their `path === '...'` lines.
+- **The scheduler's scene change is a plain call**, `localService.selectScene(id)`,
+  with no `void`, `await` or promise. It was already synchronous when it was
+  `void localRequest(...)` (an async function runs to its first `await` at
+  once, and `request` has none), so the order of events is unchanged. The one
+  difference: a store that threw would have been an unhandled rejection, and
+  now throws inside the tick. `apply` throws only before the project is
+  initialized, which cannot be so while a song plays.
+- **Where the test for it is.** `storeOps.test.ts` stands a listener in for the
+  `sceneChanged` handler, selects a scene and reads what the listener kept on
+  the next line, and checks every scene helper is not async and answers with
+  no promise. It also reads `useStudio.tsx`'s source and fails if the scheduler's
+  call gains an `await`, `void` or anything else on its line, if `captureAll` is
+  not before the change, or if `localRequest` comes back. It cannot run the
+  studio, so the handler's refs are read from a stand-in, not from the real
+  handler. The `sceneChanged` handler and its ref writes were not touched, and
+  neither were `lanesBeforeEditRef`, `drumsForUndoRef` or `synthsRef`.
+- **In `useStudio`**: `sceneRequest` is now `sceneChange(change, leavesScene)`.
+  Select, add and delete `await guestLink.captureAll()` first and then make the
+  change, as before; rename and the song do not wait, as before, and so run at
+  once. The song handler's early `setSong` is gone, because the event carries
+  the song as the store kept it. An error is shown one turn earlier than it
+  was (it used to wait for the answer's body). Reset replaces the scenes
+  without an `await`, with nothing after it.
+- **Undo's scene switch keeps one turn.** `stepHistory` selected the scene with
+  an `await`, and now calls `selectScene` and then `await Promise.resolve()`.
+  Its refs are written by the event, so they do not need the turn, but when
+  undo is pressed from a click React may render between the old call and what
+  follows, and `getSnapshot` reads `lanesBeforeEditRef` and `drumsForUndoRef`,
+  which a render and a scene change move. Not reasoned through to the end, so
+  left as it was. Step 8 can try without it when `applySnapshot` becomes one
+  `applyAll`.
+- **Looks wrong, not fixed.** Only the scene buttons collect the guests'
+  settings (`captureAll`) before leaving a scene. Undo going back to another
+  scene and the scheduler moving on in song mode do not, so a guest setting
+  changed within a few seconds of either is recorded late, in the other scene.
+  It was so before.
+- **The stand-in tests put another reducer in the place of a real one.** No
+  operation is left without a reducer, so `standIn` replaces `scene.select` or
+  `scene.delete` for the length of one test and puts it back. The test for an
+  operation with no reducer takes `scene.rename`'s away for a moment. Step 8
+  deletes that test with the branch it tests; the stand-ins can stay.
+- **A scene case names `answerFrom`.** A scene change answers with the whole
+  scene message, so instead of writing the answer out a case says it is what
+  the project holds afterwards (its scenes, song, open scene, lanes, drums and
+  guests). A case's `body` may also be a function of what its `arrange` returned,
+  since a scene's id is made by the store.
+- `useStudio.tsx` makes no calls to `localRequest` after this pull request. Nothing
+  in `ui/src` uses it.
+- **For the builder of step 8:** `localRequest` is still exported at the end of
+  `localService.ts`; delete it with `request` and `fromApplied`. The local
+  `update` in `request` is already gone (nothing used it). `reducers` is still
+  `Partial<Reducers>`. `stepHistory` has the turn kept above. A scene's id is made
+  by `createScene` and the route, so `applyAll` can replay a recorded
+  `scene.create` with the same id, but not a `scene.replace` that had no usable
+  scenes.
+
 ## What is being replaced
 
 Edits inside a project go through `localService.request(path, options)`, a leftover
@@ -613,9 +706,9 @@ makes total, so the compiler checks every operation has one. `ctx` is
 `{ state, defaults, origin }`; add to `ReducerContext` what a group needs (making
 a lane) and nothing that emits or saves. Each reducer is the old
 branch's body, moved as it is. Reducers never emit; only `apply` does (`recordFor`
-swaps `this.state` and is safe only because nothing emits meanwhile). Scene
-reducers stay private methods of the service, because `captureScene`, `applyScene`
-and `ensureScenes` use `this.state`.
+swaps `this.state` and is safe only because nothing emits meanwhile). The scene reducers use
+`captureScene`, `applyScene` and `ensureScenes`, which take the state and
+are in `projectReducers.ts` (see what pull request 7 found).
 
 ```ts
 apply<T extends Operation>(op: T, origin: Origin = 'local'): Applied<OpResult<T['type']>> {
@@ -742,8 +835,11 @@ early updates; adds the two-way tests.
    requests becomes `applyAll`. Medium. Built as `synth.create`, `synth.remove`,
    `transport.play` and `transport.stop`, with the helpers `createLane`,
    `removeLane`, `playLane` and `stopLane`. See what pull request 6 found.
-7. **Scenes and the song.** `/scenes/select`, `create`, `rename`, `delete`,
-   `replace`, `/song`. The `sceneChanged` handler and its ref writes are untouched.
+7. **Scenes and the song.** Built. `/scenes/select`, `create`, `rename`, `delete`,
+   `replace`, `/song` are `scene.select`, `scene.create`, `scene.rename`,
+   `scene.delete`, `scene.replace` and `song.set`, with the helpers `selectScene`,
+   `createScene`, `renameScene`, `deleteScene`, `replaceScenes` and `setSong`; see
+   what pull request 7 found. The `sceneChanged` handler and its ref writes are untouched.
    `await guestLink.captureAll()` still comes first. The scheduler's call is the
    synchronous `localService.selectScene(id)`. Add a test that opens a scene and
    reads the refs on the next line. High, but on its own.
