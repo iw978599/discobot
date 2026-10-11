@@ -1,7 +1,7 @@
 // What each operation does to the project. A reducer is the body of the route it replaces,
 // moved as it was. It changes the state it is handed and says what to save and send; it never
 // emits, saves or reads the clock itself, which is `apply`'s work in localService.ts.
-import { clone, merge, number, sanitizeDrums, sanitizeEffects, sanitizeModelParams, sanitizeSends, sanitizeSynthParams } from './projectSanitization';
+import { clone, merge, number, sanitizeDrums, sanitizeEffects, sanitizeModelParams, sanitizePattern, sanitizeSends, sanitizeSynthParams } from './projectSanitization';
 import { MAX_GUESTS, guestUrl, patchGuest, sanitizeGuests } from './guests';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
 import { BAR_CHOICES, DRUM_STEPS_PER_BAR, resizeBars } from './patternLength';
@@ -182,6 +182,22 @@ export const reducers: Partial<Reducers> = {
       if (Object.keys(scene.guestMix).length === 0) delete scene.guestMix;
     }
     return update('guestsChanged', { guests: state.guests });
+  },
+  // The pattern written becomes the lane's open one. The id is the operation's own: the route
+  // took it from the path, then from the body, then made one. An id that is not text, or is
+  // empty, is no pattern's, and is refused by the same check that refuses steps that are no list.
+  'pattern.write': ({ state }, op) => {
+    const patch = sent(op.patch);
+    if (!patch) return refuse(400, BAD_DATA);
+    const synth = laneOf(state, op.synthId);
+    if (!synth) return refuse(404, NO_SYNTH);
+    const id = op.patternId;
+    const previous = synth.patterns.find(p => p.id === id);
+    const pattern = sanitizePattern({ ...previous, ...patch, id, steps: patch.steps || previous?.steps || synth.pattern.steps }, state.tempo);
+    if (!pattern) return refuse(400, 'Invalid sequence pattern');
+    synth.patterns = [...synth.patterns.filter(p => p.id !== id), pattern];
+    synth.pattern = pattern;
+    return { ok: true, value: pattern, save: true, event: { type: previous ? 'patternUpdated' : 'patternCreated', data: { synthId: synth.synthId, pattern } } };
   },
   // Checked with `typeof`, which takes what JSON would have dropped or nulled as it takes nothing.
   'synth.mix': ({ state }, op) => {
