@@ -75,7 +75,7 @@ test('a run of notches is one undo step', async ({ page }) => {
   await expect(gain, 'one undo takes back all five notches').toHaveAttribute('aria-valuenow', '0.5');
 });
 
-test('a knob stops at its ends, and a small trackpad scroll adds up before it moves a step', async ({ page }) => {
+test('a knob stops at its top end', async ({ page }) => {
   const synth = page.locator('.synth-controls-panel');
   const gain = synth.getByRole('slider', { name: 'Gain', exact: true });
   await tab(page, 'Amp');
@@ -84,6 +84,12 @@ test('a knob stops at its ends, and a small trackpad scroll adds up before it mo
   await rest(page, gain);
   await spin(gain, -100, 3);
   await expect(gain, 'three notches up from 1.95 stop at the top').toHaveAttribute('aria-valuenow', '2');
+});
+
+test('a small trackpad scroll adds up before it moves a step', async ({ page }) => {
+  const synth = page.locator('.synth-controls-panel');
+  const gain = synth.getByRole('slider', { name: 'Gain', exact: true });
+  await tab(page, 'Amp');
   await edit(synth.getByLabel('Gain value', { exact: true }), '50%');
   await expect(gain).toHaveAttribute('aria-valuenow', '0.5');
   await rest(page, gain);
