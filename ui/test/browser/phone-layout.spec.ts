@@ -811,7 +811,15 @@ test('on a phone the piano roll is edited with a finger: a tap, a drag, a held n
   await expect.poll(steps, await trail(page)).toEqual([5, to + 4 > 16 ? 16 : to + 4]);
   expect(within(await box(head(5)), frame, label)).toBe(true);
   expect(within(await box(head(1)), frame, label), 'the first steps have gone off the edge').toBe(false);
-  for (let press = 0; press < 4 && await lane.getByRole('button', { name: 'Later steps', exact: true }).isEnabled(); press += 1) await lane.getByRole('button', { name: 'Later steps', exact: true }).tap();
+  // The button is not asked whether it can be pressed: it goes dead a moment after the grid
+  // moves, and a tap sent in that moment would wait for ever. The steps on show say when the
+  // grid has moved, so each tap is waited for there before the next.
+  const later = lane.getByRole('button', { name: 'Later steps', exact: true });
+  for (let press = 0; press < 4 && (await steps())[1] < 16; press += 1) {
+    const before = await steps();
+    await later.tap();
+    await expect.poll(steps, 'the grid moved along').not.toEqual(before);
+  }
   await expect(lane.getByRole('button', { name: 'Later steps', exact: true })).toBeDisabled();
   expect((await steps())[1]).toBe(16);
   await cell('C3', 16).tap();
