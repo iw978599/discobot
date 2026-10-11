@@ -206,8 +206,8 @@ Found by building pull request 4 (effects):
 - **`drumFxRef` and `effectsLoopRef` are still assigned only at render.** The
   events do not write them, so undo's "before" is what it was, and so is the
   old limit that two effect changes made before one render are both laid over
-  the same starting point (the second keeps its own field and the store
-  merges, so nothing is lost in the store).
+  the same starting point: the second is sent whole, built without the
+  first, and so puts the first back. No control makes two in one go.
 - **Undo and Reset send a whole object as a patch**, as they did. Because it
   is merged, an undo entry or the reset defaults that hold no chorus or EQ
   leave the ones the project has. That is how it was; roadmap improvement 2
