@@ -398,8 +398,6 @@ export function useStudio() {
   const [selectedSynthId, setSelectedSynthId] = useState(1);
   const [drumState, setDrumState] = useState<DrumState>(createDefaultDrumState);
   const [drumKits, setDrumKits] = useState<DrumKitDefinition[]>([]);
-  const [drumKitsLoading, setDrumKitsLoading] = useState(false);
-  const [drumKitsError, setDrumKitsError] = useState<string | null>(null);
   const [selectedDrumKitId, setSelectedDrumKitId] = useState<DrumKitId>(DEFAULT_DRUM_KIT_ID);
   const [drumMasterVolume, setDrumMasterVolume] = useState(1.0);
   const [drumSwing, setDrumSwing] = useState(0);
@@ -457,8 +455,16 @@ export function useStudio() {
   midiChannelRef.current = midiChannel;
   const midiTargetSynthIdRef = useRef(midiTargetSynthId);
   midiTargetSynthIdRef.current = midiTargetSynthId;
+  // Assigned here, and again by the handlers of the store's drum events, so that the scheduler
+  // and a handler making a second edit before React has rendered see the first.
   const drumStateRef = useRef(drumState);
   drumStateRef.current = drumState;
+  // The drums an undo entry records as "before": as they were last rendered, or as a scene
+  // change left them. A pattern tool makes many edits in one go and each pushes an entry; all
+  // of them must hold the drums as they were before the first, or one undo would take back
+  // only the last step moved. So this one is not written by the drum events.
+  const drumsForUndoRef = useRef(drumState);
+  drumsForUndoRef.current = drumState;
   const selectedDrumKitIdRef = useRef(selectedDrumKitId);
   selectedDrumKitIdRef.current = selectedDrumKitId;
   const drumFxRef = useRef(drumFx);
@@ -560,7 +566,7 @@ export function useStudio() {
       synthParams: cloneSynthParams(synth.synthParams),
       synthModelId: synth.synthModelId,
       synthModelParams: cloneSynthModelParams(synth.synthModelParams),
-      drumState: cloneDrumState(drumStateRef.current),
+      drumState: cloneDrumState(drumsForUndoRef.current),
       tempo: globalTempo,
       drumMasterVolume,
       drumSwing,
@@ -597,13 +603,12 @@ export function useStudio() {
   );
 
   const applySnapshot = useCallback(async (synthId: number, snapshot: PatternSnapshot) => {
-    setSelectedDrumKitId(snapshot.drumKitId);
     setDrumFx(snapshot.drumFx);
     setEffectsLoop(snapshot.effectsLoop);
     localService.setDrumMasterVolume(snapshot.drumMasterVolume);
     localService.setDrumSwing(snapshot.drumSwing);
+    localService.setDrumKit(snapshot.drumKitId, false);
     await Promise.all([
-      localRequest('/drum/kit', { method: 'POST', body: JSON.stringify({ kitId: snapshot.drumKitId, applyDefaults: false }) }),
       localRequest('/drum/fx', { method: 'POST', body: JSON.stringify(snapshot.drumFx) }),
       localRequest('/effects-loop', { method: 'POST', body: JSON.stringify(snapshot.effectsLoop) }),
     ]);
@@ -622,7 +627,6 @@ export function useStudio() {
         }
         : entry
     )));
-    setDrumState(cloneDrumState(snapshot.drumState));
     setGlobalTempo(snapshot.tempo);
     await Promise.all([
       localRequest(`/synth/${synthId}/patterns/${snapshot.pattern.id}`, {
@@ -643,11 +647,8 @@ export function useStudio() {
           modelParams: snapshot.synthModelParams,
         }),
       }),
-      localRequest('/drum/state', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ state: snapshot.drumState }),
-      }),
+      // Not a request, but kept in its place among them: the drums go back after the lane's model and before the tempo.
+      localService.setDrumState(snapshot.drumState),
       localRequest('/tempo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -986,6 +987,7 @@ export function useStudio() {
         // The scheduler and undo read these refs before React has rendered again.
         synthsRef.current = nextLanes;
         drumStateRef.current = nextDrums;
+        drumsForUndoRef.current = nextDrums;
         scenesRef.current = nextScenes;
         currentSceneIdRef.current = nextSceneId;
         songRef.current = nextSong;
@@ -1098,7 +1100,11 @@ export function useStudio() {
         break;
       }
       case 'drumFullState': {
-        if (message.data.drumState) setDrumState(message.data.drumState);
+        if (message.data.drumState) {
+          // The one place a drum edit is applied. The scheduler and the next handler read the ref before React has rendered again.
+          drumStateRef.current = message.data.drumState;
+          setDrumState(message.data.drumState);
+        }
         break;
       }
       case 'drumMasterVolume': {
@@ -1114,6 +1120,7 @@ export function useStudio() {
           setSelectedDrumKitId(message.data.selectedDrumKitId as DrumKitId);
         }
         if (message.data.drumState) {
+          drumStateRef.current = message.data.drumState as DrumState;
           setDrumState(message.data.drumState as DrumState);
         }
         break;
@@ -1743,7 +1750,7 @@ export function useStudio() {
   const handleDrumBarsChange = useCallback(async (bars: number) => {
     const synth = synthsRef.current[0];
     if (synth?.pattern) pushHistorySnapshot(synth.id, synth.pattern.id);
-    await localRequest('/drum/bars', { method: 'POST', body: JSON.stringify({ bars }) });
+    localService.setDrumBars(bars);
   }, [pushHistorySnapshot]);
 
   const handleSynthMixChange = useCallback(async (synthId: number, mix: { muted?: boolean; solo?: boolean }) => {
@@ -1888,7 +1895,7 @@ export function useStudio() {
   }, [drumSampleKey, drumAudio, sampleStoreVersion]);
 
   const handleDrumSampleChange = useCallback(async (instrument: DrumInstrument, sampleId: string | null) => {
-    await localRequest('/drum/sample', { method: 'POST', body: JSON.stringify({ instrument, sampleId }) });
+    localService.setDrumSample(instrument, sampleId ?? undefined);
   }, []);
 
   // Every audio export. With guests in the project the arrangement is first played through in
@@ -2110,11 +2117,7 @@ export function useStudio() {
         delete next[instrument].stepProbabilities;
         delete next[instrument].stepRatchets;
       }
-      setDrumState(next);
-      await localRequest('/drum/state', {
-        method: 'PUT',
-        body: JSON.stringify({ state: next }),
-      });
+      localService.setDrumState(next);
     }
 
     setGlobalTempo(tempo);
@@ -2127,94 +2130,35 @@ export function useStudio() {
   }, [midiImportData, midiImportAssignments, ensureSynthExists, pushHistorySnapshot]);
 
   useEffect(() => {
-    setDrumKitsLoading(true);
-    setDrumKitsError(null);
-    try {
-      const data = localService.getDrumKits();
-      setDrumKits(data.kits);
-      const hasSelected = data.kits.some((kit) => kit.id === selectedDrumKitIdRef.current);
-      if (!hasSelected) setSelectedDrumKitId(data.defaultKitId);
-    } catch {
-      setDrumKitsError('Unable to load drum kits.');
-    } finally {
-      setDrumKitsLoading(false);
-    }
+    const data = localService.getDrumKits();
+    setDrumKits(data.kits);
+    const hasSelected = data.kits.some((kit) => kit.id === selectedDrumKitIdRef.current);
+    if (!hasSelected) setSelectedDrumKitId(data.defaultKitId);
   }, []);
 
+  // The kit and the drums are applied by the drumKitChanged event. The answer is handed back
+  // for the caller to audition: its own copy of the drums is from before the change.
   const handleDrumKitChange = useCallback(async (kitId: DrumKitId, applyDefaults: boolean): Promise<DrumState | undefined> => {
-    setSelectedDrumKitId(kitId);
-    try {
-      const res = await localRequest('/drum/kit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kitId, applyDefaults }),
-      });
-      if (!res.ok) return undefined;
-      const data = await res.json();
-      if (data.selectedDrumKitId) setSelectedDrumKitId(data.selectedDrumKitId as DrumKitId);
-      if (data.drumState) {
-        setDrumState(data.drumState);
-        return data.drumState as DrumState;
-      }
-      return undefined;
-    } catch {
-      return undefined;
-    }
+    const result = localService.setDrumKit(kitId, applyDefaults);
+    return result.ok ? result.value.drumState : undefined;
   }, []);
 
   const handleDrumStepToggle = useCallback((instrument: DrumInstrument, step: number, active: boolean) => {
     const synth = synthsRef.current[0];
     if (synth?.pattern) pushHistorySnapshot(synth.id, synth.pattern.id);
-    setDrumState(prev => {
-      const next = { ...prev };
-      next[instrument] = { ...next[instrument], steps: [...next[instrument].steps] };
-      next[instrument].steps[step] = active;
-      return next;
-    });
-    localRequest('/drum/step', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ instrument, step, active }),
-    });
+    localService.setDrumStep(instrument, step, active);
   }, [pushHistorySnapshot]);
 
   const handleDrumStepVelocity = useCallback((instrument: DrumInstrument, step: number, velocity: number) => {
     const synth = synthsRef.current[0];
     if (synth?.pattern) pushHistorySnapshot(synth.id, synth.pattern.id);
-    setDrumState(prev => {
-      const next = { ...prev };
-      const track = next[instrument];
-      next[instrument] = { ...track, stepVelocities: [...(track.stepVelocities || new Array(track.steps.length).fill(1))] };
-      next[instrument].stepVelocities![step] = velocity;
-      return next;
-    });
-    localRequest('/drum/step-velocity', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ instrument, step, velocity }),
-    });
+    localService.setDrumStepVelocity(instrument, step, velocity);
   }, [pushHistorySnapshot]);
 
   const handleDrumStepDetail = useCallback((instrument: DrumInstrument, step: number, detail: { probability?: number; ratchet?: number }) => {
     const synth = synthsRef.current[0];
     if (synth?.pattern) pushHistorySnapshotThrottled(synth.id, synth.pattern.id, `drum-step-detail-${instrument}-${step}`, 300);
-    setDrumState(prev => {
-      const track = prev[instrument];
-      const next = { ...track };
-      if (detail.probability !== undefined) {
-        next.stepProbabilities = [...(track.stepProbabilities || new Array(track.steps.length).fill(1))];
-        next.stepProbabilities[step] = detail.probability;
-      }
-      if (detail.ratchet !== undefined) {
-        next.stepRatchets = [...(track.stepRatchets || new Array(track.steps.length).fill(1))];
-        next.stepRatchets[step] = detail.ratchet;
-      }
-      return { ...prev, [instrument]: next };
-    });
-    localRequest('/drum/step-detail', {
-      method: 'POST',
-      body: JSON.stringify({ instrument, step, ...detail }),
-    });
+    localService.setDrumStepDetail(instrument, step, detail);
   }, [pushHistorySnapshotThrottled]);
 
   const handleDrumSettingsChange = useCallback((instrument: DrumInstrument, settings: Partial<DrumSettings>) => {
@@ -2222,38 +2166,19 @@ export function useStudio() {
     if (synth?.pattern) {
       pushHistorySnapshotThrottled(synth.id, synth.pattern.id, `drum-settings-${instrument}`, 300);
     }
-    setDrumState(prev => {
-      const next = { ...prev };
-      next[instrument] = { ...next[instrument], settings: { ...next[instrument].settings, ...settings } };
-      return next;
-    });
-    localRequest('/drum/settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ instrument, settings }),
-    });
+    localService.setDrumSettings(instrument, settings);
   }, [pushHistorySnapshotThrottled]);
 
   const handleDrumMixChange = useCallback((instrument: DrumInstrument, mix: { muted?: boolean; solo?: boolean }) => {
     const synth = synthsRef.current[0];
     if (synth?.pattern) pushHistorySnapshot(synth.id, synth.pattern.id);
-    setDrumState(prev => {
-      const next = { ...prev };
-      next[instrument] = { ...next[instrument], ...mix };
-      return next;
-    });
-    localRequest('/drum/mix', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ instrument, ...mix }),
-    });
+    localService.setDrumMix(instrument, mix);
   }, [pushHistorySnapshot]);
 
   const handleDrumReset = useCallback(() => {
     const synth = synthsRef.current[0];
     if (synth?.pattern) pushHistorySnapshot(synth.id, synth.pattern.id);
-    setDrumState(createDefaultDrumState());
-    localRequest('/drum/reset', { method: 'POST' });
+    localService.resetDrums();
   }, [pushHistorySnapshot]);
 
   const handleDrumMasterVolumeChange = useCallback((volume: number) => {
@@ -2337,12 +2262,7 @@ export function useStudio() {
         { ...drumStateRef.current[inst], muted },
       ])
     ) as DrumState;
-    setDrumState(nextState);
-    localRequest('/drum/state', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ state: nextState }),
-    });
+    localService.setDrumState(nextState);
   }, [pushHistorySnapshot]);
 
   const handleDrumSoloAll = useCallback(() => {
@@ -2354,12 +2274,7 @@ export function useStudio() {
         { ...drumStateRef.current[inst], solo: false },
       ])
     ) as DrumState;
-    setDrumState(nextState);
-    localRequest('/drum/state', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ state: nextState }),
-    });
+    localService.setDrumState(nextState);
   }, [pushHistorySnapshot]);
 
   const handleReset = useCallback(async () => {
@@ -2444,7 +2359,7 @@ export function useStudio() {
   const isAnyPlaying = synths.some(s => s.isPlaying);
 
   return {
-    synths, selectedSynthId, setSelectedSynthId, drumState: memoizedDrumState, drumKits, drumKitsLoading, drumKitsError,
+    synths, selectedSynthId, setSelectedSynthId, drumState: memoizedDrumState, drumKits,
     selectedDrumKitId, drumMasterVolume, drumSwing, drumFx, effectsLoop, browserMuted, setBrowserMuted,
     browserVolume, setBrowserVolume, globalTempo, storageError, setStorageError, changedElsewhere, loadOtherTabVersion, keepThisTabVersion, helpOpen, setHelpOpen, midiMode, setMidiMode,
     midiChannel, setMidiChannel, midiOutNotes, setMidiOutNotes, midiOutClock, setMidiOutClock, midiTargetSynthId, setMidiTargetSynthId, projectId, projectName, projects, synthPresets, drumAudio,
