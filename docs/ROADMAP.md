@@ -148,6 +148,24 @@ target; removal of the AI review workflow.
    The reverb is a convolver with a shaped impulse. Insert effects are easier
    once the audio layer has a single owner (improvements item 4).
 
+7. **More presets, grouped by kind, and more synth models.** (M) Asked for
+   by the owner on 2026-10-11.
+   - More presets to start from, and the presets menu nested by what a
+     sound is for (bass, lead, pad, keys, pluck, effects and so on), not
+     one long list. A person's own saved presets keep a group of their own.
+     A preset needs a kind recorded with it; the ones that exist get one,
+     and imported ones go under a kind chosen at import or "other".
+   - More synth models in the manner of well-known instruments, beside the
+     ones there now, each with its four macros. A model is this synth's own
+     voice set up and limited to behave like the instrument it is named
+     for; it is not that instrument's circuit. Some will want things the
+     voice does not have yet (the ladder filter, item 5, for anything
+     Moog-like; a sample oscillator, item 3; the modulation matrix, item 4),
+     so which models are possible depends on which of those are done.
+   Presets and models are sound, and sound cannot be checked by a test:
+   every one of these needs the owner's ears before it is called done. To
+   decide: which instruments to model, and the list of kinds.
+
 Done: the voice rewrite (oscillators, filter, envelopes, FM, mono and slide,
 drum voices); unison and the 24 dB filter slope; a sample on any drum lane,
 live and in export; Import Kit, which puts several sample files on the lanes
@@ -352,6 +370,8 @@ for new accounts.
   whether what a child makes can be opened in the full app.
 - **Time signatures.** One for the whole project, or one for each scene?
   And which ones should be on offer?
+- **Presets and synth models.** Which instruments should the new models be
+  in the manner of, and are the kinds of preset above the right ones?
 - **A song download that gave only the scene.** Was it Download WAV (the
   open scene, by design) or Song WAV that was pressed?
 
@@ -382,7 +402,10 @@ for new accounts.
 8. **Parameter automation** (features 5).
 9. **The audio layer's single owner** (improvements 4), then the sound work
    that builds on it: **insert effects, the reverb, the ladder filter, the
-   modulation matrix and the sample oscillator** (sound 3 to 6).
+   modulation matrix and the sample oscillator** (sound 3 to 6). **More
+   presets and synth models** (sound 7) come after those, since the new
+   models lean on them; the grouping of the presets menu does not, and can
+   be done at any time.
 10. **More MIDI** (features 6), when there is hardware to test with.
 11. **Live collaborative sessions** (the rest of features 7), after the
     typed store. The published-songs page (features 9) is done.
