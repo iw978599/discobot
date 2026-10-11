@@ -77,10 +77,12 @@ target; removal of the AI review workflow.
    adjustments is the highest-value sound work remaining, and only a person
    can do it.
 
-2. **Samples that travel with a project.** (M for files, more for sync)
-   Imported samples stay in the browser they were imported in. Putting them
-   in project files is self-contained. Syncing them needs file storage on the
-   server, which is waiting on a payment card for Cloudflare R2
+2. **Samples that travel with a project.** (files done; sync still open)
+   A saved project file now carries the audio of the samples its drum lanes
+   use, and opening it on another device puts them in that browser. Share
+   links, published songs, sync and shared projects still carry no audio, so
+   a lane's sample is missing there. Syncing samples needs file storage on
+   the server, which is waiting on a payment card for Cloudflare R2
    (`docs/STORAGE_AND_ACCOUNTS_PLAN.md`, stage 3 step 5).
 
 3. **A sample oscillator in the synth.** (M)

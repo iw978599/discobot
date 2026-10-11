@@ -129,11 +129,11 @@ test('a saved project file carries its samples to a browser that has never had t
   await other.getByRole('button', { name: 'Select Snare', exact: true }).click();
   await expect(other.getByLabel('Snare sound', { exact: true }).locator('option:checked')).toHaveText('Sample not on this device');
   await expect(other.locator('.drum-strip').getByRole('status')).toContainText('not on this device');
-  expect((await exportWav(other, testInfo.outputPath('other-missing.wav'))).equals(builtIn), 'without the audio the built-in snare plays').toBe(true);
+  await expect.poll(async () => (await exportWav(other, testInfo.outputPath('other-missing.wav'))).equals(builtIn), { message: 'without the audio the built-in snare plays' }).toBe(true);
 
   // Then the saved file. The lane that was missing its sample now has it, under the same id.
   await importFile.setInputFiles(path);
-  await expect(other.getByRole('button', { name: /^Project: .* 2$/ })).toBeVisible();
+  await expect(other.getByRole('button', { name: /^Project: .* 3$/ })).toBeVisible();
   await expect(other.locator('.app-alert')).toHaveCount(0);
   await other.getByRole('button', { name: 'Select Snare', exact: true }).click();
   await expect(other.getByLabel('Snare sound', { exact: true }).locator('option:checked')).toHaveText('beep.wav');
@@ -147,7 +147,7 @@ test('a saved project file carries its samples to a browser that has never had t
 
   // Importing it again adds a project, not a second copy of the sample.
   await importFile.setInputFiles(path);
-  await expect(other.getByRole('button', { name: /^Project: .* 3$/ })).toBeVisible();
+  await expect(other.getByRole('button', { name: /^Project: .* 4$/ })).toBeVisible();
   await other.getByRole('button', { name: 'MIDI and samples', exact: true }).click();
   await expect(other.getByRole('button', { name: 'Delete sample beep.wav', exact: true })).toHaveCount(1);
   await other.keyboard.press('Escape');
@@ -157,8 +157,11 @@ test('a saved project file carries its samples to a browser that has never had t
   await other.getByRole('button', { name: 'Delete sample beep.wav', exact: true }).click();
   await expect(other.getByRole('button', { name: 'Delete sample beep.wav', exact: true })).toHaveCount(0);
   await other.keyboard.press('Escape');
+  // A sample already decoded stays in memory until the page is loaded again.
+  await other.reload();
+  await expect(other.getByRole('heading', { name: 'Discobot', exact: true })).toBeVisible();
   await importFile.setInputFiles({ name: 'broken.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ ...file, samples: [{ ...file.samples[0], data: 'not audio at all!' }] })) });
-  await expect(other.getByRole('button', { name: /^Project: .* 4$/ })).toBeVisible();
+  await expect(other.getByRole('button', { name: /^Project: .* 5$/ })).toBeVisible();
   await expect(other.locator('.app-alert').filter({ hasText: 'one of its samples could not be read' })).toBeVisible();
   await other.getByRole('button', { name: 'Select Snare', exact: true }).click();
   await expect(other.getByRole('button', { name: 'Snare step 5', exact: true })).toHaveAttribute('aria-pressed', 'true');
