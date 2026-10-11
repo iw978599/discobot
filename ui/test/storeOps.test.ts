@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { LocalProjectService } from '../src/services/localService.ts';
 import { OP_META, type Applied, type OpNotice, type Operation } from '../src/services/projectOps.ts';
 import { reducers } from '../src/services/projectReducers.ts';
-import { merge } from '../src/services/projectSanitization.ts';
+import { merge, sanitizeSynthParams } from '../src/services/projectSanitization.ts';
 import { MAX_GUESTS } from '../src/services/guests.ts';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from '../src/services/drumKits.ts';
 import type { DrumInstrument, DrumState } from '../src/types.ts';
@@ -32,9 +32,12 @@ interface Case {
   path: string | ((ctx: any) => string);
   body: unknown;
   run: (service: LocalProjectService, ctx: any) => Applied<unknown>;
-  // Accepted: what both ways answer and emit, and the event's name.
+  // Accepted: what both ways answer and emit, and the event's name. `eventData` when the event
+  // carries something other than the answer; `silent` when there is no event at all.
   answer?: unknown;
   event?: string;
+  eventData?: unknown;
+  silent?: boolean;
   // Refused: the status and the error both ways answer with.
   status?: 400 | 404 | 409;
   error?: string;
@@ -321,6 +324,103 @@ const effectCases: Case[] = [
   effectsSet('pre-delay and damping that are null or text are taken away', { reverb: { preDelay: null, damping: 'lots' } }, { answer: wasShaped(next => { delete next.reverb.preDelay; delete next.reverb.damping; }) }, shaped),
 ];
 
+// A lane's sound, model, mix and view, and the tempo. A new store has lane 1 and no other.
+const NO_SYNTH = 'Synth not found';
+// The sound once it has been through the checks with nothing changed, and what a case names laid over it.
+const CHECKED_SOUND = sanitizeSynthParams(defaults().synthParams, defaults().synthParams);
+const sound = (changes: object = {}) => merge(CHECKED_SOUND, changes);
+const BRIGHT = { gain: 1.5, pan: -.5, spread: .4, filter: { frequency: 1234 }, lfo1: { sync: true, rate: 40 } };
+const bright = (service: LocalProjectService) => { assert.ok(service.setSynthParams(1, BRIGHT).ok); };
+const wasBright = (changes: object = {}) => merge(sound(BRIGHT), changes);
+type LaneOutcome = { answer: unknown; eventData?: unknown; silent?: boolean } | { status: 400 | 404 | 409; error: string };
+const laneCase = (op: Case['op'], resource: string, event: string, run: (service: LocalProjectService, synthId: number, body: any) => Applied<unknown>) =>
+  (title: string, body: Record<string, unknown>, result: LaneOutcome, arrange?: Case['arrange'], synthId = 1): Case => ({
+    op, title, arrange, path: `/synth/${synthId}/${resource}`, body, run: service => run(service, synthId, body), ...('answer' in result ? { event, ...result } : result),
+  });
+const params = laneCase('synth.params', 'parameters', 'synthUpdate', (service, synthId, body) => service.setSynthParams(synthId, body));
+// The answer is the sound alone; the event names the lane.
+const sounds = (answer: unknown) => ({ answer, eventData: { synthId: 1, parameters: answer } });
+const model = laneCase('synth.model', 'model', 'synthModelUpdate', (service, synthId, body) => service.setSynthModel(synthId, { modelId: body.modelId, modelParams: body.modelParams }));
+const MACROS = { macro1: .5, macro2: .5, macro3: .5, macro4: .5 };
+const modelled = (modelId: string, macros: object = {}) => ({ answer: { synthId: 1, modelId, modelParams: { ...MACROS, ...macros } } });
+const juno = (service: LocalProjectService) => { assert.ok(service.setSynthModel(1, { modelId: 'juno-106', modelParams: { macro1: .9 } }).ok); };
+const mix = laneCase('synth.mix', 'mix', 'synthMix', (service, synthId, body) => service.setSynthMix(synthId, { muted: body.muted, solo: body.solo }));
+const mixed = (muted: boolean, solo: boolean) => ({ answer: { synthId: 1, muted, solo } });
+const soloed = (service: LocalProjectService) => { assert.ok(service.setSynthMix(1, { solo: true }).ok); };
+const prefs = laneCase('synth.prefs', 'preferences', '', (service, synthId, body) => service.setSynthPrefs(synthId, { octaveShift: body.octaveShift, keyboardMode: body.keyboardMode }));
+// A lane as the store answers it: the whole of it, with its pattern's id as its place among the ids.
+const lane = (rest: object = {}) => {
+  const pattern = { id: 'id-1', name: 'Synth 1', tempo: 120, steps: Array.from({ length: 16 }, () => ({ active: false, velocity: .7 })) };
+  return { answer: { synthId: 1, pattern, patterns: [pattern], synthParams: defaults().synthParams, synthModelId: 'generic', synthModelParams: MACROS, muted: false, solo: false, isPlaying: false, ...rest }, silent: true };
+};
+const lowPiano = (service: LocalProjectService) => { assert.ok(service.setSynthPrefs(1, { octaveShift: -9, keyboardMode: 'piano-roll' }).ok); };
+const tempoCase = (title: string, tempo: unknown, result: LaneOutcome, arrange?: Case['arrange']): Case => ({
+  op: 'tempo.set', title, arrange, path: '/tempo', body: tempo === undefined ? {} : { tempo }, run: service => service.setTempo(wrong(tempo)), ...('answer' in result ? { event: 'tempoChange', ...result } : result),
+  check: project => {
+    const expected = 'answer' in result ? (result.answer as { tempo: number }).tempo : 120;
+    assert.equal(project.tempo, expected);
+    assert.equal(project.synths.length, 2);
+    for (const entry of project.synths) assert.deepEqual([entry.pattern.tempo, ...entry.patterns.map((pattern: any) => pattern.tempo)], Array(entry.patterns.length + 1).fill(expected));
+  },
+});
+// Two lanes, the first with a second pattern, so a tempo has more than one pattern to reach.
+const twoLanes = async (service: LocalProjectService) => {
+  const post = async (path: string, body: object) => assert.equal((await service.request(path, { method: 'POST', body: JSON.stringify(body) })).status, 200);
+  await post('/synth/create', { synthId: 2 });
+  await post('/synth/1/patterns', { name: 'Second', steps: [{ active: true, note: 'C4', velocity: .8 }] });
+};
+
+const laneCases: Case[] = [
+  params('a sound change is laid over what is there, then checked', { filter: { frequency: 1234, q: 999 }, gain: 5, oscillator: { type: 'noise' }, lfo1: { sync: true }, bogus: 1 },
+    sounds(sound({ filter: { frequency: 1234, q: 30 }, gain: 2, lfo1: { sync: true } }))),
+  params('a change of nothing leaves the sound as it was, and still emits and saves', {}, sounds(wasBright()), bright),
+  params('one value inside a part changes only that', { filter: { q: 5 } }, sounds(wasBright({ filter: { q: 5 } })), bright),
+  ...notNumbers.map(([what, gain]) => params(`a level that is ${what} leaves it as it was, or puts back what a new lane has`, { gain }, sounds(wasBright({ gain: gain === undefined ? 1.5 : 1 })), bright)),
+  params('inside a part, what is undefined is not a change: JSON never sent it', { filter: { frequency: undefined, q: 5 }, pan: undefined }, sounds(wasBright({ filter: { q: 5 } })), bright),
+  params('a spread that is undefined is kept; one that is null goes back to none', { spread: undefined }, sounds(wasBright()), bright),
+  params('a spread that is not a number at all arrives as null, and goes back to none', { spread: Number.NaN }, sounds(wasBright({ spread: 0 })), bright),
+  params('an LFO whose sync is undefined keeps it, and the faster rate sync allows', { lfo1: { sync: undefined, depth: .9 } }, sounds(wasBright({ lfo1: { depth: .9 } })), bright),
+  params('an LFO whose sync is not true is not synced, and its rate is held to what that allows', { lfo1: { sync: Number.POSITIVE_INFINITY } }, sounds(wasBright({ lfo1: { sync: false, rate: 30 } })), bright),
+  ...notObjects.map(([what, value]) => params(`a part that is ${what} goes back to what a new lane has`, { filter: value }, sounds(wasBright({ filter: CHECKED_SOUND.filter })), bright)),
+  params('a part that is undefined is not a change', { filter: undefined, lfo1: undefined, gain: 1.2 }, sounds(wasBright({ gain: 1.2 })), bright),
+  params('a sound for a lane that does not exist is refused', { gain: 1 }, { status: 404, error: NO_SYNTH }, bright, 3),
+
+  model('a model change sets the model and lays its macros over the lane\'s, each held to 0 to 1', { modelId: 'tb-303', modelParams: { macro1: .9, macro2: 7, macro3: 'x', extra: 1 } }, modelled('tb-303', { macro1: .9, macro2: 1 })),
+  model('macros alone keep the model', { modelParams: { macro4: .1 } }, modelled('juno-106', { macro1: .9, macro4: .1 }), juno),
+  model('a model alone keeps the macros', { modelId: 'dx7' }, modelled('dx7', { macro1: .9 }), juno),
+  model('a model that does not exist puts the lane back on the generic one, not the one it had', { modelId: 'nope' }, modelled('generic', { macro1: .9 }), juno),
+  model('a change of nothing leaves the model as it was, and still emits and saves', {}, modelled('juno-106', { macro1: .9 }), juno),
+  ...([['undefined', undefined], ['null', null], ['not a number at all', Number.NaN], ['infinity', Number.POSITIVE_INFINITY], ['empty', ''], ['zero', 0]] as const).map(([what, modelId]) =>
+    model(`a model that is ${what} keeps the one the lane has`, { modelId }, modelled('juno-106', { macro1: .9 }), juno)),
+  model('a model that is a number puts the lane on the generic one', { modelId: 7 }, modelled('generic', { macro1: .9 }), juno),
+  model('a macro that is undefined is not a change: JSON never sent it', { modelParams: { macro1: undefined, macro2: .2 } }, modelled('juno-106', { macro1: .9, macro2: .2 }), juno),
+  model('a macro that is not a number goes back to the middle', { modelParams: { macro1: Number.NaN, macro2: null, macro3: 'x', macro4: Number.POSITIVE_INFINITY } }, modelled('juno-106'), service => { assert.ok(service.setSynthModel(1, { modelId: 'juno-106', modelParams: { macro1: .9, macro2: .9, macro3: .9, macro4: .9 } }).ok); }),
+  ...[...notObjects, ['a list', [.1, .2]] as [string, unknown], ['undefined', undefined] as [string, unknown]].map(([what, modelParams]) =>
+    model(`macros that are ${what} leave them as they were`, { modelParams }, modelled('juno-106', { macro1: .9 }), juno)),
+  model('a model for a lane that does not exist is refused', { modelId: 'dx7' }, { status: 404, error: NO_SYNTH }, juno, 3),
+
+  mix('mute and solo are set when they are true or false, and left otherwise', { muted: true, solo: 'yes' }, mixed(true, false)),
+  mix('both can change together', { muted: true, solo: false }, mixed(true, false), soloed),
+  mix('a change of nothing leaves the mix as it was, and still emits and saves', {}, mixed(false, true), soloed),
+  mix('what is undefined is not a change', { muted: undefined, solo: undefined }, mixed(false, true), soloed),
+  mix('what is not a number at all, infinity, null and a number are not a mute or a solo', { muted: Number.NaN, solo: Number.POSITIVE_INFINITY }, mixed(false, true), soloed),
+  mix('null and a number are not either', { muted: 1, solo: null }, mixed(false, true), soloed),
+  mix('a mix for a lane that does not exist is refused', { muted: true }, { status: 404, error: NO_SYNTH }, soloed, 3),
+
+  prefs('the octave and the keyboard are saved without an event; the answer is the whole lane', { octaveShift: 1.6, keyboardMode: 'piano-roll' }, lane({ octaveShift: 2, keyboardMode: 'piano-roll' })),
+  prefs('the octave is held to two either way', { octaveShift: 9, keyboardMode: 'keyboard' }, lane({ octaveShift: 2, keyboardMode: 'keyboard' }), lowPiano),
+  prefs('on a lane that has neither yet, a change of nothing sets the octave to 0 and no keyboard', {}, lane({ octaveShift: 0 })),
+  ...notNumbers.map(([what, octaveShift]) => prefs(`an octave that is ${what} keeps what was there`, { octaveShift }, lane({ octaveShift: -2, keyboardMode: 'piano-roll' }), lowPiano)),
+  ...([['undefined', undefined], ['one there is none of', 'harp'], ['null', null], ['not a number at all', Number.NaN], ['infinity', Number.POSITIVE_INFINITY]] as const).map(([what, keyboardMode]) =>
+    prefs(`a keyboard that is ${what} keeps what was there`, { octaveShift: 1, keyboardMode }, lane({ octaveShift: 1, keyboardMode: 'piano-roll' }), lowPiano)),
+  prefs('a view of a lane that does not exist is refused', { octaveShift: 1 }, { status: 404, error: NO_SYNTH }, lowPiano, 3),
+
+  tempoCase('a tempo is kept as sent, fractions too, and set on every pattern of every lane', 137.5, { answer: { tempo: 137.5 } }, twoLanes),
+  ...[20, 400].map(tempo => tempoCase(`a tempo of ${tempo} is allowed`, tempo, { answer: { tempo } }, twoLanes)),
+  ...([['just under 20', 19.9], ['just over 400', 400.1], ['text', '120'], ['null', null], ['missing', undefined], ['not a number at all', Number.NaN], ['infinity', Number.POSITIVE_INFINITY], ['less than nothing', Number.NEGATIVE_INFINITY]] as const).map(([what, tempo]) =>
+    tempoCase(`a tempo that is ${what} is refused, and no pattern is touched`, tempo, { status: 400, error: 'Invalid tempo' }, twoLanes)),
+];
+
 const cases: Case[] = [
   ...swing('a swing in range is kept as sent', .3, .3),
   ...swing('a swing past the top is held at .75', 5, .75),
@@ -388,6 +488,7 @@ const cases: Case[] = [
 
   ...drumCases,
   ...effectCases,
+  ...laneCases,
 ];
 
 // What is in storage, or null when nothing has been written yet.
@@ -418,7 +519,7 @@ for (const entry of cases) {
     } else {
       assert.equal(typed.status, 200);
       assert.deepEqual(comparable(typed.data), entry.answer);
-      assert.deepEqual(comparable(typed.events), [{ type: entry.event, data: entry.answer }]);
+      assert.deepEqual(comparable(typed.events), entry.silent ? [] : [{ type: entry.event, data: 'eventData' in entry ? entry.eventData : entry.answer }]);
       assert.equal(typed.saved, OP_META[entry.op].save, 'an accepted operation saves when OP_META says so');
     }
     entry.check?.(typedProject);
@@ -449,7 +550,7 @@ test('apply is synchronous: the event has arrived and the store has changed befo
   assert.equal(service.snapshot().drumSwing, .3);
   for (const method of [
     'apply', 'applyAll', 'setDrumSwing', 'setDrumMasterVolume', 'setDrumKit', 'setDrumState', 'resetDrums', 'setDrumBars', 'setDrumStep', 'setDrumStepVelocity', 'setDrumStepDetail',
-    'setDrumSettings', 'setDrumSample', 'setDrumMix', 'setDrumFx', 'setEffectsLoop', 'addGuest', 'changeGuest', 'removeGuest', 'getScenes', 'getTempo', 'getDrumKits',
+    'setDrumSettings', 'setDrumSample', 'setDrumMix', 'setDrumFx', 'setEffectsLoop', 'setTempo', 'setSynthParams', 'setSynthModel', 'setSynthMix', 'setSynthPrefs', 'addGuest', 'changeGuest', 'removeGuest', 'getScenes', 'getTempo', 'getDrumKits',
   ] as const) {
     assert.equal(LocalProjectService.prototype[method].constructor.name, 'Function', `${method} is not async`);
   }
@@ -477,20 +578,20 @@ test('an operation listener hears each accepted operation after its event, with 
 // These stand a reducer in for one that has not moved yet, to try what no real reducer does:
 // an outcome that is refused and yet names an event and a save, one that does not save, and one
 // with no answer. They are about `apply`, not about the operation named.
-function standIn<T>(type: 'tempo.set' | 'transport.play', reducer: (...args: any[]) => unknown, run: (service: LocalProjectService) => T): T {
+function standIn<T>(type: 'transport.stop' | 'transport.play', reducer: (...args: any[]) => unknown, run: (service: LocalProjectService) => T): T {
   assert.equal(type in reducers, false, `${type} has a reducer of its own now: stand in for another`);
   (reducers as Record<string, unknown>)[type] = reducer;
   try { return run(setup()); } finally { delete (reducers as Record<string, unknown>)[type]; }
 }
 
 test('a refused operation is answered, not thrown: no event, no notice, no save', () => {
-  standIn('tempo.set', () => ({ ok: false, status: 400, error: 'Invalid tempo', save: true, event: { type: 'tempoChange', data: {} } }), service => {
+  standIn('transport.stop', () => ({ ok: false, status: 400, error: 'Not now', save: true, event: { type: 'sequencerStop', data: {} } }), service => {
     const before = service.snapshot();
     let notices = 0;
     service.subscribeOps(() => { notices++; });
-    const result = applied(service, target => target.apply({ type: 'tempo.set', tempo: 5 }));
-    assert.deepEqual(result, { status: 400, data: { error: 'Invalid tempo' }, events: [], saved: false });
-    assert.deepEqual(service.apply({ type: 'tempo.set', tempo: 5 }), { ok: false, status: 400, error: 'Invalid tempo' });
+    const result = applied(service, target => target.apply({ type: 'transport.stop', synthId: 1 }));
+    assert.deepEqual(result, { status: 400, data: { error: 'Not now' }, events: [], saved: false });
+    assert.deepEqual(service.apply({ type: 'transport.stop', synthId: 1 }), { ok: false, status: 400, error: 'Not now' });
     assert.equal(notices, 0);
     assert.deepEqual(service.snapshot(), before);
   });
@@ -608,6 +709,82 @@ test('a change to the drum sends or the effects that is not an object is refused
     }
   }
   assert.deepEqual(service.snapshot(), before);
+});
+
+// A route found the lane from the digits in its path. An operation can name it with anything,
+// and only the lane's own number finds it.
+test('a lane named by anything but its number is not found, and a sound that is not an object is refused first', async () => {
+  const service = setup();
+  bright(service);
+  service.flush();
+  const before = service.snapshot();
+  const missing = { status: 404, data: { error: 'Synth not found' }, events: [], saved: false };
+  for (const synthId of ['1', 1.5, 0, -1, 9, Number.NaN, undefined, null, [1], true]) {
+    assert.deepEqual(applied(service, target => target.setSynthParams(wrong(synthId), { gain: 1 })), missing);
+    assert.deepEqual(applied(service, target => target.setSynthModel(wrong(synthId), { modelId: 'dx7' })), missing);
+    assert.deepEqual(applied(service, target => target.setSynthMix(wrong(synthId), { muted: true })), missing);
+    assert.deepEqual(applied(service, target => target.setSynthPrefs(wrong(synthId), { octaveShift: 1 })), missing);
+  }
+  const loop: Record<string, unknown> = {};
+  loop.loop = loop;
+  const refused = { status: 400, data: { error: 'Invalid local operation data' }, events: [], saved: false };
+  for (const patch of [null, undefined, [], [{ gain: 1 }], 'gain', 7, Number.NaN, loop, () => ({ gain: 1 })]) {
+    assert.deepEqual(applied(service, target => target.setSynthParams(1, wrong(patch))), refused);
+    assert.deepEqual(applied(service, target => target.setSynthParams(3, wrong(patch))), refused, 'checked before the lane is looked for, as a body was');
+  }
+  for (const path of ['/synth/1/parameters', '/synth/3/parameters']) {
+    for (const raw of ['null', '[]', '7', '"gain"']) {
+      const routed = await call(service, 'POST', path, undefined, raw);
+      assert.deepEqual([routed.status, routed.data, routed.events, routed.saved], [400, { error: 'Invalid local operation data' }, [], false]);
+    }
+  }
+  assert.deepEqual(service.snapshot(), before);
+});
+
+test('the store keeps nothing of a lane operation\'s own objects', () => {
+  const service = setup();
+  const patch = { filter: { frequency: 1234 }, fxSends: { reverb: .5, delay: 0, drive: 0, phaser: 0, chorus: 0 } };
+  const result = service.setSynthParams(1, patch);
+  assert.ok(result.ok);
+  patch.filter.frequency = 99;
+  patch.fxSends.reverb = 0;
+  result.value.filter.frequency = 50;
+  const macros = { macro1: .9 };
+  const modelResult = service.setSynthModel(1, { modelId: 'juno-106', modelParams: macros });
+  assert.ok(modelResult.ok);
+  macros.macro1 = 0;
+  modelResult.value.modelParams.macro2 = 0;
+  const viewed = service.setSynthPrefs(1, { octaveShift: 1 });
+  assert.ok(viewed.ok);
+  viewed.value.pattern.steps[0].active = true;
+  viewed.value.synthParams.gain = 0;
+  const kept = service.snapshot().synths[0];
+  assert.deepEqual([kept.synthParams.filter.frequency, kept.synthParams.fxSends.reverb, kept.synthModelParams.macro1, kept.synthModelParams.macro2, kept.pattern.steps[0].active, kept.synthParams.gain], [1234, .5, .9, .5, false, 1]);
+  service.flush();
+});
+
+// useStudio hears a sound only through the synthUpdate event, which is also the one thing that
+// hands the sound to the audio. A model change is followed by its macros' sound, and undo sends
+// the sound, the model, the tempo and the mix one after another: each must have arrived whole,
+// with the lane's number, before the next begins, and the view must send nothing.
+test('each lane edit is delivered before the next begins, and a view change sends nothing', () => {
+  const service = setup();
+  const heard: Message[] = [];
+  service.subscribe(message => heard.push(message));
+  heard.length = 0;
+  service.setSynthModel(1, { modelId: 'juno-106' });
+  assert.deepEqual(heard.map(message => message.type), ['synthModelUpdate']);
+  service.setSynthParams(1, { filter: { frequency: 900 } });
+  assert.deepEqual(heard.map(message => message.type), ['synthModelUpdate', 'synthUpdate']);
+  assert.deepEqual([heard[1].data.synthId, heard[1].data.parameters.filter.frequency], [1, 900]);
+  assert.deepEqual(heard[1].data.parameters, service.snapshot().synths[0].synthParams);
+  service.setTempo(90);
+  service.setSynthMix(1, { muted: true });
+  service.setSynthPrefs(1, { octaveShift: 2, keyboardMode: 'piano-roll' });
+  assert.deepEqual(heard.map(message => message.type), ['synthModelUpdate', 'synthUpdate', 'tempoChange', 'synthMix']);
+  assert.deepEqual(heard[3].data, { synthId: 1, muted: true, solo: false });
+  assert.equal(service.snapshot().synths[0].octaveShift, 2);
+  service.flush();
 });
 
 test('the store keeps nothing of an effects operation\'s own objects', () => {
@@ -757,6 +934,11 @@ test('before the service is initialized the typed way throws, with the message r
   assert.throws(() => new LocalProjectService().resetDrums(), message);
   assert.throws(() => new LocalProjectService().setDrumFx({}), message);
   assert.throws(() => new LocalProjectService().setEffectsLoop({}), message);
+  assert.throws(() => new LocalProjectService().setTempo(120), message);
+  assert.throws(() => new LocalProjectService().setSynthParams(1, {}), message);
+  assert.throws(() => new LocalProjectService().setSynthModel(1, {}), message);
+  assert.throws(() => new LocalProjectService().setSynthMix(1, {}), message);
+  assert.throws(() => new LocalProjectService().setSynthPrefs(1, {}), message);
   assert.throws(() => new LocalProjectService().getTempo(), message);
   assert.throws(() => new LocalProjectService().getScenes(), message);
 });
