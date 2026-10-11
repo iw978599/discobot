@@ -22,6 +22,15 @@ const bar = (page: Page) => page.getByRole('navigation', { name: 'Rack units', e
 const tab = (page: Page, name: string) => bar(page).getByRole('button', { name, exact: true });
 const ALL = 'Show all units on one page';
 
+const addGuest = async (page: Page, baseURL: string) => {
+  await page.getByRole('button', { name: 'Project ▾', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Add Guest Instrument', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Add a guest instrument', exact: true });
+  await dialog.getByLabel('Address of the instrument\'s page', { exact: true }).fill(`http://127.0.0.1:${Number(new URL(baseURL).port) + 1000}/__guest`);
+  await dialog.getByRole('button', { name: 'Add Guest', exact: true }).click();
+  await expect(page.locator('[data-unit="guests"]')).toHaveAttribute('data-status', 'ready');
+};
+
 test('on a phone showing the whole rack it fits the screen, with steps eight to a row and controls a finger can hit', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-chromium', 'this is the narrow layout');
   const errors: string[] = [];
@@ -244,29 +253,42 @@ test('a guest keeps its page and its sound while another unit is on screen', asy
   const blocks = async () => Number(await unit.getAttribute('data-audio-blocks'));
 
   await expect(tab(page, 'Show Guests'), 'no switch for guests until there is one').toHaveCount(0);
-  await page.getByRole('button', { name: 'Project ▾', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Add Guest Instrument', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Add a guest instrument', exact: true });
-  await dialog.getByLabel('Address of the instrument\'s page', { exact: true }).fill(`http://127.0.0.1:${Number(new URL(baseURL).port) + 1000}/__guest`);
-  await dialog.getByRole('button', { name: 'Add Guest', exact: true }).click();
+  await addGuest(page, baseURL);
 
   // The guest that was just added is the unit on show.
-  await expect(unit).toHaveAttribute('data-status', 'ready');
   await expect(tab(page, 'Show Guests')).toHaveAttribute('aria-current', 'true');
   await expect(frame).toBeVisible();
   await frame.evaluate(element => { (element as HTMLIFrameElement & { kept?: boolean }).kept = true; });
   await page.getByRole('button', { name: /Play All/ }).click();
   await expect.poll(blocks, { message: 'its sound arrives' }).toBeGreaterThan(10);
 
-  // Another unit on screen: the guest is out of sight and its sound goes on arriving.
+  // Another unit on screen. The guest is still laid out at its full size, because a page that is
+  // not rendered is not run in full, but nothing of it can be seen, touched, focused or read out.
   await tab(page, 'Show Drums').click();
-  await expect(unit).toBeHidden();
+  await expect(unit).toHaveAttribute('inert', '');
+  await expect(unit).toHaveAttribute('aria-hidden', 'true');
+  const size = await box(frame);
+  expect(size.width, 'the frame keeps its width').toBeGreaterThan(200);
+  expect(size.height, 'and its height').toBeGreaterThan(200);
+  expect(await unit.evaluate(element => getComputedStyle(element).clipPath), 'clipped to nothing').toBe('inset(50%)');
+  expect(await frame.evaluate((element) => { (element as HTMLElement).focus(); return document.activeElement === element; }), 'it cannot take focus').toBe(false);
+  expect(await unit.evaluate((element) => {
+    const area = element.getBoundingClientRect();
+    const points = [[area.left + area.width / 2, area.top + 20], [area.left + area.width / 2, area.top + area.height / 2], [area.left + 20, area.bottom - 20]];
+    return points.some(([x, y]) => element.contains(document.elementFromPoint(x, Math.min(window.innerHeight - 1, y))));
+  }), 'nor a touch').toBe(false);
+  await page.getByRole('button', { name: 'Kick step 1', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Kick step 1', exact: true }), 'and it is not in the way of the unit on show').toHaveAttribute('aria-pressed', 'true');
   const heard = await blocks();
-  await expect.poll(blocks, { message: 'sound still arrives from the hidden guest' }).toBeGreaterThan(heard + 10);
+  await expect.poll(blocks, { message: 'sound still arrives from the guest' }).toBeGreaterThan(heard + 10);
 
   // Back again, it is the same frame, not a page loaded afresh.
   await tab(page, 'Show Guests').click();
   await expect(frame).toBeVisible();
+  await expect(unit).not.toHaveAttribute('inert', '');
+  await expect(unit).not.toHaveAttribute('aria-hidden', 'true');
+  expect(await unit.evaluate(element => getComputedStyle(element).clipPath)).toBe('none');
+  expect(await frame.evaluate((element) => { (element as HTMLElement).focus(); return document.activeElement === element; }), 'on show, it can be reached again').toBe(true);
   expect(await frame.evaluate(element => (element as HTMLIFrameElement & { kept?: boolean }).kept), 'the frame was never taken out of the page').toBe(true);
   await expect(unit).toHaveAttribute('data-status', 'ready');
   await page.getByRole('button', { name: /Stop All/ }).click();
@@ -306,5 +328,89 @@ test('on a phone the walkthrough turns to the unit each stop is about', async ({
   }
   await page.keyboard.press('Escape');
   await expect(tour).toHaveCount(0);
-  await expect(page.locator('.effects-unit'), 'the rack is left on the unit the tour ended at').toBeVisible();
+  await expect(tab(page, 'Show Drums'), 'the unit the tour started from is put back').toHaveAttribute('aria-current', 'true');
+  await expect(page.getByRole('region', { name: 'Drums module', exact: true })).toBeVisible();
+  await expect(page.locator('.rack > [data-unit]:visible')).toHaveCount(1);
+});
+
+test('the lane on show is the lane that is open for editing, after a reload and when it is removed', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium', 'this is the narrow layout');
+  await paged(page);
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const third = page.getByRole('region', { name: 'Synth 3 module', exact: true });
+  const first = page.getByRole('region', { name: 'Synth 1 module', exact: true });
+  const open = async (lane: Locator, id: number) => {
+    await expect(lane.locator('.synth-controls-panel'), `Synth ${id} has its editor`).toBeVisible();
+    await expect(lane.getByRole('button', { name: `Synth ${id}`, exact: true }), 'and its name plate says it is open').toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('.synth-controls-panel'), 'no other lane has one').toHaveCount(1);
+  };
+
+  await tab(page, 'Show Synth 3').click();
+  await open(third, 3);
+
+  // A new visit opens on the lane that was left, and that lane is open: the app itself always
+  // starts with the first lane open.
+  await page.reload();
+  await expect(tab(page, 'Show Synth 3')).toHaveAttribute('aria-current', 'true');
+  await open(third, 3);
+  await third.getByRole('button', { name: /^Select step 1( |$)/ }).click();
+  await page.keyboard.press('a');
+  await expect(third.getByRole('button', { name: /^Select step 1 C/ }), 'the computer keyboard plays the lane on show').toBeVisible();
+
+  // Removed, the lane that is opened in its place is the one shown, not the empty slot.
+  await third.getByRole('button', { name: 'Remove', exact: true }).click();
+  await expect(tab(page, 'Show Synth 1')).toHaveAttribute('aria-current', 'true');
+  await open(first, 1);
+  await expect(page.locator('.rack > [data-unit]:visible')).toHaveCount(1);
+  await expect(tab(page, 'Show Synth 3, an empty slot')).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('a guest that arrives by itself does not pull the view to it, even after Add Guest was opened and closed', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium', 'this is the narrow layout');
+  await paged(page);
+  await addGuest(page, String(testInfo.project.use.baseURL));
+  await expect(tab(page, 'Show Guests')).toHaveAttribute('aria-current', 'true');
+
+  // A second project with no guest, where Add Guest is opened and closed again.
+  await page.getByRole('button', { name: 'Project ▾', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'New Project', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Project: Untitled 2', exact: true })).toBeVisible();
+  await expect(tab(page, 'Show Guests')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Project ▾', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Add Guest Instrument', exact: true }).click();
+  await page.getByRole('button', { name: 'Close guest instrument', exact: true }).click();
+  await tab(page, 'Show Drums').click();
+
+  // Back in the first project its guest arrives with it. The drums stay on show.
+  await page.getByRole('button', { name: /^Project: / }).click();
+  await page.getByRole('dialog', { name: 'Projects', exact: true }).getByRole('group', { name: 'Project Untitled', exact: true }).getByRole('button', { name: 'Open', exact: true }).click();
+  await expect(page.locator('[data-unit="guests"]')).toHaveCount(1);
+  await expect(tab(page, 'Show Guests')).toBeVisible();
+  await expect(tab(page, 'Show Drums')).toHaveAttribute('aria-current', 'true');
+  await expect(page.getByRole('region', { name: 'Drums module', exact: true })).toBeVisible();
+});
+
+test('on the narrowest phones every switch of the bar fits, with three lanes and a guest', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium', 'this is the narrow layout');
+  await page.setViewportSize({ width: 360, height: 740 });
+  await paged(page);
+  await addGuest(page, String(testInfo.project.use.baseURL));
+  const switches = bar(page).getByRole('button');
+  await expect(switches).toHaveCount(8);
+  expect(await bar(page).evaluate(element => element.scrollWidth - element.clientWidth), 'the bar does not have to be slid').toBeLessThanOrEqual(1);
+  for (const button of await switches.all()) {
+    const name = await button.getAttribute('aria-label');
+    const area = (await button.boundingBox())!;
+    expect(area.x, name!).toBeGreaterThanOrEqual(0);
+    expect(area.x + area.width, name!).toBeLessThanOrEqual(361);
+    expect(area.width, name!).toBeGreaterThanOrEqual(44);
+    expect(area.height, name!).toBeGreaterThanOrEqual(44);
+    expect(await button.evaluate(element => element.querySelector('.unit-tab-name')!.getBoundingClientRect().width <= element.getBoundingClientRect().width), `${name}: its legend fits inside it`).toBe(true);
+  }
+  for (const name of ['Show Song', 'Show Synth 3', 'Show Guests', 'Show Drums', 'Show Effects', ALL]) {
+    await tab(page, name).click();
+    await expect(tab(page, name)).toHaveAttribute('aria-current', 'true');
+  }
 });

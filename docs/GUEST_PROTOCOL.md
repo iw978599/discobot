@@ -161,6 +161,25 @@ guest start once the user has pressed play in Discobot. Create or resume the
 the context stays suspended, show a short "click here to enable sound"
 message; one click inside the frame fixes it for the session.
 
+## When the guest is not on show
+
+On a phone Discobot shows one unit of the rack at a time, and the guest may
+not be the one on show. Its frame is then still in the page at its full
+size, but nothing of it is painted where the user can see it, and it cannot
+be touched, focused or read by a screen reader. A guest may assume that it
+keeps its width and height, that it is not reloaded, and that messages keep
+arriving. It should not assume the user can see or reach it: do not wait for
+a click, and do not drive sound or timing from what is drawn. Take time from
+the `transport` messages and the clock, and make sound in the audio thread
+or from a timer, not from `requestAnimationFrame`.
+
+This is different from the user pressing Hide on the guest's own unit, which
+removes the frame from layout: a browser then stops the guest's animation
+frames and may slow its timers, and the guest's size reads as zero.
+
+Only the example guest has been tried this way, and only in Chromium. A phone
+browser may still slow a page it judges to be out of sight.
+
 ## What the host does not do yet
 
 - **Offline export.** Discobot renders WAV files faster than real time and a guest cannot. For

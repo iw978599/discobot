@@ -575,13 +575,20 @@
      unit is hidden here, not taken out of the page: a hidden lane keeps its step lights and a
      hidden guest keeps its frame, so both are right the moment they are shown again. With
      "all" on show the attribute is absent and the rack is the one long page above. */
-  .rack[data-shown="song"] > [data-unit]:not([data-unit="song"]),
-  .rack[data-shown="synth-1"] > [data-unit]:not([data-unit="synth-1"]),
-  .rack[data-shown="synth-2"] > [data-unit]:not([data-unit="synth-2"]),
-  .rack[data-shown="synth-3"] > [data-unit]:not([data-unit="synth-3"]),
+  .rack[data-shown="song"] > [data-unit]:not([data-unit="song"]):not([data-unit="guests"]),
+  .rack[data-shown="synth-1"] > [data-unit]:not([data-unit="synth-1"]):not([data-unit="guests"]),
+  .rack[data-shown="synth-2"] > [data-unit]:not([data-unit="synth-2"]):not([data-unit="guests"]),
+  .rack[data-shown="synth-3"] > [data-unit]:not([data-unit="synth-3"]):not([data-unit="guests"]),
   .rack[data-shown="guests"] > [data-unit]:not([data-unit="guests"]),
-  .rack[data-shown="drums"] > [data-unit]:not([data-unit="drums"]),
-  .rack[data-shown="effects"] > [data-unit]:not([data-unit="effects"]) { display: none; }
+  .rack[data-shown="drums"] > [data-unit]:not([data-unit="drums"]):not([data-unit="guests"]),
+  .rack[data-shown="effects"] > [data-unit]:not([data-unit="effects"]):not([data-unit="guests"]) { display: none; }
+  /* A guest is another site's page, and a page that is not rendered is not run in full: a
+     browser stops its animation frames and may slow its timers. So a guest that is not on show
+     is not hidden like the others. It keeps its size and its place on the screen, clipped to
+     nothing and out of reach of a pointer; Rack also makes it inert. */
+  .rack[data-shown]:not([data-shown="guests"]) > [data-unit="guests"] {
+    position: fixed; top: 0; left: 0; right: 0; clip-path: inset(50%); pointer-events: none;
+  }
   .rack > [data-unit]:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px; }
   /* The bar that moves between them: a strip of selector switches along the bottom edge, each
      with a lamp over its legend. It sits under an open menu and under any dialog. */
@@ -592,12 +599,16 @@
     box-shadow: 0 -6px 14px rgba(0, 0, 0, 0.45);
   }
   .unit-tab {
-    flex: 1 0 auto; min-width: 44px; height: var(--unit-bar); padding: 0 5px;
+    flex: 1 1 0; min-width: 0; height: var(--unit-bar); padding: 0 2px;
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px;
     background: none; border: 0; border-right: 1px solid #232527; border-radius: 0;
     color: var(--dim); font: inherit; font-size: 12px; text-transform: inherit; letter-spacing: 0.04em; white-space: nowrap; cursor: pointer;
   }
   .unit-tab:last-child { border-right: 0; }
+  /* Eight switches, with a guest in the project, still fit the narrowest phones. */
+  @media (max-width: 400px) {
+    .unit-tab { font-size: 11px; letter-spacing: 0; }
+  }
   .unit-tab-led { width: 7px; height: 7px; border-radius: 50%; background: #3a2a10; border: 1px solid #000; }
   .unit-tab.empty .unit-tab-name { opacity: 0.6; }
   .unit-tab[aria-current] { background: var(--well); color: var(--ink); box-shadow: inset 0 2px 0 var(--amber); }

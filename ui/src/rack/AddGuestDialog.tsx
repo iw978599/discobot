@@ -4,13 +4,15 @@ import { FEATURED_GUESTS, MAX_GUESTS } from '../services/guests';
 import Dialog from './Dialog';
 
 // Adds another creator's instrument by the address of its page.
-export default function AddGuestDialog({ studio, onClose }: { studio: Studio; onClose: () => void }) {
+export default function AddGuestDialog({ studio, onClose, onAdded }: { studio: Studio; onClose: () => void; onAdded?: () => void }) {
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
   const full = studio.guests.length >= MAX_GUESTS;
   const add = async (address = url) => {
     const problem = await studio.handleAddGuest(address);
-    if (problem) setError(problem); else onClose();
+    if (problem) { setError(problem); return; }
+    onAdded?.();
+    onClose();
   };
   return (
     <Dialog title="Add a guest instrument" closeLabel="Close guest instrument" onClose={onClose}>
