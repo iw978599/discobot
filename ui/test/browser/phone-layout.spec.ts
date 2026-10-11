@@ -3,6 +3,20 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'requestMIDIAccess', { configurable: true, value: undefined });
+    // Everything sent to the synth, so a test can tell which notes are sounding.
+    const sent: Array<{ type: string; note?: string }> = [];
+    (window as unknown as { audioMessages: typeof sent }).audioMessages = sent;
+    const Original = window.AudioWorkletNode;
+    window.AudioWorkletNode = class extends Original {
+      constructor(context: BaseAudioContext, name: string, options?: AudioWorkletNodeOptions) {
+        super(context, name, options);
+        const post = this.port.postMessage.bind(this.port);
+        this.port.postMessage = (message: { type: string; note?: string }) => {
+          sent.push(message);
+          post(message);
+        };
+      }
+    };
   });
   await page.goto('./');
   await expect(page.getByRole('heading', { name: 'Discobot', exact: true })).toBeVisible();
@@ -21,6 +35,45 @@ const paged = async (page: Page) => {
 const bar = (page: Page) => page.getByRole('navigation', { name: 'Rack units', exact: true });
 const tab = (page: Page, name: string) => bar(page).getByRole('button', { name, exact: true });
 const ALL = 'Show all units on one page';
+
+// The notes the synth has been told to start and not yet to stop.
+const sounding = (page: Page) => page.evaluate(() => {
+  const on = new Set<string>();
+  for (const message of (window as unknown as { audioMessages: Array<{ type: string; note?: string }> }).audioMessages) {
+    if (message.type === 'noteOn' && message.note) on.add(message.note);
+    if (message.type === 'noteOff' && message.note) on.delete(message.note);
+  }
+  return [...on].sort();
+});
+const started = (page: Page, note: string) => page.evaluate(wanted => (window as unknown as { audioMessages: Array<{ type: string; note?: string }> }).audioMessages.some(message => message.type === 'noteOn' && message.note === wanted), note);
+
+// Fingers on the screen. Each call says where every finger now is: one that is new has landed,
+// one that is missing has lifted.
+type Finger = { id: number; x: number; y: number };
+const fingers = async (page: Page) => {
+  const session = await page.context().newCDPSession(page);
+  let down = false;
+  return {
+    async touch(...points: Finger[]) {
+      if (points.length === 0) await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      else await session.send('Input.dispatchTouchEvent', { type: down ? 'touchMove' : 'touchStart', touchPoints: points });
+      down = points.length > 0;
+    },
+    // One finger moved in a line, a little at a time, as a finger moves.
+    async slide(from: Finger, to: { x: number; y: number }, others: Finger[] = []) {
+      for (let part = 1; part <= 8; part += 1) {
+        await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [...others, { id: from.id, x: from.x + (to.x - from.x) * part / 8, y: from.y + (to.y - from.y) * part / 8 }] });
+      }
+    },
+  };
+};
+const at = async (locator: Locator, id = 0, across = 0.5, down = 0.5): Promise<Finger> => {
+  const area = await box(locator);
+  return { id, x: Math.round(area.x + area.width * across), y: Math.round(area.y + area.height * down) };
+};
+const centred = (locator: Locator) => locator.first().evaluate(element => element.scrollIntoView({ block: 'center' }));
+// Whether one box is wholly inside another, sideways.
+const within = (inner: { x: number; width: number }, outer: { x: number; width: number }, left = 0) => inner.x >= outer.x + left - 1 && inner.x + inner.width <= outer.x + outer.width + 1;
 
 const addGuest = async (page: Page, baseURL: string) => {
   await page.getByRole('button', { name: 'Project ▾', exact: true }).click();
@@ -517,4 +570,395 @@ test('on a phone a knob is set by touch: a tap opens a large slider, and a drag 
   await expect(swingSheet).toHaveCount(0);
   await expect(swing).toBeFocused();
   expect(errors).toEqual([]);
+});
+
+test('on a phone the keyboard is played with fingers: wide keys, several at once, a slide across them, and nothing left sounding', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium', 'this is the narrow layout');
+  await paged(page);
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const view = page.viewportSize()!;
+  const scroller = page.locator('.rack-page');
+  const lane = page.locator('[data-unit="synth-1"]');
+  const strip = lane.locator('.keyboard');
+  const key = (note: string) => lane.getByRole('button', { name: `Play ${note}`, exact: true });
+  const range = lane.locator('.keyboard-range');
+  const pressed = () => lane.locator('.key[aria-pressed="true"]').evaluateAll(keys => keys.map(element => element.getAttribute('data-note')).sort());
+
+  // One octave of the three is across the screen, the middle one, and every key of it is big
+  // enough for a finger.
+  await centred(strip);
+  await expect(range).toHaveText('C4 - B4');
+  const keys = await box(strip);
+  for (const note of ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4']) {
+    const area = await box(key(note));
+    expect(area.width, note).toBeGreaterThanOrEqual(44);
+    expect(area.height, note).toBeGreaterThanOrEqual(100);
+    expect(within(area, { x: 0, width: view.width }), `${note} is on screen`).toBe(true);
+  }
+  for (const note of ['C#4', 'D#4', 'F#4', 'G#4', 'A#4']) {
+    const area = await box(key(note));
+    expect(area.width, note).toBeGreaterThanOrEqual(30);
+    expect(area.height, note).toBeGreaterThanOrEqual(60);
+  }
+  expect(keys.y, 'the keys are clear of the transport').toBeGreaterThan((await box(page.getByRole('button', { name: /Play All/ }))).y + 30);
+  expect(keys.y + keys.height, 'and of the bar of units').toBeLessThanOrEqual((await box(bar(page))).y);
+
+  // Hold and the octave buttons are in the same unit, and big enough to hit.
+  await expect(lane.getByLabel('Hold notes', { exact: true })).toBeAttached();
+  for (const name of ['Oct -', 'Oct +']) expect((await box(lane.getByRole('button', { name, exact: true }))).height, name).toBeGreaterThanOrEqual(32);
+
+  // Two fingers hold two keys, and both sound. The page does not move under them.
+  const still = await scroller.evaluate(element => element.scrollTop);
+  const hand = await fingers(page);
+  const [first, second] = [await at(key('C4'), 0, 0.5, 0.85), await at(key('E4'), 1, 0.5, 0.85)];
+  await hand.touch(first);
+  await expect(key('C4')).toHaveAttribute('aria-pressed', 'true');
+  await hand.touch(first, second);
+  await expect(key('E4')).toHaveAttribute('aria-pressed', 'true');
+  await expect(key('C4'), 'the second finger does not let the first key go').toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(() => sounding(page), 'both notes sound').toEqual(['C4', 'E4']);
+
+  // Lifting one stops only that one.
+  await hand.touch(second);
+  await expect(key('C4')).toHaveAttribute('aria-pressed', 'false');
+  await expect(key('E4')).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(() => sounding(page)).toEqual(['E4']);
+
+  // The finger that is left slides along the keys and plays each one it comes to.
+  const far = await at(key('G4'), 1, 0.5, 0.85);
+  await hand.slide(second, far);
+  await expect.poll(pressed).toEqual(['G4']);
+  await expect.poll(() => sounding(page)).toEqual(['G4']);
+  expect(await started(page, 'F4'), 'the key in between was played on the way').toBe(true);
+
+  // Slid off the top of the keyboard, it is holding nothing.
+  await hand.slide(far, { x: far.x, y: keys.y - 30 });
+  await expect.poll(pressed).toEqual([]);
+  await expect.poll(() => sounding(page)).toEqual([]);
+  await hand.touch();
+  expect(await scroller.evaluate(element => element.scrollTop), 'the page did not scroll under the fingers').toBe(still);
+
+  // A key is held while another unit is brought on with the bar. The keys are hidden, not
+  // taken away, and no finger lifts, but the note must stop.
+  const stuck = await at(key('A4'), 0, 0.5, 0.85);
+  await hand.touch(stuck);
+  await expect.poll(() => sounding(page)).toEqual(['A4']);
+  await tab(page, 'Show Drums').focus();
+  await expect(key('A4'), 'the bar taking the keyboard focus lets nothing go').toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('Enter');
+  await expect(lane).toBeHidden();
+  await expect.poll(() => sounding(page), 'no note is left sounding behind the drums').toEqual([]);
+  await hand.touch();
+  await tab(page, 'Show Synth 1').click();
+  await expect(lane.locator('.key.active')).toHaveCount(0);
+
+  // The other octaves are a button away, and the keys come back where they were left.
+  await expect(range).toHaveText('C4 - B4');
+  await lane.getByRole('button', { name: 'Higher keys', exact: true }).tap();
+  await expect(range).toHaveText('C5 - B5');
+  await expect(lane.getByRole('button', { name: 'Higher keys', exact: true })).toBeDisabled();
+  expect(within(await box(key('C5')), { x: 0, width: view.width })).toBe(true);
+  await lane.getByRole('button', { name: 'Lower keys', exact: true }).tap();
+  await lane.getByRole('button', { name: 'Lower keys', exact: true }).tap();
+  await expect(range).toHaveText('C3 - B3');
+  await expect(lane.getByRole('button', { name: 'Lower keys', exact: true })).toBeDisabled();
+  expect(within(await box(key('C3')), { x: 0, width: view.width })).toBe(true);
+
+  // A key is held as the phone is turned on its side. It is no longer under the finger.
+  await centred(strip);
+  await hand.touch(await at(key('D3'), 0, 0.5, 0.85));
+  await expect.poll(() => sounding(page)).toEqual(['D3']);
+  await page.setViewportSize({ width: 740, height: 360 });
+  await expect.poll(() => sounding(page), 'turning the phone leaves nothing sounding').toEqual([]);
+  await expect(lane.locator('.key.active')).toHaveCount(0);
+  await hand.touch().catch(() => {});
+  expect(errors).toEqual([]);
+});
+
+test('on a phone the piano roll is edited with a finger: a tap, a drag, a held note and a note made longer', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium', 'this is the narrow layout');
+  await paged(page);
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const scroller = page.locator('.rack-page');
+  const lane = page.locator('[data-unit="synth-1"]');
+  await lane.getByRole('button', { name: 'Piano Roll', exact: true }).click();
+  const grid = lane.locator('.piano-roll-grid');
+  const cell = (note: string, step: number) => lane.getByRole('button', { name: `${note} step ${step}`, exact: true });
+  const head = (step: number) => grid.locator(`.piano-roll-step-header[data-step="${step - 1}"]`);
+  const on = (note: string, step: number, pressed: boolean) => expect(cell(note, step), `${note} step ${step}`).toHaveAttribute('aria-pressed', String(pressed));
+  const steps = async () => (await lane.locator('.piano-roll-window').innerText()).split('–').map(Number);
+  const places = () => Promise.all([scroller.evaluate(element => element.scrollTop), grid.evaluate(element => element.scrollTop), grid.evaluate(element => element.scrollLeft)]);
+  const label = 46;
+
+  // Part of the bar is across the screen, starting at its first step and its lowest notes, in
+  // squares big enough for a finger. The grid is clear of the transport and the bar of units.
+  await centred(grid);
+  const frame = await box(grid);
+  const [from, to] = await steps();
+  expect(from).toBe(1);
+  expect(to, 'at least a beat of steps').toBeGreaterThanOrEqual(4);
+  expect(to, 'and not the whole bar squeezed in').toBeLessThan(16);
+  for (const [note, step] of [['C3', 1], ['C3', to], ['G3', 2]] as const) {
+    const area = await box(cell(note, step));
+    expect(area.width, `${note} step ${step}`).toBeGreaterThanOrEqual(44);
+    expect(area.height, `${note} step ${step}`).toBeGreaterThanOrEqual(44);
+    expect(within(area, frame, label), `${note} step ${step} is on show`).toBe(true);
+    expect(area.y + area.height, `${note} is on show`).toBeLessThanOrEqual(frame.y + frame.height + 1);
+  }
+  expect(within(await box(head(to + 1)), frame, label), 'the next step is off the edge').toBe(false);
+  expect(frame.y).toBeGreaterThan((await box(page.getByRole('button', { name: /Play All/ }))).y + 30);
+  expect(frame.y + frame.height).toBeLessThanOrEqual((await box(bar(page))).y);
+  for (const name of ['Earlier steps', 'Later steps']) {
+    const area = await box(lane.getByRole('button', { name, exact: true }));
+    expect(area.width, name).toBeGreaterThanOrEqual(44);
+    expect(area.height, name).toBeGreaterThanOrEqual(44);
+  }
+  const still = await places();
+  const hand = await fingers(page);
+
+  // A tap puts a note on, and the step row above shows it.
+  await cell('C3', 1).tap();
+  await on('C3', 1, true);
+  await expect(lane.getByRole('button', { name: 'Select step 1 C3', exact: true })).toBeVisible();
+
+  // Its end is a handle a finger can take. Dragged along, the note lasts longer and nothing
+  // else is painted or rubbed out.
+  const handle = cell('C3', 1).locator('.piano-roll-resize');
+  const grip = await box(handle);
+  expect(grip.width).toBeGreaterThanOrEqual(20);
+  expect(grip.height).toBeGreaterThanOrEqual(44);
+  const end = await at(handle);
+  await hand.touch(end);
+  await hand.slide(end, await at(cell('C3', 3)));
+  await hand.touch();
+  await expect(lane.getByLabel('Step 1 note length', { exact: true })).toHaveValue('3');
+  await expect(cell('C3', 3)).toHaveClass(/held/);
+  await expect(cell('C3', 3).locator('.piano-roll-resize'), 'the handle is at the new end').toBeVisible();
+  await on('C3', 1, true);
+  await on('C3', 2, false);
+
+  // A finger dragged along a row paints a note on each step it crosses.
+  const start = await at(cell('G3', 2));
+  await hand.touch(start);
+  await hand.slide(start, await at(cell('G3', 4)));
+  await hand.touch();
+  for (const step of [2, 3, 4]) await on('G3', step, true);
+
+  // A finger held still on a note keeps it, and selects its step for the controls underneath.
+  await hand.touch(await at(cell('G3', 2)));
+  await page.waitForTimeout(800);
+  await hand.touch();
+  await page.waitForTimeout(300);
+  await on('G3', 2, true);
+  await expect(lane.getByRole('button', { name: 'Select step 2 G3', exact: true }), 'its step is selected').toHaveAttribute('aria-pressed', 'true');
+  await expect(lane.getByLabel('Step 2 chance', { exact: true }), 'and the step controls are for it').toBeVisible();
+
+  // A tap on a note takes it out. A drag that begins on a note rubs out along the row.
+  await cell('G3', 2).tap();
+  await on('G3', 2, false);
+  const rub = await at(cell('G3', 3));
+  await hand.touch(rub);
+  await hand.slide(rub, await at(cell('G3', 4)));
+  await hand.touch();
+  for (const step of [3, 4]) await on('G3', step, false);
+  await on('C3', 1, true);
+  expect(await places(), 'neither the page nor the grid moved under the finger').toEqual(still);
+
+  // The rest of the bar is reached with the two buttons, a beat at a time.
+  await lane.getByRole('button', { name: 'Later steps', exact: true }).tap();
+  expect(await steps()).toEqual([5, to + 4 > 16 ? 16 : to + 4]);
+  expect(within(await box(head(5)), frame, label)).toBe(true);
+  expect(within(await box(head(1)), frame, label), 'the first steps have gone off the edge').toBe(false);
+  for (let press = 0; press < 4 && await lane.getByRole('button', { name: 'Later steps', exact: true }).isEnabled(); press += 1) await lane.getByRole('button', { name: 'Later steps', exact: true }).tap();
+  await expect(lane.getByRole('button', { name: 'Later steps', exact: true })).toBeDisabled();
+  expect((await steps())[1]).toBe(16);
+  await cell('C3', 16).tap();
+  await on('C3', 16, true);
+  await lane.getByRole('button', { name: 'Earlier steps', exact: true }).tap();
+  expect((await steps())[0] % 4, 'back on a beat').toBe(1);
+
+  // A step picked in the row above is brought on show.
+  await lane.getByRole('button', { name: /^Select step 2( |$)/ }).click();
+  await expect.poll(async () => (await steps())[0]).toBe(1);
+  await centred(grid);
+  const moved = await box(grid);
+  expect(within(await box(head(2)), moved, label)).toBe(true);
+
+  // The higher notes are above, reached by sliding the note names; the squares never slide.
+  const names = await box(grid.locator('.piano-roll-note-label').last());
+  const low = await grid.evaluate(element => element.scrollTop);
+  expect(low, 'there are notes above').toBeGreaterThan(100);
+  const name: Finger = { id: 0, x: Math.round(names.x + names.width / 2), y: Math.round(moved.y + moved.height / 2) };
+  await hand.touch(name);
+  await hand.slide(name, { x: name.x, y: name.y + 150 });
+  await hand.touch();
+  await expect.poll(() => grid.evaluate(element => element.scrollTop), 'the grid went up to higher notes').toBeLessThan(low - 50);
+  expect(await grid.evaluate(element => element.scrollLeft), 'and not sideways').toBe(still[2]);
+
+  // While it plays, the light is on the playing step, on whichever part of the bar holds it.
+  await page.locator('.rack-page').evaluate(element => element.scrollTo(0, 0));
+  await page.locator('.tempo-led').click();
+  await page.locator('.tempo-led-input').fill('20');
+  await page.locator('.tempo-led-input').press('Enter');
+  await page.getByRole('button', { name: /Play All/ }).click();
+  const lit = grid.locator('.piano-roll-step-header.playing');
+  await expect(lit).toHaveCount(1);
+  await centred(grid);
+  await expect.poll(async () => {
+    const playing = Number(await lit.getAttribute('data-step')) + 1;
+    const [low, high] = await steps();
+    if (playing < low) await lane.getByRole('button', { name: 'Earlier steps', exact: true }).tap();
+    else if (playing > high) await lane.getByRole('button', { name: 'Later steps', exact: true }).tap();
+    else return within(await box(lit), await box(grid), label) && Number(await lit.getAttribute('data-step')) + 1 === playing;
+    return false;
+  }, { message: 'the lit step is on show once the grid is turned to it', timeout: 20_000 }).toBe(true);
+  await expect(grid.locator('.piano-roll-cell.playing'), 'the whole column is lit').toHaveCount(36);
+  await page.getByRole('button', { name: /Stop All/ }).click();
+  await expect(grid.locator('.playing')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test('a phone on its side has the phone arrangement, with the width used and the height left for the instrument', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium', 'this is the narrow layout');
+  await page.setViewportSize({ width: 740, height: 360 });
+  await paged(page);
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const view = page.viewportSize()!;
+  const scroller = page.locator('.rack-page');
+  const lane = page.locator('[data-unit="synth-1"]');
+  const play = page.getByRole('button', { name: /Play All/ });
+  const step = (number: number) => box(lane.getByRole('button', { name: new RegExp(`^Select step ${number}( |$)`) }));
+  const key = (note: string) => lane.getByRole('button', { name: `Play ${note}`, exact: true });
+
+  // One unit at a time, the bar along the bottom, nothing off the side.
+  await expect(tab(page, 'Show Synth 1')).toHaveAttribute('aria-current', 'true');
+  await expect(page.locator('.rack > [data-unit]:visible')).toHaveCount(1);
+  expect(await scroller.evaluate(element => element.scrollWidth - element.clientWidth), 'no sideways scrolling').toBeLessThanOrEqual(1);
+  const strip = await box(bar(page));
+  expect(strip.y + strip.height).toBeCloseTo(view.height, 0);
+  expect(strip.height, 'the bar is lower than on an upright phone').toBeLessThanOrEqual(48);
+  for (const button of await bar(page).getByRole('button').all()) {
+    const area = (await button.boundingBox())!;
+    expect(area.width).toBeGreaterThanOrEqual(44);
+    expect(area.height).toBeGreaterThanOrEqual(44);
+  }
+
+  // A bar of steps is one row here, and each is still big enough to press.
+  const [first, last] = [await step(1), await step(16)];
+  expect(last.y, 'sixteen steps in one row').toBeCloseTo(first.y, 0);
+  expect(first.width).toBeGreaterThanOrEqual(36);
+  expect(first.height).toBeGreaterThanOrEqual(40);
+
+  // Two octaves of keys across. With the keyboard brought up the screen, the line of the
+  // transport that stays and the bar of units leave all of it on show.
+  const keys = lane.locator('.keyboard');
+  await centred(keys);
+  await expect(lane.locator('.keyboard-range')).toHaveText('C4 - B5');
+  const [top, bottom, board] = [await box(play), await box(bar(page)), await box(keys)];
+  expect(top.y).toBeGreaterThanOrEqual(0);
+  expect(bottom.y - (top.y + top.height), 'most of the height is left between them').toBeGreaterThanOrEqual(220);
+  expect(board.y, 'the keys start under the transport').toBeGreaterThanOrEqual(top.y + top.height);
+  expect(board.y + board.height, 'and end above the bar').toBeLessThanOrEqual(bottom.y);
+  for (const note of ['C4', 'B4', 'C5', 'B5']) {
+    const area = await box(key(note));
+    expect(area.width, note).toBeGreaterThanOrEqual(44);
+    expect(area.height, note).toBeGreaterThanOrEqual(100);
+    expect(within(area, { x: 0, width: view.width }), `${note} is on screen`).toBe(true);
+  }
+  await key('C5').tap();
+  await expect.poll(() => started(page, 'C5'), 'a tapped key plays').toBe(true);
+  await expect(lane.locator('.key.active')).toHaveCount(0);
+
+  // The piano roll shows more of the bar than it does upright, in squares as big, and fits
+  // between the transport and the bar with several rows of notes on show.
+  await lane.getByRole('button', { name: 'Piano Roll', exact: true }).click();
+  const grid = lane.locator('.piano-roll-grid');
+  await centred(grid);
+  const frame = await box(grid);
+  const across = Number((await lane.locator('.piano-roll-window').innerText()).split('–')[1]);
+  expect(across).toBeGreaterThanOrEqual(8);
+  const square = await box(lane.getByRole('button', { name: `C3 step ${across}`, exact: true }));
+  expect(square.width).toBeGreaterThanOrEqual(44);
+  expect(square.height).toBeGreaterThanOrEqual(44);
+  expect(within(square, frame, 46)).toBe(true);
+  expect(frame.y).toBeGreaterThanOrEqual((await box(play)).y + (await box(play)).height);
+  expect(frame.y + frame.height).toBeLessThanOrEqual((await box(bar(page))).y);
+  expect(frame.height, 'three rows of notes or more under the step numbers').toBeGreaterThanOrEqual(28 + 3 * 45);
+  await lane.getByRole('button', { name: 'C3 step 2', exact: true }).tap();
+  await expect(lane.getByRole('button', { name: 'C3 step 2', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  expect(errors).toEqual([]);
+});
+
+test('each grid of steps is one stop for the Tab key, and the arrow keys move inside it', async ({ page }, testInfo) => {
+  const phone = testInfo.project.name === 'mobile-chromium';
+  const lane = page.getByRole('region', { name: 'Synth 1 module', exact: true });
+  const step = (number: number) => lane.getByRole('button', { name: new RegExp(`^Select step ${number}( |$)`) });
+  const drum = (name: string, number: number) => page.getByRole('button', { name: `${name} step ${number}`, exact: true });
+  const stops = (selector: string) => page.locator(selector).evaluateAll(cells => cells.filter(cell => (cell as HTMLElement).tabIndex === 0).length);
+  const row = '[data-unit="synth-1"] .step-cell', beat = '.drum-step-btn', roll = '.piano-roll-cell';
+
+  // A lane's row of steps. With nothing selected the arrows move the keyboard along it, and the
+  // one stop goes with it; Tab leaves the row in one press.
+  expect(await stops(row)).toBe(1);
+  await expect(step(1)).toHaveAttribute('tabindex', '0');
+  await step(1).focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(step(2)).toBeFocused();
+  await expect(step(2)).toHaveAttribute('tabindex', '0');
+  await expect(lane.locator('.step-cell.selected'), 'moving the keyboard selects nothing').toHaveCount(0);
+  await page.keyboard.press('End');
+  await expect(step(16)).toBeFocused();
+  await page.keyboard.press('Home');
+  await expect(step(1)).toBeFocused();
+  expect(await stops(row)).toBe(1);
+  await page.keyboard.press('Tab');
+  expect(await page.evaluate(() => document.activeElement?.classList.contains('step-cell')), 'Tab goes on past the row').toBe(false);
+
+  // Enter selects the step, and from then on the arrows walk the selection, as they always have.
+  await step(3).focus();
+  await page.keyboard.press('Enter');
+  await expect(step(3)).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('ArrowRight');
+  await expect(step(4)).toHaveAttribute('aria-pressed', 'true');
+  await expect(step(4)).toBeFocused();
+  await expect(step(4)).toHaveAttribute('tabindex', '0');
+  expect(await stops(row)).toBe(1);
+
+  // The drum grid is one stop for all its lanes. Down goes to the line below: the lane's
+  // second line of eight on a phone, the next lane on a wide screen.
+  expect(await stops(beat)).toBe(1);
+  await expect(drum('Kick', 1)).toHaveAttribute('tabindex', '0');
+  await drum('Kick', 1).focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(drum('Kick', 2)).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  if (phone) {
+    await expect(drum('Kick', 10)).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+  }
+  await expect(drum('Snare', 2)).toBeFocused();
+  await expect(drum('Snare', 2)).toHaveAttribute('tabindex', '0');
+  await page.keyboard.press('ArrowUp');
+  await expect(drum('Kick', phone ? 10 : 2)).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(drum('Kick', phone ? 10 : 2), 'and the step under the keyboard is switched as before').toHaveAttribute('aria-pressed', 'true');
+  expect(await stops(beat)).toBe(1);
+
+  // The piano roll the same: one stop, on the lowest note of the selected step until it is moved.
+  await lane.getByRole('button', { name: 'Piano Roll', exact: true }).click();
+  const cell = (note: string, number: number) => lane.getByRole('button', { name: `${note} step ${number}`, exact: true });
+  expect(await stops(roll)).toBe(1);
+  await expect(cell('C3', 4)).toHaveAttribute('tabindex', '0');
+  await cell('C3', 1).focus();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowUp');
+  await expect(cell('C#3', 2)).toBeFocused();
+  await expect(cell('C#3', 2)).toHaveAttribute('tabindex', '0');
+  await expect(cell('C#3', 2)).toHaveAttribute('aria-pressed', 'false');
+  await page.keyboard.press('Enter');
+  await expect(cell('C#3', 2)).toHaveAttribute('aria-pressed', 'true');
+  expect(await stops(roll)).toBe(1);
 });
