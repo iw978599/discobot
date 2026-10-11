@@ -166,7 +166,8 @@ target; removal of the AI review workflow.
      so which models are possible depends on which of those are done.
    Presets and models are sound, and sound cannot be checked by a test:
    every one of these needs the owner's ears before it is called done. To
-   decide: which instruments to model, and the list of kinds.
+   decide: which instruments to model. The list of kinds above is agreed
+   (owner, 2026-10-11).
 
 Done: the voice rewrite (oscillators, filter, envelopes, FM, mono and slide,
 drum voices); unison and the 24 dB filter slope; a sample on any drum lane,
@@ -321,8 +322,15 @@ may redistribute.
     `browserTransport.ts`, `songPlayback.ts`, the exporters), so it should
     come after the typed store. It overlaps with pattern lengths that are not
     a whole number of bars (item 4) and the two should be designed together.
-    To decide: one time signature for the project, or one for each scene so
-    a song can change metre part-way; and which signatures to offer.
+    Decided by the owner on 2026-10-11: each scene has its own time
+    signature, so a song can change metre from one section to the next, and
+    the ones on offer are four-four, three-four and six-eight, with
+    five-four, seven-eight and twelve-eight added as worth having
+    (five-four and seven-eight are the odd metres people most reach for;
+    twelve-eight is the slow shuffle, and costs little once six-eight is
+    there). Because it is per scene, a scene's length in a song, the bar
+    counting in song mode and every export have to take each scene's own bar
+    length, where today one length serves the whole song.
 
 12. **Turn a knob with the scroll wheel.** (S) Asked for by the owner on
     2026-10-11: with the pointer over a knob, the wheel turns it, with no
@@ -369,10 +377,8 @@ for new accounts.
   addition to the guest protocol and a new prompt for its author.
 - **Kids mode.** Staying a separate page is now decided. Still to answer:
   whether what a child makes can be opened in the full app.
-- **Time signatures.** One for the whole project, or one for each scene?
-  And which ones should be on offer?
-- **Presets and synth models.** Which instruments should the new models be
-  in the manner of, and are the kinds of preset above the right ones?
+- **Synth models.** Which instruments should the new models be in the
+  manner of? A list of candidates was given to the owner on 2026-10-11.
 
 ## Suggested order
 
