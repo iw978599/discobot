@@ -11,7 +11,9 @@ import { OP_META, type Applied, type OpNotice, type Operation } from '../src/ser
 import { reducers } from '../src/services/projectReducers.ts';
 import { merge } from '../src/services/projectSanitization.ts';
 import { MAX_GUESTS } from '../src/services/guests.ts';
-import { applied, call, comparable, setup, storage, type Message } from './helpers/store.ts';
+import { DRUM_INSTRUMENTS, DRUM_KITS } from '../src/services/drumKits.ts';
+import type { DrumInstrument, DrumState } from '../src/types.ts';
+import { applied, call, comparable, defaults, setup, storage, type Message } from './helpers/store.ts';
 
 const STORAGE_KEY = 'discobot_browser_project_v1';
 // A value of the wrong type, as an untyped caller or a replayed operation could send.
@@ -80,6 +82,174 @@ const guestRemove = (title: string, result: Outcome, arrange: Case['arrange'], c
   op: 'guest.remove', title, arrange, method: 'DELETE', path: (ctx: any) => `/guests/${ctx.id ?? ctx}`, body: {}, run: (service, ctx) => service.removeGuest(ctx.id ?? ctx), ...outcome(result), check,
 });
 
+// An id a sample can have that `comparable` does not take for one of the store's own.
+const SAMPLE = 'a'.repeat(36);
+const NO_STEP = 'Invalid drum step', NO_LANE = 'Unknown local operation', NO_BARS = 'A drum pattern is 1, 2, 4 or 8 bars long';
+const LANE_SETTINGS = { volume: .5, tone: .5, extra: .5, tune: 0, humanize: .35, pan: 0 };
+type LaneChange = { on?: number[]; settings?: object; [key: string]: unknown };
+// The drums as the store keeps them once they have been through its checks: every lane, with
+// the steps in `on` switched on and whatever else is named laid over a lane nothing has touched.
+const drums = (changes: Partial<Record<DrumInstrument, LaneChange>> = {}, length = 16) => ({
+  drumState: Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => {
+    const { on = [], settings = {}, ...rest } = changes[instrument] ?? {};
+    return [instrument, { steps: Array.from({ length }, (_, step) => on.includes(step)), muted: false, solo: false, ...rest, settings: { ...LANE_SETTINGS, ...settings } }];
+  })),
+});
+// A list beside the steps (velocity, chance, repeats): 1 everywhere but where it says.
+const beside = (changes: Record<number, number> = {}, length = 16) => Array.from({ length }, (_, step) => changes[step] ?? 1);
+const kickOn = (service: LocalProjectService) => { assert.ok(service.setDrumStep('kick', 3, true).ok); };
+const kickSoft = (service: LocalProjectService) => { assert.ok(service.setDrumStepVelocity('kick', 3, .5).ok); };
+const kickLoud = (service: LocalProjectService) => { assert.ok(service.setDrumSettings('kick', { volume: .9 }).ok); };
+const snareMuted = (service: LocalProjectService) => { assert.ok(service.setDrumMix('snare', { muted: true }).ok); };
+const clapSampled = (service: LocalProjectService) => { assert.ok(service.setDrumSample('clap', SAMPLE).ok); };
+// A kick step with a velocity, a chance and repeats, a setting, a mute and a sample.
+const dressedDrums = (service: LocalProjectService) => {
+  kickOn(service); kickSoft(service); kickLoud(service); snareMuted(service); clapSampled(service);
+  assert.ok(service.setDrumStepDetail('kick', 3, { probability: .25, ratchet: 3 }).ok);
+};
+const drumsDressed = (changes: Partial<Record<DrumInstrument, LaneChange>> = {}, length = 16, at = [3]) => drums({
+  kick: {
+    on: at, settings: { volume: .9 }, stepVelocities: beside(Object.fromEntries(at.map(step => [step, .5])), length),
+    stepProbabilities: beside(Object.fromEntries(at.map(step => [step, .25])), length), stepRatchets: beside(Object.fromEntries(at.map(step => [step, 3])), length),
+    ...changes.kick,
+  },
+  snare: { muted: true, ...changes.snare }, clap: { sampleId: SAMPLE },
+}, length);
+type DrumOutcome = { answer: unknown; event?: string } | { status: 400 | 404 | 409; error: string };
+// `body` is sent to the route, where JSON leaves out what is undefined and turns a number that
+// is not finite into null; the helper is handed the same values as they are.
+const drumCase = (op: Case['op'], path: string, run: (service: LocalProjectService, body: any) => Applied<unknown>, method?: string) =>
+  (title: string, body: Record<string, unknown>, result: DrumOutcome, arrange?: Case['arrange']): Case => ({
+    op, title, arrange, method, path, body, run: service => run(service, body), ...('answer' in result ? { event: 'drumFullState', ...result } : result),
+  });
+const drumStep = drumCase('drum.step', '/drum/step', (service, body) => service.setDrumStep(body.instrument, body.step, body.active));
+const drumVelocity = drumCase('drum.stepVelocity', '/drum/step-velocity', (service, body) => service.setDrumStepVelocity(body.instrument, body.step, body.velocity));
+const drumDetail = drumCase('drum.stepDetail', '/drum/step-detail', (service, body) => service.setDrumStepDetail(body.instrument, body.step, { probability: body.probability, ratchet: body.ratchet }));
+const drumSettings = drumCase('drum.settings', '/drum/settings', (service, body) => service.setDrumSettings(body.instrument, body.settings));
+const drumSample = drumCase('drum.sample', '/drum/sample', (service, body) => service.setDrumSample(body.instrument, body.sampleId));
+const drumMix = drumCase('drum.mix', '/drum/mix', (service, body) => service.setDrumMix(body.instrument, { muted: body.muted, solo: body.solo }));
+const drumBars = drumCase('drum.bars', '/drum/bars', (service, body) => service.setDrumBars(body.bars));
+const drumReset = drumCase('drum.reset', '/drum/reset', service => service.resetDrums());
+const drumWhole = drumCase('drum.state', '/drum/state', (service, body) => service.setDrumState(body.state), 'PUT');
+const drumKit = drumCase('drum.kit', '/drum/kit', (service, body) => service.setDrumKit(body.kitId, body.applyDefaults));
+const KIT = DRUM_KITS.find(entry => entry.id === 'tr-808')!;
+// Every lane with the kit's settings laid over it, which is all of a lane's settings.
+const kitted = (changes: Partial<Record<DrumInstrument, LaneChange>> = {}) => ({
+  selectedDrumKitId: KIT.id,
+  drumState: drums(Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => [instrument, { ...changes[instrument], settings: KIT.instrumentDefaults[instrument] }]))).drumState,
+});
+const kickPanned = (service: LocalProjectService) => { kickOn(service); assert.ok(service.setDrumSettings('kick', { pan: -.5 }).ok); };
+const twoBars = (service: LocalProjectService) => { assert.ok(service.setDrumBars(2).ok); };
+const notNumbers: Array<[string, unknown]> = [['nothing', undefined], ['text', 'lots'], ['not a number at all', Number.NaN], ['infinity', Number.POSITIVE_INFINITY], ['null', null]];
+const notSteps: Array<[string, unknown]> = [['one past the end', 16], ['below zero', -1], ['a fraction', 1.5], ['text', '3'], ['missing', undefined], ['not a number at all', Number.NaN], ['infinity', Number.POSITIVE_INFINITY]];
+const notLanes: Array<[string, unknown]> = [['that does not exist', 'cowbell'], ['that is missing', undefined], ['that is not a number at all', Number.NaN]];
+
+const drumCases: Case[] = [
+  drumStep('a step is switched on, and every lane is answered', { instrument: 'kick', step: 3, active: true }, { answer: drums({ kick: { on: [3] } }) }),
+  drumStep('a step is switched off', { instrument: 'kick', step: 3, active: false }, { answer: drums() }, kickOn),
+  drumStep('the last step can be set', { instrument: 'crash', step: 15, active: true }, { answer: drums({ crash: { on: [15] } }) }),
+  drumStep('a longer pattern has more steps to set', { instrument: 'kick', step: 20, active: true }, { answer: drums({ kick: { on: [20] } }, 32) }, twoBars),
+  drumStep('anything that counts as true switches a step on', { instrument: 'kick', step: 3, active: 'yes' }, { answer: drums({ kick: { on: [3] } }) }),
+  drumStep('no word either way switches a step off', { instrument: 'kick', step: 3, active: undefined }, { answer: drums() }, kickOn),
+  drumStep('what is not a number at all arrives as null, and switches a step off', { instrument: 'kick', step: 3, active: Number.NaN }, { answer: drums() }, kickOn),
+  drumStep('infinity arrives as null too, and switches a step off', { instrument: 'kick', step: 3, active: Number.POSITIVE_INFINITY }, { answer: drums() }, kickOn),
+  ...notSteps.map(([what, step]) => drumStep(`a step that is ${what} is refused`, { instrument: 'kick', step, active: true }, { status: 400, error: NO_STEP }, kickOn)),
+  drumStep('step 16 of a one-bar pattern is refused though a longer one has it', { instrument: 'kick', step: 16, active: true }, { status: 400, error: NO_STEP }),
+  ...notLanes.map(([what, instrument]) => drumStep(`an instrument ${what} is refused`, { instrument, step: 3, active: true }, { status: 404, error: NO_LANE })),
+  drumStep('an instrument that does not exist is a 404 even when the step is bad too', { instrument: 'cowbell', step: 99, active: true }, { status: 404, error: NO_LANE }),
+
+  drumVelocity('a velocity is kept beside the steps, whether or not the step is on', { instrument: 'kick', step: 3, velocity: .5 }, { answer: drums({ kick: { stepVelocities: beside({ 3: .5 }) } }) }),
+  drumVelocity('a velocity past the top is held at 1', { instrument: 'kick', step: 3, velocity: 3 }, { answer: drums({ kick: { stepVelocities: beside() } }) }, kickSoft),
+  drumVelocity('a velocity below zero is held at 0', { instrument: 'kick', step: 3, velocity: -1 }, { answer: drums({ kick: { stepVelocities: beside({ 3: 0 }) } }) }),
+  ...notNumbers.map(([what, velocity]) => drumVelocity(`a velocity that is ${what} is full`, { instrument: 'kick', step: 3, velocity }, { answer: drums({ kick: { stepVelocities: beside() } }) }, kickSoft)),
+  drumVelocity('a velocity for a step that is not there is refused', { instrument: 'kick', step: 16, velocity: .5 }, { status: 400, error: NO_STEP }),
+  drumVelocity('a velocity for an instrument that does not exist is refused', { instrument: 'cowbell', step: 3, velocity: .5 }, { status: 404, error: NO_LANE }),
+
+  drumDetail('a chance is kept beside the steps', { instrument: 'kick', step: 3, probability: .25 }, { answer: drums({ kick: { stepProbabilities: beside({ 3: .25 }) } }) }),
+  drumDetail('repeats are kept beside the steps', { instrument: 'kick', step: 3, ratchet: 3 }, { answer: drums({ kick: { stepRatchets: beside({ 3: 3 }) } }) }),
+  drumDetail('a chance and repeats can be set together, each held to its range', { instrument: 'kick', step: 3, probability: 2, ratchet: 9 },
+    { answer: drums({ kick: { stepProbabilities: beside(), stepRatchets: beside({ 3: 4 }) } }) }),
+  drumDetail('repeats are a whole number, and at least one', { instrument: 'kick', step: 3, probability: -1, ratchet: 2.4 }, { answer: drums({ kick: { stepProbabilities: beside({ 3: 0 }), stepRatchets: beside({ 3: 2 }) } }) }),
+  drumDetail('no chance and no repeats changes nothing, and still emits and saves', { instrument: 'kick', step: 3 }, { answer: drums({ kick: { on: [3] } }) }, kickOn),
+  drumDetail('what is undefined is not sent: the other is still set', { instrument: 'kick', step: 3, probability: undefined, ratchet: 2 }, { answer: drums({ kick: { stepRatchets: beside({ 3: 2 }) } }) }),
+  drumDetail('what is not finite arrives as null, which is sent: each goes back to 1', { instrument: 'kick', step: 3, probability: Number.NaN, ratchet: Number.POSITIVE_INFINITY }, { answer: drumsDressed({ kick: { stepProbabilities: beside(), stepRatchets: beside() } }) }, dressedDrums),
+  drumDetail('null and text are sent too', { instrument: 'kick', step: 3, probability: null, ratchet: 'twice' }, { answer: drums({ kick: { stepProbabilities: beside(), stepRatchets: beside() } }) }),
+  drumDetail('a chance for a step that is not there is refused', { instrument: 'kick', step: -1, probability: .5 }, { status: 400, error: NO_STEP }),
+  drumDetail('a chance for an instrument that does not exist is refused', { instrument: 'cowbell', step: 3, probability: .5 }, { status: 404, error: NO_LANE }),
+
+  drumSettings('settings are laid over the lane\'s own', { instrument: 'kick', settings: { volume: .9, pan: -.5 } }, { answer: drums({ kick: { settings: { volume: .9, pan: -.5 } } }) }),
+  drumSettings('each setting is held to its range, and one that is not a setting is dropped', { instrument: 'kick', settings: { volume: 7, tone: -1, tune: -3, bogus: 1 } },
+    { answer: drums({ kick: { settings: { volume: 1, tone: 0, tune: -1 } } }) }),
+  drumSettings('the cymbal can be made a ride', { instrument: 'crash', settings: { cymbalType: 'ride' } }, { answer: drums({ crash: { settings: { cymbalType: 'ride' } } }) }),
+  drumSettings('a cymbal type that is not one takes the type off', { instrument: 'crash', settings: { cymbalType: 'gong' } }, { answer: drums() }, service => { assert.ok(service.setDrumSettings('crash', { cymbalType: 'ride' }).ok); }),
+  drumSettings('a setting that is undefined is not a change: JSON never sent it', { instrument: 'kick', settings: { volume: undefined, tone: .2 } }, { answer: drums({ kick: { settings: { volume: .9, tone: .2 } } }) }, kickLoud),
+  drumSettings('a setting that is not finite arrives as null, and goes back to where a new project has it', { instrument: 'kick', settings: { volume: Number.NaN, tone: Number.POSITIVE_INFINITY } }, { answer: drums() }, kickLoud),
+  ...([['text', 'loud'], ['missing', undefined], ['null', null], ['a list', [{ volume: 1 }]], ['not a number at all', Number.NaN]] as const).map(([what, settings]) =>
+    drumSettings(`settings that are ${what} change nothing, and still emit and save`, { instrument: 'kick', settings }, { answer: drums({ kick: { settings: { volume: .9 } } }) }, kickLoud)),
+  drumSettings('settings for an instrument that does not exist are refused', { instrument: 'cowbell', settings: { volume: 1 } }, { status: 404, error: NO_LANE }),
+
+  drumSample('a lane is given a sample', { instrument: 'clap', sampleId: SAMPLE }, { answer: drums({ clap: { sampleId: SAMPLE } }) }),
+  drumSample('an id no sample can have is not kept', { instrument: 'clap', sampleId: 'clap.wav' }, { answer: drums() }, clapSampled),
+  ...([['no id', undefined], ['null', null], ['a number', 7], ['not a number at all', Number.NaN]] as const).map(([what, sampleId]) =>
+    drumSample(`${what} takes the sample off the lane`, { instrument: 'clap', sampleId }, { answer: drums() }, clapSampled)),
+  drumSample('only the lane named loses its sample', { instrument: 'kick', sampleId: undefined }, { answer: drums({ clap: { sampleId: SAMPLE } }) }, clapSampled),
+  drumSample('a sample for an instrument that does not exist is refused', { instrument: 'cowbell', sampleId: SAMPLE }, { status: 404, error: NO_LANE }),
+
+  drumMix('a lane is muted', { instrument: 'snare', muted: true }, { answer: drums({ snare: { muted: true } }) }),
+  drumMix('a lane is soloed', { instrument: 'snare', solo: true }, { answer: drums({ snare: { solo: true } }) }),
+  drumMix('mute and solo can change together', { instrument: 'snare', muted: false, solo: true }, { answer: drums({ snare: { solo: true } }) }, snareMuted),
+  drumMix('a mute that is not said leaves it as it was', { instrument: 'snare', muted: undefined, solo: undefined }, { answer: drums({ snare: { muted: true } }) }, snareMuted),
+  drumMix('only true and false are a mute or a solo', { instrument: 'snare', muted: 0, solo: 'yes' }, { answer: drums({ snare: { muted: true } }) }, snareMuted),
+  drumMix('what is not a number at all is neither', { instrument: 'snare', muted: Number.NaN, solo: Number.POSITIVE_INFINITY }, { answer: drums({ snare: { muted: true } }) }, snareMuted),
+  drumMix('a mute for an instrument that does not exist is refused', { instrument: 'cowbell', muted: true }, { status: 404, error: NO_LANE }),
+
+  drumReset('the drums go back to what a new project has: steps, settings, mutes, samples and length', {}, { answer: { drumState: defaults().drumState } }, service => { dressedDrums(service); twoBars(service); }),
+  drumReset('drums that are already new are answered the same, and it still emits and saves', {}, { answer: { drumState: defaults().drumState } }),
+
+  drumWhole('a whole drum state is checked: lengths from the kick, each value held to its range, unknown lanes dropped', {
+    state: {
+      kick: {
+        steps: Array.from({ length: 32 }, (_, step) => step === 20), muted: true, solo: 'yes', sampleId: SAMPLE, settings: { volume: 4, pan: -.5, cymbalType: 'gong' },
+        stepVelocities: [.5, 9], stepProbabilities: 'often', stepRatchets: [2.6, 0],
+      },
+      snare: { steps: [true] }, cowbell: { steps: [true] },
+    },
+  }, { answer: drums({
+    kick: { on: [20], muted: true, sampleId: SAMPLE, settings: { volume: 1, pan: -.5 }, stepVelocities: beside({ 0: .5 }, 32), stepRatchets: beside({ 0: 3 }, 32) },
+    snare: { on: [0] },
+  }, 32) }, dressedDrums),
+  ...([['missing', undefined], ['null', null], ['text', 'drums'], ['a list', [1]], ['empty', {}], ['not a number at all', Number.NaN]] as const).map(([what, state]) =>
+    drumWhole(`a drum state that is ${what} leaves every lane as a new project has it`, { state }, { answer: drums() }, dressedDrums)),
+  drumWhole('inside a drum state, what is undefined or not finite is read as JSON would have sent it', {
+    state: { kick: {
+      steps: [true, undefined, Number.NaN, true], muted: undefined, solo: Number.NaN, sampleId: undefined,
+      settings: { volume: Number.NaN, tone: undefined, pan: Number.POSITIVE_INFINITY, tune: .5 }, stepVelocities: [Number.NaN, Number.POSITIVE_INFINITY, .5, undefined],
+    } },
+  }, { answer: drums({ kick: { on: [0, 3], settings: { tune: .5 }, stepVelocities: beside({ 2: .5 }) } }) }, dressedDrums),
+  // The route also takes the drum state as the whole body, with no `state` around it.
+  {
+    op: 'drum.state', title: 'the route reads a body that is the drum state itself as the helper reads its argument', arrange: dressedDrums, method: 'PUT', path: '/drum/state',
+    body: { snare: { steps: [false, true], muted: true } }, run: service => service.setDrumState(wrong({ snare: { steps: [false, true], muted: true } })),
+    answer: drums({ snare: { on: [1], muted: true } }), event: 'drumFullState',
+  },
+
+  drumBars('a longer pattern repeats what was there: steps, velocity, chance and repeats together', { bars: 2 }, { answer: drumsDressed({}, 32, [3, 19]) }, dressedDrums),
+  drumBars('a shorter pattern keeps the first bars and loses the rest', { bars: 1 }, { answer: drumsDressed({ snare: { stepVelocities: beside() } }) },
+    service => { dressedDrums(service); twoBars(service); assert.ok(service.setDrumStep('snare', 20, true).ok); assert.ok(service.setDrumStepVelocity('snare', 20, .4).ok); }),
+  drumBars('eight bars is the longest', { bars: 8 }, { answer: drums({ kick: { on: [3, 19, 35, 51, 67, 83, 99, 115] } }, 128) }, kickOn),
+  drumBars('the length it already has changes nothing, and still emits and saves', { bars: 1 }, { answer: drums({ kick: { on: [3] } }) }, kickOn),
+  ...([['three', 3], ['none', 0], ['text', '2'], ['missing', undefined], ['not a number at all', Number.NaN], ['infinity', Number.POSITIVE_INFINITY], ['a fraction', 1.5]] as const).map(([what, bars]) =>
+    drumBars(`a length of bars that is ${what} is refused`, { bars }, { status: 400, error: NO_BARS }, kickOn)),
+
+  drumKit('a kit lays its settings over every lane and keeps the steps', { kitId: KIT.id }, { answer: kitted({ kick: { on: [3] } }), event: 'drumKitChanged' }, kickPanned),
+  drumKit('a kit can be chosen without its settings', { kitId: KIT.id, applyDefaults: false }, { answer: { selectedDrumKitId: KIT.id, drumState: drums({ kick: { on: [3], settings: { pan: -.5 } } }).drumState }, event: 'drumKitChanged' }, kickPanned),
+  drumKit('chosen without its settings in a new project, the drums are answered as they are kept', { kitId: KIT.id, applyDefaults: false }, { answer: { selectedDrumKitId: KIT.id, drumState: defaults().drumState }, event: 'drumKitChanged' }),
+  ...([['undefined', undefined], ['null', null], ['zero', 0], ['text', 'false'], ['not a number at all', Number.NaN]] as const).map(([what, applyDefaults]) =>
+    drumKit(`only false leaves the settings alone: ${what} lays them over`, { kitId: KIT.id, applyDefaults }, { answer: kitted({ kick: { on: [3] } }), event: 'drumKitChanged' }, kickPanned)),
+  ...([['that does not exist', 'nope'], ['that is missing', undefined], ['that is a number', 7], ['that is not a number at all', Number.NaN]] as const).map(([what, kitId]) =>
+    drumKit(`a kit ${what} is refused`, { kitId }, { status: 400, error: 'Unknown kit' }, kickPanned)),
+];
+
 const cases: Case[] = [
   ...swing('a swing in range is kept as sent', .3, .3),
   ...swing('a swing past the top is held at .75', 5, .75),
@@ -144,6 +314,8 @@ const cases: Case[] = [
     async service => { const id = dressed(service); await service.request('/scenes/create', { method: 'POST', body: '{}' }); return id; },
     project => { for (const scene of project.scenes) assert.deepEqual(Object.keys(scene).sort(), ['drums', 'id', 'lanes', 'mutes', 'name']); }),
   guestRemove('a guest that does not exist cannot be removed', { status: 404, error: 'Guest not found' }, service => { addGuest(service); return NO_GUEST; }),
+
+  ...drumCases,
 ];
 
 // What is in storage, or null when nothing has been written yet.
@@ -203,7 +375,10 @@ test('apply is synchronous: the event has arrived and the store has changed befo
   assert.deepEqual(seen, [{ type: 'drumSwing', data: { swing: .3 } }]);
   assert.deepEqual(result, { ok: true, value: { swing: .3 } });
   assert.equal(service.snapshot().drumSwing, .3);
-  for (const method of ['apply', 'applyAll', 'setDrumSwing', 'setDrumMasterVolume', 'addGuest', 'changeGuest', 'removeGuest', 'getScenes', 'getTempo', 'getDrumKits'] as const) {
+  for (const method of [
+    'apply', 'applyAll', 'setDrumSwing', 'setDrumMasterVolume', 'setDrumKit', 'setDrumState', 'resetDrums', 'setDrumBars', 'setDrumStep', 'setDrumStepVelocity', 'setDrumStepDetail',
+    'setDrumSettings', 'setDrumSample', 'setDrumMix', 'addGuest', 'changeGuest', 'removeGuest', 'getScenes', 'getTempo', 'getDrumKits',
+  ] as const) {
     assert.equal(LocalProjectService.prototype[method].constructor.name, 'Function', `${method} is not async`);
   }
   service.flush();
@@ -361,6 +536,94 @@ test('the store keeps nothing of an operation\'s own objects', () => {
   service.flush();
 });
 
+test('the store keeps nothing of a drum operation\'s own objects', () => {
+  const service = setup();
+  const state = { kick: { steps: Array(16).fill(true), settings: { volume: .9 }, stepVelocities: Array(16).fill(.5) } };
+  const whole = service.setDrumState(wrong(state));
+  assert.ok(whole.ok);
+  state.kick.steps[0] = false;
+  state.kick.settings.volume = .1;
+  state.kick.stepVelocities[0] = 0;
+  whole.value.drumState.kick.steps[1] = false;
+  const settings = { volume: .7 };
+  const changed = service.setDrumSettings('snare', settings);
+  assert.ok(changed.ok);
+  settings.volume = .2;
+  changed.value.drumState.snare.settings.volume = 0;
+  const kept = service.snapshot().drumState;
+  assert.deepEqual([kept.kick.steps[0], kept.kick.steps[1], kept.kick.settings.volume, kept.kick.stepVelocities[0], kept.snare.settings.volume], [true, true, .9, .5, .7]);
+  service.flush();
+});
+
+// useStudio applies a drum edit only when its event arrives, and some of its handlers make
+// several edits in one go (a pattern tool, mute all then clear solos) or read the drums back
+// between two. Each event must therefore be the whole of the drums with every earlier edit in it.
+test('each drum edit is delivered whole before the next begins, with every earlier edit in it', () => {
+  const service = setup();
+  const heard: DrumState[] = [];
+  service.subscribe(message => { if (message.type === 'drumFullState' || message.type === 'drumKitChanged') heard.push(message.data.drumState); });
+  service.setDrumStep('kick', 0, true);
+  assert.equal(heard.length, 1, 'delivered before the helper returned');
+  service.setDrumState(Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => [instrument, { ...heard.at(-1)![instrument], muted: true }])) as DrumState);
+  service.setDrumStep('kick', 1, true);
+  service.setDrumStepVelocity('kick', 1, .5);
+  service.setDrumStepDetail('kick', 1, { ratchet: 2 });
+  service.setDrumKit(KIT.id, false);
+  assert.equal(heard.length, 6);
+  const last = heard.at(-1)!;
+  assert.deepEqual([last.kick.steps[0], last.kick.steps[1], last.kick.muted, last.crash.muted, last.kick.stepVelocities![1], last.kick.stepRatchets![1]], [true, true, true, true, .5, 2]);
+  assert.deepEqual(last, service.snapshot().drumState);
+  assert.equal(new Set(heard).size, 6, 'each is a copy of its own');
+  service.flush();
+});
+
+// storeRoutes.test.ts pins that a step sent to an instrument named after a property every object
+// has is not refused but throws. The typed way is left doing the same, for all six edits to one
+// lane, until the last pull request of the plan puts it right.
+test('an instrument named after a built-in property does through the helpers what it does through the routes (looks wrong)', async () => {
+  const service = setup();
+  const before = service.snapshot();
+  for (const name of ['constructor', 'toString', '__proto__']) {
+    const post = (path: string, rest: object) => service.request(path, { method: 'POST', body: JSON.stringify({ instrument: name, ...rest }) });
+    assert.throws(() => service.setDrumStep(wrong(name), 0, true), TypeError);
+    assert.throws(() => service.setDrumStepVelocity(wrong(name), 0, .5), TypeError);
+    assert.throws(() => service.setDrumStepDetail(wrong(name), 0, { ratchet: 2 }), TypeError);
+    assert.throws(() => service.setDrumSettings(wrong(name), { volume: 1 }), SyntaxError);
+    await assert.rejects(post('/drum/step', { step: 0, active: true }), TypeError);
+    await assert.rejects(post('/drum/step-velocity', { step: 0, velocity: .5 }), TypeError);
+    await assert.rejects(post('/drum/step-detail', { step: 0, ratchet: 2 }), TypeError);
+    await assert.rejects(post('/drum/settings', { settings: { volume: 1 } }), SyntaxError);
+  }
+  assert.deepEqual(service.snapshot(), before);
+  assert.equal(service.flush(), true);
+  assert.equal(storage.has(STORAGE_KEY), false, 'nothing was scheduled');
+
+  // A mute or a sample does not throw: it is written onto the built-in property itself and
+  // answered as a change that changed no lane. `__proto__` is left out here only because the
+  // property it finds is the one every object in the test run shares.
+  for (const name of ['constructor', 'toString']) {
+    const builtIn = ({} as Record<string, any>)[name];
+    try {
+      const typedMix = applied(setup(), target => target.setDrumMix(wrong(name), { muted: true }));
+      assert.equal(builtIn.muted, true);
+      delete builtIn.muted;
+      const routedMix = await call(setup(), 'POST', '/drum/mix', { instrument: name, muted: true });
+      assert.equal(builtIn.muted, true);
+      delete builtIn.muted;
+      const typedSample = applied(setup(), target => target.setDrumSample(wrong(name), SAMPLE));
+      assert.equal(builtIn.sampleId, SAMPLE);
+      delete builtIn.sampleId;
+      const routedSample = await call(setup(), 'POST', '/drum/sample', { instrument: name, sampleId: SAMPLE });
+      assert.equal(builtIn.sampleId, SAMPLE);
+      const unchanged = { status: 200, data: drums(), events: [{ type: 'drumFullState', data: drums() }], saved: true };
+      for (const result of [typedMix, routedMix, typedSample, routedSample]) assert.deepEqual(result, unchanged);
+    } finally {
+      delete builtIn.muted;
+      delete builtIn.sampleId;
+    }
+  }
+});
+
 test('before the service is initialized the typed way throws, with the message request() rejects with', () => {
   const message = /Local project has not been initialized/;
   assert.throws(() => new LocalProjectService().apply({ type: 'drum.swing', swing: .1 }), message);
@@ -370,6 +633,16 @@ test('before the service is initialized the typed way throws, with the message r
   assert.throws(() => new LocalProjectService().addGuest(GUEST_URL), message);
   assert.throws(() => new LocalProjectService().changeGuest(NO_GUEST, {}), message);
   assert.throws(() => new LocalProjectService().removeGuest(NO_GUEST), message);
+  assert.throws(() => new LocalProjectService().setDrumStep('kick', 0, true), message);
+  assert.throws(() => new LocalProjectService().setDrumStepVelocity('kick', 0, 1), message);
+  assert.throws(() => new LocalProjectService().setDrumStepDetail('kick', 0, {}), message);
+  assert.throws(() => new LocalProjectService().setDrumSettings('kick', {}), message);
+  assert.throws(() => new LocalProjectService().setDrumSample('kick'), message);
+  assert.throws(() => new LocalProjectService().setDrumMix('kick', {}), message);
+  assert.throws(() => new LocalProjectService().setDrumBars(1), message);
+  assert.throws(() => new LocalProjectService().setDrumKit(KIT.id), message);
+  assert.throws(() => new LocalProjectService().setDrumState(defaults().drumState), message);
+  assert.throws(() => new LocalProjectService().resetDrums(), message);
   assert.throws(() => new LocalProjectService().getTempo(), message);
   assert.throws(() => new LocalProjectService().getScenes(), message);
 });

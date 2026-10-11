@@ -30,14 +30,17 @@ const sent = (value: unknown): Record<string, any> | null => {
     return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
   } catch { return null; }
 };
+// One value in an operation, after the same trip: a number that is not finite is null, and
+// what JSON cannot carry is undefined.
+const sentValue = (value: unknown): unknown => sent({ value })?.value;
 
 type DrumLane = DrumState[keyof DrumState];
 // The six edits to one drum lane, as the router made them: find the lane, change it, put the
 // whole drum state through the checks, and send all of it.
 // An instrument named after a property every object has (`constructor`, `toString`,
-// `__proto__`) finds that property instead of a lane, as it did in the router: a step edit then
-// throws, and a sample or a mute is written onto it. storeRoutes.test.ts pins the throw; the
-// last pull request of the plan is where it is put right.
+// `__proto__`) finds that property instead of a lane, as it did in the router: a step edit or a
+// change of settings then throws, and a sample or a mute is written onto the property itself.
+// storeRoutes.test.ts pins the throw; the last pull request of the plan is where it is put right.
 const drumLaneEdit = ({ state, defaults }: ReducerContext, instrument: unknown, edit: (track: DrumLane) => Rejected | void): Outcome<{ drumState: DrumState }> => {
   const track = state.drumState[instrument as keyof DrumState];
   if (!track) return refuse(404, 'Unknown local operation');
@@ -100,7 +103,7 @@ export const reducers: Partial<Reducers> = {
   'drum.step': (ctx, op) => drumLaneEdit(ctx, op.instrument, track => {
     const refused = badDrumStep(track, op.step);
     if (refused) return refused;
-    track.steps[op.step] = Boolean(op.active);
+    track.steps[op.step] = Boolean(sentValue(op.active));
   }),
   'drum.stepDetail': (ctx, op) => drumLaneEdit(ctx, op.instrument, track => {
     const refused = badDrumStep(track, op.step);
