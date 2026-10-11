@@ -220,7 +220,9 @@ may redistribute.
    a note cannot be dragged longer than the steps on show (the Note length
    menu can), the piano roll does not turn to follow the playhead within a
    bar, the drum grid is still eight to a row on a phone on its side, the
-   walkthrough places its card by width alone,
+   walkthrough places its card by width alone, two fingers on the piano
+   roll at once get in each other's way (one lifting drops the other's tap,
+   and either can move a length the other is dragging),
    buttons whose only explanation is a hover hint, and the figure under a
    knob, which an iPhone may zoom the page to type in. None of it has been looked at in a browser by a person, tried on a
    real phone, or tried with a screen reader: it was built from the
