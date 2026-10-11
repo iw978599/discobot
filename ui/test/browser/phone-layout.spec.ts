@@ -492,8 +492,18 @@ test('on a phone a knob is set by touch: a tap opens a large slider, and a drag 
   await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
   for (const rise of [10, 30, 60]) await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y - rise }] });
   await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-  await expect.poll(percent, 'sixty pixels is two fifths of the range').toBeGreaterThan(50);
+  await expect.poll(percent, 'fifty pixels past the first few is a third of the range').toBeGreaterThan(50);
   await expect(sheet).toHaveCount(0);
+
+  // A finger held still on the knob and then lifted is not a tap: it was stopping the page, or
+  // pressing for a menu. It turns nothing and opens nothing.
+  const held = await percent();
+  await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+  await page.waitForTimeout(800);
+  await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await page.waitForTimeout(600);
+  await expect(sheet).toHaveCount(0);
+  expect(await percent()).toBe(held);
 
   // A drum knob the same, with the hint a mouse would get by hovering. Escape closes it.
   await tab(page, 'Show Drums').click();
