@@ -4,8 +4,8 @@ Written 2026-10-11 from a design pass over `localService.ts`, `useStudio.tsx` an
 `storeRoutes.test.ts`. This is roadmap improvement 1. It is done as a sequence of
 pull requests, each leaving `main` working and `storeRoutes.test.ts` green.
 
-Status: pull request 1 of 8 is built (the foundation, drum swing and drum master
-volume). The rest is open.
+Status: pull requests 1 and 2 of 8 are built (the foundation, drum swing and drum
+master volume; then guests). The rest is open.
 
 ## What was built, and where it differs from this plan
 
@@ -46,8 +46,8 @@ corrected to match; this list is so a later builder knows what changed and why.
 - **Undo already sent swing and master volume**, so `applySnapshot` now calls
   the two typed helpers, and no longer sets those two values itself.
 - **The numbers in the first section were off.** `useStudio.tsx` made 68 calls
-  to `localRequest`, not about 80 (62 after pull request 1), and thirteen test
-  files besides `storeRoutes.test.ts` call `request`, not eleven.
+  to `localRequest`, not about 80 (62 after pull request 1, 59 after 2), and
+  thirteen test files besides `storeRoutes.test.ts` call `request`, not eleven.
 - **No pinned count in `storeRoutes.test.ts` changed.** The five routes that
   moved kept their `path === '...'` lines and `/tempo` kept its method check.
 - **A refusal cannot be tested through a real operation yet**: neither moved
@@ -60,6 +60,44 @@ corrected to match; this list is so a later builder knows what changed and why.
   happen**, now that the kit list is read directly. `drumKitsLoading` and
   `drumKitsError` are left in `useStudio` and `DrumModule` for the drums pull
   request to remove.
+
+Found by building pull request 2 (guests):
+
+- **A patch must be read as the route's body was.** `patchGuest` changes a
+  field when its key is there (`'muted' in patch`). Through `request` a key
+  whose value was `undefined` never arrived, because JSON leaves it out;
+  handed straight to a reducer, `{ muted: undefined }` unmuted the guest and
+  `{ state: undefined }` deleted its settings. `GuestModule` sends
+  `{ state: data.state }` with whatever the guest posted, so this was not only
+  a matter for tests. The reducer now puts the patch through `sent` (see
+  Hazards) before reading it. The two-way tests fail without it.
+- **An operation can carry an id a route could never have made.** The route
+  made a new guest's id itself, so it was always a fresh UUID. `guest.add`
+  carries it, so it can be malformed or already taken, and `sanitizeGuests`
+  then hands back nothing, which would have put `undefined` in the guest
+  list. Both are refused: 400 for an id no guest can have, 409 for one already
+  in the project, after the two checks the route made and in its order
+  (address, then room). Every later operation that carries an id it creates
+  (`scene.create`, `pattern.write`, `synth.create`) needs the same thought.
+- **`guest.patch` takes a `GuestPatch`**, the five fields a guest can have
+  changed, not `Record<string, unknown>`. `useStudio` already had that type
+  written out.
+- **The helper is `changeGuest`**, because `patchGuest` is the name of the
+  function in `guests.ts` that does the work.
+- **One pinned count in `storeRoutes.test.ts` changed**: the router looked at
+  `method === 'DELETE'` twice for a guest (once to choose between removing and
+  changing, once more to strip the scenes) and now looks once, so
+  `methodChecks` went from `DELETE: 3` to `DELETE: 2`, with the comment
+  above it. Nothing else in that file changed.
+- **A guest id that is not 36 characters of hex and dashes** never reached the
+  guest routes (the path did not match, so the answer was 404 "Unknown local
+  operation"). The typed way answers 404 "Guest not found". The status is the
+  same and no caller reads the text.
+- **`apply` now says so when a reducer answers with nothing**, before it saves
+  or emits. Without that the copy of the answer threw a `SyntaxError` after
+  the event had gone out and the save was scheduled.
+- **`ReducerContext` gained `origin`**, this machine's own address, for
+  `guestUrl`. It is read once for each `apply`, as the route read it.
 
 ## What is being replaced
 
@@ -114,6 +152,35 @@ initialized" before init, and still throws a TypeError for an instrument named
 after a built-in property (`constructor`, `toString`, `__proto__`): both are pinned,
 and the second is fixed on purpose at the end. Until the last pull request it also
 throws for an operation whose route has not moved yet.
+
+**A refusal** is `{ ok: false, status, error }`, settled with guests, the first
+group that can be refused for more than one reason:
+
+- `status` is the status the route answered, kept because `request` still
+  answers with it and the pinned tests read it. As far as the routes allow, 400
+  is an operation that is wrong in itself and would be refused by any project (a
+  bad address, a change that is not an object), 404 one that names something
+  this project does not have (an unknown guest), and 409 one that is well formed
+  but that the project as it stands cannot take (four guests already). The
+  routes are not perfectly consistent about it (a full set of scenes is a 400,
+  and so is renaming a scene that is not there) and each stays as it is pinned,
+  so code should not decide much by the number. When `request` goes, the
+  numbers can stay as they are: they are a small closed set and read well.
+- `error` is a sentence fit to show the user as it is, and is the route's own
+  text. `handleAddGuest` shows it in the dialog.
+- A reducer refuses before it changes anything, and makes its checks in the
+  order the route made them (a bad address is a 400 even when the project is
+  full). `refuse(status, error)` in `projectReducers.ts` builds one.
+- `apply` hands back only those three fields. Nothing is saved, no event is
+  sent and no operation listener is told, so a refused operation is never
+  recorded, replayed or sent to anyone.
+- A check that the route made before routing belongs to the reducer now: an
+  object in an operation that is not an object is 400 "Invalid local operation
+  data", the answer `request` gives for such a body, and it comes before the
+  reducer's other checks, as the body check came before the route.
+- A caller reads `result.ok` and, when it is false, `result.error`. A helper's
+  caller that does not care (removing a guest, changing one) ignores the result,
+  as it ignored the response.
 
 **The 18 named events stay** as the vocabulary of change for React, which wants
 sanitized slices. `subscribeOps(listener)` is added for consumers that want the
@@ -199,7 +266,7 @@ export type Operation =
   | { type: 'scene.replace'; scenes?: unknown; currentSceneId?: string; song?: unknown }
   | { type: 'song.set'; entries?: unknown; loop?: boolean }
   | { type: 'guest.add'; guestId: string; url: string; name?: string }
-  | { type: 'guest.patch'; guestId: string; patch: Record<string, unknown> }
+  | { type: 'guest.patch'; guestId: string; patch: GuestPatch }
   | { type: 'guest.remove'; guestId: string };
 
 export type OpType = Operation['type'];
@@ -229,8 +296,8 @@ it replaces did not.
 Reducers are in `ui/src/services/projectReducers.ts`, a
 `Partial<{ [K in OpType]: (ctx, op) => Outcome<...> }>` that the last pull request
 makes total, so the compiler checks every operation has one. `ctx` is
-`{ state, defaults }`; add to `ReducerContext` what a group needs (making a lane,
-this machine's origin) and nothing that emits or saves. Each reducer is the old
+`{ state, defaults, origin }`; add to `ReducerContext` what a group needs (making
+a lane) and nothing that emits or saves. Each reducer is the old
 branch's body, moved as it is. Reducers never emit; only `apply` does (`recordFor`
 swaps `this.state` and is safe only because nothing emits meanwhile). Scene
 reducers stay private methods of the service, because `captureScene`, `applyScene`
@@ -243,6 +310,7 @@ apply<T extends Operation>(op: T, origin: Origin = 'local'): Applied<OpResult<T[
   if (!reduce) throw new Error(`No reducer for ${op.type} yet: it is still a route of request()`);
   const out = reduce(ctx, op);
   if (!out.ok) return { ok: false, status: out.status, error: out.error };
+  if (out.value === undefined) throw new Error(`The reducer for ${op.type} answered with nothing`);
   if (out.save) this.persist();
   if (out.event) this.emit(out.event.type, out.event.data);
   const notice: OpNotice = { op, origin, saved: !!out.save };
@@ -284,6 +352,15 @@ so the two ways cannot be wrong together. Include a clamped input (a swing of 5
 gives .75), a missing one and one of the wrong type. A group adds its cases to
 the `cases` list there; one test fails if a reducer has no case.
 
+Since pull request 2 a case can also be a refusal (`status` and `error` in place
+of `answer` and `event`): both ways must then answer the same error, emit
+nothing, save nothing and leave the project as it was. A case can name a
+`method`, and its `arrange` can be asynchronous and hand what it made (an id) to
+`path` and `run`. The ids the two stores make differ, so an expected answer is
+written with each id as its place among them (`'id-1'`), which is what
+`comparable` turns them into. An `arrange` uses the typed helpers where they
+exist and `request` for a route that has not moved.
+
 The harness is `ui/test/helpers/store.ts`: `setup` and `call` (one request and
 everything it did), moved from `storeRoutes.test.ts` unchanged; `applied`, which
 is `call` for an operation applied directly; and `comparable`, which puts a
@@ -308,8 +385,12 @@ early updates; adds the two-way tests.
    before, so the volume now comes back clamped to 0 to 1, which is the knob's
    range), `songArrangement` reading `getScenes()`, the kit list reading
    `getDrumKits()`, and the five dead cases deleted.
-2. **Guests.** `/guests`, `/guests/:id`. No refs and no early update, so this is
-   where rejected results (a bad address, too many guests) get their shape. Low.
+2. **Guests.** Built. `POST /guests`, `PUT` and `DELETE /guests/:id` are
+   `guest.add`, `guest.patch` and `guest.remove`, with the helpers `addGuest`,
+   `changeGuest` and `removeGuest`. In `useStudio`: `handleAddGuest`,
+   `handleRemoveGuest` and `handleGuestChange`, which had no refs and no early
+   update; the `guestsChanged` handler is as it was. This is where a refusal got
+   its shape (see Decisions) and where `sent` came from (see Hazards).
 3. **Drums.** `/drum/step`, `step-velocity`, `step-detail`, `settings`, `mix`,
    `sample`, `reset`, `state`, `bars`, `kit`. Drop the early `setDrumState`:
    `drumFullState` and `drumKitChanged` carry the whole state. Write
@@ -360,6 +441,20 @@ early updates; adds the two-way tests.
   a value that JSON would have dropped or changed on the way (`undefined`, `NaN`,
   infinity) now reaches the reducer as it is: the two-way tests for a group must
   include them.
+- What to do about it, from pull request 2. For a single number, text or flag,
+  the checks already in use (`number`, `typeof`, `=== true`) treat `undefined`,
+  `NaN` and `null` alike, so nothing is needed; say so with a case for each. For
+  an object (a patch, a whole state), pass it through `sent` in
+  `projectReducers.ts` before reading it: that is the trip through JSON the
+  route's body made, so keys that are `undefined` are gone, `NaN` and infinity
+  are `null`, the result is a copy nobody else holds, and anything that is not
+  an object comes back as `null`, to be refused with "Invalid local operation
+  data". It costs what the route's own `JSON.stringify` and `JSON.parse` cost,
+  which the caller no longer pays. Look especially for code that asks whether a
+  key is there (`'x' in patch`, `!== undefined`, `??`, a spread): that is where
+  `undefined` and a missing key part ways.
+- An operation carries the ids it creates, so a reducer must refuse an id that
+  is malformed or already taken, which a route that made the id never met.
 - Undo (`applySnapshot`) replayed twelve requests while `isRestoringRef` is
   set; ten are left. Move its calls with their groups.
 - Pattern writes are read-modify-write from `synthsRef`. Fine for one person; for
