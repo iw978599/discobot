@@ -1,7 +1,7 @@
-import type { DrumKitDefinition, DrumKitId, DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, Scene, Song, SynthParameters, SynthModelId, SynthModelParams } from '../types';
+import type { DrumInstrument, DrumKitDefinition, DrumKitId, DrumSettings, DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, Scene, Song, SynthParameters, SynthModelId, SynthModelParams } from '../types';
 import { sanitizeGuests, type Guest } from './guests';
 import { emptySteps } from './songPlayback';
-import { BAR_CHOICES, DRUM_STEPS_PER_BAR, laneBars, resizeBars } from './patternLength';
+import { laneBars } from './patternLength';
 import { createIndexedDbLibrary, createMemoryLibrary, hasIndexedDb, type ProjectInfo, type ProjectLibrary, type ProjectRecord, type VersionInfo, type VersionReason } from './projectLibrary';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
 import { normalizeSynthModelId } from '../synthModels';
@@ -804,6 +804,16 @@ export class LocalProjectService {
 
   setDrumSwing(swing: number) { return this.apply({ type: 'drum.swing', swing }); }
   setDrumMasterVolume(volume: number) { return this.apply({ type: 'drum.masterVolume', volume }); }
+  setDrumKit(kitId: string, applyDefaults?: boolean) { return this.apply({ type: 'drum.kit', kitId, applyDefaults }); }
+  setDrumState(state: DrumState) { return this.apply({ type: 'drum.state', state }); }
+  resetDrums() { return this.apply({ type: 'drum.reset' }); }
+  setDrumBars(bars: number) { return this.apply({ type: 'drum.bars', bars }); }
+  setDrumStep(instrument: DrumInstrument, step: number, active: boolean) { return this.apply({ type: 'drum.step', instrument, step, active }); }
+  setDrumStepVelocity(instrument: DrumInstrument, step: number, velocity: number) { return this.apply({ type: 'drum.stepVelocity', instrument, step, velocity }); }
+  setDrumStepDetail(instrument: DrumInstrument, step: number, detail: { probability?: number; ratchet?: number }) { return this.apply({ type: 'drum.stepDetail', instrument, step, probability: detail.probability, ratchet: detail.ratchet }); }
+  setDrumSettings(instrument: DrumInstrument, settings: Partial<DrumSettings>) { return this.apply({ type: 'drum.settings', instrument, settings }); }
+  setDrumSample(instrument: DrumInstrument, sampleId?: string) { return this.apply({ type: 'drum.sample', instrument, sampleId }); }
+  setDrumMix(instrument: DrumInstrument, mix: { muted?: boolean; solo?: boolean }) { return this.apply({ type: 'drum.mix', instrument, muted: mix.muted, solo: mix.solo }); }
   addGuest(url: string, name?: string) { return this.apply({ type: 'guest.add', guestId: crypto.randomUUID(), url, name }); }
   changeGuest(guestId: string, patch: GuestPatch) { return this.apply({ type: 'guest.patch', guestId, patch }); }
   removeGuest(guestId: string) { return this.apply({ type: 'guest.remove', guestId }); }
@@ -957,24 +967,12 @@ export class LocalProjectService {
       return respond({ success: this.setPlaying(body.synthId || 1, path.endsWith('/play'), body.patternId) });
     }
     if (path === '/drum/kits') return respond(this.getDrumKits());
-    if (path === '/drum/kit') {
-      const kit = DRUM_KITS.find(k => k.id === body.kitId);
-      if (!kit) return respond({ error: 'Unknown kit' }, 400);
-      state.selectedDrumKitId = kit.id;
-      if (body.applyDefaults !== false) {
-        DRUM_INSTRUMENTS.forEach(instrument => { state.drumState[instrument].settings = { ...state.drumState[instrument].settings, ...kit.instrumentDefaults[instrument] }; });
-      }
-      return update('drumKitChanged', { selectedDrumKitId: kit.id, drumState: state.drumState });
-    }
+    if (path === '/drum/kit') return fromApplied(this.apply({ type: 'drum.kit', kitId: body.kitId, applyDefaults: body.applyDefaults }));
     if (path === '/drum/state') {
       if (method === 'GET') return respond(state.drumState);
-      state.drumState = sanitizeDrums(body.state || body, this.defaults!.drumState);
-      return update('drumFullState', { drumState: state.drumState });
+      return fromApplied(this.apply({ type: 'drum.state', state: body.state || body }));
     }
-    if (path === '/drum/reset') {
-      state.drumState = clone(this.defaults!.drumState);
-      return update('drumFullState', { drumState: state.drumState });
-    }
+    if (path === '/drum/reset') return fromApplied(this.apply({ type: 'drum.reset' }));
     if (path === '/guests' && method === 'POST') return fromApplied(this.apply({ type: 'guest.add', guestId: crypto.randomUUID(), url: body.url, name: body.name }));
     const guestMatch = /^\/guests\/([0-9a-f-]{36})$/.exec(path);
     if (guestMatch) {
@@ -994,47 +992,14 @@ export class LocalProjectService {
       }
       return update(key === 'drumFx' ? 'drumFxUpdate' : 'effectsLoopUpdate', { [key]: state[key] });
     }
-    if (path === '/drum/bars') {
-      const bars = BAR_CHOICES.find(choice => choice === body.bars);
-      if (!bars) return respond({ error: 'A drum pattern is 1, 2, 4 or 8 bars long' }, 400);
-      for (const instrument of DRUM_INSTRUMENTS) {
-        const lane = state.drumState[instrument];
-        lane.steps = resizeBars(lane.steps, DRUM_STEPS_PER_BAR, bars, () => false);
-        if (lane.stepVelocities) lane.stepVelocities = resizeBars(lane.stepVelocities, DRUM_STEPS_PER_BAR, bars, () => 1);
-        if (lane.stepProbabilities) lane.stepProbabilities = resizeBars(lane.stepProbabilities, DRUM_STEPS_PER_BAR, bars, () => 1);
-        if (lane.stepRatchets) lane.stepRatchets = resizeBars(lane.stepRatchets, DRUM_STEPS_PER_BAR, bars, () => 1);
-      }
-      state.drumState = sanitizeDrums(state.drumState, this.defaults!.drumState);
-      return update('drumFullState', { drumState: state.drumState });
-    }
-    const track = state.drumState[body.instrument as keyof DrumState];
-    if (track && path.startsWith('/drum/')) {
-      if ((path === '/drum/step' || path === '/drum/step-velocity' || path === '/drum/step-detail') && (!Number.isInteger(body.step) || body.step < 0 || body.step >= track.steps.length)) {
-        return respond({ error: 'Invalid drum step' }, 400);
-      }
-      if (path === '/drum/step') track.steps[body.step] = Boolean(body.active);
-      else if (path === '/drum/step-velocity') {
-        track.stepVelocities ||= Array(track.steps.length).fill(1);
-        track.stepVelocities![body.step] = number(body.velocity, 1, 0, 1);
-      } else if (path === '/drum/step-detail') {
-        if (body.probability !== undefined) {
-          track.stepProbabilities ||= Array(track.steps.length).fill(1);
-          track.stepProbabilities![body.step] = number(body.probability, 1, 0, 1);
-        }
-        if (body.ratchet !== undefined) {
-          track.stepRatchets ||= Array(track.steps.length).fill(1);
-          track.stepRatchets![body.step] = number(body.ratchet, 1, 1, 4);
-        }
-      } else if (path === '/drum/settings') track.settings = merge(track.settings, record(body.settings));
-      else if (path === '/drum/sample') {
-        if (typeof body.sampleId === 'string') track.sampleId = body.sampleId; else delete track.sampleId;
-      } else if (path === '/drum/mix') {
-        if (typeof body.muted === 'boolean') track.muted = body.muted;
-        if (typeof body.solo === 'boolean') track.solo = body.solo;
-      } else return respond({ error: 'Unknown local operation' }, 404);
-      state.drumState = sanitizeDrums(state.drumState, this.defaults!.drumState);
-      return update('drumFullState', { drumState: state.drumState });
-    }
+    if (path === '/drum/bars') return fromApplied(this.apply({ type: 'drum.bars', bars: body.bars }));
+    const { instrument } = body;
+    if (path === '/drum/step') return fromApplied(this.apply({ type: 'drum.step', instrument, step: body.step, active: body.active }));
+    if (path === '/drum/step-velocity') return fromApplied(this.apply({ type: 'drum.stepVelocity', instrument, step: body.step, velocity: body.velocity }));
+    if (path === '/drum/step-detail') return fromApplied(this.apply({ type: 'drum.stepDetail', instrument, step: body.step, probability: body.probability, ratchet: body.ratchet }));
+    if (path === '/drum/settings') return fromApplied(this.apply({ type: 'drum.settings', instrument, settings: body.settings }));
+    if (path === '/drum/sample') return fromApplied(this.apply({ type: 'drum.sample', instrument, sampleId: body.sampleId }));
+    if (path === '/drum/mix') return fromApplied(this.apply({ type: 'drum.mix', instrument, muted: body.muted, solo: body.solo }));
     return respond({ error: 'Unknown local operation' }, 404);
   }
 }

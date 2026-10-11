@@ -59,7 +59,7 @@ const percentText = (value: number) => `${Math.round(value * 100)}%`;
 // with the synth lanes above. The strip underneath edits the instrument and step you last touched.
 function DrumModule({ studio }: { studio: Studio }) {
   const {
-    drumState, drumAudio, drumKits, drumKitsLoading, drumKitsError, selectedDrumKitId, drumFx, drumMasterVolume, drumSwing,
+    drumState, drumAudio, drumKits, selectedDrumKitId, drumFx, drumMasterVolume, drumSwing,
     handleDrumStepToggle: onStepToggle, handleDrumStepVelocity: onStepVelocity, handleDrumStepDetail: onStepDetail,
     handleDrumSettingsChange: onSettings, handleDrumMixChange: onMix, handleDrumFxChange: onFx,
   } = studio;
@@ -153,17 +153,16 @@ function DrumModule({ studio }: { studio: Studio }) {
             className="drum-kit-select"
             aria-label="Drum kit"
             value={selectedDrumKitId}
-            disabled={drumKitsLoading || drumKits.length === 0}
+            disabled={drumKits.length === 0}
             onChange={(event) => { void selectKit(event.target.value as DrumKitId); }}
           >
-            {drumKitsLoading && <option value={selectedDrumKitId}>Loading kits...</option>}
-            {!drumKitsLoading && drumKits.length === 0 && <option value={selectedDrumKitId}>No kits available</option>}
+            {drumKits.length === 0 && <option value={selectedDrumKitId}>No kits available</option>}
             {drumKits.map((kit) => <option key={kit.id} value={kit.id}>{kit.name}</option>)}
           </select>
           <div className="rack-plate-actions">
             <button
               className="rack-btn"
-              disabled={drumKitsLoading || drumKits.length === 0}
+              disabled={drumKits.length === 0}
               onClick={() => { void selectKit(selectedDrumKitId); }}
               title="Put every instrument back to this kit's settings"
             >
@@ -171,7 +170,6 @@ function DrumModule({ studio }: { studio: Studio }) {
             </button>
             <button className="rack-btn" onClick={studio.handleDrumReset} title="Clear the drum pattern and settings" aria-label="Reset drums">↺</button>
           </div>
-          {drumKitsError && <span className="rack-hint" role="alert">{drumKitsError}</span>}
         </div>
 
         <div className="drum-grid" ref={gridRef}>
