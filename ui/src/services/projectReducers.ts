@@ -1,12 +1,13 @@
 // What each operation does to the project. A reducer is the body of the route it replaces,
 // moved as it was. It changes the state it is handed and says what to save and send; it never
 // emits, saves or reads the clock itself, which is `apply`'s work in localService.ts.
-import { clone, merge, number, sanitizeDrums, sanitizeEffects, sanitizeModelParams, sanitizePattern, sanitizeSends, sanitizeSynthParams } from './projectSanitization';
+import { MAX_SCENES, clone, merge, number, sanitizeDrums, sanitizeEffects, sanitizeModelParams, sanitizePattern, sanitizeScenes, sanitizeSends, sanitizeSong, sanitizeSynthParams } from './projectSanitization';
 import { MAX_GUESTS, guestUrl, patchGuest, sanitizeGuests } from './guests';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
-import { BAR_CHOICES, DRUM_STEPS_PER_BAR, resizeBars } from './patternLength';
+import { BAR_CHOICES, DRUM_STEPS_PER_BAR, laneBars, resizeBars } from './patternLength';
+import { emptySteps } from './songPlayback';
 import { normalizeSynthModelId } from '../synthModels';
-import type { DrumState, Pattern } from '../types';
+import type { DrumState, Pattern, Scene } from '../types';
 import type { ProjectDefaults, ProjectLane, ProjectState } from './localService';
 import type { Operation, OpResult, OpType, Outcome, Rejected } from './projectOps';
 
@@ -85,6 +86,96 @@ const transport = (playing: boolean) => ({ state }: ReducerContext, op: { synthI
   synth.isPlaying = playing;
   return { ok: true, value: { success: true }, save: false, event: { type: playing ? 'sequencerPlay' : 'sequencerStop', data: { synthId: synth.synthId } } };
 };
+
+// The scenes. The lanes' patterns and the drum grid are the scene being edited; its slot in
+// `scenes` is only brought up to date by `commitScene`, which runs before anything reads
+// `scenes`. These work on the state they are handed: the reducers below use them, and so does
+// the service on its open project.
+
+// The live lanes and drum grid as a scene.
+export const captureScene = (state: ProjectState, id: string, name: string): Scene => ({
+  id, name,
+  lanes: Object.fromEntries(state.synths.map(synth => [synth.synthId, clone(synth.pattern.steps)])),
+  ...(state.synths.some(synth => (synth.pattern.bars ?? 1) > 1)
+    ? { laneBars: Object.fromEntries(state.synths.filter(synth => (synth.pattern.bars ?? 1) > 1).map(synth => [synth.synthId, synth.pattern.bars!])) } : {}),
+  ...(state.guests?.some(guest => guest.state !== undefined)
+    ? { guests: Object.fromEntries(state.guests.filter(guest => guest.state !== undefined).map(guest => [guest.id, clone(guest.state)])) } : {}),
+  ...(state.guests?.length ? { guestMix: Object.fromEntries(state.guests.map(guest => [guest.id, { volume: guest.volume, muted: guest.muted }])) } : {}),
+  mutes: {
+    lanes: Object.fromEntries(state.synths.map(synth => [synth.synthId, { muted: synth.muted, solo: synth.solo }])),
+    drums: Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => [instrument, { muted: state.drumState[instrument].muted, solo: state.drumState[instrument].solo }])),
+  },
+  drums: Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => {
+    const { steps, stepVelocities, stepProbabilities, stepRatchets } = state.drumState[instrument];
+    return [instrument, clone({
+      steps, ...(stepVelocities ? { stepVelocities } : {}), ...(stepProbabilities ? { stepProbabilities } : {}),
+      ...(stepRatchets ? { stepRatchets } : {}),
+    })];
+  })) as Scene['drums'],
+});
+
+export const ensureScenes = (state: ProjectState) => {
+  if (state.scenes.length === 0) {
+    const scene = captureScene(state, crypto.randomUUID(), 'Scene 1');
+    state.scenes = [scene];
+    state.currentSceneId = scene.id;
+  }
+  if (!state.scenes.some(scene => scene.id === state.currentSceneId)) state.currentSceneId = state.scenes[0].id;
+  state.song = sanitizeSong(state.song, state.scenes);
+};
+
+// Copies the live pattern into the current scene's slot. Edits go to the live lanes and
+// drums, so this runs before anything reads `scenes`: saving, switching, exporting.
+export const commitScene = (state: ProjectState) => {
+  const index = state.scenes.findIndex(scene => scene.id === state.currentSceneId);
+  if (index >= 0) state.scenes[index] = captureScene(state, state.currentSceneId, state.scenes[index].name);
+};
+
+// Makes a scene the live pattern.
+const applyScene = (state: ProjectState, scene: Scene) => {
+  state.currentSceneId = scene.id;
+  for (const synth of state.synths) {
+    synth.pattern.steps = clone(scene.lanes[synth.synthId] ?? emptySteps());
+    const bars = laneBars(synth.pattern.steps.length, scene.laneBars?.[synth.synthId]);
+    if (bars > 1) synth.pattern.bars = bars; else delete synth.pattern.bars;
+    // Mutes and solos are the scene's. A scene from before they were kept holds none, and
+    // the lanes carry on as they are.
+    const flags = scene.mutes?.lanes?.[synth.synthId];
+    if (flags) { synth.muted = flags.muted; synth.solo = flags.solo; }
+  }
+  // A guest takes the settings this scene holds for it. A scene from before the guest was added
+  // holds none, and the guest carries on as it is.
+  if (state.guests) {
+    state.guests = state.guests.map(guest => ({
+      ...guest,
+      ...(scene.guests && guest.id in scene.guests ? { state: clone(scene.guests[guest.id]) } : {}),
+      ...(scene.guestMix?.[guest.id] ?? {}),
+    }));
+  }
+  for (const instrument of DRUM_INSTRUMENTS) {
+    const track = state.drumState[instrument], pattern = scene.drums[instrument];
+    const flags = scene.mutes?.drums?.[instrument];
+    if (flags) { track.muted = flags.muted; track.solo = flags.solo; }
+    track.steps = clone(pattern.steps);
+    for (const key of ['stepVelocities', 'stepProbabilities', 'stepRatchets'] as const) {
+      if (pattern[key]) track[key] = clone(pattern[key]);
+      else delete track[key];
+    }
+  }
+};
+
+// What every scene change sends, and answers with: the scenes, the song, the open scene, and the
+// lanes and drums as that scene left them, which is what the sceneChanged handler writes into
+// the refs the scheduler reads.
+export const sceneMessage = (state: ProjectState) => {
+  commitScene(state);
+  return {
+    scenes: state.scenes, song: state.song, currentSceneId: state.currentSceneId,
+    synths: state.synths.map(synth => ({ synthId: synth.synthId, pattern: synth.pattern, muted: synth.muted, solo: synth.solo })), drumState: state.drumState,
+    guests: state.guests ?? [],
+  };
+};
+const sceneChanged = (state: ProjectState) => update('sceneChanged', sceneMessage(state));
 
 // Partial until every route has moved; `apply` refuses an operation that has no reducer yet.
 export const reducers: Partial<Reducers> = {
@@ -282,6 +373,74 @@ export const reducers: Partial<Reducers> = {
   // A pattern id is compared with the lane's own ids and is truthy or not: nothing to guard.
   'transport.play': transport(true),
   'transport.stop': transport(false),
+  // The scene operations. Each saves and sends the whole scene message, as its route did.
+  'scene.select': ({ state }, op) => {
+    const target = state.scenes.find(scene => scene.id === op.sceneId);
+    if (!target) return refuse(404, 'Scene not found');
+    if (target.id !== state.currentSceneId) {
+      commitScene(state);
+      applyScene(state, target);
+    }
+    return sceneChanged(state);
+  },
+  // The route made the new scene's id itself, so a missing, empty or taken one could not happen
+  // there. They are refused after the check on how many scenes there are, which came first.
+  'scene.create': ({ state }, op) => {
+    if (state.scenes.length >= MAX_SCENES) return refuse(400, `A project can hold ${MAX_SCENES} scenes`);
+    if (typeof op.sceneId !== 'string' || !op.sceneId || op.sceneId.length > 200) return refuse(400, 'That is not an id a scene can have.');
+    if (state.scenes.some(scene => scene.id === op.sceneId)) return refuse(409, 'That scene is already in the project.');
+    commitScene(state);
+    const name = (typeof op.name === 'string' && op.name.trim() ? op.name.trim() : `Scene ${state.scenes.length + 1}`).slice(0, 40);
+    const scene = captureScene(state, op.sceneId, name);
+    if (op.empty === true) {
+      for (const id of Object.keys(scene.lanes)) scene.lanes[Number(id)] = emptySteps(scene.lanes[Number(id)].length);
+      // An empty scene keeps the lengths of the one it was made from.
+      for (const instrument of DRUM_INSTRUMENTS) scene.drums[instrument] = { steps: Array(scene.drums[instrument].steps.length).fill(false) };
+    }
+    const index = state.scenes.findIndex(entry => entry.id === state.currentSceneId);
+    state.scenes.splice(index + 1, 0, scene);
+    applyScene(state, scene);
+    return sceneChanged(state);
+  },
+  // A scene that is not there is a 400 about the name, as the route answered.
+  'scene.rename': ({ state }, op) => {
+    const target = state.scenes.find(scene => scene.id === op.sceneId);
+    const name = typeof op.name === 'string' ? op.name.trim().slice(0, 40) : '';
+    if (!target || !name) return refuse(400, 'A scene needs a name');
+    target.name = name;
+    return sceneChanged(state);
+  },
+  'scene.delete': ({ state }, op) => {
+    const index = state.scenes.findIndex(scene => scene.id === op.sceneId);
+    if (index < 0) return refuse(404, 'Scene not found');
+    if (state.scenes.length === 1) return refuse(400, 'A project needs at least one scene');
+    commitScene(state);
+    state.scenes.splice(index, 1);
+    if (op.sceneId === state.currentSceneId) applyScene(state, state.scenes[Math.max(0, index - 1)]);
+    state.song = sanitizeSong({ ...state.song, entries: state.song.entries.filter(entry => entry.sceneId !== op.sceneId) }, state.scenes);
+    return sceneChanged(state);
+  },
+  // Used when a saved arrangement is loaded: the lanes and drums have already been set to its
+  // current scene, so that scene is taken from the live pattern. The scenes and the song are read
+  // through `sent`, as the body was. With none usable, a new scene gets an id made here, so this
+  // operation is not repeatable (as synth.create is not).
+  'scene.replace': ({ state, defaults }, op) => {
+    const body = sent({ scenes: op.scenes, currentSceneId: op.currentSceneId, song: op.song });
+    if (!body) return refuse(400, BAD_DATA);
+    const scenes = sanitizeScenes(body.scenes, defaults.drumState);
+    state.scenes = scenes ?? [];
+    state.currentSceneId = scenes?.some(scene => scene.id === body.currentSceneId) ? body.currentSceneId : scenes?.[0].id ?? '';
+    state.song = scenes ? sanitizeSong(body.song, scenes) : { entries: [], loop: false };
+    ensureScenes(state);
+    return sceneChanged(state);
+  },
+  // Each of entries and loop is kept when it is not sent (undefined and null alike).
+  'song.set': ({ state }, op) => {
+    const body = sent({ entries: op.entries, loop: op.loop });
+    if (!body) return refuse(400, BAD_DATA);
+    state.song = sanitizeSong({ entries: body.entries ?? state.song.entries, loop: body.loop ?? state.song.loop }, state.scenes);
+    return sceneChanged(state);
+  },
   'tempo.set': ({ state }, op) => {
     const { tempo } = op;
     if (!Number.isFinite(tempo) || tempo < 20 || tempo > 400) return refuse(400, 'Invalid tempo');

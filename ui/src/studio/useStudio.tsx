@@ -7,7 +7,7 @@ import { MIDI_DRUM_CHANNEL, midiOut } from '../services/midiOutput';
 import { Pattern, SequencerStep, SynthParameters, DrumState, DrumInstrument, DrumSettings, DrumKitDefinition, DrumKitId, EffectsLoopState, FxSendLevels, Scene, Song, SynthModelId, SynthModelParams } from '../types';
 import { SongPosition, applySceneMutes, audibleLanes, entryStartBar, guestBarGains, sceneAtBar, sceneDrumState, songBars } from '../services/songPlayback';
 import { createDefaultSynthParameters } from '@discobot/engine';
-import { localRequest, localService } from '../services/localService';
+import { localService } from '../services/localService';
 import type { GuestPatch } from '../services/projectOps';
 import { projectSync, startProjectSync } from '../services/projectSync';
 import { loadDrumSample } from '../services/drumSamples';
@@ -679,7 +679,9 @@ export function useStudio() {
     if (!entry) return;
     // The edit was made in another scene: go back to it, then undo there.
     if (entry.sceneId !== currentSceneIdRef.current) {
-      await localRequest('/scenes/select', { method: 'POST', body: JSON.stringify({ sceneId: entry.sceneId }) });
+      localService.selectScene(entry.sceneId);
+      // The scene is already open, refs and all. This one turn is kept as the request's await was.
+      await Promise.resolve();
     }
     const currentPattern = synthsRef.current.find((synth) => synth.id === entry!.synthId)?.pattern;
     const current = currentPattern ? getSnapshot(entry.synthId, currentPattern.id) : null;
@@ -831,9 +833,10 @@ export function useStudio() {
       passBar = position.bar;
       if (step === 0) {
         setSongPosition(position);
-        // Open the playing scene in the editor. This updates the live pattern at once.
+        // Open the playing scene in the editor. This updates the live pattern at once: selectScene
+        // is synchronous, and the sceneChanged handler has written the refs before it returns.
         if (position.sceneId !== currentSceneIdRef.current) {
-          void localRequest('/scenes/select', { method: 'POST', body: JSON.stringify({ sceneId: position.sceneId }) });
+          localService.selectScene(position.sceneId);
         }
       }
       if (position.sceneId !== currentSceneIdRef.current) {
@@ -1263,24 +1266,24 @@ export function useStudio() {
     if (synthsRef.current.some(s => s.isPlaying)) void handleGlobalPlayStop();
   };
 
-  const sceneRequest = useCallback(async (path: string, body: unknown) => {
+  const sceneChange = useCallback(async (change: () => { ok: boolean; error?: string }, leavesScene = true) => {
     // Leaving the open scene records it, so first collect what each guest is set to right now.
     // Guests are only asked every few seconds otherwise, and a change made just before switching
     // would be recorded late, in the scene being switched to.
-    if (path !== '/song' && path !== '/scenes/rename') await guestLink.captureAll();
-    const response = await localRequest(path, { method: 'POST', body: JSON.stringify(body) });
-    if (!response.ok) setStorageError((await response.json().catch(() => null))?.error ?? 'That scene change could not be made.');
-    return response.ok;
+    if (leavesScene) await guestLink.captureAll();
+    const result = change();
+    if (!result.ok) setStorageError(result.error ?? 'That scene change could not be made.');
+    return result.ok;
   }, []);
-  const handleSceneSelect = useCallback((sceneId: string) => sceneRequest('/scenes/select', { sceneId }), [sceneRequest]);
+  const handleSceneSelect = useCallback((sceneId: string) => sceneChange(() => localService.selectScene(sceneId)), [sceneChange]);
   // A new scene starts as a copy of the one being edited, or empty.
-  const handleSceneAdd = useCallback((empty: boolean) => sceneRequest('/scenes/create', { empty }), [sceneRequest]);
-  const handleSceneRename = useCallback((sceneId: string, name: string) => sceneRequest('/scenes/rename', { sceneId, name }), [sceneRequest]);
-  const handleSceneDelete = useCallback((sceneId: string) => sceneRequest('/scenes/delete', { sceneId }), [sceneRequest]);
+  const handleSceneAdd = useCallback((empty: boolean) => sceneChange(() => localService.createScene({ empty })), [sceneChange]);
+  const handleSceneRename = useCallback((sceneId: string, name: string) => sceneChange(() => localService.renameScene(sceneId, name), false), [sceneChange]);
+  const handleSceneDelete = useCallback((sceneId: string) => sceneChange(() => localService.deleteScene(sceneId)), [sceneChange]);
+  // The sceneChanged event sets the song, as the store kept it.
   const handleSongChange = useCallback((next: Partial<Song>) => {
-    setSong(prev => ({ ...prev, ...next }));
-    void sceneRequest('/song', next);
-  }, [sceneRequest]);
+    void sceneChange(() => localService.setSong(next), false);
+  }, [sceneChange]);
 
   // The song as one scene per bar, with every scene as it stands now, for export.
   const songArrangement = useCallback(async (): Promise<ExportArrangement & { bars: Scene[] }> => {
@@ -2157,7 +2160,7 @@ export function useStudio() {
     handleDrumReset();
     historyRef.current = { undo: [], redo: [] };
     // Back to a single empty scene, taken from the lanes and drums that were just cleared.
-    await localRequest('/scenes/replace', { method: 'POST', body: JSON.stringify({}) });
+    localService.replaceScenes();
   }, [handleDrumReset, synthAudio, drumAudio]);
 
   const memoizedDrumState = useMemo(() => drumState, [drumState]);
