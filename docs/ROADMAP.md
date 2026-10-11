@@ -32,8 +32,12 @@ slow down every later change.
    a small store outside React and the step lights follow it without a
    render. Playing a three-lane project with drums, the main thread was busy
    a little over half as long as before, and script time fell to between a
-   fifth and an eighth. Still open: nothing in the rack is memoised, so an
-   edit still renders all of it.
+   fifth and an eighth. Also done: a synth lane, the drums and a guest each
+   render only when something they read has changed, so an edit to one lane
+   no longer draws the others. Turning a knob took about a third less script
+   time, and a drum step about half. The effects panel sits out edits that are
+   not to the effects. Still open: the transport bar and the song strip
+   still render on every edit.
 
 4. **Give the audio layer a single owner.** (M)
    `browserAudio.ts` keeps the context, buses and effects in module-level

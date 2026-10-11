@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { DelaySync, EffectsLoopState } from '../types';
 import { DELAY_SYNCS, DELAY_SYNC_LABELS } from '../services/delayTime';
 import { CHORUS_DEFAULT, EQ_DEFAULT, EQ_RANGE_DB, MAX_PRE_DELAY } from '../services/effectSettings';
@@ -25,7 +26,7 @@ const parseMs = (input: string): number | null => {
   return n === null ? null : n / 1000;
 };
 
-export default function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProps) {
+function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProps) {
   const synced = Boolean(effectsLoop.delay.sync && effectsLoop.delay.sync !== 'off');
   const chorus = effectsLoop.chorus ?? CHORUS_DEFAULT, eq = effectsLoop.eq ?? EQ_DEFAULT;
   const decibels = (value: number) => `${value > 0 ? '+' : ''}${value.toFixed(1)}dB`;
@@ -365,3 +366,6 @@ export default function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProp
     </section>
   );
 }
+
+// Its two props only change when the effects do, so it sits out every other edit.
+export default memo(EffectsPanel);
