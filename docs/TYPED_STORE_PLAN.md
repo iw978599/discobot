@@ -4,10 +4,11 @@ Written 2026-10-11 from a design pass over `localService.ts`, `useStudio.tsx` an
 `storeRoutes.test.ts`. This is roadmap improvement 1. It is done as a sequence of
 pull requests, each leaving `main` working and `storeRoutes.test.ts` green.
 
-Status: pull requests 1 to 5 of 8 are built (the foundation, drum swing and
-drum master volume; then guests; then the drums; then the effects), and the
-the whole of 5 (a lane's sound, model, mix and view, and the tempo; then its
-pattern writes). 6 to 8 are open.
+Status: pull requests 1 to 6 of 8 are built (the foundation, drum swing and
+drum master volume; then guests; then the drums; then the effects; then the
+whole of 5, a lane's sound, model, mix and view, and the tempo, and then its
+pattern writes; then lanes coming and going, and the transport). 7 and 8 are
+open.
 
 ## What was built, and where it differs from this plan
 
@@ -344,6 +345,75 @@ Found by building pull request 5b (a lane's pattern writes):
   `synthsRef.current`, which a `synthUpdate` since the last render has not reached;
   it heals at the next render and the state is right.
 
+Found by building pull request 6 (lanes coming and going, and the transport):
+
+- **Four operations, one reducer each**, the route's body moved: `synth.create`
+  (`createLane`), `synth.remove` (`removeLane`), `transport.play` and
+  `transport.stop` (`playLane`, `stopLane`). Play and stop share one function
+  that is given the flag. `setPlaying` is gone from `localService`; the lane
+  is made by `newLane` in `projectReducers.ts`, which the service's private
+  `createSynth` now calls.
+- **`transport.stop` takes a `patternId`**, which the plan's type did not
+  have. The route handed the body's pattern to stop as well as to play, so a
+  stop that names a pattern the lane has makes it the lane's open pattern
+  (pinned in `storeRoutes.test.ts`). No caller in the app does it. The
+  `stopLane` helper leaves it out; `apply` takes it.
+- **`synth.create` reads its lane number through `sentValue`.** The route took
+  it with `||`, so 0, `null` and `NaN` mean "the lowest free", and so does
+  infinity, because JSON turned it into `null`. Handed straight to the reducer,
+  infinity would have been refused. Text, a fraction and a number outside 1 to 3
+  are 400 "Three synths maximum", as before. Creating a lane that exists
+  answers with it as it is, and still saves and emits (pinned).
+- **A new lane's pattern id is made inside the reducer**, so `synth.create` is
+  not repeatable the way the plan's first rule asks: two stores applying it get
+  different pattern ids. The operation does not carry one. Not changed here
+  (it would need the same refuse-a-bad-id checks as `pattern.write`); live
+  editing, or undo in the store, has to settle it.
+- **`synth.remove` looks for the lane first**, so a lane that is not there is a
+  404 even for lane 1; lane 1 that is there is 400. The router keeps its own
+  404 check, which comes before the DELETE line, so the reducer's is the same
+  answer reached by the typed way.
+- **Play and stop of a lane that is not there** answer `{ success: false }` and
+  the status is still 200, with no event and no save. The operation counts as
+  accepted: `subscribeOps` listeners are told of it, with `saved` false. The
+  route's `body.synthId || 1` stays in the route; the typed helpers take the
+  lane as given, so `playLane(0)` is a lane that is not there, where the route
+  with `synthId: 0` is lane 1.
+- **In `useStudio`**: `handleRemoveSynth` no longer sets the state after the
+  request (the `synthRemoved` event does); `ensureSynthExists` no longer sets
+  the state either (the `synthCreated` event had already added the lane, so
+  that update never did anything), and still writes the ref; Play no longer
+  sets `isPlaying` (the `sequencerPlay` event does) and keeps the playhead
+  reset; Play and Stop each make one `applyAll`. The `synthRemoved` and
+  `sequencerStop` handlers are untouched, with their ref writes, and
+  `synthAudio.stopSynth` is still before the removal.
+- **Stop's own `setSynths` is kept, and is why.** The `sequencerStop` handler
+  turns each lane's `forceReleaseSignal` over, and the Stop handler did again,
+  so the lane ends as it began. Taking the second out would have turned it over
+  once and changed what the lane's keyboard sees. This looks like a mistake (an
+  odd number of turns was probably meant); it is not fixed here. Roadmap
+  improvement 2 or the last pull request should decide.
+- **One turn fewer.** The `await` on the stop requests, and on Reset's stop, and
+  the one on the create request, are gone, so what followed them runs one
+  microtask earlier. Nothing in between could render.
+- **A removal the store refuses** (the lane is not there) used to take the lane
+  off the screen anyway. Nothing can ask for it.
+- **The stand-in tests** now stand in for `scene.select` and `scene.delete`,
+  which are what has no reducer. Point them at whatever is left in pull
+  request 7, and at nothing once the map is total.
+- **Nothing in `storeRoutes.test.ts` changed and no pinned count moved.** The
+  `/synth/create` and `/sequencer/play` lines, the DELETE check and the
+  `startsWith` are where they were.
+- `useStudio.tsx` makes 4 calls to `localRequest` after this pull request:
+  the scenes (three direct, one through `sceneRequest`).
+- **For the builder of step 7:** `synthCreated` still adds a lane to the state
+  with `octaveShift` 0 and `keyboardMode` 'keyboard' whatever the store has,
+  and `ensureSynthExists` writes the ref from the answer, so the two can
+  differ for a lane that already exists in the store and not on screen. Scene
+  changes replace every lane's pattern; `lanesBeforeEditRef` and the ref
+  writes in `sceneChanged` are the things to leave alone. The scheduler's
+  `/scenes/select` is the one `void localRequest` call.
+
 ## What is being replaced
 
 Edits inside a project go through `localService.request(path, options)`, a leftover
@@ -665,11 +735,13 @@ early updates; adds the two-way tests.
    parameters to the audio (`synthAudio.updateParameters`) and is untouched.
    5b, built: `patterns` and `patterns/:pid` (`pattern.write`), with the helper
    `writePattern`, at fourteen call sites. See what pull request 5b found.
-6. **Lanes coming and going, and the transport.** `/synth/create`, DELETE
+6. **Lanes coming and going, and the transport.** Built. `/synth/create`, DELETE
    `/synth/:id`, `/sequencer/play`, `/sequencer/stop`. Play and stop still do not
    save. The `synthRemoved` and `sequencerStop` handlers keep their ref writes.
    `synthAudio.stopSynth` still comes before the removal. The `Promise.all` of play
-   requests becomes `applyAll`. Medium.
+   requests becomes `applyAll`. Medium. Built as `synth.create`, `synth.remove`,
+   `transport.play` and `transport.stop`, with the helpers `createLane`,
+   `removeLane`, `playLane` and `stopLane`. See what pull request 6 found.
 7. **Scenes and the song.** `/scenes/select`, `create`, `rename`, `delete`,
    `replace`, `/song`. The `sceneChanged` handler and its ref writes are untouched.
    `await guestLink.captureAll()` still comes first. The scheduler's call is the

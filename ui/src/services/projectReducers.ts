@@ -6,8 +6,8 @@ import { MAX_GUESTS, guestUrl, patchGuest, sanitizeGuests } from './guests';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
 import { BAR_CHOICES, DRUM_STEPS_PER_BAR, resizeBars } from './patternLength';
 import { normalizeSynthModelId } from '../synthModels';
-import type { DrumState } from '../types';
-import type { ProjectDefaults, ProjectState } from './localService';
+import type { DrumState, Pattern } from '../types';
+import type { ProjectDefaults, ProjectLane, ProjectState } from './localService';
 import type { Operation, OpResult, OpType, Outcome, Rejected } from './projectOps';
 
 // `origin` is this machine's own address, which a guest may not be loaded from.
@@ -56,6 +56,35 @@ const drumLaneEdit = ({ state, defaults }: ReducerContext, instrument: unknown, 
 };
 const badDrumStep = (track: DrumLane, step: number) =>
   (!Number.isInteger(step) || step < 0 || step >= track.steps.length ? refuse(400, 'Invalid drum step') : undefined);
+
+// A lane as the store first makes it: one blank pattern of sixteen steps, the default sound, and
+// the project's tempo. The pattern's id is made here, not carried by the operation.
+export const newLane = (synthId: number, tempo: number, defaults: ProjectDefaults): ProjectLane => {
+  const pattern: Pattern = {
+    id: crypto.randomUUID(), name: `Synth ${synthId}`, tempo,
+    steps: Array.from({ length: 16 }, () => ({ active: false, velocity: .7 })),
+  };
+  return {
+    synthId, pattern, patterns: [pattern], synthParams: clone(defaults.synthParams),
+    synthModelId: 'generic', synthModelParams: { macro1: .5, macro2: .5, macro3: .5, macro4: .5 },
+    muted: false, solo: false, isPlaying: false,
+  };
+};
+
+// Play and stop are the same change with opposite flags: a pattern named that the lane has
+// becomes the lane's pattern (for stop as well as play, as the route did), the lane is marked,
+// the event goes out and nothing is saved. A lane that is not there is not an error: the answer
+// says it failed, nothing is sent, and the status is still 200.
+const transport = (playing: boolean) => ({ state }: ReducerContext, op: { synthId: number; patternId?: string }): Outcome<{ success: boolean }> => {
+  const synth = laneOf(state, op.synthId);
+  if (!synth) return { ok: true, value: { success: false }, save: false };
+  if (op.patternId) {
+    const pattern = synth.patterns.find(p => p.id === op.patternId);
+    if (pattern) synth.pattern = pattern;
+  }
+  synth.isPlaying = playing;
+  return { ok: true, value: { success: true }, save: false, event: { type: playing ? 'sequencerPlay' : 'sequencerStop', data: { synthId: synth.synthId } } };
+};
 
 // Partial until every route has moved; `apply` refuses an operation that has no reducer yet.
 export const reducers: Partial<Reducers> = {
@@ -233,6 +262,26 @@ export const reducers: Partial<Reducers> = {
     synth.keyboardMode = op.keyboardMode === 'piano-roll' ? 'piano-roll' : op.keyboardMode === 'keyboard' ? 'keyboard' : synth.keyboardMode;
     return { ok: true, value: synth, save: true };
   },
+  // No lane named, or one that counts as none (0, and infinity, which JSON made null), is the
+  // lowest free number. A lane that is there is answered as it is, and still saved and sent.
+  'synth.create': ({ state, defaults }, op) => {
+    const id = sentValue(op.synthId) || [1, 2, 3].find(id => !state.synths.some(s => s.synthId === id));
+    if (!Number.isInteger(id) || (id as number) < 1 || (id as number) > 3) return refuse(400, 'Three synths maximum');
+    let synth = state.synths.find(s => s.synthId === id);
+    if (!synth) { synth = newLane(id as number, state.tempo, defaults); state.synths.push(synth); }
+    return update('synthCreated', synth);
+  },
+  // The lane is looked for first, so a lane that is not there is a 404 even for lane 1.
+  'synth.remove': ({ state }, op) => {
+    const synth = laneOf(state, op.synthId);
+    if (!synth) return refuse(404, NO_SYNTH);
+    if (synth.synthId === 1) return refuse(400, 'Synth 1 cannot be removed');
+    state.synths = state.synths.filter(s => s !== synth);
+    return update('synthRemoved', { synthId: synth.synthId });
+  },
+  // A pattern id is compared with the lane's own ids and is truthy or not: nothing to guard.
+  'transport.play': transport(true),
+  'transport.stop': transport(false),
   'tempo.set': ({ state }, op) => {
     const { tempo } = op;
     if (!Number.isFinite(tempo) || tempo < 20 || tempo > 400) return refuse(400, 'Invalid tempo');

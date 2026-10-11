@@ -511,6 +511,69 @@ const patternCases: Case[] = [
   patternCase('a pattern that is not an object is refused before a lane is looked for', 'lots', { status: 400, error: 'Invalid local operation data' }, 'existing', undefined, 3),
 ];
 
+// A lane as the store makes it, with its pattern's id as its place among the ids.
+const madeLane = (synthId: number, rest: object = {}) => {
+  const pattern = { id: 'id-1', name: `Synth ${synthId}`, tempo: 120, steps: BLANK() };
+  return { answer: { synthId, pattern, patterns: [pattern], synthParams: defaults().synthParams, synthModelId: 'generic', synthModelParams: MACROS, muted: false, solo: false, isPlaying: false, ...rest } };
+};
+const laneIds = (...expected: number[]) => (project: any) => assert.deepEqual(project.synths.map((entry: any) => entry.synthId), expected);
+const makeLane = (title: string, sent: unknown, result: ReturnType<typeof madeLane> | { status: 400 | 404 | 409; error: string }, arrange?: Case['arrange'], check?: Case['check']): Case => ({
+  op: 'synth.create', title, arrange, path: '/synth/create', body: sent === undefined ? {} : { synthId: sent }, run: service => service.createLane(wrong(sent)),
+  ...('answer' in result ? { event: 'synthCreated', ...result } : result), check,
+});
+const withLanes = async (service: LocalProjectService) => { assert.ok(service.createLane(2).ok); assert.ok(service.createLane(3).ok); };
+const removeCase = (title: string, synthId: number, result: { answer: unknown } | { status: 400 | 404 | 409; error: string }, arrange?: Case['arrange'], check?: Case['check']): Case => ({
+  op: 'synth.remove', title, arrange, method: 'DELETE', path: `/synth/${synthId}`, body: {}, run: service => service.removeLane(synthId),
+  ...('answer' in result ? { event: 'synthRemoved', ...result } : result), check,
+});
+const twoPatterns = (service: LocalProjectService) => {
+  assert.ok(service.writePattern(1, 'one', { steps: [noted] }).ok);
+  assert.ok(service.writePattern(1, 'two', { steps: [noted] }).ok);
+};
+const openPattern = (id: string) => (project: any) => assert.equal(project.synths[0].pattern.id, id);
+// Play and stop do not save and send the lane's number. `patternId` is read by both.
+const transportCase = (verb: 'play' | 'stop', title: string, body: { synthId: number; patternId?: string }, result: { answer: unknown; eventData?: unknown; silent?: boolean }, arrange?: Case['arrange'], check?: Case['check']): Case => ({
+  op: verb === 'play' ? 'transport.play' : 'transport.stop', title, arrange, path: `/sequencer/${verb}`, body,
+  run: service => service.apply(verb === 'play' ? { type: 'transport.play', synthId: body.synthId, patternId: body.patternId } : { type: 'transport.stop', synthId: body.synthId, patternId: body.patternId }),
+  event: verb === 'play' ? 'sequencerPlay' : 'sequencerStop', eventData: { synthId: body.synthId }, ...result, check,
+});
+const laneStarted = (synthId: number) => async (service: LocalProjectService) => { assert.ok(service.createLane(2).ok); assert.ok(service.playLane(synthId).ok); };
+const playing = (...expected: boolean[]) => (project: any) => assert.deepEqual(project.synths.map((entry: any) => entry.isPlaying), expected);
+const SUCCESS = { answer: { success: true } }, FAILURE = { answer: { success: false }, silent: true };
+
+const comingAndGoingCases: Case[] = [
+  makeLane('a new lane is a blank pattern of sixteen steps, the default sound and the generic model', 3, madeLane(3), undefined, laneIds(1, 3)),
+  makeLane('with no lane named, the lowest free one', undefined, madeLane(2), undefined, laneIds(1, 2)),
+  makeLane('lane 0 counts as no lane named (looks wrong)', 0, madeLane(2)),
+  makeLane('lane null counts as none', null, madeLane(2)),
+  makeLane('lane infinity counts as none: JSON made it null', Number.POSITIVE_INFINITY, madeLane(2)),
+  makeLane('lane "not a number at all" counts as none', Number.NaN, madeLane(2)),
+  makeLane('lanes are kept in the order they were made, not by number', 2, madeLane(2), service => { assert.ok(service.createLane(3).ok); }, laneIds(1, 3, 2)),
+  makeLane('a new lane takes the project\'s tempo', 2, madeLane(2, { pattern: { id: 'id-1', name: 'Synth 2', tempo: 150, steps: BLANK() }, patterns: [{ id: 'id-1', name: 'Synth 2', tempo: 150, steps: BLANK() }] }), service => { assert.ok(service.setTempo(150).ok); }),
+  makeLane('creating a lane that exists answers with it as it is, and still emits and saves', 1,
+    madeLane(1, { muted: true, solo: true }), service => { assert.ok(service.setSynthMix(1, { muted: true, solo: true }).ok); }, laneIds(1)),
+  ...([4, -1, 1.5, '2'] as const).map(synthId => makeLane(`lane ${JSON.stringify(synthId)} is refused`, synthId, { status: 400, error: 'Three synths maximum' })),
+  makeLane('with all three lanes there, no lane named is refused', undefined, { status: 400, error: 'Three synths maximum' }, withLanes),
+
+  removeCase('lane 1 cannot be removed', 1, { status: 400, error: 'Synth 1 cannot be removed' }),
+  removeCase('a lane is removed and the others stay in their order', 2, { answer: { synthId: 2 } }, withLanes, laneIds(1, 3)),
+  removeCase('a lane that is playing is removed all the same', 2, { answer: { synthId: 2 } }, laneStarted(2), laneIds(1)),
+  removeCase('a lane that is not there is a 404', 3, { status: 404, error: NO_SYNTH }),
+  removeCase('lane 0 is not there either', 0, { status: 404, error: NO_SYNTH }),
+
+  ...(['play', 'stop'] as const).flatMap((verb): Case[] => {
+    const on = verb === 'play';
+    return [
+      transportCase(verb, 'marks the lane and sends its number, and does not save', { synthId: 2 }, SUCCESS, on ? laneStarted(1) : laneStarted(2), playing(on, on)),
+      transportCase(verb, 'lane 1 is the first lane', { synthId: 1 }, SUCCESS, on ? undefined : async service => { assert.ok(service.playLane(1).ok); }, playing(on)),
+      transportCase(verb, 'a pattern named becomes the lane\'s open pattern', { synthId: 1, patternId: 'one' }, SUCCESS, service => { twoPatterns(service); }, openPattern('one')),
+      transportCase(verb, 'a pattern the lane does not have is ignored', { synthId: 1, patternId: 'nope' }, SUCCESS, service => { twoPatterns(service); }, openPattern('two')),
+      transportCase(verb, 'a lane that is not there is a success that says it failed: nothing is sent or changed', { synthId: 2 }, FAILURE, undefined, playing(false)),
+      transportCase(verb, 'a lane already in that state is marked again and the event goes out again', { synthId: 2 }, SUCCESS, on ? laneStarted(2) : service => { assert.ok(service.createLane(2).ok); }, playing(false, on)),
+    ];
+  }),
+];
+
 const cases: Case[] = [
   ...swing('a swing in range is kept as sent', .3, .3),
   ...swing('a swing past the top is held at .75', 5, .75),
@@ -580,6 +643,7 @@ const cases: Case[] = [
   ...effectCases,
   ...laneCases,
   ...patternCases,
+  ...comingAndGoingCases,
 ];
 
 // What is in storage, or null when nothing has been written yet.
@@ -641,7 +705,7 @@ test('apply is synchronous: the event has arrived and the store has changed befo
   assert.equal(service.snapshot().drumSwing, .3);
   for (const method of [
     'apply', 'applyAll', 'setDrumSwing', 'setDrumMasterVolume', 'setDrumKit', 'setDrumState', 'resetDrums', 'setDrumBars', 'setDrumStep', 'setDrumStepVelocity', 'setDrumStepDetail',
-    'setDrumSettings', 'setDrumSample', 'setDrumMix', 'setDrumFx', 'setEffectsLoop', 'setTempo', 'setSynthParams', 'setSynthModel', 'setSynthMix', 'setSynthPrefs', 'addGuest', 'changeGuest', 'removeGuest', 'getScenes', 'getTempo', 'getDrumKits',
+    'setDrumSettings', 'setDrumSample', 'setDrumMix', 'setDrumFx', 'setEffectsLoop', 'setTempo', 'setSynthParams', 'setSynthModel', 'setSynthMix', 'setSynthPrefs', 'writePattern', 'createLane', 'removeLane', 'playLane', 'stopLane', 'addGuest', 'changeGuest', 'removeGuest', 'getScenes', 'getTempo', 'getDrumKits',
   ] as const) {
     assert.equal(LocalProjectService.prototype[method].constructor.name, 'Function', `${method} is not async`);
   }
@@ -669,32 +733,32 @@ test('an operation listener hears each accepted operation after its event, with 
 // These stand a reducer in for one that has not moved yet, to try what no real reducer does:
 // an outcome that is refused and yet names an event and a save, one that does not save, and one
 // with no answer. They are about `apply`, not about the operation named.
-function standIn<T>(type: 'transport.stop' | 'transport.play', reducer: (...args: any[]) => unknown, run: (service: LocalProjectService) => T): T {
+function standIn<T>(type: 'scene.select' | 'scene.delete', reducer: (...args: any[]) => unknown, run: (service: LocalProjectService) => T): T {
   assert.equal(type in reducers, false, `${type} has a reducer of its own now: stand in for another`);
   (reducers as Record<string, unknown>)[type] = reducer;
   try { return run(setup()); } finally { delete (reducers as Record<string, unknown>)[type]; }
 }
 
 test('a refused operation is answered, not thrown: no event, no notice, no save', () => {
-  standIn('transport.stop', () => ({ ok: false, status: 400, error: 'Not now', save: true, event: { type: 'sequencerStop', data: {} } }), service => {
+  standIn('scene.delete', () => ({ ok: false, status: 400, error: 'Not now', save: true, event: { type: 'sceneChanged', data: {} } }), service => {
     const before = service.snapshot();
     let notices = 0;
     service.subscribeOps(() => { notices++; });
-    const result = applied(service, target => target.apply({ type: 'transport.stop', synthId: 1 }));
+    const result = applied(service, target => target.apply({ type: 'scene.delete', sceneId: 'a' }));
     assert.deepEqual(result, { status: 400, data: { error: 'Not now' }, events: [], saved: false });
-    assert.deepEqual(service.apply({ type: 'transport.stop', synthId: 1 }), { ok: false, status: 400, error: 'Not now' });
+    assert.deepEqual(service.apply({ type: 'scene.delete', sceneId: 'a' }), { ok: false, status: 400, error: 'Not now' });
     assert.equal(notices, 0);
     assert.deepEqual(service.snapshot(), before);
   });
 });
 
 test('an operation that does not save is still announced, with saved false, and its answer is a copy', () => {
-  standIn('transport.play', ({ state }: any) => ({ ok: true, value: state.song, event: { type: 'sequencerPlay', data: { synthId: 1 } } }), service => {
+  standIn('scene.select', ({ state }: any) => ({ ok: true, value: state.song, event: { type: 'sceneChanged', data: { synthId: 1 } } }), service => {
     const notices: OpNotice[] = [];
     service.subscribeOps(notice => notices.push(notice));
     let answer: any;
-    const result = applied(service, target => (answer = target.apply({ type: 'transport.play', synthId: 1 })));
-    assert.deepEqual(result.events, [{ type: 'sequencerPlay', data: { synthId: 1 } }]);
+    const result = applied(service, target => (answer = target.apply({ type: 'scene.select', sceneId: 'a' })));
+    assert.deepEqual(result.events, [{ type: 'sceneChanged', data: { synthId: 1 } }]);
     assert.equal(result.saved, false);
     assert.deepEqual(notices.map(notice => notice.saved), [false]);
     answer.value.loop = true;
@@ -703,13 +767,13 @@ test('an operation that does not save is still announced, with saved false, and 
 });
 
 test('a reducer that answers with nothing is a mistake apply reports, before anything is saved or sent', () => {
-  standIn('transport.play', () => ({ ok: true, value: undefined, save: true, event: { type: 'sequencerPlay', data: { synthId: 1 } } }), service => {
+  standIn('scene.select', () => ({ ok: true, value: undefined, save: true, event: { type: 'sceneChanged', data: { synthId: 1 } } }), service => {
     const seen: Message[] = [];
     let notices = 0;
     service.subscribe(message => seen.push(message));
     service.subscribeOps(() => { notices++; });
     seen.length = 0;
-    assert.throws(() => service.apply({ type: 'transport.play', synthId: 1 }), /The reducer for transport\.play answered with nothing/);
+    assert.throws(() => service.apply({ type: 'scene.select', sceneId: 'a' }), /The reducer for scene\.select answered with nothing/);
     assert.deepEqual(seen, []);
     assert.equal(notices, 0);
     assert.equal(service.flush(), true);
