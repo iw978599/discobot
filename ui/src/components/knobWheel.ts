@@ -91,7 +91,7 @@ export function useKnobWheel(knob: WheelKnob) {
       if (!running && event.timeStamp - pageWheelAt < WHEEL_GAP_MS) return;
       event.preventDefault();
       const notches = wheelNotches(event);
-      if (!running) run.seen = new Set([state.value]);
+      if (!running) { run.seen = new Set([state.value]); run.sent = state.value; }
       if (!running || (run.left !== 0 && Math.sign(run.left) !== Math.sign(notches))) run.left = 0;
       run.at = event.timeStamp;
       run.left += notches * notchSize(state.min, state.max, state.step, event.shiftKey);
