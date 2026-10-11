@@ -499,20 +499,8 @@ test('on a phone a knob is set by touch: a tap opens a large slider, and a drag 
   await tab(page, 'Show Drums').click();
   const swing = page.locator('[data-unit="drums"]').getByRole('slider', { name: 'Swing', exact: true });
   const swingSheet = page.getByRole('dialog', { name: 'Swing', exact: true });
-  await page.evaluate(() => {
-    const seen: string[] = [];
-    Object.assign(window, { seen });
-    for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'lostpointercapture', 'click', 'scroll']) {
-      document.addEventListener(type, (event) => {
-        const target = event.target as Element;
-        seen.push(`${type} ${(event as PointerEvent).pointerType ?? ''} ${target.getAttribute?.('class') ?? target.nodeName} ${Math.round(document.querySelector('.rack-page')!.scrollTop)}`);
-      }, true);
-    }
-  });
   await swing.tap();
-  await page.waitForTimeout(600);
-  const seen = await page.evaluate(() => [(window as unknown as { seen: string[] }).seen.join(' | '), document.activeElement?.getAttribute('class'), document.querySelectorAll('[role="dialog"]').length].join(' || '));
-  await expect(swingSheet, seen).toContainText('delays off-beat steps');
+  await expect(swingSheet).toContainText('delays off-beat steps');
   await swingSheet.getByRole('slider', { name: 'Swing', exact: true }).press('End');
   await expect(page.getByLabel('Swing value', { exact: true })).toHaveValue('75%');
   await page.keyboard.press('Escape');
