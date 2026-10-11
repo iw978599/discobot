@@ -825,7 +825,8 @@ test('on a phone the piano roll is edited with a finger: a tap, a drag, a held n
   await cell('C3', 16).tap();
   await on('C3', 16, true);
   await lane.getByRole('button', { name: 'Earlier steps', exact: true }).tap();
-  expect((await steps())[0] % 4, 'back on a beat').toBe(1);
+  // Asked until it is so: the steps on show are read back from the grid a moment after it moves.
+  await expect.poll(async () => (await steps())[0] % 4, 'back on a beat').toBe(1);
 
   // A step picked in the row above is brought on show.
   await lane.getByRole('button', { name: /^Select step 2( |$)/ }).click();
