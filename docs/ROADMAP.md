@@ -61,7 +61,9 @@ slow down every later change.
 5. **Accessibility pass on custom controls.** (M)
    Steps are labelled and dialogs trap focus. The phone's bar of units is a
    named navigation whose switches say which unit is on show, and choosing
-   one moves keyboard focus into that unit. Still open: the step grids are
+   one moves keyboard focus into that unit. The large slider a touched knob
+   opens is a native slider in a dialog: it has a name, a value in words,
+   arrow, Home and End keys, and gives focus back to its knob. Still open: the step grids are
    long runs of separate tab stops, so add a roving tab index; and nothing,
    the walkthrough included, has been tried with a screen reader.
 
@@ -160,9 +162,14 @@ may redistribute.
    drums or the effects), with a bar along the bottom to move between them
    and to go back to the whole rack on one page; the unit last on show is
    remembered in that browser, units out of sight keep playing, and the
-   walkthrough turns to the unit each stop is about. Still open from the
-   list below: knobs as sliders or a large dial, and a piano roll made for a
-   thumb. None of it has been looked at in a browser by a person, tried on a
+   walkthrough turns to the unit each stop is about. Third part done: a knob
+   tapped with a finger opens a large slider along the bottom of the screen,
+   with its value in big figures, a step button either side and the hint a
+   mouse would get by hovering; dragging a knob still turns it, and knobs on
+   a narrow screen are as big as a fingertip. Still open from the list
+   below: a piano roll and keyboard made for a thumb. Smaller things left:
+   buttons whose only explanation is a hover hint, and the figure under a
+   knob, which an iPhone may zoom the page to type in. None of it has been looked at in a browser by a person, tried on a
    real phone, or tried with a screen reader: it was built from the
    stylesheet and is held by browser tests that measure the page. The full
    list:

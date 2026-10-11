@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useKnobInteraction } from './useKnobInteraction';
+import KnobSheet from './KnobSheet';
 import './DrumKnob.css';
 
 interface DrumKnobProps {
@@ -30,6 +31,10 @@ export default function DrumKnob({
   const [localVal, setLocalVal] = useState(value);
   const [isEditing, setIsEditing] = useState(false);
   const [inputValue, setInputValue] = useState('');
+  const rootRef = useRef<HTMLDivElement>(null);
+  // Set while the large slider is open: the page it is put on.
+  const [sheetHost, setSheetHost] = useState<HTMLElement | null>(null);
+  const openSheet = () => setSheetHost(rootRef.current?.closest<HTMLElement>('.rack-page') ?? document.body);
 
   const computedDisplay = displayValue ?? localVal.toFixed(2);
 
@@ -43,7 +48,7 @@ export default function DrumKnob({
   const { normalize, ...interaction } = useKnobInteraction(localVal, min, max, step, (next) => {
     setLocalVal(next);
     onChange(next);
-  });
+  }, false, openSheet);
 
   const svgDeg = -240 + pct * 300;
 
@@ -62,7 +67,7 @@ export default function DrumKnob({
   }, [isEditing, parseInputValue, inputValue, min, max, step, onChange]);
 
   return (
-    <div className="drum-knob">
+    <div ref={rootRef} className="drum-knob">
       <div
         className="drum-knob-rotary"
         {...interaction}
@@ -110,6 +115,21 @@ export default function DrumKnob({
           }
         }}
       />
+      {sheetHost && (
+        <KnobSheet
+          host={sheetHost}
+          name={ariaLabel}
+          hint={title}
+          value={localVal}
+          min={min}
+          max={max}
+          step={step}
+          display={computedDisplay}
+          normalize={normalize}
+          onChange={(next) => { setLocalVal(next); onChange(next); }}
+          onClose={() => setSheetHost(null)}
+        />
+      )}
     </div>
   );
 }
