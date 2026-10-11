@@ -4,8 +4,8 @@ Written 2026-10-11 from a design pass over `localService.ts`, `useStudio.tsx` an
 `storeRoutes.test.ts`. This is roadmap improvement 1. It is done as a sequence of
 pull requests, each leaving `main` working and `storeRoutes.test.ts` green.
 
-Status: pull requests 1 and 2 of 8 are built (the foundation, drum swing and drum
-master volume; then guests). The rest is open.
+Status: pull requests 1, 2 and 3 of 8 are built (the foundation, drum swing and
+drum master volume; then guests; then the drums). The rest is open.
 
 ## What was built, and where it differs from this plan
 
@@ -98,6 +98,80 @@ Found by building pull request 2 (guests):
   the event had gone out and the save was scheduled.
 - **`ReducerContext` gained `origin`**, this machine's own address, for
   `guestUrl`. It is read once for each `apply`, as the route read it.
+
+Found by building pull request 3 (drums):
+
+- **The built-in-property throw is not what this plan said.** It said the six
+  edits to one drum lane throw a TypeError for an instrument named
+  `constructor`, `toString` or `__proto__`. Run, they do three different
+  things: the three step edits throw a TypeError, a change of settings throws
+  a SyntaxError (`merge` copies settings that are not there), and a sample or
+  a mute does not throw at all: it answers 200, emits and saves, and writes
+  `sampleId` or `muted` onto the built-in property itself, which for
+  `__proto__` is the object every other object inherits from. No control in
+  the app can send such a name. The typed way does exactly the same, and
+  `storeOps.test.ts` pins both ways. The last pull request must put right all
+  three, not only the throw.
+- **Undo needs the drums as they were last rendered, not as the last event
+  left them.** `drumStateRef` is now written by the `drumFullState` and
+  `drumKitChanged` handlers. But a pattern tool (Fill, shift, reverse,
+  duplicate) makes up to 48 edits in one click and each pushes an undo entry.
+  While the ref was only assigned at render, every one of those entries held
+  the drums from before the tool, so one undo took the whole tool back. Read
+  from a ref the events write, each entry would hold the drums after the edit
+  before it, and one undo would take back a single step. So `getSnapshot`
+  reads `drumsForUndoRef`, which is assigned at render and by `sceneChanged`
+  and by nothing else: exactly what `drumStateRef` was. **Pull request 5 has
+  the same trap**: `getSnapshot` reads `synthsRef`, and `commitLanes` will
+  write it from the pattern events. Before using `commitLanes`, find every
+  handler that pushes history more than once in a go, or after an edit.
+- **A single flag can need the trip through JSON too.** The hazard below said
+  a single number, text or flag needs nothing. That holds for `number`,
+  `typeof` and `=== true`, but `/drum/step` reads its flag with
+  `Boolean(active)`, and infinity is true where the `null` JSON made of it is
+  false. `sentValue` in `projectReducers.ts` is `sent` for one value. Look
+  for `Boolean(...)`, `!!`, `||` and a bare `if (value)` on anything out of
+  an operation.
+- **`drum.state` does not need `sent`.** `sanitizeDrums` builds every lane
+  anew and reads what it is handed only with `=== true`, `typeof`, `number`
+  and `Array.isArray`, which take `undefined`, `NaN`, infinity and `null`
+  alike, so nothing of the caller's is kept and nothing differs. The two-way
+  cases prove it. The route's `body.state || body` stays in the route.
+- **The six edits to one lane share `drumLaneEdit`**: find the lane, make the
+  edit, check the whole drum state, send it. The router's
+  `track && path.startsWith('/drum/')` line is gone, and an unknown `/drum/`
+  path falls through to the same 404.
+- **Nothing in `storeRoutes.test.ts` changed, and no pinned count moved.**
+  The ten routes kept their `path === '...'` lines and `/drum/state` kept its
+  method check. The form the test knows for the `startsWith` line now matches
+  nothing, which the test allows; take it out with the rest in pull request 8.
+- **Two edits made before a render used to lose the first.** Mute All and
+  Clear Solos each build a whole drum state from `drumStateRef`. Pressed one
+  after the other before React rendered, the second was built from drums that
+  did not have the first in them. With the ref written by the event, it does.
+- **`handleDrumKitChange` applied its result three times** and now applies it
+  once, from the event. It hands back the answer's drums because its one
+  caller (`selectKit` in `DrumModule`) auditions the selected drum with the
+  new settings, and its own copy of the drums is from before the change. It
+  still takes `applyDefaults`, which that caller passes as true; undo calls
+  `setDrumKit(id, false)` itself.
+- **`drum.kit` is not undoable by the rule `OP_META` states** (true for what
+  pushes an undo entry today): choosing a kit never pushed one. The row said
+  true and now says false. An undo entry does hold the kit, so undoing an
+  earlier edit puts the kit of that time back; roadmap improvement 2 settles
+  the column.
+- **The kit menu's "loading" and "unable to load" states are gone** from
+  `useStudio` and `DrumModule`. No test looked for them.
+- **In the tests, `comparable` takes anything shaped like a UUID for one of
+  the store's own ids** and replaces it, so a sample id in an expected answer
+  must be 36 characters that are not in that shape.
+- **The cost, not optimized.** Each drum edit checks the whole drum state,
+  copies it once for every listener and once more for `apply`'s answer. A
+  drag on a knob does that per movement and a pattern tool up to 48 times a
+  click. The early update that was dropped cost a shallow copy, and the
+  route's own serializing, which is gone, cost about one of these copies.
+  Reading by slice (see "After the migration") is the answer if it shows.
+- `useStudio.tsx` makes 45 calls to `localRequest` after this pull request.
 
 ## What is being replaced
 
@@ -391,12 +465,18 @@ early updates; adds the two-way tests.
    `handleRemoveGuest` and `handleGuestChange`, which had no refs and no early
    update; the `guestsChanged` handler is as it was. This is where a refusal got
    its shape (see Decisions) and where `sent` came from (see Hazards).
-3. **Drums.** `/drum/step`, `step-velocity`, `step-detail`, `settings`, `mix`,
-   `sample`, `reset`, `state`, `bars`, `kit`. Drop the early `setDrumState`:
-   `drumFullState` and `drumKitChanged` carry the whole state. Write
-   `drumStateRef` in the `drumFullState` handler. Keep the throttled history pushes
-   and their keys exactly. Remove `drumKitsLoading` and `drumKitsError`. Medium: a
-   drag clones the whole drum state per edit.
+3. **Drums.** Built. `/drum/step`, `step-velocity`, `step-detail`, `settings`,
+   `mix`, `sample`, `reset`, `state`, `bars` and `kit` are `drum.step`,
+   `drum.stepVelocity`, `drum.stepDetail`, `drum.settings`, `drum.mix`,
+   `drum.sample`, `drum.reset`, `drum.state`, `drum.bars` and `drum.kit`, with
+   the helpers `setDrumStep`, `setDrumStepVelocity`, `setDrumStepDetail`,
+   `setDrumSettings`, `setDrumMix`, `setDrumSample`, `resetDrums`,
+   `setDrumState`, `setDrumBars` and `setDrumKit`. In `useStudio` every drum
+   handler, the MIDI import's drums and the two drum calls undo makes go
+   through them, with no early `setDrumState`; the `drumFullState` and
+   `drumKitChanged` handlers write `drumStateRef`, and undo reads
+   `drumsForUndoRef` (see what was found, above). Every history push is where
+   it was, with its key. `drumKitsLoading` and `drumKitsError` are removed.
 4. **Effects.** `/drum/fx`, `/effects-loop`. Delete the second apply from the
    response and the rollback that cannot run. The helpers take a patch, not a whole
    object. Low.
@@ -443,7 +523,8 @@ early updates; adds the two-way tests.
   include them.
 - What to do about it, from pull request 2. For a single number, text or flag,
   the checks already in use (`number`, `typeof`, `=== true`) treat `undefined`,
-  `NaN` and `null` alike, so nothing is needed; say so with a case for each. For
+  `NaN` and `null` alike, so nothing is needed; say so with a case for each.
+  A check by truth (`Boolean(value)`) is not one of those: use `sentValue`. For
   an object (a patch, a whole state), pass it through `sent` in
   `projectReducers.ts` before reading it: that is the trip through JSON the
   route's body made, so keys that are `undefined` are gone, `NaN` and infinity
@@ -456,7 +537,8 @@ early updates; adds the two-way tests.
 - An operation carries the ids it creates, so a reducer must refuse an id that
   is malformed or already taken, which a route that made the id never met.
 - Undo (`applySnapshot`) replayed twelve requests while `isRestoringRef` is
-  set; ten are left. Move its calls with their groups.
+  set; eight are left. Move its calls with their groups, each in the place it
+  had among the others: the store must be changed in the same order.
 - Pattern writes are read-modify-write from `synthsRef`. Fine for one person; for
   live editing two edits in a frame would clobber each other, and `pattern.step`
   is the answer.

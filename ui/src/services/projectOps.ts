@@ -116,7 +116,7 @@ export const OP_META: Record<OpType, { save: boolean; undoable: boolean; share: 
   'tempo.set': { save: true, undoable: true, share: true },
   'drum.swing': { save: true, undoable: true, share: true },
   'drum.masterVolume': { save: true, undoable: true, share: true },
-  'drum.kit': { save: true, undoable: true, share: true },
+  'drum.kit': { save: true, undoable: false, share: true },
   'drum.state': { save: true, undoable: true, share: true },
   'drum.reset': { save: true, undoable: true, share: true },
   'drum.bars': { save: true, undoable: true, share: true },
