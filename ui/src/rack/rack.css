@@ -618,7 +618,8 @@
   .piano-roll-corner, .piano-roll-step-header { min-height: 28px; position: sticky; top: 0; z-index: 2; font-size: 12px; }
   .piano-roll-note-label { position: sticky; left: 0; z-index: 1; font-size: 12px; }
   .piano-roll-corner { left: 0; z-index: 3; background: #1a1a1a; }
-  .piano-roll-resize { width: 22px; background: linear-gradient(90deg, rgba(255, 255, 255, 0.2) calc(100% - 6px), rgba(255, 255, 255, 0.8) calc(100% - 6px)); }
+  /* under half of the narrowest cell, so the middle of a note is the note and not its end */
+  .piano-roll-resize { width: 20px; background: linear-gradient(90deg, rgba(255, 255, 255, 0.2) calc(100% - 6px), rgba(255, 255, 255, 0.8) calc(100% - 6px)); }
 
   /* drums: the kit, then the grid eight steps to a row, then the knobs */
   .drum-top { grid-template-columns: minmax(0, 1fr); }

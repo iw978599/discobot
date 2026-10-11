@@ -117,8 +117,10 @@ export default function PianoRoll({
     });
     return cells;
   }, [pattern]);
-  // The note being stretched by its end: where it starts and how long it was last set to.
-  const resizing = useRef<{ start: number; length: number } | null>(null);
+  // The note being stretched by its end: where it starts and how long it was last set to. A
+  // finger that lands on the end of a one-step note may only be tapping the note: `tap` is
+  // that touch, until it moves.
+  const resizing = useRef<{ start: number; length: number; tap?: { id: number; note: string; x: number; y: number; at: number } } | null>(null);
   const onNoteLengthRef = useRef(onNoteLength);
   onNoteLengthRef.current = onNoteLength;
 
@@ -128,6 +130,10 @@ export default function PianoRoll({
     const move = (event: PointerEvent) => {
       const drag = resizing.current;
       if (!drag) return;
+      if (drag.tap && drag.tap.id === event.pointerId) {
+        if (Math.hypot(event.clientX - drag.tap.x, event.clientY - drag.tap.y) < TAP_SLOP) return;
+        drag.tap = undefined;
+      }
       const under = document.elementsFromPoint(event.clientX, event.clientY).find(element => element.classList.contains('piano-roll-cell')) as HTMLElement | undefined;
       if (!under?.dataset.step) return;
       const length = Math.max(1, Number(under.dataset.step) - drag.start + 1);
@@ -135,7 +141,14 @@ export default function PianoRoll({
       drag.length = length;
       onNoteLengthRef.current(drag.start, length);
     };
-    const end = () => { resizing.current = null; };
+    const end = (event: PointerEvent) => {
+      const drag = resizing.current;
+      resizing.current = null;
+      // Lifted soon without having moved, the finger was not stretching the note. That was a
+      // tap, and a tap on a note takes it out.
+      const tap = drag?.tap;
+      if (tap && event.type === 'pointerup' && tap.id === event.pointerId && event.timeStamp - tap.at < TAP_HOLD_MS) onNoteAssignRef.current(drag.start, tap.note, false);
+    };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', end);
     window.addEventListener('pointercancel', end);
@@ -392,7 +405,11 @@ export default function PianoRoll({
                           try { gridRef.current?.setPointerCapture(event.pointerId); } catch { /* the drag is still followed on the window */ }
                         }
                         pressing.current = true;
-                        resizing.current = { start: noteStart!, length: noteLength };
+                        resizing.current = {
+                          start: noteStart!,
+                          length: noteLength,
+                          tap: event.pointerType !== 'mouse' && active ? { id: event.pointerId, note, x: event.clientX, y: event.clientY, at: event.timeStamp } : undefined,
+                        };
                         onStepSelect(noteStart!);
                       }}
                       onClick={(event) => event.stopPropagation()}
