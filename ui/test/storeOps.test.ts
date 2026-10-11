@@ -1464,3 +1464,17 @@ test('the scheduler opens a scene with a plain call, and a scene change waits fo
   }
   for (const handler of ['handleSceneRename', 'handleSongChange']) assert.match(source, new RegExp(`${handler}[\\s\\S]*?, false\\)`), handler);
 });
+
+// Undo puts a snapshot back with one applyAll, in the order its twelve calls were made in, with
+// nothing awaited between them. The studio is not run here, so this reads its source.
+test('undo puts a snapshot back with one applyAll, and nothing in it waits', () => {
+  const source = readFileSync(new URL('../src/studio/useStudio.tsx', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+  const from = source.indexOf('const applySnapshot = useCallback(');
+  const body = source.slice(from, source.indexOf('const stepHistory = useCallback(', from));
+  assert.equal(body.includes('async'), false, 'applySnapshot is not async');
+  assert.equal(body.includes('await'), false);
+  assert.equal(body.includes('Promise'), false);
+  assert.equal((body.match(/localService\.applyAll\(\[/g) ?? []).length, 1);
+  const order = [...body.matchAll(/\{ type: '([\w.]+)'/g)].map(match => match[1]);
+  assert.deepEqual(order, ['drum.masterVolume', 'drum.swing', 'drum.kit', 'drum.fx', 'effects.set', 'pattern.write', 'synth.params', 'synth.model', 'drum.state', 'tempo.set', 'synth.mix', 'synth.prefs']);
+});

@@ -635,15 +635,10 @@ export function useStudio() {
     [pushHistorySnapshot]
   );
 
-  const applySnapshot = useCallback(async (synthId: number, snapshot: PatternSnapshot) => {
-    localService.setDrumMasterVolume(snapshot.drumMasterVolume);
-    localService.setDrumSwing(snapshot.drumSwing);
-    localService.setDrumKit(snapshot.drumKitId, false);
-    // Not requests any more, but still awaited, so what follows runs when it always did.
-    await Promise.all([
-      localService.setDrumFx(snapshot.drumFx),
-      localService.setEffectsLoop(snapshot.effectsLoop),
-    ]);
+  // Puts a snapshot back in one go. The store is changed in this order, each edit delivered before
+  // the next, and nothing waits between them, so nothing else (a second undo, a render) can come
+  // between two of them.
+  const applySnapshot = useCallback((synthId: number, snapshot: PatternSnapshot) => {
     setSynths((prev) => prev.map((entry) => (
       entry.id === synthId
         ? {
@@ -653,16 +648,20 @@ export function useStudio() {
         }
         : entry
     )));
-    await Promise.all([
-      // Not requests, but each kept in its place: the store is changed in the order it always was.
-      localService.writePattern(synthId, snapshot.pattern.id, snapshot.pattern),
-      localService.setSynthParams(synthId, snapshot.synthParams || DEFAULT_PARAMS),
-      localService.setSynthModel(synthId, { modelId: snapshot.synthModelId, modelParams: snapshot.synthModelParams }),
-      localService.setDrumState(snapshot.drumState),
-      localService.setTempo(snapshot.tempo),
-      localService.setSynthMix(synthId, { muted: snapshot.muted ?? false, solo: snapshot.solo ?? false }),
+    localService.applyAll([
+      { type: 'drum.masterVolume', volume: snapshot.drumMasterVolume },
+      { type: 'drum.swing', swing: snapshot.drumSwing },
+      { type: 'drum.kit', kitId: snapshot.drumKitId, applyDefaults: false },
+      { type: 'drum.fx', patch: snapshot.drumFx },
+      { type: 'effects.set', patch: snapshot.effectsLoop },
+      { type: 'pattern.write', synthId, patternId: snapshot.pattern.id, patch: snapshot.pattern },
+      { type: 'synth.params', synthId, patch: snapshot.synthParams || DEFAULT_PARAMS },
+      { type: 'synth.model', synthId, modelId: snapshot.synthModelId, modelParams: snapshot.synthModelParams },
+      { type: 'drum.state', state: snapshot.drumState },
+      { type: 'tempo.set', tempo: snapshot.tempo },
+      { type: 'synth.mix', synthId, muted: snapshot.muted ?? false, solo: snapshot.solo ?? false },
       // The octave is saved and sent to nobody, so it is set on the lane above as well.
-      localService.setSynthPrefs(synthId, { octaveShift: snapshot.octaveShift ?? 0 }),
+      { type: 'synth.prefs', synthId, octaveShift: snapshot.octaveShift ?? 0 },
     ]);
   }, []);
 
@@ -688,7 +687,7 @@ export function useStudio() {
     if (current) to.push({ synthId: entry.synthId, sceneId: entry.sceneId, snapshot: current });
     isRestoringRef.current = true;
     try {
-      await applySnapshot(entry.synthId, entry.snapshot);
+      applySnapshot(entry.synthId, entry.snapshot);
     } finally {
       isRestoringRef.current = false;
     }
