@@ -1,0 +1,138 @@
+# More synth models: the plan
+
+Written 2026-10-11. The owner asked for more synth models "in the manner of"
+well-known instruments, was given fourteen candidates, and asked for a plan to
+add all of them. This is roadmap sound item 7. Nothing here is built yet.
+
+## What a model is
+
+A model is this synth's own voice, set up and limited to behave like the
+instrument it is named for. It is not that instrument's circuit, and it does not
+use that instrument's samples. Five exist: Minimoog Model D, Juno-106, DX7,
+TB-303 and Prophet-5.
+
+In the code a model is four things (`ui/src/synthModels.ts`):
+
+- an id, added to `SynthModelId` in `engine/src/types.ts`;
+- a name and a one-line subtitle;
+- four macros, which are the four knobs a lane shows for that model;
+- a voicing: how the four macros become engine parameters
+  (`mapSynthModelToEngineParams`, through `mapModel` or, for FM, `mapFmModel`).
+
+A project stores the model's id and its four macro values. An id this version
+does not know is read as the generic model (`normalizeSynthModelId`), which is
+what an older copy of the app will do with a project that uses a new model:
+the lane opens and plays with the generic controls. Check that this is still
+true before the first new model ships, and say so in the pull request.
+
+## The fourteen, in three groups
+
+The grouping is by what each needs from the voice, because that decides when
+it can be built.
+
+### Group A: the voice as it is
+
+No engine work. Each is a definition, a voicing and presets.
+
+| Model | What it is | Voicing | Macros |
+|---|---|---|---|
+| Roland SH-101 | Mono bass and lead | One oscillator, saw and pulse mixed, sub an octave or two down, noise, 24 dB filter, one envelope shared by filter and level | Wave mix, Sub, Cutoff, Env |
+| Sequential Pro-One | Aggressive mono | Two oscillators, saw and pulse, a little detune, 24 dB filter with a fast envelope, mono with glide | Detune, Reso, Cutoff, Env |
+| Roland Jupiter-8 | Big, clean poly | Two oscillators, saw with pulse, slight detune, 12 or 24 dB filter, separate envelopes, eight voices | Detune, Reso, Brightness, Contour |
+| Oberheim OB-Xa | Wide, brassy poly | Two saws detuned further apart, 12 dB filter left fairly open, slow-ish attack, unison of two spread wide | Spread, Reso, Brightness, Attack |
+| Korg Polysix | Warm poly with ensemble | One oscillator with pulse width movement and a sub, 24 dB filter, chorus send turned up | PWM, Reso, Brightness, Ensemble |
+| Korg Mono/Poly | Stacked lead | Four copies in unison, detuned, mono, 24 dB filter | Detune, Reso, Cutoff, Env |
+| Roland JP-8000 | Supersaw | Saw with seven copies in unison, detune and mix as the two main controls, 12 dB filter | Detune, Mix, Cutoff, Release |
+
+Things to check in the code before building, each of which may move a model to
+group B:
+
+- How many unison copies the core allows. JP-8000 wants seven and Mono/Poly
+  four.
+- Whether the voice has pulse width and can move it with an LFO (Polysix,
+  SH-101).
+- The chorus is one shared effect with a send per lane, not something a model
+  owns. A Polysix model that turns up the lane's chorus send changes a mix
+  setting from a sound setting; decide whether that is acceptable or whether
+  Polysix waits for insert effects (sound 6).
+- Whether one envelope can drive both filter and level (SH-101), or whether
+  two set alike are near enough.
+
+### Group B: needs planned sound work first
+
+| Model | What it is | Waits for | Macros |
+|---|---|---|---|
+| Korg MS-20 | Screaming mono | A filter of its own character: a high-pass and a low-pass in series whose resonance distorts. This goes with the ladder filter (sound 5), which is where the voice gains a choice of filter models | HP Cutoff, LP Cutoff, Peak, Env |
+| ARP Odyssey | Duophonic lead | Oscillator sync and ring modulation in the voice, and the modulation matrix (sound 4) to route sample-and-hold and the second envelope | Sync, Ring, Cutoff, S&H |
+| Yamaha CS-80 | Expressive pads | Two complete layers per note, each with its own filter and envelopes, and the modulation matrix for the slow movement it is known for | Layer mix, Detune, Brightness, Swell |
+| Access Virus | Modern, heavily modulated | The modulation matrix, and for its harder sounds a waveshaper or a second filter | Morph, Reso, Cutoff, Mod depth |
+
+If the voice turns out to have sync or ring modulation already, the Odyssey can
+come earlier in a plainer form.
+
+### Group C: needs the sample oscillator, and samples the project may use
+
+| Model | What it is | Waits for | Macros |
+|---|---|---|---|
+| Roland D-50 | A sampled attack on a synth sustain | The sample oscillator (sound 3) | Attack level, Tone, Brightness, Chorus |
+| Korg M1 | Sampled piano, organ and others through a filter | The sample oscillator | Sound, Brightness, Attack, Release |
+| Korg Wavestation | A sequence of waves, crossfading | The sample oscillator, and a small wave sequencer on top of it | Sequence, Speed, Crossfade, Brightness |
+
+**These three cannot use the instruments' own samples.** Those are their
+makers' recordings and the project may not redistribute them. `AGENTS.md`
+already holds this line for drum machines: nothing is bundled without the
+owner's say-so and a checked licence. So each needs waveforms that are either
+made for the project (recorded or synthesized by it) or clearly licensed for
+redistribution, with the licence recorded beside them. That work, not the
+code, is most of the cost of group C, and the result will be "a sound of that
+kind", further from its namesake than groups A and B. If no usable waveforms
+are found for one of them, it is left out and the roadmap says why.
+
+## How each model is added
+
+The same for every model, one pull request per model or per two or three
+closely related ones:
+
+1. Read up on the instrument's real architecture and ranges from its manual or
+   service notes before choosing numbers (the rule in `AGENTS.md`: find the
+   real definitions; do not guess from names).
+2. Add the id, the definition and the voicing. A new engine parameter, if one
+   is needed, follows the `add-project-field` skill: optional in the type,
+   present in the defaults with a neutral value, clamped in the sanitizer,
+   `SCHEMA` bumped.
+3. Add three to five presets for it, each with its kind (bass, lead, pad,
+   keys, pluck, effects), so they land in the grouped presets menu.
+4. Tests: every macro at its ends and middle gives parameters inside the
+   sanitizer's limits; each macro moves what its label says; the generic model
+   and one unison voice at 12 dB are still bit-identical to before (the
+   existing test); a project using the new model opens in a copy of the app
+   that does not know it. Extend the browser test that selects every model and
+   macro.
+5. Say "not verified by ear" in the pull request. A model is not done until
+   the owner has listened to it.
+
+With nineteen models the model menu needs grouping as the presets menu does:
+mono, poly, digital. Do that with the first group.
+
+## Order
+
+1. **The presets menu grouped by kind, and a kind on every preset.** Needs
+   nothing else, and every later step adds presets into it.
+2. **Group A**, in this order, simplest first: SH-101; Pro-One; Jupiter-8 and
+   OB-Xa together; JP-8000 and Mono/Poly together (both are unison); Polysix
+   last, once the chorus question is settled. The model menu is grouped in the
+   first of these.
+3. **A listening session with the owner** on group A before going further:
+   what is learned about ranges and macro choices applies to the rest.
+4. **The engine work the roadmap already plans**, which is not part of this
+   plan: the audio layer's single owner, the ladder filter and filter models,
+   the modulation matrix, the sample oscillator.
+5. **Group B** as each thing it waits for lands: MS-20 with the filter models;
+   Odyssey, Virus and CS-80 after the modulation matrix, CS-80 last because
+   two layers per note is the largest change to the voice.
+6. **Group C** after the sample oscillator, and only for the models whose
+   waveforms have been found and their licences checked: M1, then D-50, then
+   Wavestation, which also needs its wave sequencer.
+
+Group A is about a day a model. Group B is a few days each on top of the
+engine work. Group C depends on the waveforms.
