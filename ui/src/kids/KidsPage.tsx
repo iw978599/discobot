@@ -161,7 +161,15 @@ export default function KidsPage() {
 
   // A hole in the grid is filled or emptied by a touch, and is heard as it is filled.
   const toggleBeat = (row: number, step: number) => {
-    if (!stateRef.current.beat[row][step]) sound(KIDS_BEAT_ROWS[row]);
+    if (!stateRef.current.beat[row][step]) {
+      const pad = KIDS_BEAT_ROWS[row], last = lastStep.current;
+      sound(pad);
+      // Filled just as its turn comes, it has been heard: the loop leaves it alone that once.
+      if (playing && last) {
+        const count = stepNearest(last, getAudioContext().currentTime);
+        if (count % KIDS_BEAT_STEPS === step) tapped.current.set(pad, count);
+      }
+    }
     setState(current => withBeatToggled(current, row, step));
   };
 

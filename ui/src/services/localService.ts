@@ -1,4 +1,4 @@
-import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, Scene, Song, SynthParameters, SynthModelId, SynthModelParams } from '../types';
+import type { DrumKitDefinition, DrumKitId, DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, Scene, Song, SynthParameters, SynthModelId, SynthModelParams } from '../types';
 import { MAX_GUESTS, guestUrl, patchGuest, sanitizeGuests, type Guest } from './guests';
 import { emptySteps } from './songPlayback';
 import { BAR_CHOICES, DRUM_STEPS_PER_BAR, laneBars, resizeBars } from './patternLength';
@@ -6,7 +6,9 @@ import { createIndexedDbLibrary, createMemoryLibrary, hasIndexedDb, type Project
 import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
 import { normalizeSynthModelId } from '../synthModels';
 import { NEW_PROJECT_REVERB } from './effectSettings';
-import { record, number, matchesShape, sanitizePattern, sanitizeSynthParams, sanitizeDrums, sanitizeEffects, sanitizeSends, sanitizeSaved, sanitizeModelParams, sanitizeKit, sanitizeScenes, sanitizeSong, MAX_SCENES } from './projectSanitization';
+import { record, number, clone, merge, matchesShape, sanitizePattern, sanitizeSynthParams, sanitizeDrums, sanitizeEffects, sanitizeSends, sanitizeSaved, sanitizeModelParams, sanitizeKit, sanitizeScenes, sanitizeSong, MAX_SCENES } from './projectSanitization';
+import type { Applied, OpNotice, OpResult, Operation, Origin, Outcome } from './projectOps';
+import { reducers, type ReducerContext } from './projectReducers';
 
 type Message = { type: string; data: any };
 type Listener = (message: Message) => void;
@@ -31,6 +33,7 @@ type State = Defaults & {
   // Other creators' instruments hosted in a frame. Optional so older projects need no migration.
   guests?: Guest[];
 };
+export type { State as ProjectState, LocalSynth as ProjectLane, Defaults as ProjectDefaults };
 type ProjectResult = { ok: true; repaired?: boolean } | { ok: false; error: string };
 const DEFAULT_PROJECT_NAME = 'Untitled';
 const projectName = (value: unknown, fallback = DEFAULT_PROJECT_NAME) =>
@@ -52,22 +55,12 @@ const SAVE_DELAY_MS = 300;
 // A version is kept when a project is opened, before anything replaces it, and this often while it is edited.
 const VERSION_INTERVAL_MS = 5 * 60_000;
 export const MAX_VERSIONS = 20;
-const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
-
-function merge<T>(base: T, patch: Partial<T>): T {
-  const result: any = clone(base);
-  for (const [key, value] of Object.entries(patch)) {
-    if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
-    result[key] = value && typeof value === 'object' && !Array.isArray(value)
-      ? merge(result[key] || {}, value) : value;
-  }
-  return result;
-}
 
 export class LocalProjectService {
   private state: State | null = null;
   private defaults: Defaults | null = null;
   private listeners = new Set<Listener>();
+  private opListeners = new Set<(notice: OpNotice) => void>();
   private storageIssue: string | null = null;
   private restored = false;
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -274,7 +267,8 @@ export class LocalProjectService {
   }
 
   // Everything in the project store as one portable object. Samples live in IndexedDB
-  // and are not part of it.
+  // and are not part of it: links, publishing and sync all use this, and none may carry
+  // audio. Only saving a project file adds them, beside the project (projectSamples.ts).
   exportProject(): ProjectFile {
     this.commitScene();
     const project = clone(this.state!);
@@ -767,6 +761,60 @@ export class LocalProjectService {
     return true;
   }
 
+  private ready(): State {
+    if (!this.state) throw new Error('Local project has not been initialized');
+    return this.state;
+  }
+
+  private ctx(): ReducerContext {
+    return { state: this.ready(), defaults: this.defaults! };
+  }
+
+  // The one way an edit reaches the project. It is synchronous and must stay so: the event
+  // has been delivered, and the listeners have run, before it returns, which song playback
+  // relies on when it opens a scene. A refused operation is answered, not thrown, and has
+  // changed nothing. The answer is a copy, as the events are.
+  apply<T extends Operation>(op: T, origin: Origin = 'local'): Applied<OpResult<T['type']>> {
+    const ctx = this.ctx();
+    const reduce = reducers[op.type] as ((ctx: ReducerContext, op: Operation) => Outcome<unknown>) | undefined;
+    if (!reduce) throw new Error(`No reducer for ${op.type} yet: it is still a route of request()`);
+    const out = reduce(ctx, op);
+    if (!out.ok) return { ok: false, status: out.status, error: out.error };
+    if (out.save) this.persist();
+    if (out.event) this.emit(out.event.type, out.event.data);
+    const notice: OpNotice = { op, origin, saved: !!out.save };
+    this.opListeners.forEach(listener => listener(notice));
+    return { ok: true, value: clone(out.value) as OpResult<T['type']> };
+  }
+
+  // Several operations one after another, each delivered before the next begins. One that is
+  // refused does not stop the rest.
+  applyAll(ops: Operation[], origin: Origin = 'local'): Applied<unknown>[] {
+    return ops.map(op => this.apply(op, origin));
+  }
+
+  // Told of every accepted operation, after its event. The operation is the caller's own
+  // object, not a copy: read it, do not change it.
+  subscribeOps(listener: (notice: OpNotice) => void) {
+    this.opListeners.add(listener);
+    return () => { this.opListeners.delete(listener); };
+  }
+
+  setDrumSwing(swing: number) { return this.apply({ type: 'drum.swing', swing }); }
+  setDrumMasterVolume(volume: number) { return this.apply({ type: 'drum.masterVolume', volume }); }
+
+  getDrumKits(): { kits: DrumKitDefinition[]; defaultKitId: DrumKitId } {
+    return clone({ kits: DRUM_KITS, defaultKitId: 'clean-analog' });
+  }
+
+  getTempo() { return { tempo: this.ready().tempo }; }
+
+  getScenes(): { scenes: Scene[]; song: Song; currentSceneId: string } {
+    this.ready();
+    const { scenes, song, currentSceneId } = this.sceneMessage();
+    return clone({ scenes, song, currentSceneId });
+  }
+
   async request(path: string, options: RequestInit = {}): Promise<Response> {
     if (!this.state) throw new Error('Local project has not been initialized');
     const state = this.state;
@@ -785,10 +833,8 @@ export class LocalProjectService {
       this.emit(type, data);
       return respond(response);
     };
-    if (path === '/scenes') {
-      const { scenes, song, currentSceneId } = this.sceneMessage();
-      return respond({ scenes, song, currentSceneId });
-    }
+    const fromApplied = (result: Applied<unknown>) => (result.ok ? respond(result.value) : respond({ error: result.error }, result.status));
+    if (path === '/scenes') return respond(this.getScenes());
     if (path === '/scenes/select') {
       const target = state.scenes.find(scene => scene.id === body.sceneId);
       if (!target) return respond({ error: 'Scene not found' }, 404);
@@ -896,7 +942,7 @@ export class LocalProjectService {
       }
     }
     if (path === '/tempo') {
-      if (method === 'GET') return respond({ tempo: state.tempo });
+      if (method === 'GET') return respond(this.getTempo());
       if (!Number.isFinite(body.tempo) || body.tempo < 20 || body.tempo > 400) return respond({ error: 'Invalid tempo' }, 400);
       state.tempo = body.tempo;
       state.synths.forEach(s => { s.pattern.tempo = body.tempo; s.patterns.forEach(p => { p.tempo = body.tempo; }); });
@@ -905,7 +951,7 @@ export class LocalProjectService {
     if (path === '/sequencer/play' || path === '/sequencer/stop') {
       return respond({ success: this.setPlaying(body.synthId || 1, path.endsWith('/play'), body.patternId) });
     }
-    if (path === '/drum/kits') return respond({ kits: DRUM_KITS, defaultKitId: 'clean-analog' });
+    if (path === '/drum/kits') return respond(this.getDrumKits());
     if (path === '/drum/kit') {
       const kit = DRUM_KITS.find(k => k.id === body.kitId);
       if (!kit) return respond({ error: 'Unknown kit' }, 400);
@@ -955,14 +1001,8 @@ export class LocalProjectService {
       }
       return update('guestsChanged', { guests: state.guests });
     }
-    if (path === '/drum/master-volume') {
-      state.drumMasterVolume = number(body.volume, state.drumMasterVolume, 0, 1);
-      return update('drumMasterVolume', { volume: state.drumMasterVolume });
-    }
-    if (path === '/drum/swing') {
-      state.drumSwing = number(body.swing, state.drumSwing, 0, .75);
-      return update('drumSwing', { swing: state.drumSwing });
-    }
+    if (path === '/drum/master-volume') return fromApplied(this.apply({ type: 'drum.masterVolume', volume: body.volume }));
+    if (path === '/drum/swing') return fromApplied(this.apply({ type: 'drum.swing', swing: body.swing }));
     if (path === '/drum/fx' || path === '/effects-loop') {
       const key = path === '/drum/fx' ? 'drumFx' : 'effectsLoop';
       if (method === 'GET') return respond(state[key]);

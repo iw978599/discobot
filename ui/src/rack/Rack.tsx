@@ -40,7 +40,19 @@ export default function Rack({ studio }: { studio: Studio }) {
   const [guestOpen, setGuestOpen] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
+  // Where the walkthrough started from, to be put back when it ends: on a narrow screen it
+  // turns to other units and opens other lanes as it goes.
+  const tourFrom = useRef<{ unit: RackUnit; lane: number } | null>(null);
+  const endTour = () => {
+    setTourOpen(false);
+    const from = tourFrom.current;
+    tourFrom.current = null;
+    if (!from || !narrow) return;
+    setUnit(from.unit);
+    if (studio.synths.some(synth => synth.id === from.lane)) studio.setSelectedSynthId(from.lane);
+  };
   const startTour = () => {
+    tourFrom.current = { unit, lane: studio.selectedSynthId };
     setAccountOpen(false);
     studio.setHelpOpen(false);
     markWalkthroughSeen();
@@ -84,16 +96,36 @@ export default function Rack({ studio }: { studio: Studio }) {
     target.tabIndex = -1;
     target.focus({ preventScroll: true });
   }, [moves]);
-  // A guest added from the menu is shown, since it would otherwise arrive out of sight.
-  const addingGuest = useRef(false);
-  const guestCount = useRef(studio.guests.length);
+  // The lane on show and the lane open for editing are kept the same one, whichever moves. The
+  // editor, the keyboard and MIDI all belong to the open lane, so a lane on show that was not
+  // open would be a row of steps with nothing to play it by.
+  const openLane = studio.selectedSynthId;
+  const lastOpenLane = useRef(openLane);
+  const lanes = studio.synths.map(synth => synth.id).join();
   useEffect(() => {
-    if (studio.guests.length > guestCount.current && addingGuest.current) {
-      addingGuest.current = false;
-      setUnit(current => (current === 'all' ? current : 'guests'));
+    const moved = lastOpenLane.current !== openLane;
+    lastOpenLane.current = openLane;
+    const lane = unitLane(unit);
+    if (!narrow || lane === null || lane === openLane) return;
+    if (moved) {
+      // Another lane was opened from somewhere else (the one on show was removed, say): turn to it.
+      const next = laneUnit(openLane);
+      setUnit(next);
+      storeRackUnit(next);
+    } else if (studio.synths.some(synth => synth.id === lane)) {
+      // The view chose the lane, as when a remembered unit is shown on a new visit: open it.
+      studio.setSelectedSynthId(lane);
     }
-    guestCount.current = studio.guests.length;
-  }, [studio.guests.length]);
+  }, [narrow, unit, openLane, lanes]);
+  // Guests that are not on show stay laid out, out of sight (rack.css), so their pages go on
+  // running. They are also put out of reach of the keyboard and of a screen reader.
+  useLayoutEffect(() => {
+    const away = paged && shown !== 'guests';
+    pageRef.current?.querySelectorAll<HTMLElement>('.rack > [data-unit="guests"]').forEach((guest) => {
+      guest.inert = away;
+      if (away) guest.setAttribute('aria-hidden', 'true'); else guest.removeAttribute('aria-hidden');
+    });
+  }, [paged, shown, studio.guests.length]);
 
   return (
     <div ref={pageRef} className={narrow ? 'rack-page has-unit-bar' : 'rack-page'}>
@@ -104,7 +136,7 @@ export default function Rack({ studio }: { studio: Studio }) {
           onOpenProjects={() => setProjectsOpen(true)}
           onShare={() => setShareOpen(true)}
           onOpenAccount={() => setAccountOpen(true)}
-          onAddGuest={() => { addingGuest.current = true; setGuestOpen(true); }}
+          onAddGuest={() => setGuestOpen(true)}
           onOpenVersions={() => setVersionsOpen(true)}
         />
         {studio.changedElsewhere && (
@@ -162,8 +194,8 @@ export default function Rack({ studio }: { studio: Studio }) {
       {projectsOpen && <ProjectsDialog studio={studio} onClose={() => setProjectsOpen(false)} />}
       {shareOpen && <ShareDialog onClose={() => setShareOpen(false)} />}
       {accountOpen && <AccountDialog onClose={() => setAccountOpen(false)} onWalkthrough={startTour} />}
-      {tourOpen && <Walkthrough onClose={() => setTourOpen(false)} signedIn={user !== null} unit={paged ? shown : undefined} onUnit={paged ? setUnit : undefined} />}
-      {guestOpen && <AddGuestDialog studio={studio} onClose={() => setGuestOpen(false)} />}
+      {tourOpen && <Walkthrough onClose={endTour} signedIn={user !== null} unit={paged ? shown : undefined} onUnit={paged ? setUnit : undefined} />}
+      {guestOpen && <AddGuestDialog studio={studio} onClose={() => setGuestOpen(false)} onAdded={() => setUnit(current => (current === 'all' ? current : 'guests'))} />}
       {versionsOpen && <VersionsDialog studio={studio} onClose={() => setVersionsOpen(false)} />}
       {studio.presetImportReport && (
         <Dialog title="Preset imported" closeLabel="Close import report" onClose={() => studio.setPresetImportReport(null)}>

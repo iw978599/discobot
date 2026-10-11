@@ -392,6 +392,22 @@ async function songs(request: Request, env: Env, now: number, rest: string): Pro
   throw new Refusal(404, 'Not found.');
 }
 
+const USERNAME = /^[A-Za-z0-9][A-Za-z0-9_-]{2,19}$/;
+
+// One person's published songs, for the page that lists them. It needs no account and says
+// nothing else about the account: a username nobody has and one with nothing published get
+// the same answer, so this cannot be used to find out which usernames exist.
+async function userSongs(env: Env, name: string): Promise<Response> {
+  if (!USERNAME.test(name)) return json(200, { songs: [] });
+  const { results } = await env.DB.prepare(
+    'SELECT songs.code, songs.title, songs.updated_at, users.username FROM users JOIN songs ON songs.owner_id = users.id WHERE users.username_key = ? ORDER BY songs.updated_at DESC, songs.code LIMIT ?',
+  ).bind(name.toLowerCase(), MAX_SONGS).all<{ code: string; title: string; updated_at: number; username: string }>();
+  return json(200, {
+    ...(results.length ? { author: results[0].username } : {}),
+    songs: results.map(row => ({ code: row.code, title: row.title, updatedAt: row.updated_at })),
+  });
+}
+
 async function route(request: Request, env: Env, now: number): Promise<Response> {
   const { pathname } = new URL(request.url);
   const method = request.method;
@@ -402,6 +418,8 @@ async function route(request: Request, env: Env, now: number): Promise<Response>
   if (is('POST', '/signin')) return signIn(env, await readBody(request), now);
   if (is('POST', '/recover')) return recover(env, await readBody(request), now);
 
+  const songsOf = method === 'GET' ? /^\/users\/([^/]+)\/songs$/.exec(pathname) : null;
+  if (songsOf) return userSongs(env, songsOf[1]);
   if (pathname === '/songs' || pathname.startsWith('/songs/')) return songs(request, env, now, pathname.slice('/songs'.length));
   if (pathname === '/projects' || pathname.startsWith('/projects/')) return projects(request, env, now, pathname.slice('/projects'.length));
   if (pathname === '/shared' || pathname.startsWith('/shared/')) return shared(request, env, now, pathname.slice('/shared'.length));

@@ -1,7 +1,7 @@
 # Discobot accounts API
 
-A Cloudflare Worker with a D1 database. It holds accounts and a copy of each
-synced project. Public song pages come later
+A Cloudflare Worker with a D1 database. It holds accounts, a copy of each
+synced project and the songs people have published
 (see `docs/STORAGE_AND_ACCOUNTS_PLAN.md`).
 
 ## What it stores
@@ -21,7 +21,12 @@ synced project. Public song pages come later
   with can read and save it; only its owner can share, unshare or delete it.
 - **Published songs:** a short code, the publisher, the project it came from,
   a title and the song. Anyone with the code can read the title, the
-  publisher's username and the song. Up to 50 per account.
+  publisher's username and the song. Up to 50 per account. Anyone with a
+  username can read the list of songs published under it
+  (`GET /users/<name>/songs`): each song's code, title and last-changed time,
+  and nothing else about the account. A username nobody has and one with
+  nothing published get the same empty answer. There is no list of everyone's
+  songs and no list of people.
 - **Failed sign-ins:** a username and a time, deleted after fifteen minutes.
 
 No email addresses, names or IP addresses. Passwords, session tokens and

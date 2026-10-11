@@ -14,6 +14,17 @@ export const record = (value: unknown): Record<string, any> =>
   value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {};
 export const number = (value: unknown, fallback: number, min: number, max: number) =>
   typeof value === 'number' && Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
+export const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
+
+export function merge<T>(base: T, patch: Partial<T>): T {
+  const result: any = clone(base);
+  for (const [key, value] of Object.entries(patch)) {
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
+    result[key] = value && typeof value === 'object' && !Array.isArray(value)
+      ? merge(result[key] || {}, value) : value;
+  }
+  return result;
+}
 
 export function sanitizeShape<T>(value: unknown, defaults: T): T {
   const input = record(value);

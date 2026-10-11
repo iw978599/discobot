@@ -10,6 +10,7 @@ import { createDefaultSynthParameters } from '@discobot/engine';
 import { localRequest, localService } from '../services/localService';
 import { projectSync, startProjectSync } from '../services/projectSync';
 import { loadDrumSample } from '../services/drumSamples';
+import { MAX_EMBEDDED_TOTAL_BYTES, MAX_PROJECT_FILE_BYTES, adoptSamples, embedSamples } from '../services/projectSamples';
 import { exportPreset, importPreset, type ImportedPreset } from '../services/presetImport';
 import { BAR_CHOICES, DRUM_STEPS_PER_BAR, clampLengths, drumBars, laneBars, resizeBars, sceneAsBars, sceneBars } from '../services/patternLength';
 import { DRUM_INSTRUMENTS } from '../services/drumKits';
@@ -410,6 +411,8 @@ export function useStudio() {
   // Decoded samples for the drum lanes that use one, and the lanes whose sample is not on this device.
   const drumSamplesRef = useRef<Partial<Record<DrumInstrument, DrumSample>>>({});
   const [missingDrumSamples, setMissingDrumSamples] = useState<DrumInstrument[]>([]);
+  // Goes up when samples arrive from a project file, so a lane whose sample was missing looks again.
+  const [sampleStoreVersion, setSampleStoreVersion] = useState(0);
   // What an imported preset was, and what did not carry over, shown once after importing.
   const [presetImportReport, setPresetImportReport] = useState<Pick<ImportedPreset, 'name' | 'source' | 'notes'> | null>(null);
   const [guests, setGuests] = useState<Guest[]>([]);
@@ -593,14 +596,12 @@ export function useStudio() {
   );
 
   const applySnapshot = useCallback(async (synthId: number, snapshot: PatternSnapshot) => {
-    setDrumMasterVolume(snapshot.drumMasterVolume);
-    setDrumSwing(snapshot.drumSwing);
     setSelectedDrumKitId(snapshot.drumKitId);
     setDrumFx(snapshot.drumFx);
     setEffectsLoop(snapshot.effectsLoop);
+    localService.setDrumMasterVolume(snapshot.drumMasterVolume);
+    localService.setDrumSwing(snapshot.drumSwing);
     await Promise.all([
-      localRequest('/drum/master-volume', { method: 'POST', body: JSON.stringify({ volume: snapshot.drumMasterVolume }) }),
-      localRequest('/drum/swing', { method: 'POST', body: JSON.stringify({ swing: snapshot.drumSwing }) }),
       localRequest('/drum/kit', { method: 'POST', body: JSON.stringify({ kitId: snapshot.drumKitId, applyDefaults: false }) }),
       localRequest('/drum/fx', { method: 'POST', body: JSON.stringify(snapshot.drumFx) }),
       localRequest('/effects-loop', { method: 'POST', body: JSON.stringify(snapshot.effectsLoop) }),
@@ -1095,63 +1096,12 @@ export function useStudio() {
         setGlobalTempo(tempo);
         break;
       }
-      case 'drumStep': {
-        const { instrument: di, step: ds, active: da } = message.data;
-        setDrumState(prev => {
-          const next = { ...prev };
-          next[di as DrumInstrument] = {
-            ...next[di as DrumInstrument],
-            steps: [...next[di as DrumInstrument].steps],
-          };
-          next[di as DrumInstrument].steps[ds as number] = da as boolean;
-          return next;
-        });
-        break;
-      }
-      case 'drumStepVelocity': {
-        const { instrument: dvi, step: dvs, velocity: dvv } = message.data;
-        setDrumState(prev => {
-          const next = { ...prev };
-          const inst = dvi as DrumInstrument;
-          next[inst] = {
-            ...next[inst],
-            stepVelocities: [...(next[inst].stepVelocities || new Array(next[inst].steps.length).fill(1))],
-          };
-          next[inst].stepVelocities![dvs as number] = dvv as number;
-          return next;
-        });
-        break;
-      }
-      case 'drumSettings': {
-        const { instrument: dsi, settings: dss } = message.data;
-        setDrumState(prev => {
-          const next = { ...prev };
-          const inst = dsi as DrumInstrument;
-          next[inst] = { ...next[inst], settings: { ...next[inst].settings, ...dss } };
-          return next;
-        });
-        break;
-      }
-      case 'drumMix': {
-        const { instrument, muted, solo } = message.data;
-        setDrumState(prev => {
-          const next = { ...prev };
-          const inst = instrument as DrumInstrument;
-          next[inst] = {
-            ...next[inst],
-            muted: Boolean(muted),
-            solo: Boolean(solo),
-          };
-          return next;
-        });
-        break;
-      }
-      case 'drumReset': {
-        setDrumState(createDefaultDrumState());
-        break;
-      }
       case 'drumFullState': {
         if (message.data.drumState) setDrumState(message.data.drumState);
+        break;
+      }
+      case 'drumMasterVolume': {
+        if (typeof message.data.volume === 'number') setDrumMasterVolume(message.data.volume);
         break;
       }
       case 'drumSwing': {
@@ -1358,7 +1308,7 @@ export function useStudio() {
 
   // The song as one scene per bar, with every scene as it stands now, for export.
   const songArrangement = useCallback(async (): Promise<ExportArrangement & { bars: Scene[] }> => {
-    const stored = await (await localRequest('/scenes')).json() as { scenes: Scene[]; song: Song };
+    const stored = localService.getScenes();
     // Each scene has its own mutes and solos, so they are applied bar by bar here and the
     // lanes are handed to the exporter unmuted.
     const arrangement = currentArrangementRef.current();
@@ -1937,7 +1887,7 @@ export function useStudio() {
       setMissingDrumSamples(loaded.filter(([, sample, wanted]) => wanted && !sample).map(([instrument]) => instrument));
     });
     return () => { current = false; };
-  }, [drumSampleKey, drumAudio]);
+  }, [drumSampleKey, drumAudio, sampleStoreVersion]);
 
   const handleDrumSampleChange = useCallback(async (instrument: DrumInstrument, sampleId: string | null) => {
     await localRequest('/drum/sample', { method: 'POST', body: JSON.stringify({ instrument, sampleId }) });
@@ -2002,12 +1952,19 @@ export function useStudio() {
     setStorageError(`Audio export failed: ${error instanceof Error ? error.message : error}`);
   }, []);
 
-  const handleExportProject = useCallback(() => {
+  // The one place a project gains its samples' audio: a file saved to disk.
+  const handleExportProject = useCallback(async () => {
     const file = {
       ...localService.exportProject(),
       synthPresets: synthPresets.filter(preset => !preset.builtIn).map(({ id, name, params, modelId, modelParams }) => ({ id, name, params, modelId, modelParams })),
     };
-    downloadFile(JSON.stringify(file), 'application/json', `discobot-project-${new Date().toISOString().slice(0, 10)}.json`);
+    const plain = JSON.stringify(file);
+    // What base64 audio still fits under the size an import accepts, as bytes of audio.
+    const room = Math.floor((MAX_PROJECT_FILE_BYTES - new Blob([plain]).size - 65536) * 3 / 4);
+    const audio = await embedSamples(file.project, undefined, Math.max(0, Math.min(MAX_EMBEDDED_TOTAL_BYTES, room))).catch(() => null);
+    downloadFile(audio?.samples.length ? JSON.stringify({ ...file, samples: audio.samples }) : plain, 'application/json', `discobot-project-${new Date().toISOString().slice(0, 10)}.json`);
+    if (!audio) setStorageError('The project file was saved without its samples: sample storage could not be read.');
+    else if (audio.skipped.length > 0) setStorageError(`The project file was saved without ${audio.skipped.join(', ')}: too large to put in a project file. Shorter samples are included.`);
   }, [synthPresets]);
 
   // Before the open project is swapped for another: stop sound, and forget undo steps that belong to it.
@@ -2061,7 +2018,7 @@ export function useStudio() {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    if (file.size > 20 * 1024 * 1024) {
+    if (file.size > MAX_PROJECT_FILE_BYTES) {
       setStorageError('That file is too large to be a Discobot project.');
       return;
     }
@@ -2075,7 +2032,13 @@ export function useStudio() {
       setStorageError('That file is not a Discobot project file.');
       return;
     }
-    await handleImportProject(parsed);
+    // Only a file brings audio, and only one that will open: a link or a published song never does.
+    const adopted = localService.readProjectFile(parsed).ok ? await adoptSamples(parsed) : { file: parsed, added: 0, dropped: 0 };
+    const opened = await handleImportProject(adopted.file);
+    if (adopted.added > 0) setSampleStoreVersion(version => version + 1);
+    if (opened && adopted.dropped > 0) {
+      setStorageError(`The project was opened, but ${adopted.dropped === 1 ? 'one of its samples' : `${adopted.dropped} of its samples`} could not be read from the file. Those lanes play their built-in sound.`);
+    }
   }, [handleImportProject]);
 
   const midiImportFileRef = useRef<HTMLInputElement>(null);
@@ -2166,30 +2129,18 @@ export function useStudio() {
   }, [midiImportData, midiImportAssignments, ensureSynthExists, pushHistorySnapshot]);
 
   useEffect(() => {
-    const fetchDrumKits = async () => {
-      setDrumKitsLoading(true);
-      setDrumKitsError(null);
-      try {
-        const res = await localRequest('/drum/kits');
-        if (!res.ok) {
-          setDrumKitsError('Unable to load drum kits.');
-          return;
-        }
-        const data = await res.json();
-        if (Array.isArray(data.kits)) {
-          setDrumKits(data.kits);
-          const hasSelected = data.kits.some((kit: DrumKitDefinition) => kit.id === selectedDrumKitIdRef.current);
-          if (!hasSelected && data.defaultKitId) {
-            setSelectedDrumKitId(data.defaultKitId as DrumKitId);
-          }
-        }
-      } catch {
-        setDrumKitsError('Unable to load drum kits.');
-      } finally {
-        setDrumKitsLoading(false);
-      }
-    };
-    void fetchDrumKits();
+    setDrumKitsLoading(true);
+    setDrumKitsError(null);
+    try {
+      const data = localService.getDrumKits();
+      setDrumKits(data.kits);
+      const hasSelected = data.kits.some((kit) => kit.id === selectedDrumKitIdRef.current);
+      if (!hasSelected) setSelectedDrumKitId(data.defaultKitId);
+    } catch {
+      setDrumKitsError('Unable to load drum kits.');
+    } finally {
+      setDrumKitsLoading(false);
+    }
   }, []);
 
   const handleDrumKitChange = useCallback(async (kitId: DrumKitId, applyDefaults: boolean): Promise<DrumState | undefined> => {
@@ -2310,23 +2261,13 @@ export function useStudio() {
   const handleDrumMasterVolumeChange = useCallback((volume: number) => {
     const synth = synthsRef.current[0];
     if (synth?.pattern) pushHistorySnapshotThrottled(synth.id, synth.pattern.id, 'drum-master-volume', 300);
-    setDrumMasterVolume(volume);
-    localRequest('/drum/master-volume', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ volume }),
-    });
+    localService.setDrumMasterVolume(volume);
     }, [pushHistorySnapshotThrottled]);
 
   const handleDrumSwingChange = useCallback((swing: number) => {
     const synth = synthsRef.current[0];
     if (synth?.pattern) pushHistorySnapshotThrottled(synth.id, synth.pattern.id, 'drum-swing', 300);
-    setDrumSwing(swing);
-    localRequest('/drum/swing', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ swing }),
-    });
+    localService.setDrumSwing(swing);
   }, [pushHistorySnapshotThrottled]);
 
   const handleDrumFxChange = useCallback((next: Partial<{ sends: Partial<FxSendLevels>; returnLevel: number }>) => {
@@ -2513,7 +2454,7 @@ export function useStudio() {
     handleMidiImportClick, handleMidiImportFile, handleMidiImportApplyAll, midiImportFileRef, handleRemoveSynth,
     ensureSynthExists, handleOctaveShift, handleTempoChange, handleGlobalPlayStop, handleStepChange, handleStepSelect, handleKeyboardModeChange,
     handlePianoRollNoteAssign, handleClearPatternNotes, handleNotePlay, handleNoteRelease, computerKeyNotes, midiState,
-    handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange, guests, handleAddGuest, handleRemoveGuest, handleGuestChange, guestRecording, handleExportWav, missingDrumSamples, handleDrumSampleChange, handleLaneBarsChange, handleDrumBarsChange, sceneLength,
+    handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange, guests, handleAddGuest, handleRemoveGuest, handleGuestChange, guestRecording, handleExportWav, missingDrumSamples, sampleStoreVersion, handleDrumSampleChange, handleLaneBarsChange, handleDrumBarsChange, sceneLength,
     handleSynthMixChange, handleSaveSynthPreset, handleLoadSynthPreset, handleDeleteSynthPreset,
     handleExportMidi, currentArrangement, reportExportError, handleExportProject, projectImportFileRef, handleImportProjectFile, handleImportProject,
     handleNewProject, handleOpenProject, handleCopyProject, handleRenameProject, handleDeleteProject, handleRestoreVersion, handleCopyVersion, handleImportSynthPreset, handleExportSynthPreset, presetImportReport, setPresetImportReport, handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail,
