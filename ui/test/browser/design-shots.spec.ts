@@ -196,6 +196,43 @@ test('design shots: the rack, its units and the states of its controls', async (
     await knob.focus();
     await near(walk, knob, 'focus-knob', 90);
   });
+  // The states beside each other in one row: a mute that is on, a step selected with the pointer,
+  // another focused with the keyboard and, where there is a pointer, a third under it.
+  const row = (number: number) => lane(page, 1).getByRole('button', { name: new RegExp(`^Select step ${number}( |$)`) });
+  await attempt(walk, 'states-step-row', async () => {
+    await page.getByRole('button', { name: 'Mute Synth 1', exact: true }).click();
+    await row(5).click();
+    await page.keyboard.press('Tab');
+    await row(3).focus();
+    if (!walk.phone) await row(8).hover(); else await page.mouse.move(2, 2);
+    await near(walk, lane(page, 1).locator('.step-row'), 'states-step-row', 60);
+  });
+  await attempt(walk, 'states-step-row-2', async () => {
+    await row(5).focus();
+    if (!walk.phone) await row(7).hover();
+    await near(walk, lane(page, 1).locator('.step-row'), 'states-step-row-2', 60);
+  });
+  await attempt(walk, 'focus-step-empty', async () => {
+    // An empty step selected with the pointer, two along from an empty one focused with the keyboard.
+    await row(4).click();
+    await page.mouse.move(2, 2);
+    await page.keyboard.press('Tab');
+    await row(2).focus();
+    await near(walk, row(3), 'focus-step-empty', 110);
+  });
+  await attempt(walk, 'states-song', async () => {
+    await page.getByRole('group', { name: 'Scenes', exact: true }).getByRole('button').nth(1).focus();
+    await near(walk, page.locator('.song-module'), 'states-song', 10);
+  });
+  await attempt(walk, 'states-drum-grid', async () => {
+    await page.getByRole('button', { name: 'Closed Hat step 2', exact: true }).click();
+    await page.mouse.move(2, 2);
+    await page.keyboard.press('Tab');
+    const kick = page.getByRole('button', { name: 'Kick step 1', exact: true });
+    await kick.focus();
+    await near(walk, kick, 'states-drum-grid', 120);
+  });
+  await attempt(walk, 'the lane unmuted again', () => page.getByRole('button', { name: 'Mute Synth 1', exact: true }).click());
   await attempt(walk, 'state-disabled-step-tools', async () => {
     await lane(page, 1).getByRole('button', { name: /^Select step 2( |$)/ }).click();
     await expect(lane(page, 1).getByLabel('Step 2 chance', { exact: true })).toBeDisabled();
@@ -242,6 +279,15 @@ test('design shots: menus, dialogs, the walkthrough and a guest', async ({ page 
       await page.keyboard.press('Escape');
     });
   }
+  await attempt(walk, 'focus-menu-row', async () => {
+    await menu(page, 'Project');
+    await expect(page.getByRole('menuitem').first()).toBeVisible();
+    await page.keyboard.press('Tab');
+    await page.getByRole('menuitem').nth(1).focus();
+    if (!walk.phone) await page.getByRole('menuitem').nth(3).hover();
+    await near(walk, page.locator('.rack-menu-list'), 'focus-menu-row', 40);
+    await page.keyboard.press('Escape');
+  });
   await attempt(walk, 'dialog-help and the walkthrough', async () => {
     await page.getByRole('button', { name: 'Help', exact: true }).click();
     const help = page.getByRole('dialog', { name: 'How to use Discobot', exact: true });
@@ -312,6 +358,8 @@ test('design shots: menus, dialogs, the walkthrough and a guest', async ({ page 
     await expect(dialog).toBeVisible();
     await shot(walk, 'dialog-add-guest');
     const address = dialog.getByLabel('Address of the instrument\'s page', { exact: true });
+    await address.fill('https://example.org/synth');
+    await near(walk, dialog, 'focus-dialog-field', 10);
     await address.fill('http://example.com/synth');
     await address.press('Enter');
     await expect(dialog.getByRole('alert')).toBeVisible();
