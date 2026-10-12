@@ -1,8 +1,21 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
 const PROJECT_KEY = 'discobot_browser_project_v1';
 const stored = (page: Page) => page.evaluate(key => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem(key) || '{}')), PROJECT_KEY);
+// The preset menu: a button, a list of groups, and a list of the chosen group's presets.
+const presetButton = (scope: Page | Locator) => scope.getByRole('button', { name: /^Synth preset/ });
+const presetRow = (scope: Page | Locator, group: string, name: string) => scope.getByRole('menu', { name: group, exact: true }).getByRole('menuitem', { name, exact: true });
+async function openPresetGroup(scope: Page | Locator, group: string) {
+  await presetButton(scope).click();
+  await scope.locator(`[role="menuitem"][data-group="${group}"]`).click();
+}
+// Escape goes back from the group's list, then closes the menu.
+async function closePresetMenu(page: Page, scope: Page | Locator = page) {
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await expect(presetButton(scope)).toHaveAttribute('aria-expanded', 'false');
+}
 const file = (name: string, contents: unknown) => ({ name, mimeType: 'application/json', buffer: Buffer.from(typeof contents === 'string' ? contents : JSON.stringify(contents)) });
 
 test.beforeEach(async ({ page }) => {
@@ -40,10 +53,12 @@ test('a preset from another synth is imported with a report, and Discobot\'s own
   expect(sound.lfo1.enabled).toBe(false);
 
   // It is kept with the presets, so it can be put on any lane later.
-  const presets = lane.getByLabel('Synth preset', { exact: true });
-  await expect(presets.locator('option', { hasText: '1985-1' })).toHaveCount(1);
+  await openPresetGroup(lane, 'My presets');
+  await expect(presetRow(lane, 'My presets', '1985-1')).toBeVisible();
   await page.reload();
-  await expect(lane.getByLabel('Synth preset', { exact: true }).locator('option', { hasText: '1985-1' })).toHaveCount(1);
+  await openPresetGroup(lane, 'My presets');
+  await expect(presetRow(lane, 'My presets', '1985-1')).toBeVisible();
+  await closePresetMenu(page, lane);
 
   // Importing the same file again does not overwrite the first.
   await input.setInputFiles(file('1985-1.preset.websynth.json', { format: 'websynth-preset', version: 1, name: '1985-1', params: {} }));
@@ -103,7 +118,6 @@ test('your own presets are kept in IndexedDB, and ones from before are moved the
   page.on('pageerror', error => errors.push(error.message));
   const OLD_KEY = 'discobot_synth_presets_v1';
   const lane = page.locator('.synth-module').first();
-  const names = () => lane.getByLabel('Synth preset', { exact: true }).locator('option').allTextContents();
   const inDatabase = () => page.evaluate(() => new Promise<string[]>((resolve, reject) => {
     const request = indexedDB.open('discobot-presets');
     request.onerror = () => reject(request.error);
@@ -131,17 +145,22 @@ test('your own presets are kept in IndexedDB, and ones from before are moved the
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Discobot', exact: true })).toBeVisible();
   await expect.poll(inDatabase).toEqual(['Night Bass', 'From Before']);
-  await expect.poll(names).toEqual(expect.arrayContaining(['Night Bass', 'From Before']));
+  await openPresetGroup(lane, 'My presets');
+  await expect(presetRow(lane, 'My presets', 'Night Bass')).toBeVisible();
+  await expect(presetRow(lane, 'My presets', 'From Before')).toBeVisible();
   expect(await page.evaluate(key => localStorage.getItem(key), OLD_KEY), 'the old copy is removed once it has been moved').toBeNull();
 
   // Both are still there after another reload, and a deleted one stays deleted.
   await page.reload();
-  await expect.poll(names).toEqual(expect.arrayContaining(['Night Bass', 'From Before']));
-  await lane.getByLabel('Synth preset', { exact: true }).selectOption({ label: 'From Before' });
+  await openPresetGroup(lane, 'My presets');
+  await expect(presetRow(lane, 'My presets', 'Night Bass')).toBeVisible();
+  await presetRow(lane, 'My presets', 'From Before').click();
+  await expect(presetButton(lane)).toHaveAccessibleName('Synth preset: From Before');
   await lane.getByRole('button', { name: 'Delete', exact: true }).click();
   await expect.poll(inDatabase).toEqual(['Night Bass']);
   await page.reload();
-  await expect.poll(names).toContain('Night Bass');
-  expect(await names()).not.toContain('From Before');
+  await openPresetGroup(lane, 'My presets');
+  await expect(presetRow(lane, 'My presets', 'Night Bass')).toBeVisible();
+  await expect(presetRow(lane, 'My presets', 'From Before')).toHaveCount(0);
   expect(errors).toEqual([]);
 });

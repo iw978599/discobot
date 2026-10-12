@@ -256,6 +256,19 @@
 .rack-menu-list button:disabled { color: var(--text-faint); cursor: not-allowed; }
 .rack-menu-list button.danger:not(:hover):not(:focus-visible):not(:disabled) { color: var(--danger); }
 .rack-menu-sep { height: 1px; margin: 4px 2px; background: var(--edge); }
+/* A menu of groups (NestedMenu). Its button shows what was picked at a width that never changes,
+   so a longer name cannot make the row it stands in taller. A group's list opens beside the
+   first, to the right, or to the left of it when the button is near the window's right edge. */
+.rack-btn.rack-menu-pick { display: inline-flex; align-items: center; gap: 6px; width: 172px; text-align: left; }
+.rack-menu-pick > span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rack-menu.nested > .rack-menu-list { left: 0; right: auto; }
+.rack-menu.nested.flip > .rack-menu-list { left: auto; right: 0; }
+.rack-menu-group { position: relative; display: flex; flex-direction: column; }
+.rack-menu-group > button { display: flex; justify-content: space-between; gap: 14px; }
+.rack-menu-group > button[aria-expanded="true"] { background: var(--surface-hover); color: var(--text); }
+.rack-menu-group > .rack-menu-list { left: calc(100% + 6px); right: auto; top: -5px; max-height: 60vh; overflow-y: auto; }
+.rack-menu.flip .rack-menu-group > .rack-menu-list { left: auto; right: calc(100% + 6px); }
+.rack-menu-head { padding: 6px 12px 4px; font-size: var(--type-caption); letter-spacing: 0.12em; color: var(--text-faint); border-top: 1px solid var(--edge); margin-top: 4px; }
 .owner-tools h4 { margin: 10px 0 0; font-family: var(--panel-font); font-size: var(--type-label); letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-label); }
 .account-danger { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--edge); }
 .account-danger .rack-btn.danger:not(.on) { border-color: var(--danger); color: var(--danger); }
@@ -639,6 +652,8 @@
     position: fixed; left: 8px; right: 8px; top: auto; bottom: calc(8px + env(safe-area-inset-bottom));
     max-height: 70dvh; overflow-y: auto; box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.55), var(--shadow-float);
   }
+  /* A menu inside a unit is not in the top bar's layer, and has to be lifted over the bar of units itself. */
+  .rack-menu.nested > .rack-menu-list { left: 8px; right: 8px; z-index: 45; }
   .rack-menu-list button { padding: 13px 12px; font-size: var(--type-body); }
   .rack-menu-list button[data-hint]::after {
     content: attr(data-hint); display: block; margin-top: 3px; font-size: var(--type-label); line-height: 1.3;

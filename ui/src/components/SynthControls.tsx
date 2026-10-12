@@ -8,6 +8,7 @@ import { createDefaultSynthParameters } from '@discobot/engine';
 import { SynthParameters, OscillatorType, SynthModelId } from '../types';
 import { SYNTH_MODELS } from '../synthModels';
 import { groupPresets, type PresetKind } from '../services/presetKinds';
+import NestedMenu from '../rack/NestedMenu';
 import Knob from './Knob';
 import './SynthControls.css';
 
@@ -159,6 +160,11 @@ export function createNamedSynthPresets(base: SynthParameters) {
   });
 }
 
+// A preset that comes with the app carries this after its name, in the menu and on its button;
+// a person's own has none, and is under "My presets".
+const BUILT_IN_MARK = ' *';
+const BUILT_IN_HINT = 'Built in';
+
 export default function SynthControls({
   parameters,
   onParameterChange,
@@ -177,6 +183,7 @@ export default function SynthControls({
 }: SynthControlsProps) {
   const [presetName, setPresetName] = useState('');
   const [selectedPresetId, setSelectedPresetId] = useState('');
+  const selectedPreset = presets.find((preset) => preset.id === selectedPresetId);
   const updateOscillator = (updates: Partial<SynthParameters['oscillator']>) => {
     onParameterChange({
       oscillator: { ...parameters.oscillator, ...updates },
@@ -294,26 +301,25 @@ export default function SynthControls({
             <button className="rack-btn" onClick={onRemove} title="Remove this synth lane">Remove</button>
           )}
           <div className="preset-controls">
-            <select
-              className="synth-select preset-select"
-              aria-label="Synth preset"
-              value={selectedPresetId}
-              onChange={(e) => {
-                setSelectedPresetId(e.target.value);
-                if (e.target.value) onLoadPreset(e.target.value);
+            <NestedMenu
+              label="Synth preset"
+              text={selectedPreset?.name ?? 'Preset…'}
+              mark={selectedPreset?.builtIn ? BUILT_IN_MARK : undefined}
+              title={selectedPreset ? `${selectedPreset.name} (${selectedPreset.builtIn ? 'built in' : 'one of your own'})` : 'Choose a preset for this lane'}
+              groups={groupPresets(presets).map((group) => ({
+                label: group.label,
+                items: group.presets.map((preset) => ({
+                  id: preset.id,
+                  label: preset.name,
+                  mark: preset.builtIn ? BUILT_IN_MARK : undefined,
+                  title: preset.builtIn ? BUILT_IN_HINT : undefined,
+                })),
+              }))}
+              onSelect={(id) => {
+                setSelectedPresetId(id);
+                onLoadPreset(id);
               }}
-            >
-              <option value="" disabled>Preset...</option>
-              {groupPresets(presets).map((group) => (
-                <optgroup key={group.label} label={group.label}>
-                  {group.presets.map((preset) => (
-                    <option key={preset.id} value={preset.id}>
-                      {preset.name}{preset.builtIn ? ' *' : ''}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
+            />
             <input
               className="preset-name-input"
               placeholder="Save preset"
