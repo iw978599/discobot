@@ -481,6 +481,17 @@ may redistribute.
     reasonable starting point. The final chord set, inversions and whether
     insertion adds to or replaces notes are still design choices.
 
+16. **One row for a project and its copies.** Done: asked for by the owner on
+    2026-10-12 and built. In Projects, a project and the ones the app named
+    after it ("copy", "earlier version", "this browser's version", and the
+    2, 3… added to a name already in use) share one row under the main name,
+    with a list on the row to choose which of them Open, Rename, Copy, Delete
+    and the rest act on. Nothing is renamed, merged or stored; it is only how
+    the list is shown. Still open: two new projects left as "Untitled" and
+    "Untitled 2" share a row as well, since the number is all the app has to
+    go on, and a copy of a project with a very long name is not matched to
+    it, because the app shortens the name to fit the ending on.
+
 Done: song mode, with mutes and solos kept per scene; patterns of 1, 2, 4 or
 8 bars per lane, and MIDI files of up to eight bars imported at full length;
 chords, note length and late starts; project files; the computer keyboard as a

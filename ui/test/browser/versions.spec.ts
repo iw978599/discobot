@@ -57,7 +57,10 @@ test('earlier versions of a project are kept and can be restored or saved as a c
   await expect(page.locator('.tempo-led-value'), 'the open project is left alone').toHaveText('90');
   await page.getByRole('button', { name: /^Project: / }).click();
   const projects = page.getByRole('dialog', { name: 'Projects', exact: true });
-  await projects.getByRole('group', { name: 'Project Untitled (earlier version)', exact: true }).getByRole('button', { name: 'Open', exact: true }).click();
+  // The copy shares the row of the project it was taken from.
+  const row = projects.getByRole('group', { name: 'Project Untitled', exact: true });
+  await row.getByLabel('Version of Untitled', { exact: true }).selectOption('Untitled (earlier version)');
+  await row.getByRole('button', { name: 'Open', exact: true }).click();
   await expect(page.locator('.tempo-led-value'), 'the very first version: an empty project at 120').toHaveText('120');
 
   // Versions survive a reload, and belong to their own project.
