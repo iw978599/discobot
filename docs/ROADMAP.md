@@ -186,6 +186,8 @@ target; removal of the AI review workflow.
        project may redistribute: D-50, M1, Wavestation. Their makers'
        samples cannot be used, so these will be the furthest from their
        namesakes, and one may be left out if no usable waveforms are found.
+   Asked for by the owner on 2026-10-12, as well as more presets: a review
+   of every built-in preset's sound, redesigning the weak ones.
    Done (step 1 of the plan): every built-in preset has a kind and the presets
    menu is grouped by it, with a person's own presets in "My presets". Still
    open: the new presets themselves (no kind has an Effects preset yet, so

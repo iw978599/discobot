@@ -3,6 +3,7 @@ import type { Studio } from '../studio/useStudio';
 import type { Song } from '../types';
 import { MAX_REPEATS, MAX_SONG_ENTRIES, songLengthBars } from '../services/songPlayback';
 import ConfirmDialog from './ConfirmDialog';
+import { SCENE_COLORS, SCENE_COLOR_NAMES } from '../services/sceneColors';
 
 const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, '0')}`;
 
@@ -15,6 +16,7 @@ export default function SongModule({ studio }: { studio: Studio }) {
   const [deleting, setDeleting] = useState<string | null>(null);
   const current = scenes.find(scene => scene.id === currentSceneId);
   const nameOf = (sceneId: string) => scenes.find(scene => scene.id === sceneId)?.name ?? '?';
+  const colorOf = (sceneId: string) => scenes.find(scene => scene.id === sceneId)?.color;
   const bars = songLengthBars(song, studio.sceneLength);
   const setEntries = (entries: Song['entries']) => studio.handleSongChange({ entries });
 
@@ -51,6 +53,7 @@ export default function SongModule({ studio }: { studio: Studio }) {
             <button
               key={scene.id}
               className={`scene-chip ${scene.id === currentSceneId ? 'on' : ''}`}
+              data-color={scene.color}
               aria-label={`Scene: ${scene.name}`}
               aria-pressed={scene.id === currentSceneId}
               title={scene.id === currentSceneId ? 'This scene is open in the rack below' : 'Open this scene for editing'}
@@ -71,6 +74,18 @@ export default function SongModule({ studio }: { studio: Studio }) {
         >
           Rename
         </button>
+        <label className="scene-color" title="Mark the open scene with a colour, shown on it here and on its blocks in the song">
+          Colour
+          <select
+            aria-label="Colour of the open scene"
+            disabled={!current}
+            value={current?.color ?? ''}
+            onChange={(event) => { if (current) void studio.handleSceneColor(current.id, event.target.value); }}
+          >
+            <option value="">None</option>
+            {SCENE_COLORS.map(color => <option key={color} value={color}>{SCENE_COLOR_NAMES[color]}</option>)}
+          </select>
+        </label>
         <button
           className="rack-btn danger"
           disabled={!current || scenes.length < 2}
@@ -117,6 +132,7 @@ export default function SongModule({ studio }: { studio: Studio }) {
               <div
                 key={`${entry.sceneId}-${index}`}
                 className={`song-block ${playing ? 'playing' : ''} ${songStartEntry === index ? 'start' : ''}`}
+                data-color={colorOf(entry.sceneId)}
                 role="group"
                 aria-label={`Song block ${index + 1}: ${nameOf(entry.sceneId)}`}
               >

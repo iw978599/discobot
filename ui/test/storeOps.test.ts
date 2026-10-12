@@ -595,6 +595,8 @@ const create = sceneChange('scene.create', (service, body) => service.createScen
 const createRefused = sceneRefused('scene.create', (service, body) => service.createScene(body));
 const rename = sceneChange('scene.rename', (service, body) => service.renameScene(body.sceneId, body.name));
 const renameRefused = sceneRefused('scene.rename', (service, body) => service.renameScene(body.sceneId, body.name));
+const colour = sceneChange('scene.color', (service, body) => service.setSceneColor(body.sceneId, body.color));
+const colourRefused = sceneRefused('scene.color', (service, body) => service.setSceneColor(body.sceneId, body.color));
 const remove = sceneChange('scene.delete', (service, body) => service.deleteScene(body.sceneId));
 const removeRefused = sceneRefused('scene.delete', (service, body) => service.deleteScene(body.sceneId));
 const replace = sceneChange('scene.replace', (service, body) => service.replaceScenes(body));
@@ -631,7 +633,9 @@ const sceneCases: Case[] = [
   create('a new scene is a copy of the open one, placed after it and opened', {}, service => { kickOn(service); kickSoft(service); oneNote(service); }, project => {
     assert.deepEqual(names(project), ['Scene 1', 'Scene 2']);
     assert.equal(project.currentSceneId, project.scenes[1].id);
-    assert.deepEqual({ ...project.scenes[1], id: 0, name: 0 }, { ...project.scenes[0], id: 0, name: 0 });
+    assert.deepEqual({ ...project.scenes[1], id: 0, name: 0, color: 0 }, { ...project.scenes[0], id: 0, name: 0, color: 0 });
+    assert.equal(project.scenes[0].color, undefined, 'the scene it was copied from is not given a colour');
+    assert.equal(project.scenes[1].color, 'red', 'a new scene takes the first colour no scene has');
     assert.equal(project.scenes[1].drums.kick.stepVelocities[3], .5);
   }),
   create('an empty new scene has no notes or hits, keeps the lengths, and takes its name trimmed', { empty: true, name: '  Break  ' }, service => {
@@ -665,6 +669,18 @@ const sceneCases: Case[] = [
   renameRefused('a blank name', (id: string) => ({ sceneId: id, name: '   ' }), 400, 'A scene needs a name', openScene),
   renameRefused('a name that is not text', (id: string) => ({ sceneId: id, name: 7 }), 400, 'A scene needs a name', openScene),
   renameRefused('no name at all', (id: string) => ({ sceneId: id }), 400, 'A scene needs a name', openScene),
+
+  colour('a scene is given a colour, and the open scene keeps the one it had', (ids: Ids) => ({ sceneId: ids.first, color: 'blue' }), twoScenes, project => {
+    assert.deepEqual(project.scenes.map((scene: any) => scene.color), ['blue', 'red']);
+    assert.equal(project.currentSceneId, project.scenes[1].id, 'colouring does not open the scene');
+  }),
+  colour('a colour that is not in the list takes the colour away', (ids: Ids) => ({ sceneId: ids.second, color: '#ff0000' }), twoScenes, project => {
+    assert.equal('color' in project.scenes[1], false);
+  }),
+  colour('no colour takes the colour away', (ids: Ids) => ({ sceneId: ids.second }), twoScenes, project => {
+    assert.equal('color' in project.scenes[1], false);
+  }),
+  colourRefused('a scene that does not exist cannot be coloured', { sceneId: 'nope', color: 'blue' }, 400, 'That scene is not in the project.'),
 
   removeRefused('a scene that does not exist, even when only one is left', { sceneId: 'nope' }, 404, 'Scene not found'),
   removeRefused('the last scene cannot be deleted', (id: string) => ({ sceneId: id }), 400, 'A project needs at least one scene', openScene),
@@ -824,7 +840,7 @@ const cases: Case[] = [
     }),
   guestRemove('removing the only guest leaves the scenes with no guest settings at all', { answer: { guests: [] } },
     service => { const id = dressed(service); service.createScene(); return id; },
-    project => { for (const scene of project.scenes) assert.deepEqual(Object.keys(scene).sort(), ['drums', 'id', 'lanes', 'mutes', 'name']); }),
+    project => { for (const scene of project.scenes) assert.deepEqual(Object.keys(scene).filter(key => key !== 'color').sort(), ['drums', 'id', 'lanes', 'mutes', 'name']); }),
   guestRemove('a guest that does not exist cannot be removed', { status: 404, error: 'Guest not found' }, service => { addGuest(service); return NO_GUEST; }),
 
   ...drumCases,
@@ -1443,7 +1459,7 @@ test('the store keeps nothing of a scene or song operation\'s own objects', () =
 });
 
 test('scene operations are saved, not undoable, and shared', () => {
-  for (const type of ['scene.select', 'scene.create', 'scene.rename', 'scene.delete', 'scene.replace', 'song.set'] as const) {
+  for (const type of ['scene.select', 'scene.create', 'scene.rename', 'scene.color', 'scene.delete', 'scene.replace', 'song.set'] as const) {
     assert.deepEqual(OP_META[type], { save: true, undoable: false, share: true }, type);
   }
 });

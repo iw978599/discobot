@@ -49,6 +49,13 @@
   --drum-low-tom: #14b8a6;
   --drum-high-tom: #8b5cf6;
   --drum-cymbal: #ec4899;
+  /* The colours a scene can be marked with. None is the amber of "on". */
+  --scene-red: #ef4444;
+  --scene-green: #22c55e;
+  --scene-blue: #3b82f6;
+  --scene-teal: #14b8a6;
+  --scene-violet: #8b5cf6;
+  --scene-pink: #ec4899;
   --panel-font: 'Barlow Condensed', 'Arial Narrow', 'Roboto Condensed', Arial, sans-serif;
   --led-font: 'Share Tech Mono', Consolas, 'Courier New', monospace;
   --plate: 124px;
@@ -287,6 +294,16 @@
 .scene-chip:hover { border-color: var(--hover); color: var(--text); }
 .scene-chip.on { background: var(--on); border-color: var(--on); color: var(--text-on); }
 .rack .scene-name-input { background: var(--surface-field); border: 1px solid var(--edge-control); border-radius: 3px; color: var(--text); font: inherit; padding: 5px 8px; width: 150px; text-transform: none; }
+/* A scene's colour is a band down the left of its chip and of each of its blocks in the song. It
+   is an edge, not a shadow, so the focus ring and the lit face of the open scene stay as they are. */
+[data-color="red"] { --scene-color: var(--scene-red); }
+[data-color="green"] { --scene-color: var(--scene-green); }
+[data-color="blue"] { --scene-color: var(--scene-blue); }
+[data-color="teal"] { --scene-color: var(--scene-teal); }
+[data-color="violet"] { --scene-color: var(--scene-violet); }
+[data-color="pink"] { --scene-color: var(--scene-pink); }
+.scene-strip .scene-chip[data-color], .song-chain .song-block[data-color], .shared-song-order span[data-color] { border-left: 5px solid var(--scene-color); }
+.scene-color { display: flex; align-items: center; gap: 6px; color: var(--text-label); }
 .mode-toggle { width: var(--side); }
 .mode-toggle button { width: auto; flex: 1; height: 24px; padding: 0 4px; font-size: 11px; text-transform: inherit; letter-spacing: inherit; }
 .song-block { display: flex; align-items: stretch; background: var(--surface-control); border: 1px solid var(--edge-control); border-radius: 3px; overflow: hidden; }

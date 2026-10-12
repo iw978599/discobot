@@ -265,6 +265,9 @@ export interface DrumLanePattern {
 export interface Scene {
   id: string;
   name: string;
+  // the name of the colour the scene is marked with in the scene strip and the song. Absent
+  // means none, as every scene was before scenes had colours.
+  color?: string;
   // steps per synth lane id; a missing lane is silent in this scene
   lanes: Record<number, SequencerStep[]>;
   drums: Record<DrumInstrument, DrumLanePattern>;

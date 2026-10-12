@@ -6,6 +6,7 @@ import { MAX_GUESTS, guestUrl, patchGuest, sanitizeGuests } from './guests';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
 import { BAR_CHOICES, DRUM_STEPS_PER_BAR, laneBars, resizeBars } from './patternLength';
 import { emptySteps } from './songPlayback';
+import { nextSceneColor, sceneColor } from './sceneColors';
 import { normalizeSynthModelId } from '../synthModels';
 import type { DrumState, Pattern, Scene } from '../types';
 import type { ProjectDefaults, ProjectLane, ProjectState } from './localService';
@@ -91,8 +92,9 @@ const transport = (playing: boolean) => ({ state }: ReducerContext, op: { synthI
 // the service on its open project.
 
 // The live lanes and drum grid as a scene.
-export const captureScene = (state: ProjectState, id: string, name: string): Scene => ({
+export const captureScene = (state: ProjectState, id: string, name: string, color?: string): Scene => ({
   id, name,
+  ...(color ? { color } : {}),
   lanes: Object.fromEntries(state.synths.map(synth => [synth.synthId, clone(synth.pattern.steps)])),
   ...(state.synths.some(synth => (synth.pattern.bars ?? 1) > 1)
     ? { laneBars: Object.fromEntries(state.synths.filter(synth => (synth.pattern.bars ?? 1) > 1).map(synth => [synth.synthId, synth.pattern.bars!])) } : {}),
@@ -126,7 +128,7 @@ export const ensureScenes = (state: ProjectState) => {
 // drums, so this runs before anything reads `scenes`: saving, switching, exporting.
 export const commitScene = (state: ProjectState) => {
   const index = state.scenes.findIndex(scene => scene.id === state.currentSceneId);
-  if (index >= 0) state.scenes[index] = captureScene(state, state.currentSceneId, state.scenes[index].name);
+  if (index >= 0) state.scenes[index] = captureScene(state, state.currentSceneId, state.scenes[index].name, state.scenes[index].color);
 };
 
 // Makes a scene the live pattern.
@@ -389,7 +391,7 @@ export const reducers: Reducers = {
     if (state.scenes.some(scene => scene.id === op.sceneId)) return refuse(409, 'That scene is already in the project.');
     commitScene(state);
     const name = (typeof op.name === 'string' && op.name.trim() ? op.name.trim() : `Scene ${state.scenes.length + 1}`).slice(0, 40);
-    const scene = captureScene(state, op.sceneId, name);
+    const scene = captureScene(state, op.sceneId, name, nextSceneColor(state.scenes));
     if (op.empty === true) {
       for (const id of Object.keys(scene.lanes)) scene.lanes[Number(id)] = emptySteps(scene.lanes[Number(id)].length);
       // An empty scene keeps the lengths of the one it was made from.
@@ -406,6 +408,14 @@ export const reducers: Reducers = {
     const name = typeof op.name === 'string' ? op.name.trim().slice(0, 40) : '';
     if (!target || !name) return refuse(400, 'A scene needs a name');
     target.name = name;
+    return sceneChanged(state);
+  },
+  // No colour, or one that is not in the list, takes the scene's colour away.
+  'scene.color': ({ state }, op) => {
+    const target = state.scenes.find(scene => scene.id === op.sceneId);
+    if (!target) return refuse(400, 'That scene is not in the project.');
+    const color = sceneColor(op.color);
+    if (color) target.color = color; else delete target.color;
     return sceneChanged(state);
   },
   'scene.delete': ({ state }, op) => {

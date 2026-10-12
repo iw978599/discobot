@@ -5,6 +5,7 @@ import { MAX_STEP_NOTES, MAX_STEP_OFFSET } from './noteScheduling';
 import { BAR_CHOICES, DRUM_STEPS_PER_BAR, MAX_BARS, clampLengths, laneBars } from './patternLength';
 import { sanitizeGuestMix, sanitizeSceneGuests } from './guests';
 import { MAX_REPEATS, MAX_SONG_ENTRIES } from './songPlayback';
+import { sceneColor } from './sceneColors';
 import { normalizeSynthModelId } from '../synthModels';
 import { noteNameToMidi } from '../utils/midiExport';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
@@ -219,6 +220,7 @@ export function sanitizeScenes(value: unknown, defaults: DrumState): Scene[] | n
     return [{
       id: input.id.slice(0, 200),
       name: (typeof input.name === 'string' && input.name.trim() ? input.name.trim() : 'Scene').slice(0, 40),
+      ...(sceneColor(input.color) ? { color: sceneColor(input.color) } : {}),
       lanes,
       ...(Object.keys(lengths).length ? { laneBars: lengths } : {}),
       ...(sanitizeSceneGuests(input.guests) ? { guests: sanitizeSceneGuests(input.guests) } : {}),

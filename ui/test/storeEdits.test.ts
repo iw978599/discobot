@@ -149,7 +149,8 @@ const cases: Case[] = [
       assert.equal(scenes[1].name, 'Scene 2');
       assert.match(scenes[1].id, UUID);
       assert.equal(currentSceneId, scenes[1].id);
-      assert.deepEqual({ ...scenes[1], id: 0, name: 0 }, { ...scenes[0], id: 0, name: 0 });
+      assert.deepEqual({ ...scenes[1], id: 0, name: 0, color: 0 }, { ...scenes[0], id: 0, name: 0, color: 0 });
+      assert.equal(scenes[1].color, 'red');
       assert.equal(scenes[1].drums.kick.stepVelocities[3], .4);
       assert.equal(scenes[1].lanes[1][0].note, 'C4');
       assert.equal(drumState.kick.steps[3], true);
@@ -208,6 +209,20 @@ const cases: Case[] = [
       assert.deepEqual(result.events[0].data.drumState, before.drumState);
     },
   }),
+  sceneChange('a scene is given a colour, and one that is not in the list takes it away', {
+    type: 'scene.color', arrange: twoScenes,
+    body: (ids: any) => ({ sceneId: ids.first, color: 'teal' }),
+    check: (result, service, ids) => {
+      assert.deepEqual(result.events[0].data.scenes.map((scene: any) => scene.color), ['teal', 'red']);
+      assert.equal(result.events[0].data.currentSceneId, ids.second, 'colouring does not open the scene');
+      ok(service.setSceneColor(ids.first, 'url(javascript:1)'));
+      assert.equal('color' in service.snapshot().scenes[0], false);
+    },
+  }),
+  {
+    type: 'scene.color', title: 'a scene that does not exist cannot be coloured',
+    body: { sceneId: 'nope', color: 'teal' }, status: 400, error: 'That scene is not in the project.',
+  },
   {
     type: 'scene.rename', title: 'a scene that does not exist is a 400 about the name, not a 404 (looks wrong)',
     body: { sceneId: 'nope', name: 'Verse' }, status: 400, error: 'A scene needs a name',
@@ -708,7 +723,7 @@ const cases: Case[] = [
     body: (id: string) => ({ guestId: id }),
     check: (result, service) => {
       assert.deepEqual(result.data, { guests: [] });
-      for (const scene of service.snapshot().scenes) assert.deepEqual(keys(scene), ['drums', 'id', 'lanes', 'mutes', 'name']);
+      for (const scene of service.snapshot().scenes) assert.deepEqual(keys(scene).filter((key: string) => key !== 'color'), ['drums', 'id', 'lanes', 'mutes', 'name']);
     },
   }, ['guestsChanged']),
 

@@ -200,10 +200,11 @@ it done.
    sure" for deleting a scene, a project or a member; its own button over
    the file chooser in MIDI and samples; its own small player on the share
    page; the phone browser's tap mark turned off for the whole page.
-3. **Feature 1:** starting points for an empty project. Built on
-   `feat/design-review-starting-points`; check its pull request's state.
-4. **Feature 7:** a colour for each scene. It is a stored value, so follow
-   the `add-project-field` skill.
+3. **Feature 1** is merged (#131): three beats in a strip on a project
+   opened empty, which stays until Hide is pressed. Nobody has heard the
+   beats; they are data in `ui/src/services/starters.ts`.
+4. **Feature 7:** a colour for each scene. Built on
+   `feat/design-review-scene-colours`; check its pull request's state.
 5. **Feature 5:** copy a lane's pattern, or one drum row, to another scene.
 6. **Feature 2:** export as a small dialog (what, as what, how long, and
    the progress in the same place). The message and the names are already
@@ -213,6 +214,18 @@ it done.
    The review only placed the switch; the metronome does not exist yet. The
    owner was told this would be read as "build it" and did not object.
 9. **Chord buttons in the piano roll** (roadmap features 15).
+
+### Step 2b. The preset sounds (asked for by the owner on 2026-10-12)
+
+The owner: "would also like to add reviewing/redesigning the synth preset
+sounds as well as adding more presets". Go through every built-in preset,
+redesign the ones that are weak, and add more (roadmap sound 7 lists the
+kinds, and no kind has an Effects preset yet). Where it sits in the order
+was not said; it is placed here, before the new models, because the new
+models' presets build on the same work. Ask the owner if that matters.
+Sound cannot be checked by a test: bring the owner a list of what changed
+to listen to. The starting beats (`starters.ts`) may also be dressed up
+later; the owner has heard them and said they "sound good".
 
 ### Step 3. Every synth model in `docs/SYNTH_MODELS_PLAN.md`
 
@@ -268,7 +281,8 @@ patterns, and live collaboration, which the owner wants built last of all.
   instruments, after two fixes (#76, #77). Asked what they see (which guest;
   does it fail to load, make no sound, or drift out of time; any message in
   the console). Not yet answered.
-- **Listening.** Nothing is verified by ear.
+- **Listening.** The owner has heard the three starting beats and said they
+  sound good (2026-10-12). Nothing else is verified by ear.
 - **Whether Play should stay a light button when stopped** (#123).
 - **The Launchkey's numbers**, when step 4 is reached.
 - **A request to GitHub Support** about an unreachable commit was drafted
