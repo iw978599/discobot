@@ -45,7 +45,7 @@ test('at every end and the middle of every macro, a model stays inside the limit
 });
 
 test('a model this copy of the app does not know opens with the plain engine', () => {
-  assert.equal(normalizeSynthModelId('jupiter-8'), 'generic');
+  assert.equal(normalizeSynthModelId('polysix'), 'generic');
   assert.equal(normalizeSynthModelId('sh-101'), 'sh-101');
   assert.equal(normalizeSynthModelId('pro-one'), 'pro-one');
   assert.deepEqual(mapSynthModelToEngineParams('generic', MIDDLE), {});
@@ -90,10 +90,38 @@ test('the Pro-One is two oscillators, mono with glide, into a four-pole filter w
   assert.ok(voice('pro-one', { ...MIDDLE, macro4: 1 }).filterEnvAmount > voice('pro-one', { ...MIDDLE, macro4: 0 }).filterEnvAmount, 'Env');
 });
 
+test('the Jupiter-8 is a clean poly of saw and pulse into a four-pole filter, with separate envelopes', () => {
+  const middle = voice('jupiter-8');
+  assert.equal(middle.voiceMode, 'poly');
+  assert.equal(middle.filterSlope, 24);
+  assert.ok(middle.osc2Enabled && middle.oscType === 'sawtooth' && middle.osc2Type === 'square');
+  assert.ok(middle.filterDrive <= 0.1, 'clean: next to no drive');
+  assert.notDeepEqual([middle.attack, middle.decay, middle.sustain], [middle.filterAttack, middle.filterDecay, middle.filterSustain], 'the filter has an envelope of its own');
+  assert.ok(voice('jupiter-8', { ...MIDDLE, macro1: 1 }).osc2Detune > voice('jupiter-8', { ...MIDDLE, macro1: 0 }).osc2Detune, 'Detune');
+  assert.ok(voice('jupiter-8', { ...MIDDLE, macro2: 1 }).filterQ > voice('jupiter-8', { ...MIDDLE, macro2: 0 }).filterQ, 'Resonance');
+  assert.ok(voice('jupiter-8', { ...MIDDLE, macro3: 1 }).filterFreq > voice('jupiter-8', { ...MIDDLE, macro3: 0 }).filterFreq, 'Brightness');
+  assert.ok(voice('jupiter-8', { ...MIDDLE, macro4: 1 }).filterEnvAmount > voice('jupiter-8', { ...MIDDLE, macro4: 0 }).filterEnvAmount, 'Contour');
+});
+
+test('the OB-Xa is two saws spread apart into a two-pole filter, and its fourth knob is the swell', () => {
+  const middle = voice('ob-xa');
+  assert.equal(middle.voiceMode, 'poly');
+  assert.equal(middle.filterSlope, 12);
+  assert.ok(middle.osc2Enabled && middle.oscType === 'sawtooth' && middle.osc2Type === 'sawtooth');
+  assert.ok(middle.osc2Detune > voice('jupiter-8').osc2Detune, 'its oscillators sit further apart than the Jupiter\'s');
+  assert.ok(voice('ob-xa', { ...MIDDLE, macro1: 1 }).osc2Detune >= 40 && voice('ob-xa', { ...MIDDLE, macro1: 0 }).osc2Detune <= 6, 'Spread');
+  assert.ok(voice('ob-xa', { ...MIDDLE, macro2: 1 }).filterQ > voice('ob-xa', { ...MIDDLE, macro2: 0 }).filterQ, 'Resonance');
+  assert.ok(voice('ob-xa', { ...MIDDLE, macro3: 0 }).filterFreq <= 800 && voice('ob-xa', { ...MIDDLE, macro3: 1 }).filterFreq >= 14000, 'Brightness');
+  const fast = voice('ob-xa', { ...MIDDLE, macro4: 0 }), slow = voice('ob-xa', { ...MIDDLE, macro4: 1 });
+  assert.ok(fast.attack <= 0.01 && slow.attack >= 0.8, 'Attack');
+  assert.ok(slow.filterAttack > slow.attack, 'the filter opens a little after the level, which is the brass');
+  assert.equal(fast.release, slow.release, 'Attack leaves the release alone');
+});
+
 test('leaving the SH-101 for another model puts the first oscillator back to full level', () => {
   const lane = sound('sh-101', { ...MIDDLE, macro1: 0 });
   assert.equal(toVoiceParams(lane).oscLevel, 0);
-  for (const next of ['minimoog-model-d', 'juno-106', 'tb-303', 'prophet-5', 'pro-one'] as const) {
+  for (const next of ['minimoog-model-d', 'juno-106', 'tb-303', 'prophet-5', 'pro-one', 'jupiter-8', 'ob-xa'] as const) {
     assert.equal(toVoiceParams(onLane(lane, mapSynthModelToEngineParams(next, MIDDLE))).oscLevel, 1, next);
   }
 });

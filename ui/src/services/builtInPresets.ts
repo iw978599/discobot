@@ -195,6 +195,14 @@ const PAD: BuiltInPreset[] = [
     spread: 0.5, fxReturn: 0.9, fxSends: { reverb: 0.5, delay: 0.2, drive: 0, phaser: 0.1, chorus: 0.45 },
     lfo2: { enabled: true, target: 'vibrato', waveform: 'sine', rate: 4.2, depth: 0.08, sync: false, retrigger: false },
   }),
+  model('pad-jupiter', 'Jupiter Pad', 'pad', 'jupiter-8', [0.5, 0.2, 0.4, 0.5], {
+    gain: 0.85,
+    spread: 0.5, fxReturn: 0.9, fxSends: { reverb: 0.5, delay: 0.2, drive: 0, phaser: 0.05, chorus: 0.3 },
+  }),
+  model('pad-ob', 'OB Pad', 'pad', 'ob-xa', [0.7, 0.25, 0.4, 0.7], {
+    gain: 1.05,
+    spread: 0.7, fxReturn: 0.9, fxSends: { reverb: 0.5, delay: 0.2, drive: 0, phaser: 0.1, chorus: 0.2 },
+  }),
   generic('pad-strings', 'String Ensemble', 'pad', {
     gain: 0.9,
     oscillator: { type: 'sawtooth' },
@@ -286,6 +294,14 @@ const KEYS: BuiltInPreset[] = [
   model('keys-juno', 'Juno Keys', 'keys', 'juno-106', [0.3, 0.3, 0.4, 0.9], {
     gain: 0.9,
     spread: 0.3, fxReturn: 0.85, fxSends: { reverb: 0.3, delay: 0.1, drive: 0, phaser: 0, chorus: 0.4 },
+  }),
+  model('keys-jupiter', 'Jupiter Brass', 'keys', 'jupiter-8', [0.3, 0.25, 0.55, 0.9], {
+    gain: 0.85,
+    spread: 0.3, fxReturn: 0.8, fxSends: { reverb: 0.3, delay: 0.1, drive: 0.05, phaser: 0, chorus: 0.15 },
+  }),
+  model('keys-ob', 'OB Brass', 'keys', 'ob-xa', [0.4, 0.2, 0.6, 0.05], {
+    gain: 1,
+    spread: 0.5, fxReturn: 0.8, fxSends: { reverb: 0.3, delay: 0.1, drive: 0.1, phaser: 0, chorus: 0.1 },
   }),
   model('keys-brass', 'Poly Brass', 'keys', 'prophet-5', [0.4, 0.3, 0.55, 0.7], {
     gain: 0.9,

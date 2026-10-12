@@ -188,9 +188,9 @@ target; removal of the AI review workflow.
        namesakes, and one may be left out if no usable waveforms are found.
    Asked for by the owner on 2026-10-12, as well as more presets: a review
    of every built-in preset's sound, redesigning the weak ones.
-   Done on 2026-10-12: the first two new models, SH-101 and Pro-One, with
-   five presets between them and the model menu grouped Mono, Poly and
-   Digital. Twelve models to go. Not verified by ear.
+   Done on 2026-10-12: the first four new models, SH-101, Pro-One,
+   Jupiter-8 and OB-Xa, with nine presets between them and the model menu
+   grouped Mono, Poly and Digital. Ten models to go. Not verified by ear.
    Done on 2026-10-12: the seventeen old presets are replaced by forty, in
    all six kinds including Effects, each measured so that presets of a kind
    are about as loud as each other (the old ones differed by 18 dB). Not
