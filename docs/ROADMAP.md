@@ -181,6 +181,11 @@ target; removal of the AI review workflow.
        project may redistribute: D-50, M1, Wavestation. Their makers'
        samples cannot be used, so these will be the furthest from their
        namesakes, and one may be left out if no usable waveforms are found.
+   Done (step 1 of the plan): every built-in preset has a kind and the presets
+   menu is grouped by it, with a person's own presets in "My presets". Still
+   open: the new presets themselves (no kind has an Effects preset yet, so
+   that group does not show); choosing a kind when a preset is imported (an
+   imported preset goes under "My presets" for now); the new models.
    The model menu is grouped too, since it grows to nineteen. Presets and
    models are sound, and sound cannot be checked by a test: each needs the
    owner's ears before it is called done, with a listening session after the
