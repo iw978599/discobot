@@ -49,16 +49,6 @@
   --drum-low-tom: #14b8a6;
   --drum-high-tom: #8b5cf6;
   --drum-cymbal: #ec4899;
-  /* The names from before the colours were named by job. They still work; do not use them in anything new. */
-  --rail: var(--surface-rail);
-  --unit-top: var(--surface-panel-top);
-  --unit-bottom: var(--surface-panel-bottom);
-  --well: var(--surface-well);
-  --ink: var(--text);
-  --legend: var(--text-label);
-  --dim: var(--text-faint);
-  --amber: var(--on);
-  --amber-soft: var(--on-glow);
   --panel-font: 'Barlow Condensed', 'Arial Narrow', 'Roboto Condensed', Arial, sans-serif;
   --led-font: 'Share Tech Mono', Consolas, 'Courier New', monospace;
   --plate: 124px;
@@ -143,7 +133,7 @@
 .rack-plate-actions { display: flex; gap: 4px; }
 
 /* buttons */
-.rack-btn, .rack .octave-shift-btn, .rack .keyboard-panel-toggle button {
+.rack-btn {
   background: var(--surface-control);
   border: 1px solid var(--edge-control);
   border-radius: 3px;
@@ -156,13 +146,13 @@
   white-space: nowrap;
   line-height: 1.2;
 }
-.rack-btn:hover:not(:disabled), .rack .octave-shift-btn:hover:not(:disabled), .rack .keyboard-panel-toggle button:hover:not(:disabled) {
+.rack-btn:hover:not(:disabled) {
   border-color: var(--hover);
   color: var(--text);
   background: var(--surface-control);
 }
-.rack-btn:disabled, .rack-btn.go:disabled, .rack-btn.on:disabled, .rack .octave-shift-btn:disabled { background: var(--surface-well); border-color: var(--edge-faint); color: var(--text-faint); cursor: not-allowed; }
-.rack-btn.on, .rack .keyboard-panel-toggle button.active { background: var(--on); color: var(--text-on); border-color: var(--on); }
+.rack-btn:disabled, .rack-btn.go:disabled, .rack-btn.on:disabled { background: var(--surface-well); border-color: var(--edge-faint); color: var(--text-faint); cursor: not-allowed; }
+.rack-btn.on { background: var(--on); color: var(--text-on); border-color: var(--on); }
 /* The one main button of a bar or a dialog is the lightest thing on it. Play is lit, like anything that is on, while it plays. */
 .rack-btn.go { background: var(--action); border-color: var(--action); color: var(--text-on); font-size: 14px; padding: 7px 16px; }
 .rack-btn.go:hover:not(:disabled) { background: #fff; border-color: #fff; color: var(--text-on); }
@@ -170,7 +160,7 @@
 /* Something lit gets lighter under a pointer. Only where there is a pointer: on a touch screen a
    hover stays after the tap, and a lit thing would go on looking different from its neighbours. */
 @media (hover: hover) {
-  .rack-btn.on:hover:not(:disabled), .rack .keyboard-panel-toggle button.active:hover:not(:disabled), .rack-btn.go.playing:hover:not(:disabled),
+  .rack-btn.on:hover:not(:disabled), .rack-btn.go.playing:hover:not(:disabled),
   .rack-ms button.on:hover, .scene-chip.on:hover, .synth-tabs button.active:hover, .step-cell.has-note:hover {
     background: var(--on-bright); border-color: var(--on-bright); color: var(--text-on);
   }
@@ -203,7 +193,7 @@
 .rack-ms button:hover { border-color: var(--hover); color: var(--text); }
 .rack-ms button.on { background: var(--on); border-color: var(--on); color: var(--text-on); }
 
-.rack select, .rack-dialog select, .rack .preset-name-input, .rack .save-name-input, .rack .tempo-led-input {
+.rack select, .rack-dialog select, .rack .save-name-input, .rack .tempo-led-input {
   background: var(--surface-field);
   border: 1px solid var(--edge-control);
   border-radius: 3px;
@@ -219,7 +209,6 @@
 
 /* menus */
 .app-alert-actions { display: flex; gap: 6px; flex: none; }
-.rack .synth-filter-type-row { gap: 4px; }
 .rack-menu { position: relative; }
 .rack-menu-list {
   position: absolute; right: 0; top: calc(100% + 4px); z-index: 30;
@@ -249,7 +238,7 @@
 .project-name:hover { text-decoration: underline; }
 .project-line { display: flex; align-items: baseline; gap: 8px; max-width: 100%; }
 .project-line .project-name { min-width: 0; flex: 0 1 auto; }
-.save-state { position: relative; flex: none; width: 7.2em; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); }
+.save-state { position: relative; flex: none; width: 7.2em; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); }
 .save-state.full { margin-left: 12px; align-self: center; width: auto; font-size: 13px; text-transform: none; letter-spacing: 0; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .tempo-display-group { display: flex; align-items: center; gap: 6px; }
@@ -267,7 +256,6 @@
 .save-confirm-btn, .save-cancel-btn { background: var(--surface-control); border: 1px solid var(--edge-control); border-radius: 3px; color: var(--text-label); padding: 4px 8px; cursor: pointer; }
 .save-confirm-btn:hover { border-color: var(--hover); color: var(--text); }
 .save-feedback { color: var(--text); }
-.transport .knob { padding: 0; }
 
 .app-alert {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -293,7 +281,7 @@
 .scene-chip.on { background: var(--on); border-color: var(--on); color: var(--text-on); }
 .rack .scene-name-input { background: var(--surface-field); border: 1px solid var(--edge-control); border-radius: 3px; color: var(--text); font: inherit; padding: 5px 8px; width: 150px; text-transform: none; }
 .mode-toggle { width: var(--side); }
-.mode-toggle button { width: auto; flex: 1; height: 24px; padding: 0 4px; font-size: 11px; }
+.mode-toggle button { width: auto; flex: 1; height: 24px; padding: 0 4px; font-size: 11px; text-transform: inherit; letter-spacing: inherit; }
 .song-block { display: flex; align-items: stretch; background: var(--surface-control); border: 1px solid var(--edge-control); border-radius: 3px; overflow: hidden; }
 .song-block.start { border-color: var(--text); }
 .song-block.playing { border-color: var(--on); box-shadow: 0 0 8px var(--on-glow); }
@@ -324,22 +312,7 @@
 .synth-module .rack-ms { justify-content: flex-end; }
 .rack-knobs { display: flex; align-items: flex-start; justify-content: flex-end; gap: 4px; }
 .rack-knobs .synth-model-macro-grid { display: flex; gap: 4px; margin: 0; padding: 0; border: 0; background: none; }
-.rack .knob { padding: 0 2px; gap: 2px; }
-.rack .knob-label { font-family: var(--panel-font); font-size: 11px; color: var(--text-label); letter-spacing: 0.06em; max-width: 64px; }
 .rack-knobs .knob-label { max-width: 46px; }
-.rack .knob-value-input, .rack .drum-knob-value-input {
-  font-family: var(--led-font); font-size: 11px; font-weight: 400; color: var(--value);
-  background: var(--surface-field); box-sizing: content-box; width: 8.5ch; min-width: 4.5ch; max-width: none; padding: 1px 2px;
-}
-/* Where the browser can size a field to what it holds, the figure never loses its unit's last letter. */
-@supports (field-sizing: content) {
-  .rack .knob-value-input, .rack .drum-knob-value-input { field-sizing: content; width: auto; }
-}
-.rack .knob-svg line { stroke: var(--value); }
-.rack .knob-svg circle:last-child { fill: var(--value); }
-.rack .knob-disabled .knob-svg line { stroke: var(--edge-strong); }
-.rack .knob-disabled .knob-svg circle:last-child { fill: var(--edge-strong); }
-.rack .drum-knob-label { font-size: 11px; color: var(--text-label); }
 
 .step-row { display: grid; gap: 3px; min-width: 0; }
 .step-cell {
@@ -370,16 +343,6 @@
 .step-velocity-bar { position: absolute; left: 0; bottom: 0; height: 3px; background: rgba(0, 0, 0, 0.45); }
 
 /* synth editor */
-.rack .synth-controls-panel {
-  background: var(--surface-inset); border: 1px solid var(--edge-faint); border-radius: 2px; box-shadow: none;
-  padding: 10px 12px; display: flex; flex-direction: column; gap: 10px;
-}
-.rack .synth-header { margin: 0; padding: 0; border: 0; align-items: center; }
-.rack .synth-octave-controls, .rack .synth-header-tools, .rack .preset-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; }
-.rack .model-selector-wrap { display: flex; align-items: center; gap: 6px; }
-.rack .model-selector-wrap label, .rack .octave-shift-value { color: var(--text-faint); font-family: var(--panel-font); font-size: 12px; font-weight: 600; }
-.rack .synth-select, .rack .synth-filter-type-select { color: var(--text); font-family: var(--panel-font); font-size: 12px; width: auto; text-transform: uppercase; }
-.rack .preset-name-input { width: 130px; text-transform: none; }
 .synth-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--edge-faint); }
 .synth-tabs button {
   background: var(--surface-control); border: 1px solid var(--edge-control); border-bottom: 0; border-radius: 3px 3px 0 0;
@@ -387,20 +350,7 @@
 }
 .synth-tabs button:hover { border-color: var(--hover); color: var(--text); }
 .synth-tabs button.active { background: var(--on); border-color: var(--on); color: var(--text-on); }
-.rack .synth-columns { display: flex; flex-wrap: wrap; gap: 8px; }
-.rack .synth-columns[data-tab="notes"], .rack .synth-columns[data-tab="arp"] { display: none; }
-.rack .synth-columns[data-tab="osc"] .synth-column:not([data-tab="osc"]),
-.rack .synth-columns[data-tab="filter"] .synth-column:not([data-tab="filter"]),
-.rack .synth-columns[data-tab="amp"] .synth-column:not([data-tab="amp"]),
-.rack .synth-columns[data-tab="lfo"] .synth-column:not([data-tab="lfo"]),
-.rack .synth-columns[data-tab="sends"] .synth-column:not([data-tab="sends"]) { display: none; }
-.rack .synth-column { background: var(--surface-well); border: 1px solid var(--edge-faint); border-radius: 2px; box-shadow: none; padding: 8px 10px; }
-.rack .synth-column h3 { font-family: var(--panel-font); font-size: 12px; letter-spacing: 0.12em; color: var(--text-faint); text-align: left; }
-.rack .synth-column-controls { flex-direction: row; flex-wrap: wrap; align-items: flex-start; gap: 6px 8px; }
-.rack .synth-waveform-selector label { color: var(--text-faint); font-family: var(--panel-font); }
-.rack .synth-toggle input:checked + .synth-toggle-slider { background-color: var(--on); }
 .synth-arp-panel .arp-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.rack .arp-gate-label { color: var(--text-label); display: flex; align-items: center; gap: 6px; }
 .synth-notes { display: flex; flex-direction: column; gap: 10px; }
 .step-tools, .drum-step-details { display: flex; align-items: center; gap: 8px 18px; flex-wrap: wrap; }
 .step-tools label, .drum-step-details label { display: flex; align-items: center; gap: 6px; color: var(--text-label); }
@@ -409,11 +359,6 @@
 .step-tools-swap > * { grid-area: 1 / 1; min-width: 0; }
 .step-tools-controls { display: flex; align-items: center; gap: 8px 18px; flex-wrap: wrap; }
 .step-tools-controls label { display: flex; align-items: center; gap: 6px; color: var(--text-label); }
-.rack .keyboard-panel-toggle .octave-shift-value { color: var(--value); font-family: var(--led-font); }
-.rack .keyboard-container { max-height: none; }
-.rack .key.white { height: 84px; }
-.rack .black-keys, .rack .key.black { height: 52px; }
-.rack .keyboard-header h2 { font-family: var(--panel-font); font-size: 13px; letter-spacing: 0.12em; color: var(--text-faint); }
 
 /* drums */
 .drum-grid { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
@@ -466,26 +411,6 @@
 .drum-tools, .drum-strip-toggles { display: flex; gap: 4px; }
 .drum-strip .rack-knobs, .drum-sends .rack-knobs { gap: 10px; flex: 1; justify-content: flex-start; }
 .drum-step-details input[type="range"] { width: 90px; }
-
-/* effects */
-.effects-unit .effects-panel {
-  background: none; border: 0; border-radius: 0; padding: 0;
-  display: grid; grid-template-columns: var(--plate) minmax(0, 1fr); gap: 12px; align-items: start;
-}
-.effects-unit .effects-panel-header { flex-direction: column; align-items: flex-start; gap: 6px; margin: 0; }
-.effects-unit .effects-panel-header h3 { font-family: var(--panel-font); font-size: 18px; letter-spacing: 0.08em; color: var(--text); }
-.effects-unit .effects-returns { display: flex; gap: 2px; }
-.effects-unit .effects-returns .knob-label { max-width: 96px; }
-/* Two rows of ten: drive, phaser, delay; then chorus, reverb, master EQ. */
-.effects-unit .effects-grid { grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 6px; }
-.effects-unit .effects-block { grid-column: span 3; }
-.effects-unit .effects-block:nth-child(2), .effects-unit .effects-block:nth-child(5) { grid-column: span 4; }
-.effects-unit .effects-block { background: var(--surface-inset); border: 1px solid var(--edge-faint); border-radius: 2px; padding: 6px 8px; display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; }
-.effects-unit .effects-block h4 { font-family: var(--panel-font); font-size: 12px; letter-spacing: 0.12em; color: var(--text-faint); margin: 0; }
-.effects-unit .effects-row-head { margin: 0; gap: 12px; }
-.effects-unit .effects-knobs { grid-column: 1 / -1; flex-direction: row; justify-content: center; gap: 4px; }
-.effects-unit .effects-toggle { color: var(--text-label); font-size: 11px; min-height: 24px; }
-.effects-unit .effects-toggle input[type="checkbox"] { width: 18px; height: 18px; }
 
 /* dialogs */
 .rack-dialog-overlay { position: fixed; inset: 0; z-index: 100; background: rgba(0, 0, 0, 0.7); display: grid; place-items: center; padding: 16px; }
@@ -559,7 +484,6 @@
 .shared-songs strong { overflow-wrap: anywhere; }
 .rack-empty { color: var(--text-faint); }
 .import-notes { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
-.rack .preset-import { cursor: pointer; display: inline-flex; align-items: center; }
 /* The transport stays in reach while the rest of the rack scrolls under it. */
 .rack-unit.transport { position: sticky; top: 0; z-index: 40; box-shadow: 0 6px 14px rgba(0, 0, 0, 0.45); }
 .guest-unit .rack-plate { width: var(--plate); flex: none; }
@@ -585,7 +509,6 @@
 .help-sections { display: flex; flex-direction: column; gap: 12px; }
 .help-list { margin: 4px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
 .help-list-plain { list-style: none; padding-left: 0; }
-.rack-dialog .midi-panel, .rack-dialog .sample-panel { background: var(--surface-inset); border: 1px solid var(--edge-faint); border-radius: 2px; }
 
 /* The walkthrough: everything but one part of the rack is dimmed, and a card explains that part.
    The dimming is the spot's shadow; the shade under it only keeps clicks off the rack. */
@@ -631,7 +554,7 @@
   .app-alert { flex-wrap: wrap; }
 
   /* big enough for a finger */
-  .rack-btn, .rack .octave-shift-btn, .rack .keyboard-panel-toggle button { padding: 9px 12px; font-size: 13px; }
+  .rack-btn { padding: 9px 12px; font-size: 13px; }
   .rack-btn.go { padding: 9px 16px; }
   .rack-ms button { width: 36px; height: 36px; font-size: 13px; }
   .rack-ms.small button { width: 30px; height: 30px; font-size: 12px; }
@@ -688,7 +611,7 @@
      tall as the screen allows. The strip of three octaves is moved an octave at a time by the
      buttons over it (Keyboard reads how far it can go). It never slides under a finger: a
      finger that moves across the keys is playing them. */
-  .rack .keyboard-container { --key-h: clamp(110px, calc(100dvh - 215px), 170px); padding: 6px 0 0; background: none; }
+  .rack .keyboard-container { --key-h: clamp(110px, calc(100dvh - 215px), 170px); padding: 6px 0 0; background: none; border: 0; }
   .rack .keyboard-header { justify-content: flex-start; gap: 6px; margin-bottom: 6px; }
   .rack .keyboard-header h2 { margin-right: auto; }
   .rack .keyboard-reach { min-width: 44px; min-height: 44px; padding: 0; font-size: 15px; }
@@ -708,7 +631,7 @@
      two buttons over the grid, and the note names and step numbers staying put at its edges.
      Only the note names slide the grid, and only up and down: a finger on a square is always
      editing, so the page never moves under it. */
-  .rack .piano-roll { padding: 6px 0 0; background: none; }
+  .rack .piano-roll { padding: 6px 0 0; background: none; border: 0; }
   .piano-roll-header { flex-wrap: wrap; gap: 6px; }
   .piano-roll-header h2 { margin-right: auto; }
   .piano-roll-hint { order: 1; flex: 0 0 100%; margin: 0; text-align: left; font-size: 12px; }
@@ -727,7 +650,7 @@
   .piano-roll-cell, .piano-roll-note-label { min-height: 44px; }
   .piano-roll-corner, .piano-roll-step-header { min-height: 28px; position: sticky; top: 0; z-index: 2; font-size: 12px; }
   .piano-roll-note-label { position: sticky; left: 0; z-index: 1; font-size: 12px; }
-  .piano-roll-corner { left: 0; z-index: 3; background: #1a1a1a; }
+  .piano-roll-corner { left: 0; z-index: 3; background: var(--surface-control); }
   /* under half of the narrowest cell, so the middle of a note is the note and not its end */
   .piano-roll-resize { width: 20px; background: linear-gradient(90deg, rgba(255, 255, 255, 0.2) calc(100% - 6px), rgba(255, 255, 255, 0.8) calc(100% - 6px)); }
 
@@ -837,17 +760,5 @@
   .rack-page * { transition: none !important; scroll-behavior: auto !important; }
 }
 
-.rack .synth-header-tools { flex-direction: row; justify-content: flex-end; }
-.rack-dialog .sample-panel { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
-.rack-dialog .sample-panel h2 { margin: 0; font-family: var(--panel-font); font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text); }
-.rack-dialog .sample-panel button, .rack-dialog .midi-panel button {
-  background: var(--surface-control); border: 1px solid var(--edge-control); border-radius: 3px; color: var(--text-plain); padding: 4px 9px; cursor: pointer;
-  font-family: var(--panel-font); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; font-size: 12px;
-}
-.rack-dialog .sample-panel button:hover:not(:disabled), .rack-dialog .midi-panel button:hover { border-color: var(--hover); color: var(--text); }
-.rack-dialog .midi-panel button.active { background: var(--on); border-color: var(--on); color: var(--text-on); }
-.rack-dialog .sample-list { list-style: none; margin: 0; padding: 0; width: 100%; display: flex; flex-direction: column; gap: 4px; }
-.rack-dialog .sample-list li { display: flex; align-items: center; gap: 8px; }
-.rack-dialog .sample-list li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .guest-confirm { display: inline-flex; gap: 4px; }
 .guest-trouble { margin: 0; padding: 6px 10px; border: 1px solid var(--danger); border-radius: 2px; color: #ffb4a6; text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 13px; }

@@ -1,61 +1,54 @@
-/**
- * Hardware-style synthesizer panel with knobs
- */
-
+/* A lane's sound editor: a box inside the lane's unit, with a box for each group of controls. */
 .synth-controls-panel {
-  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-  border: 2px solid #3a3a3a;
-  border-radius: 12px;
-  padding: 12px;
-  box-shadow:
-    0 8px 24px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--surface-inset);
+  border: 1px solid var(--edge-faint);
+  border-radius: 2px;
+  padding: 10px 12px;
   min-width: 0;
   max-width: none;
   height: auto;
 }
 
 .synth-header {
-  margin-bottom: 12px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #3a3a3a;
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
   flex-wrap: wrap;
 }
 
-.synth-header h2 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: 3px;
-  color: #f59e0b;
-  text-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
-}
-
 .synth-columns {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
+/* One page of the editor at a time: only the boxes of the open tab are shown. */
+.synth-columns[data-tab="notes"], .synth-columns[data-tab="arp"] { display: none; }
+.synth-columns[data-tab="osc"] .synth-column:not([data-tab="osc"]),
+.synth-columns[data-tab="filter"] .synth-column:not([data-tab="filter"]),
+.synth-columns[data-tab="amp"] .synth-column:not([data-tab="amp"]),
+.synth-columns[data-tab="lfo"] .synth-column:not([data-tab="lfo"]),
+.synth-columns[data-tab="sends"] .synth-column:not([data-tab="sends"]) { display: none; }
+
 .synth-column {
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid #2a2a2a;
-  border-radius: 8px;
-  padding: 6px;
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+  background: var(--surface-well);
+  border: 1px solid var(--edge-faint);
+  border-radius: 2px;
+  padding: 8px 10px;
 }
 
 .synth-column h3 {
   margin: 0 0 6px 0;
-  font-size: 11px;
+  font-family: var(--panel-font);
+  font-size: 12px;
   font-weight: 700;
-  letter-spacing: 1.5px;
-  color: #999;
-  text-align: center;
+  letter-spacing: 0.12em;
+  color: var(--text-faint);
+  text-align: left;
 }
 
 .synth-section-header {
@@ -71,39 +64,41 @@
 
 .synth-column-controls {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  align-items: center;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 6px 8px;
 }
 
 .synth-filter-type-row {
   display: flex;
   justify-content: center;
+  gap: 4px;
   width: 100%;
 }
 
+/* The rack gives every select its face (rack.css); these only add what the editor's own need. */
+.synth-select,
 .synth-filter-type-select {
-  background: #222;
-  border: 1px solid #444;
-  border-radius: 4px;
-  color: #10b981;
-  font-size: 0.65rem;
-  font-weight: 700;
-  padding: 0.15rem 0.3rem;
-  cursor: pointer;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  width: 48px;
   text-align: center;
+  cursor: pointer;
 }
 
-.synth-filter-type-select:hover {
-  border-color: #10b981;
+.synth-select {
+  min-width: 56px;
 }
 
-.synth-filter-type-select option {
-  background: #222;
-  color: #10b981;
+.model-select {
+  min-width: 148px;
+}
+
+.preset-select {
+  min-width: 120px;
+}
+
+.arp-select {
+  min-width: 66px;
 }
 
 .synth-lfo-rate-row {
@@ -116,40 +111,20 @@
   transform: scale(0.8);
 }
 
-.synth-octave-controls {
+.synth-octave-controls,
+.synth-header-tools,
+.preset-controls {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
-.model-selector-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  margin-left: 6px;
+.synth-header-tools,
+.preset-controls {
+  justify-content: flex-end;
 }
 
-.model-selector-wrap label {
-  font-size: 10px;
-  color: #aaa;
-  letter-spacing: 1px;
-}
-
-.model-select {
-  min-width: 148px;
-  font-size: 12px;
-  color: #f59e0b;
-}
-
-.synth-header-tools {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
-}
-
-.preset-controls,
 .arp-controls {
   display: flex;
   align-items: center;
@@ -158,66 +133,60 @@
   justify-content: flex-end;
 }
 
-.preset-select {
-  min-width: 120px;
-  font-size: 12px;
-}
-
-.arp-select {
-  min-width: 66px;
-  font-size: 12px;
-}
-
-.preset-name-input {
-  background: #1a1a1a;
-  border: 1px solid #4a4a4a;
-  border-radius: 6px;
-  color: #ddd;
-  padding: 5px 7px;
-  font-size: 12px;
-  min-width: 92px;
-}
-
-.arp-gate-label {
-  font-size: 11px;
-  color: #bbb;
-  display: inline-flex;
+.model-selector-wrap {
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
+  margin-left: 6px;
 }
 
-.arp-gate-label input[type="range"] {
-  width: 84px;
+.model-selector-wrap label,
+.octave-shift-value {
+  font-family: var(--panel-font);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-faint);
 }
 
-.octave-shift-btn {
-  background: #333;
-  color: #00d4ff;
-  border: 2px solid #00d4ff;
-  padding: 6px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.8rem;
-  font-weight: bold;
-  transition: all 0.2s;
-}
-
-.octave-shift-btn:hover:not(:disabled) {
-  background: #00d4ff;
-  color: #000;
-}
-
-.octave-shift-btn:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
+.model-selector-wrap label {
+  letter-spacing: 1px;
 }
 
 .octave-shift-value {
   min-width: 18px;
   text-align: center;
-  font-family: 'Courier New', Courier, monospace;
-  color: #f59e0b;
-  font-weight: 700;
+}
+
+.preset-name-input {
+  background: var(--surface-field);
+  border: 1px solid var(--edge-control);
+  border-radius: 3px;
+  color: var(--text);
+  font: inherit;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  padding: 4px 6px;
+  width: 130px;
+  min-width: 92px;
+  max-width: 100%;
+}
+
+.preset-import {
+  display: inline-flex;
+  align-items: center;
+}
+
+.arp-gate-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-label);
+}
+
+.arp-gate-label input[type="range"] {
+  width: 84px;
 }
 
 /* Waveform selector */
@@ -230,70 +199,12 @@
 }
 
 .synth-waveform-selector label {
+  font-family: var(--panel-font);
   font-size: 11px;
   font-weight: 600;
-  color: #e5e5e5;
+  color: var(--text-faint);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-}
-
-.synth-select {
-  background: #1a1a1a;
-  border: 2px solid #4a4a4a;
-  border-radius: 6px;
-  color: #3b82f6;
-  font-size: 16px;
-  font-weight: bold;
-  padding: 6px 10px;
-  cursor: pointer;
-  transition: all 0.2s;
-  text-align: center;
-  min-width: 56px;
-}
-
-.synth-select:hover {
-  border-color: #3b82f6;
-  box-shadow: 0 0 8px rgba(59, 130, 246, 0.3);
-}
-
-.synth-select:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 12px rgba(59, 130, 246, 0.5);
-}
-
-.synth-select option {
-  background: #1a1a1a;
-  color: #e5e5e5;
-  padding: 8px;
-}
-
-.synth-model-macros {
-  border: 1px solid #4b3a1d;
-  border-radius: 10px;
-  padding: 8px;
-  margin-bottom: 10px;
-  background: rgba(245, 158, 11, 0.06);
-}
-
-.synth-model-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 8px;
-  margin-bottom: 6px;
-}
-
-.synth-model-header h3 {
-  margin: 0;
-  font-size: 12px;
-  color: #f59e0b;
-  letter-spacing: 1px;
-}
-
-.synth-model-header span {
-  font-size: 11px;
-  color: #c4b087;
 }
 
 .synth-model-macro-grid {
@@ -302,7 +213,7 @@
   grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
 }
 
-/* Toggle switch for effects */
+/* A sliding switch: dark when off, lit when on. */
 .synth-toggle {
   position: relative;
   display: inline-block;
@@ -321,11 +232,6 @@
   cursor: pointer;
 }
 
-.synth-toggle input:focus-visible + .synth-toggle-slider {
-  outline: 2px solid #f59e0b;
-  outline-offset: 3px;
-}
-
 .synth-toggle input:disabled + .synth-toggle-slider {
   opacity: 0.4;
 }
@@ -337,7 +243,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: #4a4a4a;
+  background-color: var(--edge);
   transition: 0.3s;
   border-radius: 20px;
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
@@ -350,45 +256,26 @@
   width: 14px;
   left: 3px;
   bottom: 3px;
-  background-color: #1a1a1a;
+  background-color: var(--surface-control);
   transition: 0.3s;
   border-radius: 50%;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .synth-toggle input:checked + .synth-toggle-slider {
-  background-color: #f59e0b;
+  background-color: var(--on);
   box-shadow:
     inset 0 2px 4px rgba(0, 0, 0, 0.2),
-    0 0 8px rgba(245, 158, 11, 0.3);
+    0 0 8px var(--on-glow);
 }
 
 .synth-toggle input:checked + .synth-toggle-slider:before {
   transform: translateX(20px);
-  background-color: #fff;
+  background-color: var(--text);
 }
 
 .synth-toggle:hover .synth-toggle-slider {
   opacity: 0.9;
-}
-
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .synth-controls-panel {
-    padding: 10px;
-    max-width: 100%;
-  }
-
-  .synth-header h2 {
-    font-size: 14px;
-    letter-spacing: 2px;
-  }
-}
-
-@media (max-width: 480px) {
-  .synth-controls-panel {
-    padding: 8px;
-  }
 }
 
 .synth-env-viz .synth-column-controls {
@@ -397,4 +284,8 @@
 
 .synth-env-viz svg {
   opacity: 0.8;
+}
+
+.synth-env-viz polyline {
+  stroke: var(--value);
 }

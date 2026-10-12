@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.25rem;
+  gap: 4px;
   user-select: none;
 }
 
@@ -19,33 +19,36 @@
   display: block;
 }
 
+.drum-knob-svg line { stroke: var(--value); }
+.drum-knob-svg circle:last-child { fill: var(--value); }
+
 .drum-knob-label {
-  font-size: 0.65rem;
-  color: #888;
+  font-size: 11px;
+  color: var(--text-label);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .drum-knob-value-input {
-  font-size: 0.7rem;
-  color: #f59e0b;
-  font-family: 'Courier New', Courier, monospace;
-  font-weight: 600;
-  background: rgba(245, 158, 11, 0.1);
+  font-family: var(--led-font);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--value);
+  background: var(--surface-field);
+  box-sizing: content-box;
+  width: 8.5ch;
+  min-width: 4.5ch;
+  max-width: none;
+  padding: 1px 2px;
   border: 1px solid transparent;
   border-radius: 4px;
   text-align: center;
-  padding: 1px 3px;
-  width: 4.1ch;
-  min-width: 0;
-  max-width: 4.8ch;
-  outline: none;
 }
 
-.drum-knob-value-input:focus {
-  border-color: rgba(245, 158, 11, 0.7);
+@supports (field-sizing: content) {
+  .drum-knob-value-input { field-sizing: content; width: auto; }
 }
+
 .drum-knob-rotary:focus-visible {
-  outline: 2px solid #f59e0b;
   border-radius: 50%;
 }

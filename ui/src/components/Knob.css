@@ -2,9 +2,9 @@
   display: inline-flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   position: relative;
-  padding: 8px;
+  padding: 0 2px;
   user-select: none;
 }
 
@@ -36,6 +36,12 @@
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
 }
 
+/* A knob's pointer is a figure being read, so it is the colour of one whatever colour it was given. */
+.knob-svg line { stroke: var(--value); }
+.knob-svg circle:last-child { fill: var(--value); }
+.knob-disabled .knob-svg line { stroke: var(--edge-strong); }
+.knob-disabled .knob-svg circle:last-child { fill: var(--edge-strong); }
+
 /* Size variants */
 .knob-small .knob-svg {
   width: 36px;
@@ -53,63 +59,42 @@
 }
 
 .knob-label {
+  font-family: var(--panel-font);
   font-size: 11px;
   font-weight: 600;
-  color: #e5e5e5;
+  color: var(--text-label);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.06em;
   text-align: center;
-  max-width: 80px;
+  max-width: 64px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .knob-value-input {
-  font-size: 10px;
-  color: #f59e0b;
-  font-weight: 500;
-  font-family: 'Courier New', monospace;
-  background: rgba(245, 158, 11, 0.1);
-  padding: 1px 4px;
-  border-radius: 3px;
-  width: 4.4ch;
-  min-width: 0;
-  max-width: 5.4ch;
-  text-align: center;
+  font-family: var(--led-font);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--value);
+  background: var(--surface-field);
+  box-sizing: content-box;
+  width: 8.5ch;
+  min-width: 4.5ch;
+  max-width: none;
+  padding: 1px 2px;
   border: 1px solid transparent;
-  outline: none;
+  border-radius: 3px;
+  text-align: center;
 }
 
-.knob-value-input:focus {
-  border-color: rgba(245, 158, 11, 0.7);
+/* Where the browser can size a field to what it holds, the figure never loses its unit's last letter. */
+@supports (field-sizing: content) {
+  .knob-value-input { field-sizing: content; width: auto; }
 }
 
 .knob-rotary:focus-visible {
-  outline: 2px solid #f59e0b;
   border-radius: 50%;
-}
-
-.knob-disabled .knob-value-input {
-  color: #666;
-  background: rgba(102, 102, 102, 0.1);
-}
-
-/* Responsive sizing */
-@media (max-width: 768px) {
-  .knob {
-    padding: 6px;
-  }
-
-  .knob-label {
-    font-size: 10px;
-  }
-
-  .knob-value-input {
-    font-size: 9px;
-    padding: 1px 4px;
-    min-width: 40px;
-  }
 }
 
 /* The wheel will turn this knob (knobWheel.ts) */

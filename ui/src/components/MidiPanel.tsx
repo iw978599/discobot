@@ -76,7 +76,7 @@ export default function MidiPanel({
             {(['live', 'record', 'step'] as MidiMode[]).map((value) => (
               <button
                 key={value}
-                className={mode === value ? 'active' : ''}
+                className={mode === value ? 'rack-btn on' : 'rack-btn'}
                 aria-pressed={mode === value}
                 onClick={() => onModeChange(value)}
               >
