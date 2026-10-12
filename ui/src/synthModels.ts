@@ -142,6 +142,18 @@ export const SYNTH_MODELS: SynthModelDefinition[] = [
     ],
   },
   {
+    id: 'polysix',
+    name: 'Polysix',
+    group: 'Poly',
+    subtitle: 'Warm poly: one oscillator with a moving pulse and a sub, one envelope, and its ensemble',
+    macros: [
+      { key: 'macro1', label: 'PWM' },
+      { key: 'macro2', label: 'Resonance' },
+      { key: 'macro3', label: 'Brightness' },
+      { key: 'macro4', label: 'Ensemble' },
+    ],
+  },
+  {
     id: 'pro-one',
     name: 'Pro-One',
     group: 'Mono',
@@ -389,24 +401,60 @@ function mapJp8000(params: SynthModelParams): Partial<SynthParameters> {
   };
 }
 
+// One oscillator a note, a pulse whose width an LFO keeps moving, a sub under it, a four-pole
+// filter and one envelope for filter and level. What made the instrument sound bigger than one
+// oscillator was the ensemble it had built in. This synth's chorus is one shared effect with a
+// send from each lane, so the fourth macro is the lane's chorus send: the one model that
+// changes a mix setting, which the owner agreed to for this model alone.
+function mapPolysix(params: SynthModelParams): Partial<SynthParameters> {
+  const shared = { attack: 0.02, decay: 0.5, sustain: 0.7, release: 0.5 };
+  const movement = Number(range(0, 0.8, params.macro1).toFixed(2));
+  return {
+    engine: 'subtractive',
+    voiceMode: 'poly',
+    oscillator: { type: 'square', detune: 0, pulseWidth: 0.5 },
+    oscillator2: { enabled: false, type: 'sawtooth', semitones: 0, detune: 0, level: 0 },
+    mixer: { sub: 0.4, noise: 0, osc: 1 },
+    filter: {
+      type: 'lowpass',
+      frequency: Math.round(250 * (10000 / 250) ** clamp01(params.macro3)),
+      q: Number(range(0.4, 6, params.macro2).toFixed(2)),
+      envAmount: 0.25,
+      keyTracking: 0.5,
+      drive: 0.05,
+      slope: 24,
+    },
+    filterEnvelope: { ...shared },
+    envelope: { ...shared },
+    velocity: { amp: 1, filter: 0.15 },
+    portamento: { enabled: false, glide: 0.05 },
+    lfo1: { sync: false, retrigger: false, enabled: movement > 0, target: 'pulseWidth', waveform: 'triangle', rate: 0.6, depth: movement },
+    fxSends: { chorus: Number(range(0, 0.8, params.macro4).toFixed(2)) } as SynthParameters['fxSends'],
+  };
+}
+
 // What a lane is given when it moves to a model: the model's macros, and anything another model
 // may have left on the lane that this one does not set for itself. A lane that only has a macro
 // turned gets the macros alone (mapSynthModelToEngineParams), so a slope or a unison someone
 // chose on it stays. The plain engine takes nothing away: it is where a model's sound is taken
 // to be changed by hand.
-export function enterSynthModel(modelId: SynthModelId, modelParams: SynthModelParams): Partial<SynthParameters> {
+export function enterSynthModel(modelId: SynthModelId, modelParams: SynthModelParams, leaving?: SynthModelId): Partial<SynthParameters> {
   const mapped = mapSynthModelToEngineParams(modelId, modelParams);
   if (modelId === 'generic') return mapped;
   return {
     ...mapped,
     unison: mapped.unison ?? { voices: 1, detune: 0.3, mix: 1 },
     filter: { slope: 12, ...mapped.filter } as SynthParameters['filter'],
+    // The Polysix's ensemble is the lane's chorus send. It goes when the lane leaves the Polysix;
+    // a chorus send on any other lane is the person's own and is not touched.
+    ...(leaving === 'polysix' && modelId !== 'polysix' ? { fxSends: { chorus: 0 } as SynthParameters['fxSends'] } : {}),
   };
 }
 
 export function mapSynthModelToEngineParams(modelId: SynthModelId, modelParams: SynthModelParams): Partial<SynthParameters> {
   if (modelId === 'generic') return {};
   if (modelId === 'jp-8000') return mapJp8000(modelParams);
+  if (modelId === 'polysix') return mapPolysix(modelParams);
   if (modelId === 'mono-poly') {
     return {
       ...mapModel(modelParams, {

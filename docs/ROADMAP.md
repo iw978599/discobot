@@ -188,11 +188,12 @@ target; removal of the AI review workflow.
        namesakes, and one may be left out if no usable waveforms are found.
    Asked for by the owner on 2026-10-12, as well as more presets: a review
    of every built-in preset's sound, redesigning the weak ones.
-   Done on 2026-10-12: the first six new models, SH-101, Pro-One,
-   Jupiter-8, OB-Xa, JP-8000 and Mono/Poly, with thirteen presets between
-   them and the model menu grouped Mono, Poly and Digital. Unison goes to
-   seven copies, with a level for the side copies. Eight models to go.
-   Not verified by ear.
+   Done on 2026-10-12: the seven models that needed nothing new from the
+   voice, SH-101, Pro-One, Jupiter-8, OB-Xa, JP-8000, Mono/Poly and
+   Polysix, with fifteen presets between them and the model menu grouped
+   Mono, Poly and Digital. Unison goes to seven copies, with a level for
+   the side copies. Seven models to go, each waiting on engine work.
+   Not verified by ear: the owner listens to these seven next.
    Done on 2026-10-12: the seventeen old presets are replaced by forty, in
    all six kinds including Effects, each measured so that presets of a kind
    are about as loud as each other (the old ones differed by 18 dB). Not

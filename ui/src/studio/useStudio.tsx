@@ -1437,7 +1437,7 @@ export function useStudio() {
     await Promise.resolve();
     // A lane moving to another model also has put back what the model it leaves may have set.
     const mapped = normalizedModelId !== synth.synthModelId
-      ? enterSynthModel(normalizedModelId, normalizedModelParams)
+      ? enterSynthModel(normalizedModelId, normalizedModelParams, synth.synthModelId)
       : mapSynthModelToEngineParams(normalizedModelId, normalizedModelParams);
     if (Object.keys(mapped).length > 0) localService.setSynthParams(synthId, mapped);
   }, [pushHistorySnapshot]);
