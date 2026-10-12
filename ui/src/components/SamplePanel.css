@@ -6,13 +6,13 @@
   padding: 10px 12px;
   background: var(--surface-inset);
   border: 1px solid var(--edge-faint);
-  border-radius: 2px;
+  border-radius: var(--corner-panel);
 }
 
 .sample-panel h2 {
   margin: 0;
   font-family: var(--panel-font);
-  font-size: 13px;
+  font-size: var(--type-label);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text);

@@ -1,7 +1,7 @@
 .keyboard-container {
   background: var(--surface-well);
   border: 1px solid var(--edge-faint);
-  border-radius: 2px;
+  border-radius: var(--corner-panel);
   padding: 8px 10px;
   overflow: hidden;
 }
@@ -14,7 +14,7 @@
 }
 
 .keyboard-header h2 {
-  font-size: 13px;
+  font-size: var(--type-label);
   font-weight: 600;
   letter-spacing: 0.12em;
   color: var(--text-faint);
@@ -22,7 +22,7 @@
 }
 
 .keyboard-range {
-  font-size: 13px;
+  font-size: var(--type-label);
   color: var(--text-faint);
   font-family: var(--led-font);
   letter-spacing: 0;
@@ -61,8 +61,8 @@
   height: 84px;
   background: #fff;
   border: 1px solid #ccc;
-  border-radius: 0 0 2px 2px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  border-radius: 0 0 var(--corner-panel) var(--corner-panel);
+  box-shadow: var(--shadow-control);
 }
 
 .key.white:hover {
@@ -74,7 +74,7 @@
   background: var(--on);
   border-color: var(--on-bright);
   transform: translateY(2px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-control);
 }
 
 .key-label {
@@ -82,7 +82,7 @@
   bottom: 10px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 12px;
+  font-size: var(--type-label);
   color: #666;
   font-weight: 500;
   pointer-events: none;
@@ -107,8 +107,8 @@
   height: 52px;
   background: #1a1a1a;
   border: 1px solid #000;
-  border-radius: 0 0 2px 2px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.5);
+  border-radius: 0 0 var(--corner-panel) var(--corner-panel);
+  box-shadow: var(--shadow-control);
   pointer-events: all;
   z-index: 10;
 }
