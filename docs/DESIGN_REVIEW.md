@@ -147,7 +147,7 @@ charcoal). Make hover a lighter border, not amber. Use one look for every
 "on" toggle. The steps' "selected" ring would then need to differ from
 focus: a thicker white ring for selected, a double ring for focus.
 
-### 4. The piano roll, the keyboard and parts of the sound editor are in an older colour scheme. Inconsistency, medium.
+### 4. The piano roll, the keyboard and parts of the sound editor are in an older colour scheme. Inconsistency, medium. **Done as redesign C part 2.** The switch reads "Keys" and "Roll". Seen only in the pictures the checks take, not on a real screen.
 
 - Notes are amber in the row of steps and blue in the piano roll directly
   beneath it. `phone/phone-piano-roll.png`, `desktop/unit-synth-piano-roll.png`.
@@ -325,7 +325,7 @@ button over the file chooser; the app's own dialog for the three
 confirmations (which also lets Delete be styled as dangerous); turn the tap
 mark off for the whole page.
 
-### 11. The MIDI and samples dialog is the least finished screen. Polish, small.
+### 11. The MIDI and samples dialog is the least finished screen. Polish, small. **Done with redesign C part 2.** The file chooser is still the browser's own; that is finding 10.
 
 The sampler's box is indented and narrower than the box above it, the
 "not supported" message sits in a small box of its own at a different width
@@ -542,7 +542,12 @@ surface but `--surface-control`, `--surface-inset`, `--surface-field` and
 `--text-faint` and `--text-on`; and `--action`, `--select` and `--gap`
 were added. What parts 2 and 3 build on:
 
-- Part 2 (the older components): move `PianoRoll.css`, `Keyboard.css`,
+- **Part 2 is done.** Each component's stylesheet holds its own look on the
+  names, the `.rack .…` overrides and the old names are deleted, and the
+  buttons that had a style of their own are `.rack-btn`. Left written out:
+  the piano's white and black keys, and the knob's body in `Knob.tsx` and
+  `DrumKnob.tsx`. The knobs are still passed a `color` each that nothing
+  shows; it can be removed. What it was asked to do: move `PianoRoll.css`, `Keyboard.css`,
   `KeyboardPanel.css`, `SynthControls.css`, `EffectsPanel.css`,
   `MidiPanel.css`, `Knob.css` and `DrumKnob.css` onto the names and delete
   the `.rack .…` overrides. A note in the piano roll and a pressed key

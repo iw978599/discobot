@@ -142,8 +142,9 @@ Tick things off here as they merge.
 ### Step 1. Design-review findings 1 to 6
 
 Findings 1, 2, 3, 5 and 6 are merged. **Finding 4** (the piano roll,
-keyboard and sound editor still in an older colour scheme) is done as
-redesign C part 2, the first thing on the look track below.
+keyboard and sound editor still in an older colour scheme) is built as
+redesign C part 2, on the branch `feat/design-review-older-components`.
+Check that pull request's state before anything else on the look track.
 
 ### Step 2. The rest of the owner's picks from the design review
 
@@ -158,7 +159,9 @@ it done.
 
 **Look track (Opus, with the frontend-design skill), in order:**
 
-1. **Redesign C part 2, with findings 4 and 11.** Move `PianoRoll.css`,
+1. **Redesign C part 2, with findings 4 and 11.** Built on
+   `feat/design-review-older-components` on 2026-10-12 by the session that
+   picked this file up; see its pull request. What it was: move `PianoRoll.css`,
    `Keyboard.css`, `KeyboardPanel.css`, `SynthControls.css`,
    `EffectsPanel.css`, `MidiPanel.css`, `Knob.css` and `DrumKnob.css` onto
    the named colours and delete the `.rack .…` overrides in `rack.css`.

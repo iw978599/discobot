@@ -200,8 +200,7 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 ## Colours and States
 The rack's colours are named in `rack.css` (on `.rack-page`) by the job they do. A new control
 picks from these names and never writes a colour out; if no name fits, add one there and to this
-table. The names from before (`--amber`, `--ink`, `--legend`, `--dim`, `--well`, `--rail`,
-`--unit-top`, `--unit-bottom`) still work and point at these; do not use them in anything new.
+table. The names from before (`--amber`, `--ink`, `--legend`, `--dim` and the rest) are gone.
 
 | Job | Name |
 |-----|------|
@@ -230,7 +229,7 @@ table. The names from before (`--amber`, `--ink`, `--legend`, `--dim`, `--well`,
 - Amber means two things only: this is on or holds something (`--on`), and this is a figure (`--value`). It is not for emphasis, headings, hover or focus. The two have the same colour today and are separate names so that either can change.
 - Four states look different, and `state-looks.spec.ts` holds them apart. **Focus** is a 2px white ring 2px outside the control with a dark gap between (`.rack-page :is(...):focus-visible`), the same on everything; a new kind of focusable thing must be added to that rule's list. Where a ring outside would be cut off or lie under a neighbour (menu rows, song blocks, piano keys, the piano roll, the bar of units) the ring and gap are drawn inside the edge; add to that second list for anything in a clipped strip. **Hover** is a lighter edge (`--hover`), an underline where there is no edge, and a lighter face on something lit, the last only under `@media (hover: hover)` because a touch screen keeps a hover after a tap. **Selected** (a step the controls below act on) is a frame inside the step's own edge. **On** is an amber face with a dark word, for every toggle and every "this one is open"; the bar of units on a phone shows it as a lit lamp instead.
 - The focus ring's gap and the selected frame are both `box-shadow`, so a rule that gives a focusable thing a shadow of its own must say what it looks like focused as well (see `.step-cell.selected:focus-visible`), or focusing it would drop one of them.
-- The older components' own stylesheets (`PianoRoll.css`, `Keyboard.css`, `KeyboardPanel.css`, `SynthControls.css`, `EffectsPanel.css`, `MidiPanel.css`, `Knob.css`, `DrumKnob.css`) are not on these names yet; that, and sizes and corners, are parts 2 and 3 of redesign C in `docs/DESIGN_REVIEW.md`. Kids mode has its own look and none of this applies to it.
+- Each component's own stylesheet in `ui/src/components/` holds its whole look, on these names. `rack.css` does not restyle a component from outside: the only rules there that reach into one are the phone layout's (inside its media block) and the focus ring. A button anywhere is a `.rack-btn` (`.on` when lit, `.danger` when it deletes); do not give a component a button style of its own. The piano's keys are written out as a piano's white and black, and a knob's pointer is `--value` whatever `color` it was passed. Sizes and corners are part 3 of redesign C in `docs/DESIGN_REVIEW.md`. Kids mode has its own look and none of this applies to it.
 
 ## Drum Instrument Details
 | Instrument | Tone range | Extra knob | Engine function |
