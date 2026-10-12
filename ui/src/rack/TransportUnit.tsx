@@ -1,4 +1,7 @@
 import { useEffect, useRef } from 'react';
+import { useNarrow } from '../hooks/useNarrow';
+import SaveState from './SaveState';
+import { spaceBelongsToTarget } from '../hooks/useComputerKeyboard';
 import type { Studio } from '../studio/useStudio';
 import Knob from '../components/Knob';
 import Menu from './Menu';
@@ -23,6 +26,22 @@ export default function TransportUnit({ studio, onOpenSettings, onOpenProjects, 
   const { midiState } = studio;
   const exporting = studio.exportStatus?.phase === 'working';
   const user = useAccountUser();
+  const narrow = useNarrow();
+  // Space plays and stops, unless it belongs to whatever has the keyboard: a button or link it
+  // would press, a field it types in, a menu, or a dialog.
+  const playStop = useRef(studio.handleGlobalPlayStop);
+  playStop.current = studio.handleGlobalPlayStop;
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.code !== 'Space' || event.repeat || event.defaultPrevented) return;
+      if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+      if (spaceBelongsToTarget(event.target) || document.querySelector('[aria-modal="true"]')) return;
+      event.preventDefault();
+      void playStop.current();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
   const midiStatus = !midiState.supported ? 'MIDI is not available in this browser'
     : midiState.connected ? 'A MIDI controller is connected' : 'No MIDI controller connected';
   // On a narrow screen the bar wraps over several lines and only the last, with the tempo and
@@ -42,12 +61,15 @@ export default function TransportUnit({ studio, onOpenSettings, onOpenProjects, 
       <div className="rack-row">
         <div className="rack-plate static brand">
           <h1>Discobot</h1>
-          <button className="project-name" onClick={onOpenProjects} aria-label={`Project: ${studio.projectName}`} title="See all projects, rename this one, or keep a copy">
-            {studio.projectName || 'Untitled'}
-          </button>
+          <div className="project-line">
+            <button className="project-name" onClick={onOpenProjects} aria-label={`Project: ${studio.projectName}`} title="See all projects, rename this one, or keep a copy">
+              {studio.projectName || 'Untitled'}
+            </button>
+            {!narrow && <SaveState projectId={studio.projectId} />}
+          </div>
         </div>
         <TempoDisplay tempo={studio.globalTempo} onChange={(bpm) => { void studio.handleTempoChange(bpm); }} />
-        <button className={`rack-btn go play-all-button ${studio.isAnyPlaying ? 'playing' : ''}`} onClick={() => { void studio.handleGlobalPlayStop(); }}>
+        <button className={`rack-btn go play-all-button ${studio.isAnyPlaying ? 'playing' : ''}`} onClick={() => { void studio.handleGlobalPlayStop(); }} title={`${studio.isAnyPlaying ? 'Stop' : 'Start'} every lane and the drums (Space)`}>
           {studio.isAnyPlaying ? '⏹ Stop All' : '▶ Play All'}
         </button>
         <div className="rack-grow" />

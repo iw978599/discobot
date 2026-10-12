@@ -65,6 +65,9 @@ export class LocalProjectService {
   private unsaved = false;
   // Set when another tab has written the project: this tab stops saving until the user chooses a version.
   private paused = false;
+  // True after a write was refused (storage full or blocked); cleared by the next one that works.
+  private writeFailed = false;
+  private saveListeners = new Set<() => void>();
   private library: ProjectLibrary = createMemoryLibrary();
   // False until a stored working copy was found, so a first run can adopt a library project instead.
   private hadWorkingCopy = false;
@@ -100,6 +103,7 @@ export class LocalProjectService {
       window.addEventListener('storage', (event) => {
         if (event.key !== STORAGE_KEY || this.paused) return;
         this.paused = true;
+        this.saveChanged();
         this.emit('externalChange', {});
       });
     }
@@ -276,6 +280,7 @@ export class LocalProjectService {
     this.restored = true;
     this.paused = false;
     this.write();
+    this.saveChanged();
     this.emit('init', this.snapshot());
   }
 
@@ -609,6 +614,7 @@ export class LocalProjectService {
   // Marks the project as changed; the write follows once edits pause.
   private persist() {
     this.unsaved = true;
+    this.saveChanged();
     if (this.saveTimer !== null) clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => { this.flush(); }, SAVE_DELAY_MS);
   }
@@ -625,10 +631,28 @@ export class LocalProjectService {
   // Another tab changed the stored project. Keep this tab's version: save it over theirs and carry on.
   resumeSaving(): boolean {
     this.paused = false;
-    return this.write();
+    const ok = this.write();
+    this.saveChanged();
+    return ok;
   }
 
   get savingPaused() { return this.paused; }
+
+  // Where the open project's work is, as far as this browser knows: another tab has it and this
+  // one has stopped saving, the last write was refused, edits are waiting for the short delay
+  // before they are written, or everything is written.
+  saveState(): 'paused' | 'failed' | 'saving' | 'saved' {
+    return this.paused ? 'paused' : this.writeFailed ? 'failed' : this.unsaved ? 'saving' : 'saved';
+  }
+
+  subscribeSaveState(listener: () => void) {
+    this.saveListeners.add(listener);
+    return () => { this.saveListeners.delete(listener); };
+  }
+
+  private saveChanged() {
+    this.saveListeners.forEach(listener => listener());
+  }
 
   private write() {
     if (this.saveTimer !== null) clearTimeout(this.saveTimer);
@@ -640,6 +664,8 @@ export class LocalProjectService {
       state.updatedAt = Date.now();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       this.unsaved = false;
+      this.writeFailed = false;
+      this.saveChanged();
       // Keep the library's record of this project in step. It is asynchronous and may not finish
       // if the tab is closing; the working copy just written is what a reload reads.
       const saved = this.currentRecord();
@@ -651,6 +677,8 @@ export class LocalProjectService {
       return true;
     } catch {
       this.unsaved = true;
+      this.writeFailed = true;
+      this.saveChanged();
       this.storageIssue = 'Unable to save to browser storage. Free space or allow storage for this site.';
       this.emit('storageError', { message: this.storageIssue });
       return false;

@@ -21,6 +21,14 @@ export function isTypingTarget(target: EventTarget | null): boolean {
   return !['range', 'checkbox', 'radio', 'button', 'file'].includes((target as HTMLInputElement).type);
 }
 
+// Whether the Space key means something to the element that has the keyboard: it presses a
+// button, follows a link, types in a field or picks from a menu, and must be left to do so.
+export function spaceBelongsToTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  return target.closest('button, a[href], input, textarea, select, summary, [role="button"], [role="menu"], [role="menuitem"], [role="option"], [role="tab"], [role="checkbox"], [role="radio"], [role="switch"], [role="textbox"], [role="combobox"]') !== null;
+}
+
 interface ComputerKeyboardTarget {
   synthId: number;
   octaveShift: number;
