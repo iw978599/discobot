@@ -22,13 +22,18 @@ jobs:
       - run: npm test
       - run: npm run build
   # The browser tests are most of the time a run takes, and half of them are the same tests at
-  # phone width. Each width gets a machine of its own, so they run at once.
+  # phone width. Each width's spec files are dealt out to four machines, so eight run at once and
+  # the wait is the slowest quarter, not the whole suite. Each machine has its own copy of the app
+  # and of the accounts API, so the specs still run one at a time against the server they reset.
   browser:
     runs-on: ubuntu-latest
+    # A whole quarter takes about three minutes. A machine that has stopped is given up on.
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         project: [chromium, mobile-chromium]
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -38,8 +43,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Fetching the browser has hung for ten minutes and more on a machine that was otherwise well.
       - run: npx playwright install --with-deps chromium
-      - run: npx playwright test --project=${{ matrix.project }}
+        timeout-minutes: 5
+      - run: npx playwright test --project=${{ matrix.project }} --shard=${{ matrix.shard }}/4
         # A branch named for a design review also takes its pictures (design-shots.spec.ts).
         env:
           DESIGN_SHOTS: ${{ contains(github.head_ref, 'design-review') && '1' || '' }}
@@ -49,7 +56,26 @@ jobs:
       - if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results-${{ matrix.project }}
+          name: test-results-${{ matrix.project }}-${{ matrix.shard }}
           path: test-results/
           retention-days: 7
           if-no-files-found: ignore
+  # The four machines' results for a width are put back together under the name they have always
+  # had (test-results-chromium, test-results-mobile-chromium), so one download gets them all.
+  results:
+    if: ${{ !cancelled() }}
+    needs: browser
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium, mobile-chromium]
+    steps:
+      - uses: actions/upload-artifact/merge@v4
+        # With nothing kept by any machine there is nothing to put together, which is not a failure.
+        continue-on-error: true
+        with:
+          name: test-results-${{ matrix.project }}
+          pattern: test-results-${{ matrix.project }}-*
+          delete-merged: true
+          retention-days: 7
