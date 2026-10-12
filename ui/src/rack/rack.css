@@ -171,12 +171,17 @@
 .rack-menu-list button:hover, .rack-menu-list button:focus-visible { background: var(--amber); color: #111; }
 
 /* transport */
-.transport .brand { width: auto; min-width: var(--plate); max-width: 220px; }
+.transport .brand { width: auto; min-width: var(--plate); max-width: 340px; }
 .project-name {
   background: none; border: 0; padding: 0; color: var(--amber); font: inherit; font-size: 11px; text-transform: none;
   letter-spacing: 0.04em; cursor: pointer; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
 }
 .project-name:hover { text-decoration: underline; }
+.project-line { display: flex; align-items: baseline; gap: 8px; max-width: 100%; }
+.project-line .project-name { min-width: 0; flex: 0 1 auto; }
+.save-state { position: relative; flex: none; width: 7.2em; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); }
+.save-state.full { width: auto; font-size: 13px; text-transform: none; letter-spacing: 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .tempo-display-group { display: flex; align-items: center; gap: 6px; }
 .tempo-led {
   display: flex; align-items: baseline; gap: 8px; cursor: text;
