@@ -197,6 +197,41 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 - `localService.exportProject()` / `importProject()` are the project file format (`format: 'discobot-project'`). Import goes through the same `restore()` sanitizing as a reload; never trust a file's contents. `exportProject()` is also what share links, published songs, sync and sharing are made from, so it must never hold audio: only the saved file gains its `samples`, in `useStudio`.
 - The service worker serves hashed files under `assets/` cache-first and everything else network-first. Keep unhashed files (the page, `audio-worklet.js`) network-first, or an update would pair a new app with a stale worklet.
 
+## Colours and States
+The rack's colours are named in `rack.css` (on `.rack-page`) by the job they do. A new control
+picks from these names and never writes a colour out; if no name fits, add one there and to this
+table. The names from before (`--amber`, `--ink`, `--legend`, `--dim`, `--well`, `--rail`,
+`--unit-top`, `--unit-bottom`) still work and point at these; do not use them in anything new.
+
+| Job | Name |
+|-----|------|
+| Behind the rack; the rack's frame | `--surface-page`; `--surface-rail` |
+| A unit or a dialog | `--surface-panel` (a gradient of `--surface-panel-top` and `-bottom`) |
+| A box inside a unit (the sound editor, an effect, a row of a list) | `--surface-inset` |
+| A button's face, a menu | `--surface-control`, and `--surface-hover` under a pointer where there is no edge to lighten |
+| An empty step, a slider's track | `--surface-well` |
+| Somewhere to type or choose | `--surface-field` |
+| Behind lit figures (the tempo) | `--surface-display` |
+| A line round a unit; a stronger one; a fainter one; a control's; an empty step on a beat | `--edge`; `--edge-strong`; `--edge-faint`; `--edge-control`; `--edge-beat` |
+| A name, a heading, what was typed | `--text` |
+| A sentence, a word on a button | `--text-plain` |
+| A label beside a control | `--text-label` |
+| A caption, a hint, a disabled word (4.5 to 1 on a panel, no fainter) | `--text-faint` |
+| A word on anything lit | `--text-on` |
+| On, open, or holding something: a step with a note, a pressed-in toggle, mute, the open scene, the open lane's edge, a lamp | `--on`, with `--on-bright` (its lighter edge, and its face under a pointer), `--on-glow` and `--lamp-off` |
+| A figure being read out: the tempo, a knob's value and pointer, a count | `--value`, `--value-glow` |
+| The one main button of a bar or a dialog (`.rack-btn.go`) | `--action` |
+| Keyboard focus | `--focus`, held off the control by `--gap` |
+| The selected step | `--select`, with a line of `--gap` under it |
+| A pointer over a control | `--hover` (its edge) |
+| Something that deletes or has failed | `--danger` |
+| A drum lane | `--drum-kick`, `--drum-snare`, `--drum-clap`, `--drum-closed-hat`, `--drum-open-hat`, `--drum-low-tom`, `--drum-high-tom`, `--drum-cymbal`; a row carries `data-drum` and reads its own as `--drum-color` |
+
+- Amber means two things only: this is on or holds something (`--on`), and this is a figure (`--value`). It is not for emphasis, headings, hover or focus. The two have the same colour today and are separate names so that either can change.
+- Four states look different, and `state-looks.spec.ts` holds them apart. **Focus** is a 2px white ring 2px outside the control with a dark gap between (`.rack-page :is(...):focus-visible`), the same on everything; a new kind of focusable thing must be added to that rule's list. Where a ring outside would be cut off or lie under a neighbour (menu rows, song blocks, piano keys, the piano roll, the bar of units) the ring and gap are drawn inside the edge; add to that second list for anything in a clipped strip. **Hover** is a lighter edge (`--hover`), an underline where there is no edge, and a lighter face on something lit, the last only under `@media (hover: hover)` because a touch screen keeps a hover after a tap. **Selected** (a step the controls below act on) is a frame inside the step's own edge. **On** is an amber face with a dark word, for every toggle and every "this one is open"; the bar of units on a phone shows it as a lit lamp instead.
+- The focus ring's gap and the selected frame are both `box-shadow`, so a rule that gives a focusable thing a shadow of its own must say what it looks like focused as well (see `.step-cell.selected:focus-visible`), or focusing it would drop one of them.
+- The older components' own stylesheets (`PianoRoll.css`, `Keyboard.css`, `KeyboardPanel.css`, `SynthControls.css`, `EffectsPanel.css`, `MidiPanel.css`, `Knob.css`, `DrumKnob.css`) are not on these names yet; that, and sizes and corners, are parts 2 and 3 of redesign C in `docs/DESIGN_REVIEW.md`. Kids mode has its own look and none of this applies to it.
+
 ## Drum Instrument Details
 | Instrument | Tone range | Extra knob | Engine function |
 |------------|-----------|------------|-----------------|

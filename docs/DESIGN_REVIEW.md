@@ -115,7 +115,14 @@ e. **The delay's two labels run together as "ONSYNC".**
    `desktop/unit-effects.png`. The "On" tick box and the "Sync" menu's label
    have no gap. Fix: a gap, or call the menu's label "Time".
 
-### 3. Amber means too many things, so focus and selection are hard to tell apart. Fault, medium.
+### 3. Amber means too many things, so focus and selection are hard to tell apart. Fault, medium. Done in pull request #123.
+
+What was built differs from the fix below in two places. A selected step is
+not a thicker ring but a frame inside the step's own edge, so that it and the
+focus ring, which stands outside, are different shapes and a step that is
+both shows both. And the main button (Play, and a dialog's main button) is
+no longer amber, since amber now means "on": it is the lightest button, and
+Play turns amber while it plays.
 
 Amber (`--amber`, `#ffb000`) is used for: a step that holds a note, the open
 lane's border, the open scene, the main button, every figure and readout,
@@ -525,6 +532,39 @@ them than after.
 
 **Now.** See findings 3, 4 and 7. The look is held in one large stylesheet
 that overrides seven older ones.
+
+**Part 1 of three is done (pull request #123): the names for colours, and
+the four states of finding 3.** `rack.css` names its colours by job and its
+own rules use the names; `AGENTS.md` ("Colours and States") has the table.
+The names differ a little from the sketch below: there is no "raised"
+surface but `--surface-control`, `--surface-inset`, `--surface-field` and
+`--surface-display`; text is `--text`, `--text-plain`, `--text-label`,
+`--text-faint` and `--text-on`; and `--action`, `--select` and `--gap`
+were added. What parts 2 and 3 build on:
+
+- Part 2 (the older components): move `PianoRoll.css`, `Keyboard.css`,
+  `KeyboardPanel.css`, `SynthControls.css`, `EffectsPanel.css`,
+  `MidiPanel.css`, `Knob.css` and `DrumKnob.css` onto the names and delete
+  the `.rack .…` overrides. A note in the piano roll and a pressed key
+  become `--on`. Those files still set orange focus outlines of their own;
+  the rack's one focus rule already overrides them, so they can simply be
+  deleted. The roll's cells and the piano keys are in the list of things
+  whose ring is drawn inside the edge; once a note there is amber, check the
+  picture of a focused note. The old names (`--amber`, `--ink`,
+  `--legend`, `--dim`, `--well`, `--rail`, `--unit-top`,
+  `--unit-bottom`) are no longer used by `rack.css` itself and can be
+  deleted once nothing else uses them.
+- Still written out in `rack.css`, for part 2 or 3 to name or drop: black
+  (`#000`) round the displays, white for the step light, the two paler
+  ambers of a slide and a held note (`#ffe09a`, `#8a6a1f`), the reds of
+  the message bar and of an error (`#2a1a12`, `#ffd9cc`, `#ffb4a6`,
+  `#ff8f80`), the rack's screws, and the knob sheet's thumb.
+- Part 3 (sizes and corners) has nothing from part 1 to undo: no type
+  size, corner, spacing or shadow was changed, and the names for those are
+  still to be chosen.
+- The snare lane's colour (`--drum-snare`, `#f59e0b`) is close to the
+  amber of "on". It was left as it was; whoever revisits the drum colours
+  may want to move it.
 
 **Proposal.** A short list of names in `rack.css` for everything: seven
 type sizes, two corners, three shadows, and colours named by job rather
