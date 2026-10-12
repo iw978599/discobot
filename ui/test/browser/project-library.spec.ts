@@ -58,7 +58,7 @@ test('a share link opens a page that plays the song, and a visitor can keep a co
   const audio = shared.locator('audio');
   await expect(audio).toBeAttached({ timeout: 20_000 });
   const player = shared.getByRole('group', { name: /, audio$/ });
-  await expect(player.getByRole('button', { name: /Pause/ }), 'the rack's own player, not the browser's').toBeVisible();
+  await expect(player.getByRole('button', { name: /Pause/ }), 'the player is the rack\'s own and shows that it is playing').toBeVisible();
   await expect.poll(() => audio.evaluate((element: HTMLAudioElement) => element.duration), { message: 'two bars at 140 BPM plus a tail' }).toBeGreaterThan(3.4);
   await expect.poll(() => audio.evaluate((element: HTMLAudioElement) => element.currentTime), { message: 'it is actually playing' }).toBeGreaterThan(0);
   expect((await project(visitor)).name, 'listening does not save anything into the visitor\'s projects').toBe('Untitled');
