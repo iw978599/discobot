@@ -40,6 +40,9 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test --project=${{ matrix.project }}
+        # A branch named for a design review also takes its pictures (design-shots.spec.ts).
+        env:
+          DESIGN_SHOTS: ${{ contains(github.head_ref, 'design-review') && '1' || '' }}
       # Nobody watches these run. When a test fails, what Playwright kept for it (a screenshot,
       # the page as it stood and a trace of every step) is kept for a week. That is done even when
       # the job passes, because a test that failed and then passed on its second go leaves them too.

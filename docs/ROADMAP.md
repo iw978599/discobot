@@ -121,8 +121,13 @@ slow down every later change.
      what it would change for someone using the app. These go further than
      fixes, up to a different look or arrangement for a whole part.
    Nothing suggested is built until the owner has chosen it. A suggestion
-   may change how something is laid out or reached, but not what the app
-   can do.
+   may change how something is laid out or reached, and, as the owner
+   allowed on 2026-10-11, it may also propose new features and changes to
+   what the app does.
+
+   The review is written: `docs/DESIGN_REVIEW.md`, with numbered findings,
+   five redesign suggestions and eleven suggested features. Still open:
+   the owner choosing from it, and everything it lists as not looked at.
 
 Done: the rack rebuild that emptied `App.tsx`; the two-tab guard; debounced
 saving; projects as IndexedDB records with version history; the Vibrato LFO
