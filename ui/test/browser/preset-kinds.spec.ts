@@ -111,11 +111,11 @@ test('the preset menu works from the keyboard alone', async ({ page }) => {
   await expect(groupRow(page, 'Lead')).toBeFocused();
   await page.keyboard.press('ArrowUp');
   await page.keyboard.press('ArrowUp');
-  await expect(groupRow(page, 'Pluck'), 'the arrows go round from the first row to the last').toBeFocused();
+  await expect(groupRow(page, 'Effects'), 'the arrows go round from the first row to the last').toBeFocused();
   await page.keyboard.press('Home');
   await expect(groupRow(page, 'Bass')).toBeFocused();
   await page.keyboard.press('End');
-  await expect(groupRow(page, 'Pluck')).toBeFocused();
+  await expect(groupRow(page, 'Effects')).toBeFocused();
   await page.keyboard.press('ArrowDown');
   await expect(groupRow(page, 'Bass')).toBeFocused();
 
