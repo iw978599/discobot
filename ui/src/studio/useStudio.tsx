@@ -25,6 +25,7 @@ import { sanitizeSynthParams } from '../services/projectSanitization';
 import type { PresetKind } from '../services/presetKinds';
 import { expandStep, expandStepNotes, stepNotes, withStepNotes } from '../services/noteScheduling';
 import { STARTERS, projectIsEmpty, starterDrums, starterPattern } from '../services/starters';
+import { startsUndoStep } from './undoSteps';
 import { BrowserTransport, TransportTick } from '../services/browserTransport';
 import { downloadFile, ExportArrangement } from '../services/wavExport';
 import { expandDrumStep } from '../services/drumScheduling';
@@ -641,10 +642,10 @@ export function useStudio() {
     (synthId: number, patternId: string, keySuffix: string, minIntervalMs = 250) => {
       const now = performance.now();
       const key = `${synthId}:${patternId}:${keySuffix}`;
-      const lastTs = historyThrottleRef.current[key] ?? 0;
+      const lastTs = historyThrottleRef.current[key];
       historyThrottleRef.current[key] = now;
       // Compare against the last change, not the last snapshot, so one continuous drag is one undo step.
-      if (now - lastTs < minIntervalMs) return;
+      if (!startsUndoStep(lastTs, now, minIntervalMs)) return;
       pushHistorySnapshot(synthId, patternId);
     },
     [pushHistorySnapshot]

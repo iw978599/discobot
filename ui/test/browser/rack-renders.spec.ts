@@ -82,10 +82,8 @@ test('undo reaches units that did not render for each other\'s edit', async ({ p
   const undo = page.getByRole('button', { name: 'Undo', exact: true });
   await undo.click();
   await expect(step).toHaveAttribute('aria-pressed', active!);
-  // An undo pressed while the one before is still being put back is dropped, so this asks
-  // again until the level has gone back. There is nothing left to undo after it.
-  await expect.poll(async () => {
-    await undo.click();
-    return level(page, 2).inputValue();
-  }).toBe(original);
+  // The level was the first thing changed, a moment after the page loaded. It is its own undo
+  // step all the same (undoSteps.ts): one more undo puts it back.
+  await undo.click();
+  await expect(level(page, 2)).toHaveValue(original);
 });
