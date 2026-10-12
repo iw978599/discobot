@@ -548,7 +548,7 @@ test('design shots: an account, sharing, a published song and a person\'s page',
   });
   await visit('page-share-playing', short, async (visitor) => {
     await visitor.getByRole('button', { name: /Listen/ }).click();
-    await expect(visitor.locator('audio')).toBeVisible({ timeout: 40_000 });
+    await expect(visitor.locator('audio')).toBeAttached({ timeout: 40_000 });
   });
   await visit('page-share-long-link', long, async (visitor) => {
     await expect(visitor.getByRole('main', { name: 'Shared song', exact: true })).toBeVisible();

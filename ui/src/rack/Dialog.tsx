@@ -9,19 +9,28 @@ interface DialogProps {
   sheet?: boolean;
   // What takes focus when it opens, as a selector. The first button, unless told otherwise.
   initialFocus?: string;
+  // A short question laid over whatever is open, a panel even on a phone.
+  small?: boolean;
 }
+
+// The dialogs that are open, the newest last. Only that one answers the keyboard, so Escape in a
+// question asked from inside a dialog closes the question and not the dialog under it.
+const open: symbol[] = [];
 
 // One modal for the whole app: traps Tab, closes on Escape or a click outside, and puts
 // focus back where it came from.
-export default function Dialog({ title, closeLabel, onClose, children, sheet = false, initialFocus = 'button' }: DialogProps) {
+export default function Dialog({ title, closeLabel, onClose, children, sheet = false, initialFocus = 'button', small = false }: DialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
 
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
+    const self = Symbol('dialog');
+    open.push(self);
     dialogRef.current?.querySelector<HTMLElement>(initialFocus)?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
+      if (open[open.length - 1] !== self) return;
       if (event.key === 'Escape') {
         event.preventDefault();
         closeRef.current();
@@ -37,12 +46,13 @@ export default function Dialog({ title, closeLabel, onClose, children, sheet = f
     document.addEventListener('keydown', onKeyDown);
     return () => {
       document.removeEventListener('keydown', onKeyDown);
+      open.splice(open.indexOf(self), 1);
       previous?.focus();
     };
   }, []);
 
   return (
-    <div className={sheet ? 'rack-dialog-overlay sheet' : 'rack-dialog-overlay'} onClick={onClose} role="presentation">
+    <div className={sheet ? 'rack-dialog-overlay sheet' : small ? 'rack-dialog-overlay small' : 'rack-dialog-overlay'} onClick={(event) => { event.stopPropagation(); onClose(); }} role="presentation">
       <div ref={dialogRef} className="rack-dialog" role="dialog" aria-modal="true" aria-label={title} onClick={(event) => event.stopPropagation()}>
         <div className="rack-dialog-header">
           <h2>{title}</h2>

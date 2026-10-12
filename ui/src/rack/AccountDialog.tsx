@@ -3,6 +3,7 @@ import { account, currentUser, subscribeAccount, type Invite, type Member } from
 import { projectSync } from '../services/projectSync';
 import { walkthroughSeen } from '../services/walkthrough';
 import Dialog from './Dialog';
+import ConfirmDialog from './ConfirmDialog';
 
 export const useAccountUser = () => useSyncExternalStore(subscribeAccount, currentUser);
 export const useSyncStatus = () => useSyncExternalStore(projectSync.subscribe, projectSync.status);
@@ -118,6 +119,7 @@ function OwnerTools() {
   const [invites, setInvites] = useState<Invite[] | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [copied, setCopied] = useState('');
+  const [removing, setRemoving] = useState('');
   const { busy, error, run } = useAction();
   const load = async () => { const [nextInvites, nextMembers] = await Promise.all([account.invites(), account.members()]); setInvites(nextInvites); setMembers(nextMembers); };
   useEffect(() => { void run(load); }, []);
@@ -157,15 +159,23 @@ function OwnerTools() {
           {!member.owner && (
             <button
               className="rack-btn danger" disabled={busy}
-              onClick={() => {
-                if (window.confirm(`Remove the account "${member.username}"? This cannot be undone.`)) void run(async () => { await account.removeMember(member.username); await load(); });
-              }}
+              onClick={() => setRemoving(member.username)}
             >
               Remove
             </button>
           )}
         </div>
       ))}
+      {removing && (
+        <ConfirmDialog
+          title="Remove this account?"
+          confirmLabel="Remove"
+          onCancel={() => setRemoving('')}
+          onConfirm={() => { const username = removing; setRemoving(''); void run(async () => { await account.removeMember(username); await load(); }); }}
+        >
+          Remove the account "{removing}"? This cannot be undone.
+        </ConfirmDialog>
+      )}
     </section>
   );
 }

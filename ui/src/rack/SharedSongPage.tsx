@@ -4,6 +4,7 @@ import { applySceneMutes, songBars, songLengthBars } from '../services/songPlayb
 import { sceneBars } from '../services/patternLength';
 import { renderArrangementWav } from '../services/wavExport';
 import { USER_PREFIX, userName } from '../services/shareLink';
+import SongPlayer from './SongPlayer';
 import './rack.css';
 
 const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, '0')}`;
@@ -84,7 +85,7 @@ export default function SharedSongPage({ file, author, error: fetchError, onOpen
           ))}
         </div>
         {audioUrl
-          ? <audio controls autoPlay src={audioUrl} aria-label={`${project.name}, audio`} />
+          ? <SongPlayer src={audioUrl} label={`${project.name}, audio`} />
           : (
             <button className="rack-btn go shared-play" disabled={status === 'rendering'} onClick={() => { void listen(); }}>
               {status === 'rendering' ? 'Preparing the song…' : '▶ Listen'}

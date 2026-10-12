@@ -78,8 +78,8 @@ test('scenes hold their own notes and drums, can be renamed and deleted, and sur
   await expect(drum(page, 'Snare step 5')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.synth-module').first().getByRole('button', { name: 'Select step 5 G3', exact: true })).toBeVisible();
 
-  page.once('dialog', dialog => { void dialog.accept(); });
   await page.locator('.song-module').getByRole('button', { name: 'Delete', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Delete this scene?', exact: true }).getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(scene(page, 'Chorus')).toHaveCount(0);
   await expect(scene(page, 'Scene 3'), 'deleting the open scene opens the one before it').toHaveAttribute('aria-pressed', 'true');
   const stored = await project(page);

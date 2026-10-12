@@ -112,8 +112,9 @@ test('projects follow the account to a second browser, and edits and conflicts a
 
   // Deleting on the phone removes it from the account and from the first browser.
   phoneList = await projects(phone);
-  phone.once('dialog', confirm => { expect(confirm.message()).toContain('from your account'); void confirm.accept(); });
   await phoneList.getByRole('group', { name: 'Project Night Drive', exact: true }).getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(phone.getByRole('dialog', { name: 'Delete this project?', exact: true })).toContainText('from your account');
+  await phone.getByRole('dialog', { name: 'Delete this project?', exact: true }).getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(phoneList.getByRole('group', { name: 'Project Night Drive', exact: true })).toHaveCount(0);
   await phone.keyboard.press('Escape');
   await syncNow(phone);

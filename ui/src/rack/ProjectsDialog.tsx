@@ -4,6 +4,7 @@ import { AccountError, sharingApi } from '../services/account';
 import { projectSync } from '../services/projectSync';
 import { useAccountUser, useSyncStatus } from './AccountDialog';
 import Dialog from './Dialog';
+import ConfirmDialog from './ConfirmDialog';
 import SaveState from './SaveState';
 import { useNarrow } from '../hooks/useNarrow';
 
@@ -66,6 +67,7 @@ export default function ProjectsDialog({ studio, onClose }: { studio: Studio; on
   const narrow = useNarrow();
   const [renaming, setRenaming] = useState<string | null>(null);
   const [draftName, setDraftName] = useState('');
+  const [deleting, setDeleting] = useState<{ id: string; name: string; from: string } | null>(null);
   const [protectedStorage, setProtectedStorage] = useState<boolean | null>(null);
   // The project whose sharing is on show, and why one that was shared could not be opened.
   const [sharing, setSharing] = useState<string | null>(null);
@@ -142,7 +144,7 @@ export default function ProjectsDialog({ studio, onClose }: { studio: Studio; on
               className="rack-btn danger"
               onClick={() => {
                 const from = theirs ? ` from this browser? ${theirs.owner}'s project is not deleted, and you stop working on it together.` : `${user && synced ? ' from this browser and from your account' : ''}?`;
-                if (window.confirm(`Delete the project "${project.name}"${from} This cannot be undone.`)) void studio.handleDeleteProject(project.id);
+                setDeleting({ id: project.id, name: project.name, from });
               }}
             >
               Delete
@@ -184,6 +186,16 @@ export default function ProjectsDialog({ studio, onClose }: { studio: Studio; on
         {protectedStorage === false && ' The browser may clear them if it runs short of space, so export the ones you care about.'}
         {' '}Use Project → Export Project for a backup file.
       </p>
+      {deleting && (
+        <ConfirmDialog
+          title="Delete this project?"
+          confirmLabel="Delete"
+          onCancel={() => setDeleting(null)}
+          onConfirm={() => { setDeleting(null); void studio.handleDeleteProject(deleting.id); }}
+        >
+          Delete the project "{deleting.name}"{deleting.from} This cannot be undone.
+        </ConfirmDialog>
+      )}
     </Dialog>
   );
 }

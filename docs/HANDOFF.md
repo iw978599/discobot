@@ -144,7 +144,7 @@ Tick things off here as they merge.
 Findings 1, 2, 3, 5 and 6 are merged. **Finding 4** (the piano roll,
 keyboard and sound editor still in an older colour scheme) is built as
 redesign C part 2, on the branch `feat/design-review-older-components`.
-Check that pull request's state before anything else on the look track.
+It is merged (#129).
 
 ### Step 2. The rest of the owner's picks from the design review
 
@@ -161,7 +161,7 @@ it done.
 
 1. **Redesign C part 2, with findings 4 and 11.** Built on
    `feat/design-review-older-components` on 2026-10-12 by the session that
-   picked this file up; see its pull request. What it was: move `PianoRoll.css`,
+   picked this file up, and merged (#129). What it was: move `PianoRoll.css`,
    `Keyboard.css`, `KeyboardPanel.css`, `SynthControls.css`,
    `EffectsPanel.css`, `MidiPanel.css`, `Knob.css` and `DrumKnob.css` onto
    the named colours and delete the `.rack .…` overrides in `rack.css`.
@@ -189,7 +189,8 @@ it done.
    Project menu in groups (findings 12 and 13, #126); one set of names for
    the drums and the knobs (finding 14, and with it the full drum names of
    feature 9, #127).
-2. **Finding 10:** the app's own dialog in place of the browser's "are you
+2. **Finding 10** is built on `feat/design-review-own-dialogs`; check its
+   pull request's state. What it was: the app's own dialog in place of the browser's "are you
    sure" for deleting a scene, a project or a member; its own button over
    the file chooser in MIDI and samples; its own small player on the share
    page; the phone browser's tap mark turned off for the whole page.

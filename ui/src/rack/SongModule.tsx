@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Studio } from '../studio/useStudio';
 import type { Song } from '../types';
 import { MAX_REPEATS, MAX_SONG_ENTRIES, songLengthBars } from '../services/songPlayback';
+import ConfirmDialog from './ConfirmDialog';
 
 const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, '0')}`;
 
@@ -11,6 +12,7 @@ export default function SongModule({ studio }: { studio: Studio }) {
   const { scenes, currentSceneId, song, playMode, songPosition, songStartEntry } = studio;
   const [renaming, setRenaming] = useState<string | null>(null);
   const [draftName, setDraftName] = useState('');
+  const [deleting, setDeleting] = useState<string | null>(null);
   const current = scenes.find(scene => scene.id === currentSceneId);
   const nameOf = (sceneId: string) => scenes.find(scene => scene.id === sceneId)?.name ?? '?';
   const bars = songLengthBars(song, studio.sceneLength);
@@ -72,11 +74,7 @@ export default function SongModule({ studio }: { studio: Studio }) {
         <button
           className="rack-btn danger"
           disabled={!current || scenes.length < 2}
-          onClick={() => {
-            if (current && window.confirm(`Delete the scene "${current.name}"? Its notes and drum hits are lost and it is removed from the song.`)) {
-              void studio.handleSceneDelete(current.id);
-            }
-          }}
+          onClick={() => { if (current) setDeleting(current.id); }}
           title={scenes.length < 2 ? 'A project needs at least one scene' : 'Delete the open scene'}
         >
           Delete
@@ -157,6 +155,20 @@ export default function SongModule({ studio }: { studio: Studio }) {
           Loop
         </label>
       </div>
+      {deleting && (() => {
+        const scene = scenes.find(entry => entry.id === deleting);
+        if (!scene) return null;
+        return (
+          <ConfirmDialog
+            title="Delete this scene?"
+            confirmLabel="Delete"
+            onCancel={() => setDeleting(null)}
+            onConfirm={() => { setDeleting(null); void studio.handleSceneDelete(scene.id); }}
+          >
+            Delete the scene "{scene.name}"? Its notes and drum hits are lost and it is removed from the song.
+          </ConfirmDialog>
+        );
+      })()}
     </section>
   );
 }
