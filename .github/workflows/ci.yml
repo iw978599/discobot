@@ -43,8 +43,21 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # Fetching the browser has hung for ten minutes and more on a machine that was otherwise well.
-      - run: npx playwright install --with-deps chromium
+      # The browser is kept from one run to the next and fetched again only when Playwright's
+      # version changes (the lock file). Fetching it on every machine was slow, and twice on
+      # 2026-10-12 the download stopped for minutes on a machine that was otherwise well, then
+      # came all at once. So when it does have to be fetched, an attempt that has not finished in
+      # two and a half minutes is dropped and made again.
+      - id: browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - if: steps.browsers.outputs.cache-hit != 'true'
+        run: timeout 150 npx playwright install chromium || timeout 150 npx playwright install chromium || timeout 150 npx playwright install chromium
+        timeout-minutes: 9
+      # What the browser needs from the system. GitHub's machines have nearly all of it already.
+      - run: npx playwright install-deps chromium
         timeout-minutes: 5
       - run: npx playwright test --project=${{ matrix.project }} --shard=${{ matrix.shard }}/4
         # A branch named for a design review also takes its pictures (design-shots.spec.ts).
