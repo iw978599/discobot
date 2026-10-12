@@ -121,7 +121,13 @@ to 120 pixels, so the steps are 34 pixels narrower in all. That widening is
 what the review's feature 9 proposed, which the owner had left out; the
 agent held the pull request and the owner then said to merge it.
 
-### A test to watch
+### A test to watch: found and fixed
+
+The cause was in the app, not the test: the first change to a knob within a
+quarter of a second of the page loading got no undo step, because "no
+change before this one" was read as "a change at time zero". The test typed
+a level about 240 ms in. `ui/src/studio/undoSteps.ts` holds the rule now,
+with a unit test. What follows is what was known before.
 
 `rack-renders.spec.ts`, "undo reaches units that did not render for each
 other's edit", passed only on a retry twice on 2026-10-12, on two different
