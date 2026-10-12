@@ -1,6 +1,7 @@
 import type { DrumInstrument, DrumKitDefinition, DrumKitId, DrumSettings, DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, Scene, Song, SynthParameters, SynthModelId, SynthModelParams } from '../types';
 import { sanitizeGuests, type Guest } from './guests';
 import { createIndexedDbLibrary, createMemoryLibrary, hasIndexedDb, type ProjectInfo, type ProjectLibrary, type ProjectRecord, type VersionInfo, type VersionReason } from './projectLibrary';
+import { COPY_SUFFIX, EARLIER_SUFFIX } from './projectFamilies';
 import { DRUM_KITS } from './drumKits';
 import { normalizeSynthModelId } from '../synthModels';
 import { NEW_PROJECT_REVERB } from './effectSettings';
@@ -350,7 +351,7 @@ export class LocalProjectService {
       if (!version) return { ok: false, error: 'That version is no longer available.' };
       const { state } = this.restore({ savedPatterns: [], ...record(version.project) });
       const now = Date.now();
-      Object.assign(state, { savedPatterns: [], projectId: crypto.randomUUID(), revision: 0, createdAt: now, updatedAt: now, name: await this.uniqueName(projectName(`${version.name} (earlier version)`)) });
+      Object.assign(state, { savedPatterns: [], projectId: crypto.randomUUID(), revision: 0, createdAt: now, updatedAt: now, name: await this.uniqueName(projectName(`${version.name}${EARLIER_SUFFIX}`)) });
       await this.library.put(this.recordFor(state));
       await this.announceProjects();
       return { ok: true };
@@ -484,7 +485,7 @@ export class LocalProjectService {
     try {
       const source = id === this.state!.projectId ? (this.write(), this.currentRecord()) : await this.library.get(id);
       if (!source) return { ok: false, error: 'That project is no longer in the library.' };
-      const now = Date.now(), copyId = crypto.randomUUID(), copyName = await this.uniqueName(projectName(name, `${source.name} copy`));
+      const now = Date.now(), copyId = crypto.randomUUID(), copyName = await this.uniqueName(projectName(name, `${source.name}${COPY_SUFFIX}`));
       await this.library.put({
         ...source, id: copyId, name: copyName, createdAt: now, updatedAt: now, revision: 0,
         project: { ...(source.project as object), projectId: copyId, name: copyName, revision: 0, createdAt: now, updatedAt: now },

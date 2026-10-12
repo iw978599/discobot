@@ -468,7 +468,9 @@ test('a guest that arrives by itself does not pull the view to it, even after Ad
 
   // Back in the first project its guest arrives with it. The drums stay on show.
   await page.getByRole('button', { name: /^Project: / }).click();
-  await page.getByRole('dialog', { name: 'Projects', exact: true }).getByRole('group', { name: 'Project Untitled', exact: true }).getByRole('button', { name: 'Open', exact: true }).click();
+  const first = page.getByRole('dialog', { name: 'Projects', exact: true }).getByRole('group', { name: 'Project Untitled', exact: true });
+  await first.getByLabel('Version of Untitled', { exact: true }).selectOption('Untitled');
+  await first.getByRole('button', { name: 'Open', exact: true }).click();
   await expect(page.locator('[data-unit="guests"]')).toHaveCount(1);
   await expect(tab(page, 'Show Guests')).toBeVisible();
   await expect(tab(page, 'Show Drums')).toHaveAttribute('aria-current', 'true');

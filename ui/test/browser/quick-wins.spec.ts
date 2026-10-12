@@ -5,10 +5,13 @@ const PROJECT_KEY = 'discobot_browser_project_v1';
 const project = (page: Page) => page.evaluate(key => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem(key) || '{}')), PROJECT_KEY);
 
 type Captured = { type: string; note?: string; instrument?: string; time?: number };
-async function openProject(page: Page, name: string) {
+// A project that shares its row with copies of itself is chosen from that row's list first: pass the row's name as `family`.
+async function openProject(page: Page, name: string, family?: string) {
   await page.getByRole('button', { name: /^Project: / }).click();
   const dialog = page.getByRole('dialog', { name: 'Projects', exact: true });
-  await dialog.getByRole('group', { name: `Project ${name}`, exact: true }).getByRole('button', { name: 'Open', exact: true }).click();
+  const row = dialog.getByRole('group', { name: `Project ${family ?? name}`, exact: true });
+  if (family) await row.getByLabel(`Version of ${family}`, { exact: true }).selectOption(name);
+  await row.getByRole('button', { name: 'Open', exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole('button', { name: `Project: ${name}`, exact: true })).toBeVisible();
 }
@@ -239,9 +242,10 @@ test('a project file restores lanes, drums, saved arrangements and presets over 
   // Nothing was replaced: the project started before the import is still there.
   await page.getByRole('button', { name: /^Project: / }).click();
   const projects = page.getByRole('dialog', { name: 'Projects', exact: true });
-  await expect(projects.getByRole('group')).toHaveCount(3);
+  await expect(projects.getByRole('group'), 'the three share a name, so they share a row').toHaveCount(1);
+  await expect(projects.getByLabel('Version of Untitled', { exact: true }).locator('option')).toHaveCount(3);
   await page.keyboard.press('Escape');
-  await openProject(page, 'Untitled 2');
+  await openProject(page, 'Untitled 2', 'Untitled');
   await expect(page.locator('.tempo-led-value')).toHaveText('150');
 
   await input.setInputFiles({ name: 'notes.json', mimeType: 'application/json', buffer: Buffer.from('{"hello":"world"}') });

@@ -1,6 +1,7 @@
 import { AccountError, accountsEnabled, currentUser, projectsApi, sharingApi, subscribeAccount, type ProjectsApi, type SharedProject, type SharingApi } from './account';
 import { localService } from './localService';
 import type { ProjectRecord } from './projectLibrary';
+import { KEPT_SUFFIX } from './projectFamilies';
 
 // Keeps the projects in this browser and the ones in the signed-in account in step.
 //
@@ -77,8 +78,6 @@ interface UserMeta {
   // Shared projects removed here, whose owners are still to be told this account has left.
   left: Record<string, string>;
 }
-
-const KEPT_SUFFIX = ' (this browser\'s version)';
 
 // Two saves of an unchanged project must hash the same, so fields that change on every
 // write, or just by looking at another scene, are left out.

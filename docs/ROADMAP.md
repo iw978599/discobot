@@ -484,6 +484,17 @@ may redistribute.
     reasonable starting point. The final chord set, inversions and whether
     insertion adds to or replaces notes are still design choices.
 
+16. **One row for a project and its copies.** Done: asked for by the owner on
+    2026-10-12 and built. In Projects, a project and the ones the app named
+    after it ("copy", "earlier version", "this browser's version", and the
+    2, 3… added to a name already in use) share one row under the main name,
+    with a list on the row to choose which of them Open, Rename, Copy, Delete
+    and the rest act on. Nothing is renamed, merged or stored; it is only how
+    the list is shown. Still open: two new projects left as "Untitled" and
+    "Untitled 2" share a row as well, since the number is all the app has to
+    go on, and a copy of a project with a very long name is not matched to
+    it, because the app shortens the name to fit the ending on.
+
 Done: song mode, with mutes and solos kept per scene; patterns of 1, 2, 4 or
 8 bars per lane, and MIDI files of up to eight bars imported at full length;
 chords, note length and late starts; project files; the computer keyboard as a
@@ -492,6 +503,8 @@ stem and loop export; the installable, offline-capable app; share links, both
 the long kind that carries the song and short links to a published one;
 accounts, project sync and version history; guest instruments; the walkthrough
 for new accounts.
+
+17. **Kindle and Fire tablets get the phone layout.** (S) Asked for by the owner on 2026-10-12. Built: a Silk, Kindle or Fire model user agent makes the page report a 640px layout width, which the existing phone rules treat as a phone upright or on its side. Not verified on a real Kindle.
 
 ## Questions waiting on the owner
 

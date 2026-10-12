@@ -843,7 +843,8 @@ on the owner's laptop.
 | `walkthrough-step-1`, `-4`, `-9` | The walkthrough at its first, fourth and last stop |
 | `dialog-midi-samples` | MIDI and samples, with no MIDI available |
 | `dialog-projects-one` | Projects, with one project |
-| `dialog-projects` | Projects, with two, one being renamed |
+| `dialog-projects-family` | Projects, with two that share a name in one row |
+| `dialog-projects` | Projects, with that row being renamed |
 | `dialog-versions` | Version history, one version |
 | `dialog-share-signed-out` | Share, signed out |
 | `dialog-preset-import` | The report after importing another synth's preset |

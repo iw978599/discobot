@@ -386,7 +386,10 @@ test('design shots: menus, dialogs, the walkthrough and a guest', async ({ page 
     await menu(page, 'Project', 'New Project');
     await page.getByRole('button', { name: /^Project: / }).click();
     const projects = page.getByRole('dialog', { name: 'Projects', exact: true });
-    await expect(projects.getByRole('group')).toHaveCount(2);
+    // "Untitled" and "Untitled 2" share a row, with a list to choose between them.
+    await expect(projects.getByRole('group')).toHaveCount(1);
+    await expect(projects.getByLabel('Version of Untitled', { exact: true }).locator('option')).toHaveCount(2);
+    await shot(walk, 'dialog-projects-family');
     await projects.locator('.rack-list-row.current').getByRole('button', { name: 'Rename', exact: true }).click();
     await expect(projects.getByLabel('Project name', { exact: true })).toBeVisible();
     await shot(walk, 'dialog-projects');

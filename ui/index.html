@@ -3,6 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <script>
+      // A Kindle or Fire is given the phone layout by reporting a narrow width (see services/kindle.ts,
+      // which holds the same expression). The width stands alone: beside an initial scale a browser
+      // lays the page out at whichever of the two is wider, and the width would do nothing.
+      (function () {
+        var meta = document.querySelector('meta[name="viewport"]');
+        if (meta && /\bSilk\/|\bKindle\b|\bKF[A-Z]{2,6}\b/.test(navigator.userAgent)) {
+          meta.setAttribute('content', 'width=640, viewport-fit=cover');
+        }
+      })();
+    </script>
     <meta name="description" content="Discobot — a private, browser-local synthesizer, sequencer and drum machine." />
     <meta name="theme-color" content="#1a1a1a" />
     <link rel="manifest" href="/manifest.webmanifest" />
