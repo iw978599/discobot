@@ -175,7 +175,10 @@ it done.
    keyboard and piano-roll switch. The MIDI and samples dialog is tidied in
    the same pass. `docs/DESIGN_REVIEW.md`, under redesign C, says what part
    1 left for it.
-2. **Redesign C part 3, with finding 7.** One scale of type sizes, two
+2. **Redesign C part 3, with finding 7.** Built on
+   `feat/design-review-type-and-corners` (the owner said yes to both the
+   larger base size and the plain face for sentences); check its pull
+   request's state. What it was: one scale of type sizes, two
    corners, three shadows, named beside the colours. Browser tests measure
    sizes on a phone, so some of their numbers will move.
 3. **Redesign A, with finding 8 and features 3 and 4.** The phone's top

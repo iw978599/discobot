@@ -233,7 +233,7 @@ the row, right beside "move later".
 Fix: drum rows 22 pixels tall (eight rows add 48 pixels to the unit), mute
 and solo 24 square everywhere, song-block buttons 26 wide with ✕ set apart.
 
-### 7. Lettering comes in 33 sizes. Inconsistency, medium.
+### 7. Lettering comes in 33 sizes. Inconsistency, medium. **Done as redesign C part 3**: seven sizes (11, 13, 14, 16, 18, 26, 40), the desktop's base raised from 12 to 13, and the plain face for sentences. Letter-spacings and weights were not in the fix and are as they were.
 
 Counted across the stylesheets: 33 different sizes (9, 10, 11, 12, 13, 14,
 15, 16, 18, 20, 22, 26, 30, 34, 38, 40, 44 pixels, eleven more written in
@@ -564,7 +564,12 @@ were added. What parts 2 and 3 build on:
   ambers of a slide and a held note (`#ffe09a`, `#8a6a1f`), the reds of
   the message bar and of an error (`#2a1a12`, `#ffd9cc`, `#ffb4a6`,
   `#ff8f80`), the rack's screws, and the knob sheet's thumb.
-- Part 3 (sizes and corners) has nothing from part 1 to undo: no type
+- **Part 3 is done.** `AGENTS.md` ("Sizes, Corners, Shadows and Faces") has
+  the table. The scale is 11, 13, 14, 16, 18, 26 and 40 (13 where the
+  sketch had 12, since the base was raised). Four shadows are named, not
+  three: a lit step's glow is fainter than a lamp's. The bar of units'
+  upward shadow is the one shadow still written out. What it was told:
+  it has nothing from part 1 to undo: no type
   size, corner, spacing or shadow was changed, and the names for those are
   still to be chosen.
 - The snare lane's colour (`--drum-snare`, `#f59e0b`) is close to the

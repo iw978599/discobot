@@ -23,7 +23,7 @@
 .drum-knob-svg circle:last-child { fill: var(--value); }
 
 .drum-knob-label {
-  font-size: 11px;
+  font-size: var(--type-caption);
   color: var(--text-label);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -31,7 +31,7 @@
 
 .drum-knob-value-input {
   font-family: var(--led-font);
-  font-size: 11px;
+  font-size: var(--type-caption);
   font-weight: 400;
   color: var(--value);
   background: var(--surface-field);
@@ -41,7 +41,7 @@
   max-width: none;
   padding: 1px 2px;
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: var(--corner-control);
   text-align: center;
 }
 

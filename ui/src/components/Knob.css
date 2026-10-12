@@ -60,7 +60,7 @@
 
 .knob-label {
   font-family: var(--panel-font);
-  font-size: 11px;
+  font-size: var(--type-caption);
   font-weight: 600;
   color: var(--text-label);
   text-transform: uppercase;
@@ -74,7 +74,7 @@
 
 .knob-value-input {
   font-family: var(--led-font);
-  font-size: 11px;
+  font-size: var(--type-caption);
   font-weight: 400;
   color: var(--value);
   background: var(--surface-field);
@@ -84,7 +84,7 @@
   max-width: none;
   padding: 1px 2px;
   border: 1px solid transparent;
-  border-radius: 3px;
+  border-radius: var(--corner-control);
   text-align: center;
 }
 

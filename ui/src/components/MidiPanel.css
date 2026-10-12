@@ -6,7 +6,7 @@
   gap: 8px;
   padding: 10px 12px;
   border: 1px solid var(--edge-faint);
-  border-radius: 2px;
+  border-radius: var(--corner-panel);
   background: var(--surface-inset);
   min-width: 0;
 }
@@ -22,7 +22,7 @@
 
 .midi-status-dot.connected {
   background: var(--on);
-  box-shadow: 0 0 6px var(--on);
+  box-shadow: var(--shadow-lamp);
 }
 
 .midi-panel select {
@@ -39,7 +39,7 @@
   min-width: 0;
   color: var(--text-label);
   font-family: var(--led-font);
-  font-size: 13px;
+  font-size: var(--type-label);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -54,7 +54,7 @@
 
 .midi-note {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--type-label);
   color: var(--text-label);
   max-width: 60ch;
 }
