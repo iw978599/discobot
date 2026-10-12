@@ -288,12 +288,47 @@ may redistribute.
 
 5. **Parameter automation.** (L, after the typed store)
    Record knob movements per step or per bar and play them back. Filter sweeps
-   over a section are a large part of electronic arrangement.
+   over a section are a large part of electronic arrangement. The owner asked
+   on 2026-10-12 whether a hardware knob could record it: yes, if the knob
+   mapping in item 6 is built so that a mapped hardware knob changes a
+   parameter by the same store operation the knob on screen sends. Recording
+   is then the same for both. A hardware knob sends 128 positions, so a
+   recorded sweep needs smoothing between them on playback.
 
-6. **More MIDI.** (M)
+6. **More MIDI.** (L in all)
    Following an external clock, sending notes played by hand, and choosing
    the output channels. MIDI output has only been tested against a fake
    device, so real hardware is needed to finish any of it.
+
+   Asked for by the owner on 2026-10-12: map a controller's knobs and pads to
+   the synths and the drums. Today a MIDI keyboard plays one lane, chosen in
+   the MIDI panel with one channel; a controller's knob messages arrive, are
+   shown in the panel, and are then dropped (`handleMidiMessage` returns on
+   `controlChange`), and incoming notes cannot go to the drums. In three
+   parts:
+   - **Pads to the drums.** (S) "Drums" as somewhere incoming notes can go,
+     with each note mapped to a drum lane. The note numbers MIDI export
+     already uses for the eight lanes are the starting map, so most pad
+     controllers work as they come; each pad can be given another lane.
+   - **More than one place at once.** (S) A keyboard on a lane and pads on
+     the drums together: a place for each channel, or for each device,
+     where today there is one channel and one lane.
+   - **Knobs to parameters, by learning.** (M) Choose Learn on any knob on
+     screen, turn a knob on the controller, and the two are tied. To settle
+     in building it: where the ties are kept (with the device in this
+     browser, so a controller works the same in every project, or with the
+     project); what happens when the controller's knob and the knob on
+     screen are in different places (jump, or wait until the hardware knob
+     passes the value); a knob that follows the open lane against one tied
+     to a single lane; and a list of the ties with a way to remove each.
+     It needs one way of naming any parameter (this lane's cutoff, the drum
+     bus's drive), which the modulation matrix (sound 4) and parameter
+     automation (item 5) need as well: build it once. A mapped knob must
+     change the parameter by the same store operation the knob on screen
+     sends, so undo, saving, and later automation treat the two alike.
+   Web MIDI is in Chrome and Edge on a computer and on Android, and in
+   Firefox with its own permission; not on an iPhone or iPad. None of this
+   has been tried with real hardware.
 
 7. **Collaborative sessions.** (L) First version done, in turns: the owner
    of a synced project shares it by username, the other person opens it from
