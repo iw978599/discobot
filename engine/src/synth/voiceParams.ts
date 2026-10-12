@@ -31,6 +31,7 @@ export interface VoiceParams {
   filterKeyTracking: number;
   filterDrive: number;
   filterSlope: number;
+  filterModel: string;
   attack: number;
   decay: number;
   sustain: number;
@@ -78,7 +79,7 @@ export function createDefaultSynthParameters(): SynthParameters {
     duck: 0,
     lfo1: { enabled: false, target: 'pitch', waveform: 'sine', rate: 5, depth: 0.2, sync: false, retrigger: true },
     lfo2: { enabled: false, target: 'filter', waveform: 'triangle', rate: 0.8, depth: 0.25, sync: false, retrigger: true },
-    filter: { frequency: 20000, q: 1, type: 'lowpass', envAmount: 0, keyTracking: 0, drive: 0, slope: 12 },
+    filter: { frequency: 20000, q: 1, type: 'lowpass', envAmount: 0, keyTracking: 0, drive: 0, slope: 12, model: 'svf' },
     envelope: { attack: 0.01, decay: 0.1, sustain: 0.7, release: 0.3 },
     filterEnvelope: { attack: 0.005, decay: 0.25, sustain: 0.2, release: 0.3 },
     velocity: { amp: 1, filter: 0 },
@@ -114,7 +115,7 @@ export function toVoiceParams(p: SynthParameters, bpm = 120): VoiceParams {
     fmAlgorithm: fm.algorithm, fmRatio: fm.ratio, fmIndex: fm.index, fmDecay: fm.decay, fmFeedback: fm.feedback,
     filterType: p.filter.type, filterFreq: p.filter.frequency, filterQ: p.filter.q,
     filterEnvAmount: p.filter.envAmount ?? 0, filterKeyTracking: p.filter.keyTracking ?? 0, filterDrive: p.filter.drive ?? 0,
-    filterSlope: p.filter.slope ?? 12,
+    filterSlope: p.filter.slope ?? 12, filterModel: p.filter.model ?? 'svf',
     attack: p.envelope.attack, decay: p.envelope.decay, sustain: p.envelope.sustain, release: p.envelope.release,
     filterAttack: filterEnvelope.attack, filterDecay: filterEnvelope.decay,
     filterSustain: filterEnvelope.sustain, filterRelease: filterEnvelope.release,

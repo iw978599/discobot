@@ -41,11 +41,19 @@ test('unison, the 24 dB filter and kick ducking are saved, and ducking is audibl
   await synth.getByLabel('Unison detune value', { exact: true }).fill('20');
   await synth.getByLabel('Unison detune value', { exact: true }).press('Enter');
   await tab(page, 'Filter');
+  // The ladder is a third choice beside the two slopes. It is a 24 dB filter, and choosing a
+  // plain slope again goes back to the clean filter.
+  await synth.getByLabel('Filter slope', { exact: true }).selectOption('ladder');
+  await expect.poll(async () => {
+    const { filter } = (await stored(page)).synths[0].synthParams;
+    return [filter.slope, filter.model];
+  }).toEqual([24, 'ladder']);
+  await expect(synth.getByLabel('Filter slope', { exact: true })).toHaveValue('ladder');
   await synth.getByLabel('Filter slope', { exact: true }).selectOption('24');
   await expect.poll(async () => {
     const params = (await stored(page)).synths[0].synthParams;
-    return [params.unison.voices, params.unison.detune, params.filter.slope];
-  }).toEqual([3, 0.4, 24]);
+    return [params.unison.voices, params.unison.detune, params.filter.slope, params.filter.model];
+  }).toEqual([3, 0.4, 24, 'svf']);
 
   // A long note under a kick on the first step: the stem's opening should be quieter with ducking on.
   await tab(page, 'Amp');

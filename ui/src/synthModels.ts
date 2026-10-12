@@ -438,13 +438,19 @@ function mapPolysix(params: SynthModelParams): Partial<SynthParameters> {
 // turned gets the macros alone (mapSynthModelToEngineParams), so a slope or a unison someone
 // chose on it stays. The plain engine takes nothing away: it is where a model's sound is taken
 // to be changed by hand.
+// The models whose instrument had a ladder filter. It is given when a lane moves to the model
+// and not when a macro is turned, so a lane that was set to one of these before the ladder
+// existed goes on sounding as it did until the model is chosen again.
+const LADDER_MODELS: SynthModelId[] = ['minimoog-model-d', 'tb-303'];
+
 export function enterSynthModel(modelId: SynthModelId, modelParams: SynthModelParams, leaving?: SynthModelId): Partial<SynthParameters> {
   const mapped = mapSynthModelToEngineParams(modelId, modelParams);
   if (modelId === 'generic') return mapped;
+  const ladder = LADDER_MODELS.includes(modelId);
   return {
     ...mapped,
     unison: mapped.unison ?? { voices: 1, detune: 0.3, mix: 1 },
-    filter: { slope: 12, ...mapped.filter } as SynthParameters['filter'],
+    filter: { slope: ladder ? 24 : 12, ...mapped.filter, model: ladder ? 'ladder' : 'svf' } as SynthParameters['filter'],
     // The Polysix's ensemble is the lane's chorus send. It goes when the lane leaves the Polysix;
     // a chorus send on any other lane is the person's own and is not touched.
     ...(leaving === 'polysix' && modelId !== 'polysix' ? { fxSends: { chorus: 0 } as SynthParameters['fxSends'] } : {}),

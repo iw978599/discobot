@@ -107,6 +107,7 @@ export function sanitizeSynthParams(value: unknown, defaults: SynthParameters): 
   filter.keyTracking = number(filter.keyTracking, 0, 0, 1);
   filter.drive = number(filter.drive, 0, 0, 1);
   filter.slope = filter.slope === 24 ? 24 : 12;
+  filter.model = filter.model === 'ladder' ? 'ladder' : 'svf';
   for (const key of ['attack', 'decay', 'release'] as const) params.envelope[key] = number(params.envelope[key], defaults.envelope[key], 0, 10);
   params.envelope.sustain = number(params.envelope.sustain, defaults.envelope.sustain, 0, 1);
   params.portamento.glide = number(params.portamento.glide, defaults.portamento.glide, 0, 2);

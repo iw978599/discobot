@@ -1,4 +1,4 @@
-import { Adsr, Noise, Svf, approachCoefficient, finiteClamp as clamp, lfoShape, noteFrequency, oscillator, svfCoefficient } from '../dsp';
+import { Adsr, Ladder, Noise, Svf, approachCoefficient, finiteClamp as clamp, ladderFeedback, lfoShape, noteFrequency, oscillator, svfCoefficient } from '../dsp';
 import { VoiceParams, createDefaultSynthParameters, toVoiceParams } from './voiceParams';
 
 export interface NoteOnMessage {
@@ -31,6 +31,7 @@ interface Voice {
   filterEnv: Adsr;
   filter: Svf;
   filter2: Svf;
+  ladder: Ladder;
   previousInput: number;
   last: number;
   transition: number;
@@ -75,7 +76,7 @@ export class SynthCore {
       active: false, note: '', id: undefined, frequency: 440, targetFrequency: 440, velocity: 0, keyOctaves: 0,
       phase1: new Float64Array(MAX_UNISON), phase2: new Float64Array(MAX_UNISON), phaseSub: 0,
       fmPhase: [0, 0, 0, 0], fmFeedback: 0, fmEnv: 0, lfoPhase: [0, 0],
-      amp: new Adsr(), filterEnv: new Adsr(), filter: new Svf(), filter2: new Svf(), previousInput: 0,
+      amp: new Adsr(), filterEnv: new Adsr(), filter: new Svf(), filter2: new Svf(), ladder: new Ladder(), previousInput: 0,
       last: 0, transition: 0, transitionSamples: 0, age: 0, remaining: Infinity, releaseOverride: 0,
     }));
     this.refreshDerived();
@@ -87,7 +88,7 @@ export class SynthCore {
   setParams(update: Partial<Record<keyof VoiceParams, unknown>> | null | undefined): void {
     if (!update) return;
     const p = this.params as unknown as Record<string, unknown>;
-    const signature = () => `${p.oscType}|${p.filterType}|${p.engine}|${p.osc2Type}|${p.filterSlope}|${p.unisonVoices}`;
+    const signature = () => `${p.oscType}|${p.filterType}|${p.engine}|${p.osc2Type}|${p.filterSlope}|${p.unisonVoices}|${p.filterModel}`;
     const before = signature();
     for (const [key, value] of Object.entries(update)) {
       if (!(key in p)) continue;
@@ -202,6 +203,7 @@ export class SynthCore {
       voice.fmFeedback = 0;
       voice.filter.reset();
       voice.filter2.reset();
+      voice.ladder.reset();
       voice.previousInput = 0;
       voice.amp.reset();
       voice.filterEnv.reset();
@@ -263,6 +265,7 @@ export class SynthCore {
     const envAmount = clamp(p.filterEnvAmount, -1, 1), keyTracking = clamp(p.filterKeyTracking, 0, 1);
     const fmRatio = clamp(p.fmRatio, 0.25, 16, 2), fmIndex = clamp(p.fmIndex, 0, 1), fmFeedback = clamp(p.fmFeedback, 0, 1);
     const algorithm = Math.round(clamp(p.fmAlgorithm, 0, 3));
+    const ladder = p.filterModel === 'ladder' && p.filterType === 'lowpass';
 
     for (let i = 0; i < left.length; i++) {
       while (this.pending.length && this.pending[0].frame <= this.frame + i) this.startNote(this.pending.shift()!);
@@ -352,14 +355,22 @@ export class SynthCore {
         const g = svfCoefficient(clamp(s.filterFreq * 2 ** octaves, 20, maxCutoff, 1000), sr * 2);
         const damping = 1 / s.filterQ;
         const midpoint = (v.previousInput + source) * 0.5;
-        v.filter.tick(midpoint, g, damping);
-        if (d.twoStage) v.filter2.tick(v.filter.output(p.filterType, midpoint, damping), g, SECOND_STAGE_DAMPING);
-        v.filter.tick(source, g, damping);
-        v.previousInput = source;
-        let filtered = v.filter.output(p.filterType, source, damping);
-        if (d.twoStage) {
-          v.filter2.tick(filtered, g, SECOND_STAGE_DAMPING);
-          filtered = v.filter2.output(p.filterType, filtered, SECOND_STAGE_DAMPING);
+        let filtered: number;
+        if (ladder) {
+          const feedback = ladderFeedback(s.filterQ);
+          v.ladder.tick(midpoint, g, feedback);
+          filtered = v.ladder.tick(source, g, feedback);
+          v.previousInput = source;
+        } else {
+          v.filter.tick(midpoint, g, damping);
+          if (d.twoStage) v.filter2.tick(v.filter.output(p.filterType, midpoint, damping), g, SECOND_STAGE_DAMPING);
+          v.filter.tick(source, g, damping);
+          v.previousInput = source;
+          filtered = v.filter.output(p.filterType, source, damping);
+          if (d.twoStage) {
+            v.filter2.tick(filtered, g, SECOND_STAGE_DAMPING);
+            filtered = v.filter2.output(p.filterType, filtered, SECOND_STAGE_DAMPING);
+          }
         }
 
         const velocityGain = 1 - velocityAmp * (1 - v.velocity);

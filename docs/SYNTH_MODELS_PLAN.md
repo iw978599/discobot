@@ -80,6 +80,14 @@ true before the first new model ships, and say so in the pull request.
   any of group B. Things to listen for are noted in each entry above and
   in the pull requests (#139, #140, #141 and the Polysix's).
 
+- 2026-10-12: **The owner listened** to the seven models of group A and the
+  presets: "things generally sound good to me". Nothing was asked to be
+  changed.
+- 2026-10-12: **The ladder filter is built** (roadmap sound 5), the first
+  of the engine work group B waits on. The Minimoog and TB-303 take it. The
+  MS-20 still needs its own filter: a high-pass and a low-pass in a row
+  with a resonance that distorts, and a second cutoff for the voice.
+
 ## The fourteen, in three groups
 
 The grouping is by what each needs from the voice, because that decides when
