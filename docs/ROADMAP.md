@@ -501,6 +501,8 @@ the long kind that carries the song and short links to a published one;
 accounts, project sync and version history; guest instruments; the walkthrough
 for new accounts.
 
+17. **Kindle and Fire tablets get the phone layout.** (S) Asked for by the owner on 2026-10-12. Built: a Silk, Kindle or Fire model user agent makes the page report a 640px layout width, which the existing phone rules treat as a phone upright or on its side. Not verified on a real Kindle.
+
 ## Questions waiting on the owner
 
 - **Did the Firefox guest fixes work?** PRs #76 and #77 changed how a guest
