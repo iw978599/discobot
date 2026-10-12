@@ -656,7 +656,7 @@ export default function SynthControls({
                   label="Voices"
                   value={unison.voices}
                   min={1}
-                  max={5}
+                  max={7}
                   step={1}
                   displayValue={unison.voices === 1 ? 'Off' : `${unison.voices}`}
                   onChange={(v) => onParameterChange({ unison: { ...unison, voices: Math.round(v) } })}
@@ -674,6 +674,19 @@ export default function SynthControls({
                   parseInputValue={(input) => { const cents = parseNumber(input); return cents === null ? null : cents / 50; }}
                   disabled={unison.voices === 1}
                   tooltip="How far apart the unison copies are tuned, in cents each way"
+                />
+                <Knob
+                  label="Mix"
+                  ariaLabel="Unison mix"
+                  value={unison.mix ?? 1}
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  displayValue={`${Math.round((unison.mix ?? 1) * 100)}%`}
+                  onChange={(v) => onParameterChange({ unison: { ...unison, mix: v } })}
+                  parseInputValue={parsePercent(0, 1)}
+                  disabled={unison.voices < 3 || unison.voices % 2 === 0}
+                  tooltip="How loud the copies either side of the middle one are. With 3, 5 or 7 copies the middle one stays in tune and at full level"
                 />
               </div>
             </div>

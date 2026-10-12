@@ -103,6 +103,41 @@ test('a sound saved before the first oscillator had a level plays exactly as it 
   assert.equal(toVoiceParams({ ...createDefaultSynthParameters(), mixer: { sub: 0, noise: 0 } }).oscLevel, 1);
 });
 
+const stack = (unison: { voices: number; detune: number; mix?: number }, seconds = 0.25) => {
+  const core = new SynthCore(AUDIT_RATE);
+  core.setParams(toVoiceParams({ ...createDefaultSynthParameters(), oscillator: { type: 'sawtooth', detune: 0, pulseWidth: 0.5 }, unison }));
+  core.noteOn({ note: 'A2', velocity: 1 });
+  const left = new Float32Array(Math.round(AUDIT_RATE * seconds)), right = new Float32Array(left.length);
+  core.process(left, right);
+  return left;
+};
+
+test('up to seven copies can be stacked, and a stack saved before the side copies had a level plays exactly as it did', () => {
+  for (const voices of [1, 2, 3, 5]) {
+    assert.deepEqual(stack({ voices, detune: 0.4 }), stack({ voices, detune: 0.4, mix: 1 }), `${voices} copies`);
+  }
+  const five = stack({ voices: 5, detune: 0.4 }), seven = stack({ voices: 7, detune: 0.4 });
+  assert.notDeepEqual(seven, five, 'seven is not five');
+  assert.deepEqual(stack({ voices: 99, detune: 0.4 }), seven, 'more than seven is seven');
+  assert.ok(seven.every(Number.isFinite));
+});
+
+test('with the side copies turned right down, a stack is its one in-tune copy', () => {
+  const size = (samples: Float32Array) => Math.sqrt(samples.reduce((sum, sample) => sum + sample * sample, 0) / samples.length);
+  // How much the level moves over time: copies out of tune with each other beat, one copy is steady.
+  const wobble = (samples: Float32Array) => {
+    const windows = Array.from({ length: 16 }, (_, i) => size(samples.subarray(12000 + i * 2000, 14000 + i * 2000)));
+    return (Math.max(...windows) - Math.min(...windows)) / Math.max(...windows);
+  };
+  const alone = stack({ voices: 1, detune: 0.6 }, 1), middleOnly = stack({ voices: 7, detune: 0.6, mix: 0 }, 1), all = stack({ voices: 7, detune: 0.6, mix: 1 }, 1);
+  // The middle copy starts at another point in its wave than a lone oscillator, so it is as loud and as steady, not the same samples.
+  assert.ok(Math.abs(size(middleOnly) / size(alone) - 1) < 0.02, `as loud as one copy (${(size(middleOnly) / size(alone)).toFixed(3)})`);
+  assert.ok(wobble(middleOnly) < 0.12, `and as steady (${wobble(middleOnly).toFixed(3)})`);
+  assert.ok(wobble(all) > 0.25, `where all seven beat (${wobble(all).toFixed(3)})`);
+  const half = stack({ voices: 7, detune: 0.6, mix: 0.5 }, 1);
+  assert.ok(wobble(half) > wobble(middleOnly) && Math.abs(size(half) / size(all) - 1) < 0.35, 'half way is between the two, at much the same loudness');
+});
+
 test('the first oscillator can be turned off, and with everything off there is silence, not a fault', () => {
   const silent = render({ sub: 0, noise: 0, osc: 0 });
   assert.ok(silent.every(sample => sample === 0));

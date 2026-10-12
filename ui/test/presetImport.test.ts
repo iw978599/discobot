@@ -33,7 +33,7 @@ test('a VAST preset is translated using that synth\'s own meanings', () => {
   assert.equal(params.oscillator2!.type, 'square', 'wave 3 is a square');
   assert.deepEqual([params.oscillator2!.enabled, params.oscillator2!.semitones, params.oscillator2!.detune, params.oscillator2!.level], [true, 12, 5, 0.5], 'oscillator 2 keeps its octave and level relative to oscillator 1');
   assert.deepEqual(params.mixer, { sub: 0.9, noise: 0.18, osc: 1 });
-  assert.deepEqual(params.unison, { voices: 3, detune: 0.5 }, 'cents become a share of the detune range');
+  assert.deepEqual(params.unison, { voices: 3, detune: 0.5, mix: 1 }, 'cents become a share of the detune range');
   assert.deepEqual(params.portamento, { enabled: true, glide: 0.08 });
 
   near(params.filter.frequency, 440, 0.01);   // cutoff is a note number: 69 is A440
@@ -114,7 +114,7 @@ test('a WebSynth Studio patch is read by its shape, in the units that synth uses
 
 test('a Discobot preset survives export and import, and is checked like any stored sound', () => {
   const sound = createDefaultSynthParameters();
-  sound.filter.frequency = 1234; sound.oscillator.type = 'square'; sound.unison = { voices: 3, detune: 0.4 };
+  sound.filter.frequency = 1234; sound.oscillator.type = 'square'; sound.unison = { voices: 3, detune: 0.4, mix: 1 };
   const back = imported(JSON.parse(JSON.stringify(exportPreset('  My Lead  ', sound))));
   assert.deepEqual([back.name, back.source, back.notes], ['My Lead', 'Discobot', []]);
   assert.deepEqual(back.params, sound);

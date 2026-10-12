@@ -57,6 +57,19 @@ true before the first new model ships, and say so in the pull request.
     release comes with a faster attack. If that reads wrong by ear, it is
     the thing to change for all of them at once.
 
+- 2026-10-12: **JP-8000 and Mono/Poly are built.** Not verified by ear.
+  - The owner said to raise the unison limit, so it is seven copies now.
+  - The supersaw's Mix needed something the voice did not have: a level
+    for the copies either side of the middle one (`unison.mix`). It is in
+    the sound editor's unison box as Mix.
+  - Detune on the JP-8000 is not even along the knob: small amounts for
+    most of its travel, then it opens out, as descriptions of the
+    instrument say. The exact curve was not found; this one is a square.
+  - The Mono/Poly is its unison mode only: four copies on one note. Its
+    four-note mode, one oscillator a note, is not modelled.
+  - A lane that moves to another model now has unison and filter slope put
+    back (`enterSynthModel`), which the slope note above asked for.
+
 ## The fourteen, in three groups
 
 The grouping is by what each needs from the voice, because that decides when

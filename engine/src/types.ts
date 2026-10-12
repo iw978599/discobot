@@ -115,6 +115,9 @@ export interface SynthParameters {
   unison?: {
     voices: number;
     detune: number;
+    // how loud the copies either side of the middle one are, 0 to 1. Absent means 1: all alike,
+    // as they always were. It only does anything with an odd number of copies, which has a middle.
+    mix?: number;
   };
   // how far a kick drum pulls this lane's level down, 0 to 1
   duck?: number;
@@ -170,7 +173,7 @@ export interface SynthParameters {
   };
 }
 
-export type SynthModelId = 'generic' | 'minimoog-model-d' | 'juno-106' | 'dx7' | 'tb-303' | 'prophet-5' | 'sh-101' | 'pro-one' | 'jupiter-8' | 'ob-xa';
+export type SynthModelId = 'generic' | 'minimoog-model-d' | 'juno-106' | 'dx7' | 'tb-303' | 'prophet-5' | 'sh-101' | 'pro-one' | 'jupiter-8' | 'ob-xa' | 'jp-8000' | 'mono-poly';
 
 export interface SynthModelParams {
   macro1: number;

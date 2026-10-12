@@ -33,7 +33,7 @@ import { useComputerKeyboard } from '../hooks/useComputerKeyboard';
 import { getAudioContext, setMasterVolume, setMasterMuted, setEffectsTempo } from '../hooks/browserAudio';
 import { DRUM_NOTE_MAP, downloadMidiFile, noteNameToMidi } from '../utils/midiExport';
 import { importMidiFile, readFileAsArrayBuffer, MidiImportResult } from '../utils/midiImport';
-import { DEFAULT_SYNTH_MODEL_ID, createDefaultSynthModelParams, mapSynthModelToEngineParams, normalizeSynthModelId, normalizeSynthModelParams } from '../synthModels';
+import { DEFAULT_SYNTH_MODEL_ID, createDefaultSynthModelParams, enterSynthModel, mapSynthModelToEngineParams, normalizeSynthModelId, normalizeSynthModelParams } from '../synthModels';
 
 const DEFAULT_PARAMS: SynthParameters = createDefaultSynthParameters();
 
@@ -1435,7 +1435,10 @@ export function useStudio() {
     // the model for a click. A preset load pushes its second undo entry after this returns, and
     // that entry holds what was rendered then: the new model with the sound from before it.
     await Promise.resolve();
-    const mapped = mapSynthModelToEngineParams(normalizedModelId, normalizedModelParams);
+    // A lane moving to another model also has put back what the model it leaves may have set.
+    const mapped = normalizedModelId !== synth.synthModelId
+      ? enterSynthModel(normalizedModelId, normalizedModelParams)
+      : mapSynthModelToEngineParams(normalizedModelId, normalizedModelParams);
     if (Object.keys(mapped).length > 0) localService.setSynthParams(synthId, mapped);
   }, [pushHistorySnapshot]);
 

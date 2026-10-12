@@ -43,7 +43,7 @@ interface Voice {
 const TWO_PI = 2 * Math.PI;
 const VOICE_LEVEL = 0.18;
 const MIDDLE_C = 261.6256;
-const MAX_UNISON = 5;
+const MAX_UNISON = 7;
 // The second stage of the 24 dB filter is not resonant; the first stage supplies the peak.
 const SECOND_STAGE_DAMPING = Math.SQRT2;
 
@@ -58,7 +58,7 @@ export class SynthCore {
     attack: 0, decay: 0, sustain: 0.7, release: 0,
     filterAttack: 0, filterDecay: 0, filterSustain: 0.2, filterRelease: 0,
     glide: 1, osc2Ratio: 1, mixScale: 1, fmDecay: 0, driveGain: 1, driveMakeup: 1,
-    unisonCount: 1, unisonRatios: new Float64Array(MAX_UNISON).fill(1), twoStage: false,
+    unisonCount: 1, unisonRatios: new Float64Array(MAX_UNISON).fill(1), unisonLevels: new Float64Array(MAX_UNISON).fill(1), twoStage: false,
   };
   private pending: Array<NoteOnMessage & { frame: number }> = [];
   private globalLfoPhase: [number, number] = [0, 0];
@@ -126,14 +126,20 @@ export class SynthCore {
     d.unisonCount = Math.round(clamp(p.unisonVoices, 1, MAX_UNISON, 1));
     // Copies are spread evenly across plus and minus the detune amount, up to 50 cents each way.
     const spreadCents = clamp(p.unisonDetune, 0, 1) * 50;
+    // The copy in the middle, in tune, is always at full level; the ones either side can be turned down.
+    const side = clamp(p.unisonMix, 0, 1, 1);
+    let copies = 0;
     for (let u = 0; u < MAX_UNISON; u++) {
       const position = d.unisonCount > 1 ? (u / (d.unisonCount - 1)) * 2 - 1 : 0;
       d.unisonRatios[u] = 2 ** (position * spreadCents / 1200);
+      d.unisonLevels[u] = position === 0 ? 1 : side;
+      if (u < d.unisonCount) copies += d.unisonLevels[u] * d.unisonLevels[u];
     }
     // Sources added together are brought back down to the level of one. With the first oscillator
     // at full level, as it always was, the sum is never under one, so this is what it always was.
     // Turned down with nothing else on, it is simply quieter: nothing is brought back up.
-    const power = d.unisonCount * (osc1 * osc1 + osc2 * osc2) + sub * sub + noise * noise;
+    // With the side copies at full level, as they always were, `copies` is their number.
+    const power = copies * (osc1 * osc1 + osc2 * osc2) + sub * sub + noise * noise;
     d.mixScale = power > 1 ? 1 / Math.sqrt(power) : 1;
     d.twoStage = p.filterSlope >= 24 && (p.filterType === 'lowpass' || p.filterType === 'highpass' || p.filterType === 'bandpass');
     d.fmDecay = approachCoefficient(clamp(p.fmDecay, 0.01, 10, 0.6), sr, 4.6);
@@ -323,11 +329,12 @@ export class SynthCore {
           for (let u = 0; u < d.unisonCount; u++) {
             const step1 = clamp(step * d.unisonRatios[u], 0.000001, 0.45);
             v.phase1[u] = (v.phase1[u] + step1) % 1;
-            source += oscillator(p.oscType, v.phase1[u], step1, pulseWidth) * oscLevel;
+            const level = d.unisonLevels[u];
+            source += oscillator(p.oscType, v.phase1[u], step1, pulseWidth) * oscLevel * level;
             if (osc2Level > 0) {
               const step2 = clamp(step1 * d.osc2Ratio, 0.000001, 0.45);
               v.phase2[u] = (v.phase2[u] + step2) % 1;
-              source += oscillator(p.osc2Type, v.phase2[u], step2) * osc2Level;
+              source += oscillator(p.osc2Type, v.phase2[u], step2) * osc2Level * level;
             }
           }
           if (subLevel > 0) {
