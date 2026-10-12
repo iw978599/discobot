@@ -33,7 +33,7 @@ test('other devices are not', () => {
 test('index.html uses the same expression and a width under the phone layout limit', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   assert.ok(html.includes(`/${KINDLE_PATTERN.source}/`), 'the inline script must hold the same expression');
-  assert.ok(html.includes(`width=${KINDLE_VIEWPORT_WIDTH}`));
+  assert.ok(html.includes(`'width=${KINDLE_VIEWPORT_WIDTH}, viewport-fit=cover'`), 'the width is set without an initial scale, which would override it');
   assert.ok(KINDLE_VIEWPORT_WIDTH <= 720);
   assert.match(html, /name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/);
 });
