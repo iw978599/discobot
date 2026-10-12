@@ -176,7 +176,7 @@ square. Replace the two emoji with two small drawn icons or the words "Keys"
 and "Roll". This is the single change that most makes the app read as one
 thing.
 
-### 5. Faint text. Fault, small.
+### 5. Faint text. Fault, small. **Done in #121.** The faint edges are lighter but not to 3 to 1: an empty step is 2.4 to 1 and kids mode's holes 1.7 to 1 and 2.3 to 1.
 
 Measured from the colour values, against the usual minimum of 4.5 to 1 for
 small text (3 to 1 for large):
@@ -205,7 +205,7 @@ Also faint, but not text: an empty step's edge against the panel is 1.4 to
 places to press. A slightly lighter edge would help; in kids mode the holes
 could be a shade lighter.
 
-### 6. Small things to hit on a desktop. Fault, small to medium.
+### 6. Small things to hit on a desktop. Fault, small to medium. **Done in #121.** Drum rows are 24 pixels tall (not 22), the tick boxes 18 pixels.
 
 The phone layout was given finger-sized controls; the desktop was left with
 some very small ones, and plenty of laptops have touch screens.
