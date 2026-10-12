@@ -674,7 +674,9 @@ The owner said on 2026-10-11 that the review may suggest features and
 changes to what the app does. These come from looking at the screens and
 asking what a person would reach for and not find.
 
-1. **A way to start that is not an empty rack.** A new project is 48 dark
+1. **Done.** Three beats ("House Beat", "Slow Groove", "Electro") and
+   "Leave It Empty", in a strip above the song unit; not checked by ear.
+   **A way to start that is not an empty rack.** A new project is 48 dark
    squares and eight empty drum rows (`desktop/rack-empty.png`), and the
    only instruction is one grey line inside the open lane. Offer, on an
    empty project, three or four starting points ("House beat", "Slow

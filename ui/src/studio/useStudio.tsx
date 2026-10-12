@@ -24,6 +24,7 @@ import type { ProjectInfo } from '../services/projectLibrary';
 import { sanitizeSynthParams } from '../services/projectSanitization';
 import type { PresetKind } from '../services/presetKinds';
 import { expandStep, expandStepNotes, stepNotes, withStepNotes } from '../services/noteScheduling';
+import { STARTERS, projectIsEmpty, starterDrums, starterPattern } from '../services/starters';
 import { BrowserTransport, TransportTick } from '../services/browserTransport';
 import { downloadFile, ExportArrangement } from '../services/wavExport';
 import { expandDrumStep } from '../services/drumScheduling';
@@ -2093,6 +2094,26 @@ export function useStudio() {
     localService.resetDrums();
   }, [pushHistorySnapshot]);
 
+  // Fills an empty project with a starting point: its tempo, a bar of drums and a bass line on
+  // the first lane. It is one edit, so one undo takes all of it back.
+  const handleStarter = useCallback((starterId: string) => {
+    const starter = STARTERS.find(entry => entry.id === starterId);
+    const synth = synthsRef.current[0];
+    if (!starter || !synth?.pattern) return;
+    pushHistorySnapshot(synth.id, synth.pattern.id);
+    localService.applyAll([
+      { type: 'tempo.set', tempo: starter.tempo },
+      { type: 'drum.state', state: starterDrums(starter, drumsForUndoRef.current) },
+      { type: 'pattern.write', synthId: synth.id, patternId: synth.pattern.id, patch: { steps: starterPattern(starter, synth.pattern).steps } },
+    ]);
+  }, [pushHistorySnapshot]);
+
+  // The offer goes away for a project once it is turned down, until the page is loaded again.
+  const [startersDismissedFor, setStartersDismissedFor] = useState('');
+  const dismissStarters = useCallback(() => setStartersDismissedFor(projectIdRef.current), []);
+  const showStarters = projectId !== '' && startersDismissedFor !== projectId
+    && projectIsEmpty(synths.map(synth => synth.pattern), drumState, scenes.length);
+
   const handleDrumMasterVolumeChange = useCallback((volume: number) => {
     const synth = synthsRef.current[0];
     if (synth?.pattern) pushHistorySnapshotThrottled(synth.id, synth.pattern.id, 'drum-master-volume', 300);
@@ -2200,6 +2221,7 @@ export function useStudio() {
   const isAnyPlaying = synths.some(s => s.isPlaying);
 
   return {
+    handleStarter, dismissStarters, showStarters,
     synths, selectedSynthId, setSelectedSynthId, drumState: memoizedDrumState, drumKits,
     selectedDrumKitId, drumMasterVolume, drumSwing, drumFx, effectsLoop, browserMuted, setBrowserMuted,
     browserVolume, setBrowserVolume, globalTempo, storageError, setStorageError, changedElsewhere, loadOtherTabVersion, keepThisTabVersion, helpOpen, setHelpOpen, midiMode, setMidiMode,

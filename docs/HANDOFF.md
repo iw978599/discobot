@@ -189,12 +189,13 @@ it done.
    Project menu in groups (findings 12 and 13, #126); one set of names for
    the drums and the knobs (finding 14, and with it the full drum names of
    feature 9, #127).
-2. **Finding 10** is built on `feat/design-review-own-dialogs`; check its
-   pull request's state. What it was: the app's own dialog in place of the browser's "are you
+2. **Finding 10** is merged (#130), with a fix for lit buttons going dark
+   after a tap on a phone, which #129 had brought in. What it was: the app's own dialog in place of the browser's "are you
    sure" for deleting a scene, a project or a member; its own button over
    the file chooser in MIDI and samples; its own small player on the share
    page; the phone browser's tap mark turned off for the whole page.
-3. **Feature 1:** starting points for an empty project.
+3. **Feature 1:** starting points for an empty project. Built on
+   `feat/design-review-starting-points`; check its pull request's state.
 4. **Feature 7:** a colour for each scene. It is a stored value, so follow
    the `add-project-field` skill.
 5. **Feature 5:** copy a lane's pattern, or one drum row, to another scene.
