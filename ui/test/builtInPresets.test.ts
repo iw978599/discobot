@@ -17,6 +17,9 @@ const LEVEL: Record<PresetKind, number> = { bass: -18, lead: -20, pad: -17, keys
 // Filtered noise cannot be made as loud as a tone at the most a lane's level allows, so the
 // sounds made of it are allowed to sit further under.
 const MADE_OF_NOISE = new Set(['builtin-fx-riser', 'builtin-fx-wind', 'builtin-fx-helicopter']);
+// The TB-303's level is all in its first moment and its resonance takes bass away, so at the most
+// a lane's level allows an acid bass is still under the basses that sustain.
+const ALL_ATTACK = new Set(['builtin-bass-acid']);
 
 test('every kind has sounds to choose from, and no two presets share an id or a name', () => {
   for (const kind of PRESET_KINDS) {
@@ -73,7 +76,7 @@ test('every preset makes sound, stays clear of the limiter and falls silent afte
 test('presets of a kind are about as loud as each other', () => {
   for (const preset of presets) {
     const m = measures.get(preset.id)!;
-    const under = MADE_OF_NOISE.has(preset.id) ? 6 : 3;
+    const under = MADE_OF_NOISE.has(preset.id) || ALL_ATTACK.has(preset.id) ? 6 : 3;
     assert.ok(
       m.loudness <= LEVEL[preset.kind] + 3 && m.loudness >= LEVEL[preset.kind] - under,
       `${preset.name} (${preset.kind}) is at ${m.loudness.toFixed(1)} dB; its kind sits at ${LEVEL[preset.kind]}`,

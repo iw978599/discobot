@@ -78,9 +78,14 @@ export const KIDS_PAD_ORDER = [0, 1, 2, 3, 4, 5, 9, 10, 6, 11, 8, 7];
 // are one instrument with one picture, and the two never play the same hit twice.
 export const KIDS_BEAT_ROWS = [6, 11, 8, 7];
 
-const sound = (changes: Partial<SynthParameters>): SynthParameters => ({
-  ...createDefaultSynthParameters(), gain: 0.8, fxSends: { reverb: 0, delay: 0, drive: 0, phaser: 0, chorus: 0 }, ...changes,
-});
+// A kids sound names its whole filter; what a filter has gained since (its model) is filled in.
+const sound = (changes: Partial<SynthParameters>): SynthParameters => {
+  const base = createDefaultSynthParameters();
+  return {
+    ...base, gain: 0.8, fxSends: { reverb: 0, delay: 0, drive: 0, phaser: 0, chorus: 0 }, ...changes,
+    filter: { ...base.filter, ...changes.filter },
+  };
+};
 
 // The sounds a child picks from, by picture. Set by reasoning, not by ear. A stored tune names
 // its sound by its place here, so a new one goes on the end.

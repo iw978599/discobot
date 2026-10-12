@@ -157,10 +157,14 @@ target; removal of the AI review workflow.
    Sources (two LFOs, both envelopes, velocity, key, mod wheel) routed to any
    destination with a depth, replacing the fixed LFO target dropdowns.
 
-5. **A true ladder filter.** (M)
-   The 24 dB mode is two cascaded state-variable stages; a ladder with its
-   characteristic resonance and bass loss is open, and the Minimoog and
-   TB-303 models do not switch to 24 dB by themselves yet.
+5. **A true ladder filter.** (M) Done on 2026-10-12, not verified by ear.
+   The voice has a four-pole ladder beside the state-variable filter, as a
+   third choice in the slope menu. Its resonance thins the bass a little and
+   rings by itself at the top. The Minimoog and TB-303 models take it, with
+   24 dB, when a lane is moved to them. Open: the other filter models the
+   MS-20 needs (a high-pass and a low-pass in a row whose resonance
+   distorts); and the ladder gives back most of the level its resonance
+   takes, because a lane's level stops at 200%.
 
 6. **An algorithmic reverb, and insert effects per lane.** (M each)
    The reverb is a convolver with a shaped impulse. Insert effects are easier

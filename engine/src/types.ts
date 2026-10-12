@@ -63,6 +63,7 @@ export interface EffectsLoopState {
 
 // 'pitch' is up to an octave either way; 'vibrato' is the same movement scaled to one semitone.
 export type LfoTarget = 'pitch' | 'filter' | 'amp' | 'pulseWidth' | 'vibrato';
+export type FilterModel = 'svf' | 'ladder';
 export type SynthEngineMode = 'subtractive' | 'fm';
 export type SynthVoiceMode = 'poly' | 'mono';
 
@@ -155,6 +156,10 @@ export interface SynthParameters {
     drive?: number;
     // 12 or 24 dB per octave; 24 applies to low-pass, high-pass and band-pass
     slope?: number;
+    // which filter the low-pass is: 'svf', the clean state-variable one every sound had before
+    // there was a choice, or 'ladder', a four-pole ladder. Absent means 'svf'. A ladder is
+    // always four poles and only a low-pass: any other type uses the state-variable filter.
+    model?: FilterModel;
   };
   envelope: SynthEnvelope;
   fxSends: FxSendLevels;

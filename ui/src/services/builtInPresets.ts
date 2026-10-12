@@ -1,6 +1,6 @@
 import { createDefaultSynthParameters } from '@discobot/engine';
 import type { SynthModelId, SynthModelParams, SynthParameters } from '../types';
-import { DEFAULT_SYNTH_MODEL_ID, createDefaultSynthModelParams, mapSynthModelToEngineParams } from '../synthModels';
+import { DEFAULT_SYNTH_MODEL_ID, createDefaultSynthModelParams, enterSynthModel } from '../synthModels';
 import type { PresetKind } from './presetKinds';
 
 // The sounds that come with the app. Each has a kind, which is the group the presets menu
@@ -44,7 +44,7 @@ const model = (id: string, name: string, kind: PresetKind, modelId: SynthModelId
   const modelParams = { macro1: macros[0], macro2: macros[1], macro3: macros[2], macro4: macros[3] };
   return {
     id: `builtin-${id}`, name, kind, builtIn: true, modelId, modelParams,
-    params: sound(extras, sound(mapSynthModelToEngineParams(modelId, modelParams) as Patch)),
+    params: sound(extras, sound(enterSynthModel(modelId, modelParams) as Patch)),
   };
 };
 
@@ -59,11 +59,11 @@ const BASS: BuiltInPreset[] = [
     envelope: { attack: 0.004, decay: 0.2, sustain: 0.85, release: 0.12 },
     fxSends: { reverb: 0.02, delay: 0, drive: 0.1, phaser: 0, chorus: 0 },
   }),
-  model('bass', 'Round Bass', 'bass', 'minimoog-model-d', [0.2, 0.25, 0.3, 0.35], {
-    gain: 1.75,
+  model('bass', 'Round Bass', 'bass', 'minimoog-model-d', [0.2, 0.25, 0.36, 0.35], {
+    gain: 2,
     fxReturn: 0.55, fxSends: { reverb: 0.05, delay: 0.03, drive: 0.25, phaser: 0, chorus: 0 },
   }),
-  model('bass-acid', 'Acid Bass', 'bass', 'tb-303', [0.8, 0.7, 0.35, 0.45], {
+  model('bass-acid', 'Acid Bass', 'bass', 'tb-303', [0.8, 0.6, 0.5, 0.65], {
     gain: 2,
     fxReturn: 0.6, fxSends: { reverb: 0.06, delay: 0.12, drive: 0.4, phaser: 0, chorus: 0 },
   }),
@@ -129,7 +129,7 @@ const BASS: BuiltInPreset[] = [
 
 const LEAD: BuiltInPreset[] = [
   model('lead', 'Saw Lead', 'lead', 'minimoog-model-d', [0.35, 0.3, 0.75, 0.5], {
-    gain: 1.45,
+    gain: 1.8,
     fxReturn: 0.72, fxSends: { reverb: 0.2, delay: 0.3, drive: 0.15, phaser: 0.08, chorus: 0 },
     lfo2: { enabled: true, target: 'vibrato', waveform: 'sine', rate: 5.5, depth: 0.25, sync: false, retrigger: true },
   }),
@@ -189,7 +189,7 @@ const LEAD: BuiltInPreset[] = [
     fxSends: { reverb: 0.3, delay: 0.2, drive: 0, phaser: 0, chorus: 0.15 },
   }),
   model('lead-squelch', 'Squelch Lead', 'lead', 'tb-303', [0.9, 0.8, 0.75, 0.55], {
-    gain: 1.9,
+    gain: 2,
     fxReturn: 0.7, fxSends: { reverb: 0.15, delay: 0.3, drive: 0.35, phaser: 0, chorus: 0 },
   }),
   generic('lead-glass', 'Glass Lead', 'lead', {

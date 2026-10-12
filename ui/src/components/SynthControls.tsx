@@ -711,12 +711,13 @@ export default function SynthControls({
               <select
                 className="synth-filter-type-select"
                 aria-label="Filter slope"
-                value={parameters.filter.slope === 24 ? 24 : 12}
-                onChange={(e) => updateFilter({ slope: Number(e.target.value) })}
-                title="12 dB per octave is gentler; 24 dB is the steeper, darker classic-synth filter"
+                value={parameters.filter.model === 'ladder' ? 'ladder' : parameters.filter.slope === 24 ? 24 : 12}
+                onChange={(e) => updateFilter(e.target.value === 'ladder' ? { slope: 24, model: 'ladder' } : { slope: Number(e.target.value), model: 'svf' })}
+                title="12 dB per octave is gentler; 24 dB is steeper and darker. Ladder is a 24 dB low-pass whose resonance thins the bass and can ring by itself, as on a Minimoog; it is a low-pass only"
               >
                 <option value={12}>12 dB</option>
                 <option value={24}>24 dB</option>
+                <option value="ladder">Ladder</option>
               </select>
             </div>
             <Knob

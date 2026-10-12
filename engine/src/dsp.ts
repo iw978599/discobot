@@ -98,6 +98,51 @@ export class Svf {
   }
 }
 
+// A four-pole ladder low-pass: four one-pole stages in a row with the last fed back to the first,
+// solved without a delay in the loop so it stays in tune and stable while the cutoff moves. The
+// feedback is the resonance. It is what gives a ladder its two marks: the peak takes level out of
+// everything under it, so the bass thins as resonance comes up, and at full feedback it rings by
+// itself. The input stage saturates, which keeps that ringing bounded and rounds a hot signal.
+const LADDER_MAKEUP = 0.75;
+const LADDER_BEND = 0.35;
+
+export class Ladder {
+  private s1 = 0;
+  private s2 = 0;
+  private s3 = 0;
+  private s4 = 0;
+
+  reset(): void { this.s1 = this.s2 = this.s3 = this.s4 = 0; }
+
+  // g comes from svfCoefficient; feedback is 0 (no resonance) to 4 (rings by itself).
+  tick(input: number, g: number, feedback: number): number {
+    const G = g / (1 + g), G2 = G * G;
+    // What the four stages would put out with no input, from what they hold now.
+    const held = (1 - G) * (G2 * G * this.s1 + G2 * this.s2 + G * this.s3 + this.s4);
+    // Three quarters of the level the feedback takes away is given back: a resonant sound is a little thinner in
+    // the bass, as a ladder's is, without going faint. A real ladder loses far more; a lane's level stops at 200%,
+    // and a sound that quiet could not be brought back up.
+    // The input stage bends only what is well over a full-level signal, so the peak can stand several times
+    // over the sound it is in before it is held back. Bending at full level would flatten the resonance away.
+    const u = Math.tanh((input * (1 + LADDER_MAKEUP * feedback) - feedback * held) / (1 + feedback * G2 * G2) * LADDER_BEND) / LADDER_BEND;
+    let v = (u - this.s1) * G; const y1 = v + this.s1; this.s1 = y1 + v;
+    v = (y1 - this.s2) * G; const y2 = v + this.s2; this.s2 = y2 + v;
+    v = (y2 - this.s3) * G; const y3 = v + this.s3; this.s3 = y3 + v;
+    v = (y3 - this.s4) * G; const y4 = v + this.s4; this.s4 = y4 + v;
+    if (!Number.isFinite(this.s1 + this.s2 + this.s3 + this.s4)) { this.reset(); return 0; }
+    return y4;
+  }
+}
+
+// The ladder's feedback for a resonance set as a Q, the way the other filter takes it. A ladder's
+// peak stands (1 + k) / (4 - k) times over its passband for a feedback of k, and that is set
+// equal to the Q, so the same setting gives much the same peak on either filter: none at a
+// quarter, most of the way to ringing by ten, never quite all the way.
+export function ladderFeedback(q: number): number {
+  const wanted = Math.max(q, 0.1);
+  return finiteClamp((4 * wanted - 1) / (wanted + 1), 0, 3.95, 0);
+}
+
 export type EnvelopeStage = 'off' | 'attack' | 'decay' | 'sustain' | 'release';
 
 // Exponential ADSR: segments approach their target the way an analog envelope does.
