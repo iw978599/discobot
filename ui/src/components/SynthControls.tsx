@@ -6,7 +6,7 @@
 import { useState, type ReactNode } from 'react';
 import { createDefaultSynthParameters } from '@discobot/engine';
 import { SynthParameters, OscillatorType, SynthModelId } from '../types';
-import { SYNTH_MODELS } from '../synthModels';
+import { SYNTH_MODELS, SYNTH_MODEL_GROUPS } from '../synthModels';
 import { groupPresets, type PresetKind } from '../services/presetKinds';
 import NestedMenu from '../rack/NestedMenu';
 import Knob from './Knob';
@@ -243,10 +243,15 @@ export default function SynthControls({
               onChange={(e) => onModelChange(e.target.value as SynthModelId)}
               title="Synth model - changes the character and behavior of the synthesizer"
             >
-              {SYNTH_MODELS.map((entry) => (
-                <option key={entry.id} value={entry.id}>
-                  {entry.name}
-                </option>
+              {SYNTH_MODELS.filter(entry => !entry.group).map((entry) => (
+                <option key={entry.id} value={entry.id}>{entry.name}</option>
+              ))}
+              {SYNTH_MODEL_GROUPS.map(group => (
+                <optgroup key={group} label={group}>
+                  {SYNTH_MODELS.filter(entry => entry.group === group).map((entry) => (
+                    <option key={entry.id} value={entry.id}>{entry.name}</option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           </div>

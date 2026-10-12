@@ -66,6 +66,14 @@ const BASS: BuiltInPreset[] = [
     gain: 2,
     fxReturn: 0.6, fxSends: { reverb: 0.06, delay: 0.12, drive: 0.4, phaser: 0, chorus: 0 },
   }),
+  model('bass-101', '101 Bass', 'bass', 'sh-101', [0.25, 0.6, 0.3, 0.6], {
+    gain: 1.8,
+    fxReturn: 0.55, fxSends: { reverb: 0.04, delay: 0.04, drive: 0.2, phaser: 0, chorus: 0 },
+  }),
+  model('bass-pro', 'Pro Bass', 'bass', 'pro-one', [0.3, 0.35, 0.3, 0.55], {
+    gain: 2,
+    fxReturn: 0.55, fxSends: { reverb: 0.04, delay: 0.03, drive: 0.25, phaser: 0, chorus: 0 },
+  }),
   generic('bass-rubber', 'Rubber Bass', 'bass', {
     gain: 1.05,
     voiceMode: 'mono', portamento: { enabled: true, glide: 0.05 },
@@ -119,6 +127,16 @@ const LEAD: BuiltInPreset[] = [
     gain: 1.45,
     fxReturn: 0.72, fxSends: { reverb: 0.2, delay: 0.3, drive: 0.15, phaser: 0.08, chorus: 0 },
     lfo2: { enabled: true, target: 'vibrato', waveform: 'sine', rate: 5.5, depth: 0.25, sync: false, retrigger: true },
+  }),
+  model('lead-101', '101 Lead', 'lead', 'sh-101', [0.75, 0.2, 0.65, 0.4], {
+    gain: 1.3,
+    fxReturn: 0.7, fxSends: { reverb: 0.18, delay: 0.3, drive: 0.1, phaser: 0, chorus: 0.1 },
+    lfo2: { enabled: true, target: 'vibrato', waveform: 'sine', rate: 5.5, depth: 0.2, sync: false, retrigger: true },
+  }),
+  model('lead-pro', 'Pro Lead', 'lead', 'pro-one', [0.5, 0.4, 0.7, 0.5], {
+    gain: 1.75,
+    fxReturn: 0.7, fxSends: { reverb: 0.2, delay: 0.3, drive: 0.2, phaser: 0, chorus: 0 },
+    lfo2: { enabled: true, target: 'vibrato', waveform: 'sine', rate: 5.5, depth: 0.2, sync: false, retrigger: true },
   }),
   generic('lead-square', 'Square Lead', 'lead', {
     gain: 0.75,
@@ -324,6 +342,10 @@ const PLUCK: BuiltInPreset[] = [
     filterEnvelope: { attack: 0.001, decay: 0.2, sustain: 0, release: 0.15 },
     envelope: { attack: 0.002, decay: 0.28, sustain: 0, release: 0.2 },
     fxSends: { reverb: 0.3, delay: 0.3, drive: 0.05, phaser: 0, chorus: 0.2 },
+  }),
+  model('pluck-pro', 'Pro Zap', 'pluck', 'pro-one', [0.2, 0.6, 0.25, 0.3], {
+    gain: 1.45,
+    fxReturn: 0.7, fxSends: { reverb: 0.2, delay: 0.3, drive: 0.25, phaser: 0, chorus: 0 },
   }),
   generic('pluck-blip', 'Blip', 'pluck', {
     gain: 1.7,

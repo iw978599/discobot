@@ -25,6 +25,25 @@ what an older copy of the app will do with a project that uses a new model:
 the lane opens and plays with the generic controls. Check that this is still
 true before the first new model ships, and say so in the pull request.
 
+## Progress
+
+- 2026-10-12: **SH-101 and Pro-One are built**, with the model menu grouped
+  Mono, Poly and Digital. Not verified by ear. What was found on the way:
+  - The voice has pulse width and an LFO can move it, so the SH-101's pulse
+    is as planned. Its pulse is the voice's first oscillator (the only one
+    with a width) and its saw the second, at the same pitch, balanced by the
+    first oscillator's new level.
+  - One envelope for filter and level is done by giving both the same
+    values; the envelope's own times are fixed and not on a macro.
+  - The sub is one octave down only. The real one can also sit two down.
+  - Unison stops at five copies. The JP-8000 wants seven: raise the limit
+    with that model.
+  - A model's filter slope: these two set 24 dB. The five older models
+    still leave the slope alone, as the roadmap notes for the Minimoog and
+    TB-303.
+  - A project using one of these opens with the plain engine in a copy of
+    the app that does not know it; a test checks the rule.
+
 ## The fourteen, in three groups
 
 The grouping is by what each needs from the voice, because that decides when
