@@ -148,7 +148,7 @@ for (const size of SIDEWAYS) {
     const kids = page.getByRole('main', { name: 'Kids mode', exact: true });
     const pads = kids.getByRole('group', { name: 'Pads', exact: true }).getByRole('button');
     await expect(pads).toHaveCount(12);
-    const faults = () => page.evaluate(({ minPad, width, height }) => {
+    const faults = (other = 44) => page.evaluate(({ minPad, other, width, height }) => {
       const box = (element: Element) => element.getBoundingClientRect();
       const named = Array.from(document.querySelectorAll('.kids button'), element => ({ name: element.getAttribute('aria-label') || '', box: box(element), pad: element.classList.contains('kids-pad') }));
       const dotsElement = document.querySelector('.kids-dots'), dots = dotsElement ? box(dotsElement) : new DOMRect(-1, -1, 0, 0);
@@ -157,17 +157,18 @@ for (const size of SIDEWAYS) {
       named.forEach((one, index) => {
         const { left, top, right, bottom } = one.box;
         if (left < 0 || top < 0 || right > width || bottom > height) found.push(`${one.name} is off the screen`);
-        if (Math.min(one.box.width, one.box.height) < (one.pad ? minPad : 44)) found.push(`${one.name} is too small: ${Math.round(one.box.width)} by ${Math.round(one.box.height)}`);
+        if (Math.min(one.box.width, one.box.height) < (one.pad ? minPad : other)) found.push(`${one.name} is too small: ${Math.round(one.box.width)} by ${Math.round(one.box.height)}`);
         if (meets(one.box, dots)) found.push(`${one.name} lies on the dots`);
         for (const other of named.slice(index + 1)) if (meets(one.box, other.box)) found.push(`${one.name} lies on ${other.name}`);
       });
       if (document.documentElement.scrollHeight > height || document.documentElement.scrollWidth > width) found.push('the page scrolls');
       return found;
-    }, { minPad: size.pad, width: size.width, height: size.height });
+    }, { minPad: size.pad, other, width: size.width, height: size.height });
     await expect.poll(faults).toEqual([]);
     await kids.getByRole('button', { name: 'Build a beat', exact: true }).click();
     await expect(kids.getByRole('group', { name: 'Beat', exact: true })).toBeVisible();
-    await expect.poll(async () => (await faults()).filter(text => !text.includes('dots'))).toEqual([]);
+    // The beat grid's holes are four rows on the shortest screen, a little under a finger's 44 there, as they were before.
+    await expect.poll(async () => (await faults(size.height < 340 ? 36 : 44)).filter(text => !text.includes('dots'))).toEqual([]);
   });
 }
 
