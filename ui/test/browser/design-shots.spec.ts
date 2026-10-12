@@ -279,6 +279,17 @@ test('design shots: menus, dialogs, the walkthrough and a guest', async ({ page 
       await page.keyboard.press('Escape');
     });
   }
+  await attempt(walk, 'menu-preset', async () => {
+    const editor = page.locator('.synth-module').first();
+    await editor.getByRole('button', { name: /^Synth preset/ }).click();
+    await expect(editor.locator('[role="menuitem"][data-group]').first()).toBeVisible();
+    await shot(walk, 'menu-preset-groups');
+    await editor.locator('[role="menuitem"][data-group="Pad"]').click();
+    await expect(editor.getByRole('menu', { name: 'Pad', exact: true })).toBeVisible();
+    await shot(walk, 'menu-preset-group-open');
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+  });
   await attempt(walk, 'focus-menu-row', async () => {
     await menu(page, 'Project');
     await expect(page.getByRole('menuitem').first()).toBeVisible();

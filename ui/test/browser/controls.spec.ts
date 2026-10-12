@@ -8,6 +8,24 @@ async function edit(control: Locator, text: string) {
   await control.press('Enter');
 }
 
+// The preset menu: a button, a list of groups, and a list of the chosen group's presets.
+const presetButton = (scope: Page | Locator) => scope.getByRole('button', { name: /^Synth preset/ });
+const presetRow = (scope: Page | Locator, group: string, name: string) => scope.getByRole('menu', { name: group, exact: true }).getByRole('menuitem', { name, exact: true });
+async function openPresetGroup(scope: Page | Locator, group: string) {
+  await presetButton(scope).click();
+  await scope.locator(`[role="menuitem"][data-group="${group}"]`).click();
+}
+async function choosePreset(scope: Page | Locator, group: string, name: string) {
+  await openPresetGroup(scope, group);
+  await presetRow(scope, group, name).click();
+  await expect(presetButton(scope)).toHaveAccessibleName(`Synth preset: ${name}`);
+}
+// Escape goes back from the group's list, then closes the menu.
+async function closePresetMenu(page: Page, scope: Page | Locator = page) {
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await expect(presetButton(scope)).toHaveAttribute('aria-expanded', 'false');
+}
 const tab = (page: Page, name: string) => page.getByRole('tab', { name, exact: true }).click();
 async function menu(page: Page, name: 'Project' | 'Export', item: string) {
   await page.getByRole('button', { name: `${name} ▾`, exact: true }).click();
@@ -94,7 +112,7 @@ test('full musical arrangement survives a kept copy, editing, reopening and relo
   const synth = page.locator('.synth-controls-panel');
   await page.locator('.tempo-led').click();
   await edit(page.locator('.tempo-led-input'), '96');
-  await synth.getByLabel('Synth preset', { exact: true }).selectOption({ label: 'Sub Bass *' });
+  await choosePreset(synth, 'Bass', 'Sub Bass');
   await tab(page, 'Amp');
   await edit(synth.getByLabel('Gain value', { exact: true }), '63%');
   await edit(synth.getByLabel('Pan value', { exact: true }), 'L25');
@@ -271,19 +289,25 @@ test('releasing the first key during worklet loading cannot start a stuck note',
 
 test('all named presets and model macros are selectable; user presets survive reload', async ({ page }) => {
   const synth = page.locator('.synth-controls-panel');
-  const preset = synth.getByLabel('Synth preset', { exact: true });
-  const named = await preset.locator('option').allTextContents();
-  const builtIn = named.filter(name => name.endsWith(' *'));
-  expect(builtIn.length, 'the app comes with a good many sounds').toBeGreaterThanOrEqual(30);
   await tab(page, 'Amp');
   const gain = synth.getByRole('slider', { name: 'Gain', exact: true });
-  for (const name of builtIn) {
-    await preset.selectOption({ label: name });
-    await expect(preset.locator('option:checked')).toHaveText(name);
-    // Each sets its own level, within what a lane's level can be.
-    await expect.poll(async () => Number(await gain.getAttribute('aria-valuenow')), { message: name }).toBeGreaterThanOrEqual(0.3);
-    await expect.poll(async () => Number(await gain.getAttribute('aria-valuenow')), { message: name }).toBeLessThanOrEqual(2);
+  let builtIn = 0;
+  for (const family of ['Bass', 'Lead', 'Pad', 'Keys', 'Pluck', 'Effects']) {
+    await openPresetGroup(synth, family);
+    const rows = synth.getByRole('menu', { name: family, exact: true }).locator('[role="menuitem"]:not([data-back])');
+    await expect(rows.first()).toBeVisible();
+    const named = await rows.evaluateAll(found => found.map(row => row.getAttribute('aria-label') || ''));
+    expect(named.length, `${family} has sounds to choose from`).toBeGreaterThanOrEqual(5);
+    builtIn += named.length;
+    await closePresetMenu(page, synth);
+    for (const name of named) {
+      await choosePreset(synth, family, name);
+      // Each sets its own level, within what a lane's level can be.
+      await expect.poll(async () => Number(await gain.getAttribute('aria-valuenow')), { message: name }).toBeGreaterThanOrEqual(0.3);
+      await expect.poll(async () => Number(await gain.getAttribute('aria-valuenow')), { message: name }).toBeLessThanOrEqual(2);
+    }
   }
+  expect(builtIn, 'the app comes with a good many sounds').toBeGreaterThanOrEqual(30);
   const macros = page.locator('.synth-module.selected .synth-model-macro-grid [role="slider"]');
   for (const model of ['minimoog-model-d', 'juno-106', 'dx7', 'tb-303', 'prophet-5']) {
     await synth.getByLabel('Synth model', { exact: true }).selectOption(model);
@@ -293,10 +317,13 @@ test('all named presets and model macros are selectable; user presets survive re
   await synth.getByLabel('Preset name', { exact: true }).fill('My keys');
   await synth.getByRole('button', { name: 'Save', exact: true }).click();
   await page.reload();
-  await page.getByLabel('Synth preset', { exact: true }).selectOption({ label: 'My keys' });
+  await choosePreset(page, 'My presets', 'My keys');
   await expect(page.getByLabel('Synth model', { exact: true })).toHaveValue('prophet-5');
   await page.locator('.preset-controls').getByRole('button', { name: 'Delete', exact: true }).click();
-  await expect(page.getByLabel('Synth preset', { exact: true }).locator('option').filter({ hasText: 'My keys' })).toHaveCount(0);
+  await expect(presetButton(page)).toHaveAccessibleName('Synth preset: Preset…');
+  await presetButton(page).click();
+  await expect(page.locator('[role="menuitem"][data-group="Bass"]')).toBeVisible();
+  await expect(page.locator('[role="menuitem"][data-group="My presets"]'), 'the group goes with the last preset in it').toHaveCount(0);
 });
 
 test('piano-roll keyboard navigation, 32-step editing and cancelled painting preserve notes', async ({ page }) => {

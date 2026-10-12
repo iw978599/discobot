@@ -198,6 +198,9 @@ target; removal of the AI review workflow.
    open: the new presets themselves (no kind has an Effects preset yet, so
    that group does not show); choosing a kind when a preset is imported (an
    imported preset goes under "My presets" for now); the new models.
+   Done as well: the presets menu is a nested menu in the rack's own style
+   (the groups, then a group's presets beside them, or in their place on a
+   phone), in place of the browser's own list.
    The model menu is grouped too, since it grows to nineteen. Presets and
    models are sound, and sound cannot be checked by a test: each needs the
    owner's ears before it is called done, with a listening session after the

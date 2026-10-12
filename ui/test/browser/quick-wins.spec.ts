@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
 const PROJECT_KEY = 'discobot_browser_project_v1';
@@ -19,6 +19,24 @@ async function setTempoTo(page: Page, bpm: number) {
   await page.locator('.tempo-led').click();
   await page.locator('.tempo-led-input').fill(String(bpm));
   await page.locator('.tempo-led-input').press('Enter');
+}
+// The preset menu: a button, a list of groups, and a list of the chosen group's presets.
+const presetButton = (scope: Page | Locator) => scope.getByRole('button', { name: /^Synth preset/ });
+const presetRow = (scope: Page | Locator, group: string, name: string) => scope.getByRole('menu', { name: group, exact: true }).getByRole('menuitem', { name, exact: true });
+async function openPresetGroup(scope: Page | Locator, group: string) {
+  await presetButton(scope).click();
+  await scope.locator(`[role="menuitem"][data-group="${group}"]`).click();
+}
+async function choosePreset(scope: Page | Locator, group: string, name: string) {
+  await openPresetGroup(scope, group);
+  await presetRow(scope, group, name).click();
+  await expect(presetButton(scope)).toHaveAccessibleName(`Synth preset: ${name}`);
+}
+// Escape goes back from the group's list, then closes the menu.
+async function closePresetMenu(page: Page, scope: Page | Locator = page) {
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await expect(presetButton(scope)).toHaveAttribute('aria-expanded', 'false');
 }
 async function menu(page: Page, name: 'Project' | 'Export', item: string) {
   await page.getByRole('button', { name: `${name} ▾`, exact: true }).click();
@@ -197,10 +215,14 @@ test('a project file restores lanes, drums, saved arrangements and presets over 
   await menu(page, 'Project', 'New Project');
   await expect(page.locator('.tempo-led-value')).toHaveText('120');
   await expect(page.getByRole('button', { name: 'Project: Untitled 2', exact: true })).toBeVisible();
-  await page.getByLabel('Synth preset', { exact: true }).locator('option').filter({ hasText: 'Travel keys' }).first().waitFor({ state: 'attached' });
-  await page.locator('.preset-controls').getByLabel('Synth preset', { exact: true }).selectOption({ label: 'Travel keys' });
+  await choosePreset(page, 'My presets', 'Travel keys');
   await page.locator('.preset-controls').getByRole('button', { name: 'Delete', exact: true }).click();
-  await expect(page.getByLabel('Synth preset', { exact: true }).locator('option').filter({ hasText: 'Travel keys' })).toHaveCount(0);
+  await expect(presetButton(page)).toHaveAccessibleName('Synth preset: Preset…');
+  await presetButton(page).click();
+  await expect(page.locator('[role="menuitem"][data-group="Bass"]')).toBeVisible();
+  await expect(page.locator('[role="menuitem"][data-group="My presets"]')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(presetButton(page)).toHaveAttribute('aria-expanded', 'false');
   await setTempoTo(page, 150);
 
   const input = page.locator('input[aria-label="Import project file"]');
@@ -211,7 +233,9 @@ test('a project file restores lanes, drums, saved arrangements and presets over 
   await page.getByRole('button', { name: 'Select Snare', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Snare step 5', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('button', { name: 'Snare step 5', exact: true })).toContainText('×3');
-  await expect(page.getByLabel('Synth preset', { exact: true }).locator('option').filter({ hasText: 'Travel keys' })).toHaveCount(1);
+  await openPresetGroup(page, 'My presets');
+  await expect(presetRow(page, 'My presets', 'Travel keys')).toBeVisible();
+  await closePresetMenu(page);
   await expect(page.locator('.app-alert')).toHaveCount(0);
   expect((await project(page)).tempo).toBe(96);
 
