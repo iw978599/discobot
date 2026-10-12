@@ -1,4 +1,7 @@
 import { useEffect, useRef } from 'react';
+import { useNarrow } from '../hooks/useNarrow';
+import SaveState from './SaveState';
+import { spaceBelongsToTarget } from '../hooks/useComputerKeyboard';
 import type { Studio } from '../studio/useStudio';
 import Knob from '../components/Knob';
 import Menu from './Menu';
@@ -23,6 +26,22 @@ export default function TransportUnit({ studio, onOpenSettings, onOpenProjects, 
   const { midiState } = studio;
   const exporting = studio.exportStatus?.phase === 'working';
   const user = useAccountUser();
+  const narrow = useNarrow();
+  // Space plays and stops, unless it belongs to whatever has the keyboard: a button or link it
+  // would press, a field it types in, a menu, or a dialog.
+  const playStop = useRef(studio.handleGlobalPlayStop);
+  playStop.current = studio.handleGlobalPlayStop;
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.code !== 'Space' || event.repeat || event.defaultPrevented) return;
+      if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+      if (spaceBelongsToTarget(event.target) || document.querySelector('[aria-modal="true"]')) return;
+      event.preventDefault();
+      void playStop.current();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
   const midiStatus = !midiState.supported ? 'MIDI is not available in this browser'
     : midiState.connected ? 'A MIDI controller is connected' : 'No MIDI controller connected';
   // On a narrow screen the bar wraps over several lines and only the last, with the tempo and
@@ -42,12 +61,15 @@ export default function TransportUnit({ studio, onOpenSettings, onOpenProjects, 
       <div className="rack-row">
         <div className="rack-plate static brand">
           <h1>Discobot</h1>
-          <button className="project-name" onClick={onOpenProjects} aria-label={`Project: ${studio.projectName}`} title="See all projects, rename this one, or keep a copy">
-            {studio.projectName || 'Untitled'}
-          </button>
+          <div className="project-line">
+            <button className="project-name" onClick={onOpenProjects} aria-label={`Project: ${studio.projectName}`} title="See all projects, rename this one, or keep a copy">
+              {studio.projectName || 'Untitled'}
+            </button>
+            {!narrow && <SaveState projectId={studio.projectId} />}
+          </div>
         </div>
         <TempoDisplay tempo={studio.globalTempo} onChange={(bpm) => { void studio.handleTempoChange(bpm); }} />
-        <button className={`rack-btn go play-all-button ${studio.isAnyPlaying ? 'playing' : ''}`} onClick={() => { void studio.handleGlobalPlayStop(); }}>
+        <button className={`rack-btn go play-all-button ${studio.isAnyPlaying ? 'playing' : ''}`} onClick={() => { void studio.handleGlobalPlayStop(); }} title={`${studio.isAnyPlaying ? 'Stop' : 'Start'} every lane and the drums (Space)`}>
           {studio.isAnyPlaying ? '⏹ Stop All' : '▶ Play All'}
         </button>
         <div className="rack-grow" />
@@ -55,30 +77,34 @@ export default function TransportUnit({ studio, onOpenSettings, onOpenProjects, 
         <button className="rack-btn" onClick={() => { void studio.handleRedo(); }} title="Redo (Ctrl/Cmd+Shift+Z)">Redo</button>
         <Menu
           label="Project"
-          items={[
+          groups={[[
             { label: 'New Project', title: 'Start an empty project. The open one stays in your projects', onSelect: () => { void studio.handleNewProject(); } },
             { label: 'All Projects', title: 'Open, rename, copy or delete projects', onSelect: onOpenProjects },
             { label: 'Save a Copy', title: 'Keep a copy of this project as it is now, to go back to', onSelect: () => { void studio.handleCopyProject(studio.projectId); } },
             { label: 'Version History', title: 'Go back to an earlier version of this project', onSelect: onOpenVersions },
+          ], [
             { label: 'Share Link', title: 'Make a link that plays this song for anyone who opens it', onSelect: onShare },
             { label: 'Export Project', title: 'Download the whole project as a file', onSelect: studio.handleExportProject },
             { label: 'Import Project', title: 'Add a project file to your projects and open it', onSelect: () => studio.projectImportFileRef.current?.click() },
-            { label: 'Add Guest Instrument', title: "Host another creator's web instrument in this project, by its address", onSelect: onAddGuest },
             { label: 'Import MIDI', title: 'Bring notes in from a .mid file', onSelect: studio.handleMidiImportClick },
+          ], [
+            { label: 'Add Guest Instrument', title: "Host another creator's web instrument in this project, by its address", onSelect: onAddGuest },
             { label: 'Kids Mode', title: 'Big pads, a beat grid of pictures and one play button for a small child. It keeps its own tune and cannot change your projects', onSelect: enterKidsMode },
-            { label: 'Reset All', title: 'Clear every lane, the drums and the effects of this project', onSelect: () => { void studio.handleReset(); } },
-          ]}
+          ], [
+            { label: 'Reset All', title: 'Clear every lane, the drums and the effects of this project', danger: true, onSelect: () => { void studio.handleReset(); } },
+          ]]}
         />
         <Menu
           label="Export"
-          items={[
+          groups={[[
             { label: 'Scene WAV', title: 'The open scene: one bar with its effect tail', disabled: exporting, onSelect: () => { void studio.handleExportWav('pattern').catch(studio.reportExportError); } },
             { label: 'Loop WAV', title: 'One bar that loops seamlessly, with effect tails wrapped in', disabled: exporting, onSelect: () => { void studio.handleExportWav('loop').catch(studio.reportExportError); } },
             { label: 'Stems', title: 'Each synth lane, the drums and each guest instrument as separate WAV files in a zip', disabled: exporting, onSelect: () => { void studio.handleExportWav('stems').catch(studio.reportExportError); } },
             { label: 'Scene MIDI', title: 'A Standard MIDI File of the open scene', onSelect: studio.handleExportMidi },
+          ], [
             { label: 'Song WAV', title: 'The whole song, start to finish, as one audio file', disabled: exporting, onSelect: () => { void studio.handleExportWav('song').catch(studio.reportExportError); } },
             { label: 'Song MIDI', title: 'The whole song as a MIDI file, with a marker at each section', onSelect: () => { void studio.handleExportSongMidi().catch(studio.reportExportError); } },
-          ]}
+          ]]}
         />
         {accountsEnabled && (
           <button className="rack-btn account-button" onClick={onOpenAccount} title={user ? 'Your account' : 'Sign in or create an account. Optional'} aria-label={user ? `Account: ${user.username}` : 'Sign in'}>

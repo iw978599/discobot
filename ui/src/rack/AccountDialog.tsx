@@ -123,8 +123,10 @@ function OwnerTools() {
   useEffect(() => { void run(load); }, []);
 
   return (
-    <>
-      <h3>Invite codes</h3>
+    <section className="owner-tools" aria-labelledby="owner-tools-heading">
+      <h3 id="owner-tools-heading">Owner tools</h3>
+      <p>Only you, as the owner of this Discobot, see these: the invite codes and the members.</p>
+      <h4>Invite codes</h4>
       <p>Each code lets one person create an account.</p>
       <div className="rack-dialog-actions start">
         <button className="rack-btn" disabled={busy} onClick={() => { void run(async () => { await account.createInvite(); await load(); }); }}>New Invite Code</button>
@@ -145,7 +147,7 @@ function OwnerTools() {
           )}
         </div>
       ))}
-      <h3>Members</h3>
+      <h4>Members</h4>
       {members.map(member => (
         <div key={member.username} className="rack-list-row" role="group" aria-label={`Member ${member.username}`}>
           <span>
@@ -164,7 +166,7 @@ function OwnerTools() {
           )}
         </div>
       ))}
-    </>
+    </section>
   );
 }
 
@@ -204,12 +206,11 @@ function SignedIn({ username, owner, onRecoveryCode, onWalkthrough }: { username
         </div>
       )}
       <div className="account-actions">
-        <button className="rack-btn go" disabled={busy} onClick={() => { void run(account.signOut); }}>Sign Out</button>
+        <button className="rack-btn" disabled={busy} onClick={() => { void run(account.signOut); }}>Sign Out</button>
         <button className="rack-btn" disabled={busy} title="Sign out of every browser where this account is signed in" onClick={() => { void run(account.signOutEverywhere); }}>Sign Out Everywhere</button>
         <button className={`rack-btn ${panel === 'password' ? 'on' : ''}`} onClick={() => open('password')}>Change Password</button>
         <button className={`rack-btn ${panel === 'code' ? 'on' : ''}`} onClick={() => open('code')}>New Recovery Code</button>
         <button className="rack-btn" title="A short tour of the rack" onClick={onWalkthrough}>Show the Walkthrough</button>
-        <button className={`rack-btn danger ${panel === 'delete' ? 'on' : ''}`} onClick={() => open('delete')}>Delete Account</button>
       </div>
       {notice && <p role="status">{notice}</p>}
       {panel === 'password' && (
@@ -226,6 +227,11 @@ function SignedIn({ username, owner, onRecoveryCode, onWalkthrough }: { username
           <div className="rack-dialog-actions start"><button className="rack-btn go" type="submit" disabled={busy}>Show New Code</button></div>
         </Form>
       )}
+      {panel === '' && error && <p role="alert">{error}</p>}
+      {owner && <OwnerTools />}
+      <div className="account-danger">
+        <button className={`rack-btn danger ${panel === 'delete' ? 'on' : ''}`} onClick={() => open('delete')}>Delete Account</button>
+      </div>
       {panel === 'delete' && (
         <Form error={error} onSubmit={() => { void run(async () => { await account.deleteAccount(password); }); }}>
           <p>Removes your account and the copies of your projects stored with it. Projects in this browser are not touched. This cannot be undone.</p>
@@ -233,8 +239,6 @@ function SignedIn({ username, owner, onRecoveryCode, onWalkthrough }: { username
           <div className="rack-dialog-actions start"><button className="rack-btn danger" type="submit" disabled={busy}>Delete My Account</button></div>
         </Form>
       )}
-      {panel === '' && error && <p role="alert">{error}</p>}
-      {owner && <OwnerTools />}
     </>
   );
 }

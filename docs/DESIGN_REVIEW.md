@@ -334,7 +334,7 @@ and a smaller size, and "Stop Samples" is offered when there are no samples.
 `MidiPanel.css` and `SamplePanel.css` are from before the rack and only
 partly overridden. Fix with finding 4.
 
-### 12. The account dialog's main button is Sign Out. Polish, small.
+### 12. The account dialog's main button is Sign Out. Polish, small. **Done in #126.** Nothing is left of it.
 
 Signed in, the one amber button is Sign Out, in a row of six where Delete
 Account looks the same as Show the Walkthrough.
@@ -344,7 +344,7 @@ is there and well done. Fix: no amber button here; Delete Account apart, at
 the bottom, in the danger colour; the owner's invite codes and members
 under a heading that says they are the owner's.
 
-### 13. The Project menu is eleven things in one list. Polish, small.
+### 13. The Project menu is eleven things in one list. Polish, small. **Done in #126**, with the Export menu grouped the same way. The WAV names that feature 13 mentions were already Scene WAV and Song WAV. On a phone the sheet is taller than the screen's 70% and scrolls, so Kids Mode and Reset All are below the first screenful.
 
 New Project, All Projects, Save a Copy, Version History, Share Link, Export
 Project, Import Project, Add Guest Instrument, Import MIDI, Kids Mode, Reset
@@ -705,7 +705,7 @@ asking what a person would reach for and not find.
    between scenes"); from the design side I would put it as a "Copy to…"
    item on each lane, listing the scenes.
 
-6. **A visible save state.** The Projects list says "saves as you work"
+6. **A visible save state.** **Done in #125.** On a phone the word is in the Projects dialog, not on the bar. It also says "Not saved" when the browser refuses a write. The Projects list says "saves as you work"
    (`desktop/dialog-projects-one.png`), but the rack itself never says
    anything was saved, and a signed-in person cannot see from the rack
    whether the project is in their account or only in this browser. A
@@ -730,7 +730,7 @@ asking what a person would reach for and not find.
    column with "Kick", "Snare", "Clap", "Cl Hat", "Op Hat", "Lo Tom",
    "Hi Tom", "Cymbal". Small.
 
-10. **Keyboard shortcuts shown where they are used.** Space for Play is not
+10. **Keyboard shortcuts shown where they are used.** **Done in #125.** Space had no shortcut; it now plays and stops, and the Play All hint and Help say so. Space for Play is not
     offered (letters play notes, so shortcuts need a modifier or a
     non-letter key; `AGENTS.md` says so). Space is not a letter. If Play is
     not already on Space, it should be, and the Play button's hint should
