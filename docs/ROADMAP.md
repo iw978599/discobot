@@ -351,6 +351,11 @@ may redistribute.
     is in four-four today: a bar is sixteen steps (thirty-two on a lane set
     to finer steps), the drum grid is sixteen to a bar, and the transport,
     the song, the exports and the bar tabs all count in bars of that length.
+    On 2026-10-12, the owner also asked for a way to change a bar's length:
+    choose the number of beats or steps in the bar. This is different from
+    changing how many bars a pattern contains (item 4) or using finer step
+    resolution on a synth lane. Whether arbitrary custom step counts should
+    work with the agreed per-scene time signatures is still a design question.
     Being able to change it means, at least, three-four, six-eight, five-four
     and seven-eight:
     - a bar's length in steps comes from the time signature, for lanes and
@@ -373,7 +378,8 @@ may redistribute.
     twelve-eight is the slow shuffle, and costs little once six-eight is
     there). Because it is per scene, a scene's length in a song, the bar
     counting in song mode and every export have to take each scene's own bar
-    length, where today one length serves the whole song.
+    length, where today one length serves the whole song. Keep these agreed
+    metre options and the backward-compatible four-four default.
 
 12. **Turn a knob with the scroll wheel.** (S) Asked for by the owner on
     2026-10-11: with the pointer over a knob, the wheel turns it, with no
@@ -413,6 +419,25 @@ may redistribute.
     greyed out, and the message says when the file has downloaded (Stems say
     which file of how many). Still open: a true progress bar or percentage,
     since the browser's offline renderer does not report how far it has got.
+
+14. **A playlist-style layout for scenes.** (M) Asked for by the owner on
+    2026-10-12. Show each scene occurrence in song playback order so the
+    arrangement is easy to read and edit. Proposed scope: reorder occurrences,
+    repeat scenes and show each occurrence's duration, using the existing
+    scenes and song data, including scenes with different bar lengths. Provide
+    keyboard and touch access; do not make dragging the only way to edit it.
+    The exact visual layout, and whether an occurrence's duration is in bars
+    or repeats, are still design choices. This is the project's song
+    arrangement, not a playlist of published songs, a discovery page or a new
+    cloud service.
+
+15. **Chord buttons in the piano roll.** (S) Asked for by the owner on
+    2026-10-12. Offer buttons to insert editable chord notes at the selected
+    step, with a chosen root and chord type. These are note-entry shortcuts,
+    using the existing note length, velocity and undo behavior, not a new
+    synthesis feature; chords already play. Basic major and minor chords are a
+    reasonable starting point. The final chord set, inversions and whether
+    insertion adds to or replaces notes are still design choices.
 
 Done: song mode, with mutes and solos kept per scene; patterns of 1, 2, 4 or
 8 bars per lane, and MIDI files of up to eight bars imported at full length;
@@ -456,10 +481,12 @@ for new accounts.
    look at is in place.
 6. **Record live playing** and **more ways to edit patterns** (features 3
    and 4): the two that most change what making a song feels like. **Time
-   signatures** (features 11) go with pattern editing, after the typed
-   store. **The scroll wheel on knobs** (features 12) and **showing that
-   an export is being made** (features 13) are small and can go in at any
-   time.
+   signatures and changing bar length** (feature 11) go with pattern editing,
+   after the typed store; **piano-roll chord buttons** (feature 15) fit with
+   note entry. A **playlist-style scene layout** (feature 14) belongs with
+   song arrangement and should account for scenes of different lengths.
+   **The scroll wheel on knobs** (features 12) and **showing that an export
+   is being made** (features 13) are small and can go in at any time.
 7. Done: samples in project files (sound 2). Sync for them waits on storage.
 8. **Parameter automation** (features 5).
 9. **The audio layer's single owner** (improvements 4), then the sound work
