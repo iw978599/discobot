@@ -235,6 +235,27 @@ table. The names from before (`--amber`, `--ink`, `--legend`, `--dim` and the re
 - The focus ring's gap and the selected frame are both `box-shadow`, so a rule that gives a focusable thing a shadow of its own must say what it looks like focused as well (see `.step-cell.selected:focus-visible`), or focusing it would drop one of them.
 - Each component's own stylesheet in `ui/src/components/` holds its whole look, on these names. `rack.css` does not restyle a component from outside: the only rules there that reach into one are the phone layout's (inside its media block) and the focus ring. A button anywhere is a `.rack-btn` (`.on` when lit, `.danger` when it deletes); do not give a component a button style of its own. The piano's keys are written out as a piano's white and black, and a knob's pointer is `--value` whatever `color` it was passed. Sizes and corners are part 3 of redesign C in `docs/DESIGN_REVIEW.md`. Kids mode has its own look and none of this applies to it.
 
+## Sizes, Corners, Shadows and Faces
+Named in `rack.css` beside the colours. A rule picks a name and never writes a size, a corner or
+a shadow out; if none fits, the answer is nearly always the nearest one, not a new one.
+
+| Job | Name |
+|-----|------|
+| A caption, a knob's label and figure, a drum's name, a step's note | `--type-caption` (11px) |
+| A label, a button, a hint: the size of nearly everything | `--type-label` (13px) |
+| A dialog's words, a message bar | `--type-body` (14px) |
+| A phone's unit name, the song player's time | `--type-large` (16px) |
+| A unit's name, a dialog's title | `--type-title` (18px) |
+| Lit figures read from across the room: the tempo, the big value of a knob's sheet | `--type-display` (26px) |
+| The title of a shared song | `--type-hero` (40px) |
+| A panel's corner; a control's | `--corner-panel` (2px); `--corner-control` (3px) |
+| Under a control that stands proud; under anything floating over the rack | `--shadow-control`; `--shadow-float` |
+| Round a lamp that is on; the fainter glow of something lit | `--shadow-lamp`; `--shadow-lit` |
+
+- Three faces. `--panel-font` (condensed capitals) is for labels, names and buttons. `--sentence-font` (the device's plain face) is for anything longer than a label: a hint, a message, a dialog's words. `--led-font` is for figures. A button keeps the label face wherever it stands; a container set in the sentence face must say so for its buttons, because `.rack-btn` inherits its face (see the rule beside `.rack-dialog-body .rack-btn`).
+- Round things (lamps, knobs) and the sliding switch's pill are shapes, not corners. Rings and frames drawn with `box-shadow` (focus, the selected step, the dimming behind a menu) are lines, not shadows. Both stay written out.
+- Two sizes are still written out because they follow something else: the recovery code scales with the screen's width, and a raised accidental is a fraction of its note.
+
 ## Drum Instrument Details
 | Instrument | Tone range | Extra knob | Engine function |
 |------------|-----------|------------|-----------------|
