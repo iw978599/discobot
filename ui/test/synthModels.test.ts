@@ -45,7 +45,7 @@ test('at every end and the middle of every macro, a model stays inside the limit
 });
 
 test('a model this copy of the app does not know opens with the plain engine', () => {
-  assert.equal(normalizeSynthModelId('polysix'), 'generic');
+  assert.equal(normalizeSynthModelId('ms-20'), 'generic');
   assert.equal(normalizeSynthModelId('sh-101'), 'sh-101');
   assert.equal(normalizeSynthModelId('pro-one'), 'pro-one');
   assert.deepEqual(mapSynthModelToEngineParams('generic', MIDDLE), {});
@@ -138,6 +138,37 @@ test('the Mono/Poly is four oscillators stacked on one note, pulled apart by Det
   assert.ok(voice('mono-poly', { ...MIDDLE, macro2: 1 }).filterQ > voice('mono-poly', { ...MIDDLE, macro2: 0 }).filterQ, 'Resonance');
   assert.ok(voice('mono-poly', { ...MIDDLE, macro3: 1 }).filterFreq > voice('mono-poly', { ...MIDDLE, macro3: 0 }).filterFreq, 'Cutoff');
   assert.ok(voice('mono-poly', { ...MIDDLE, macro4: 1 }).filterEnvAmount > voice('mono-poly', { ...MIDDLE, macro4: 0 }).filterEnvAmount, 'Env');
+});
+
+test('the Polysix is one oscillator with a moving pulse and a sub, one envelope, and its ensemble on the chorus send', () => {
+  const middle = voice('polysix');
+  assert.deepEqual([middle.voiceMode, middle.oscType, middle.osc2Enabled, middle.filterSlope], ['poly', 'square', false, 24]);
+  assert.ok(middle.subLevel > 0, 'a sub under the one oscillator');
+  assert.deepEqual(
+    [middle.attack, middle.decay, middle.sustain, middle.release],
+    [middle.filterAttack, middle.filterDecay, middle.filterSustain, middle.filterRelease], 'one envelope drives filter and level');
+  const still = voice('polysix', { ...MIDDLE, macro1: 0 }), moving = voice('polysix', { ...MIDDLE, macro1: 1 });
+  assert.equal(still.lfo1Enabled, false);
+  assert.ok(moving.lfo1Enabled && moving.lfo1Target === 'pulseWidth' && moving.lfo1Depth > 0.7, 'PWM');
+  assert.ok(voice('polysix', { ...MIDDLE, macro2: 1 }).filterQ > voice('polysix', { ...MIDDLE, macro2: 0 }).filterQ, 'Resonance');
+  assert.ok(voice('polysix', { ...MIDDLE, macro3: 1 }).filterFreq > voice('polysix', { ...MIDDLE, macro3: 0 }).filterFreq, 'Brightness');
+  // Ensemble is the lane's chorus send, and nothing else about the sends.
+  assert.deepEqual(mapSynthModelToEngineParams('polysix', { ...MIDDLE, macro4: 0 }).fxSends, { chorus: 0 });
+  assert.equal(sound('polysix', { ...MIDDLE, macro4: 1 }).fxSends.chorus, 0.8);
+  assert.equal(sound('polysix', { ...MIDDLE, macro4: 1 }).fxSends.reverb, createDefaultSynthParameters().fxSends.reverb, 'the other sends are left alone');
+});
+
+test('the ensemble goes when a lane leaves the Polysix, and no other lane\'s chorus send is touched', () => {
+  const polysix = sound('polysix', { ...MIDDLE, macro4: 1 });
+  assert.equal(onLane(polysix, enterSynthModel('juno-106', MIDDLE, 'polysix')).fxSends.chorus, 0);
+  assert.equal(onLane(polysix, enterSynthModel('juno-106', MIDDLE, 'polysix')).fxSends.reverb, polysix.fxSends.reverb);
+  // Someone's own chorus on another model stays when that lane changes model.
+  const own = onLane(sound('juno-106'), { fxSends: { ...sound('juno-106').fxSends, chorus: 0.6 } });
+  assert.equal(onLane(own, enterSynthModel('prophet-5', MIDDLE, 'juno-106')).fxSends.chorus, 0.6);
+  // No other model says anything about the sends.
+  for (const model of SYNTH_MODELS.filter(entry => entry.id !== 'polysix')) {
+    assert.equal(mapSynthModelToEngineParams(model.id, MIDDLE).fxSends, undefined, model.id);
+  }
 });
 
 test('a lane that moves to another model is given back what the one it leaves had set', () => {

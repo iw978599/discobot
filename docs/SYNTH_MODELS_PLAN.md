@@ -70,6 +70,16 @@ true before the first new model ships, and say so in the pull request.
   - A lane that moves to another model now has unison and filter slope put
     back (`enterSynthModel`), which the slope note above asked for.
 
+- 2026-10-12: **Polysix is built, which finishes group A.** Not verified
+  by ear. Its Ensemble macro is the lane's chorus send, as the owner agreed
+  for this model; the send goes back to zero when the lane leaves the
+  Polysix. The real instrument's ensemble, chorus and phase are three
+  settings of one effect; here there is the one shared chorus. Its sub is
+  one octave down only.
+- **Next is the listening session with the owner on all seven**, before
+  any of group B. Things to listen for are noted in each entry above and
+  in the pull requests (#139, #140, #141 and the Polysix's).
+
 ## The fourteen, in three groups
 
 The grouping is by what each needs from the voice, because that decides when
