@@ -43,14 +43,14 @@ export default function SamplePanel({ onPlay }: { onPlay: (sample: SampleRecord)
       </label>
       {error && <p role="alert">{error}</p>}
       {busy && <span role="status">Working…</span>}
-      <button onClick={() => stopAllSamples()}>Stop Samples</button>
+      {samples.length > 0 && <button className="rack-btn" onClick={() => stopAllSamples()}>Stop Samples</button>}
       {samples.length === 0 && <p>No samples yet. Imported audio stays on this device.</p>}
       <ul className="sample-list">
         {samples.map(sample => (
           <li key={sample.id}>
             <span>{sample.name}</span>
-            <button disabled={busy} aria-label={`Play sample ${sample.name}`} onClick={() => { void perform(async () => { await onPlay(sample); }); }}>Play</button>
-            <button disabled={busy} aria-label={`Delete sample ${sample.name}`} onClick={() => { void perform(async () => { stopAllSamples(); await deleteSample(sample.id); setSamples(await listSamples()); }); }}>Delete</button>
+            <button className="rack-btn" disabled={busy} aria-label={`Play sample ${sample.name}`} onClick={() => { void perform(async () => { await onPlay(sample); }); }}>Play</button>
+            <button className="rack-btn danger" disabled={busy} aria-label={`Delete sample ${sample.name}`} onClick={() => { void perform(async () => { stopAllSamples(); await deleteSample(sample.id); setSamples(await listSamples()); }); }}>Delete</button>
           </li>
         ))}
       </ul>

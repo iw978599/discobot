@@ -1,84 +1,60 @@
+/* A box of the MIDI and samples dialog: as wide as the dialog, the same as the sampler's below it. */
 .midi-panel {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.3rem;
-  padding: 0.25rem 0.5rem;
-  border: 1px solid #3f3f3f;
-  border-radius: 4px;
-  background: #111;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--edge-faint);
+  border-radius: 2px;
+  background: var(--surface-inset);
   min-width: 0;
-  flex-shrink: 1;
 }
 
 .midi-status-dot {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: #ef4444;
+  background: var(--lamp-off);
+  border: 1px solid #000;
   flex-shrink: 0;
 }
 
 .midi-status-dot.connected {
-  background: #22c55e;
+  background: var(--on);
+  box-shadow: 0 0 6px var(--on);
 }
 
 .midi-panel select {
-  background: #1d1d1d;
-  border: 1px solid #444;
-  border-radius: 3px;
-  color: #ddd;
-  font-size: 0.68rem;
-  padding: 0.1rem 0.25rem;
   min-width: 0;
-  max-width: 90px;
 }
 
 .midi-mode-buttons {
   display: flex;
-  gap: 0.15rem;
-}
-
-.midi-mode-buttons button {
-  background: #1f1f1f;
-  border: 1px solid #444;
-  color: #aaa;
-  border-radius: 3px;
-  font-size: 0.65rem;
-  padding: 0.08rem 0.3rem;
-  text-transform: capitalize;
-  cursor: pointer;
-}
-
-.midi-mode-buttons button.active {
-  border-color: #00d4ff;
-  color: #00d4ff;
+  gap: 4px;
 }
 
 .midi-last-message {
-  color: #777;
-  font-size: 0.6rem;
+  flex: 1 1 14ch;
+  min-width: 0;
+  color: var(--text-label);
+  font-family: var(--led-font);
+  font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 80px;
-}
-.midi-panel[role="status"] {
-  max-width: 30rem;
-  font-size: 0.75rem;
-  line-height: 1.4;
 }
 
 .midi-check {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  font-size: 0.72rem;
-  color: #ddd;
+  gap: 6px;
+  color: var(--text-plain);
 }
 
 .midi-note {
-  margin: 0.4rem 0 0;
-  font-size: 0.75rem;
-  color: #a8b0bc;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-label);
   max-width: 60ch;
 }

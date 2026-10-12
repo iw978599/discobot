@@ -51,26 +51,26 @@ export default function KeyboardPanel({
     <div className="keyboard-panel">
       <div className="keyboard-panel-toggle">
         <button
-          className={mode === 'keyboard' ? 'active' : ''}
+          className={mode === 'keyboard' ? 'rack-btn on' : 'rack-btn'}
           onClick={() => onModeChange('keyboard')}
           title="Keyboard"
           aria-label="Keyboard"
           aria-pressed={mode === 'keyboard'}
         >
-          🎹
+          Keys
         </button>
         <button
-          className={mode === 'piano-roll' ? 'active' : ''}
+          className={mode === 'piano-roll' ? 'rack-btn on' : 'rack-btn'}
           onClick={() => onModeChange('piano-roll')}
           title="Piano Roll"
           aria-label="Piano Roll"
           aria-pressed={mode === 'piano-roll'}
         >
-          📊
+          Roll
         </button>
         <span className="octave-shift-value">{octaveShift > 0 ? `+${octaveShift}` : octaveShift}</span>
         <button
-          className="octave-shift-btn"
+          className="rack-btn"
           onClick={() => onOctaveShift('down')}
           disabled={octaveShift <= -2}
           title="Shift octave down (Z)"
@@ -78,7 +78,7 @@ export default function KeyboardPanel({
           Oct -
         </button>
         <button
-          className="octave-shift-btn"
+          className="rack-btn"
           onClick={() => onOctaveShift('up')}
           disabled={octaveShift >= 2}
           title="Shift octave up (X)"

@@ -286,7 +286,7 @@ export default function PianoRoll({
             <button className="rack-btn" type="button" aria-label="Later steps" disabled={from >= lastFirst} onClick={() => turn(1)}>▶</button>
           </div>
         )}
-        <button className="piano-roll-action" onClick={onClear}>Clear</button>
+        <button className="rack-btn danger piano-roll-action" onClick={onClear}>Clear</button>
       </div>
 
       <div

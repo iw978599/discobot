@@ -291,7 +291,7 @@ export default function SynthControls({
         </div>
         <div className="synth-header-tools">
           {onRemove && (
-            <button className="octave-shift-btn" onClick={onRemove} title="Remove this synth lane">Remove</button>
+            <button className="rack-btn" onClick={onRemove} title="Remove this synth lane">Remove</button>
           )}
           <div className="preset-controls">
             <select
@@ -329,7 +329,7 @@ export default function SynthControls({
               }}
             />
             <button
-              className="octave-shift-btn"
+              className="rack-btn"
               disabled={!presetName.trim()}
               onClick={() => {
                 onSavePreset(presetName.trim());
@@ -339,7 +339,7 @@ export default function SynthControls({
               Save
             </button>
             <button
-              className="octave-shift-btn"
+              className="rack-btn"
               disabled={!selectedPresetId || Boolean(presets.find((preset) => preset.id === selectedPresetId)?.builtIn)}
               onClick={() => {
                 const selected = presets.find((preset) => preset.id === selectedPresetId);
@@ -352,7 +352,7 @@ export default function SynthControls({
             >
               Delete
             </button>
-            <label className="octave-shift-btn preset-import" title="Load a preset file: one saved from Discobot, or one from another synth that Discobot knows how to translate">
+            <label className="rack-btn preset-import" title="Load a preset file: one saved from Discobot, or one from another synth that Discobot knows how to translate">
               Import
               <input
                 type="file"
@@ -367,7 +367,7 @@ export default function SynthControls({
               />
             </label>
             <button
-              className="octave-shift-btn"
+              className="rack-btn"
               title="Save this lane's sound as a file"
               onClick={() => onExportPreset(presetName.trim() || presets.find(preset => preset.id === selectedPresetId)?.name || '')}
             >

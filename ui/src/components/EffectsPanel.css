@@ -1,74 +1,89 @@
+/* The effects unit: its name and the three returns in the rack's first column, the effects beside them. */
 .effects-panel {
-  background: #181818;
-  border: 1px solid #353535;
-  border-radius: 10px;
-  padding: 0.6rem;
+  display: grid;
+  grid-template-columns: var(--plate) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
   min-width: 0;
 }
 
 .effects-panel-header {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 0.45rem;
+  gap: 6px;
 }
 
 .effects-panel-header h3 {
   margin: 0;
-  font-size: 0.95rem;
-  color: #cde2ff;
+  font-family: var(--panel-font);
+  font-size: 18px;
+  letter-spacing: 0.08em;
+  color: var(--text);
 }
 
+.effects-returns { display: flex; gap: 2px; }
+.effects-returns .knob-label { max-width: 96px; }
+
+/* Two rows of ten: drive, phaser, delay; then chorus, reverb, master EQ. */
 .effects-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.3rem;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 6px;
 }
 
 .effects-block {
-  border: 1px solid #2f2f2f;
-  border-radius: 8px;
-  background: #111;
-  padding: 0.3rem 0.2rem;
+  grid-column: span 3;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  border: 1px solid var(--edge-faint);
+  border-radius: 2px;
+  background: var(--surface-inset);
+  padding: 6px 8px;
   min-width: 0;
 }
 
+.effects-block:nth-child(2),
+.effects-block:nth-child(5) {
+  grid-column: span 4;
+}
+
 .effects-block h4 {
-  margin: 0 0 0.2rem 0;
-  font-size: 0.7rem;
-  letter-spacing: 0.05em;
-  color: #99a4b4;
+  margin: 0;
+  font-family: var(--panel-font);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: var(--text-faint);
   text-transform: uppercase;
 }
 
 .effects-row-head {
   display: flex;
   justify-content: flex-end;
-  margin-bottom: 0.2rem;
+  gap: 12px;
 }
 
 .effects-knobs {
+  grid-column: 1 / -1;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 0.05rem;
+  justify-content: center;
+  gap: 4px;
 }
 
 .effects-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  font-size: 0.68rem;
-  color: #b7c0cd;
+  gap: 5px;
+  min-height: 24px;
+  font-size: 11px;
+  color: var(--text-label);
 }
 
-.effects-toggle input {
-  width: 0.8rem;
-  height: 0.8rem;
-}
-
-@media (max-width: 1200px) {
-  .effects-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+.effects-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
 }
