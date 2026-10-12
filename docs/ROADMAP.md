@@ -208,6 +208,8 @@ may redistribute.
 
 ## Features
 
+0. **Kindle and Fire tablets get the phone layout.** (S) Asked for by the owner on 2026-10-12. Built: a Silk, Kindle or Fire model user agent makes the page report a 640px layout width, which the existing phone rules treat as a phone upright or on its side. Not verified on a real Kindle.
+
 1. **A layout for phones and the installed app.** (L) First part done: at
    720px wide and under the rack no longer scrolls sideways. Units stack
    their parts, step grids are eight to a row, buttons are finger-sized, the

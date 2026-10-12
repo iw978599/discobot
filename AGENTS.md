@@ -94,6 +94,7 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 | `engine/src/dsp.ts` | Shared oscillators, state-variable filter, exponential ADSR, seeded noise |
 
 ## Behaviour Worth Knowing
+- A Kindle or Fire tablet (Silk) is given the phone layout by its viewport width: an inline script in `ui/index.html` sets `width=640` on the viewport tag when the user agent matches `KINDLE_PATTERN` in `ui/src/services/kindle.ts` (a test keeps the two expressions the same). The layout rules themselves are unchanged; do not add a second way to choose the layout. Not verified on a real Kindle.
 - There are many projects. `localService` holds the open one, with a working copy in `localStorage` (written synchronously, so it survives a closing tab) and a record in the library that is updated after every write. Switching projects goes through `stash()` then `activate()`, which emits `init`. Project operations are async methods on `localService` (`newProject`, `openProject`, `copyProject`, `renameProject`, `deleteProject`, `importProject`), not operations.
 - Each project keeps up to 20 earlier versions in the library (`keepVersion` in `localService.ts`): one when it is opened, one every five minutes of editing, and one before anything replaces it (a sync download, a restore). A version identical to the last one kept is skipped, compared in `normalized()` form. Anything new that overwrites a project must call `keepVersion` first.
 - Versions are in this browser only: not in project files, links or sync. Deleting a project deletes them.
