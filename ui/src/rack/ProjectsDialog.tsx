@@ -4,6 +4,8 @@ import { AccountError, sharingApi } from '../services/account';
 import { projectSync } from '../services/projectSync';
 import { useAccountUser, useSyncStatus } from './AccountDialog';
 import Dialog from './Dialog';
+import SaveState from './SaveState';
+import { useNarrow } from '../hooks/useNarrow';
 
 const when = (time: number) => new Date(time).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 
@@ -61,6 +63,7 @@ function Sharing({ projectId, name }: { projectId: string; name: string }) {
 // Every project in this browser. The open one saves itself as you work; "Copy" keeps a
 // version to go back to.
 export default function ProjectsDialog({ studio, onClose }: { studio: Studio; onClose: () => void }) {
+  const narrow = useNarrow();
   const [renaming, setRenaming] = useState<string | null>(null);
   const [draftName, setDraftName] = useState('');
   const [protectedStorage, setProtectedStorage] = useState<boolean | null>(null);
@@ -89,6 +92,7 @@ export default function ProjectsDialog({ studio, onClose }: { studio: Studio; on
     <Dialog title="Projects" closeLabel="Close projects" onClose={onClose}>
       <div className="rack-dialog-actions start">
         <button className="rack-btn go" onClick={() => { void studio.handleNewProject().then(ok => { if (ok) onClose(); }); }}>New Project</button>
+        {narrow && <SaveState projectId={studio.projectId} full />}
       </div>
       {studio.projects.length === 0 && <p className="rack-empty">Loading projects…</p>}
       {studio.projects.map((project) => {
