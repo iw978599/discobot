@@ -284,8 +284,11 @@ kids mode look good on the owner's phone.
   `trace.zip`, and in `1-trace.trace` (one JSON object a line) a `before`
   with no matching `after` is the action that never finished.
 - **Fetching the browser on GitHub can stall** for minutes and then arrive
-  all at once. It is cached now and retried; a job that fails before any
-  test ran can simply be run again.
+  all at once. It is cached now and retried. Installing the browser's
+  system libraries with apt also hung, twice, restarting services; the
+  checks no longer run apt, because GitHub's machines have the libraries. A
+  job that fails before any test ran can simply be run again
+  (`gh run rerun <run> --failed`).
 - **Stage files by name.** `git add -A` once swept a local cache file into
   a commit.
 - **The working tree has Windows line endings on Windows.** Multi-line
