@@ -16,7 +16,8 @@ const BUTTON = '#1a1b1c';
 const DISPLAY = '#0a0b0a';
 
 // The contrast ratio of an element's drawn text colour (after its opacity) against a backdrop, and its opacity.
-const ink = (target: Locator, backdrop: string) => target.first().evaluate((element, back) => {
+const ink = (target: Locator, backdrop: string, markEmpty = false) => target.first().evaluate((element, [back, mark]) => {
+  if (mark) element.closest('.unit-tab')?.classList.add('empty');
   const channels = (text: string) => (text.match(/[\d.]+/g) || []).map(Number);
   const light = ([r, g, b]: number[]) => {
     const [x, y, z] = [r, g, b].map(value => { const unit = value / 255; return unit <= 0.03928 ? unit / 12.92 : ((unit + 0.055) / 1.055) ** 2.4; });
@@ -29,10 +30,10 @@ const ink = (target: Locator, backdrop: string) => target.first().evaluate((elem
   const mix = [r, g, b].map((value, index) => value * a * opacity + under[index] * (1 - a * opacity));
   const [top, bottom] = [light(mix), light(under)];
   return { ratio: (Math.max(top, bottom) + 0.05) / (Math.min(top, bottom) + 0.05), opacity };
-}, backdrop);
+}, [backdrop, markEmpty] as const);
 
-const expectLegible = async (target: Locator, backdrop: string, what: string) => {
-  const found = await ink(target, backdrop);
+const expectLegible = async (target: Locator, backdrop: string, what: string, markEmpty = false) => {
+  const found = await ink(target, backdrop, markEmpty);
   expect(found.ratio, `${what}: contrast against ${backdrop}`).toBeGreaterThanOrEqual(4.5);
   expect(found.opacity, `${what} is shown by its colour, not by being see-through`).toBe(1);
 };
@@ -42,9 +43,10 @@ test('faint text is legible: captions, drum step numbers, BPM and the empty lane
   await expectLegible(page.locator('.drum-step-indicator').first(), PANEL, 'a drum step number');
   await expectLegible(page.locator('.tempo-led-label'), DISPLAY, 'BPM');
   if (testInfo.project.name === 'mobile-chromium') {
-    const empty = page.locator('.unit-tab.empty .unit-tab-name');
+    // No tab of a new project's bar is empty, so one is given the empty look in the same step as it is measured.
+    const empty = page.locator('.unit-tab:not([aria-current]) .unit-tab-name');
     await expect(empty.first()).toBeVisible();
-    await expectLegible(empty, PANEL, 'an empty lane\'s name on the bar');
+    await expectLegible(empty, PANEL, 'an empty lane\'s name on the bar', true);
   }
 });
 
