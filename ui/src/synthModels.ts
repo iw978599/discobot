@@ -7,10 +7,15 @@ interface MacroDescriptor {
   label: string;
 }
 
+// How the model menu groups them. The plain engine stands outside any group.
+export type SynthModelGroup = 'Mono' | 'Poly' | 'Digital';
+export const SYNTH_MODEL_GROUPS: SynthModelGroup[] = ['Mono', 'Poly', 'Digital'];
+
 interface SynthModelDefinition {
   id: SynthModelId;
   name: string;
   subtitle: string;
+  group?: SynthModelGroup;
   macros: MacroDescriptor[];
 }
 
@@ -19,6 +24,7 @@ export const SYNTH_MODELS: SynthModelDefinition[] = [
   {
     id: 'minimoog-model-d',
     name: 'Minimoog Model D',
+    group: 'Mono',
     subtitle: 'Mono, two oscillators + sub into a driven filter',
     macros: [
       { key: 'macro1', label: 'Detune' },
@@ -30,6 +36,7 @@ export const SYNTH_MODELS: SynthModelDefinition[] = [
   {
     id: 'juno-106',
     name: 'Juno-106',
+    group: 'Poly',
     subtitle: 'Poly saw + pulse + sub, gentle filter',
     macros: [
       { key: 'macro1', label: 'Detune' },
@@ -41,6 +48,7 @@ export const SYNTH_MODELS: SynthModelDefinition[] = [
   {
     id: 'dx7',
     name: 'DX7',
+    group: 'Digital',
     subtitle: 'Four-operator FM voice',
     macros: [
       { key: 'macro1', label: 'Ratio' },
@@ -52,6 +60,7 @@ export const SYNTH_MODELS: SynthModelDefinition[] = [
   {
     id: 'tb-303',
     name: 'TB-303',
+    group: 'Mono',
     subtitle: 'Mono acid bass: accent on loud steps, slide on tied steps',
     macros: [
       { key: 'macro1', label: 'Wave / Tune' },
@@ -63,12 +72,37 @@ export const SYNTH_MODELS: SynthModelDefinition[] = [
   {
     id: 'prophet-5',
     name: 'Prophet-5',
+    group: 'Poly',
     subtitle: 'Poly saw + pulse with filter envelope',
     macros: [
       { key: 'macro1', label: 'Detune' },
       { key: 'macro2', label: 'Resonance' },
       { key: 'macro3', label: 'Brightness' },
       { key: 'macro4', label: 'Contour' },
+    ],
+  },
+  {
+    id: 'sh-101',
+    name: 'SH-101',
+    group: 'Mono',
+    subtitle: 'Mono, one oscillator: saw and moving pulse, a sub, one envelope for filter and level',
+    macros: [
+      { key: 'macro1', label: 'Wave Mix' },
+      { key: 'macro2', label: 'Sub' },
+      { key: 'macro3', label: 'Cutoff' },
+      { key: 'macro4', label: 'Env' },
+    ],
+  },
+  {
+    id: 'pro-one',
+    name: 'Pro-One',
+    group: 'Mono',
+    subtitle: 'Mono, two oscillators into a hard 24 dB filter with a fast envelope, and glide',
+    macros: [
+      { key: 'macro1', label: 'Detune' },
+      { key: 'macro2', label: 'Resonance' },
+      { key: 'macro3', label: 'Cutoff' },
+      { key: 'macro4', label: 'Env' },
     ],
   },
 ];
@@ -131,6 +165,8 @@ interface ModelVoicing {
   drive: number;
   accent: number;
   glide?: number;
+  // 24 for a model whose filter is a four-pole. Left out, the lane keeps the slope it has.
+  slope?: 24;
 }
 
 function mapModel(params: SynthModelParams, voicing: ModelVoicing): Partial<SynthParameters> {
@@ -150,7 +186,8 @@ function mapModel(params: SynthModelParams, voicing: ModelVoicing): Partial<Synt
       detune: osc2 ? Math.round(range(osc2.spread[0], osc2.spread[1], params.macro1)) : 0,
       level: osc2?.level ?? 0,
     },
-    mixer: { sub: voicing.sub ?? 0, noise: voicing.noise ?? 0 },
+    // The first oscillator at full level, whatever a model the lane had before left it at.
+    mixer: { sub: voicing.sub ?? 0, noise: voicing.noise ?? 0, osc: 1 },
     filter: {
       type: 'lowpass',
       frequency: Math.round(range(voicing.cutoff[0], voicing.cutoff[1], params.macro3)),
@@ -158,6 +195,7 @@ function mapModel(params: SynthModelParams, voicing: ModelVoicing): Partial<Synt
       envAmount: Number(range(voicing.envAmount[0], voicing.envAmount[1], params.macro4).toFixed(2)),
       keyTracking: voicing.keyTracking,
       drive: voicing.drive,
+      ...(voicing.slope ? { slope: voicing.slope } : {}),
     },
     filterEnvelope: {
       attack: 0.003,
@@ -216,9 +254,52 @@ function mapFmModel(params: SynthModelParams): Partial<SynthParameters> {
   };
 }
 
+// One oscillator that gives a saw and a pulse at once, balanced by the first macro, with a sub
+// under them and one envelope driving both the filter and the level. The pulse's width is kept
+// moving by an LFO, which is most of what the instrument's pulse sounds like. The voice's first
+// oscillator is the pulse, because only it has a width; the second is the saw.
+function mapSh101(params: SynthModelParams): Partial<SynthParameters> {
+  const pulse = clamp01(params.macro1), saw = 1 - pulse;
+  const shared = { attack: 0.003, decay: 0.35, sustain: 0.45, release: 0.18 };
+  return {
+    engine: 'subtractive',
+    voiceMode: 'mono',
+    oscillator: { type: 'square', detune: 0, pulseWidth: 0.5 },
+    oscillator2: { enabled: saw > 0, type: 'sawtooth', semitones: 0, detune: 0, level: Number(saw.toFixed(2)) },
+    mixer: { sub: Number(range(0, 0.9, params.macro2).toFixed(2)), noise: 0, osc: Number(pulse.toFixed(2)) },
+    filter: {
+      type: 'lowpass',
+      // The cutoff is heard in octaves, so the knob moves through them evenly: 120 Hz to 8 kHz.
+      frequency: Math.round(120 * (8000 / 120) ** clamp01(params.macro3)),
+      q: 2.5,
+      envAmount: Number(range(0, 0.8, params.macro4).toFixed(2)),
+      keyTracking: 0.5,
+      drive: 0.15,
+      slope: 24,
+    },
+    filterEnvelope: { ...shared },
+    envelope: { ...shared },
+    velocity: { amp: 1, filter: 0.2 },
+    portamento: { enabled: false, glide: 0.05 },
+    lfo1: { sync: false, retrigger: false, enabled: true, target: 'pulseWidth', waveform: 'triangle', rate: 1.2, depth: 0.35 },
+  };
+}
+
 export function mapSynthModelToEngineParams(modelId: SynthModelId, modelParams: SynthModelParams): Partial<SynthParameters> {
   if (modelId === 'generic') return {};
   if (modelId === 'dx7') return mapFmModel(modelParams);
+  if (modelId === 'sh-101') return mapSh101(modelParams);
+  if (modelId === 'pro-one') {
+    return mapModel(modelParams, {
+      oscillator: 'sawtooth', voiceMode: 'mono',
+      oscillator2: { type: 'square', semitones: 0, spread: [2, 30], level: 0.8 },
+      detune: [0, 0], pulseWidth: 0.5,
+      cutoff: [120, 7000], resonance: [0.8, 12],
+      attack: [0.001, 0.03], decay: [0.04, 0.6], sustain: [0.1, 0.8], release: [0.04, 0.4],
+      lfoRate: [0.1, 8], lfoDepth: [0.02, 0.25],
+      envAmount: [0.2, 0.9], filterDecay: [0.05, 0.8], keyTracking: 0.5, drive: 0.4, accent: 0.35, glide: 0.03, slope: 24,
+    });
+  }
   if (modelId === 'minimoog-model-d') {
     return mapModel(modelParams, {
       oscillator: 'sawtooth', voiceMode: 'mono',

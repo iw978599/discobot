@@ -170,7 +170,7 @@ export interface SynthParameters {
   };
 }
 
-export type SynthModelId = 'generic' | 'minimoog-model-d' | 'juno-106' | 'dx7' | 'tb-303' | 'prophet-5';
+export type SynthModelId = 'generic' | 'minimoog-model-d' | 'juno-106' | 'dx7' | 'tb-303' | 'prophet-5' | 'sh-101' | 'pro-one';
 
 export interface SynthModelParams {
   macro1: number;
