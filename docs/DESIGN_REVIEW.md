@@ -665,7 +665,7 @@ asking what a person would reach for and not find.
    between scenes"); from the design side I would put it as a "Copy to…"
    item on each lane, listing the scenes.
 
-6. **A visible save state.** The Projects list says "saves as you work"
+6. **A visible save state.** **Done in #125.** On a phone the word is in the Projects dialog, not on the bar. It also says "Not saved" when the browser refuses a write. The Projects list says "saves as you work"
    (`desktop/dialog-projects-one.png`), but the rack itself never says
    anything was saved, and a signed-in person cannot see from the rack
    whether the project is in their account or only in this browser. A
@@ -690,7 +690,7 @@ asking what a person would reach for and not find.
    column with "Kick", "Snare", "Clap", "Cl Hat", "Op Hat", "Lo Tom",
    "Hi Tom", "Cymbal". Small.
 
-10. **Keyboard shortcuts shown where they are used.** Space for Play is not
+10. **Keyboard shortcuts shown where they are used.** **Done in #125.** Space had no shortcut; it now plays and stops, and the Play All hint and Help say so. Space for Play is not
     offered (letters play notes, so shortcuts need a modifier or a
     non-letter key; `AGENTS.md` says so). Space is not a letter. If Play is
     not already on Space, it should be, and the Play button's hint should

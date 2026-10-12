@@ -180,7 +180,7 @@
 .project-line { display: flex; align-items: baseline; gap: 8px; max-width: 100%; }
 .project-line .project-name { min-width: 0; flex: 0 1 auto; }
 .save-state { position: relative; flex: none; width: 7.2em; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); }
-.save-state.full { width: auto; font-size: 13px; text-transform: none; letter-spacing: 0; }
+.save-state.full { margin-left: 12px; align-self: center; width: auto; font-size: 13px; text-transform: none; letter-spacing: 0; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .tempo-display-group { display: flex; align-items: center; gap: 6px; }
 .tempo-led {
