@@ -154,6 +154,18 @@ export const SYNTH_MODELS: SynthModelDefinition[] = [
     ],
   },
   {
+    id: 'ms-20',
+    name: 'MS-20',
+    group: 'Mono',
+    subtitle: 'Screaming mono: a high-pass, then a low-pass whose peak distorts as it is pushed',
+    macros: [
+      { key: 'macro1', label: 'HP Cutoff' },
+      { key: 'macro2', label: 'LP Cutoff' },
+      { key: 'macro3', label: 'Peak' },
+      { key: 'macro4', label: 'Env' },
+    ],
+  },
+  {
     id: 'pro-one',
     name: 'Pro-One',
     group: 'Mono',
@@ -433,6 +445,36 @@ function mapPolysix(params: SynthModelParams): Partial<SynthParameters> {
   };
 }
 
+// Two oscillators, mono, through a high-pass and then a two-pole low-pass. Both filters share one
+// peak, and it is the instrument's voice: it does not ring cleanly, it distorts, harder the
+// further it is pushed. One envelope opens the low-pass. The first macro is off at the bottom.
+function mapMs20(params: SynthModelParams): Partial<SynthParameters> {
+  const highpass = clamp01(params.macro1);
+  return {
+    engine: 'subtractive',
+    voiceMode: 'mono',
+    oscillator: { type: 'sawtooth', detune: 0, pulseWidth: 0.5 },
+    oscillator2: { enabled: true, type: 'square', semitones: 0, detune: 7, level: 0.7 },
+    mixer: { sub: 0, noise: 0, osc: 1 },
+    filter: {
+      type: 'lowpass',
+      model: 'ms20',
+      slope: 12,
+      highpass: highpass < 0.02 ? 0 : Math.round(30 * (1500 / 30) ** highpass),
+      frequency: Math.round(150 * (9000 / 150) ** clamp01(params.macro2)),
+      q: Number(range(0.7, 22, params.macro3).toFixed(2)),
+      envAmount: Number(range(0, 0.85, params.macro4).toFixed(2)),
+      keyTracking: 0.5,
+      drive: 0.35,
+    },
+    filterEnvelope: { attack: 0.003, decay: 0.35, sustain: 0.25, release: 0.25 },
+    envelope: { attack: 0.003, decay: 0.3, sustain: 0.7, release: 0.2 },
+    velocity: { amp: 1, filter: 0.3 },
+    portamento: { enabled: true, glide: 0.03 },
+    lfo1: { sync: false, retrigger: true, enabled: false, target: 'filter', waveform: 'triangle', rate: 0.5, depth: 0.1 },
+  };
+}
+
 // What a lane is given when it moves to a model: the model's macros, and anything another model
 // may have left on the lane that this one does not set for itself. A lane that only has a macro
 // turned gets the macros alone (mapSynthModelToEngineParams), so a slope or a unison someone
@@ -450,7 +492,8 @@ export function enterSynthModel(modelId: SynthModelId, modelParams: SynthModelPa
   return {
     ...mapped,
     unison: mapped.unison ?? { voices: 1, detune: 0.3, mix: 1 },
-    filter: { slope: ladder ? 24 : 12, ...mapped.filter, model: ladder ? 'ladder' : 'svf' } as SynthParameters['filter'],
+    // No high-pass and the clean filter, unless the model is one that sets them for itself.
+    filter: { slope: ladder ? 24 : 12, highpass: 0, ...mapped.filter, model: mapped.filter?.model ?? (ladder ? 'ladder' : 'svf') } as SynthParameters['filter'],
     // The Polysix's ensemble is the lane's chorus send. It goes when the lane leaves the Polysix;
     // a chorus send on any other lane is the person's own and is not touched.
     ...(leaving === 'polysix' && modelId !== 'polysix' ? { fxSends: { chorus: 0 } as SynthParameters['fxSends'] } : {}),
@@ -461,6 +504,7 @@ export function mapSynthModelToEngineParams(modelId: SynthModelId, modelParams: 
   if (modelId === 'generic') return {};
   if (modelId === 'jp-8000') return mapJp8000(modelParams);
   if (modelId === 'polysix') return mapPolysix(modelParams);
+  if (modelId === 'ms-20') return mapMs20(modelParams);
   if (modelId === 'mono-poly') {
     return {
       ...mapModel(modelParams, {

@@ -49,6 +49,19 @@ test('unison, the 24 dB filter and kick ducking are saved, and ducking is audibl
     return [filter.slope, filter.model];
   }).toEqual([24, 'ladder']);
   await expect(synth.getByLabel('Filter slope', { exact: true })).toHaveValue('ladder');
+  // The MS-20's filter is a fourth, at 12 dB, and the high-pass in front of the filter is a knob of its own.
+  await synth.getByLabel('Filter slope', { exact: true }).selectOption('ms20');
+  await expect(synth.getByLabel('High-pass cutoff value', { exact: true })).toHaveValue('Off');
+  await synth.getByLabel('High-pass cutoff value', { exact: true }).fill('300');
+  await synth.getByLabel('High-pass cutoff value', { exact: true }).press('Enter');
+  await expect.poll(async () => {
+    const { filter } = (await stored(page)).synths[0].synthParams;
+    return [filter.slope, filter.model, filter.highpass];
+  }).toEqual([12, 'ms20', 300]);
+  await expect(synth.getByLabel('High-pass cutoff value', { exact: true })).toHaveValue('300Hz');
+  await synth.getByLabel('High-pass cutoff value', { exact: true }).fill('0');
+  await synth.getByLabel('High-pass cutoff value', { exact: true }).press('Enter');
+  await expect(synth.getByLabel('High-pass cutoff value', { exact: true })).toHaveValue('Off');
   await synth.getByLabel('Filter slope', { exact: true }).selectOption('24');
   await expect.poll(async () => {
     const params = (await stored(page)).synths[0].synthParams;

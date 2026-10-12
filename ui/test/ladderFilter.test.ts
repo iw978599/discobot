@@ -100,7 +100,8 @@ test('the resonance setting means much the same on either filter', () => {
 });
 
 test('the Minimoog and the TB-303 take the ladder when a lane moves to them, and no other model does', () => {
-  for (const model of SYNTH_MODELS.filter(entry => entry.id !== 'generic')) {
+  // The MS-20 has a filter of its own, which its macros set; ms20Filter.test.ts covers it.
+  for (const model of SYNTH_MODELS.filter(entry => entry.id !== 'generic' && entry.id !== 'ms-20')) {
     const entered = enterSynthModel(model.id, MIDDLE).filter!;
     const ladder = model.id === 'minimoog-model-d' || model.id === 'tb-303';
     assert.equal(entered.model, ladder ? 'ladder' : 'svf', model.id);

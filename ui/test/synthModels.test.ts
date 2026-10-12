@@ -45,7 +45,7 @@ test('at every end and the middle of every macro, a model stays inside the limit
 });
 
 test('a model this copy of the app does not know opens with the plain engine', () => {
-  assert.equal(normalizeSynthModelId('ms-20'), 'generic');
+  assert.equal(normalizeSynthModelId('cs-80'), 'generic');
   assert.equal(normalizeSynthModelId('sh-101'), 'sh-101');
   assert.equal(normalizeSynthModelId('pro-one'), 'pro-one');
   assert.deepEqual(mapSynthModelToEngineParams('generic', MIDDLE), {});
@@ -169,6 +169,36 @@ test('the ensemble goes when a lane leaves the Polysix, and no other lane\'s cho
   for (const model of SYNTH_MODELS.filter(entry => entry.id !== 'polysix')) {
     assert.equal(mapSynthModelToEngineParams(model.id, MIDDLE).fxSends, undefined, model.id);
   }
+});
+
+test('the MS-20 is two oscillators, mono, through a high-pass and a two-pole low-pass that share a peak', () => {
+  const middle = voice('ms-20');
+  assert.deepEqual([middle.voiceMode, middle.filterModel, middle.filterSlope, middle.osc2Enabled], ['mono', 'ms20', 12, true]);
+  assert.ok(middle.portamentoEnabled);
+  // HP Cutoff is off at the bottom, and climbs.
+  assert.equal(voice('ms-20', { ...MIDDLE, macro1: 0 }).filterHighpass, 0);
+  assert.ok(voice('ms-20', { ...MIDDLE, macro1: 0.1 }).filterHighpass >= 30);
+  assert.ok(voice('ms-20', { ...MIDDLE, macro1: 1 }).filterHighpass >= 1400);
+  assert.ok(voice('ms-20', { ...MIDDLE, macro2: 1 }).filterFreq > voice('ms-20', { ...MIDDLE, macro2: 0 }).filterFreq, 'LP Cutoff');
+  assert.ok(voice('ms-20', { ...MIDDLE, macro3: 1 }).filterQ > 20 && voice('ms-20', { ...MIDDLE, macro3: 0 }).filterQ < 1, 'Peak');
+  assert.equal(voice('ms-20', { ...MIDDLE, macro4: 0 }).filterEnvAmount, 0);
+  assert.ok(voice('ms-20', { ...MIDDLE, macro4: 1 }).filterEnvAmount > 0.8, 'Env');
+  // Each macro leaves the other three's things alone.
+  assert.equal(voice('ms-20', { ...MIDDLE, macro1: 1 }).filterFreq, middle.filterFreq);
+  assert.equal(voice('ms-20', { ...MIDDLE, macro2: 1 }).filterHighpass, middle.filterHighpass);
+});
+
+test('the high-pass and the distorting filter go when a lane leaves the MS-20', () => {
+  const lane = sound('ms-20', { ...MIDDLE, macro1: 1 });
+  assert.ok(toVoiceParams(lane).filterHighpass > 0);
+  for (const next of ['juno-106', 'pro-one', 'jp-8000', 'minimoog-model-d'] as const) {
+    const moved = toVoiceParams(onLane(lane, enterSynthModel(next, MIDDLE, 'ms-20')));
+    assert.equal(moved.filterHighpass, 0, next);
+    assert.notEqual(moved.filterModel, 'ms20', next);
+  }
+  // A high-pass someone set on another model stays while a macro is turned.
+  const own = onLane(sound('juno-106'), { filter: { ...sound('juno-106').filter, highpass: 300 } });
+  assert.equal(toVoiceParams(onLane(own, mapSynthModelToEngineParams('juno-106', { ...MIDDLE, macro3: 0.9 }))).filterHighpass, 300);
 });
 
 test('a lane that moves to another model is given back what the one it leaves had set', () => {

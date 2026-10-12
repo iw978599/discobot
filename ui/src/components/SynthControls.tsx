@@ -711,15 +711,33 @@ export default function SynthControls({
               <select
                 className="synth-filter-type-select"
                 aria-label="Filter slope"
-                value={parameters.filter.model === 'ladder' ? 'ladder' : parameters.filter.slope === 24 ? 24 : 12}
-                onChange={(e) => updateFilter(e.target.value === 'ladder' ? { slope: 24, model: 'ladder' } : { slope: Number(e.target.value), model: 'svf' })}
-                title="12 dB per octave is gentler; 24 dB is steeper and darker. Ladder is a 24 dB low-pass whose resonance thins the bass and can ring by itself, as on a Minimoog; it is a low-pass only"
+                value={parameters.filter.model === 'ladder' ? 'ladder' : parameters.filter.model === 'ms20' ? 'ms20' : parameters.filter.slope === 24 ? 24 : 12}
+                onChange={(e) => updateFilter(
+                  e.target.value === 'ladder' ? { slope: 24, model: 'ladder' }
+                    : e.target.value === 'ms20' ? { slope: 12, model: 'ms20' }
+                      : { slope: Number(e.target.value), model: 'svf' },
+                )}
+                title="12 dB per octave is gentler; 24 dB is steeper and darker. Ladder is a 24 dB low-pass whose resonance thins the bass and can ring by itself, as on a Minimoog. MS-20 is a 12 dB low-pass whose resonance distorts harder the further it is pushed. Both are low-passes only"
               >
                 <option value={12}>12 dB</option>
                 <option value={24}>24 dB</option>
                 <option value="ladder">Ladder</option>
+                <option value="ms20">MS-20</option>
               </select>
             </div>
+            <Knob
+              label="High-pass"
+              ariaLabel="High-pass cutoff"
+              value={parameters.filter.highpass ?? 0}
+              min={0}
+              max={2000}
+              step={5}
+              displayValue={(parameters.filter.highpass ?? 0) < 20 ? 'Off' : `${Math.round(parameters.filter.highpass ?? 0)}Hz`}
+              onChange={(v) => updateFilter({ highpass: v < 20 ? 0 : v })}
+              parseInputValue={parseCutoff}
+              color="#10b981"
+              tooltip="Takes out everything under this before the filter. Off at the bottom"
+            />
             <Knob
               label="Cutoff"
               value={parameters.filter.frequency}
