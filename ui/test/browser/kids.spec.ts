@@ -138,6 +138,40 @@ test('kids mode is big pads and a play button, with nothing to read, type or ope
   expect(seen.errors).toEqual([]);
 });
 
+// Phones held sideways are very short. Every pad must be whole and clear of the others, the dots and the
+// buttons around them, and still big enough for a small finger.
+const SIDEWAYS = [{ width: 740, height: 360, pad: 72 }, { width: 844, height: 390, pad: 72 }, { width: 568, height: 320, pad: 64 }];
+for (const size of SIDEWAYS) {
+  test(`on a phone held sideways at ${size.width} by ${size.height} no pad lies on another or on the dots`, async ({ page }) => {
+    await page.setViewportSize({ width: size.width, height: size.height });
+    await page.goto('./#kids');
+    const kids = page.getByRole('main', { name: 'Kids mode', exact: true });
+    const pads = kids.getByRole('group', { name: 'Pads', exact: true }).getByRole('button');
+    await expect(pads).toHaveCount(12);
+    const faults = (other = 44) => page.evaluate(({ minPad, other, width, height }) => {
+      const box = (element: Element) => element.getBoundingClientRect();
+      const named = Array.from(document.querySelectorAll('.kids button'), element => ({ name: element.getAttribute('aria-label') || '', box: box(element), pad: element.classList.contains('kids-pad') }));
+      const dotsElement = document.querySelector('.kids-dots'), dots = dotsElement ? box(dotsElement) : new DOMRect(-1, -1, 0, 0);
+      const found: string[] = [];
+      const meets = (a: DOMRect, b: DOMRect) => a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
+      named.forEach((one, index) => {
+        const { left, top, right, bottom } = one.box;
+        if (left < 0 || top < 0 || right > width || bottom > height) found.push(`${one.name} is off the screen`);
+        if (Math.min(one.box.width, one.box.height) < (one.pad ? minPad : other)) found.push(`${one.name} is too small: ${Math.round(one.box.width)} by ${Math.round(one.box.height)}`);
+        if (meets(one.box, dots)) found.push(`${one.name} lies on the dots`);
+        for (const other of named.slice(index + 1)) if (meets(one.box, other.box)) found.push(`${one.name} lies on ${other.name}`);
+      });
+      if (document.documentElement.scrollHeight > height || document.documentElement.scrollWidth > width) found.push('the page scrolls');
+      return found;
+    }, { minPad: size.pad, other, width: size.width, height: size.height });
+    await expect.poll(faults).toEqual([]);
+    await kids.getByRole('button', { name: 'Build a beat', exact: true }).click();
+    await expect(kids.getByRole('group', { name: 'Beat', exact: true })).toBeVisible();
+    // The beat grid's holes are four rows on the shortest screen, a little under a finger's 44 there, as they were before.
+    await expect.poll(async () => (await faults(size.height < 340 ? 36 : 44)).filter(text => !text.includes('dots'))).toEqual([]);
+  });
+}
+
 test('a second screen, reached by its picture, is a grid of pictures for building a beat', async ({ page }, testInfo) => {
   const seen = watch(page, testInfo.project.use.baseURL);
   await page.goto('./#kids');

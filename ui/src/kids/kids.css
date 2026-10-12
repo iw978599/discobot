@@ -96,6 +96,17 @@
   .kids-screen { width: 52px; height: 52px; }
   .kids-play { width: 72px; height: 72px; font-size: 34px; }
 }
+/* A phone held sideways has about 330px to spare. The sounds join the two activities on the top line, the
+   buttons below shrink, and the twelve pads go six across in two rows, so each is whole and none lies on another. */
+@media (max-height: 520px) and (orientation: landscape) {
+  .kids-top { flex-wrap: nowrap; }
+  .kids-sounds { order: 0; flex: 0 1 auto; gap: 6px; }
+  .kids-screen { width: 48px; height: 48px; }
+  .kids-round { width: 46px; height: 46px; font-size: 24px; }
+  .kids-play { width: 56px; height: 56px; font-size: 28px; }
+  .kids-pads { grid-template-columns: repeat(6, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); width: min(100%, 960px); }
+  .kids-pad { min-height: 0; font-size: clamp(30px, 14vh, 56px); }
+}
 @media (prefers-reduced-motion: reduce) {
   .kids-pad:active, .kids-pad.lit, .kids-round:active, .kids-play:active, .kids-screen:active, .kids-row:active, .kids-row.lit, .kids-cell.on.now { transform: none; }
 }

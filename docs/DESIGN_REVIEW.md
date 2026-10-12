@@ -59,7 +59,7 @@ The two bigger redesigns I would choose first:
 Most important first. Each is marked **fault** (wrong or hard to use),
 **inconsistency**, or **polish**.
 
-### 1. Kids mode's pads overlap on a phone held sideways. Fault, small.
+### 1. Kids mode's pads overlap on a phone held sideways. Fault, small. **Done in #120.** Nothing is left of it; the beat grid on the shortest sideways phone (568 by 320) has holes 38px high, as before.
 
 A child holding a phone sideways sees the three rows of pads piled on top of
 each other: only the top sliver of the bear, dog, cat and rabbit shows, the
@@ -81,7 +81,7 @@ the drum pads. Most of each pad cannot be touched.
 - The roadmap asks "whether twelve pads are cramped on a phone held
   sideways" (features 10). This answers it.
 
-### 2. Words cut off or squeezed on a phone. Fault, small each.
+### 2. Words cut off or squeezed on a phone. Fault, small each. **Done in #120**, all five parts a to e. Not seen on a real phone.
 
 a. **The Scene/Song switch reads "Scen" and "Song" with the letters
    clipped.** `phone/phone-unit-song.png`, `phone/focus-button.png`. In
