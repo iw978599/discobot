@@ -169,6 +169,8 @@ test('every control in the rack, a menu and a dialog shows the same focus ring',
   test.setTimeout(90_000);
   await lane(page).getByRole('button', { name: 'Piano Roll', exact: true }).click();
   await expect(lane(page).getByRole('button', { name: 'C3 step 1', exact: true })).toBeVisible();
+  // Some older controls fade from one look to the next. This reads the look they come to rest in, so the fades are switched off.
+  await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; }' });
   await byKeyboard(page);
   const rack = await wrongRings(page.locator('.rack'));
   expect(rack.wrong, 'controls in the rack without the ring').toEqual([]);
