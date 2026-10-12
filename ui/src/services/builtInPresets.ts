@@ -74,6 +74,10 @@ const BASS: BuiltInPreset[] = [
     gain: 2,
     fxReturn: 0.55, fxSends: { reverb: 0.04, delay: 0.03, drive: 0.25, phaser: 0, chorus: 0 },
   }),
+  model('bass-monopoly', 'Mono/Poly Bass', 'bass', 'mono-poly', [0.35, 0.3, 0.3, 0.55], {
+    gain: 2,
+    fxReturn: 0.55, fxSends: { reverb: 0.04, delay: 0.03, drive: 0.25, phaser: 0, chorus: 0 },
+  }),
   generic('bass-rubber', 'Rubber Bass', 'bass', {
     gain: 1.05,
     voiceMode: 'mono', portamento: { enabled: true, glide: 0.05 },
@@ -137,6 +141,14 @@ const LEAD: BuiltInPreset[] = [
     gain: 1.75,
     fxReturn: 0.7, fxSends: { reverb: 0.2, delay: 0.3, drive: 0.2, phaser: 0, chorus: 0 },
     lfo2: { enabled: true, target: 'vibrato', waveform: 'sine', rate: 5.5, depth: 0.2, sync: false, retrigger: true },
+  }),
+  model('lead-jp', 'JP Supersaw', 'lead', 'jp-8000', [0.6, 0.9, 0.75, 0.3], {
+    gain: 0.55,
+    spread: 0.3, fxReturn: 0.8, fxSends: { reverb: 0.3, delay: 0.25, drive: 0, phaser: 0, chorus: 0.1 },
+  }),
+  model('lead-monopoly', 'Mono/Poly Lead', 'lead', 'mono-poly', [0.5, 0.3, 0.7, 0.5], {
+    gain: 1.6,
+    fxReturn: 0.7, fxSends: { reverb: 0.2, delay: 0.3, drive: 0.15, phaser: 0, chorus: 0 },
   }),
   generic('lead-square', 'Square Lead', 'lead', {
     gain: 0.75,
@@ -202,6 +214,10 @@ const PAD: BuiltInPreset[] = [
   model('pad-ob', 'OB Pad', 'pad', 'ob-xa', [0.7, 0.25, 0.4, 0.7], {
     gain: 1.05,
     spread: 0.7, fxReturn: 0.9, fxSends: { reverb: 0.5, delay: 0.2, drive: 0, phaser: 0.1, chorus: 0.2 },
+  }),
+  model('pad-jp', 'JP Trance Pad', 'pad', 'jp-8000', [0.7, 1, 0.5, 0.8], {
+    gain: 0.7,
+    spread: 0.6, fxReturn: 0.9, fxSends: { reverb: 0.5, delay: 0.25, drive: 0, phaser: 0.05, chorus: 0.2 },
   }),
   generic('pad-strings', 'String Ensemble', 'pad', {
     gain: 0.9,

@@ -118,6 +118,30 @@ export const SYNTH_MODELS: SynthModelDefinition[] = [
     ],
   },
   {
+    id: 'mono-poly',
+    name: 'Mono/Poly',
+    group: 'Mono',
+    subtitle: 'Mono, four oscillators stacked and detuned into a 24 dB filter',
+    macros: [
+      { key: 'macro1', label: 'Detune' },
+      { key: 'macro2', label: 'Resonance' },
+      { key: 'macro3', label: 'Cutoff' },
+      { key: 'macro4', label: 'Env' },
+    ],
+  },
+  {
+    id: 'jp-8000',
+    name: 'JP-8000',
+    group: 'Digital',
+    subtitle: 'Supersaw: seven saws, one in tune and six spread either side of it',
+    macros: [
+      { key: 'macro1', label: 'Detune' },
+      { key: 'macro2', label: 'Mix' },
+      { key: 'macro3', label: 'Cutoff' },
+      { key: 'macro4', label: 'Release' },
+    ],
+  },
+  {
     id: 'pro-one',
     name: 'Pro-One',
     group: 'Mono',
@@ -337,8 +361,66 @@ function mapObxa(params: SynthModelParams): Partial<SynthParameters> {
   };
 }
 
+// Seven saws on every note: one in tune, six spread either side. Detune is how far they spread,
+// and it is not even: most of the knob's travel is small amounts, then it opens out fast, as
+// the instrument's does. Mix is how loud the six are beside the one in tune.
+function mapJp8000(params: SynthModelParams): Partial<SynthParameters> {
+  return {
+    engine: 'subtractive',
+    voiceMode: 'poly',
+    oscillator: { type: 'sawtooth', detune: 0, pulseWidth: 0.5 },
+    oscillator2: { enabled: false, type: 'sawtooth', semitones: 0, detune: 0, level: 0 },
+    mixer: { sub: 0, noise: 0, osc: 1 },
+    unison: { voices: 7, detune: Number((clamp01(params.macro1) ** 2).toFixed(3)), mix: Number(clamp01(params.macro2).toFixed(2)) },
+    filter: {
+      type: 'lowpass',
+      frequency: Math.round(200 * (16000 / 200) ** clamp01(params.macro3)),
+      q: 0.8,
+      envAmount: 0.1,
+      keyTracking: 0.5,
+      drive: 0,
+      slope: 12,
+    },
+    filterEnvelope: { attack: 0.005, decay: 0.4, sustain: 0.6, release: 0.4 },
+    envelope: { attack: 0.01, decay: 0.3, sustain: 0.85, release: Number(range(0.05, 2.5, params.macro4).toFixed(3)) },
+    velocity: { amp: 1, filter: 0.15 },
+    portamento: { enabled: false, glide: 0.05 },
+    lfo1: { sync: false, retrigger: true, enabled: false, target: 'filter', waveform: 'triangle', rate: 0.5, depth: 0.1 },
+  };
+}
+
+// What a lane is given when it moves to a model: the model's macros, and anything another model
+// may have left on the lane that this one does not set for itself. A lane that only has a macro
+// turned gets the macros alone (mapSynthModelToEngineParams), so a slope or a unison someone
+// chose on it stays. The plain engine takes nothing away: it is where a model's sound is taken
+// to be changed by hand.
+export function enterSynthModel(modelId: SynthModelId, modelParams: SynthModelParams): Partial<SynthParameters> {
+  const mapped = mapSynthModelToEngineParams(modelId, modelParams);
+  if (modelId === 'generic') return mapped;
+  return {
+    ...mapped,
+    unison: mapped.unison ?? { voices: 1, detune: 0.3, mix: 1 },
+    filter: { slope: 12, ...mapped.filter } as SynthParameters['filter'],
+  };
+}
+
 export function mapSynthModelToEngineParams(modelId: SynthModelId, modelParams: SynthModelParams): Partial<SynthParameters> {
   if (modelId === 'generic') return {};
+  if (modelId === 'jp-8000') return mapJp8000(modelParams);
+  if (modelId === 'mono-poly') {
+    return {
+      ...mapModel(modelParams, {
+        oscillator: 'sawtooth', voiceMode: 'mono',
+        detune: [0, 0], pulseWidth: 0.5,
+        cutoff: [120, 8000], resonance: [0.8, 10],
+        attack: [0.002, 0.05], decay: [0.05, 0.7], sustain: [0.2, 0.85], release: [0.05, 0.5],
+        lfoRate: [0.1, 7], lfoDepth: [0.02, 0.25],
+        envAmount: [0.15, 0.8], filterDecay: [0.06, 0.9], keyTracking: 0.5, drive: 0.3, accent: 0.3, glide: 0.04, slope: 24,
+      }),
+      // Its four oscillators, stacked on the one note and pulled apart by the first macro.
+      unison: { voices: 4, detune: Number(range(0.05, 0.8, modelParams.macro1).toFixed(2)), mix: 1 },
+    };
+  }
   if (modelId === 'ob-xa') return mapObxa(modelParams);
   if (modelId === 'jupiter-8') {
     return mapModel(modelParams, {

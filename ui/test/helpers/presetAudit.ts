@@ -24,7 +24,8 @@ export interface PresetMeasure {
   loudness: number;
   // where the weight of the spectrum lies at its loudest, in Hz
   brightness: number;
-  // seconds from the key going down to half the loudest level
+  // seconds from the key going down to half the level it holds at (or half its loudest, for a
+  // sound that dies away while the key is down)
   attack: number;
   // seconds from the key coming up until it is 60 dB under its loudest, or `ringLimit` if it never is
   ring: number;
@@ -95,13 +96,19 @@ export function measurePreset(params: SynthParameters, kind: PresetKind, notes =
   }
   const loudest = Math.max(1e-9, ...levels);
   const loudestAt = levels.indexOf(Math.max(...levels)) * WINDOW / 2;
-  // Attack: the first moment a 5 ms level reaches half the loudest.
+  // Attack: the first moment a 5 ms level reaches half the level the sound holds at. Stacked,
+  // detuned copies beat, and their loudest moment can come long after the note has spoken, so
+  // the level in the middle of the held time is the measure; a sound that has died away by then
+  // is measured against its loudest.
+  const whileHeld = levels.slice(0, Math.floor((held - WINDOW) / (WINDOW / 2)) + 1).sort((a, b) => a - b);
+  const middle = whileHeld[Math.floor(whileHeld.length / 2)] ?? loudest;
+  const reference = middle >= loudest * 0.25 ? middle : loudest;
   let attack = HOLD;
   const short = 240;
   for (let start = 0; start + short <= held; start += short / 2) {
     let sum = 0;
     for (let i = start; i < start + short; i++) sum += mono[i] * mono[i];
-    if (Math.sqrt(sum / short) >= loudest * 0.5) { attack = start / AUDIT_RATE; break; }
+    if (Math.sqrt(sum / short) >= reference * 0.5) { attack = start / AUDIT_RATE; break; }
   }
   let ring = RING_LIMIT;
   const floor = loudest * 0.001;

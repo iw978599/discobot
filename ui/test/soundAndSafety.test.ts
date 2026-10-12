@@ -64,9 +64,9 @@ test('new sound settings are clamped on load and default to off for older projec
   const old = structuredClone(defaults) as Record<string, any>;
   delete old.unison; delete old.duck; delete old.filter.slope;
   const loaded = sanitizeSynthParams(old, defaults);
-  assert.deepEqual([loaded.unison, loaded.duck, loaded.filter.slope], [{ voices: 1, detune: 0.3 }, 0, 12]);
+  assert.deepEqual([loaded.unison, loaded.duck, loaded.filter.slope], [{ voices: 1, detune: 0.3, mix: 1 }, 0, 12]);
   const hostile = sanitizeSynthParams({ ...defaults, unison: { voices: 99, detune: -4 }, duck: 7, filter: { ...defaults.filter, slope: 48 } }, defaults);
-  assert.deepEqual([hostile.unison, hostile.duck, hostile.filter.slope], [{ voices: 5, detune: 0 }, 1, 12]);
+  assert.deepEqual([hostile.unison, hostile.duck, hostile.filter.slope], [{ voices: 7, detune: 0, mix: 1 }, 1, 12]);
   const voice = toVoiceParams(sanitizeSynthParams({ ...defaults, unison: { voices: 3, detune: 0.5 }, filter: { ...defaults.filter, slope: 24 } }, defaults));
   assert.deepEqual([voice.unisonVoices, voice.unisonDetune, voice.filterSlope], [3, 0.5, 24]);
 });

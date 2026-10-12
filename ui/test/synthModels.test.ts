@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createDefaultSynthParameters, toVoiceParams } from '@discobot/engine';
-import { SYNTH_MODELS, SYNTH_MODEL_GROUPS, mapSynthModelToEngineParams, normalizeSynthModelId } from '../src/synthModels.ts';
+import { SYNTH_MODELS, SYNTH_MODEL_GROUPS, enterSynthModel, mapSynthModelToEngineParams, normalizeSynthModelId } from '../src/synthModels.ts';
 import { sanitizeSynthParams } from '../src/services/projectSanitization.ts';
 import type { SynthModelId, SynthModelParams, SynthParameters } from '../src/types.ts';
 
@@ -118,10 +118,49 @@ test('the OB-Xa is two saws spread apart into a two-pole filter, and its fourth 
   assert.equal(fast.release, slow.release, 'Attack leaves the release alone');
 });
 
+test('the JP-8000 is seven saws, one in tune and six either side, with Detune and Mix', () => {
+  const middle = voice('jp-8000');
+  assert.equal(middle.voiceMode, 'poly');
+  assert.deepEqual([middle.oscType, middle.osc2Enabled, middle.unisonVoices], ['sawtooth', false, 7]);
+  assert.equal(voice('jp-8000', { ...MIDDLE, macro1: 0 }).unisonDetune, 0);
+  assert.equal(voice('jp-8000', { ...MIDDLE, macro1: 1 }).unisonDetune, 1);
+  assert.ok(middle.unisonDetune < 0.5, 'half way round the knob is well under half the spread');
+  assert.equal(voice('jp-8000', { ...MIDDLE, macro2: 0 }).unisonMix, 0);
+  assert.equal(voice('jp-8000', { ...MIDDLE, macro2: 1 }).unisonMix, 1);
+  assert.ok(voice('jp-8000', { ...MIDDLE, macro3: 1 }).filterFreq > voice('jp-8000', { ...MIDDLE, macro3: 0 }).filterFreq, 'Cutoff');
+  assert.ok(voice('jp-8000', { ...MIDDLE, macro4: 1 }).release > 2 && voice('jp-8000', { ...MIDDLE, macro4: 0 }).release < 0.1, 'Release');
+});
+
+test('the Mono/Poly is four oscillators stacked on one note, pulled apart by Detune, into a four-pole filter', () => {
+  const middle = voice('mono-poly');
+  assert.deepEqual([middle.voiceMode, middle.unisonVoices, middle.filterSlope, middle.osc2Enabled], ['mono', 4, 24, false]);
+  assert.ok(voice('mono-poly', { ...MIDDLE, macro1: 1 }).unisonDetune > voice('mono-poly', { ...MIDDLE, macro1: 0 }).unisonDetune, 'Detune');
+  assert.ok(voice('mono-poly', { ...MIDDLE, macro2: 1 }).filterQ > voice('mono-poly', { ...MIDDLE, macro2: 0 }).filterQ, 'Resonance');
+  assert.ok(voice('mono-poly', { ...MIDDLE, macro3: 1 }).filterFreq > voice('mono-poly', { ...MIDDLE, macro3: 0 }).filterFreq, 'Cutoff');
+  assert.ok(voice('mono-poly', { ...MIDDLE, macro4: 1 }).filterEnvAmount > voice('mono-poly', { ...MIDDLE, macro4: 0 }).filterEnvAmount, 'Env');
+});
+
+test('a lane that moves to another model is given back what the one it leaves had set', () => {
+  // Out of the supersaw: no stack of seven. Out of a four-pole model: the two-pole slope.
+  const fromJp = onLane(sound('jp-8000'), enterSynthModel('juno-106', MIDDLE));
+  assert.equal(toVoiceParams(fromJp).unisonVoices, 1);
+  const fromPro = onLane(sound('pro-one'), enterSynthModel('juno-106', MIDDLE));
+  assert.equal(toVoiceParams(fromPro).filterSlope, 12);
+  // A model that sets these for itself keeps its own.
+  assert.equal(toVoiceParams(onLane(sound('juno-106'), enterSynthModel('jp-8000', MIDDLE))).unisonVoices, 7);
+  assert.equal(toVoiceParams(onLane(sound('juno-106'), enterSynthModel('sh-101', MIDDLE))).filterSlope, 24);
+  // Turning a macro on a lane that stays where it is takes nothing away: a slope or a stack someone chose stays.
+  const chosen = onLane(sound('juno-106'), { unison: { voices: 3, detune: 0.4, mix: 1 }, filter: { ...sound('juno-106').filter, slope: 24 } });
+  const turned = toVoiceParams(onLane(chosen, mapSynthModelToEngineParams('juno-106', { ...MIDDLE, macro3: 0.8 })));
+  assert.deepEqual([turned.unisonVoices, turned.filterSlope], [3, 24]);
+  // The plain engine takes nothing away either: it is where a model's sound is taken to be changed by hand.
+  assert.deepEqual(enterSynthModel('generic', MIDDLE), {});
+});
+
 test('leaving the SH-101 for another model puts the first oscillator back to full level', () => {
   const lane = sound('sh-101', { ...MIDDLE, macro1: 0 });
   assert.equal(toVoiceParams(lane).oscLevel, 0);
-  for (const next of ['minimoog-model-d', 'juno-106', 'tb-303', 'prophet-5', 'pro-one', 'jupiter-8', 'ob-xa'] as const) {
+  for (const next of ['minimoog-model-d', 'juno-106', 'tb-303', 'prophet-5', 'pro-one', 'jupiter-8', 'ob-xa', 'jp-8000', 'mono-poly'] as const) {
     assert.equal(toVoiceParams(onLane(lane, mapSynthModelToEngineParams(next, MIDDLE))).oscLevel, 1, next);
   }
 });
