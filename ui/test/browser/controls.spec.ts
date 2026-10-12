@@ -109,7 +109,7 @@ test('full musical arrangement survives a kept copy, editing, reopening and relo
   const synth = page.locator('.synth-controls-panel');
   await page.locator('.tempo-led').click();
   await edit(page.locator('.tempo-led-input'), '96');
-  await choosePreset(synth, 'Bass', 'Bass — Deep Sub');
+  await choosePreset(synth, 'Bass', 'Sub Bass');
   await tab(page, 'Amp');
   await edit(synth.getByLabel('Gain value', { exact: true }), '63%');
   await edit(synth.getByLabel('Pan value', { exact: true }), 'L25');
@@ -287,18 +287,24 @@ test('releasing the first key during worklet loading cannot start a stuck note',
 test('all named presets and model macros are selectable; user presets survive reload', async ({ page }) => {
   const synth = page.locator('.synth-controls-panel');
   await tab(page, 'Amp');
-  for (const family of ['Bass', 'Lead', 'Pad', 'Pluck']) {
+  const gain = synth.getByRole('slider', { name: 'Gain', exact: true });
+  let builtIn = 0;
+  for (const family of ['Bass', 'Lead', 'Pad', 'Keys', 'Pluck', 'Effects']) {
     await openPresetGroup(synth, family);
     const rows = synth.getByRole('menu', { name: family, exact: true }).locator('[role="menuitem"]:not([data-back])');
     await expect(rows.first()).toBeVisible();
-    const named = (await rows.evaluateAll(found => found.map(row => row.getAttribute('aria-label') || ''))).filter(name => name.startsWith(`${family} —`));
-    expect(named).toHaveLength(3);
+    const named = await rows.evaluateAll(found => found.map(row => row.getAttribute('aria-label') || ''));
+    expect(named.length, `${family} has sounds to choose from`).toBeGreaterThanOrEqual(5);
+    builtIn += named.length;
     await closePresetMenu(page, synth);
     for (const name of named) {
       await choosePreset(synth, family, name);
-      await expect(synth.getByRole('slider', { name: 'Gain', exact: true })).toHaveAttribute('aria-valuenow', /0\.(45|55)/);
+      // Each sets its own level, within what a lane's level can be.
+      await expect.poll(async () => Number(await gain.getAttribute('aria-valuenow')), { message: name }).toBeGreaterThanOrEqual(0.3);
+      await expect.poll(async () => Number(await gain.getAttribute('aria-valuenow')), { message: name }).toBeLessThanOrEqual(2);
     }
   }
+  expect(builtIn, 'the app comes with a good many sounds').toBeGreaterThanOrEqual(30);
   const macros = page.locator('.synth-module.selected .synth-model-macro-grid [role="slider"]');
   for (const model of ['minimoog-model-d', 'juno-106', 'dx7', 'tb-303', 'prophet-5']) {
     await synth.getByLabel('Synth model', { exact: true }).selectOption(model);

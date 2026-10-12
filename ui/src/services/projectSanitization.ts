@@ -83,7 +83,7 @@ export function sanitizeSynthParams(value: unknown, defaults: SynthParameters): 
   osc2.semitones = Math.round(number(osc2.semitones, osc2Defaults.semitones, -36, 36));
   osc2.detune = number(osc2.detune, osc2Defaults.detune, -100, 100);
   osc2.level = number(osc2.level, osc2Defaults.level, 0, 1);
-  params.mixer = { sub: number(params.mixer!.sub, 0, 0, 1), noise: number(params.mixer!.noise, 0, 0, 1) };
+  params.mixer = { sub: number(params.mixer!.sub, 0, 0, 1), noise: number(params.mixer!.noise, 0, 0, 1), osc: number(params.mixer!.osc, 1, 0, 1) };
   params.unison = {
     voices: Math.round(number(params.unison!.voices, 1, 1, 5)), detune: number(params.unison!.detune, defaults.unison!.detune, 0, 1),
   };

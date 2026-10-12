@@ -79,6 +79,7 @@ test('projects and presets saved before the new voice existed load with neutral 
   assert.equal(voice.voiceMode, 'poly');
   assert.equal(voice.osc2Enabled, false);
   assert.equal(voice.subLevel + voice.noiseLevel + voice.filterEnvAmount + voice.filterDrive + voice.filterKeyTracking, 0);
+  assert.equal(voice.oscLevel, 1, 'the first oscillator is at full level, as it always was');
   assert.equal(voice.velocityAmp, 1);
   assert.equal(voice.lfo1Retrigger, true);
 
@@ -93,7 +94,7 @@ test('projects and presets saved before the new voice existed load with neutral 
   assert.equal(hostile.oscillator2!.type, defaults.oscillator2!.type);
   assert.equal(hostile.oscillator2!.semitones, 36);
   assert.equal(hostile.oscillator2!.level, 1);
-  assert.deepEqual(hostile.mixer, { sub: 0, noise: 0 });
+  assert.deepEqual(hostile.mixer, { sub: 0, noise: 0, osc: 1 });
   assert.equal(hostile.fm!.algorithm, 3);
   assert.equal(hostile.filter.envAmount, 1);
   assert.equal(hostile.filter.keyTracking, 0);

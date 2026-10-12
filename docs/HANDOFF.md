@@ -220,6 +220,10 @@ it done.
 
 ### Step 2b. The preset sounds (asked for by the owner on 2026-10-12)
 
+First part built on `feat/preset-sounds`: forty presets in place of
+seventeen, level-matched by measurement, and a level for the first
+oscillator. Check its pull request's state. The owner has not heard them.
+
 The owner: "would also like to add reviewing/redesigning the synth preset
 sounds as well as adding more presets". Go through every built-in preset,
 redesign the ones that are weak, and add more (roadmap sound 7 lists the
@@ -280,17 +284,34 @@ patterns, and live collaboration, which the owner wants built last of all.
 
 ## 5. Waiting on the owner
 
-- **Firefox.** The owner said "firefox still has trouble" with guest
-  instruments, after two fixes (#76, #77). Asked what they see (which guest;
-  does it fail to load, make no sound, or drift out of time; any message in
-  the console). Not yet answered.
+Said by the owner on 2026-10-12, so no longer waiting:
+
+- **Firefox waits.** "lets get feature complete in chrome then work back to
+  firefox."
+- **Play stays as it is.** "play/stop state should be easy to tell from the
+  button, so do what you must": it is a light button reading Play All when
+  stopped and a lit amber one reading Stop All while playing, which was
+  judged clear enough. Change it only if the owner says it is not.
+- **The new lettering looks good.**
+- **The GitHub Support report was sent.**
+- **Sound work comes next**, ahead of the rest of the design-review queue:
+  "we've done a lot of non sound work. lets do some sounds work, prests and
+  synths".
+- Also asked for that day, each given to a builder: the preset selector as
+  a nested menu; in Projects, one row for a project and its copies, with a
+  way to choose among them; Kindle devices given the phone layout. Check
+  the open pull requests for each.
+
+Still waiting:
+
+- **Firefox, later.** The owner said "firefox still has trouble" with guest
+  instruments, after two fixes (#76, #77). When Chrome is feature complete,
+  ask what they see (which guest; does it fail to load, make no sound, or
+  drift out of time; any message in the console).
 - **Listening.** The owner has heard the three starting beats and said they
-  sound good (2026-10-12). Nothing else is verified by ear.
-- **Whether Play should stay a light button when stopped** (#123).
+  sound good (2026-10-12). Nothing else is verified by ear, the forty new
+  presets least of all.
 - **The Launchkey's numbers**, when step 4 is reached.
-- **A request to GitHub Support** about an unreachable commit was drafted
-  for the owner on 2026-10-12. Ask the owner whether it was sent; do not
-  describe it here.
 
 Decided, so do not ask again: kids mode stays a separate page, and a kids
 tune not opening in the full app is fine; published songs have a page for

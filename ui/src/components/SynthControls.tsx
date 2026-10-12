@@ -115,51 +115,6 @@ const parseCutoff = (input: string): number | null => {
   return trimmed.includes('k') ? n * 1000 : n;
 };
 
-export function createNamedSynthPresets(base: SynthParameters) {
-  const sounds: Array<[string, OscillatorType, number, number, number, number, number, number]> = [
-    ['Bass — Deep Sub', 'sine', 420, 0.8, 0.003, 0.18, 0.8, 0.12],
-    ['Bass — Acid Pulse', 'sawtooth', 780, 9, 0.003, 0.2, 0.35, 0.08],
-    ['Bass — Rubber Square', 'square', 1100, 3.2, 0.008, 0.24, 0.45, 0.16],
-    ['Lead — Bright Saw', 'sawtooth', 7600, 2.5, 0.012, 0.2, 0.7, 0.22],
-    ['Lead — Soft Triangle', 'triangle', 3800, 1.2, 0.035, 0.25, 0.65, 0.35],
-    ['Lead — Singing Pulse', 'square', 4400, 4, 0.06, 0.3, 0.72, 0.4],
-    ['Pad — Warm Cloud', 'triangle', 1800, 1.4, 0.75, 0.8, 0.82, 1.8],
-    ['Pad — Glass Air', 'sine', 9800, 0.8, 0.45, 0.9, 0.75, 1.4],
-    ['Pad — Analog Strings', 'sawtooth', 2600, 2, 0.65, 0.55, 0.8, 1.2],
-    ['Pluck — Bell', 'sine', 12000, 1, 0.002, 0.55, 0.05, 0.45],
-    ['Pluck — Wooden', 'triangle', 1900, 2, 0.002, 0.18, 0, 0.12],
-    ['Pluck — Short Wire', 'sawtooth', 4800, 3, 0.001, 0.12, 0, 0.08],
-  ];
-  return sounds.map(([name, type, frequency, q, attack, decay, sustain, release], index) => {
-    const pad = name.startsWith('Pad');
-    const bass = name.startsWith('Bass');
-    const kind: PresetKind = pad ? 'pad' : bass ? 'bass' : name.startsWith('Lead') ? 'lead' : 'pluck';
-    return {
-      id: `builtin-named-${index}`,
-      name,
-      kind,
-      builtIn: true,
-      modelId: 'generic' as SynthModelId,
-      modelParams: { macro1: 0.5, macro2: 0.5, macro3: 0.5, macro4: 0.5 },
-      params: {
-        ...base,
-        hold: false,
-        gain: bass ? 0.55 : 0.45,
-        pan: 0,
-        spread: pad ? 0.55 : 0,
-        oscillator: { type, detune: pad ? 7 : 0 },
-        filter: { ...base.filter, type: 'lowpass' as const, frequency, q },
-        envelope: { attack, decay, sustain, release },
-        lfo1: { ...base.lfo1, enabled: pad, sync: false, rate: 0.6, depth: 0.15, target: 'filter' as const },
-        lfo2: { ...base.lfo2, enabled: false, sync: false },
-        arpeggiator: { ...base.arpeggiator, enabled: false },
-        portamento: { ...base.portamento, enabled: false },
-        fxSends: { reverb: bass ? 0.03 : pad ? 0.5 : 0.22, delay: bass ? 0 : 0.18, drive: bass ? 0.2 : 0.05, phaser: pad ? 0.15 : 0 },
-      },
-    };
-  });
-}
-
 // A preset that comes with the app carries this after its name, in the menu and on its button;
 // a person's own has none, and is under "My presets".
 const BUILT_IN_MARK = ' *';
@@ -649,6 +604,19 @@ export default function SynthControls({
                   disabled={!osc2.enabled}
                   color="#6366f1"
                   tooltip={TOOLTIPS.osc2Level}
+                />
+                <Knob
+                  label="Osc 1"
+                  ariaLabel="Oscillator 1 level"
+                  value={mixer.osc ?? 1}
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  displayValue={`${Math.round((mixer.osc ?? 1) * 100)}%`}
+                  onChange={(v) => updateMixer({ osc: v })}
+                  parseInputValue={parsePercent(0, 1)}
+                  color="#6366f1"
+                  tooltip="How loud the first oscillator is. Turn it down to hear the second oscillator, the sub or the noise alone"
                 />
                 <Knob
                   label="Sub"

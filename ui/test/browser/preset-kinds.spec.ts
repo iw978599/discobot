@@ -29,7 +29,7 @@ test('the preset menu lists the kinds, then a person\'s own presets, and each op
 
   await picker(page).click();
   await expect(picker(page)).toHaveAttribute('aria-expanded', 'true');
-  await expect.poll(() => groupNames(page), 'the kinds, in their agreed order').toEqual(['Bass', 'Lead', 'Pad', 'Keys', 'Pluck']);
+  await expect.poll(() => groupNames(page), 'the kinds, in their agreed order').toEqual(['Bass', 'Lead', 'Pad', 'Keys', 'Pluck', 'Effects']);
   await expect(lane(page).getByRole('menu', { name: 'Synth preset', exact: true })).toBeVisible();
   await expect(lane(page).locator('[role="menuitem"]:not([data-group])'), 'no preset is shown until a group is chosen').toHaveCount(0);
 
@@ -81,7 +81,7 @@ test('choosing a preset loads it, closes the menu and puts its name on the butto
   await lane(page).getByLabel('Preset name', { exact: true }).fill(mine);
   await lane(page).getByRole('button', { name: 'Save', exact: true }).click();
   await picker(page).click();
-  await expect.poll(() => groupNames(page)).toEqual(['Bass', 'Lead', 'Pad', 'Keys', 'Pluck', 'My presets']);
+  await expect.poll(() => groupNames(page)).toEqual(['Bass', 'Lead', 'Pad', 'Keys', 'Pluck', 'Effects', 'My presets']);
   await groupRow(page, 'My presets').click();
   await expect(choices(page, 'My presets')).toHaveText([mine]);
   await choices(page, 'My presets').first().click();
@@ -96,7 +96,7 @@ test('choosing a preset loads it, closes the menu and puts its name on the butto
   await lane(page).getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(picker(page), 'deleting the preset clears the button').toHaveAccessibleName('Synth preset: Preset…');
   await picker(page).click();
-  await expect.poll(() => groupNames(page), 'and its group goes with the last preset in it').toEqual(['Bass', 'Lead', 'Pad', 'Keys', 'Pluck']);
+  await expect.poll(() => groupNames(page), 'and its group goes with the last preset in it').toEqual(['Bass', 'Lead', 'Pad', 'Keys', 'Pluck', 'Effects']);
 });
 
 test('the preset menu works from the keyboard alone', async ({ page }) => {
@@ -169,7 +169,7 @@ test('on a phone the sheet shows the groups, then one group\'s presets under a B
   const back = lane(page).getByRole('menuitem', { name: 'Back', exact: true });
 
   await picker(page).click();
-  await expect.poll(() => groupNames(page)).toEqual(['Bass', 'Lead', 'Pad', 'Keys', 'Pluck']);
+  await expect.poll(() => groupNames(page)).toEqual(['Bass', 'Lead', 'Pad', 'Keys', 'Pluck', 'Effects']);
   const sheet = (await lane(page).getByRole('menu', { name: 'Synth preset', exact: true }).boundingBox())!;
   const view = page.viewportSize()!;
   expect(sheet.y + sheet.height, 'the sheet is along the bottom of the screen').toBeGreaterThan(view.height - 40);
@@ -182,7 +182,7 @@ test('on a phone the sheet shows the groups, then one group\'s presets under a B
   await expect(groupList(page, 'Pad').locator('[role="menuitem"]').first(), 'Back is the top row').toHaveAccessibleName('Back');
 
   await back.click();
-  await expect.poll(() => groupNames(page), 'Back shows the groups again').toEqual(['Bass', 'Lead', 'Pad', 'Keys', 'Pluck']);
+  await expect.poll(() => groupNames(page), 'Back shows the groups again').toEqual(['Bass', 'Lead', 'Pad', 'Keys', 'Pluck', 'Effects']);
   await expect(back).toHaveCount(0);
   await expect(picker(page), 'and the sheet is still open').toHaveAttribute('aria-expanded', 'true');
 
