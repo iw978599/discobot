@@ -81,7 +81,7 @@ export default function SharedSongPage({ file, author, error: fetchError, onOpen
         </p>
         <div className="shared-song-order" aria-label="Song order">
           {project.song.entries.map((entry, index) => (
-            <span key={index}>{project.scenes.find(scene => scene.id === entry.sceneId)?.name ?? '?'} ×{entry.repeats}</span>
+            <span key={index} data-color={project.scenes.find(scene => scene.id === entry.sceneId)?.color}>{project.scenes.find(scene => scene.id === entry.sceneId)?.name ?? '?'} ×{entry.repeats}</span>
           ))}
         </div>
         {audioUrl

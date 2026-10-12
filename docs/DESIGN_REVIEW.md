@@ -722,7 +722,8 @@ asking what a person would reach for and not find.
    it) would answer the question people have before closing a tab. Small.
    Not on the roadmap.
 
-7. **Scene colours.** Scenes are told apart only by name. A colour for each
+7. **Done.** Six colours and none, chosen beside Rename; a new scene takes
+   the first colour not in use. **Scene colours.** Scenes are told apart only by name. A colour for each
    scene, shown on its chip, on its blocks in the song, and on the share
    page's strips (redesign D), makes a song's shape readable at a glance:
    A A B A. For anyone using song mode. Small to medium; it is a stored

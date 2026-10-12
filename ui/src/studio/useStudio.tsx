@@ -1294,6 +1294,7 @@ export function useStudio() {
   // A new scene starts as a copy of the one being edited, or empty.
   const handleSceneAdd = useCallback((empty: boolean) => sceneChange(() => localService.createScene({ empty })), [sceneChange]);
   const handleSceneRename = useCallback((sceneId: string, name: string) => sceneChange(() => localService.renameScene(sceneId, name), false), [sceneChange]);
+  const handleSceneColor = useCallback((sceneId: string, color: string) => sceneChange(() => localService.setSceneColor(sceneId, color || undefined), false), [sceneChange]);
   const handleSceneDelete = useCallback((sceneId: string) => sceneChange(() => localService.deleteScene(sceneId)), [sceneChange]);
   // The sceneChanged event sets the song, as the store kept it.
   const handleSongChange = useCallback((next: Partial<Song>) => {
@@ -2243,7 +2244,7 @@ export function useStudio() {
     handleDrumSettingsChange, handleDrumMixChange, handleDrumReset, handleDrumMasterVolumeChange, handleDrumSwingChange,
     handleDrumFxChange, handleEffectsLoopChange, handleDrumMuteAll, handleDrumSoloAll, handleReset,
     scenes, currentSceneId, song, playMode, setPlayMode, songStartEntry, setSongStartEntry, songPosition,
-    handleSceneSelect, handleSceneAdd, handleSceneRename, handleSceneDelete, handleSongChange, songArrangement, handleExportSongMidi,
+    handleSceneSelect, handleSceneAdd, handleSceneRename, handleSceneColor, handleSceneDelete, handleSongChange, songArrangement, handleExportSongMidi,
     isAnyPlaying,
   };
 }
