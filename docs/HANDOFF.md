@@ -239,8 +239,10 @@ later; the owner has heard them and said they "sound good".
 The owner: "tackle everything to add all synths from the roadmap". All
 fourteen, with the engine work each needs.
 
-1. Group A, which needs nothing new. SH-101 and Pro-One are built on
-   `feat/synth-models-sh101-pro-one` (check its pull request's state);
+1. Group A, which needs nothing new. SH-101 and Pro-One are merged (#139).
+   Jupiter-8 and OB-Xa are built on `feat/synth-models-jupiter-obxa`
+   (check its pull request's state). Next: JP-8000 with Mono/Poly, raising
+   the unison limit from five copies to seven, then Polysix;
    `docs/SYNTH_MODELS_PLAN.md` has what was found. The full list: SH-101; Pro-One; Jupiter-8 with
    OB-Xa; JP-8000 with Mono/Poly; Polysix last. The Polysix may turn up its
    lane's chorus send (the owner answered for the Polysix only; ask again

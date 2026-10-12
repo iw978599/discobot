@@ -94,6 +94,30 @@ export const SYNTH_MODELS: SynthModelDefinition[] = [
     ],
   },
   {
+    id: 'jupiter-8',
+    name: 'Jupiter-8',
+    group: 'Poly',
+    subtitle: 'Big, clean poly: saw and pulse a little apart into a smooth 24 dB filter',
+    macros: [
+      { key: 'macro1', label: 'Detune' },
+      { key: 'macro2', label: 'Resonance' },
+      { key: 'macro3', label: 'Brightness' },
+      { key: 'macro4', label: 'Contour' },
+    ],
+  },
+  {
+    id: 'ob-xa',
+    name: 'OB-Xa',
+    group: 'Poly',
+    subtitle: 'Wide, brassy poly: two saws spread apart into an open 12 dB filter, with a swell',
+    macros: [
+      { key: 'macro1', label: 'Spread' },
+      { key: 'macro2', label: 'Resonance' },
+      { key: 'macro3', label: 'Brightness' },
+      { key: 'macro4', label: 'Attack' },
+    ],
+  },
+  {
     id: 'pro-one',
     name: 'Pro-One',
     group: 'Mono',
@@ -285,8 +309,48 @@ function mapSh101(params: SynthModelParams): Partial<SynthParameters> {
   };
 }
 
+// Two saws spread apart by the first macro, into a two-pole filter that is left fairly open,
+// and a level that swells in: the fourth macro is how long the swell takes, and the filter opens
+// with it a little more slowly, which is the brass.
+function mapObxa(params: SynthModelParams): Partial<SynthParameters> {
+  const attack = range(0.005, 0.9, params.macro4);
+  return {
+    engine: 'subtractive',
+    voiceMode: 'poly',
+    oscillator: { type: 'sawtooth', detune: 0, pulseWidth: 0.5 },
+    oscillator2: { enabled: true, type: 'sawtooth', semitones: 0, detune: Math.round(range(6, 40, params.macro1)), level: 0.9 },
+    mixer: { sub: 0, noise: 0, osc: 1 },
+    filter: {
+      type: 'lowpass',
+      frequency: Math.round(800 * (14000 / 800) ** clamp01(params.macro3)),
+      q: Number(range(0.4, 5, params.macro2).toFixed(2)),
+      envAmount: 0.3,
+      keyTracking: 0.4,
+      drive: 0.2,
+      slope: 12,
+    },
+    filterEnvelope: { attack: Number((attack * 1.2 + 0.005).toFixed(3)), decay: 0.9, sustain: 0.5, release: 1 },
+    envelope: { attack: Number(attack.toFixed(3)), decay: 0.6, sustain: 0.85, release: 1 },
+    velocity: { amp: 1, filter: 0.25 },
+    portamento: { enabled: false, glide: 0.05 },
+    lfo1: { sync: false, retrigger: true, enabled: false, target: 'filter', waveform: 'triangle', rate: 0.5, depth: 0.1 },
+  };
+}
+
 export function mapSynthModelToEngineParams(modelId: SynthModelId, modelParams: SynthModelParams): Partial<SynthParameters> {
   if (modelId === 'generic') return {};
+  if (modelId === 'ob-xa') return mapObxa(modelParams);
+  if (modelId === 'jupiter-8') {
+    return mapModel(modelParams, {
+      oscillator: 'sawtooth', voiceMode: 'poly',
+      oscillator2: { type: 'square', semitones: 0, spread: [1, 12], level: 0.7 },
+      detune: [0, 0], pulseWidth: 0.45,
+      cutoff: [350, 12000], resonance: [0.4, 6],
+      attack: [0.005, 0.5], decay: [0.12, 1.2], sustain: [0.4, 0.92], release: [0.2, 2],
+      lfoRate: [0.1, 6], lfoDepth: [0.02, 0.25],
+      envAmount: [0.05, 0.5], filterDecay: [0.15, 1.5], keyTracking: 0.5, drive: 0.05, accent: 0.2, slope: 24,
+    });
+  }
   if (modelId === 'dx7') return mapFmModel(modelParams);
   if (modelId === 'sh-101') return mapSh101(modelParams);
   if (modelId === 'pro-one') {

@@ -44,6 +44,19 @@ true before the first new model ships, and say so in the pull request.
   - A project using one of these opens with the plain engine in a copy of
     the app that does not know it; a test checks the rule.
 
+- 2026-10-12: **Jupiter-8 and OB-Xa are built.** Not verified by ear.
+  - The Jupiter-8's separate high-pass filter is left out: the voice has
+    one filter. Its low-pass is set to 24 dB.
+  - The OB-Xa is set to its 12 dB filter. Its first macro spreads the two
+    saws apart; it does not use unison, which the sources read for this
+    did not confirm for the instrument, and it does not touch the lane's
+    stereo spread, which belongs to the lane and not to a model. Its fourth
+    macro is the attack alone, as planned, not the contour the older
+    models share.
+  - The Jupiter-8 shares the older models' contour macro, where a longer
+    release comes with a faster attack. If that reads wrong by ear, it is
+    the thing to change for all of them at once.
+
 ## The fourteen, in three groups
 
 The grouping is by what each needs from the voice, because that decides when
