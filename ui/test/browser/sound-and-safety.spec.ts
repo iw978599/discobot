@@ -34,12 +34,12 @@ test('unison, the 24 dB filter and kick ducking are saved, and ducking is audibl
   const synth = page.locator('.synth-controls-panel');
   await tab(page, 'Osc');
   const voices = synth.getByRole('slider', { name: 'Voices', exact: true });
-  await expect(synth.getByRole('slider', { name: 'Uni Det', exact: true })).toHaveAttribute('aria-disabled', 'true');
+  await expect(synth.getByRole('slider', { name: 'Unison detune', exact: true })).toHaveAttribute('aria-disabled', 'true');
   await voices.press('ArrowUp');
   await voices.press('ArrowUp');
   await expect(synth.getByLabel('Voices value', { exact: true })).toHaveValue('3');
-  await synth.getByLabel('Uni Det value', { exact: true }).fill('20');
-  await synth.getByLabel('Uni Det value', { exact: true }).press('Enter');
+  await synth.getByLabel('Unison detune value', { exact: true }).fill('20');
+  await synth.getByLabel('Unison detune value', { exact: true }).press('Enter');
   await tab(page, 'Filter');
   await synth.getByLabel('Filter slope', { exact: true }).selectOption('24');
   await expect.poll(async () => {

@@ -116,7 +116,7 @@ function SynthModule({ studio, synthId, synth }: SynthModuleProps) {
           title={selected ? 'This lane is open for editing' : 'Open this lane for editing'}
         >
           <b>Synth {synthId}</b>
-          <span>{model.id === 'generic' ? 'Analog' : model.name}</span>
+          <span>{model.name}</span>
         </button>
         <div className="rack-ms">
           <button
@@ -159,8 +159,9 @@ function SynthModule({ studio, synthId, synth }: SynthModuleProps) {
                   <Knob
                     key={macro.key}
                     size="small"
-                    label={macro.label}
-                    ariaLabel={`Synth ${synthId} ${macro.label}`}
+                    label={macro.label === 'Resonance' ? 'Reso' : macro.label}
+                    tooltip={macro.label}
+                    ariaLabel={`Synth ${synthId} ${macro.label.toLowerCase()}`}
                     value={synth.synthModelParams[macro.key]}
                     displayValue={`${Math.round(synth.synthModelParams[macro.key] * 100)}%`}
                     parseInputValue={percent}
@@ -187,6 +188,7 @@ function SynthModule({ studio, synthId, synth }: SynthModuleProps) {
                 <Knob
                   size="small"
                   label="Reso"
+                  tooltip="Resonance"
                   ariaLabel={`Synth ${synthId} resonance`}
                   value={params.filter.q}
                   min={0.1}

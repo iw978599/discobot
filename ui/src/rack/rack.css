@@ -62,7 +62,7 @@
   --panel-font: 'Barlow Condensed', 'Arial Narrow', 'Roboto Condensed', Arial, sans-serif;
   --led-font: 'Share Tech Mono', Consolas, 'Courier New', monospace;
   --plate: 124px;
-  --side: 86px;
+  --side: 120px;
   --knobs: 256px;
   /* The page itself is the scrolling area, so the transport can stay put at its top. */
   height: 100vh;
@@ -407,13 +407,13 @@
 
 /* drums */
 .drum-grid { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-/* name 30 + gap 6 + mute/solo 50 = the synth lanes' --side column, so the cells line up */
-.drum-grid-row { display: grid; grid-template-columns: 30px 50px minmax(0, 1fr); column-gap: 6px; align-items: center; }
+/* name 64 + gap 6 + mute/solo 50 = the synth lanes' --side column, so the cells line up */
+.drum-grid-row { display: grid; grid-template-columns: 64px 50px minmax(0, 1fr); column-gap: 6px; align-items: center; }
 .drum-grid-row > .drum-cells { margin-left: 6px; }
 .drum-grid-row .rack-ms { justify-content: flex-end; gap: 2px; }
 .drum-name {
   height: 24px; padding: 0; background: var(--surface-control); border: 1px solid var(--edge-control); border-radius: 2px;
-  color: var(--text-label); font: inherit; font-size: 11px; cursor: pointer; text-transform: uppercase;
+  color: var(--text-label); font: inherit; font-size: 11px; cursor: pointer; text-transform: uppercase; white-space: nowrap;
 }
 .drum-name:hover { border-color: var(--hover); color: var(--text); }
 .drum-grid-row.selected .drum-name { background: var(--drum-color); border-color: var(--drum-color); color: var(--text-on); }
@@ -465,6 +465,7 @@
 .effects-unit .effects-panel-header { flex-direction: column; align-items: flex-start; gap: 6px; margin: 0; }
 .effects-unit .effects-panel-header h3 { font-family: var(--panel-font); font-size: 18px; letter-spacing: 0.08em; color: var(--text); }
 .effects-unit .effects-returns { display: flex; gap: 2px; }
+.effects-unit .effects-returns .knob-label { max-width: 96px; }
 /* Two rows of ten: drive, phaser, delay; then chorus, reverb, master EQ. */
 .effects-unit .effects-grid { grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 6px; }
 .effects-unit .effects-block { grid-column: span 3; }
@@ -720,10 +721,10 @@
   .drum-top .drum-kit-select { width: auto; flex: 1; min-width: 0; font-size: 13px; }
   .drum-top > .rack-knobs { justify-content: flex-start; }
   .drum-grid { gap: 6px; }
-  .drum-grid-row { grid-template-columns: 40px 64px minmax(0, 1fr); align-items: stretch; }
+  .drum-grid-row { grid-template-columns: 52px 64px minmax(0, 1fr); align-items: stretch; }
   .drum-grid-row .rack-ms { align-items: center; }
   .drum-cells { grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; }
-  .drum-name { height: auto; min-height: 30px; font-size: 12px; }
+  .drum-name { height: auto; min-height: 30px; font-size: 12px; white-space: normal; line-height: 1.1; padding: 2px; overflow-wrap: anywhere; }
   .drum-step-btn { height: 30px; font-size: 11px; }
   .drum-step-indicator { font-size: 11px; }
   .drum-sound select { max-width: 60vw; }

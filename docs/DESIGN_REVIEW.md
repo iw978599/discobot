@@ -358,7 +358,7 @@ menu there is a full-width sheet with room for it. Overlaps features 13
 (naming the WAV exports), which should be done in the same pass on the
 Export menu (`desktop/menu-export.png`).
 
-### 14. Names that do not match. Inconsistency, small.
+### 14. Names that do not match. Inconsistency, small. **Done in #127**, and with it feature 9 below. See the pull request for every name that changed.
 
 - The drum grid says BD, SD, CP, CH, OH, LT, HT, CY; the strip beneath says
   Kick, Clap; Import Kit says Kick, Snare, Closed Hat, Low Tom.

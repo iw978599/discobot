@@ -338,6 +338,8 @@ npm run migrate --workspace=server  # Apply new database migrations to the live 
 - `App` chooses the page before `useStudio` runs, as it does for kids mode, and moving between it and any other page reloads. The songs on it are plain links to `#s=code`.
 - A server from before the page existed answers 404 for the route, and the page then says such pages are not available yet. The accounts API is deployed by hand, so the site can be ahead of it; a server that cannot be reached gets a different message and a Try Again button.
 
+- Names: a drum has one name (`LABELS` in `DrumModule.tsx`: Kick, Snare, Clap, Closed Hat, Open Hat, Low Tom, High Tom, Cymbal), shown whole on the grid, in its hint, to a screen reader and in Import Kit. The grid's name column is 64px wide (`--side` is that plus mute and solo, so it is 120px) and wraps on a phone. A knob's visible label may be shortened only where it cannot fit, as the lane's "Reso", and then carries the whole word as its hint; its accessible name is always the whole word. A lane says its model's name (`Generic`) under its own name. `matching-names.spec.ts` checks that none of these is cut off.
+
 ## Known Issues
 - The typed store is finished (`docs/TYPED_STORE_PLAN.md`). What it left open: an edit that changes nothing still saves and emits; one step of the drums still sends the whole drum state; `synth.create` and `scene.replace` make an id inside the reducer; undo and the song scheduler do not collect the guests' settings before leaving a scene. The plan's account of pull request 8 lists them
 - `useStudio.tsx` is about 2,300 lines and owns most state; the UI is separate from it, but the state itself is not yet split by concern
