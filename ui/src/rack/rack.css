@@ -148,7 +148,8 @@
   white-space: nowrap;
   line-height: 1.2;
 }
-.rack-btn:hover:not(:disabled) {
+/* Not a lit button: on a touch screen a hover stays after the tap, and it would put the light out. */
+.rack-btn:not(.on):hover:not(:disabled) {
   border-color: var(--hover);
   color: var(--text);
   background: var(--surface-control);
