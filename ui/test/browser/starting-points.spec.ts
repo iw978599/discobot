@@ -25,24 +25,42 @@ test('an empty project offers beats to start from, and one press fills it in', a
   await expect(kick(page, 2)).toHaveAttribute('aria-pressed', 'false');
   await expect(lane(page).getByRole('button', { name: 'Select step 3 C3', exact: true })).toBeVisible();
   await expect(lane(page).getByRole('button', { name: 'Select step 15 D#3', exact: true })).toBeVisible();
-  await expect(offer(page), 'the project is no longer empty, so the offer is gone').toHaveCount(0);
+  await expect(offer(page), 'the offer stays, so another can be tried').toBeVisible();
 
-  // It was one edit: one undo empties the project again and the offer comes back.
-  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  // Another replaces the first, and each is one edit: one undo brings the first back, a second empties the project.
+  await offer(page).getByRole('button', { name: 'Slow Groove', exact: true }).click();
+  await expect(tempo(page)).toHaveText('88');
+  await expect(kick(page, 5)).toHaveAttribute('aria-pressed', 'false');
+  await expect(lane(page).getByRole('button', { name: 'Select step 1 E3', exact: true })).toBeVisible();
+  await expect(lane(page).getByRole('button', { name: /^Select step 3( |$)/ }), 'the first beat\u2019s bass note is gone').toHaveAccessibleName('Select step 3');
+  const undo = page.getByRole('button', { name: 'Undo', exact: true });
+  await undo.click();
+  await expect(tempo(page)).toHaveText('124');
+  await expect(kick(page, 5)).toHaveAttribute('aria-pressed', 'true');
+  await undo.click();
   await expect(kick(page, 1)).toHaveAttribute('aria-pressed', 'false');
   await expect(tempo(page)).toHaveText('120');
-  await expect(offer(page)).toBeVisible();
 });
 
-test('the offer can be turned down, and goes away once anything is put in', async ({ page }) => {
-  await offer(page).getByRole('button', { name: 'Leave It Empty', exact: true }).click();
+test('the offer leaves only when it is hidden, and is not made on a project that has something in it', async ({ page }) => {
+  await offer(page).getByRole('button', { name: 'Hide', exact: true }).click();
   await expect(offer(page)).toHaveCount(0);
   await expect(kick(page, 1), 'nothing was put in').toHaveAttribute('aria-pressed', 'false');
 
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Discobot', exact: true })).toBeVisible();
   await expect(offer(page), 'a project that is still empty offers again on the next visit').toBeVisible();
+
+  // Putting something in does not take the offer away: the rack must not move under the pointer.
+  await kick(page, 1).scrollIntoViewIfNeeded();
+  const before = await kick(page, 1).boundingBox();
   await kick(page, 1).click();
   await expect(kick(page, 1)).toHaveAttribute('aria-pressed', 'true');
-  await expect(offer(page)).toHaveCount(0);
+  await expect(offer(page)).toBeVisible();
+  expect(await kick(page, 1).boundingBox(), 'the step is where it was pressed').toEqual(before);
+
+  await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+  await page.reload();
+  await expect(kick(page, 1)).toHaveAttribute('aria-pressed', 'true');
+  await expect(offer(page), 'a project with a hit in it is not offered a beat').toHaveCount(0);
 });
