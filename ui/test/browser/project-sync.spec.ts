@@ -85,7 +85,9 @@ test('projects follow the account to a second browser, and edits and conflicts a
   await expect(phoneDialog.getByRole('group', { name: 'Project sync', exact: true })).toContainText('2 in your account');
   await phone.keyboard.press('Escape');
   let phoneList = await projects(phone);
-  await expect(phoneList.getByRole('group')).toHaveCount(3);
+  // The account's Untitled arrived beside the phone's own as "Untitled 2"; the two share a row.
+  await expect(phoneList.getByRole('group')).toHaveCount(2);
+  await expect(phoneList.getByLabel('Version of Untitled', { exact: true }).locator('option')).toHaveCount(2);
   await phoneList.getByRole('group', { name: 'Project Night Drive', exact: true }).getByRole('button', { name: 'Open', exact: true }).click();
   await expect(phone.locator('.tempo-led-value')).toHaveText('133');
   await expect(phone.getByRole('button', { name: 'Snare step 5', exact: true })).toHaveAttribute('aria-pressed', 'true');
@@ -106,14 +108,18 @@ test('projects follow the account to a second browser, and edits and conflicts a
   await expect(phone.locator('.tempo-led-value'), 'the phone keeps what it was editing').toHaveText('150');
   await expect(phone.getByRole('button', { name: 'Project: Night Drive (this browser\'s version)', exact: true })).toBeVisible();
   await phone.getByRole('button', { name: 'Dismiss sync message', exact: true }).click();
+  // Both versions are in the one row; the phone's own is open, so the account's is chosen from the list.
   phoneList = await projects(phone);
-  await phoneList.getByRole('group', { name: 'Project Night Drive', exact: true }).getByRole('button', { name: 'Open', exact: true }).click();
+  const kept = phoneList.getByRole('group', { name: 'Project Night Drive', exact: true });
+  await expect(kept.getByLabel('Version of Night Drive', { exact: true })).toHaveValue('Night Drive (this browser\'s version)');
+  await kept.getByLabel('Version of Night Drive', { exact: true }).selectOption('Night Drive');
+  await kept.getByRole('button', { name: 'Open', exact: true }).click();
   await expect(phone.locator('.tempo-led-value')).toHaveText('100');
 
   // Deleting on the phone removes it from the account and from the first browser.
   phoneList = await projects(phone);
   await phoneList.getByRole('group', { name: 'Project Night Drive', exact: true }).getByRole('button', { name: 'Delete', exact: true }).click();
-  await expect(phone.getByRole('dialog', { name: 'Delete this project?', exact: true })).toContainText('from your account');
+  await expect(phone.getByRole('dialog', { name: 'Delete this project?', exact: true })).toContainText('"Night Drive" from this browser and from your account');
   await phone.getByRole('dialog', { name: 'Delete this project?', exact: true }).getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(phoneList.getByRole('group', { name: 'Project Night Drive', exact: true })).toHaveCount(0);
   await phone.keyboard.press('Escape');

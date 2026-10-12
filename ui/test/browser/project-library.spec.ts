@@ -133,9 +133,70 @@ test('new projects start empty and each project remembers its own work across re
   await expect(page.getByRole('button', { name: 'Project: Untitled 2', exact: true })).toBeVisible();
   await page.getByRole('button', { name: /^Project: / }).click();
   const dialog = page.getByRole('dialog', { name: 'Projects', exact: true });
-  await dialog.getByRole('group', { name: 'Project Untitled', exact: true }).getByRole('button', { name: 'Open', exact: true }).click();
+  const row = dialog.getByRole('group', { name: 'Project Untitled', exact: true });
+  await row.getByLabel('Version of Untitled', { exact: true }).selectOption('Untitled');
+  await row.getByRole('button', { name: 'Open', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Kick step 1', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('button', { name: 'Snare step 9', exact: true })).toHaveAttribute('aria-pressed', 'false');
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Kick step 1', exact: true }), 'undo does not reach back into another project').toHaveAttribute('aria-pressed', 'true');
+});
+
+test('a project and the copies named after it share one row, with a list to choose between them', async ({ page }) => {
+  await page.getByRole('button', { name: /^Project: / }).click();
+  const dialog = page.getByRole('dialog', { name: 'Projects', exact: true });
+  await dialog.getByRole('button', { name: 'Rename', exact: true }).click();
+  await dialog.getByLabel('Project name', { exact: true }).fill('Friday jam');
+  await dialog.getByLabel('Project name', { exact: true }).press('Enter');
+  const row = dialog.getByRole('group', { name: 'Project Friday jam', exact: true });
+  const version = row.getByLabel('Version of Friday jam', { exact: true });
+  await expect(row).toBeVisible();
+  await expect(row.locator('select'), 'a project on its own has nothing to choose between').toHaveCount(0);
+
+  // Two copies: still one row.
+  await row.getByRole('button', { name: 'Copy', exact: true }).click();
+  await expect(version.locator('option')).toHaveCount(2);
+  await row.getByRole('button', { name: 'Copy', exact: true }).click();
+  await expect(version.locator('option')).toHaveCount(3);
+  await expect(dialog.getByRole('group')).toHaveCount(1);
+  await expect(version.locator('option').first()).toHaveText('Original · open now');
+  await expect(version.locator('option').filter({ hasText: /^copy · / })).toHaveCount(1);
+  await expect(version.locator('option').filter({ hasText: /^copy 2 · / })).toHaveCount(1);
+  await expect(version, 'the open project is the one the row starts on').toHaveValue('Friday jam');
+  await expect(row).toContainText('Open now · saves as you work');
+  await expect(row.getByRole('button', { name: 'Open', exact: true })).toBeDisabled();
+
+  // Choosing a copy turns the row over to it; the row is still marked as holding the open project.
+  await version.selectOption('Friday jam copy');
+  await expect(row).toContainText('Last changed');
+  await expect(row).toHaveClass(/current/);
+  await row.getByRole('button', { name: 'Open', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Project: Friday jam copy', exact: true })).toBeVisible();
+
+  // Renamed to something of its own, it leaves the family for a row of its own.
+  await page.getByRole('button', { name: /^Project: / }).click();
+  await expect(version).toHaveValue('Friday jam copy');
+  await row.getByRole('button', { name: 'Rename', exact: true }).click();
+  await expect(dialog.getByLabel('Project name', { exact: true }), 'the whole name is there to edit').toHaveValue('Friday jam copy');
+  await dialog.getByLabel('Project name', { exact: true }).fill('Sunday');
+  await dialog.getByLabel('Project name', { exact: true }).press('Enter');
+  await expect(page.getByRole('button', { name: 'Project: Sunday', exact: true })).toBeVisible();
+  const sunday = dialog.getByRole('group', { name: 'Project Sunday', exact: true });
+  await expect(sunday).toHaveClass(/current/);
+  await expect(sunday.locator('select')).toHaveCount(0);
+  await expect(dialog.getByRole('group')).toHaveCount(2);
+  await expect(row).not.toHaveClass(/current/);
+  await expect(version.locator('option')).toHaveCount(2);
+
+  // Deleting asks about the one chosen, by its whole name, and leaves the other alone.
+  await version.selectOption('Friday jam copy 2');
+  await row.getByRole('button', { name: 'Delete', exact: true }).click();
+  const sure = page.getByRole('dialog', { name: 'Delete this project?', exact: true });
+  await expect(sure).toContainText('"Friday jam copy 2"');
+  await sure.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(version, 'the one left is an ordinary row again').toHaveCount(0);
+  await expect(row).toContainText('Last changed');
+  await expect(dialog.getByRole('group')).toHaveCount(2);
+  expect((await project(page)).name, 'the open project was not touched').toBe('Sunday');
 });

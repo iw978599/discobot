@@ -13,10 +13,13 @@ async function menu(page: Page, name: 'Project' | 'Export', item: string) {
   await page.getByRole('button', { name: `${name} ▾`, exact: true }).click();
   await page.getByRole('menuitem', { name: item, exact: true }).click();
 }
-async function openProject(page: Page, name: string) {
+// A project that shares its row with copies of itself is chosen from that row's list first: pass the row's name as `family`.
+async function openProject(page: Page, name: string, family?: string) {
   await page.getByRole('button', { name: /^Project: / }).click();
   const dialog = page.getByRole('dialog', { name: 'Projects', exact: true });
-  await dialog.getByRole('group', { name: `Project ${name}`, exact: true }).getByRole('button', { name: 'Open', exact: true }).click();
+  const row = dialog.getByRole('group', { name: `Project ${family ?? name}`, exact: true });
+  if (family) await row.getByLabel(`Version of ${family}`, { exact: true }).selectOption(name);
+  await row.getByRole('button', { name: 'Open', exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole('button', { name: `Project: ${name}`, exact: true })).toBeVisible();
 }
@@ -141,7 +144,7 @@ test('full musical arrangement survives a kept copy, editing, reopening and relo
   await tab(page, 'Amp');
   await edit(synth.getByLabel('Gain value', { exact: true }), '20%');
   await page.getByRole('button', { name: 'Kick step 1', exact: true }).click();
-  await openProject(page, 'Untitled copy');
+  await openProject(page, 'Untitled copy', 'Untitled');
   await tab(page, 'Amp');
   await expect(synth.getByLabel('Gain value', { exact: true })).toHaveValue('63%');
   await expect(page.getByLabel('Synth 1 level value', { exact: true })).toHaveValue('63%');
@@ -158,7 +161,7 @@ test('full musical arrangement survives a kept copy, editing, reopening and relo
   await expect(page.getByLabel('Gain value', { exact: true })).toHaveValue('63%');
   await expect(page.getByRole('button', { name: 'Kick step 1', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('button', { name: 'Project: Untitled copy', exact: true }), 'the project that was open is still open after a reload').toBeVisible();
-  await openProject(page, 'Untitled');
+  await openProject(page, 'Untitled', 'Untitled');
   await tab(page, 'Amp');
   await expect(page.getByLabel('Gain value', { exact: true }), 'the original still has the edit made after the copy').toHaveValue('20%');
 });
@@ -344,18 +347,24 @@ test('projects dialog traps focus, closes with Escape, and renames, copies and d
   expect((await project(page)).name).toBe('Friday jam');
 
   await dialog.getByRole('button', { name: 'Copy', exact: true }).click();
-  const copy = dialog.getByRole('group', { name: 'Project Friday jam copy', exact: true });
-  await expect(copy).toBeVisible();
-  await copy.getByRole('button', { name: 'Delete', exact: true }).click();
+  // The copy shares the row of the project it was made from, and is chosen from that row's list.
+  const family = dialog.getByRole('group', { name: 'Project Friday jam', exact: true });
+  const version = family.getByLabel('Version of Friday jam', { exact: true });
+  await expect(version.locator('option')).toHaveCount(2);
+  await expect(dialog.getByRole('group')).toHaveCount(1);
+  await version.selectOption('Friday jam copy');
+  await family.getByRole('button', { name: 'Delete', exact: true }).click();
   // The app asks in its own dialog, and Escape there answers no without closing the list under it.
   const sure = page.getByRole('dialog', { name: 'Delete this project?', exact: true });
   await expect(sure.getByRole('button', { name: 'Cancel', exact: true }), 'Cancel has the focus, so Enter never deletes').toBeFocused();
   await page.keyboard.press('Escape');
   await expect(sure).toHaveCount(0);
-  await expect(copy, 'nothing was deleted').toBeVisible();
-  await copy.getByRole('button', { name: 'Delete', exact: true }).click();
-  await page.getByRole('dialog', { name: 'Delete this project?', exact: true }).getByRole('button', { name: 'Delete', exact: true }).click();
-  await expect(copy).toHaveCount(0);
+  await expect(version.locator('option'), 'nothing was deleted').toHaveCount(2);
+  await expect(version, 'the copy is still the one chosen').toHaveValue('Friday jam copy');
+  await family.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(sure, 'the question names the copy, not the row').toContainText('"Friday jam copy"');
+  await sure.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(version, 'with the copy gone the row has nothing to choose between').toHaveCount(0);
 
   // Deleting the only project leaves a fresh one, never nothing.
   const first = (await project(page)).projectId;

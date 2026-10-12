@@ -6,10 +6,13 @@ async function menu(page: Page, name: 'Project' | 'Export', item: string) {
   await page.getByRole('button', { name: `${name} ▾`, exact: true }).click();
   await page.getByRole('menuitem', { name: item, exact: true }).click();
 }
-async function openProject(page: Page, name: string) {
+// A project that shares its row with copies of itself is chosen from that row's list first: pass the row's name as `family`.
+async function openProject(page: Page, name: string, family?: string) {
   await page.getByRole('button', { name: /^Project: / }).click();
   const dialog = page.getByRole('dialog', { name: 'Projects', exact: true });
-  await dialog.getByRole('group', { name: `Project ${name}`, exact: true }).getByRole('button', { name: 'Open', exact: true }).click();
+  const row = dialog.getByRole('group', { name: `Project ${family ?? name}`, exact: true });
+  if (family) await row.getByLabel(`Version of ${family}`, { exact: true }).selectOption(name);
+  await row.getByRole('button', { name: 'Open', exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole('button', { name: `Project: ${name}`, exact: true })).toBeVisible();
 }
@@ -96,7 +99,7 @@ test('a kept copy restores tempo, lanes, swing and mutes; undo restores edits', 
   await page.locator('.tempo-led').click();
   await page.locator('.tempo-led-input').fill('90');
   await page.locator('.tempo-led-input').press('Enter');
-  await openProject(page, 'Untitled copy');
+  await openProject(page, 'Untitled copy', 'Untitled');
   await expect(page.locator('.tempo-led-value')).toHaveText('146');
   await expect(page.getByRole('button', { name: 'Mute Synth 2', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(() => page.evaluate(() => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem('discobot_browser_project_v1')!)).synths.find((s: any) => s.synthId === 2)?.pattern.steps[0].note)).toBe('E4');

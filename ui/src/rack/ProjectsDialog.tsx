@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import type { Studio } from '../studio/useStudio';
 import { AccountError, sharingApi } from '../services/account';
 import { projectSync } from '../services/projectSync';
+import { chosenMember, projectFamilies } from '../services/projectFamilies';
 import { useAccountUser, useSyncStatus } from './AccountDialog';
 import Dialog from './Dialog';
 import ConfirmDialog from './ConfirmDialog';
@@ -62,7 +63,8 @@ function Sharing({ projectId, name }: { projectId: string; name: string }) {
 }
 
 // Every project in this browser. The open one saves itself as you work; "Copy" keeps a
-// version to go back to.
+// version to go back to. A project and the copies the app named after it share one row, with
+// a list to choose which of them the row's buttons act on.
 export default function ProjectsDialog({ studio, onClose }: { studio: Studio; onClose: () => void }) {
   const narrow = useNarrow();
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -72,6 +74,8 @@ export default function ProjectsDialog({ studio, onClose }: { studio: Studio; on
   // The project whose sharing is on show, and why one that was shared could not be opened.
   const [sharing, setSharing] = useState<string | null>(null);
   const [joinError, setJoinError] = useState('');
+  // Which member each family's row is showing, where the user has chosen one. Not saved.
+  const [picked, setPicked] = useState<Record<string, string>>({});
   const user = useAccountUser();
   const sync = useSyncStatus();
 
@@ -97,7 +101,9 @@ export default function ProjectsDialog({ studio, onClose }: { studio: Studio; on
         {narrow && <SaveState projectId={studio.projectId} full />}
       </div>
       {studio.projects.length === 0 && <p className="rack-empty">Loading projects…</p>}
-      {studio.projects.map((project) => {
+      {projectFamilies(studio.projects).map((family) => {
+        const project = chosenMember(family, picked[family.key], studio.projectId);
+        const several = family.members.length > 1;
         const open = project.id === studio.projectId;
         const synced = sync.inAccount.includes(project.id);
         const theirs = user ? sync.shared[project.id] : undefined;
@@ -108,7 +114,7 @@ export default function ProjectsDialog({ studio, onClose }: { studio: Studio; on
             : withOthers ? ` · In your account · Shared with ${withOthers.people}${lastSaved(withOthers.savedBy)}`
               : synced ? ' · In your account' : ' · This browser only';
         return [
-          <div key={project.id} className={`rack-list-row ${open ? 'current' : ''}`} role="group" aria-label={`Project ${project.name}`}>
+          <div key={family.key} className={`rack-list-row ${family.members.some(member => member.project.id === studio.projectId) ? 'current' : ''}`} role="group" aria-label={`Project ${family.title}`}>
             {renaming === project.id ? (
               <input
                 autoFocus
@@ -124,7 +130,25 @@ export default function ProjectsDialog({ studio, onClose }: { studio: Studio; on
               />
             ) : (
               <span>
-                <strong>{project.name}</strong>
+                <strong>{family.title}</strong>
+                {several && (
+                  <select
+                    className="rack-family-pick"
+                    aria-label={`Version of ${family.title}`}
+                    title="Choose which of these the buttons on this row act on"
+                    value={project.name}
+                    onChange={(event) => {
+                      const wanted = family.members.find(member => member.project.name === event.target.value);
+                      if (wanted) setPicked({ ...picked, [family.key]: wanted.project.id });
+                    }}
+                  >
+                    {family.members.map(member => (
+                      <option key={member.project.id} value={member.project.name}>
+                        {member.label} · {member.project.id === studio.projectId ? 'open now' : when(member.project.updatedAt)}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <small>{open ? 'Open now · saves as you work' : `Last changed ${when(project.updatedAt)}`}{where}</small>
               </span>
             )}

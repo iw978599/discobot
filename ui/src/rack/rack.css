@@ -514,6 +514,8 @@
 .rack-share input { flex: 1; min-width: 0; background: var(--surface-field); border: 1px solid var(--edge-control); border-radius: var(--corner-control); color: var(--text); padding: 7px 9px; font: inherit; }
 .rack-list-row > span:first-child { display: flex; flex-direction: column; }
 .rack-list-row small { color: var(--text-faint); font-size: var(--type-label); }
+/* A project and its copies share a row; this chooses which one the row is about. */
+.rack-family-pick { align-self: flex-start; margin: 4px 0; }
 .rack-list-row input { flex: 1; min-width: 0; background: var(--surface-field); border: 1px solid var(--edge-control); border-radius: var(--corner-control); color: var(--text); padding: 5px 8px; font: inherit; }
 
 /* the page a share link opens */
