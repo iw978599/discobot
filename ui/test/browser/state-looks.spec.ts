@@ -60,8 +60,8 @@ test('on a step, focus is a ring outside it and selected is a frame inside it, a
   await expect(step(page, 1)).toHaveAttribute('aria-pressed', 'true');
   await expect(step(page, 1)).toHaveCSS('background-color', ON);
   await expect(step(page, 1), 'a selected step has no ring').toHaveCSS('outline-style', 'none');
-  await expect.poll(() => css(step(page, 1), 'box-shadow'), 'a selected step is framed inside its edge').toContain(`${SELECT} 0px 0px 0px 2px inset`);
-  await expect.poll(() => css(step(page, 1), 'box-shadow'), 'a dark line keeps the frame off the amber').toContain(`${GAP} 0px 0px 0px 3px inset`);
+  await expect.poll(() => css(step(page, 1), 'box-shadow'), 'a selected step is framed inside its edge').toContain(`${SELECT} 0px 0px 0px 3px inset`);
+  await expect.poll(() => css(step(page, 1), 'box-shadow'), 'a dark line keeps the frame off the amber').toContain(`${GAP} 0px 0px 0px 4px inset`);
 
   // Focused, holding a note, not selected: the ring, a dark gap, then the amber.
   await byKeyboard(page);
@@ -86,7 +86,7 @@ test('on a step, focus is a ring outside it and selected is a frame inside it, a
   // Selected and focused: both, the frame inside and the ring outside.
   await step(page, 1).focus();
   await ring(step(page, 1), 'the selected step');
-  await expect.poll(() => css(step(page, 1), 'box-shadow'), 'still framed').toContain(`${SELECT} 0px 0px 0px 2px inset`);
+  await expect.poll(() => css(step(page, 1), 'box-shadow'), 'still framed').toContain(`${SELECT} 0px 0px 0px 3px inset`);
   await expect.poll(() => css(step(page, 1), 'box-shadow'), 'and ringed with its gap').toContain(`${GAP} 0px 0px 0px 2px`);
   await expect(step(page, 3), 'the step left behind has lost its ring').toHaveCSS('outline-style', 'none');
 });

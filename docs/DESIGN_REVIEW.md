@@ -818,7 +818,7 @@ on the owner's laptop.
 | `rack-playing` | The top of the rack while playing, a step light lit |
 | `focus-button`, `focus-step`, `focus-knob` | The keyboard focus ring on a button or field, a step and a knob |
 | `states-step-row`, `states-step-row-2` | One row of steps with the states beside each other: a mute that is on, a step selected, a step focused and (desktop) a step under the pointer; in `-2` the selected step is the focused one |
-| `focus-step-empty`, `states-drum-grid` | The focus ring on an empty step, and on a drum step beside a picked one |
+| `focus-step-empty`, `states-drum-grid` | The focus ring on an empty step two along from an empty selected one, and on a drum step beside a picked one |
 | `states-song` | The song unit with the open scene lit and focus on the other scene |
 | `focus-menu-row`, `focus-dialog-field` | The focus ring on a row of the Project menu and on a field in a dialog |
 | `state-disabled-step-tools` | The step controls with an empty step selected: three of them disabled |

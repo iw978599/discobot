@@ -345,12 +345,13 @@
 .step-cell.held { background: linear-gradient(var(--on-glow), var(--on-glow)), var(--surface-well); border-color: #8a6a1f; }
 .step-cell.chance { border-style: dashed; border-color: var(--text-on); }
 .step-note sup { font-size: 0.75em; margin-left: 1px; }
-/* The selected step is framed inside its own edge, white with a dark line under it, so the frame
-   shows on a lit step and on an empty one and is never taken for the focus ring, which stands
-   outside the step. A step that is both has both. */
-.step-cell.selected { box-shadow: inset 0 0 0 2px var(--select), inset 0 0 0 3px var(--gap); }
-.step-cell.selected.has-note { box-shadow: inset 0 0 0 2px var(--select), inset 0 0 0 3px var(--gap), 0 0 6px var(--on-glow); }
-.rack-page .step-cell.selected:focus-visible, .rack-page .drum-step-btn.picked:focus-visible { box-shadow: inset 0 0 0 2px var(--select), inset 0 0 0 3px var(--gap), 0 0 0 2px var(--gap); }
+/* The selected step is framed inside its own edge: a white band with a dark line either side, so
+   it shows on a lit step and on an empty one, and an empty one is a shade lighter as well. It is
+   never taken for the focus ring, which stands outside the step. A step that is both has both. */
+.step-cell.selected:not(.has-note):not(.held), .drum-step-btn.picked:not(.active) { background: var(--surface-hover); }
+.step-cell.selected { box-shadow: inset 0 0 0 1px var(--gap), inset 0 0 0 3px var(--select), inset 0 0 0 4px var(--gap); }
+.step-cell.selected.has-note { box-shadow: inset 0 0 0 1px var(--gap), inset 0 0 0 3px var(--select), inset 0 0 0 4px var(--gap), 0 0 6px var(--on-glow); }
+.rack-page .step-cell.selected:focus-visible, .rack-page .drum-step-btn.picked:focus-visible { box-shadow: inset 0 0 0 1px var(--gap), inset 0 0 0 3px var(--select), inset 0 0 0 4px var(--gap), 0 0 0 2px var(--gap); }
 .rack-page .step-cell:focus-visible, .rack-page .drum-step-btn:focus-visible { z-index: 2; }
 .steps-32 .step-cell { font-size: 9px; }
 .step-light { position: absolute; top: 2px; left: 50%; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: transparent; }
@@ -428,8 +429,8 @@
 .drum-step-btn.active { background: var(--drum-color); border-color: var(--drum-color); }
 .drum-step-btn.chance { border-style: dashed; border-color: #fff; }
 .drum-step-btn.current { box-shadow: 0 0 0 1px var(--text); }
-.drum-step-btn.picked { box-shadow: inset 0 0 0 2px var(--select), inset 0 0 0 3px var(--gap); }
-.drum-step-btn.picked.current { box-shadow: inset 0 0 0 2px var(--select), inset 0 0 0 3px var(--gap), 0 0 0 1px var(--text); }
+.drum-step-btn.picked { box-shadow: inset 0 0 0 1px var(--gap), inset 0 0 0 3px var(--select), inset 0 0 0 4px var(--gap); }
+.drum-step-btn.picked.current { box-shadow: inset 0 0 0 1px var(--gap), inset 0 0 0 3px var(--select), inset 0 0 0 4px var(--gap), 0 0 0 1px var(--text); }
 /* A lane's colour comes from its name here. The low and high tom are stored as snare2 and ride. */
 [data-drum="kick"] { --drum-color: var(--drum-kick); }
 [data-drum="snare"] { --drum-color: var(--drum-snare); }

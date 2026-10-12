@@ -213,9 +213,12 @@ test('design shots: the rack, its units and the states of its controls', async (
     await near(walk, lane(page, 1).locator('.step-row'), 'states-step-row-2', 60);
   });
   await attempt(walk, 'focus-step-empty', async () => {
-    await row(2).focus();
+    // An empty step selected with the pointer, two along from an empty one focused with the keyboard.
+    await row(4).click();
     await page.mouse.move(2, 2);
-    await near(walk, row(2), 'focus-step-empty', 90);
+    await page.keyboard.press('Tab');
+    await row(2).focus();
+    await near(walk, row(3), 'focus-step-empty', 110);
   });
   await attempt(walk, 'states-song', async () => {
     await page.getByRole('group', { name: 'Scenes', exact: true }).getByRole('button').nth(1).focus();
