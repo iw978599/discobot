@@ -128,7 +128,7 @@ test('a WAV export records the guest by playing through once, and the named inst
   const exportWav = async (name: string) => {
     const download = page.waitForEvent('download', { timeout: 30_000 });
     await page.getByRole('button', { name: 'Export ▾', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Download WAV', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Scene WAV', exact: true }).click();
     const path = testInfo.outputPath(name);
     await (await download).saveAs(path);
     const bytes = await readFile(path);

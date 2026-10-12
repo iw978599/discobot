@@ -85,7 +85,7 @@ test('a MIDI file of several bars imports at its full length', async ({ page }, 
 
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export ▾', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Export MIDI', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Scene MIDI', exact: true }).click();
   const path = testInfo.outputPath('two-bars.mid');
   await (await download).saveAs(path);
 

@@ -14,7 +14,7 @@ async function exportWav(page: Page, path: string) {
   await page.waitForTimeout(250);
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export ▾', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Download WAV', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Scene WAV', exact: true }).click();
   await (await download).saveAs(path);
   return readFile(path);
 }

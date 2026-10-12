@@ -390,6 +390,11 @@ may redistribute.
     Download WAV, which is the open scene, and Song WAV. Call the first
     Scene WAV, and its MIDI neighbour Scene MIDI, so the two kinds read as
     a pair.
+    Done: "Download WAV" is now Scene WAV and "Export MIDI" Scene MIDI. While a WAV
+    export is made a message at the top says so, the other WAV exports are
+    greyed out, and the message says when the file has downloaded (Stems say
+    which file of how many). Still open: a true progress bar or percentage,
+    since the browser's offline renderer does not report how far it has got.
 
 Done: song mode, with mutes and solos kept per scene; patterns of 1, 2, 4 or
 8 bars per lane, and MIDI files of up to eight bars imported at full length;

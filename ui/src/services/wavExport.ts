@@ -318,11 +318,12 @@ export function stemParts(arrangement: ExportArrangement): Array<{ only: StemPar
 }
 
 // Every stem is the same length and starts at the same instant, so they line up in a DAW.
-export async function renderStemsZip(arrangement: ExportArrangement) {
+export async function renderStemsZip(arrangement: ExportArrangement, onProgress?: (done: number, total: number) => void) {
   const parts = stemParts(arrangement);
   if (parts.length === 0) throw new Error('There are no notes, drum steps or guest instruments to export.');
   const entries = [];
   for (const part of parts) {
+    onProgress?.(entries.length, parts.length);
     entries.push({ name: part.name, data: new Uint8Array(await renderArrangementWav(arrangement, { only: part.only })) });
   }
   return createZip(entries);
@@ -340,6 +341,6 @@ export async function downloadArrangementWav(arrangement: ExportArrangement, opt
   downloadFile(await renderArrangementWav(arrangement, options), 'audio/wav', `discobot-${kind}${Date.now()}.wav`);
 }
 
-export async function downloadStemsZip(arrangement: ExportArrangement) {
-  downloadFile(await renderStemsZip(arrangement), 'application/zip', `discobot-stems-${Date.now()}.zip`);
+export async function downloadStemsZip(arrangement: ExportArrangement, onProgress?: (done: number, total: number) => void) {
+  downloadFile(await renderStemsZip(arrangement, onProgress), 'application/zip', `discobot-stems-${Date.now()}.zip`);
 }
