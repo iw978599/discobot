@@ -20,10 +20,6 @@ const LABELS: Record<DrumInstrument, string> = {
 const SHORT_LABELS: Record<DrumInstrument, string> = {
   kick: 'BD', snare: 'SD', clap: 'CP', closedHH: 'CH', openHH: 'OH', snare2: 'LT', ride: 'HT', crash: 'CY',
 };
-const COLORS: Record<DrumInstrument, string> = {
-  kick: '#ef4444', snare: '#f59e0b', clap: '#f97316', closedHH: '#3b82f6', openHH: '#22c55e',
-  snare2: '#14b8a6', ride: '#8b5cf6', crash: '#ec4899',
-};
 
 const EXTRA: Record<DrumInstrument, { knob: string; display: (v: number) => string; parse: (n: number) => number }> = {
   kick: { knob: 'Punch', display: (v) => `${(20 + v * 80).toFixed(0)}%`, parse: (n) => (n - 20) / 80 },
@@ -207,7 +203,7 @@ function DrumModule({ studio }: { studio: Studio }) {
               <div
                 key={instrument}
                 className={`drum-grid-row ${selected === instrument ? 'selected' : ''}`}
-                style={{ '--drum-color': COLORS[instrument] } as React.CSSProperties}
+                data-drum={instrument}
               >
                 <button
                   className="drum-name"
@@ -289,7 +285,7 @@ function DrumModule({ studio }: { studio: Studio }) {
         </div>
       </div>
 
-      <div className="rack-row drum-strip" style={{ '--drum-color': COLORS[selected] } as React.CSSProperties}>
+      <div className="rack-row drum-strip" data-drum={selected}>
         <div className="drum-strip-name">
           <span className="drum-selected-dot" />
           <b>{isRide ? 'Ride' : LABELS[selected]}</b>
