@@ -100,8 +100,8 @@ test('the owner creates an account, invites a friend, and both can get back in',
   await page.keyboard.press('Escape');
   dialog = await openAccount(page);
   await expect(dialog.getByRole('group', { name: /^Invite / })).toContainText('by Disco_Dana');
-  page.once('dialog', confirm => { void confirm.accept(); });
   await dialog.getByRole('group', { name: 'Member Disco_Dana', exact: true }).getByRole('button', { name: 'Remove', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Remove this account?', exact: true }).getByRole('button', { name: 'Remove', exact: true }).click();
   await expect(dialog.getByRole('group', { name: 'Member Disco_Dana', exact: true })).toHaveCount(0);
   await openAccount(friend);
   await expect(friend.getByRole('button', { name: 'Sign in', exact: true }), 'a removed account is signed out the next time it is checked').toBeVisible();

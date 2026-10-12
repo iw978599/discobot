@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { deleteSample, listSamples, saveSample, type SampleRecord } from '../services/sampleStore';
 import { stopAllSamples } from '../hooks/browserAudio';
 import './SamplePanel.css';
@@ -7,6 +7,7 @@ export default function SamplePanel({ onPlay }: { onPlay: (sample: SampleRecord)
   const [samples, setSamples] = useState<SampleRecord[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     let mounted = true;
     listSamples().then(result => { if (mounted) setSamples(result); })
@@ -23,10 +24,13 @@ export default function SamplePanel({ onPlay }: { onPlay: (sample: SampleRecord)
   return (
     <section className="sample-panel" aria-label="Sampler">
       <h2>Sampler</h2>
-      <label className="sample-upload">
-        Import audio sample (up to 50 MB)
+      <div className="sample-upload">
+        <button className="rack-btn" disabled={busy} onClick={() => fileRef.current?.click()}>Import a Sample</button>
+        <span>An audio file, up to 50 MB.</span>
         <input
+          ref={fileRef}
           type="file"
+          hidden
           accept="audio/*,.wav,.mp3,.ogg,.flac,.m4a"
           aria-label="Import audio sample"
           disabled={busy}
@@ -40,7 +44,7 @@ export default function SamplePanel({ onPlay }: { onPlay: (sample: SampleRecord)
             });
           }}
         />
-      </label>
+      </div>
       {error && <p role="alert">{error}</p>}
       {busy && <span role="status">Working…</span>}
       {samples.length > 0 && <button className="rack-btn" onClick={() => stopAllSamples()}>Stop Samples</button>}

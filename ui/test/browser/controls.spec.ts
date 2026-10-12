@@ -346,14 +346,21 @@ test('projects dialog traps focus, closes with Escape, and renames, copies and d
   await dialog.getByRole('button', { name: 'Copy', exact: true }).click();
   const copy = dialog.getByRole('group', { name: 'Project Friday jam copy', exact: true });
   await expect(copy).toBeVisible();
-  page.once('dialog', confirm => { void confirm.accept(); });
   await copy.getByRole('button', { name: 'Delete', exact: true }).click();
+  // The app asks in its own dialog, and Escape there answers no without closing the list under it.
+  const sure = page.getByRole('dialog', { name: 'Delete this project?', exact: true });
+  await expect(sure.getByRole('button', { name: 'Cancel', exact: true }), 'Cancel has the focus, so Enter never deletes').toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(sure).toHaveCount(0);
+  await expect(copy, 'nothing was deleted').toBeVisible();
+  await copy.getByRole('button', { name: 'Delete', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Delete this project?', exact: true }).getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(copy).toHaveCount(0);
 
   // Deleting the only project leaves a fresh one, never nothing.
   const first = (await project(page)).projectId;
-  page.once('dialog', confirm => { void confirm.accept(); });
   await dialog.getByRole('group', { name: 'Project Friday jam', exact: true }).getByRole('button', { name: 'Delete', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Delete this project?', exact: true }).getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(dialog.getByRole('group', { name: 'Project Untitled', exact: true })).toBeVisible();
   await expect(dialog.getByRole('group')).toHaveCount(1);
   expect((await project(page)).projectId).not.toBe(first);

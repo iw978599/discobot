@@ -196,3 +196,12 @@ test('every control in the rack, a menu and a dialog shows the same focus ring',
   expect(inside.wrong, 'controls in the dialog without the ring').toEqual([]);
   expect(inside.seen).toBeGreaterThan(1);
 });
+
+test('a lit button stays lit after the tap that lit it', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium', 'only a touch screen leaves a hover behind after a tap');
+  const roll = lane(page).getByRole('button', { name: 'Piano Roll', exact: true });
+  await roll.tap();
+  await expect(roll).toHaveAttribute('aria-pressed', 'true');
+  await expect(roll, 'the hover a tap leaves behind does not put the light out').toHaveCSS('background-color', ON);
+  await expect(roll).toHaveCSS('color', 'rgb(17, 17, 17)');
+});

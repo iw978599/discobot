@@ -296,7 +296,7 @@ controls wrap to four lines.
 Fix: see redesign B. As a small first step: move presets into a tab of their
 own, so the header is one line.
 
-### 10. Things that are the browser's own, not the rack's. Inconsistency, small each.
+### 10. Things that are the browser's own, not the rack's. Inconsistency, small each. **Done, all but the sliders and tick boxes**, which the fix below did not ask for and are still the browser's.
 
 - The share page's player is the browser's white pill once Listen is
   pressed. `desktop/page-share-playing.png`, `phone/page-share-playing.png`.

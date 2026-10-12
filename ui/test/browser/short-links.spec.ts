@@ -69,7 +69,7 @@ test('a published song has a short link that anyone can open, update keeps the l
   await expect(song).toContainText('A song by Ian');
   await expect(song).toContainText('140 BPM');
   await song.getByRole('button', { name: /Listen/ }).click();
-  await expect(song.locator('audio')).toBeVisible({ timeout: 20_000 });
+  await expect(song.locator('audio')).toBeAttached({ timeout: 20_000 });
   await song.getByRole('button', { name: 'Open a Copy to Edit', exact: true }).click();
   await expect(visitor.getByRole('button', { name: 'Project: Friday Night', exact: true })).toBeVisible();
   await expect(visitor.getByRole('button', { name: 'Kick step 1', exact: true })).toHaveAttribute('aria-pressed', 'true');
