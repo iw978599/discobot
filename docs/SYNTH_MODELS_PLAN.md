@@ -88,6 +88,19 @@ true before the first new model ships, and say so in the pull request.
   MS-20 still needs its own filter: a high-pass and a low-pass in a row
   with a resonance that distorts, and a second cutoff for the voice.
 
+- 2026-10-12: **The MS-20 is built**, with the two things it needed from
+  the voice: a high-pass before the filter, and a two-pole filter whose
+  resonance distorts as it is pushed. Not verified by ear.
+  - Sources disagree on whether the instrument's high-pass is 6 or 12 dB an
+    octave. This one is 12.
+  - Its second oscillator's ring modulation is not modelled, and nor is
+    the patch panel. One envelope opens the low-pass; the high-pass does
+    not move with it.
+  - The distortion is in the filter's resonance only. Pushed hard with a
+    plain sine it measures about 36 dB under the note, so it is a growl
+    more than a scream; `MS20_HOLD` is the one number to raise if the
+    owner wants more.
+
 ## The fourteen, in three groups
 
 The grouping is by what each needs from the voice, because that decides when

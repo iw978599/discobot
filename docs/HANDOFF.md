@@ -252,10 +252,11 @@ fourteen, with the engine work each needs.
    sound good to me". What this said before: No sound in the app, old or new, has
    been checked by ear.
 3. The audio engine's single owner (roadmap improvements 4).
-4. The ladder filter and filter models, then the MS-20. The ladder is built
-   on `feat/ladder-filter` (check its pull request's state); it was taken
-   before item 3 because it does not need it and the owner asked for sound
-   work. The MS-20's own filter is next.
+4. The ladder filter and filter models, then the MS-20. The ladder is
+   merged (#143); it was taken before item 3 because it does not need it
+   and the owner asked for sound work. The MS-20, with its filter and a
+   high-pass for the voice, is built on `feat/design-review-ms20-model`
+   (check its pull request's state).
 5. The modulation matrix, then the Odyssey, the Virus and the CS-80. Build
    here the one way of naming any parameter that step 4 needs too.
 6. The sample oscillator, then the M1, the D-50 and the Wavestation. These
@@ -319,8 +320,9 @@ Still waiting:
   drift out of time; any message in the console).
 - **Listening.** The owner has heard the three starting beats, the seven
   models of group A and the presets (2026-10-12): "things generally sound
-  good to me". Not heard: the ladder filter, and the four presets on the
-  Minimoog and TB-303 as they sound through it.
+  good to me". Not heard: the ladder filter and the four presets on the
+  Minimoog and TB-303 as they sound through it; the MS-20, its filter, its
+  three presets and the high-pass.
 - **The Launchkey's numbers**, when step 4 is reached.
 
 Decided, so do not ask again: kids mode stays a separate page, and a kids

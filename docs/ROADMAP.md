@@ -161,10 +161,11 @@ target; removal of the AI review workflow.
    The voice has a four-pole ladder beside the state-variable filter, as a
    third choice in the slope menu. Its resonance thins the bass a little and
    rings by itself at the top. The Minimoog and TB-303 models take it, with
-   24 dB, when a lane is moved to them. Open: the other filter models the
-   MS-20 needs (a high-pass and a low-pass in a row whose resonance
-   distorts); and the ladder gives back most of the level its resonance
-   takes, because a lane's level stops at 200%.
+   24 dB, when a lane is moved to them. The MS-20's filter followed the
+   same day: a two-pole whose resonance distorts as it is pushed, and a
+   high-pass before the filter that any sound can use. Open: the ladder
+   gives back most of the level its resonance takes, because a lane's
+   level stops at 200%.
 
 6. **An algorithmic reverb, and insert effects per lane.** (M each)
    The reverb is a convolver with a shaped impulse. Insert effects are easier
@@ -192,6 +193,9 @@ target; removal of the AI review workflow.
        namesakes, and one may be left out if no usable waveforms are found.
    Asked for by the owner on 2026-10-12, as well as more presets: a review
    of every built-in preset's sound, redesigning the weak ones.
+   Done on 2026-10-12: the MS-20, the first model that needed engine work,
+   with three presets. Six models to go: three wait on the modulation
+   matrix and three on the sample oscillator. Not verified by ear.
    Done on 2026-10-12: the seven models that needed nothing new from the
    voice, SH-101, Pro-One, Jupiter-8, OB-Xa, JP-8000, Mono/Poly and
    Polysix, with fifteen presets between them and the model menu grouped

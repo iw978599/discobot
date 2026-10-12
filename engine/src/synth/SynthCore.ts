@@ -32,6 +32,7 @@ interface Voice {
   filter: Svf;
   filter2: Svf;
   ladder: Ladder;
+  highpass: Svf;
   previousInput: number;
   last: number;
   transition: number;
@@ -47,6 +48,10 @@ const MIDDLE_C = 261.6256;
 const MAX_UNISON = 7;
 // The second stage of the 24 dB filter is not resonant; the first stage supplies the peak.
 const SECOND_STAGE_DAMPING = Math.SQRT2;
+// The MS-20's filter. Its resonance is held back more the bigger its peak has grown, as the clipping in
+// the instrument's feedback does: with the peak down it is the clean two-pole, and pushed, the peak stops
+// growing and flattens, which is the distortion it is known for. This is how fast the holding back comes on.
+const MS20_HOLD = 0.1;
 
 // The one synth voice implementation. The AudioWorklet runs it block by block for live
 // playback and the WAV exporter runs it offline, so both produce the same audio.
@@ -76,7 +81,7 @@ export class SynthCore {
       active: false, note: '', id: undefined, frequency: 440, targetFrequency: 440, velocity: 0, keyOctaves: 0,
       phase1: new Float64Array(MAX_UNISON), phase2: new Float64Array(MAX_UNISON), phaseSub: 0,
       fmPhase: [0, 0, 0, 0], fmFeedback: 0, fmEnv: 0, lfoPhase: [0, 0],
-      amp: new Adsr(), filterEnv: new Adsr(), filter: new Svf(), filter2: new Svf(), ladder: new Ladder(), previousInput: 0,
+      amp: new Adsr(), filterEnv: new Adsr(), filter: new Svf(), filter2: new Svf(), ladder: new Ladder(), highpass: new Svf(), previousInput: 0,
       last: 0, transition: 0, transitionSamples: 0, age: 0, remaining: Infinity, releaseOverride: 0,
     }));
     this.refreshDerived();
@@ -204,6 +209,7 @@ export class SynthCore {
       voice.filter.reset();
       voice.filter2.reset();
       voice.ladder.reset();
+      voice.highpass.reset();
       voice.previousInput = 0;
       voice.amp.reset();
       voice.filterEnv.reset();
@@ -266,6 +272,10 @@ export class SynthCore {
     const fmRatio = clamp(p.fmRatio, 0.25, 16, 2), fmIndex = clamp(p.fmIndex, 0, 1), fmFeedback = clamp(p.fmFeedback, 0, 1);
     const algorithm = Math.round(clamp(p.fmAlgorithm, 0, 3));
     const ladder = p.filterModel === 'ladder' && p.filterType === 'lowpass';
+    const ms20 = p.filterModel === 'ms20' && p.filterType === 'lowpass';
+    // A high-pass before the filter. Under 20 Hz there is none, and the sound is what it was before there could be.
+    const highpassCutoff = clamp(p.filterHighpass, 0, maxCutoff, 0);
+    const highpassG = highpassCutoff >= 20 ? svfCoefficient(highpassCutoff, sr) : 0;
 
     for (let i = 0; i < left.length; i++) {
       while (this.pending.length && this.pending[0].frame <= this.frame + i) this.startNote(this.pending.shift()!);
@@ -354,6 +364,11 @@ export class SynthCore {
         // Run the filter twice per sample: cheap 2x oversampling keeps resonance clean near Nyquist.
         const g = svfCoefficient(clamp(s.filterFreq * 2 ** octaves, 20, maxCutoff, 1000), sr * 2);
         const damping = 1 / s.filterQ;
+        if (highpassG > 0) {
+          // The MS-20's high-pass has the same peak as its low-pass and distorts the same way; any other is plain.
+          v.highpass.tick(source, highpassG, ms20 ? damping + MS20_HOLD * v.highpass.bp * v.highpass.bp : Math.SQRT2);
+          source = v.highpass.hp;
+        }
         const midpoint = (v.previousInput + source) * 0.5;
         let filtered: number;
         if (ladder) {
@@ -361,6 +376,11 @@ export class SynthCore {
           v.ladder.tick(midpoint, g, feedback);
           filtered = v.ladder.tick(source, g, feedback);
           v.previousInput = source;
+        } else if (ms20) {
+          v.filter.tick(midpoint, g, damping + MS20_HOLD * v.filter.bp * v.filter.bp);
+          v.filter.tick(source, g, damping + MS20_HOLD * v.filter.bp * v.filter.bp);
+          v.previousInput = source;
+          filtered = v.filter.lp;
         } else {
           v.filter.tick(midpoint, g, damping);
           if (d.twoStage) v.filter2.tick(v.filter.output(p.filterType, midpoint, damping), g, SECOND_STAGE_DAMPING);

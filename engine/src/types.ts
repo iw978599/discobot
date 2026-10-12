@@ -63,7 +63,7 @@ export interface EffectsLoopState {
 
 // 'pitch' is up to an octave either way; 'vibrato' is the same movement scaled to one semitone.
 export type LfoTarget = 'pitch' | 'filter' | 'amp' | 'pulseWidth' | 'vibrato';
-export type FilterModel = 'svf' | 'ladder';
+export type FilterModel = 'svf' | 'ladder' | 'ms20';
 export type SynthEngineMode = 'subtractive' | 'fm';
 export type SynthVoiceMode = 'poly' | 'mono';
 
@@ -157,9 +157,13 @@ export interface SynthParameters {
     // 12 or 24 dB per octave; 24 applies to low-pass, high-pass and band-pass
     slope?: number;
     // which filter the low-pass is: 'svf', the clean state-variable one every sound had before
-    // there was a choice, or 'ladder', a four-pole ladder. Absent means 'svf'. A ladder is
-    // always four poles and only a low-pass: any other type uses the state-variable filter.
+    // there was a choice; 'ladder', a four-pole ladder; or 'ms20', a two-pole whose resonance
+    // distorts. Absent means 'svf'. A ladder is always four poles and an 'ms20' always two, and
+    // both are low-passes only: any other type uses the state-variable filter.
     model?: FilterModel;
+    // the cutoff in Hz of a high-pass the sound goes through before the filter above. Absent or
+    // under 20 means there is none, as there was not before it existed.
+    highpass?: number;
   };
   envelope: SynthEnvelope;
   fxSends: FxSendLevels;
@@ -178,7 +182,7 @@ export interface SynthParameters {
   };
 }
 
-export type SynthModelId = 'generic' | 'minimoog-model-d' | 'juno-106' | 'dx7' | 'tb-303' | 'prophet-5' | 'sh-101' | 'pro-one' | 'jupiter-8' | 'ob-xa' | 'jp-8000' | 'mono-poly' | 'polysix';
+export type SynthModelId = 'generic' | 'minimoog-model-d' | 'juno-106' | 'dx7' | 'tb-303' | 'prophet-5' | 'sh-101' | 'pro-one' | 'jupiter-8' | 'ob-xa' | 'jp-8000' | 'mono-poly' | 'polysix' | 'ms-20';
 
 export interface SynthModelParams {
   macro1: number;

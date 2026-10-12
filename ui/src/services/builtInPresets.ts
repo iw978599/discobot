@@ -79,6 +79,10 @@ const BASS: BuiltInPreset[] = [
     gain: 2,
     fxReturn: 0.55, fxSends: { reverb: 0.04, delay: 0.03, drive: 0.25, phaser: 0, chorus: 0 },
   }),
+  model('bass-ms', 'MS Bass', 'bass', 'ms-20', [0, 0.35, 0.45, 0.6], {
+    gain: 1.55,
+    fxReturn: 0.55, fxSends: { reverb: 0.04, delay: 0.03, drive: 0.25, phaser: 0, chorus: 0 },
+  }),
   generic('bass-rubber', 'Rubber Bass', 'bass', {
     gain: 1.05,
     voiceMode: 'mono', portamento: { enabled: true, glide: 0.05 },
@@ -150,6 +154,15 @@ const LEAD: BuiltInPreset[] = [
   model('lead-monopoly', 'Mono/Poly Lead', 'lead', 'mono-poly', [0.5, 0.3, 0.7, 0.5], {
     gain: 1.6,
     fxReturn: 0.7, fxSends: { reverb: 0.2, delay: 0.3, drive: 0.15, phaser: 0, chorus: 0 },
+  }),
+  model('lead-ms', 'MS Scream', 'lead', 'ms-20', [0.3, 0.7, 0.85, 0.5], {
+    gain: 1.15,
+    fxReturn: 0.7, fxSends: { reverb: 0.2, delay: 0.3, drive: 0.2, phaser: 0, chorus: 0 },
+  }),
+  model('lead-ms-hollow', 'MS Hollow', 'lead', 'ms-20', [0.6, 0.75, 0.4, 0.3], {
+    gain: 0.85,
+    fxReturn: 0.7, fxSends: { reverb: 0.25, delay: 0.3, drive: 0.1, phaser: 0, chorus: 0 },
+    lfo2: { enabled: true, target: 'vibrato', waveform: 'sine', rate: 5.5, depth: 0.2, sync: false, retrigger: true },
   }),
   generic('lead-square', 'Square Lead', 'lead', {
     gain: 0.75,
