@@ -114,14 +114,14 @@ export function HelpModal({ open, onClose, onWalkthrough }: { open: boolean; onC
             <li>The rack is read top to bottom: transport, three synth lanes, the drum grid, then the shared effects. Every lane's steps line up.</li>
             <li>Click a synth lane's name plate to open its editor. Select a step in its row, then play a key to put a note on it.</li>
             <li>Click cells in the drum grid to add hits. The strip under the grid edits the instrument and step you last touched.</li>
-            <li>Press <strong>Play All</strong> to start and <strong>Stop All</strong> to stop.</li>
+            <li>Press <strong>Play All</strong> to start and <strong>Stop All</strong> to stop. The Space bar does the same, unless a button, a field or a dialog has the keyboard.</li>
           </ol>
         </section>
         <section>
           <h3>Top row</h3>
           <ul className="help-list help-list-plain">
             <li><strong>BPM:</strong> click the display to type a tempo (20–400), or tap it in with <strong>Tap</strong>.</li>
-            <li><strong>Projects:</strong> click the project's name to see every project in this browser. The open project saves itself as you work; <strong>Copy</strong> keeps a version to go back to. Arrangements saved in earlier versions are now projects.</li>
+            <li><strong>Projects:</strong> the small word beside the project's name says where its work is: Saved (in this browser), In account (signed in, and the account has this version), Browser only (signed in, but this project is not in the account), Saving, or Not saving when another tab has the project. Click the project's name to see every project in this browser. The open project saves itself as you work; <strong>Copy</strong> keeps a version to go back to. Arrangements saved in earlier versions are now projects.</li>
             <li><strong>Project menu:</strong> start a new project, share a link, export or import a project file (a backup you can move to another device; imported samples are not included), import a MIDI file, or reset the open project.</li>
             <li><strong>Kids Mode:</strong> in the Project menu. Big pads, a picture grid for building a beat and one play button for a small child, on a page of its own that cannot change your projects. Hold “Hold to leave” for three seconds to come back.</li>
             <li><strong>Working together:</strong> signed in, <strong>Share</strong> beside a project in your account lets someone else with an account open it and save changes. You take turns; if you both change it at once, both versions are kept. Projects shared with you are listed under your own, and nothing arrives until you open it.</li>
@@ -161,6 +161,7 @@ export function HelpModal({ open, onClose, onWalkthrough }: { open: boolean; onC
           <ul className="help-list help-list-plain">
             <li><strong>Play notes from the computer keyboard:</strong> the A S D F G H J K L row is the white keys and W E T Y U O P the black keys, on the open lane. Z and X shift the octave.</li>
             <li><strong>Move along the steps:</strong> with a step selected, the left and right arrow keys select the one before or after it.</li>
+            <li><strong>Play and stop:</strong> Space, as the Play All button does. When a button has the keyboard, Space presses that button instead; in a text field it types a space.</li>
             <li><strong>Tap tempo:</strong> Shift + T</li>
             <li><strong>Undo:</strong> Ctrl/Cmd + Z. <strong>Redo:</strong> Ctrl/Cmd + Shift + Z or Ctrl/Cmd + Y. They step back through note, sound, drum, tempo and effects edits in the order you made them.</li>
           </ul>
