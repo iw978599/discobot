@@ -122,7 +122,7 @@ export class SynthCore {
     d.glide = p.portamentoEnabled ? approachCoefficient(clamp(p.portamentoGlide, 0.001, 2, 0.05), sr, 1) : 1;
     d.osc2Ratio = 2 ** (clamp(p.osc2Semitones, -36, 36, 0) / 12 + clamp(p.osc2Detune, -100, 100, 0) / 1200);
     const osc2 = p.osc2Enabled ? clamp(p.osc2Level, 0, 1) : 0;
-    const sub = clamp(p.subLevel, 0, 1), noise = clamp(p.noiseLevel, 0, 1);
+    const osc1 = clamp(p.oscLevel, 0, 1, 1), sub = clamp(p.subLevel, 0, 1), noise = clamp(p.noiseLevel, 0, 1);
     d.unisonCount = Math.round(clamp(p.unisonVoices, 1, MAX_UNISON, 1));
     // Copies are spread evenly across plus and minus the detune amount, up to 50 cents each way.
     const spreadCents = clamp(p.unisonDetune, 0, 1) * 50;
@@ -130,7 +130,11 @@ export class SynthCore {
       const position = d.unisonCount > 1 ? (u / (d.unisonCount - 1)) * 2 - 1 : 0;
       d.unisonRatios[u] = 2 ** (position * spreadCents / 1200);
     }
-    d.mixScale = 1 / Math.sqrt(d.unisonCount * (1 + osc2 * osc2) + sub * sub + noise * noise);
+    // Sources added together are brought back down to the level of one. With the first oscillator
+    // at full level, as it always was, the sum is never under one, so this is what it always was.
+    // Turned down with nothing else on, it is simply quieter: nothing is brought back up.
+    const power = d.unisonCount * (osc1 * osc1 + osc2 * osc2) + sub * sub + noise * noise;
+    d.mixScale = power > 1 ? 1 / Math.sqrt(power) : 1;
     d.twoStage = p.filterSlope >= 24 && (p.filterType === 'lowpass' || p.filterType === 'highpass' || p.filterType === 'bandpass');
     d.fmDecay = approachCoefficient(clamp(p.fmDecay, 0.01, 10, 0.6), sr, 4.6);
     const drive = clamp(p.filterDrive, 0, 1);
@@ -243,7 +247,7 @@ export class SynthCore {
     const maxCutoff = Math.min(20000, sr * 0.45);
     const fm = p.engine === 'fm';
     const osc2Level = p.osc2Enabled ? clamp(p.osc2Level, 0, 1) : 0;
-    const subLevel = clamp(p.subLevel, 0, 1), noiseLevel = clamp(p.noiseLevel, 0, 1);
+    const oscLevel = clamp(p.oscLevel, 0, 1, 1), subLevel = clamp(p.subLevel, 0, 1), noiseLevel = clamp(p.noiseLevel, 0, 1);
     const lfoRates = [clamp(p.lfo1Rate, 0, 100) / sr, clamp(p.lfo2Rate, 0, 100) / sr];
     const lfoDepths = [p.lfo1Enabled ? clamp(p.lfo1Depth, 0, 1) : 0, p.lfo2Enabled ? clamp(p.lfo2Depth, 0, 1) : 0];
     const lfoTargets = [p.lfo1Target, p.lfo2Target];
@@ -319,7 +323,7 @@ export class SynthCore {
           for (let u = 0; u < d.unisonCount; u++) {
             const step1 = clamp(step * d.unisonRatios[u], 0.000001, 0.45);
             v.phase1[u] = (v.phase1[u] + step1) % 1;
-            source += oscillator(p.oscType, v.phase1[u], step1, pulseWidth);
+            source += oscillator(p.oscType, v.phase1[u], step1, pulseWidth) * oscLevel;
             if (osc2Level > 0) {
               const step2 = clamp(step1 * d.osc2Ratio, 0.000001, 0.45);
               v.phase2[u] = (v.phase2[u] + step2) % 1;

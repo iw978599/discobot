@@ -91,7 +91,7 @@ test('full musical arrangement survives a kept copy, editing, reopening and relo
   const synth = page.locator('.synth-controls-panel');
   await page.locator('.tempo-led').click();
   await edit(page.locator('.tempo-led-input'), '96');
-  await synth.getByLabel('Synth preset', { exact: true }).selectOption({ label: 'Bass — Deep Sub *' });
+  await synth.getByLabel('Synth preset', { exact: true }).selectOption({ label: 'Sub Bass *' });
   await tab(page, 'Amp');
   await edit(synth.getByLabel('Gain value', { exact: true }), '63%');
   await edit(synth.getByLabel('Pan value', { exact: true }), 'L25');
