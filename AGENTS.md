@@ -303,6 +303,8 @@ npm run migrate --workspace=server  # Apply new database migrations to the live 
 - `App` chooses the page before `useStudio` runs, as it does for kids mode, and moving between it and any other page reloads. The songs on it are plain links to `#s=code`.
 - A server from before the page existed answers 404 for the route, and the page then says such pages are not available yet. The accounts API is deployed by hand, so the site can be ahead of it; a server that cannot be reached gets a different message and a Try Again button.
 
+- `Menu` takes `groups` (lists of `MenuItem`), draws a `role="separator"` line between them (not a tab stop) and an item's `danger` flag draws it in the danger colour. A row's `title` is its hover hint and, on a narrow screen, its second line (a `::after` reading `data-hint`, so a row's text and name stay its label only; tests that read the menu's text depend on that). The Project menu is projects; in and out; extras; Reset All alone.
+
 ## Known Issues
 - The typed store is finished (`docs/TYPED_STORE_PLAN.md`). What it left open: an edit that changes nothing still saves and emits; one step of the drums still sends the whole drum state; `synth.create` and `scene.replace` make an id inside the reducer; undo and the song scheduler do not collect the guests' settings before leaving a scene. The plan's account of pull request 8 lists them
 - `useStudio.tsx` is about 2,300 lines and owns most state; the UI is separate from it, but the state itself is not yet split by concern

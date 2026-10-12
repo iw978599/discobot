@@ -169,6 +169,11 @@
   padding: 7px 10px; cursor: pointer; white-space: nowrap;
 }
 .rack-menu-list button:hover, .rack-menu-list button:focus-visible { background: var(--amber); color: #111; }
+.rack-menu-list button.danger:not(:hover):not(:focus-visible) { color: var(--danger); }
+.rack-menu-sep { height: 1px; margin: 4px 2px; background: var(--edge); }
+.owner-tools h4 { margin: 10px 0 0; font-family: var(--panel-font); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--legend); }
+.account-danger { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--edge); }
+.account-danger .rack-btn.danger { border-color: var(--danger); color: var(--danger); }
 
 /* transport */
 .transport .brand { width: auto; min-width: var(--plate); max-width: 220px; }
@@ -573,6 +578,12 @@
     max-height: 70dvh; overflow-y: auto; box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.55), 0 10px 24px rgba(0, 0, 0, 0.6);
   }
   .rack-menu-list button { padding: 13px 12px; font-size: 14px; }
+  .rack-menu-list button[data-hint]::after {
+    content: attr(data-hint); display: block; margin-top: 3px; font-size: 12px; line-height: 1.3;
+    text-transform: none; letter-spacing: 0; white-space: normal; color: var(--dim);
+  }
+  .rack-menu-list button[data-hint]:hover::after, .rack-menu-list button[data-hint]:focus-visible::after { color: inherit; }
+  .rack-menu-list button.danger[data-hint]:not(:hover):not(:focus-visible)::after { color: var(--dim); }
 
   /* synth lanes: name and mute on one line, the steps under them eight to a row, then the knobs */
   .synth-module > .rack-row { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
