@@ -102,6 +102,9 @@ export interface SynthParameters {
   mixer?: {
     sub: number;
     noise: number;
+    // how loud the first oscillator is, 0 to 1. Absent means 1, as it always was before it
+    // could be turned down; at 0 a sound can be made of noise, the sub or the second oscillator alone.
+    osc?: number;
   };
   filterEnvelope?: SynthEnvelope;
   velocity?: {

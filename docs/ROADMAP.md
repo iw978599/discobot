@@ -188,6 +188,11 @@ target; removal of the AI review workflow.
        namesakes, and one may be left out if no usable waveforms are found.
    Asked for by the owner on 2026-10-12, as well as more presets: a review
    of every built-in preset's sound, redesigning the weak ones.
+   Done on 2026-10-12: the seventeen old presets are replaced by forty, in
+   all six kinds including Effects, each measured so that presets of a kind
+   are about as loud as each other (the old ones differed by 18 dB). Not
+   verified by ear. The first oscillator has a level, so a sound can be made
+   of noise alone. Still to come with each new synth model: its own presets.
    Done (step 1 of the plan): every built-in preset has a kind and the presets
    menu is grouped by it, with a person's own presets in "My presets". Still
    open: the new presets themselves (no kind has an Effects preset yet, so

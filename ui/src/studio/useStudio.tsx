@@ -1,5 +1,4 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { createNamedSynthPresets } from '../components/SynthControls';
 import { useSynthAudio } from '../hooks/useSynthAudio';
 import { useDrumAudio } from '../hooks/useDrumAudio';
 import { MidiMode, MidiMessage, useMidiInput } from '../hooks/useMidiInput';
@@ -23,6 +22,7 @@ import { downloadArrangementWav, downloadStemsZip } from '../services/wavExport'
 import type { ProjectInfo } from '../services/projectLibrary';
 import { sanitizeSynthParams } from '../services/projectSanitization';
 import type { PresetKind } from '../services/presetKinds';
+import { createBuiltInPresets } from '../services/builtInPresets';
 import { expandStep, expandStepNotes, stepNotes, withStepNotes } from '../services/noteScheduling';
 import { STARTERS, projectIsEmpty, starterDrums, starterPattern } from '../services/starters';
 import { startsUndoStep } from './undoSteps';
@@ -165,115 +165,6 @@ function cloneSynthModelParams(params: SynthModelParams | null | undefined): Syn
     macro3: normalized.macro3,
     macro4: normalized.macro4,
   };
-}
-
-function createBuiltInPresets(): Array<SynthPreset & { kind: PresetKind }> {
-  return [
-    {
-      id: 'builtin-pad',
-      name: 'Pad',
-      kind: 'pad',
-      builtIn: true,
-      modelId: DEFAULT_SYNTH_MODEL_ID,
-      modelParams: createDefaultSynthModelParams(),
-      params: {
-        ...DEFAULT_PARAMS,
-        oscillator: { type: 'sawtooth', detune: -4, pulseWidth: 0.5 },
-        oscillator2: { enabled: true, type: 'sawtooth', semitones: 0, detune: 11, level: 0.8 },
-        filter: { ...DEFAULT_PARAMS.filter, frequency: 1400, q: 1.8, envAmount: 0.2, keyTracking: 0.4 },
-        filterEnvelope: { attack: 0.6, decay: 1.2, sustain: 0.6, release: 1.2 },
-        spread: 0.5,
-        envelope: { attack: 0.35, decay: 0.7, sustain: 0.78, release: 1.2 },
-        fxReturn: 0.9,
-        fxSends: { reverb: 0.55, delay: 0.26, drive: 0.05, phaser: 0.24 },
-        lfo1: { enabled: true, target: 'filter', waveform: 'triangle', rate: 0.8, depth: 0.3 },
-        lfo2: { enabled: true, target: 'pitch', waveform: 'sine', rate: 4.2, depth: 0.12 },
-      },
-    },
-    {
-      id: 'builtin-bass',
-      name: 'Bass',
-      kind: 'bass',
-      builtIn: true,
-      modelId: 'minimoog-model-d',
-      modelParams: { macro1: 0.72, macro2: 0.64, macro3: 0.35, macro4: 0.45 },
-      params: {
-        ...DEFAULT_PARAMS,
-        voiceMode: 'mono',
-        oscillator: { type: 'sawtooth', detune: 0, pulseWidth: 0.5 },
-        mixer: { sub: 0.55, noise: 0 },
-        filter: { ...DEFAULT_PARAMS.filter, frequency: 260, q: 2.5, envAmount: 0.45, keyTracking: 0.3, drive: 0.3 },
-        filterEnvelope: { attack: 0.002, decay: 0.16, sustain: 0.1, release: 0.15 },
-        velocity: { amp: 1, filter: 0.4 },
-        envelope: { attack: 0.005, decay: 0.11, sustain: 0.48, release: 0.18 },
-        fxReturn: 0.55,
-        fxSends: { reverb: 0.08, delay: 0.06, drive: 0.28, phaser: 0.05 },
-        lfo1: { enabled: true, target: 'filter', waveform: 'square', rate: 1.5, depth: 0.15 },
-        lfo2: { enabled: false, target: 'filter', waveform: 'sine', rate: 0.5, depth: 0.1 },
-      },
-    },
-    {
-      id: 'builtin-lead',
-      name: 'Lead',
-      kind: 'lead',
-      builtIn: true,
-      modelId: 'prophet-5',
-      modelParams: { macro1: 0.63, macro2: 0.55, macro3: 0.58, macro4: 0.44 },
-      params: {
-        ...DEFAULT_PARAMS,
-        oscillator: { type: 'sawtooth', detune: 0, pulseWidth: 0.5 },
-        oscillator2: { enabled: true, type: 'square', semitones: 0, detune: 8, level: 0.7 },
-        filter: { ...DEFAULT_PARAMS.filter, frequency: 2400, q: 1.9, envAmount: 0.3, keyTracking: 0.6 },
-        filterEnvelope: { attack: 0.005, decay: 0.3, sustain: 0.4, release: 0.3 },
-        envelope: { attack: 0.012, decay: 0.22, sustain: 0.62, release: 0.28 },
-        fxReturn: 0.72,
-        fxSends: { reverb: 0.2, delay: 0.34, drive: 0.2, phaser: 0.12 },
-        lfo1: { enabled: true, target: 'pitch', waveform: 'sawtooth', rate: 5.5, depth: 0.22 },
-        lfo2: { enabled: true, target: 'filter', waveform: 'triangle', rate: 0.6, depth: 0.18 },
-      },
-    },
-    {
-      id: 'builtin-pluck',
-      name: 'Pluck',
-      kind: 'pluck',
-      builtIn: true,
-      modelId: 'dx7',
-      modelParams: { macro1: 0.52, macro2: 0.68, macro3: 0.74, macro4: 0.86 },
-      params: {
-        ...DEFAULT_PARAMS,
-        oscillator: { type: 'sawtooth', detune: 0, pulseWidth: 0.5 },
-        filter: { ...DEFAULT_PARAMS.filter, frequency: 500, q: 3, envAmount: 0.7, keyTracking: 0.5 },
-        filterEnvelope: { attack: 0.001, decay: 0.12, sustain: 0, release: 0.1 },
-        velocity: { amp: 1, filter: 0.3 },
-        envelope: { attack: 0.002, decay: 0.19, sustain: 0.2, release: 0.12 },
-        fxReturn: 0.62,
-        fxSends: { reverb: 0.18, delay: 0.22, drive: 0.1, phaser: 0.07 },
-        lfo1: { enabled: true, target: 'filter', waveform: 'square', rate: 8, depth: 0.25 },
-        lfo2: { enabled: false, target: 'pitch', waveform: 'sine', rate: 3, depth: 0.1 },
-      },
-    },
-    {
-      id: 'builtin-grand-piano',
-      name: 'Electric Piano',
-      kind: 'keys',
-      builtIn: true,
-      modelId: 'dx7',
-      modelParams: { macro1: 0.95, macro2: 0.2, macro3: 0.45, macro4: 0.5 },
-      params: {
-        ...DEFAULT_PARAMS,
-        engine: 'fm',
-        fm: { algorithm: 1, ratio: 14, index: 0.22, decay: 0.35, feedback: 0 },
-        oscillator: { type: 'sine', detune: 0, pulseWidth: 0.5 },
-        filter: { ...DEFAULT_PARAMS.filter, frequency: 9000, q: 0.7, keyTracking: 0.5 },
-        velocity: { amp: 1, filter: 0.35 },
-        envelope: { attack: 0.004, decay: 0.42, sustain: 0.22, release: 1.45 },
-        fxReturn: 0.82,
-        fxSends: { reverb: 0.34, delay: 0.06, drive: 0.02, phaser: 0.02 },
-        lfo1: { enabled: false, target: 'pitch', waveform: 'triangle', rate: 4.8, depth: 0.02 },
-        lfo2: { enabled: false, target: 'filter', waveform: 'sine', rate: 1, depth: 0.05 },
-      },
-    },
-  ];
 }
 
 // User presets from browser storage or a project file; anything malformed is dropped.
@@ -456,7 +347,6 @@ export function useStudio() {
   const [projects, setProjects] = useState<ProjectInfo[]>([]);
   const [synthPresets, setSynthPresets] = useState<SynthPreset[]>(() => [
     ...createBuiltInPresets(),
-    ...createNamedSynthPresets(DEFAULT_PARAMS),
   ]);
   const synthPresetsRef = useRef(synthPresets);
   synthPresetsRef.current = synthPresets;

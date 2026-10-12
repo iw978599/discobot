@@ -91,7 +91,7 @@ test('full musical arrangement survives a kept copy, editing, reopening and relo
   const synth = page.locator('.synth-controls-panel');
   await page.locator('.tempo-led').click();
   await edit(page.locator('.tempo-led-input'), '96');
-  await synth.getByLabel('Synth preset', { exact: true }).selectOption({ label: 'Bass — Deep Sub *' });
+  await synth.getByLabel('Synth preset', { exact: true }).selectOption({ label: 'Sub Bass *' });
   await tab(page, 'Amp');
   await edit(synth.getByLabel('Gain value', { exact: true }), '63%');
   await edit(synth.getByLabel('Pan value', { exact: true }), 'L25');
@@ -270,13 +270,16 @@ test('all named presets and model macros are selectable; user presets survive re
   const synth = page.locator('.synth-controls-panel');
   const preset = synth.getByLabel('Synth preset', { exact: true });
   const named = await preset.locator('option').allTextContents();
-  for (const family of ['Bass —', 'Lead —', 'Pad —', 'Pluck —']) {
-    expect(named.filter(name => name.startsWith(family))).toHaveLength(3);
-  }
+  const builtIn = named.filter(name => name.endsWith(' *'));
+  expect(builtIn.length, 'the app comes with a good many sounds').toBeGreaterThanOrEqual(30);
   await tab(page, 'Amp');
-  for (const name of named.filter(name => name.includes('—'))) {
+  const gain = synth.getByRole('slider', { name: 'Gain', exact: true });
+  for (const name of builtIn) {
     await preset.selectOption({ label: name });
-    await expect(synth.getByRole('slider', { name: 'Gain', exact: true })).toHaveAttribute('aria-valuenow', /0\.(45|55)/);
+    await expect(preset.locator('option:checked')).toHaveText(name);
+    // Each sets its own level, within what a lane's level can be.
+    await expect.poll(async () => Number(await gain.getAttribute('aria-valuenow')), { message: name }).toBeGreaterThanOrEqual(0.3);
+    await expect.poll(async () => Number(await gain.getAttribute('aria-valuenow')), { message: name }).toBeLessThanOrEqual(2);
   }
   const macros = page.locator('.synth-module.selected .synth-model-macro-grid [role="slider"]');
   for (const model of ['minimoog-model-d', 'juno-106', 'dx7', 'tb-303', 'prophet-5']) {
