@@ -56,9 +56,11 @@ jobs:
       - if: steps.browsers.outputs.cache-hit != 'true'
         run: timeout 150 npx playwright install chromium || timeout 150 npx playwright install chromium || timeout 150 npx playwright install chromium
         timeout-minutes: 9
-      # What the browser needs from the system. GitHub's machines have nearly all of it already.
-      - run: npx playwright install-deps chromium
-        timeout-minutes: 5
+      # The system libraries the browser needs are not installed here: GitHub's machines come with
+      # them. Asking for them (`playwright install-deps`) ran apt on every machine, which found them
+      # all present, and on 2026-10-12 twice hung for five minutes restarting services after it
+      # updated something unrelated. If a browser ever fails to start for want of a library, the
+      # error names it, and that is the time to put the step back.
       - run: npx playwright test --project=${{ matrix.project }} --shard=${{ matrix.shard }}/4
         # A branch named for a design review also takes its pictures (design-shots.spec.ts).
         env:
