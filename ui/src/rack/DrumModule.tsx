@@ -17,9 +17,6 @@ const LABELS: Record<DrumInstrument, string> = {
   kick: 'Kick', snare: 'Snare', clap: 'Clap', closedHH: 'Closed Hat', openHH: 'Open Hat',
   snare2: 'Low Tom', ride: 'High Tom', crash: 'Cymbal',
 };
-const SHORT_LABELS: Record<DrumInstrument, string> = {
-  kick: 'BD', snare: 'SD', clap: 'CP', closedHH: 'CH', openHH: 'OH', snare2: 'LT', ride: 'HT', crash: 'CY',
-};
 
 const EXTRA: Record<DrumInstrument, { knob: string; display: (v: number) => string; parse: (n: number) => number }> = {
   kick: { knob: 'Punch', display: (v) => `${(20 + v * 80).toFixed(0)}%`, parse: (n) => (n - 20) / 80 },
@@ -198,7 +195,7 @@ function DrumModule({ studio }: { studio: Studio }) {
           </div>
           {INSTRUMENTS.map((instrument) => {
             const row = drumState[instrument];
-            const short = instrument === 'crash' && row.settings.cymbalType === 'ride' ? 'RD' : SHORT_LABELS[instrument];
+            const shown = instrument === 'crash' && row.settings.cymbalType === 'ride' ? 'Ride' : LABELS[instrument];
             return (
               <div
                 key={instrument}
@@ -212,7 +209,7 @@ function DrumModule({ studio }: { studio: Studio }) {
                   title={`${LABELS[instrument]}: click to hear it and edit its sound`}
                   onClick={() => { setSelected(instrument); preview(instrument); }}
                 >
-                  {short}
+                  {shown}
                 </button>
                 <div className="rack-ms small">
                   <button
@@ -387,9 +384,9 @@ function DrumModule({ studio }: { studio: Studio }) {
           >
             Fill
           </button>
-          <button className="rack-btn" title="Shift pattern right" onClick={() => rearrange((step) => (step + 15) % 16)}>→</button>
-          <button className="rack-btn" title="Reverse pattern" onClick={() => rearrange((step) => 15 - step)}>⇄</button>
-          <button className="rack-btn" title="Duplicate first 8 steps to last 8" onClick={() => rearrange((step) => (step >= 8 ? step - 8 : step))}>⇈</button>
+          <button className="rack-btn" title="Shift pattern right" aria-label="Shift right" onClick={() => rearrange((step) => (step + 15) % 16)}>→ Shift</button>
+          <button className="rack-btn" title="Reverse pattern" aria-label="Reverse" onClick={() => rearrange((step) => 15 - step)}>⇄ Reverse</button>
+          <button className="rack-btn" title="Duplicate first 8 steps to last 8" aria-label="Repeat first half" onClick={() => rearrange((step) => (step >= 8 ? step - 8 : step))}>⇈ Repeat Half</button>
         </div>
         <div className="drum-step-details">
           <span className="step-tools-name">Step {selectedStep + 1}</span>

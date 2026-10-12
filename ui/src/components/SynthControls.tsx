@@ -684,7 +684,8 @@ export default function SynthControls({
                   tooltip="Detuned copies of the oscillators stacked on every note - more is thicker"
                 />
                 <Knob
-                  label="Uni Det"
+                  label="Detune"
+                  ariaLabel="Unison detune"
                   value={unison.detune}
                   min={0}
                   max={1}
@@ -779,7 +780,8 @@ export default function SynthControls({
               tooltip={TOOLTIPS.keyTracking}
             />
             <Knob
-              label="Flt Drive"
+              label="Drive"
+              ariaLabel="Filter drive"
               value={parameters.filter.drive ?? 0}
               min={0}
               max={1}

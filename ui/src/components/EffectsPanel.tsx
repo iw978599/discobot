@@ -40,7 +40,7 @@ function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProps) {
         </label>
         <div className="effects-returns">
           <Knob
-            label="Synth Rtn"
+            label="Synth Return"
             ariaLabel="Synth return"
             size="small"
             value={effectsLoop.returns.synth}
@@ -50,7 +50,7 @@ function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProps) {
             tooltip="How much of the shared effects the synths get back"
           />
           <Knob
-            label="Drum Rtn"
+            label="Drum Return"
             ariaLabel="Drum return"
             size="small"
             value={effectsLoop.returns.drums}

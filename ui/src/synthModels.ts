@@ -55,7 +55,7 @@ export const SYNTH_MODELS: SynthModelDefinition[] = [
     subtitle: 'Mono acid bass: accent on loud steps, slide on tied steps',
     macros: [
       { key: 'macro1', label: 'Wave / Tune' },
-      { key: 'macro2', label: 'Reso' },
+      { key: 'macro2', label: 'Resonance' },
       { key: 'macro3', label: 'Brightness' },
       { key: 'macro4', label: 'Decay' },
     ],
