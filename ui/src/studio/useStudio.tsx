@@ -24,6 +24,7 @@ import type { ProjectInfo } from '../services/projectLibrary';
 import { sanitizeSynthParams } from '../services/projectSanitization';
 import type { PresetKind } from '../services/presetKinds';
 import { expandStep, expandStepNotes, stepNotes, withStepNotes } from '../services/noteScheduling';
+import { STARTERS, projectIsEmpty, starterDrums, starterPattern } from '../services/starters';
 import { BrowserTransport, TransportTick } from '../services/browserTransport';
 import { downloadFile, ExportArrangement } from '../services/wavExport';
 import { expandDrumStep } from '../services/drumScheduling';
@@ -448,6 +449,8 @@ export function useStudio() {
   useEffect(() => { midiOut.configure({ notes: midiOutNotes, clock: midiOutClock }); }, [midiOutNotes, midiOutClock]);
   const [midiTargetSynthId, setMidiTargetSynthId] = useState<number | null>(1);
   const [projectId, setProjectId] = useState('');
+  // Goes up each time a project is put on the rack: the page loading, a project opened or restored.
+  const [projectOpens, setProjectOpens] = useState(0);
   const [projectName, setProjectName] = useState('');
   const [projects, setProjects] = useState<ProjectInfo[]>([]);
   const [synthPresets, setSynthPresets] = useState<SynthPreset[]>(() => [
@@ -978,6 +981,7 @@ export function useStudio() {
           setProjectId(message.data.projectId);
           setProjectName(message.data.name);
         }
+        setProjectOpens(count => count + 1);
         if (Array.isArray(message.data.scenes)) {
           setScenes(message.data.scenes);
           setCurrentSceneId(message.data.currentSceneId);
@@ -2093,6 +2097,29 @@ export function useStudio() {
     localService.resetDrums();
   }, [pushHistorySnapshot]);
 
+  // Fills an empty project with a starting point: its tempo, a bar of drums and a bass line on
+  // the first lane. It is one edit, so one undo takes all of it back.
+  const handleStarter = useCallback((starterId: string) => {
+    const starter = STARTERS.find(entry => entry.id === starterId);
+    const synth = synthsRef.current[0];
+    if (!starter || !synth?.pattern) return;
+    pushHistorySnapshot(synth.id, synth.pattern.id);
+    localService.applyAll([
+      { type: 'tempo.set', tempo: starter.tempo },
+      { type: 'drum.state', state: starterDrums(starter, drumsForUndoRef.current) },
+      { type: 'pattern.write', synthId: synth.id, patternId: synth.pattern.id, patch: { steps: starterPattern(starter, synth.pattern).steps } },
+    ]);
+  }, [pushHistorySnapshot]);
+
+  // The offer is decided when a project is opened and found empty, and it leaves only by its own
+  // Hide button. It must not go away because a note was put in: that would move the whole rack
+  // under the pointer that had just put it in.
+  const [showStarters, setShowStarters] = useState(false);
+  useEffect(() => {
+    setShowStarters(projectOpens > 0 && projectIsEmpty(synthsRef.current.map(synth => synth.pattern), drumsForUndoRef.current, scenesRef.current.length));
+  }, [projectOpens]);
+  const dismissStarters = useCallback(() => setShowStarters(false), []);
+
   const handleDrumMasterVolumeChange = useCallback((volume: number) => {
     const synth = synthsRef.current[0];
     if (synth?.pattern) pushHistorySnapshotThrottled(synth.id, synth.pattern.id, 'drum-master-volume', 300);
@@ -2200,6 +2227,7 @@ export function useStudio() {
   const isAnyPlaying = synths.some(s => s.isPlaying);
 
   return {
+    handleStarter, dismissStarters, showStarters,
     synths, selectedSynthId, setSelectedSynthId, drumState: memoizedDrumState, drumKits,
     selectedDrumKitId, drumMasterVolume, drumSwing, drumFx, effectsLoop, browserMuted, setBrowserMuted,
     browserVolume, setBrowserVolume, globalTempo, storageError, setStorageError, changedElsewhere, loadOtherTabVersion, keepThisTabVersion, helpOpen, setHelpOpen, midiMode, setMidiMode,

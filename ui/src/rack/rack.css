@@ -272,6 +272,10 @@
   color: var(--text); text-transform: none; letter-spacing: 0.02em; font-weight: 500; font-size: 14px;
 }
 
+/* the offer on an empty project */
+.starter-choices { display: flex; flex-wrap: wrap; gap: 4px; }
+.starter-hint { flex: 0 1 auto; min-width: 0; }
+
 /* scenes and song */
 .scene-strip, .song-chain { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
 .song-chain { flex: 1; }

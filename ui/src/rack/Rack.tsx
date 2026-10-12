@@ -8,6 +8,7 @@ import TransportUnit from './TransportUnit';
 import SynthModule from './SynthModule';
 import DrumModule from './DrumModule';
 import SongModule from './SongModule';
+import StarterUnit from './StarterUnit';
 import Dialog from './Dialog';
 import ProjectsDialog from './ProjectsDialog';
 import ShareDialog from './ShareDialog';
@@ -189,6 +190,7 @@ export default function Rack({ studio }: { studio: Studio }) {
             <button className="rack-btn" onClick={() => studio.setStorageError(null)} aria-label="Dismiss message">✕</button>
           </div>
         )}
+        <StarterUnit studio={studio} />
         <SongModule studio={studio} />
         {[1, 2, 3].map(id => <SynthModule key={id} studio={studio} synthId={id} synth={studio.synths.find(entry => entry.id === id)} />)}
         {studio.guests.map(guest => <GuestModule key={guest.id} studio={studio} guest={guest} />)}
