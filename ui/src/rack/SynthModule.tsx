@@ -384,6 +384,10 @@ function SynthModule({ studio, synthId, synth }: SynthModuleProps) {
                 </div>
               </div>
               <KeyboardPanel
+                recording={studio.recording}
+                onRecordingChange={studio.setRecording}
+                quantize={studio.quantize}
+                onQuantizeChange={studio.setQuantize}
                 mode={synth.keyboardMode}
                 onModeChange={(mode) => studio.handleKeyboardModeChange(synthId, mode)}
                 pattern={synth.pattern}
