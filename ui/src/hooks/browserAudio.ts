@@ -1,5 +1,6 @@
 import type { EffectsLoopState, FxSendLevels } from '../types';
 import { delaySeconds } from '../services/delayTime';
+import { rateHz } from '../services/rateSync';
 import { EQ_RANGE_DB, MAX_PRE_DELAY } from '../services/effectSettings';
 
 const limit = (v: number | undefined, min: number, max: number, fallback = min) =>
@@ -312,17 +313,17 @@ function updateEffects(bus: Effects, group: 'synth' | 'drums', state: EffectsLoo
   }
   smooth(bus.wet.drive.gain, state.drive.enabled ? 0.5 : 0, ctx);
   smooth(bus.tone.frequency, 400 * Math.pow(40, limit(state.drive.tone, 0, 1)), ctx);
-  smooth(bus.lfo.frequency, limit(state.phaser.rate, 0.02, 20), ctx);
+  smooth(bus.lfo.frequency, limit(rateHz(state.phaser, effectsTempo), 0.02, 20), ctx);
   smooth(bus.depth.gain, limit(state.phaser.depth, 0, 1) * 650, ctx);
   bus.phaser.forEach((node, i) => smooth(node.frequency, 900 + i * 350, ctx));
   smooth(bus.phaserFeedback.gain, enabled && state.phaser.enabled ? limit(state.phaser.feedback, 0, 0.75) : 0, ctx);
   smooth(bus.wet.phaser.gain, state.phaser.enabled ? limit(state.phaser.mix, 0, 1) * 0.5 : 0, ctx);
-  smooth(bus.chorus.lfo.frequency, limit(state.chorus?.rate, 0.05, 8, 0.6), ctx);
+  smooth(bus.chorus.lfo.frequency, limit(rateHz(state.chorus, effectsTempo, 0.6), 0.02, 20, 0.6), ctx);
   smooth(bus.chorus.depth.gain, chorusSweep(state.chorus?.depth ?? 0), ctx);
   smooth(bus.wet.chorus.gain, state.chorus?.enabled ? limit(state.chorus.mix, 0, 1) : 0, ctx);
 }
 
-// A tempo-synced delay follows this.
+// A tempo-synced delay, phaser and chorus follow this.
 let effectsTempo = 120;
 export function setEffectsTempo(tempo: number): void {
   if (!(tempo > 0) || tempo === effectsTempo) return;

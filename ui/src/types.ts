@@ -8,6 +8,7 @@
  */
 
 export type {
+  RateSync,
   // Audio synthesis types
   OscillatorType,
   SynthParameters,
