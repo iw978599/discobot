@@ -6,6 +6,10 @@ const notesAt = async (page: Page, step: number) => {
   return found.active ? [found.note, ...(found.notes ?? [])] : [];
 };
 
+// Every drum's steps. Undo writes the drums back with their defaults spelled out, so the whole
+// state is not compared, only what the drums play.
+const drumSteps = async (page: Page) => JSON.stringify(Object.entries((await stored(page)).drumState).map(([drum, lane]) => [drum, (lane as { steps: boolean[] }).steps]).sort());
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'requestMIDIAccess', { configurable: true, value: undefined });
@@ -38,7 +42,7 @@ test('Transpose moves every note of the lane together, one press is one undo, an
   await expect.poll(both).toEqual([['C3'], ['A3', 'C4', 'E4']]);
   for (const words of moves) await expect(move(words)).toBeEnabled();
   const velocity = (await stored(page)).synths[0].pattern.steps[4].velocity;
-  const drums = JSON.stringify((await stored(page)).drumState);
+  const drums = await drumSteps(page);
 
   // Up a semitone, up an octave, and back the same way.
   await move('up a semitone').click();
@@ -80,6 +84,6 @@ test('Transpose moves every note of the lane together, one press is one undo, an
   await move('up a semitone').click();
   await expect.poll(both).toEqual([['C#7'], ['A#7', 'C#8', 'F8']]);
 
-  expect(JSON.stringify((await stored(page)).drumState), 'the drums are not transposed').toBe(drums);
+  expect(await drumSteps(page), 'the drums are not transposed').toBe(drums);
   expect(errors).toEqual([]);
 });
