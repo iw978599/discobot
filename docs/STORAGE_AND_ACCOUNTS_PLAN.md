@@ -24,8 +24,10 @@ Status: proposed, nothing built. Written 2026-10-08; stage 3 revised the same da
   code, sign in, sign out, recovery codes, change password, delete account,
   and the owner's invite codes and member list. The API runs on Cloudflare at
   `https://discobot-api.discobot-server.workers.dev`. Only the owner creates
-  invite codes. Samples will not sync at first: Cloudflare's file storage (R2)
-  needs a payment card, so projects go in the database and samples wait.
+  invite codes. Samples do not sync: Cloudflare's file storage (R2)
+  needs a payment card, and the owner said on 2026-10-12 that the project
+  pays for nothing. Projects go in the database; samples travel in saved
+  project files. Anything below that speaks of R2 is not planned.
 - **Stage 3, step 3 (project sync): built.** Projects made while signed in
   are kept in the account and follow it to other browsers. Projects that were
   in the browser before signing in are added by hand. A project changed in

@@ -43,6 +43,12 @@ before acting on what this says about it.
 
 ## 2. How the owner wants the work run
 
+**The project pays for nothing.** The owner said so on 2026-10-12, in
+capitals. Do not plan, propose or build on anything that costs money, asks
+for a payment card, or bills by use, and do not describe work as waiting on
+a payment. If something can only be done by paying, it is not planned; say
+so and look for a way that is free.
+
 These are the owner's own instructions, given over several sessions. A new
 session should save them to its memory.
 
@@ -162,8 +168,8 @@ app's own waves). The owner has heard little of the sound work: see section 5.
 
 Asked for on 2026-10-12 and put first by the owner: "everything with a
 rate knob should have a sync button that syncs to tempo ... bump it to the
-top". Built on `feat/design-review-tempo-sync` for the phaser, the chorus
-and the speed of a sequence of waves (check its pull request's state).
+top". Built for the phaser, the chorus and the speed of a sequence of
+waves, and merged (#154).
 The roadmap item says what is still open, and the owner has not said
 whether that is enough.
 
@@ -202,7 +208,9 @@ Behaviour:
 3. **Feature 5:** copy a lane's pattern, or one drum row, to another scene.
 4. **Feature 2:** export as a small dialog (what, as what, how long, and
    the progress in the same place).
-5. **Feature 11:** Help with a list of headings and a search box.
+5. **Feature 11:** Help with a list of headings and a search box. Merged
+   (#153). "Help for this unit" on each unit's name plate, the other half
+   of that feature in the review, is not built.
 6. **Feature 8:** a metronome and a count-in, with the switch beside Tap.
    The metronome does not exist yet.
 7. **Chord buttons in the piano roll** (roadmap features 15). The owner
@@ -310,8 +318,10 @@ owner.
 
 - **Listen and tune** (sound 1). Only the owner can do it, at any time.
   Section 5 lists what has not been heard.
-- **Samples that sync** (sound 2). Needs file storage on the server, which
-  waits on a payment card for Cloudflare R2.
+- **Samples that sync** (sound 2). Not planned as first designed: the file
+  storage it was to use asks for a payment card, and the project pays for
+  nothing (the owner, 2026-10-12). Open only if a way is found that costs
+  nothing.
 
 ### Not chosen, so not in the queue
 
