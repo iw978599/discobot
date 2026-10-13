@@ -4,7 +4,7 @@
 import { MAX_SCENES, clone, merge, number, sanitizeDrums, sanitizeEffects, sanitizeModelParams, sanitizePattern, sanitizeScenes, sanitizeSends, sanitizeSong, sanitizeSynthParams } from './projectSanitization';
 import { MAX_GUESTS, guestUrl, patchGuest, sanitizeGuests } from './guests';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
-import { BAR_CHOICES, DRUM_STEPS_PER_BAR, laneBars, resizeBars } from './patternLength';
+import { BAR_CHOICES, DRUM_STEPS_PER_BAR, barTargets, copyBar, drumBars, laneBars, resizeBars } from './patternLength';
 import { emptySteps } from './songPlayback';
 import { nextSceneColor, sceneColor } from './sceneColors';
 import { normalizeSynthModelId } from '../synthModels';
@@ -188,6 +188,20 @@ export const reducers: Reducers = {
       if (lane.stepVelocities) lane.stepVelocities = resizeBars(lane.stepVelocities, DRUM_STEPS_PER_BAR, bars, () => 1);
       if (lane.stepProbabilities) lane.stepProbabilities = resizeBars(lane.stepProbabilities, DRUM_STEPS_PER_BAR, bars, () => 1);
       if (lane.stepRatchets) lane.stepRatchets = resizeBars(lane.stepRatchets, DRUM_STEPS_PER_BAR, bars, () => 1);
+    }
+    state.drumState = sanitizeDrums(state.drumState, defaults.drumState);
+    return update('drumFullState', { drumState: state.drumState });
+  },
+  // One bar of the whole grid laid over others: every drum's steps, with each step's details.
+  'drum.copyBar': ({ state, defaults }, op) => {
+    const to = barTargets(drumBars(state.drumState), op.from, op.to);
+    if (!to) return refuse(400, 'There is no such bar to copy');
+    for (const instrument of DRUM_INSTRUMENTS) {
+      const lane = state.drumState[instrument];
+      lane.steps = copyBar(lane.steps, DRUM_STEPS_PER_BAR, op.from, to);
+      if (lane.stepVelocities) lane.stepVelocities = copyBar(lane.stepVelocities, DRUM_STEPS_PER_BAR, op.from, to);
+      if (lane.stepProbabilities) lane.stepProbabilities = copyBar(lane.stepProbabilities, DRUM_STEPS_PER_BAR, op.from, to);
+      if (lane.stepRatchets) lane.stepRatchets = copyBar(lane.stepRatchets, DRUM_STEPS_PER_BAR, op.from, to);
     }
     state.drumState = sanitizeDrums(state.drumState, defaults.drumState);
     return update('drumFullState', { drumState: state.drumState });

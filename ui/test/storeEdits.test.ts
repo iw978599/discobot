@@ -828,6 +828,33 @@ const cases: Case[] = [
       assert.equal('stepVelocities' in snare, false);
     },
   }),
+  ...([{ from: 2, to: [0] }, { from: 0, to: [2] }, { from: 0, to: [0] }, { from: 0, to: [] }, { from: 0, to: 1 }, { from: '0', to: [1] }, { from: 0.5, to: [1] }, { to: [1] }] as const).map((body): Case => ({
+    type: 'drum.copyBar', title: `copying ${JSON.stringify(body)} in two bars is refused`, arrange: service => { ok(service.setDrumBars(2)); }, body, status: 400, error: 'There is no such bar to copy',
+  })),
+  drumChange('one bar of the drums is laid over another, with each step\'s details, and replaces what was there', {
+    type: 'drum.copyBar', body: { from: 0, to: [1] },
+    arrange: service => {
+      ok(service.setDrumBars(2));
+      ok(service.setDrumStep('kick', 3, true));
+      ok(service.setDrumStepVelocity('kick', 3, .4));
+      ok(service.setDrumStepDetail('kick', 3, { probability: .5, ratchet: 3 }));
+      ok(service.setDrumStep('snare', 20, true));
+    },
+    check: result => {
+      const { kick, snare } = result.events[0].data.drumState;
+      const twice = (fill: unknown, at: unknown) => Array.from({ length: 32 }, (_, index) => (index % 16 === 3 ? at : fill));
+      assert.deepEqual(kick.steps, twice(false, true));
+      assert.deepEqual(kick.stepVelocities, twice(1, .4));
+      assert.deepEqual(kick.stepProbabilities, twice(1, .5));
+      assert.deepEqual(kick.stepRatchets, twice(1, 3));
+      assert.deepEqual(snare.steps, Array(32).fill(false));
+    },
+  }),
+  drumChange('a bar laid over every other bar leaves itself alone', {
+    type: 'drum.copyBar', body: { from: 1, to: [0, 2, 3] },
+    arrange: service => { ok(service.setDrumBars(4)); ok(service.setDrumStep('kick', 2, true)); ok(service.setDrumStep('kick', 21, true)); },
+    check: result => assert.deepEqual(result.events[0].data.drumState.kick.steps, Array.from({ length: 64 }, (_, index) => index % 16 === 5)),
+  }),
   drumChange('a shorter drum pattern keeps the first bars', {
     type: 'drum.bars', body: { bars: 1 },
     arrange: service => { ok(service.setDrumBars(4)); ok(service.setDrumStep('kick', 2, true)); ok(service.setDrumStep('kick', 40, true)); },

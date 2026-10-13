@@ -8,6 +8,7 @@ import UnitHelp, { UNIT_HELP } from './UnitHelp';
 import { gridKeyTarget } from './gridKeys';
 import { BAR_CHOICES, drumBars } from '../services/patternLength';
 import CopyToScene from './CopyToScene';
+import CopyBar from './CopyBar';
 import type { Studio } from '../studio/useStudio';
 import { CYMBAL_TYPES } from '@discobot/engine';
 import { DRUM_SETTINGS_DEFAULT } from '../services/drumKits';
@@ -386,6 +387,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
             <button className={`rack-btn ${follow ? 'on' : ''}`} aria-pressed={follow} title="Show whichever bar is playing" onClick={() => setFollow(value => !value)}>Follow</button>
           </span>
         )}
+        {bars > 1 && <CopyBar part="the drums" bar={shownBar} bars={bars} onCopy={to => studio.handleCopyDrumBar(shownBar, to)} />}
         <CopyToScene
           part={`the ${LABELS[selected]} row`}
           scenes={studio.scenes}

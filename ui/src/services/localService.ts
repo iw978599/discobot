@@ -732,6 +732,7 @@ export class LocalProjectService {
   setDrumState(state: DrumState) { return this.apply({ type: 'drum.state', state }); }
   resetDrums() { return this.apply({ type: 'drum.reset' }); }
   setDrumBars(bars: number) { return this.apply({ type: 'drum.bars', bars }); }
+  copyDrumBar(from: number, to: number[]) { return this.apply({ type: 'drum.copyBar', from, to }); }
   setDrumStep(instrument: DrumInstrument, step: number, active: boolean) { return this.apply({ type: 'drum.step', instrument, step, active }); }
   setDrumStepVelocity(instrument: DrumInstrument, step: number, velocity: number) { return this.apply({ type: 'drum.stepVelocity', instrument, step, velocity }); }
   setDrumStepDetail(instrument: DrumInstrument, step: number, detail: { probability?: number; ratchet?: number }) { return this.apply({ type: 'drum.stepDetail', instrument, step, probability: detail.probability, ratchet: detail.ratchet }); }

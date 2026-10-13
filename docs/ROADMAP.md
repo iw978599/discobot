@@ -381,7 +381,10 @@ may redistribute.
    Done on 2026-10-13: a Copy to menu on each lane and on the drum strip
    puts that lane's notes, or the selected drum's row, into another scene.
    It asks first when the other scene has something there, because it is
-   not in the undo history. Still open: the rest of this item.
+   not in the undo history. Also done that day: a Copy bar menu beside the
+   bar buttons of a lane or the drum grid lays the bar on show over
+   another bar, or over every other, as one undo step. Still open: lengths
+   that are not a whole number of bars, and sharing a part between scenes.
 
 5. **Parameter automation.** (L, after the typed store)
    Record knob movements per step or per bar and play them back. Filter sweeps
