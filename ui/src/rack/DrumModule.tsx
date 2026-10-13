@@ -4,6 +4,7 @@ import { MAX_KIT_FILES } from '../services/kitImport';
 import KitImportDialog from './KitImportDialog';
 import { usePlayhead, usePlayheadMark } from '../hooks/usePlayhead';
 import { tracked } from '../studio/tracked';
+import UnitHelp, { UNIT_HELP } from './UnitHelp';
 import { gridKeyTarget } from './gridKeys';
 import { BAR_CHOICES, drumBars } from '../services/patternLength';
 import CopyToScene from './CopyToScene';
@@ -58,7 +59,7 @@ const percentText = (value: number) => `${Math.round(value * 100)}%`;
 
 // The whole drum kit as one grid: eight instruments down, sixteen steps across, lined up
 // with the synth lanes above. The strip underneath edits the instrument and step you last touched.
-function DrumModule({ studio }: { studio: Studio }) {
+function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: string) => void }) {
   const {
     drumState, drumAudio, drumKits, selectedDrumKitId, drumFx, drumMasterVolume, drumSwing,
     handleDrumStepToggle: onStepToggle, handleDrumStepVelocity: onStepVelocity, handleDrumStepDetail: onStepDetail,
@@ -150,8 +151,9 @@ function DrumModule({ studio }: { studio: Studio }) {
   return (
     <section className="rack-unit drum-machine" aria-label="Drums module" data-unit="drums">
       <div className="rack-row drum-top">
-        <div className="rack-plate static">
+        <div className={onHelp ? 'rack-plate static helped' : 'rack-plate static'}>
           <b>Drums</b>
+          {onHelp && <UnitHelp about="the drums" section={UNIT_HELP.drums} onHelp={onHelp} />}
           <select
             className="drum-kit-select"
             aria-label="Drum kit"

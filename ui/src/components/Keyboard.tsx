@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
+import { keyboardKeyTarget, keyboardNotes, octaveOnShow } from '../services/keyboardKeys';
 import './Keyboard.css';
 
 interface KeyboardProps {
@@ -9,6 +10,9 @@ interface KeyboardProps {
   releaseSignal?: boolean;
   // notes held from the computer keyboard, shown pressed alongside clicked ones
   computerKeyNotes?: ReadonlySet<string>;
+  // Left and right are walking the lane's selected step (SynthModule), so the keys leave those
+  // two alone. Up and down, Home and End still move along the keys.
+  arrowsWalk?: boolean;
 }
 
 const WHITE_KEYS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
@@ -22,7 +26,7 @@ const BLACK_KEYS = [
   null,
 ];
 
-export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0, holdEnabled = false, releaseSignal = false, computerKeyNotes }: KeyboardProps) {
+export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0, holdEnabled = false, releaseSignal = false, computerKeyNotes, arrowsWalk = false }: KeyboardProps) {
   const [clickedNotes, setActiveNotes] = useState<Set<string>>(new Set());
   const activeNotes = useMemo(
     () => (computerKeyNotes?.size ? new Set([...clickedNotes, ...computerKeyNotes]) : clickedNotes),
@@ -56,6 +60,22 @@ export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0, h
   const showOctave = (index: number) => {
     const strip = stripRef.current;
     if (strip) strip.scrollLeft = index * (strip.firstElementChild?.getBoundingClientRect().width ?? 0);
+  };
+  const reachRef = useRef(reach);
+  reachRef.current = reach;
+
+  // The keys are one stop for the Tab key: the key the keyboard was last on while its octave is
+  // on show, or else the first key that is.
+  const notes = useMemo(() => keyboardNotes(octaves), [octaves]);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const cursorOctave = cursor ? Math.floor(notes.indexOf(cursor) / 12) : -1;
+  const stop = cursor && cursorOctave >= reach.at && cursorOctave <= reach.at + 2 - reach.max ? cursor : notes[reach.at * 12];
+  // A key that takes the focus is brought on show an octave at a time, as the two buttons
+  // move the strip, so the strip never rests part of the way along.
+  const reveal = (note: string) => {
+    const { at, max } = reachRef.current;
+    const index = Math.floor(notes.indexOf(note) / 12);
+    if (max > 0 && index >= 0) showOctave(octaveOnShow(index, at, 3 - max));
   };
 
   useEffect(() => {
@@ -156,7 +176,12 @@ export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0, h
     'aria-label': `Play ${note}`,
     'aria-pressed': activeNotes.has(note),
     'data-note': note,
+    tabIndex: note === stop ? 0 : -1,
     style: { touchAction: 'none' },
+    onFocus: () => {
+      setCursor(note);
+      reveal(note);
+    },
     onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => {
       if (event.button !== 0) return;
       event.preventDefault();
@@ -189,9 +214,22 @@ export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0, h
     onPointerCancel: (event: React.PointerEvent<HTMLButtonElement>) => leave(event.pointerId),
     onLostPointerCapture: (event: React.PointerEvent<HTMLButtonElement>) => leave(event.pointerId),
     onKeyDown: (event: React.KeyboardEvent<HTMLButtonElement>) => {
-      if (![' ', 'Enter'].includes(event.key)) return;
+      if ([' ', 'Enter'].includes(event.key)) {
+        event.preventDefault();
+        if (!event.repeat) handleNoteDown(note);
+        return;
+      }
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      const sideways = event.key === 'ArrowLeft' || event.key === 'ArrowRight';
+      if (sideways && arrowsWalk) return;
+      // Up is the next key to the right, as it is the higher note.
+      const way = event.key === 'ArrowUp' ? 'ArrowRight' : event.key === 'ArrowDown' ? 'ArrowLeft' : event.key;
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(way)) return;
+      // Prevented even at the last key, so the page does not scroll and the lane's own arrow
+      // keys do not act for a key pressed here.
       event.preventDefault();
-      if (!event.repeat) handleNoteDown(note);
+      const next = keyboardKeyTarget(way, notes, note);
+      if (next) stripRef.current?.querySelector<HTMLElement>(`[data-note="${next}"]`)?.focus({ preventScroll: true });
     },
     onKeyUp: (event: React.KeyboardEvent<HTMLButtonElement>) => {
       if (![' ', 'Enter'].includes(event.key)) return;
@@ -226,7 +264,7 @@ export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0, h
           <button className="rack-btn keyboard-reach" aria-label="Higher keys" disabled={reach.at >= reach.max} onClick={() => showOctave(reach.at + 1)}>▶</button>
         )}
       </div>
-      <div className="keyboard" ref={stripRef} onContextMenu={(event) => { if (pointers.current.size > 0 || ['touch', 'pen'].includes((event.nativeEvent as PointerEvent).pointerType)) event.preventDefault(); }}>
+      <div className="keyboard" ref={stripRef} role="group" aria-label="Piano keys" onContextMenu={(event) => { if (pointers.current.size > 0 || ['touch', 'pen'].includes((event.nativeEvent as PointerEvent).pointerType)) event.preventDefault(); }}>
         {octaves.map((octave) => (
           <div key={octave} className="octave">
             <div className="white-keys">

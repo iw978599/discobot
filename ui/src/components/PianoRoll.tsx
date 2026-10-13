@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { Fragment } from 'react';
 import { Pattern } from '../types';
 import { MAX_STEP_NOTES, noteLengths, stepNotes, stepOffset } from '../services/noteScheduling';
 import { CHORD_SHAPES, chordNotes, type ChordShapeId } from '../services/chords';
@@ -175,7 +174,7 @@ export default function PianoRoll({
   const place = (column: number) => {
     const grid = gridRef.current;
     const head = grid?.querySelector<HTMLElement>(`.piano-roll-step-header[data-step="${firstStepRef.current + column}"]`);
-    const corner = grid?.firstElementChild;
+    const corner = grid?.querySelector('.piano-roll-corner');
     if (!grid || !head || !corner) return;
     grid.scrollLeft += head.getBoundingClientRect().left - corner.getBoundingClientRect().right - 1;
   };
@@ -198,7 +197,7 @@ export default function PianoRoll({
       const shown = width === 0;
       width = now;
       if (now === 0) return;
-      const label = grid.firstElementChild?.getBoundingClientRect().width ?? 0;
+      const label = grid.querySelector('.piano-roll-corner')?.getBoundingClientRect().width ?? 0;
       const room = Math.floor((now - label) / (MIN_CELL + 1));
       setAcross(ACROSS.find(steps => steps <= room) ?? ACROSS[ACROSS.length - 1]);
       if (shown) grid.scrollTop = grid.scrollHeight;
@@ -319,10 +318,12 @@ export default function PianoRoll({
         <button className="rack-btn danger piano-roll-action" onClick={onClear}>Clear</button>
       </div>
 
+      {/* A grid to a screen reader: each row and each cell's wrapper has no box of its own
+          (display: contents), so the layout is still one grid of headers and buttons. */}
       <div
         ref={gridRef}
         className="piano-roll-grid"
-        role="group"
+        role="grid"
         aria-label="Piano roll notes"
         style={{ gridTemplateColumns: `minmax(58px, auto) repeat(${columns.length}, minmax(28px, 1fr))`, '--roll-columns': columns.length, '--roll-fit': Math.max(1, fit) } as CSSProperties}
         onFocus={(event) => {
@@ -335,20 +336,24 @@ export default function PianoRoll({
         // also take the touch that follows it.
         onContextMenu={(event) => { if (pressing.current || ['touch', 'pen'].includes((event.nativeEvent as PointerEvent).pointerType)) event.preventDefault(); }}
       >
-        <div className="piano-roll-corner" />
-        {columns.map((stepIndex) => (
-          <div
-            key={`step-header-${stepIndex}`}
-            className={`piano-roll-step-header ${selectedStep === stepIndex ? 'selected' : ''}`}
-            data-step={stepIndex}
-          >
-            {stepIndex + 1}
-          </div>
-        ))}
+        <div className="piano-roll-row" role="row">
+          <div className="piano-roll-corner" role="columnheader" aria-label="Note" />
+          {columns.map((stepIndex) => (
+            <div
+              key={`step-header-${stepIndex}`}
+              className={`piano-roll-step-header ${selectedStep === stepIndex ? 'selected' : ''}`}
+              role="columnheader"
+              aria-label={`Step ${stepIndex + 1}`}
+              data-step={stepIndex}
+            >
+              {stepIndex + 1}
+            </div>
+          ))}
+        </div>
 
         {notes.map((note) => (
-          <Fragment key={note}>
-            <div key={`label-${note}`} className={`piano-roll-note-label ${note.includes('#') ? 'sharp' : ''}`}>
+          <div key={note} className="piano-roll-row" role="row">
+            <div className={`piano-roll-note-label ${note.includes('#') ? 'sharp' : ''}`} role="rowheader">
               {note}
             </div>
             {columns.map((stepIndex) => {
@@ -361,8 +366,8 @@ export default function PianoRoll({
               const isEnd = noteStart !== undefined && stepIndex === Math.min(pattern.steps.length - 1, noteStart + noteLength - 1);
               const late = active ? stepOffset(step) : 0;
               return (
+                <div key={`${note}-${stepIndex}`} className="piano-roll-slot" role="gridcell">
                 <button
-                  key={`${note}-${stepIndex}`}
                   className={`piano-roll-cell ${active ? 'active' : ''} ${late > 0 ? 'late' : ''} ${active && noteLength > 1 ? 'long' : ''} ${sustained ? 'held' : ''} ${selectedStep === stepIndex ? 'selected' : ''}`}
                   aria-label={`${note} step ${stepIndex + 1}`}
                   aria-pressed={active}
@@ -417,7 +422,7 @@ export default function PianoRoll({
                     event.preventDefault();
                     const nextNote = notes[Math.max(0, Math.min(notes.length - 1, nextRow))];
                     nextStep = Math.max(0, Math.min(pattern.steps.length - 1, nextStep));
-                    event.currentTarget.parentElement?.querySelector<HTMLButtonElement>(`[data-note="${nextNote}"][data-step="${nextStep}"]`)?.focus();
+                    gridRef.current?.querySelector<HTMLButtonElement>(`[data-note="${nextNote}"][data-step="${nextStep}"]`)?.focus();
                   }}
                   style={{ touchAction: 'none', ...(late > 0 ? { '--late': `${Math.round(late * 100)}%` } as CSSProperties : {}) }}
                   type="button"
@@ -450,9 +455,10 @@ export default function PianoRoll({
                     />
                   )}
                 </button>
+                </div>
               );
             })}
-          </Fragment>
+          </div>
         ))}
       </div>
     </div>
