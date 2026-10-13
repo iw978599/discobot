@@ -148,8 +148,11 @@ target; removal of the AI review workflow.
    use, and opening it on another device puts them in that browser. Share
    links, published songs, sync and shared projects still carry no audio, so
    a lane's sample is missing there. Syncing samples needs file storage on
-   the server, which is waiting on a payment card for Cloudflare R2
-   (`docs/STORAGE_AND_ACCOUNTS_PLAN.md`, stage 3 step 5).
+   the server. The storage first planned, Cloudflare R2, asks for a payment
+   card, and the owner said on 2026-10-12 that the project pays for
+   nothing. So this is not planned on R2. It stays open only if a way is
+   found that costs nothing and asks for no card; until then samples
+   travel in project files, which is free and works today.
 
 3. **A sample oscillator in the synth.** (M) Done on 2026-10-12, not verified
    by ear. A synth lane's engine can be Sample: it plays an imported sample
