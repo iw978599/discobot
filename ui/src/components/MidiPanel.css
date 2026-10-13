@@ -11,6 +11,13 @@
   min-width: 0;
 }
 
+.midi-ties { flex-wrap: wrap; }
+.midi-learn-status { color: var(--text-plain); font-family: var(--sentence-font); }
+.midi-tie-list { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.midi-tie-list li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: var(--surface-inset); border: 1px solid var(--edge-faint); border-radius: var(--corner-control); padding: 4px 8px; color: var(--text-plain); }
+.midi-tie-list b { color: var(--text); flex: 1; }
+.midi-tie-arrow { color: var(--text-faint); }
+
 .midi-status-dot {
   width: 7px;
   height: 7px;
