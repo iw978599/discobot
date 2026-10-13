@@ -536,6 +536,21 @@ may redistribute.
     synthesis feature; chords already play. Basic major and minor chords are a
     reasonable starting point. The final chord set, inversions and whether
     insertion adds to or replaces notes are still design choices.
+    How the owner wants it to work, said on 2026-10-12:
+    - Choose a shape first (major, minor and so on), then the root note:
+      with a shape chosen, pressing a note in the roll puts the whole chord
+      there, built on that note.
+    - Once a chord is in the roll, each of its notes can be deleted or made
+      longer by itself.
+    - "Perhaps a toggle" between changing one note and changing the whole
+      chord, meaning every note in the step. The owner was unsure of the
+      toggle; show them a way of doing it before settling.
+    What this needs that the app does not have: a step holds one length for
+    all its notes (`step.length`), so a note of a chord cannot yet be longer
+    than its neighbours. Each note needs a length of its own, stored so that
+    older projects play as they did, and carried through playback, the
+    arpeggiator, WAV and MIDI export and MIDI import (`expandStepNotes`).
+    That makes this larger than the (S) above: (M).
 
 16. **One row for a project and its copies.** Done: asked for by the owner on
     2026-10-12 and built. In Projects, a project and the ones the app named

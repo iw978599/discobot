@@ -190,7 +190,11 @@ Behaviour:
 5. **Feature 11:** Help with a list of headings and a search box.
 6. **Feature 8:** a metronome and a count-in, with the switch beside Tap.
    The metronome does not exist yet.
-7. **Chord buttons in the piano roll** (roadmap features 15).
+7. **Chord buttons in the piano roll** (roadmap features 15). The owner
+   said on 2026-10-12 how it should work: choose a shape, then the root
+   note; each note of a chord can then be deleted or lengthened by itself,
+   perhaps with a toggle between one note and the whole step. The roadmap
+   item has it in full, and says why it needs a length for each note.
 
 ### Step 3. MIDI work (roadmap features 6)
 
