@@ -754,23 +754,47 @@ for new accounts.
 
 ## Questions waiting on the owner
 
-- **Controller knobs.** Merged on 2026-10-13 with the owner's answers,
-  each as built: the ties are kept with the browser for now, the
-  parameter jumps to the controller's knob as soon as it is turned, and
-  choosing the parameter from a menu is enough. Still to do: try it with
-  the Launchkey.
+- **Firefox guests.** The owner said on 2026-10-13 that the timing "still
+  seems off" on Firefox after PRs #76 and #77. Still to ask: what is
+  heard (a guest early, late, drifting further out as it plays, or
+  stuttering), and with which guest.
+- **Controller knobs and MIDI pads.** Both are built as the owner asked;
+  neither has been tried with the Launchkey.
 
-- **Did the Firefox guest fixes work?** PRs #76 and #77 changed how a guest
-  instrument's audio is timed for Firefox. Nobody has said whether a guest
-  now plays in time on a real desktop Firefox.
-- **Tape Loop Deck.** On hold: the owner took it off the Add Guest list on
-  2026-10-10. Its loops are not saved with a project either, which needs an
-  addition to the guest protocol and a new prompt for its author.
-- **Kids mode.** Staying a separate page is now decided. Still to answer:
-  whether what a child makes can be opened in the full app.
-- **The Polysix model and the chorus.** The chorus is one shared effect
-  with a send for each lane. May a model turn up its lane's send, or should
-  that model wait until a lane can have effects of its own?
+## Decided by the owner on 2026-10-13
+
+Answers given in one sitting. Each is settled; build to it without asking
+again.
+
+- **Transpose.** As built and merged: one lane in the open scene, four
+  buttons, the notes rewritten, a button disabled at the edge of the range.
+- **Controller knobs.** As built and merged: ties kept with the browser
+  for now, the value jumps to the controller's knob, the parameter chosen
+  from a menu.
+- **Randomizer.** As built: random notes for synth lanes only, the kind of
+  line it makes, the browser remembering the last key and scale, and no
+  question before it replaces a lane's notes.
+- **A knob's reset.** A middle click puts a knob back at its default, not
+  at zero.
+- **The scroll wheel on knobs.** The rule that the pointer must rest on a
+  knob before the wheel turns it is good.
+- **The piano keys' arrows.** Left and right standing aside while a step
+  is selected is fine.
+- **Time signatures.** The six agreed ones only. No custom number of
+  steps in a bar.
+- **Master mixer.** A new unit showing the same levels as the knobs that
+  exist, which stay. Each instrument has a channel.
+- **A delay and reverb send for each drum.** Yes: delay and reverb only,
+  with the kit's own sends as a master over them.
+- **Aux sends.** Two for now. Which effects they can be pointed at is the
+  builder's choice.
+- **MIDI.** Each pad can be given to any drum. When more than one device
+  is connected, each can have a destination of its own.
+- **Kids mode.** What a child makes cannot be opened in the full app.
+- **The Polysix model and the chorus.** When a lane can have effects of
+  its own, the Polysix's Ensemble moves from the lane's send on the shared
+  chorus to an effect of its own.
+- **Tape Loop Deck.** Stays off the Add Guest list.
 
 ## Suggested order
 
