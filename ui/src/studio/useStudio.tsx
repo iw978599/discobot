@@ -10,7 +10,7 @@ import { localService } from '../services/localService';
 import type { GuestPatch } from '../services/projectOps';
 import { projectSync, startProjectSync } from '../services/projectSync';
 import { loadDrumSample } from '../services/drumSamples';
-import { loadLaneSample } from '../services/builtInWaves';
+import { loadCymbals, loadLaneSample } from '../services/builtInWaves';
 import { MAX_EMBEDDED_TOTAL_BYTES, MAX_PROJECT_FILE_BYTES, adoptSamples, embedSamples } from '../services/projectSamples';
 import { exportPreset, importPreset, type ImportedPreset } from '../services/presetImport';
 import { BAR_CHOICES, DRUM_STEPS_PER_BAR, clampLengths, drumBars, laneBars, resizeBars, sceneAsBars, sceneBars } from '../services/patternLength';
@@ -314,6 +314,8 @@ export function useStudio() {
   // Decoded samples for the drum lanes that use one, and the lanes whose sample is not on this device.
   const drumSamplesRef = useRef<Partial<Record<DrumInstrument, DrumSample>>>({});
   const [missingDrumSamples, setMissingDrumSamples] = useState<DrumInstrument[]>([]);
+  // The app's cymbal recordings, for the worklet and for export. Empty until they have been fetched.
+  const cymbalsRef = useRef<Awaited<ReturnType<typeof loadCymbals>>>({});
   // The decoded recording each synth lane's sample engine plays, by lane id.
   const synthSamplesRef = useRef<Record<number, DrumSample>>({});
   // Goes up when samples arrive from a project file, so a lane whose sample was missing looks again.
@@ -1647,7 +1649,7 @@ export function useStudio() {
     tempo: globalTempoRef.current, synths: synthsRef.current, drumState: drumStateRef.current,
     drumKitId: selectedDrumKitIdRef.current, drumMasterVolume, drumSwing,
     drumFx: drumFxRef.current, effectsLoop: effectsLoopRef.current, drumSamples: { ...drumSamplesRef.current },
-    synthSamples: { ...synthSamplesRef.current },
+    synthSamples: { ...synthSamplesRef.current }, drumCymbals: cymbalsRef.current,
     // A scene longer than one bar is rendered a bar at a time, each lane looping at its own length.
     ...(sceneBars(liveSceneRef.current()) > 1 ? { bars: sceneAsBars(liveSceneRef.current()) } : {}),
   }), [drumMasterVolume, drumSwing]);
@@ -1696,6 +1698,17 @@ export function useStudio() {
     });
     return () => { current = false; };
   }, [drumSampleKey, drumAudio, sampleStoreVersion]);
+
+  // The cymbals come with the app. Until they arrive the cymbal lane plays its synthesized voice.
+  useEffect(() => {
+    let current = true;
+    void loadCymbals().then((cymbals) => {
+      if (!current) return;
+      cymbalsRef.current = cymbals;
+      drumAudio.setCymbals(cymbals);
+    });
+    return () => { current = false; };
+  }, [drumAudio]);
 
   // The same for the synth lanes: which recording each one's sample engine plays.
   const synthSampleKey = synths.map(entry => `${entry.id}:${entry.synthParams?.sample?.wave ?? ''}:${entry.synthParams?.sample?.id ?? ''}`).join('|');

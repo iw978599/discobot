@@ -1,5 +1,5 @@
 import { useRef, useEffect, useMemo } from 'react';
-import type { DrumInstrument, DrumSettings, DrumKitId, FxSendLevels } from '../types';
+import type { CymbalType, DrumInstrument, DrumSettings, DrumKitId, FxSendLevels } from '../types';
 import type { DrumSample } from '../../../engine/src/drums/DrumCore';
 import type { DrumWorkletMessage } from '@discobot/engine';
 import { createAudioLane, getAudioContext, ensureAudioReady, loadAudioWorklet, setEffectsLoop } from './browserAudio';
@@ -16,6 +16,7 @@ export function useDrumAudio() {
   const kitRef = useRef<DrumKitId>('clean-analog');
   const generationRef = useRef(0);
   const samplesRef = useRef<Partial<Record<DrumInstrument, DrumSample>>>({});
+  const cymbalsRef = useRef<Partial<Record<CymbalType, DrumSample>>>({});
 
   // Everything below only reads refs, so one instance serves every render.
   const api = useMemo(() => {
@@ -27,6 +28,7 @@ export function useDrumAudio() {
         lane.setVolume(volumeRef.current);
         lane.setSends(sendsRef.current, returnRef.current);
         node.connect(lane.input);
+        send(node, { type: 'cymbals', cymbals: cymbalsRef.current });
         // Samples chosen before the node existed.
         for (const [instrument, sample] of Object.entries(samplesRef.current)) send(node, { type: 'sample', instrument: instrument as DrumInstrument, sample });
         laneRef.current = lane;
@@ -41,6 +43,11 @@ export function useDrumAudio() {
       laneRef.current?.setSends(sends, fxReturn);
     }
     function setKit(kit: DrumKitId) { kitRef.current = kit; }
+    // The recordings the cymbal lane plays. The worklet gets its own copy.
+    function setCymbals(cymbals: Partial<Record<CymbalType, DrumSample>>) {
+      cymbalsRef.current = cymbals;
+      send(nodeRef.current, { type: 'cymbals', cymbals });
+    }
     // A lane's sample, or null for its synthesized voice. The worklet gets its own copy.
     function setSample(instrument: DrumInstrument, sample: DrumSample | null) {
       if (sample) samplesRef.current[instrument] = sample; else delete samplesRef.current[instrument];
@@ -75,7 +82,7 @@ export function useDrumAudio() {
       laneRef.current = null;
       nodeRef.current = null;
     }
-    return { ensureAudioReady, tryResume: () => { void ensureAudioReady(); }, playDrumHit, setVolume, setFxSends, setKit, setSample, setEffectsLoop, stopAllNotes, dispose };
+    return { ensureAudioReady, tryResume: () => { void ensureAudioReady(); }, playDrumHit, setVolume, setFxSends, setKit, setSample, setCymbals, setEffectsLoop, stopAllNotes, dispose };
   }, []);
   useEffect(() => api.dispose, [api]);
   return api;

@@ -7,6 +7,7 @@ import { tracked } from '../studio/tracked';
 import { gridKeyTarget } from './gridKeys';
 import { BAR_CHOICES, drumBars } from '../services/patternLength';
 import type { Studio } from '../studio/useStudio';
+import { CYMBAL_TYPES } from '@discobot/engine';
 import { DrumInstrument, DrumKitId, DrumState, CymbalType } from '../types';
 import DrumKnob from '../components/DrumKnob';
 
@@ -18,6 +19,10 @@ const LABELS: Record<DrumInstrument, string> = {
   snare2: 'Low Tom', ride: 'High Tom', crash: 'Cymbal',
 };
 
+// The cymbals the Cymbal lane can be. A crash is the lane's own name; the others show theirs.
+const CYMBAL_NAMES: Record<CymbalType, string> = { crash: 'Crash', ride: 'Ride', bell: 'Bell', splash: 'Splash' };
+const cymbalName = (type: CymbalType | undefined) => (type && type !== 'crash' && CYMBAL_NAMES[type]) || LABELS.crash;
+
 const EXTRA: Record<DrumInstrument, { knob: string; display: (v: number) => string; parse: (n: number) => number }> = {
   kick: { knob: 'Punch', display: (v) => `${(20 + v * 80).toFixed(0)}%`, parse: (n) => (n - 20) / 80 },
   snare: { knob: 'Snap', display: (v) => `${(10 + v * 90).toFixed(0)}%`, parse: (n) => (n - 10) / 90 },
@@ -26,7 +31,8 @@ const EXTRA: Record<DrumInstrument, { knob: string; display: (v: number) => stri
   openHH: { knob: 'Decay', display: (v) => `${((0.22 + v * 0.85) * 1000).toFixed(0)}ms`, parse: (n) => (n / 1000 - 0.22) / 0.85 },
   snare2: { knob: 'Bend', display: (v) => `${(20 + v * 80).toFixed(0)}%`, parse: (n) => (n - 20) / 80 },
   ride: { knob: 'Decay', display: (v) => `${((0.4 + v * 1.2) * 1000).toFixed(0)}ms`, parse: (n) => (n / 1000 - 0.4) / 1.2 },
-  crash: { knob: 'Wash', display: (v) => `${((0.8 + v * 2.1) * 1000).toFixed(0)}ms`, parse: (n) => (n / 1000 - 0.8) / 2.1 },
+  // The cymbal is a recording: its knob is how much of the recording's own ring is left, not a time.
+  crash: { knob: 'Decay', display: (v) => `${Math.round(v * 100)}%`, parse: (n) => n / 100 },
 };
 
 const parseNumber = (input: string): number | null => {
@@ -97,8 +103,7 @@ function DrumModule({ studio }: { studio: Studio }) {
   };
 
   const track = drumState[selected];
-  const isRide = selected === 'crash' && track.settings.cymbalType === 'ride';
-  const extra = isRide ? EXTRA.ride : EXTRA[selected];
+  const extra = EXTRA[selected];
   const stepLabel = `${LABELS[selected]} step ${selectedStep + 1}`;
 
   const handleStepClick = (instrument: DrumInstrument, step: number, shiftKey: boolean) => {
@@ -195,7 +200,7 @@ function DrumModule({ studio }: { studio: Studio }) {
           </div>
           {INSTRUMENTS.map((instrument) => {
             const row = drumState[instrument];
-            const shown = instrument === 'crash' && row.settings.cymbalType === 'ride' ? 'Ride' : LABELS[instrument];
+            const shown = instrument === 'crash' ? cymbalName(row.settings.cymbalType) : LABELS[instrument];
             return (
               <div
                 key={instrument}
@@ -285,16 +290,18 @@ function DrumModule({ studio }: { studio: Studio }) {
       <div className="rack-row drum-strip" data-drum={selected}>
         <div className="drum-strip-name">
           <span className="drum-selected-dot" />
-          <b>{isRide ? 'Ride' : LABELS[selected]}</b>
+          <b>{selected === 'crash' ? cymbalName(track.settings.cymbalType) : LABELS[selected]}</b>
           {selected === 'crash' && (
-            <button
-              className="rack-btn"
-              aria-label="Switch cymbal type"
-              onClick={() => onSettings('crash', { cymbalType: (isRide ? 'crash' : 'ride') as CymbalType })}
-              title="Switch this lane between a crash and a ride"
-            >
-              {isRide ? 'Ride' : 'Crash'}
-            </button>
+            <label className="drum-sound" title="Which cymbal this lane is. Each is a recording of a real one, the same in every kit">
+              Cymbal
+              <select
+                aria-label="Cymbal type"
+                value={track.settings.cymbalType ?? 'crash'}
+                onChange={(event) => onSettings('crash', { cymbalType: event.target.value as CymbalType })}
+              >
+                {CYMBAL_TYPES.map(type => <option key={type} value={type}>{CYMBAL_NAMES[type]}</option>)}
+              </select>
+            </label>
           )}
         </div>
         <label className="drum-sound" title="Play an imported sample on this lane instead of its built-in sound. Volume, tune and pan still apply">

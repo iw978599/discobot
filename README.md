@@ -23,7 +23,7 @@ instrument, each with four knobs of its own.
 
 A model is this synth's own voice set up to behave like the instrument it is
 named for. It is not that instrument's circuit and uses none of its samples.
-The M1, D-50 and Wavestation play recordings and waves from two free
+The M1, D-50 and Wavestation, and the drums' cymbals, play recordings and waves from two free
 libraries, VSCO 2 Community Edition (Versilian Studios, with an upright piano
 sampled by Simon Dalzell of Ivy Audio) and Adventure Kid Waveforms (Kristoffer
 Ekstrand), both in the public domain; `docs/BUNDLED_AUDIO.md` has the details.
@@ -34,8 +34,10 @@ volume. You can save, export and import your own, including presets from some
 other synths.
 
 **A drum machine** with eight lanes and eight kits (Clean, Punchy, Lo-Fi,
-TR-808, TR-909, LinnDrum, DMX, TR-707). Any lane can play a sample of your own
-instead of its built-in voice, and a whole kit can be imported at once.
+TR-808, TR-909, LinnDrum, DMX, TR-707). The drums are synthesized, except the
+cymbal lane, which plays a recording of a real crash, ride, bell or splash.
+Any lane can play a sample of your own instead of its built-in voice, and a
+whole kit can be imported at once.
 
 **Scenes and a song.** A scene is every lane's pattern plus the drum grid,
 one, two, four or eight bars long. A song is scenes in order, each repeated as many times as

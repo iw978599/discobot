@@ -1,4 +1,4 @@
-import { DrumCore, type DrumSample, SynthCore, type SynthSample, toVoiceParams } from '@discobot/engine';
+import { type CymbalType, DrumCore, type DrumSample, SynthCore, type SynthSample, toVoiceParams } from '@discobot/engine';
 import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, Scene, SequencerStep, SynthParameters } from '../types';
 import { sceneDrumState } from './songPlayback';
 import { DRUM_INSTRUMENTS } from './drumKits';
@@ -24,6 +24,8 @@ export interface ExportArrangement {
   bars?: Scene[];
   // Decoded samples for the drum lanes that use one. A lane without an entry is synthesized.
   drumSamples?: Partial<Record<DrumInstrument, DrumSample>>;
+  // The app's cymbal recordings, by kind. Without them the cymbal lane is synthesized.
+  drumCymbals?: Partial<Record<CymbalType, DrumSample>>;
   // Decoded recordings for the synth lanes set to the sample engine, by lane id. A lane without
   // one plays its oscillators, as it does live.
   synthSamples?: Record<number, SynthSample>;
@@ -116,7 +118,7 @@ export function renderSynthBars(
   return renderCore(core, frames);
 }
 
-type DrumArrangement = Pick<ExportArrangement, 'tempo' | 'drumState' | 'drumKitId' | 'drumMasterVolume' | 'drumSwing' | 'bars' | 'drumSamples'>;
+type DrumArrangement = Pick<ExportArrangement, 'tempo' | 'drumState' | 'drumKitId' | 'drumMasterVolume' | 'drumSwing' | 'bars' | 'drumSamples' | 'drumCymbals'>;
 interface DrumHit { instrument: DrumInstrument; time: number; velocity: number; settings: DrumSettings }
 
 // Every drum hit the export plays, with its start time. Worked out once so the drum render
@@ -151,6 +153,7 @@ export function renderDrums(
   arrangement: DrumArrangement, frames: number, sampleRate: number, bars = 1, barDuration = 240 / arrangement.tempo,
 ): Stereo {
   const core = new DrumCore(sampleRate);
+  core.setCymbals(arrangement.drumCymbals);
   for (const [instrument, sample] of Object.entries(arrangement.drumSamples ?? {})) core.setSample(instrument as DrumInstrument, sample);
   for (const hit of drumHits(arrangement, bars, barDuration)) core.trigger({ ...hit, kitId: arrangement.drumKitId });
   return renderCore(core, frames);

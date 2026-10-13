@@ -30,6 +30,10 @@ export const SOURCES = [
   { id: 'attack-bell', zones: [{ file: 'vsco/glock_C6.wav', from: `${VSCO}Percussion/Glock/glock_medium_C6.wav`, root: 96, seconds: 0.3 }] },
   { id: 'attack-breath', zones: [{ file: 'vsco/flute_C5.wav', from: `${VSCO}Woodwinds/Flute/stac/LDFlute_stac_C5_v2_rr1.wav`, root: 84, seconds: 0.2 }] },
   { id: 'attack-mallet', zones: [{ file: 'vsco/marimba_C4.wav', from: `${VSCO}Percussion/Marimba/Marimba_hit_Outrigger_C4_loud_01.wav`, root: 72, seconds: 0.15 }] },
+  // The drum machine's cymbals, one hit each. They are kept at a higher rate than the rest, because
+  // most of a cymbal is above what 22,050 Hz can hold. A cymbal has no note; the root is not used.
+  ...[['crash', 'cymbal-crash1_ff_rr1', 2.5], ['ride', 'susCymb1-hitstick_f_rr1', 1.8], ['bell', 'susCymb1-hit-bell_mf', 1.5], ['splash', 'cymbal-crashshort_v1', 1]]
+    .map(([name, source, seconds]) => ({ id: `cymbal-${name}`, zones: [{ file: `vsco/cymbal_${name}.wav`, from: `${VSCO}Percussion/${source}.wav`, root: 60, seconds, rate: 32000, unpitched: true }] })),
   { id: 'organ', frames: cycles('eorgan', [1]) },
   { id: 'choir', frames: cycles('hvoice', [1]) },
   { id: 'seq-voices', frames: cycles('hvoice', [1, 14, 27, 40, 53, 66, 79, 92]) },
@@ -101,14 +105,18 @@ function pitchOf(samples, rate, expected) {
   return bestLag ? rate / bestLag : 0;
 }
 
-function zone(folder, { file, root, seconds }) {
+function zone(folder, { file, root, seconds, rate: wanted = RATE, unpitched = false }) {
   const { mono, rate } = readWav(join(folder, file));
   // Start a moment before the sound does.
   const loud = peakOf(mono), begin = Math.max(0, mono.findIndex(value => Math.abs(value) > loud * 0.02) - Math.floor(rate * 0.002));
-  const cut = resample(mono.subarray(begin, begin + Math.ceil(rate * (seconds + 0.05))), rate, RATE).subarray(0, Math.floor(RATE * seconds));
+  const cut = resample(mono.subarray(begin, begin + Math.ceil(rate * (seconds + 0.05))), rate, wanted).subarray(0, Math.floor(wanted * seconds));
   // The last fifth fades away, so a recording cut short does not stop with a click.
   const fade = Math.floor(cut.length * 0.2), scale = 0.9 / peakOf(cut);
   const out = Float64Array.from(cut, (value, index) => value * scale * Math.min(1, (cut.length - 1 - index) / fade));
+  if (unpitched) {
+    console.log(`  ${file.padEnd(24)} ${(out.length / wanted).toFixed(2)}s kept of ${((mono.length - begin) / rate).toFixed(2)}s, at ${wanted} Hz`);
+    return { root, rate: wanted, samples: out };
+  }
   const expected = 440 * 2 ** ((root - 69) / 12), heard = pitchOf(out, RATE, expected);
   const cents = heard ? 1200 * Math.log2(heard / expected) : NaN;
   console.log(`  ${file.padEnd(24)} root ${root}  ${seconds}s  pitch ${heard.toFixed(1)} Hz against ${expected.toFixed(1)} (${cents.toFixed(0)} cents)`);

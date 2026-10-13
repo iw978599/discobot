@@ -288,7 +288,8 @@ export type DrumInstrument = 'kick' | 'snare' | 'openHH' | 'closedHH' | 'ride' |
 export type DrumKitId = 'clean-analog' | 'punchy-modern' | 'lofi-dirty' | 'tr-808' | 'tr-909' | 'linndrum' | 'oberheim-dmx' | 'tr-707';
 export type DrumKitModelVariant = 'analog' | 'modern' | 'dirty';
 
-export type CymbalType = 'crash' | 'ride';
+export type CymbalType = 'crash' | 'ride' | 'bell' | 'splash';
+export const CYMBAL_TYPES: CymbalType[] = ['crash', 'ride', 'bell', 'splash'];
 
 export interface DrumSettings {
   volume: number;

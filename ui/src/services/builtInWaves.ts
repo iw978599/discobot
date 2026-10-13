@@ -1,4 +1,4 @@
-import type { SynthParameters, SynthSample } from '@discobot/engine';
+import { CYMBAL_TYPES, type CymbalType, type SynthParameters, type SynthSample } from '@discobot/engine';
 import { loadDrumSample } from './drumSamples';
 
 // The sounds that come with the app for the sample engine: recordings of instruments and single
@@ -62,6 +62,17 @@ export function loadBuiltInWave(id: string): Promise<SynthSample | null> {
       .catch(() => { loading = undefined; return new Map<string, SynthSample>(); });
   }
   return loading.then(waves => waves.get(id) ?? null);
+}
+
+// The drum machine's cymbals, by kind. One that could not be fetched is left out, and the drum
+// voice plays its synthesized cymbal for it.
+export async function loadCymbals(): Promise<Partial<Record<CymbalType, SynthSample>>> {
+  const cymbals: Partial<Record<CymbalType, SynthSample>> = {};
+  for (const kind of CYMBAL_TYPES) {
+    const sample = await loadBuiltInWave(`cymbal-${kind}`);
+    if (sample) cymbals[kind] = { data: sample.data, rate: sample.rate };
+  }
+  return cymbals;
 }
 
 // What a lane's sample engine plays: one of the app's sounds, an imported sample, or nothing.

@@ -178,8 +178,11 @@ whether that is enough.
 Asked for on 2026-10-12: "the cymbal on the drum machine sounds bad. also
 give more cymbal options on drums". Ask which cymbal, in which kit, and
 what is wrong with it before changing anything; then a pass at the sound,
-and more cymbals to choose from. Whether any of them may be a recording is
-the owner's decision.
+and more cymbals to choose from. The owner answered: both cymbals, every
+kit, "sound nothing like cymbals", the hats are fine, and yes to
+recordings. Built on `feat/design-review-cymbals` (check its pull
+request's state): four recorded cymbals in place of the synthesized two.
+The owner has not heard them.
 
 ### Step 3. A full song among the starting points (roadmap features 21)
 
@@ -360,8 +363,9 @@ Still waiting:
   Minimoog and TB-303 as they sound through it; the MS-20, its filter, its
   three presets and the high-pass.
 - **The Launchkey's numbers**, when the MIDI work (step 5) is reached.
-- **The cymbal** (step 2): which one sounds bad, in which kit, and how; and
-  whether new cymbals may be recordings or must all be synthesized.
+- **The cymbals** (step 2): whether the recorded Crash, Ride, Bell and
+  Splash sound right, and whether the Ride (a suspended cymbal struck with
+  a stick, the nearest the free library has) passes for one.
 - **Transpose, the randomizer, the master mixer, the drums' own sends and
   routable aux sends** (steps 11 and 9): what each should do. The roadmap
   items (features 19, 20 and 22 to 24) list the questions.

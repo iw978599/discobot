@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { SynthCore, createDefaultSynthParameters, toVoiceParams, type SynthSample } from '@discobot/engine';
+import { CYMBAL_TYPES, SynthCore, createDefaultSynthParameters, toVoiceParams, type SynthSample } from '@discobot/engine';
 import { BUILT_IN_WAVES, parseWaveBundle } from '../src/services/builtInWaves.ts';
 import { sanitizeSynthParams } from '../src/services/projectSanitization.ts';
 import { SYNTH_MODELS, enterSynthModel, mapSynthModelToEngineParams } from '../src/synthModels.ts';
@@ -48,8 +48,11 @@ const same = (a: Float32Array, b: Float32Array) => a.length === b.length && a.ev
 const sequence = (scan: number, fade: number) => ({ sample: { root: 60, loop: false, wave: 'seq-overtones', scan, fade } });
 
 test('the wave file holds every sound the menu offers, is small, and a damaged one gives nothing', () => {
-  assert.ok(file.byteLength < 600 * 1024, `${Math.round(file.byteLength / 1024)} KB`);
-  assert.deepEqual([...BUNDLED_WAVES.keys()].sort(), BUILT_IN_WAVES.map(entry => entry.id).sort());
+  assert.ok(file.byteLength < 1000 * 1024, `${Math.round(file.byteLength / 1024)} KB`);
+  // Beside the sample engine's sounds it holds the drum machine's cymbals, one for each kind.
+  const cymbals = CYMBAL_TYPES.map(kind => `cymbal-${kind}`);
+  assert.deepEqual([...BUNDLED_WAVES.keys()].sort(), [...BUILT_IN_WAVES.map(entry => entry.id), ...cymbals].sort());
+  for (const id of cymbals) assert.ok(wave(id).data.length > wave(id).rate / 2 && wave(id).rate >= 32000, id);
   for (const entry of BUILT_IN_WAVES) {
     const found = wave(entry.id);
     for (const part of [found, ...(found.zones ?? [])]) {
