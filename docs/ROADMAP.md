@@ -680,6 +680,14 @@ for new accounts.
     some, or a gentle nudge of the sound that is there); or all of these
     on one button. Whatever it is, one press is one undo step, and it never
     touches what it was not pointed at.
+    Built on 2026-10-13 as a draft waiting for the owner, not verified by
+    ear: a key, a scale (major, minor and the two pentatonics) and a
+    Randomize button in a lane's Notes tab, which replace that lane's
+    notes in the open scene with a new line in the scale, as one undo
+    step. The key and scale are remembered by the browser, not the
+    project. Still open: whether notes are what was meant (as built), or
+    a drum pattern (the drums already have Fill), or a random sound for a
+    lane (every knob, or a gentle nudge), or all of these on one button.
 
 21. **A full song among the starting points.** (S to M) Asked for by the
     owner on 2026-10-12: "add a full song example along with the beat
