@@ -5,7 +5,7 @@ import { createBuiltInPresets } from '../src/services/builtInPresets.ts';
 import { PRESET_KINDS, type PresetKind } from '../src/services/presetKinds.ts';
 import { sanitizeSynthParams } from '../src/services/projectSanitization.ts';
 import { mapSynthModelToEngineParams } from '../src/synthModels.ts';
-import { AUDIT_RATE, RING_LIMIT, measurePreset } from './helpers/presetAudit.ts';
+import { AUDIT_RATE, RING_LIMIT, measureMotion, measurePreset } from './helpers/presetAudit.ts';
 
 const presets = createBuiltInPresets();
 const measures = new Map(presets.map(preset => [preset.id, measurePreset(preset.params, preset.kind)]));
@@ -89,6 +89,42 @@ test('a bass, a lead, keys and a pluck speak at once', () => {
     const m = measures.get(preset.id)!;
     assert.ok(m.attack <= 0.06, `${preset.name} takes ${Math.round(m.attack * 1000)} ms to speak`);
   }
+});
+
+const named = (id: string) => {
+  const preset = presets.find(entry => entry.id === `builtin-${id}`);
+  assert.ok(preset, `there is a preset ${id}`);
+  return preset;
+};
+
+test('the sounds that promise to move do, and the ones that promise two sides have them', () => {
+  // A held chord whose level comes and goes: breathing slowly, or cut into steps in time.
+  for (const [id, least] of [['pad-breath', 3], ['pad-gate', 12], ['pad-voices-time', 3]] as const) {
+    const preset = named(id), swing = measureMotion(preset.params, preset.kind).swing;
+    assert.ok(swing >= least, `${preset.name} moves ${swing.toFixed(1)} dB while held`);
+  }
+  // A second layer placed apart from the first, or a route to the pan.
+  for (const id of ['lead-soft', 'lead-stereo', 'pad-glass', 'pad-voices-time', 'keys-felt', 'keys-suitcase', 'fx-wind', 'fx-helicopter', 'fx-computer']) {
+    const preset = named(id), width = measureMotion(preset.params, preset.kind).width;
+    assert.ok(width >= 0.2, `${preset.name} is ${width.toFixed(2)} wide`);
+  }
+  // One note alone is the same on both sides unless something places it.
+  assert.ok(measureMotion(named('lead-square').params, 'lead').width < 0.01);
+});
+
+test('the newer parts of the voice each have a sound that shows them', () => {
+  const uses = (check: (params: typeof presets[number]['params']) => unknown) => presets.filter(preset => preset.modelId === 'generic' && check(preset.params)).length;
+  assert.ok(uses(p => p.layer?.enabled) >= 3, 'a second layer');
+  assert.ok(uses(p => p.modMatrix?.some(route => route.source === 'random')) >= 1, 'the random source');
+  assert.ok(uses(p => p.modMatrix?.some(route => route.destination === 'pan')) >= 3, 'a route to the pan');
+  assert.ok(uses(p => p.modMatrix?.some(route => route.source === 'velocity' && route.destination === 'fmIndex')) >= 3, 'a harder note is brighter in FM');
+  assert.ok(uses(p => p.oscillator2?.enabled && p.oscillator2.sync) >= 1, 'oscillator sync');
+  assert.ok(uses(p => p.filter.model === 'ladder') >= 3, 'the ladder filter');
+  assert.ok(uses(p => p.lfo1.enabled && p.lfo1.sync) >= 2, 'an LFO in time with the tempo');
+  assert.ok(uses(p => p.engine === 'sample' && p.sample?.wave) >= 3, 'the app\u2019s own recorded sounds');
+  assert.ok(uses(p => p.sample?.sync) >= 1, 'a sequence of waves in time with the tempo');
+  assert.equal(named('pluck-arp').params.arpeggiator.enabled, true);
+  assert.equal(named('pluck-arp').params.arpeggiator.octaves, 2);
 });
 
 // The level of the first oscillator, which the noise sounds turn down.

@@ -152,6 +152,73 @@ target; removal of the AI review workflow.
    LinnDrum, DMX and TR-707, which are synthesized. A listening session with
    adjustments is the highest-value sound work remaining, and only a person
    can do it.
+   To listen to, from the pass over the built-in sounds and beats on
+   2026-10-13. None of it is verified by ear: each change was chosen from
+   what the sound's name promises and from measurements (level, how far the
+   level moves while a chord is held for eight seconds, and how much of the
+   sound differs between the two sides). No preset's name or id changed, and
+   a project already saved keeps the sound it has: a preset is only applied
+   when it is loaded.
+   Presets changed, in the order of the menu:
+   - Bass, FM Bass: a harder note is brighter (velocity to the FM amount);
+     at a middling strength it is what it was.
+   - Lead, Mono/Poly Lead and Odyssey Sync: vibrato, which the other leads
+     had and these two did not.
+   - Lead, Soft Lead: a second layer, slightly out of tune, a little
+     brighter and placed apart. It measured the same on both sides and now
+     measures 0.42 wide. It plays four notes at once, not eight.
+   - Lead, Glass Lead: a harder note is glassier (velocity to the FM amount).
+   - Pad, M1 Voices: a slow vibrato, and notes spread across the two sides
+     by pitch (it measured the same on both sides; now 0.23).
+   - Pad, Glass Pad: the FM amount drifts slowly and the sound sways from
+     side to side. Its level moved 0.8 dB while held and its brightness
+     hardly at all; now 1.7 dB and about a third of an octave.
+   - Pad, Breath Pad: it swells and falls slowly, as breathing does, and
+     drifts a little from side to side (0.9 dB of movement before, 5.8 now).
+   - Keys, M1 Organ: a gentle tremolo at six a second, as a rotary speaker
+     gives; it was a still sound.
+   - Keys, Digital Piano: a harder note is brighter (velocity to the FM
+     amount), on top of the filter that already followed it.
+   - Pluck, Chord Stab and Blip: a harder note is brighter (velocity to the
+     filter), as the other plucks already were. Blip is a little louder: it
+     was the quietest pluck.
+   - Effects, Wind: the gusts cross from side to side as they brighten.
+   - Effects, Helicopter: it circles slowly from one side to the other.
+   Presets added:
+   - Bass, Sync Bass: oscillator sync swept by the filter's envelope,
+     through the ladder filter.
+   - Lead, Stereo Lead: a saw and a pulse through the ladder filter, in two
+     layers placed far apart (0.76 wide, the widest lead).
+   - Pad, Voices in Time: the sequence of voice waves stepped through in
+     time with the tempo, a wave each half note, in two layers.
+   - Pad, Gate Pad: a chord cut into eighth notes in time with the tempo,
+     with the filter opening and closing once a bar.
+   - Keys, Felt Piano: the recorded piano, darker and softer, in two layers
+     a little apart.
+   - Keys, Suitcase Keys: an FM electric piano that moves from side to side
+     in time with the tempo, brighter for a harder note.
+   - Pluck, Harp: the recorded harp attack over a soft triangle that carries
+     the note, low notes to the left and high to the right.
+   - Pluck, Octave Arp: a pluck through the ladder filter that comes with
+     the arpeggiator on, up and down through two octaves.
+   - Effects, Computer: a square wave stepping to a random pitch and place
+     every sixteenth note, in time with the tempo.
+   - Effects, Dive: a note that starts an octave up and falls.
+   Looked at and left alone: Pluck Bass was tried on the ladder filter and
+   lost 1.7 dB with its level already at the most a lane allows, so it is as
+   it was. Super Saw measures narrow (0.06) but two layers of five copies is
+   a lot of work for a phone. A model's preset can only be given what its
+   macros leave alone, so M1 Voices could not have a second layer.
+   The three starting beats, each with one or two hits that are not played
+   every time and one that repeats within its step:
+   - House Beat: the ghost snare before the bar comes round plays half the
+     time, and the last closed hat is played twice.
+   - Slow Groove: the ghost snare in the middle plays seven times in ten,
+     the open hat three in four, and the last ghost snare is a drag (two
+     quick hits) into the next bar.
+   - Electro: a quiet ghost snare after the third kick, six times in ten;
+     the high tom of the fill is a roll of two; the open hat at the end
+     plays seven times in ten.
 
 2. **Samples that travel with a project.** (files done; sync still open)
    A saved project file now carries the audio of the samples its drum lanes
@@ -751,8 +818,9 @@ for new accounts.
     with a bass, a pad and a bell lead on three built-in sounds and the
     recorded crash. The three beats were dressed up the same day: quiet
     and loud hats, ghost notes, a fill, and bass notes of different
-    strengths. Open: the owner hearing all of it and saying what to change;
-    more than one song.
+    strengths. On 2026-10-13 they were also given hits left to chance and
+    repeats (listed under sound 1). Open: the owner hearing all of it and
+    saying what to change; more than one song.
 
 22. **A master mixer.** (M) Asked for by the owner on 2026-10-12. Levels are
     spread about today: each synth lane has a Level knob on its face and
