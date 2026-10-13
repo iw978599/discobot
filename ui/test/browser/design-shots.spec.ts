@@ -84,7 +84,7 @@ const open = async (page: Page, address = './') => {
   await page.goto(address);
 };
 const ready = (page: Page) => expect(page.getByRole('heading', { name: 'Discobot', exact: true })).toBeVisible();
-const menu = async (page: Page, name: 'Project' | 'Export', item?: string) => {
+const menu = async (page: Page, name: 'Project', item?: string) => {
   await page.getByRole('button', { name: `${name} ▾`, exact: true }).click();
   if (item) await page.getByRole('menuitem', { name: item, exact: true }).click();
 };
@@ -271,14 +271,19 @@ test('design shots: menus, dialogs, the walkthrough and a guest', async ({ page 
   await ready(page);
   await drums(walk);
 
-  for (const name of ['Project', 'Export'] as const) {
-    await attempt(walk, `menu-${name.toLowerCase()}`, async () => {
-      await menu(page, name);
-      await expect(page.getByRole('menuitem').first()).toBeVisible();
-      await shot(walk, `menu-${name.toLowerCase()}`);
-      await page.keyboard.press('Escape');
-    });
-  }
+  await attempt(walk, 'menu-project', async () => {
+    await menu(page, 'Project');
+    await expect(page.getByRole('menuitem').first()).toBeVisible();
+    await shot(walk, 'menu-project');
+    await page.keyboard.press('Escape');
+  });
+  // Export was a menu and is now a dialog; its picture keeps the name it had.
+  await attempt(walk, 'menu-export', async () => {
+    await page.locator('.transport').getByRole('button', { name: 'Export', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Export', exact: true })).toBeVisible();
+    await shot(walk, 'menu-export');
+    await page.keyboard.press('Escape');
+  });
   await attempt(walk, 'menu-preset', async () => {
     const editor = page.locator('.synth-module').first();
     await editor.getByRole('button', { name: /^Synth preset/ }).click();

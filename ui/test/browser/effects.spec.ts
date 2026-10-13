@@ -1,6 +1,18 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
+// Export is a dialog: what (the scene or the song), as what, then Export. It is closed at once and
+// the file goes on being made, so the caller waits for the download as it did with the menu.
+async function exportAs(page: Page, item: string) {
+  await page.locator('.transport').getByRole('button', { name: 'Export', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Export', exact: true });
+  await dialog.getByRole('radio', { name: item.startsWith('Song') ? 'The whole song' : 'This scene', exact: true }).check();
+  await dialog.getByRole('radio', { name: item === 'Loop WAV' ? 'Seamless loop' : item === 'Stems' ? 'Stems' : item.endsWith('MIDI') ? 'MIDI' : 'Audio', exact: true }).check();
+  await dialog.getByRole('button', { name: 'Export', exact: true }).click();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+}
+
 const PROJECT_KEY = 'discobot_browser_project_v1';
 const stored = (page: Page) => page.evaluate(key => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem(key) || '{}')), PROJECT_KEY);
 
@@ -13,8 +25,7 @@ async function edit(control: Locator, text: string) {
 async function exportWav(page: Page, path: string) {
   await page.waitForTimeout(250);
   const download = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Export ▾', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Scene WAV', exact: true }).click();
+  await exportAs(page, 'Scene WAV');
   await (await download).saveAs(path);
   return readFile(path);
 }

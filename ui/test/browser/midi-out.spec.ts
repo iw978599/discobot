@@ -1,6 +1,18 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
+// Export is a dialog: what (the scene or the song), as what, then Export. It is closed at once and
+// the file goes on being made, so the caller waits for the download as it did with the menu.
+async function exportAs(page: Page, item: string) {
+  await page.locator('.transport').getByRole('button', { name: 'Export', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Export', exact: true });
+  await dialog.getByRole('radio', { name: item.startsWith('Song') ? 'The whole song' : 'This scene', exact: true }).check();
+  await dialog.getByRole('radio', { name: item === 'Loop WAV' ? 'Seamless loop' : item === 'Stems' ? 'Stems' : item.endsWith('MIDI') ? 'MIDI' : 'Audio', exact: true }).check();
+  await dialog.getByRole('button', { name: 'Export', exact: true }).click();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+}
+
 const PROJECT_KEY = 'discobot_browser_project_v1';
 const stored = (page: Page) => page.evaluate(key => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem(key) || '{}')), PROJECT_KEY);
 const sent = (page: Page) => page.evaluate(() => (window as unknown as { midiSent: Array<{ data: number[]; at?: number }> }).midiSent);
@@ -84,8 +96,7 @@ test('a MIDI file of several bars imports at its full length', async ({ page }, 
   expect(before.synths[0].pattern.steps.length).toBe(32);
 
   const download = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Export ▾', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Scene MIDI', exact: true }).click();
+  await exportAs(page, 'Scene MIDI');
   const path = testInfo.outputPath('two-bars.mid');
   await (await download).saveAs(path);
 

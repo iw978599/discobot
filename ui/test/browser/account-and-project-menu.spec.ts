@@ -23,7 +23,7 @@ test.beforeEach(async ({ page, request }, testInfo) => {
   await expect(page.getByRole('heading', { name: 'Discobot', exact: true })).toBeVisible();
 });
 
-test('the Project menu is in three groups with Reset All apart, and the Export menu in two', async ({ page }) => {
+test('the Project menu is in three groups with Reset All apart, and Export is a dialog of two choices', async ({ page }) => {
   await page.getByRole('button', { name: 'Project ▾', exact: true }).click();
   const menu = page.getByRole('menu', { name: 'Project', exact: true });
   await expect(menu.getByRole('menuitem')).toHaveCount(11);
@@ -51,10 +51,13 @@ test('the Project menu is in three groups with Reset All apart, and the Export m
   await expect(menu).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Project ▾', exact: true })).toBeFocused();
 
-  await page.getByRole('button', { name: 'Export ▾', exact: true }).click();
-  const exports = page.getByRole('menu', { name: 'Export', exact: true });
-  expect(await rows(exports)).toEqual(['Scene WAV', 'Loop WAV', 'Stems', 'Scene MIDI', '|', 'Song WAV', 'Song MIDI']);
+  // Export is a dialog of two choices: what, and as what.
+  await page.locator('.transport').getByRole('button', { name: 'Export', exact: true }).click();
+  const exports = page.getByRole('dialog', { name: 'Export', exact: true });
+  await expect(exports.getByRole('group', { name: 'What', exact: true }).getByRole('radio')).toHaveCount(2);
+  await expect(exports.getByRole('group', { name: 'As', exact: true }).getByRole('radio')).toHaveCount(4);
   await page.keyboard.press('Escape');
+  await expect(exports).toHaveCount(0);
 });
 
 test('a menu row still does its job from its group', async ({ page }) => {

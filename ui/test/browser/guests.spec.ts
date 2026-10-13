@@ -1,5 +1,17 @@
 import { expect, test, type Page } from '@playwright/test';
 
+// Export is a dialog: what (the scene or the song), as what, then Export. It is closed at once and
+// the file goes on being made, so the caller waits for the download as it did with the menu.
+async function exportAs(page: Page, item: string) {
+  await page.locator('.transport').getByRole('button', { name: 'Export', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Export', exact: true });
+  await dialog.getByRole('radio', { name: item.startsWith('Song') ? 'The whole song' : 'This scene', exact: true }).check();
+  await dialog.getByRole('radio', { name: item === 'Loop WAV' ? 'Seamless loop' : item === 'Stems' ? 'Stems' : item.endsWith('MIDI') ? 'MIDI' : 'Audio', exact: true }).check();
+  await dialog.getByRole('button', { name: 'Export', exact: true }).click();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+}
+
 const PROJECT_KEY = 'discobot_browser_project_v1';
 const stored = (page: Page) => page.evaluate(key => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem(key) || '{}')), PROJECT_KEY);
 const guestAddress = (baseURL: string) => `http://127.0.0.1:${Number(new URL(baseURL).port) + 1000}/__guest`;
@@ -127,8 +139,7 @@ test('a WAV export records the guest by playing through once, and the named inst
   const { readFile } = await import('node:fs/promises');
   const exportWav = async (name: string) => {
     const download = page.waitForEvent('download', { timeout: 30_000 });
-    await page.getByRole('button', { name: 'Export ▾', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Scene WAV', exact: true }).click();
+    await exportAs(page, 'Scene WAV');
     const path = testInfo.outputPath(name);
     await (await download).saveAs(path);
     const bytes = await readFile(path);
@@ -179,8 +190,7 @@ test('a song export gives a guest each scene\'s own mute, whichever scene is ope
   const { readFile } = await import('node:fs/promises');
   const exportSong = async (name: string) => {
     const download = page.waitForEvent('download', { timeout: 30_000 });
-    await page.getByRole('button', { name: 'Export ▾', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Song WAV', exact: true }).click();
+    await exportAs(page, 'Song WAV');
     const path = testInfo.outputPath(name);
     await (await download).saveAs(path);
     const bytes = await readFile(path);
@@ -347,8 +357,7 @@ test('a guest is in the loop and the stems, and has sends to the shared effects'
   const { readFile } = await import('node:fs/promises');
   const download = async (item: string, name: string) => {
     const pending = page.waitForEvent('download', { timeout: 30_000 });
-    await page.getByRole('button', { name: 'Export ▾', exact: true }).click();
-    await page.getByRole('menuitem', { name: item, exact: true }).click();
+    await exportAs(page, item);
     const path = testInfo.outputPath(name);
     await (await pending).saveAs(path);
     return readFile(path);
