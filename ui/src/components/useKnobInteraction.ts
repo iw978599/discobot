@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import type { KeyboardEvent, PointerEvent } from 'react';
+import type { KeyboardEvent, MouseEvent, PointerEvent } from 'react';
 import { useKnobWheel } from './knobWheel';
 
 // How far a finger may wander and still be a tap. A mouse has no such allowance: it turns the
@@ -48,7 +48,19 @@ export function useKnobInteraction(value: number, min: number, max: number, step
   return {
     normalize,
     ref: wheelRef,
+    // The middle button would start the browser's own scrolling from the knob.
+    onMouseDown: (event: MouseEvent<HTMLDivElement>) => { if (event.button === 1) event.preventDefault(); },
     onPointerDown: (event: PointerEvent<HTMLDivElement>) => {
+      // A press of a mouse's middle button puts the knob at zero: the middle of a knob that goes
+      // either side of it, and the end nearest zero of one that does not reach it.
+      if (!disabled && event.button === 1 && event.pointerType === 'mouse') {
+        event.preventDefault();
+        event.currentTarget.focus();
+        drag.current = null;
+        const zero = normalize(0);
+        if (zero !== value) onChange(zero);
+        return;
+      }
       if (disabled || event.button !== 0) return;
       event.preventDefault();
       event.currentTarget.focus();
