@@ -644,6 +644,15 @@ for new accounts.
     models, a scene's colour, mutes that differ from scene to scene.
     Nobody can write a good song by reasoning alone: it is made, then the
     owner listens, and it is changed until they like it.
+    First version built on 2026-10-13, not verified by ear: a Sample Song
+    button on the strip opens a finished song as a new project. It is in A
+    minor at 118, five sections of four bars (intro, verse, chorus, break,
+    outro, the chorus returning after the break), about seventy seconds,
+    with a bass, a pad and a bell lead on three built-in sounds and the
+    recorded crash. The three beats were dressed up the same day: quiet
+    and loud hats, ghost notes, a fill, and bass notes of different
+    strengths. Open: the owner hearing all of it and saying what to change;
+    more than one song.
 
 22. **A master mixer.** (M) Asked for by the owner on 2026-10-12. Levels are
     spread about today: each synth lane has a Level knob on its face and

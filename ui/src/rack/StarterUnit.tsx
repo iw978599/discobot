@@ -16,8 +16,9 @@ export default function StarterUnit({ studio }: { studio: Studio }) {
           {STARTERS.map(starter => (
             <button key={starter.id} className="rack-btn" title={starter.hint} onClick={() => studio.handleStarter(starter.id)}>{starter.name}</button>
           ))}
+          <button className="rack-btn" title="A whole song, five sections long, opened as a new project of its own to play and take apart" onClick={() => { void studio.handleSampleSong(); }}>Sample Song</button>
         </div>
-        <span className="rack-hint starter-hint">Pick a beat and press Play. Each one replaces the drums and Synth 1's notes, and Undo takes it back.</span>
+        <span className="rack-hint starter-hint">Pick a beat and press Play. Each one replaces the drums and Synth 1's notes, and Undo takes it back. Sample Song opens a finished song as a new project.</span>
         <div className="rack-grow" />
         <button className="rack-btn" title="Hide these starting points" onClick={studio.dismissStarters}>Hide</button>
       </div>

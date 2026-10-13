@@ -64,3 +64,26 @@ test('the offer leaves only when it is hidden, and is not made on a project that
   await expect(kick(page, 1)).toHaveAttribute('aria-pressed', 'true');
   await expect(offer(page), 'a project with a hit in it is not offered a beat').toHaveCount(0);
 });
+
+test('Sample Song opens a finished song as a new project, ready to play as a song', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const stored = () => page.evaluate(() => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem('discobot_browser_project_v1') || '{}')));
+  const first = (await stored()).projectId;
+  await offer(page).getByRole('button', { name: 'Sample Song', exact: true }).click();
+
+  await expect(tempo(page)).toHaveText('118');
+  await expect.poll(async () => (await stored()).name).toBe('Sample Song');
+  const project = await stored();
+  expect(project.projectId, 'the empty project it was started from is left alone').not.toBe(first);
+  expect(project.scenes.map((scene: { name: string }) => scene.name)).toEqual(['Intro', 'Verse', 'Chorus', 'Break', 'Outro']);
+  expect(project.song.entries).toHaveLength(6);
+  expect(project.synths).toHaveLength(3);
+  await expect(offer(page), 'a project with a song in it is not offered a beat').toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Kick step 1', exact: true }), 'the intro opens, and has no kick yet').toHaveAttribute('aria-pressed', 'false');
+
+  await page.getByRole('button', { name: /Play All/ }).click();
+  await page.waitForTimeout(1200);
+  await page.getByRole('button', { name: /Stop All/ }).click();
+  expect(errors).toEqual([]);
+});

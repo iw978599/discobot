@@ -186,9 +186,10 @@ The owner has not heard them.
 
 ### Step 3. A full song among the starting points (roadmap features 21)
 
-Beside the three beats. It is made, the owner listens, and it is changed
-until they like it. Placed here by the builder, as content that shows the
-sound work off; the owner did not say where it goes.
+Beside the three beats. A first version, with the three beats dressed up
+and the arpeggiator's single-note change the owner asked for the same day,
+is built on `feat/design-review-starters-and-arp` (check its pull
+request's state). The owner has heard none of it: ask what to change.
 
 ### Step 4. The rest of the owner's picks from the design review
 

@@ -111,7 +111,7 @@ test('a slide holds the note past the next step; the arpeggiator fills the step 
   assert.ok(expandStep('C3', params, window, 120, true)[0].duration > window);
   const arp = merge(params, { arpeggiator: { enabled: true, mode: 'up', rate: '1/32', gate: 0.5 } });
   const pulses = expandStep('C3', arp, 0.25, 120);
-  assert.deepEqual(pulses.map(pulse => pulse.note), ['C3', 'E3', 'G3', 'C4']);
+  assert.deepEqual(pulses.map(pulse => pulse.note), ['C3', 'C4', 'C5', 'C3']);
   assert.deepEqual(pulses.map(pulse => pulse.offset), [0, 0.0625, 0.125, 0.1875]);
 });
 

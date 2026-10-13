@@ -116,7 +116,8 @@ renders exports, so both sound the same. Each of its eight notes has:
 - four modulation routes: an LFO, an envelope, velocity, key or a stepped
   random value, sent to pitch, the second oscillator's pitch, the filter, the
   level, pulse width, pan or FM amount;
-- mono mode with glide between tied steps, and an arpeggiator.
+- mono mode with glide between tied steps, and an arpeggiator, which runs a
+  chord through its own notes and a single note through its octaves.
 
 Each lane has a Duck amount that pulls it down on every kick and lets it swell
 back; it is applied the same way in an export.
