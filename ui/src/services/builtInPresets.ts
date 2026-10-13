@@ -172,6 +172,10 @@ const LEAD: BuiltInPreset[] = [
     gain: 1.3,
     fxReturn: 0.7, fxSends: { reverb: 0.2, delay: 0.3, drive: 0.15, phaser: 0, chorus: 0 },
   }),
+  model('lead-cs80', 'CS-80 Brass', 'lead', 'cs-80', [0.5, 0.35, 0.65, 0.2], {
+    gain: 1,
+    fxReturn: 0.8, fxSends: { reverb: 0.35, delay: 0.15, drive: 0, phaser: 0, chorus: 0.1 },
+  }),
   model('lead-virus', 'Virus Lead', 'lead', 'virus', [0.3, 0.35, 0.7, 0.5], {
     gain: 1.65,
     fxReturn: 0.75, fxSends: { reverb: 0.25, delay: 0.3, drive: 0.1, phaser: 0, chorus: 0.15 },
@@ -248,6 +252,14 @@ const PAD: BuiltInPreset[] = [
   model('pad-polysix', 'Polysix Pad', 'pad', 'polysix', [0.6, 0.2, 0.45, 0.7], {
     gain: 0.7,
     spread: 0.5, fxReturn: 0.9, fxSends: { reverb: 0.45, delay: 0.15, drive: 0, phaser: 0 },
+  }),
+  model('pad-cs80', 'CS-80 Strings', 'pad', 'cs-80', [0.5, 0.6, 0.6, 0.55], {
+    gain: 1,
+    fxReturn: 0.9, fxSends: { reverb: 0.5, delay: 0.15, drive: 0, phaser: 0, chorus: 0.25 },
+  }),
+  model('pad-cs80-swell', 'CS-80 Swell', 'pad', 'cs-80', [0.6, 0.4, 0.85, 0.8], {
+    gain: 1.15,
+    fxReturn: 0.9, fxSends: { reverb: 0.55, delay: 0.3, drive: 0, phaser: 0, chorus: 0.15 },
   }),
   model('pad-virus', 'Virus Motion', 'pad', 'virus', [0.6, 0.3, 0.45, 1], {
     gain: 1.15,

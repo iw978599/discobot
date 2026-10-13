@@ -45,7 +45,7 @@ test('at every end and the middle of every macro, a model stays inside the limit
 });
 
 test('a model this copy of the app does not know opens with the plain engine', () => {
-  assert.equal(normalizeSynthModelId('cs-80'), 'generic');
+  assert.equal(normalizeSynthModelId('no-such-synth'), 'generic');
   assert.equal(normalizeSynthModelId('sh-101'), 'sh-101');
   assert.equal(normalizeSynthModelId('pro-one'), 'pro-one');
   assert.deepEqual(mapSynthModelToEngineParams('generic', MIDDLE), {});
@@ -243,6 +243,30 @@ test('the Virus morphs a saw into a pulse through a driven filter, and its fourt
   }
   // Its LFOs are sources only: neither is switched on to its own target.
   assert.deepEqual([middle.lfo1Enabled, middle.lfo2Enabled], [false, false]);
+});
+
+test('the CS-80 plays two layers a note, and its knobs set the second against the first', () => {
+  const middle = voice('cs-80');
+  assert.deepEqual([middle.voiceMode, middle.layerEnabled, middle.filterSlope], ['poly', true, 12]);
+  assert.ok(middle.filterHighpass >= 20 && middle.velocityFilter > 0 && middle.layerWidth > 0);
+  assert.deepEqual([voice('cs-80', { ...MIDDLE, macro1: 0 }).layerMix, voice('cs-80', { ...MIDDLE, macro1: 1 }).layerMix], [0, 1]);
+  assert.deepEqual([voice('cs-80', { ...MIDDLE, macro2: 0 }).layerDetune, voice('cs-80', { ...MIDDLE, macro2: 1 }).layerDetune], [0, 30]);
+  // Brightness is level in the middle, darker below and brighter above.
+  assert.deepEqual([0, 0.5, 1].map(macro3 => voice('cs-80', { ...MIDDLE, macro3 }).layerBrightness), [-2, 0, 2]);
+  assert.equal(voice('cs-80', { ...MIDDLE, macro4: 0 }).layerAttack, 0);
+  assert.ok(voice('cs-80', { ...MIDDLE, macro4: 1 }).layerAttack > voice('cs-80', MIDDLE).layerAttack);
+});
+
+test('the second layer goes when a lane leaves the CS-80', () => {
+  const lane = sound('cs-80', { macro1: 1, macro2: 1, macro3: 1, macro4: 1 });
+  for (const model of SYNTH_MODELS.filter(entry => entry.id !== 'generic' && entry.id !== 'cs-80')) {
+    const moved = toVoiceParams(onLane(lane, enterSynthModel(model.id, MIDDLE, 'cs-80')));
+    assert.equal(moved.layerEnabled, false, model.id);
+    assert.equal(moved.filterHighpass, mapSynthModelToEngineParams(model.id, MIDDLE).filter?.highpass ?? 0, model.id);
+  }
+  // Only turning a macro leaves a layer someone switched on by hand where it is.
+  const byHand = onLane(sound('juno-106'), { layer: { enabled: true, mix: 0.5, detune: 8, brightness: 0, attack: 0, width: 0 } });
+  assert.equal(toVoiceParams(onLane(byHand, mapSynthModelToEngineParams('juno-106', { ...MIDDLE, macro1: 1 }))).layerEnabled, true);
 });
 
 test('sync, the ring and the routes go when a lane leaves the Odyssey', () => {

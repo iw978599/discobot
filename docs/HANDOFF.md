@@ -261,9 +261,12 @@ fourteen, with the engine work each needs.
    matrix (#145) and the MS-20 (#144) are merged. The Odyssey, with sync
    and ring modulation for the voice, is built on
    `feat/design-review-odyssey` (check its pull request's state), and
-   the Virus on `feat/synth-model-virus`. The CS-80 is next; the CS-80 needs two layers a note, the
-   largest change to the voice. The owner also asked on 2026-10-12 for the
-   README to be brought up to date with all of this. The owner said on
+   the Virus on `feat/synth-model-virus`; both are merged (#146, #147), and
+   #147 brought the README up to date as the owner asked. The CS-80, with
+   a second layer for the voice, is built on `feat/design-review-cs80`
+   (check its pull request's state). That is every model that does not
+   need samples. Keep the README's model table and counts current when a
+   model or preset is added. The owner said on
    2026-10-12 to "just keep working" through this. What it said before:
    the modulation matrix, then the Odyssey, the Virus and the CS-80. Build
    here the one way of naming any parameter that step 4 needs too.

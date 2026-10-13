@@ -102,6 +102,11 @@ export function sanitizeSynthParams(value: unknown, defaults: SynthParameters): 
     voices: Math.round(number(params.unison!.voices, 1, 1, 7)), detune: number(params.unison!.detune, defaults.unison!.detune, 0, 1),
     mix: number(params.unison!.mix, 1, 0, 1),
   };
+  const layer = record(input.layer);
+  params.layer = {
+    enabled: layer.enabled === true, mix: number(layer.mix, .5, 0, 1), detune: number(layer.detune, 8, -50, 50),
+    brightness: number(layer.brightness, 0, -3, 3), attack: number(layer.attack, 0, 0, 5), width: number(layer.width, 0, 0, 1),
+  };
   params.duck = number(input.duck, 0, 0, 1);
   params.velocity = { amp: number(params.velocity!.amp, 1, 0, 1), filter: number(params.velocity!.filter, 0, 0, 1) };
   const fm = params.fm!, fmDefaults = defaults.fm!;

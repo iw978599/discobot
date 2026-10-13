@@ -140,6 +140,22 @@ export interface SynthParameters {
     // as they always were. It only does anything with an odd number of copies, which has a middle.
     mix?: number;
   };
+  // a second layer on every note: the same sound again, tuned, filtered, faded in and placed
+  // differently. Absent or not enabled means one layer, as there always was. Two layers take
+  // two voices a note, so half as many notes can sound at once.
+  layer?: {
+    enabled: boolean;
+    // the balance between the two, 0 (the first alone) to 1 (the second alone)
+    mix: number;
+    // the second layer's tuning against the first, in cents
+    detune: number;
+    // the second layer's filter against the first's, in octaves
+    brightness: number;
+    // seconds added to the second layer's attack, so it swells in under the first
+    attack: number;
+    // how far apart the two are placed, 0 (together) to 1 (one each side)
+    width: number;
+  };
   // how far a kick drum pulls this lane's level down, 0 to 1
   duck?: number;
   fm?: {
@@ -205,7 +221,7 @@ export interface SynthParameters {
   };
 }
 
-export type SynthModelId = 'generic' | 'minimoog-model-d' | 'juno-106' | 'dx7' | 'tb-303' | 'prophet-5' | 'sh-101' | 'pro-one' | 'jupiter-8' | 'ob-xa' | 'jp-8000' | 'mono-poly' | 'polysix' | 'ms-20' | 'odyssey' | 'virus';
+export type SynthModelId = 'generic' | 'minimoog-model-d' | 'juno-106' | 'dx7' | 'tb-303' | 'prophet-5' | 'sh-101' | 'pro-one' | 'jupiter-8' | 'ob-xa' | 'jp-8000' | 'mono-poly' | 'polysix' | 'ms-20' | 'odyssey' | 'virus' | 'cs-80';
 
 export interface SynthModelParams {
   macro1: number;

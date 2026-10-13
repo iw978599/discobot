@@ -120,6 +120,22 @@ true before the first new model ships, and say so in the pull request.
   - A synced oscillator tuned very high aliases: the restart is not
     band-limited.
 
+- 2026-10-12: **The CS-80 is built**, and with it a second layer for the
+  voice. Not verified by ear.
+  - A layered sound plays every note on two voices. The second is the
+    first again with five differences: its share of the level, its tuning,
+    its filter (in octaves against the first's), a slower attack, and its
+    place from side to side. It is a stored field (`layer`) that any sound
+    can use, on the Osc tab.
+  - The instrument's two layers were two whole synths, each with its own
+    waves, filters and envelopes. Here the layers share all of those.
+  - Each layer is a saw alone. The instrument could add a pulse to it; this
+    voice's pulse and saw at one pitch cancel each other (the two together
+    measured 5 to 9 dB under either alone), so the pulse is left out.
+  - A layered lane plays four notes at once, not eight. The instrument had
+    eight. Raising the voice count is a cost in processing and was not done.
+  - Its ribbon, its poly aftertouch and its ring modulator are not modelled.
+
 - 2026-10-12: **The Virus is built.** It needed nothing more from the
   voice: the routes carry its movement and the filter's drive is its
   saturation. Not verified by ear.
