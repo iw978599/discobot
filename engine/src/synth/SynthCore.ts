@@ -43,6 +43,8 @@ interface Voice {
   // The value the random source is holding for this note, and where the LFO that steps it was last.
   random: number;
   randomPhase: number;
+  // Which layer of a layered sound this voice is playing: 0, or 1 for the second.
+  layer: number;
 }
 
 const TWO_PI = 2 * Math.PI;
@@ -69,6 +71,7 @@ export class SynthCore {
   private derived = {
     attack: 0, decay: 0, sustain: 0.7, release: 0,
     filterAttack: 0, filterDecay: 0, filterSustain: 0.2, filterRelease: 0,
+    layerAttack: 0, layerRatio: 1, layerFirst: 1, layerSecond: 1,
     glide: 1, osc2Ratio: 1, mixScale: 1, fmDecay: 0, driveGain: 1, driveMakeup: 1,
     unisonCount: 1, unisonRatios: new Float64Array(MAX_UNISON).fill(1), unisonLevels: new Float64Array(MAX_UNISON).fill(1), twoStage: false,
   };
@@ -95,7 +98,7 @@ export class SynthCore {
       fmPhase: [0, 0, 0, 0], fmFeedback: 0, fmEnv: 0, lfoPhase: [0, 0],
       amp: new Adsr(), filterEnv: new Adsr(), filter: new Svf(), filter2: new Svf(), ladder: new Ladder(), highpass: new Svf(), previousInput: 0,
       last: 0, transition: 0, transitionSamples: 0, age: 0, remaining: Infinity, releaseOverride: 0,
-      random: 0, randomPhase: 0,
+      random: 0, randomPhase: 0, layer: 0,
     }));
     this.refreshDerived();
     Object.assign(this.smoothed, {
@@ -106,7 +109,7 @@ export class SynthCore {
   setParams(update: Partial<Record<keyof VoiceParams, unknown>> | null | undefined): void {
     if (!update) return;
     const p = this.params as unknown as Record<string, unknown>;
-    const signature = () => `${p.oscType}|${p.filterType}|${p.engine}|${p.osc2Type}|${p.filterSlope}|${p.unisonVoices}|${p.filterModel}`;
+    const signature = () => `${p.oscType}|${p.filterType}|${p.engine}|${p.osc2Type}|${p.filterSlope}|${p.unisonVoices}|${p.filterModel}|${p.layerEnabled}`;
     const before = signature();
     for (const [key, value] of Object.entries(update)) {
       if (!(key in p)) continue;
@@ -134,6 +137,13 @@ export class SynthCore {
     d.decay = approachCoefficient(clamp(p.decay, 0.002, 10, 0.2), sr, 4.6);
     d.sustain = clamp(p.sustain, 0, 1, 0.5);
     d.release = approachCoefficient(clamp(p.release, 0.005, 10, 0.3), sr, 6.9);
+    // The second layer of a layered sound: a slower way in and its own tuning. The two layers share
+    // the level between them, so that at any balance they are together as loud as one.
+    d.layerAttack = approachCoefficient(clamp(clamp(p.attack, 0.001, 10, 0.01) + clamp(p.layerAttack, 0, 5, 0), 0.001, 10, 0.01), sr, 1.47);
+    d.layerRatio = 2 ** (clamp(p.layerDetune, -50, 50, 0) / 1200);
+    const balance = clamp(p.layerMix, 0, 1, 0.5) * Math.PI / 2;
+    d.layerFirst = Math.cos(balance);
+    d.layerSecond = Math.sin(balance);
     d.filterAttack = approachCoefficient(clamp(p.filterAttack, 0.001, 10, 0.005), sr, 1.47);
     d.filterDecay = approachCoefficient(clamp(p.filterDecay, 0.002, 10, 0.25), sr, 4.6);
     d.filterSustain = clamp(p.filterSustain, 0, 1, 0.2);
@@ -198,31 +208,39 @@ export class SynthCore {
       ? Math.max(1, Math.round(message.duration! * this.sampleRate)) : Infinity;
     const keyOctaves = Math.log2(frequency / MIDDLE_C);
 
+    // A layered sound plays every note on two voices, one for each layer.
+    const layers = p.layerEnabled ? Math.min(2, this.voices.length) : 1;
+
     if (p.voiceMode === 'mono') {
-      const voice = this.voices[0];
-      for (let i = 1; i < this.voices.length; i++) this.release(this.voices[i]);
-      if (voice.active && voice.amp.stage !== 'release') {
-        // Legato: move the pitch without retriggering the envelopes. This is what a slide is.
-        voice.note = message.note;
-        voice.id = message.id;
-        voice.targetFrequency = frequency;
-        if (!p.portamentoEnabled) voice.frequency = frequency;
-        voice.keyOctaves = keyOctaves;
-        voice.remaining = remaining;
-        this.lastFrequency = frequency;
-        return;
+      for (let i = layers; i < this.voices.length; i++) this.release(this.voices[i]);
+      for (let layer = 0; layer < layers; layer++) {
+        const voice = this.voices[layer];
+        if (voice.active && voice.amp.stage !== 'release') {
+          // Legato: move the pitch without retriggering the envelopes. This is what a slide is.
+          voice.note = message.note;
+          voice.id = message.id;
+          voice.targetFrequency = frequency;
+          if (!p.portamentoEnabled) voice.frequency = frequency;
+          voice.keyOctaves = keyOctaves;
+          voice.remaining = remaining;
+          this.lastFrequency = frequency;
+          continue;
+        }
+        this.trigger(voice, message, frequency, frequency, velocity, remaining, keyOctaves, layer);
       }
-      this.trigger(voice, message, frequency, frequency, velocity, remaining, keyOctaves);
       return;
     }
 
-    let voice = this.voices.find(v => v.active && v.note === message.note)
-      || this.voices.find(v => !v.active);
-    if (!voice) voice = this.voices.reduce((oldest, v) => v.age < oldest.age ? v : oldest);
-    this.trigger(voice, message, frequency, p.portamentoEnabled ? this.lastFrequency : frequency, velocity, remaining, keyOctaves);
+    const from = p.portamentoEnabled ? this.lastFrequency : frequency;
+    for (let layer = 0; layer < layers; layer++) {
+      let voice = this.voices.find(v => v.active && v.note === message.note && (layers === 1 || v.layer === layer))
+        || this.voices.find(v => !v.active);
+      if (!voice) voice = this.voices.reduce((oldest, v) => v.age < oldest.age ? v : oldest);
+      this.trigger(voice, message, frequency, from, velocity, remaining, keyOctaves, layer);
+    }
   }
 
-  private trigger(voice: Voice, message: NoteOnMessage, frequency: number, startFrequency: number, velocity: number, remaining: number, keyOctaves: number): void {
+  private trigger(voice: Voice, message: NoteOnMessage, frequency: number, startFrequency: number, velocity: number, remaining: number, keyOctaves: number, layer: number): void {
     if (!voice.active) {
       // Unison copies start out of phase with each other, or the note would open with a spike.
       for (let u = 0; u < MAX_UNISON; u++) {
@@ -248,6 +266,7 @@ export class SynthCore {
     voice.targetFrequency = frequency;
     voice.velocity = velocity;
     voice.keyOctaves = keyOctaves;
+    voice.layer = layer;
     voice.lfoPhase = [0, 0];
     voice.random = this.chance.next();
     voice.randomPhase = 0;
@@ -308,6 +327,9 @@ export class SynthCore {
     // A high-pass before the filter. Under 20 Hz there is none, and the sound is what it was before there could be.
     const highpassCutoff = clamp(p.filterHighpass, 0, maxCutoff, 0);
     const highpassG = highpassCutoff >= 20 ? svfCoefficient(highpassCutoff, sr) : 0;
+    // The second layer. With one layer nothing here is used, and the sound is what it was before there could be two.
+    const layered = p.layerEnabled;
+    const layerBrightness = clamp(p.layerBrightness, -3, 3, 0), layerWidth = clamp(p.layerWidth, 0, 1, 0);
 
     for (let i = 0; i < left.length; i++) {
       while (this.pending.length && this.pending[0].frame <= this.frame + i) this.startNote(this.pending.shift()!);
@@ -326,7 +348,8 @@ export class SynthCore {
         const v = this.voices[index];
         if (!v.active) continue;
         if (--v.remaining <= 0) this.release(v);
-        const amp = v.amp.tick(d.attack, d.decay, d.sustain, v.releaseOverride || d.release);
+        const second = layered && v.layer === 1;
+        const amp = v.amp.tick(second ? d.layerAttack : d.attack, d.decay, d.sustain, v.releaseOverride || d.release);
         if (v.amp.stage === 'off') { v.active = false; v.last = 0; continue; }
         const filterEnv = v.filterEnv.tick(d.filterAttack, d.filterDecay, d.filterSustain, v.releaseOverride || d.filterRelease);
         v.frequency += (v.targetFrequency - v.frequency) * d.glide;
@@ -378,7 +401,7 @@ export class SynthCore {
           if (osc2Octaves !== 0) osc2Mod = 2 ** osc2Octaves;
         }
 
-        const step = clamp(v.frequency * 2 ** (s.detune / 1200 + pitchMod) / sr, 0.000001, 0.45);
+        const step = clamp((second ? v.frequency * d.layerRatio : v.frequency) * 2 ** (s.detune / 1200 + pitchMod) / sr, 0.000001, 0.45);
         let source: number;
         if (fm) {
           v.fmEnv += (0.2 - v.fmEnv) * d.fmDecay;
@@ -431,8 +454,9 @@ export class SynthCore {
         }
 
         if (d.driveGain > 1) source = Math.tanh(source * d.driveGain) * d.driveMakeup;
-        const octaves = clamp(filterMod, -1, 1) * 2 + envAmount * 5 * filterEnv
+        let octaves = clamp(filterMod, -1, 1) * 2 + envAmount * 5 * filterEnv
           + keyTracking * v.keyOctaves + velocityFilter * 3 * (v.velocity - 0.5) + routedFilter;
+        if (second) octaves += layerBrightness;
         // Run the filter twice per sample: cheap 2x oversampling keeps resonance clean near Nyquist.
         const g = svfCoefficient(clamp(s.filterFreq * 2 ** octaves, 20, maxCutoff, 1000), sr * 2);
         const damping = 1 / s.filterQ;
@@ -467,13 +491,18 @@ export class SynthCore {
 
         const velocityGain = 1 - velocityAmp * (1 - v.velocity);
         let value = filtered * amp * ampMod * velocityGain * s.gain * VOICE_LEVEL;
+        let place = panMod;
+        if (layered) {
+          value *= second ? d.layerSecond : d.layerFirst;
+          place += second ? layerWidth : -layerWidth;
+        }
         if (v.transitionSamples > 0) {
           const blend = v.transitionSamples / this.transitionLength;
           value = value * (1 - blend) + v.transition * blend;
           v.transitionSamples--;
         }
         v.last = value;
-        const angle = (clamp(s.pan + clamp(v.keyOctaves / 3 - 0.25, -1, 1) * s.spread + panMod, -1, 1) + 1) * Math.PI / 4;
+        const angle = (clamp(s.pan + clamp(v.keyOctaves / 3 - 0.25, -1, 1) * s.spread + place, -1, 1) + 1) * Math.PI / 4;
         l += value * Math.cos(angle);
         r += value * Math.sin(angle);
       }

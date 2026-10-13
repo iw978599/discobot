@@ -179,10 +179,14 @@ export default function SynthControls({
   const velocity = parameters.velocity ?? DEFAULTS.velocity!;
   const fm = parameters.fm ?? DEFAULTS.fm!;
   const unison = parameters.unison ?? DEFAULTS.unison!;
+  const layer = parameters.layer ?? DEFAULTS.layer!;
   const isFm = parameters.engine === 'fm';
 
   const updateOscillator2 = (updates: Partial<NonNullable<SynthParameters['oscillator2']>>) => {
     onParameterChange({ oscillator2: { ...osc2, ...updates } });
+  };
+  const updateLayer = (updates: Partial<NonNullable<SynthParameters['layer']>>) => {
+    onParameterChange({ layer: { ...layer, ...updates } });
   };
   const updateMixer = (updates: Partial<NonNullable<SynthParameters['mixer']>>) => {
     onParameterChange({ mixer: { ...mixer, ...updates } });
@@ -723,6 +727,88 @@ export default function SynthControls({
             </div>
           </>
         )}
+
+        <div className="synth-column" data-tab="osc">
+          <div className="synth-section-header">
+            <h3>LAYER</h3>
+            <label className="synth-toggle" title="Play every note twice: a second layer of the same sound, tuned, filtered, faded in and placed differently. Half as many notes can sound at once">
+              <input
+                type="checkbox"
+                checked={layer.enabled}
+                aria-label="Second layer enabled"
+                onChange={(e) => updateLayer({ enabled: e.target.checked })}
+              />
+              <span className="synth-toggle-slider" />
+            </label>
+          </div>
+          <div className="synth-column-controls">
+            <Knob
+              label="Mix"
+              ariaLabel="Layer mix"
+              value={layer.mix}
+              min={0}
+              max={1}
+              step={0.01}
+              displayValue={`${Math.round(layer.mix * 100)}%`}
+              onChange={(v) => updateLayer({ mix: v })}
+              parseInputValue={parsePercent(0, 1)}
+              disabled={!layer.enabled}
+              tooltip="The balance between the two layers: the first alone at 0%, the second alone at 100%"
+            />
+            <Knob
+              label="Detune"
+              ariaLabel="Layer detune"
+              value={layer.detune}
+              min={-50}
+              max={50}
+              step={1}
+              displayValue={`${layer.detune > 0 ? '+' : ''}${Math.round(layer.detune)}c`}
+              onChange={(v) => updateLayer({ detune: v })}
+              parseInputValue={parseNumber}
+              disabled={!layer.enabled}
+              tooltip="How far the second layer is tuned from the first, in cents"
+            />
+            <Knob
+              label="Bright"
+              ariaLabel="Layer brightness"
+              value={layer.brightness}
+              min={-3}
+              max={3}
+              step={0.05}
+              displayValue={`${layer.brightness > 0 ? '+' : ''}${layer.brightness.toFixed(1)}`}
+              onChange={(v) => updateLayer({ brightness: v })}
+              parseInputValue={parseNumber}
+              disabled={!layer.enabled}
+              tooltip="The second layer's filter against the first's, in octaves: brighter above 0, darker below"
+            />
+            <Knob
+              label="Swell"
+              ariaLabel="Layer swell"
+              value={layer.attack}
+              min={0}
+              max={5}
+              step={0.01}
+              displayValue={`${layer.attack.toFixed(2)}s`}
+              onChange={(v) => updateLayer({ attack: v })}
+              parseInputValue={parseNumber}
+              disabled={!layer.enabled}
+              tooltip="Seconds added to the second layer's attack, so it comes in under the first"
+            />
+            <Knob
+              label="Width"
+              ariaLabel="Layer width"
+              value={layer.width}
+              min={0}
+              max={1}
+              step={0.01}
+              displayValue={`${Math.round(layer.width * 100)}%`}
+              onChange={(v) => updateLayer({ width: v })}
+              parseInputValue={parsePercent(0, 1)}
+              disabled={!layer.enabled}
+              tooltip="How far apart the two layers are placed: together at 0%, one each side at 100%"
+            />
+          </div>
+        </div>
 
         <div className="synth-column" data-tab={COLUMN_TABS['FILTER']}>
           <h3>FILTER</h3>

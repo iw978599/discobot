@@ -13,18 +13,18 @@ controls sized for a finger.
 
 ## What is in it
 
-**Three synth lanes.** Each plays one of sixteen synth models: a plain engine
-with every control on show, and fifteen set up in the manner of a well-known
+**Three synth lanes.** Each plays one of seventeen synth models: a plain engine
+with every control on show, and sixteen set up in the manner of a well-known
 instrument, each with four knobs of its own.
 
 | Mono | Poly | Digital |
 |---|---|---|
-| Minimoog Model D, TB-303, SH-101, Pro-One, Mono/Poly, MS-20, Odyssey | Juno-106, Prophet-5, Jupiter-8, OB-Xa, Polysix | DX7, JP-8000, Virus |
+| Minimoog Model D, TB-303, SH-101, Pro-One, Mono/Poly, MS-20, Odyssey | Juno-106, Prophet-5, Jupiter-8, OB-Xa, Polysix, CS-80 | DX7, JP-8000, Virus |
 
 A model is this synth's own voice set up to behave like the instrument it is
 named for. It is not that instrument's circuit and uses none of its samples.
 
-**Sixty-five presets** in six kinds: bass, lead, pad, keys, pluck and effects.
+**Sixty-eight presets** in six kinds: bass, lead, pad, keys, pluck and effects.
 They are level-matched, so choosing another does not mean reaching for the
 volume. You can save, export and import your own, including presets from some
 other synths.
@@ -90,6 +90,9 @@ renders exports, so both sound the same. Each of its eight notes has:
   second can be hard-synced to the first, and the two can be ring modulated;
 - up to seven detuned copies stacked on a note (unison), with a level for the
   copies either side of the middle one;
+- an optional second layer: the note played again on another voice, tuned,
+  filtered, faded in and placed differently, which halves the notes that can
+  sound at once to four;
 - a four-operator FM mode;
 - a high-pass, then a filter that can be a clean 12 or 24 dB state-variable
   filter, a four-pole ladder whose resonance thins the bass and rings by

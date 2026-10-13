@@ -178,6 +178,18 @@ export const SYNTH_MODELS: SynthModelDefinition[] = [
     ],
   },
   {
+    id: 'cs-80',
+    name: 'CS-80',
+    group: 'Poly',
+    subtitle: 'Two layers on every note: one swells in under the other, tuned apart and placed either side',
+    macros: [
+      { key: 'macro1', label: 'Layer Mix' },
+      { key: 'macro2', label: 'Detune' },
+      { key: 'macro3', label: 'Brightness' },
+      { key: 'macro4', label: 'Swell' },
+    ],
+  },
+  {
     id: 'virus',
     name: 'Virus',
     group: 'Digital',
@@ -572,6 +584,36 @@ function mapVirus(params: SynthModelParams): Partial<SynthParameters> {
   };
 }
 
+// Two layers on every note, each a saw through a high-pass and a two-pole low-pass, and a note that
+// answers how hard it is played. The instrument could add a pulse to each layer's saw; this voice's
+// pulse and saw at one pitch cancel each other, so there is the saw alone. The macros are all about the second layer against the first:
+// how much of it there is, how far it is tuned away, how much brighter or darker it is, and how slowly
+// it comes in. The instrument's two layers were two whole synths; here the second is the first again
+// with those four differences. Two layers take two voices a note, so it plays four notes, not eight.
+function mapCs80(params: SynthModelParams): Partial<SynthParameters> {
+  const swell = clamp01(params.macro4);
+  return {
+    engine: 'subtractive',
+    voiceMode: 'poly',
+    oscillator: { type: 'sawtooth', detune: 0, pulseWidth: 0.5 },
+    oscillator2: { enabled: false, type: 'sawtooth', semitones: 0, detune: 0, level: 0, sync: false },
+    mixer: { sub: 0, noise: 0, osc: 1, ring: 0 },
+    filter: { type: 'lowpass', frequency: 2200, q: 1.2, envAmount: 0.3, keyTracking: 0.5, drive: 0, slope: 12, highpass: 80 },
+    filterEnvelope: { attack: 0.06, decay: 0.8, sustain: 0.5, release: 0.6 },
+    envelope: { attack: 0.02, decay: 0.6, sustain: 0.85, release: 0.6 },
+    velocity: { amp: 0.5, filter: 0.35 },
+    portamento: { enabled: false, glide: 0.05 },
+    layer: {
+      enabled: true,
+      mix: Number(clamp01(params.macro1).toFixed(2)),
+      detune: Number(range(0, 30, params.macro2).toFixed(1)),
+      brightness: Number(range(-2, 2, params.macro3).toFixed(2)),
+      attack: Number((swell * swell * 3).toFixed(2)),
+      width: 0.6,
+    },
+  };
+}
+
 // What a lane is given when it moves to a model: the model's macros, and anything another model
 // may have left on the lane that this one does not set for itself. A lane that only has a macro
 // turned gets the macros alone (mapSynthModelToEngineParams), so a slope or a unison someone
@@ -591,6 +633,8 @@ export function enterSynthModel(modelId: SynthModelId, modelParams: SynthModelPa
     unison: mapped.unison ?? { voices: 1, detune: 0.3, mix: 1 },
     // No routes, no sync and no ring modulation, unless the model sets its own.
     modMatrix: mapped.modMatrix ?? [],
+    // One layer, unless the model is one that plays two.
+    layer: mapped.layer ?? { enabled: false, mix: 0.5, detune: 8, brightness: 0, attack: 0, width: 0 },
     oscillator2: { ...mapped.oscillator2, sync: mapped.oscillator2?.sync ?? false } as SynthParameters['oscillator2'],
     mixer: { ...mapped.mixer, ring: mapped.mixer?.ring ?? 0 } as SynthParameters['mixer'],
     // No high-pass and the clean filter, unless the model is one that sets them for itself.
@@ -608,6 +652,7 @@ export function mapSynthModelToEngineParams(modelId: SynthModelId, modelParams: 
   if (modelId === 'ms-20') return mapMs20(modelParams);
   if (modelId === 'odyssey') return mapOdyssey(modelParams);
   if (modelId === 'virus') return mapVirus(modelParams);
+  if (modelId === 'cs-80') return mapCs80(modelParams);
   if (modelId === 'mono-poly') {
     return {
       ...mapModel(modelParams, {

@@ -309,7 +309,7 @@ test('all named presets and model macros are selectable; user presets survive re
   }
   expect(builtIn, 'the app comes with a good many sounds').toBeGreaterThanOrEqual(30);
   const macros = page.locator('.synth-module.selected .synth-model-macro-grid [role="slider"]');
-  for (const model of ['minimoog-model-d', 'juno-106', 'dx7', 'tb-303', 'sh-101', 'pro-one', 'jupiter-8', 'ob-xa', 'jp-8000', 'mono-poly', 'polysix', 'ms-20', 'odyssey', 'virus', 'prophet-5']) {
+  for (const model of ['minimoog-model-d', 'juno-106', 'dx7', 'tb-303', 'sh-101', 'pro-one', 'jupiter-8', 'ob-xa', 'jp-8000', 'mono-poly', 'polysix', 'ms-20', 'odyssey', 'virus', 'cs-80', 'prophet-5']) {
     await synth.getByLabel('Synth model', { exact: true }).selectOption(model);
     await expect(macros).toHaveCount(4);
     await macros.first().press('ArrowUp');
