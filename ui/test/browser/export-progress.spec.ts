@@ -8,7 +8,7 @@ const exportDialog = (page: Page) => page.getByRole('dialog', { name: 'Export', 
 const radio = (page: Page, name: string) => exportDialog(page).getByRole('radio', { name, exact: true });
 const go = (page: Page) => exportDialog(page).getByRole('button', { name: 'Export', exact: true });
 async function openExport(page: Page) {
-  await page.getByRole('button', { name: 'Export', exact: true }).click();
+  await page.locator('.transport').getByRole('button', { name: 'Export', exact: true }).click();
   await expect(exportDialog(page)).toBeVisible();
 }
 

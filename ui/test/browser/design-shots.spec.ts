@@ -279,7 +279,7 @@ test('design shots: menus, dialogs, the walkthrough and a guest', async ({ page 
   });
   // Export was a menu and is now a dialog; its picture keeps the name it had.
   await attempt(walk, 'menu-export', async () => {
-    await page.getByRole('button', { name: 'Export', exact: true }).click();
+    await page.locator('.transport').getByRole('button', { name: 'Export', exact: true }).click();
     await expect(page.getByRole('dialog', { name: 'Export', exact: true })).toBeVisible();
     await shot(walk, 'menu-export');
     await page.keyboard.press('Escape');

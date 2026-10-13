@@ -52,7 +52,7 @@ test('the Project menu is in three groups with Reset All apart, and Export is a 
   await expect(page.getByRole('button', { name: 'Project ▾', exact: true })).toBeFocused();
 
   // Export is a dialog of two choices: what, and as what.
-  await page.getByRole('button', { name: 'Export', exact: true }).click();
+  await page.locator('.transport').getByRole('button', { name: 'Export', exact: true }).click();
   const exports = page.getByRole('dialog', { name: 'Export', exact: true });
   await expect(exports.getByRole('group', { name: 'What', exact: true }).getByRole('radio')).toHaveCount(2);
   await expect(exports.getByRole('group', { name: 'As', exact: true }).getByRole('radio')).toHaveCount(4);
