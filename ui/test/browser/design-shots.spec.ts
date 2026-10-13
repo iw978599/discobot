@@ -213,6 +213,18 @@ test('design shots: the rack, its units and the states of its controls', async (
       await unit.getByRole('button', { name: 'More', exact: true }).click();
       await unit.getByRole('button', { name: 'Sends', exact: true }).click();
     });
+    await attempt(walk, 'unit-drums-own-sends', async () => {
+      const unit = page.locator('[data-unit="drums"]');
+      await unit.getByRole('button', { name: 'Sends', exact: true }).click();
+      // The selected drum's share of the reverb turned right down, beside the kit's sends.
+      const share = unit.locator('.drum-own-sends input').nth(1);
+      await share.fill('0%');
+      await share.press('Enter');
+      await near(walk, unit.locator('.drum-sends'), 'unit-drums-own-sends', 12);
+      await share.fill('100%');
+      await share.press('Enter');
+      await unit.getByRole('button', { name: 'Sends', exact: true }).click();
+    });
   }
 
   // Focus rings: the first Tab makes the browser show them, and they stay shown for focus moved after.
@@ -582,6 +594,13 @@ test('design shots: a phone showing one unit at a time, the knob sheet, and a ph
     await shot(walk, 'phone-unit-drums');
     await scrollBy(walk, 0.7);
     await shot(walk, 'phone-unit-drums-2');
+  });
+  await attempt(walk, 'phone-unit-drums-sends', async () => {
+    const unit = page.locator('[data-unit="drums"]');
+    await unit.getByRole('button', { name: 'Sends', exact: true }).tap();
+    await toTop(walk, unit.locator('.drum-sends'));
+    await shot(walk, 'phone-unit-drums-sends');
+    await unit.getByRole('button', { name: 'Sends', exact: true }).tap();
   });
   await attempt(walk, 'phone-unit-mixer', async () => {
     await show('Show Mixer');

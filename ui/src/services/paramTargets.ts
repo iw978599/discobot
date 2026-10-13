@@ -58,6 +58,8 @@ export const DRUM_PARAMS: Record<string, ParamRange> = {
   extra: { label: 'Second knob', min: 0, max: 1 },
   tune: { label: 'Tune', min: -1, max: 1 },
   pan: { label: 'Pan', min: -1, max: 1 },
+  delaySend: { label: 'To delay', min: 0, max: 1 },
+  reverbSend: { label: 'To reverb', min: 0, max: 1 },
 };
 
 // A shared effect's setting: which effect, and which of its numbers.

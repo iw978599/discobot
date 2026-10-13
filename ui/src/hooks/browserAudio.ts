@@ -399,30 +399,41 @@ export class AudioEngine {
     eqGains(state.eq).forEach((gain, band) => smooth(live.eq[band].gain, gain, live.context));
   }
 
-  createLane(group: Group) {
+  // `ownMix` names the effects this lane feeds with a mix of its own (the drums, whose every drum
+  // has its own share of the delay and the reverb) in place of the signal at `input`. Each gets an
+  // input in `taps` with the lane's volume and ducking, and the lane's send to that effect is fed
+  // from it alone. A mix that is the same as the signal at `input` sounds exactly as if there were none.
+  createLane(group: Group, ownMix: readonly EffectName[] = []) {
     const { context: ctx, master } = this.open(), bus = this.bus(group);
     // input carries the lane volume; ducker sits after it so the dry signal and the sends pump together.
     const input = ctx.createGain(), ducker = ctx.createGain();
     input.connect(ducker);
     ducker.connect(master);
     const sends = {} as Record<EffectName, GainNode>;
+    const taps: Partial<Record<EffectName, GainNode>> = {}, tapDuckers: GainNode[] = [];
     for (const name of EFFECT_NAMES) {
       sends[name] = ctx.createGain();
       sends[name].gain.value = 0;
-      ducker.connect(sends[name]).connect(bus.inputs[name]);
+      if (ownMix.includes(name)) {
+        const tap = ctx.createGain(), tapDucker = ctx.createGain();
+        tap.connect(tapDucker).connect(sends[name]).connect(bus.inputs[name]);
+        taps[name] = tap;
+        tapDuckers.push(tapDucker);
+      } else ducker.connect(sends[name]).connect(bus.inputs[name]);
     }
     const dispose = () => {
       this.lanes.delete(dispose);
       input.disconnect();
       ducker.disconnect();
-      Object.values(sends).forEach(node => node.disconnect());
+      [...Object.values(taps), ...tapDuckers, ...Object.values(sends)].forEach(node => node.disconnect());
     };
     this.lanes.add(dispose);
     return {
       input,
       output: ducker,
-      duck(time: number, amount: number) { scheduleDuck(ducker.gain, time, amount); },
-      setVolume(value: number) { smooth(input.gain, limit(value, 0, 1), ctx); },
+      taps,
+      duck(time: number, amount: number) { for (const node of [ducker, ...tapDuckers]) scheduleDuck(node.gain, time, amount); },
+      setVolume(value: number) { for (const node of [input, ...Object.values(taps)]) smooth(node.gain, limit(value, 0, 1), ctx); },
       setSends(values: FxSendLevels, returnLevel = 1) {
         for (const name of Object.keys(sends) as EffectName[]) smooth(sends[name].gain, limit(values[name], 0, 1) * limit(returnLevel, 0, 1), ctx);
       },
@@ -493,6 +504,6 @@ export function setEffectsLoop(state: EffectsLoopState): void {
   audioEngine.setEffectsLoop(state);
 }
 
-export function createAudioLane(group: Group) {
-  return audioEngine.createLane(group);
+export function createAudioLane(group: Group, ownMix: readonly EffectName[] = []) {
+  return audioEngine.createLane(group, ownMix);
 }

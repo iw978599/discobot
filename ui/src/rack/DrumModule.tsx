@@ -56,6 +56,12 @@ const parsePan = (input: string): number | null => {
 };
 const percentText = (value: number) => `${Math.round(value * 100)}%`;
 
+// The two effects a drum has a send of its own to. Each is a share of the kit's send to that effect.
+const OWN_SENDS = [
+  { key: 'delaySend', label: 'Delay', effect: 'delay', kitKnob: 'Dly Send' },
+  { key: 'reverbSend', label: 'Reverb', effect: 'reverb', kitKnob: 'Rev Send' },
+] as const;
+
 // The whole drum kit as one grid: eight instruments down, sixteen steps across, lined up
 // with the synth lanes above. The strip underneath edits the instrument and step you last touched.
 function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: string) => void }) {
@@ -526,7 +532,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
         </div>
         <div className="drum-strip-toggles">
           <button className={`rack-btn ${showMore ? 'on' : ''}`} aria-pressed={showMore} onClick={() => setShowMore((value) => !value)} title="Show the humanize and pan knobs">More</button>
-          <button className={`rack-btn ${showSends ? 'on' : ''}`} aria-pressed={showSends} onClick={() => setShowSends((value) => !value)} title="Show the kit's effect sends and mute controls">Sends</button>
+          <button className={`rack-btn ${showSends ? 'on' : ''}`} aria-pressed={showSends} onClick={() => setShowSends((value) => !value)} title="Show this drum's and the kit's effect sends, and the mute controls">Sends</button>
         </div>
       </div>
 
@@ -541,11 +547,31 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
       )}
 
       {showSends && (
-        <div className="rack-row drum-sends">
+        <div className="rack-row drum-sends" data-drum={selected}>
+          <span className="drum-send-name">
+            <span className="drum-selected-dot" />
+            <b>{LABELS[selected]}'s share</b>
+          </span>
+          <div className="rack-knobs drum-own-sends" role="group" aria-label={`${LABELS[selected]}'s share of the kit's delay and reverb sends`}>
+            {OWN_SENDS.map(({ key, label, effect, kitKnob }) => (
+              <DrumKnob
+                key={`${selected}-${key}`}
+                label={label}
+                ariaLabel={`${LABELS[selected]} to ${effect}`}
+                value={track.settings[key] ?? 1}
+                defaultValue={1}
+                displayValue={percentText(track.settings[key] ?? 1)}
+                parseInputValue={parsePercent}
+                onChange={(value) => onSettings(selected, { [key]: value })}
+                title={`How much of the ${LABELS[selected]} goes to the ${effect}: its share of what the kit sends there (${kitKnob}, beside this). At 100% it is sent like the rest of the kit; at 0% it is kept out of the ${effect}`}
+              />
+            ))}
+          </div>
           <span className="step-tools-name">Kit sends</span>
           <div className="rack-knobs">
             {(['reverb', 'delay', 'drive', 'phaser', 'chorus'] as const).map((send) => {
               const label = { reverb: 'Rev Send', delay: 'Dly Send', drive: 'Drv Send', phaser: 'Phs Send', chorus: 'Cho Send' }[send];
+              const master = send === 'reverb' || send === 'delay' ? '. Each drum then sends its own share of this' : '';
               return (
                 <DrumKnob
                   key={send}
@@ -555,7 +581,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
                   displayValue={percentText(drumFx.sends[send] ?? 0)}
                   parseInputValue={parsePercent}
                   onChange={(value) => onFx({ sends: { [send]: value } })}
-                  title={`Amount of the drum kit sent to the ${send}`}
+                  title={`Amount of the drum kit sent to the ${send}${master}`}
                 />
               );
             })}
