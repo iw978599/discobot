@@ -170,9 +170,12 @@ target; removal of the AI review workflow.
    and second layer. A root note says which key gives the recorded pitch,
    and Loop sends it round while a key is held. Project files carry the
    sample; links, published songs and sync do not, and there the lane plays
-   its oscillator. Open: loop points and a start offset; several recordings
-   across the keyboard; smoothing for a recording played far above its
-   root, which at present aliases.
+   its oscillator. On 2026-10-13, not verified by ear: Start says where
+   in the recording a note begins, and Loop From and Loop To say which
+   part goes round. Open: a crossfade where the loop goes round, which can
+   click; several recordings across the keyboard for an imported sample;
+   smoothing for a recording played far above its root, which at present
+   aliases.
 
 4. **A modulation matrix.** (M) First part done on 2026-10-12, not verified
    by ear: up to four routes a sound, on the LFO tab under Routing. Sources

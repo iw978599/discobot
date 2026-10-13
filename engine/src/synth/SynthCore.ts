@@ -299,6 +299,7 @@ export class SynthCore {
     voice.samplePosition = 0;
     voice.sampleData = null;
     const sample = this.sample;
+    let recording = sample && !sample.frame ? sample.data : null;
     if (sample && !sample.frame && (sample.zones || sample.root !== undefined)) {
       // The recording made nearest this note.
       const midi = 69 + 12 * Math.log2(frequency / 440);
@@ -308,7 +309,11 @@ export class SynthCore {
       }
       voice.sampleData = data;
       voice.sampleScale = rate / (440 * 2 ** ((root - 69) / 12));
+      recording = data;
     }
+    // A note begins where the sound says, as a share of whichever recording it plays.
+    const start = clamp(this.params.sampleStart, 0, 1, 0);
+    if (recording && start > 0) voice.samplePosition = start * (recording.length - 1);
     // A voice that is still sounding keeps its phase and envelope level, so stealing it cannot click.
     voice.active = true;
     voice.note = message.note;
@@ -361,6 +366,8 @@ export class SynthCore {
     // The sample engine, when it has a recording. Without one the lane plays its oscillators.
     const sample = p.engine === 'sample' ? this.sample : null;
     const sampleLoop = p.sampleLoop;
+    // The part that goes round, as shares of the recording. The whole of it unless the sound says.
+    const loopFrom = clamp(p.sampleLoopStart, 0, 1, 0), loopTo = Math.max(loopFrom, clamp(p.sampleLoopEnd, 0, 1, 1));
     // How many of the recording's frames one cycle of a note is worth, at the note it was recorded at.
     const sampleScale = sample ? sample.rate / (440 * 2 ** ((clamp(sample.root ?? p.sampleRoot, 0, 127, 60) - 69) / 12)) : 0;
     // A table of single cycles: how long each is, how many there are, how fast they are stepped
@@ -507,7 +514,11 @@ export class SynthCore {
           } else {
             const data = v.sampleData ?? sample.data, end = data.length - 1;
             let at = v.samplePosition;
-            if (at >= end && sampleLoop) at %= end;
+            if (sampleLoop) {
+              // A loop too short to hold a sample is the whole recording.
+              const whole = (loopTo - loopFrom) * end < 2, from = whole ? 0 : loopFrom * end, round = whole ? end : loopTo * end;
+              if (at >= round) at = from + (at - round) % (round - from);
+            }
             if (at < end) {
               const index = Math.floor(at);
               source = data[index] + (data[index + 1] - data[index]) * (at - index);

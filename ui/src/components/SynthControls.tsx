@@ -771,7 +771,53 @@ export default function SynthControls({
                   />
                 </>
               )}
-              <label className="synth-sync" title="Go round again from the start while the note is held, instead of playing once">
+              {!builtIn?.steps && (
+                <>
+                <Knob
+                  label="Start"
+                  ariaLabel="Sample start"
+                  value={sample.start ?? 0}
+                  defaultValue={0}
+                  min={0}
+                  max={0.99}
+                  step={0.01}
+                  displayValue={`${Math.round((sample.start ?? 0) * 100)}%`}
+                  onChange={(v) => updateSample({ start: v })}
+                  parseInputValue={parsePercent(0, 1)}
+                  disabled={false}
+                  tooltip="Where in the recording a note begins: 0% is its beginning"
+                />
+                  <Knob
+                  label="Loop From"
+                  ariaLabel="Sample loop start"
+                  value={sample.loopStart ?? 0}
+                  defaultValue={0}
+                  min={0}
+                  max={0.99}
+                  step={0.01}
+                  displayValue={`${Math.round((sample.loopStart ?? 0) * 100)}%`}
+                  onChange={(v) => updateSample({ loopStart: v })}
+                  parseInputValue={parsePercent(0, 1)}
+                  disabled={!sample.loop}
+                  tooltip="With Loop on: where the part that goes round begins"
+                />
+                  <Knob
+                  label="Loop To"
+                  ariaLabel="Sample loop end"
+                  value={sample.loopEnd ?? 1}
+                  defaultValue={1}
+                  min={0.01}
+                  max={1}
+                  step={0.01}
+                  displayValue={`${Math.round((sample.loopEnd ?? 1) * 100)}%`}
+                  onChange={(v) => updateSample({ loopEnd: v })}
+                  parseInputValue={parsePercent(0, 1)}
+                  disabled={!sample.loop}
+                  tooltip="With Loop on: where the part that goes round ends, and goes back to Loop From"
+                />
+                  </>
+              )}
+              <label className="synth-sync" title="Go round again while the note is held, instead of playing once">
                 <input
                   type="checkbox"
                   aria-label="Loop the sample"
