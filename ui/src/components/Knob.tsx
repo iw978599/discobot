@@ -11,6 +11,8 @@ import './Knob.css';
 interface KnobProps {
   label: string;
   value: number;
+  // Where a middle click puts the knob back to.
+  defaultValue?: number;
   min?: number;
   max?: number;
   step?: number;
@@ -27,6 +29,7 @@ interface KnobProps {
 export default function Knob({
   label,
   value,
+  defaultValue,
   min = 0,
   max = 1,
   step = 0.01,
@@ -59,7 +62,7 @@ export default function Knob({
   const { normalize, ...interaction } = useKnobInteraction(localVal, min, max, step, (next) => {
     setLocalVal(next);
     onChange(next);
-  }, disabled, openSheet);
+  }, disabled, openSheet, defaultValue);
 
   const svgDeg = -240 + pct * 300;
 

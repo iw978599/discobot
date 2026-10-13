@@ -220,6 +220,7 @@ function GuestModule({ studio, guest, onHelp }: { studio: Studio; guest: Guest; 
           label="Level"
           ariaLabel={`Guest ${name} level`}
           value={guest.volume}
+          defaultValue={0.8}
           displayValue={`${Math.round(guest.volume * 100)}%`}
           parseInputValue={(input) => { const value = Number.parseFloat(input); return Number.isFinite(value) ? value / 100 : null; }}
           onChange={(value) => { void studio.handleGuestChange(guest.id, { volume: value }); }}
@@ -239,6 +240,7 @@ function GuestModule({ studio, guest, onHelp }: { studio: Studio; guest: Guest; 
                   label={{ reverb: 'Reverb', delay: 'Delay', drive: 'Drive', phaser: 'Phaser', chorus: 'Chorus' }[send]}
                   ariaLabel={`Guest ${name} ${send} send`}
                   value={value}
+                  defaultValue={0}
                   displayValue={`${Math.round(value * 100)}%`}
                   parseInputValue={(input) => { const parsed = Number.parseFloat(input); return Number.isFinite(parsed) ? parsed / 100 : null; }}
                   onChange={(next) => { void studio.handleGuestChange(guest.id, { sends: { ...NO_SENDS, ...guest.sends, [send]: next } }); }}

@@ -500,6 +500,7 @@ export default function SynthControls({
             <Knob
               label="Detune"
               value={parameters.oscillator.detune}
+              defaultValue={DEFAULTS.oscillator.detune}
               min={-100}
               max={100}
               step={1}
@@ -511,6 +512,7 @@ export default function SynthControls({
             <Knob
               label="Pulse W"
               value={parameters.oscillator.pulseWidth ?? 0.5}
+              defaultValue={DEFAULTS.oscillator.pulseWidth ?? 0.5}
               min={0.05}
               max={0.95}
               step={0.01}
@@ -545,6 +547,7 @@ export default function SynthControls({
               <Knob
                 label="Ratio"
                 value={fm.ratio}
+                defaultValue={DEFAULTS.fm!.ratio}
                 min={0.5}
                 max={14}
                 step={0.5}
@@ -556,6 +559,7 @@ export default function SynthControls({
               <Knob
                 label="Amount"
                 value={fm.index}
+                defaultValue={DEFAULTS.fm!.index}
                 min={0}
                 max={1}
                 step={0.01}
@@ -568,6 +572,7 @@ export default function SynthControls({
               <Knob
                 label="Mod Decay"
                 value={fm.decay}
+                defaultValue={DEFAULTS.fm!.decay}
                 min={0.02}
                 max={4}
                 step={0.01}
@@ -580,6 +585,7 @@ export default function SynthControls({
               <Knob
                 label="Feedback"
                 value={fm.feedback}
+                defaultValue={DEFAULTS.fm!.feedback}
                 min={0}
                 max={1}
                 step={0.01}
@@ -642,6 +648,7 @@ export default function SynthControls({
                 label="Root"
                 ariaLabel="Sample root note"
                 value={sample.root}
+                defaultValue={DEFAULTS.sample!.root}
                 min={24}
                 max={96}
                 step={1}
@@ -655,6 +662,7 @@ export default function SynthControls({
                 label="Level"
                 ariaLabel="Sample level"
                 value={mixer.osc ?? 1}
+                defaultValue={DEFAULTS.mixer!.osc ?? 1}
                 min={0}
                 max={1}
                 step={0.01}
@@ -681,6 +689,7 @@ export default function SynthControls({
                     label="Speed"
                     ariaLabel="Sequence speed"
                     value={sample.scan ?? 2}
+                    defaultValue={DEFAULTS.sample!.scan ?? 2}
                     min={0}
                     max={16}
                     step={0.05}
@@ -693,6 +702,7 @@ export default function SynthControls({
                     label="Fade"
                     ariaLabel="Sequence crossfade"
                     value={sample.fade ?? 1}
+                    defaultValue={DEFAULTS.sample!.fade ?? 1}
                     min={0}
                     max={1}
                     step={0.01}
@@ -754,6 +764,7 @@ export default function SynthControls({
                 <Knob
                   label="Semi"
                   value={osc2.semitones}
+                  defaultValue={DEFAULTS.oscillator2!.semitones}
                   min={-24}
                   max={24}
                   step={1}
@@ -766,6 +777,7 @@ export default function SynthControls({
                 <Knob
                   label="Fine"
                   value={osc2.detune}
+                  defaultValue={DEFAULTS.oscillator2!.detune}
                   min={-50}
                   max={50}
                   step={1}
@@ -794,6 +806,7 @@ export default function SynthControls({
                 <Knob
                   label="Osc 2"
                   value={osc2.level}
+                  defaultValue={DEFAULTS.oscillator2!.level}
                   min={0}
                   max={1}
                   step={0.01}
@@ -808,6 +821,7 @@ export default function SynthControls({
                   label="Osc 1"
                   ariaLabel="Oscillator 1 level"
                   value={mixer.osc ?? 1}
+                  defaultValue={DEFAULTS.mixer!.osc ?? 1}
                   min={0}
                   max={1}
                   step={0.01}
@@ -820,6 +834,7 @@ export default function SynthControls({
                 <Knob
                   label="Sub"
                   value={mixer.sub}
+                  defaultValue={DEFAULTS.mixer!.sub}
                   min={0}
                   max={1}
                   step={0.01}
@@ -832,6 +847,7 @@ export default function SynthControls({
                 <Knob
                   label="Noise"
                   value={mixer.noise}
+                  defaultValue={DEFAULTS.mixer!.noise}
                   min={0}
                   max={1}
                   step={0.01}
@@ -845,6 +861,7 @@ export default function SynthControls({
                   label="Ring"
                   ariaLabel="Ring modulation"
                   value={mixer.ring ?? 0}
+                  defaultValue={DEFAULTS.mixer!.ring ?? 0}
                   min={0}
                   max={1}
                   step={0.01}
@@ -863,6 +880,7 @@ export default function SynthControls({
                 <Knob
                   label="Voices"
                   value={unison.voices}
+                  defaultValue={DEFAULTS.unison!.voices}
                   min={1}
                   max={7}
                   step={1}
@@ -874,6 +892,7 @@ export default function SynthControls({
                   label="Detune"
                   ariaLabel="Unison detune"
                   value={unison.detune}
+                  defaultValue={DEFAULTS.unison!.detune}
                   min={0}
                   max={1}
                   step={0.01}
@@ -887,6 +906,7 @@ export default function SynthControls({
                   label="Mix"
                   ariaLabel="Unison mix"
                   value={unison.mix ?? 1}
+                  defaultValue={DEFAULTS.unison!.mix ?? 1}
                   min={0}
                   max={1}
                   step={0.01}
@@ -919,6 +939,7 @@ export default function SynthControls({
               label="Mix"
               ariaLabel="Layer mix"
               value={layer.mix}
+              defaultValue={DEFAULTS.layer!.mix}
               min={0}
               max={1}
               step={0.01}
@@ -932,6 +953,7 @@ export default function SynthControls({
               label="Detune"
               ariaLabel="Layer detune"
               value={layer.detune}
+              defaultValue={DEFAULTS.layer!.detune}
               min={-50}
               max={50}
               step={1}
@@ -945,6 +967,7 @@ export default function SynthControls({
               label="Bright"
               ariaLabel="Layer brightness"
               value={layer.brightness}
+              defaultValue={DEFAULTS.layer!.brightness}
               min={-3}
               max={3}
               step={0.05}
@@ -958,6 +981,7 @@ export default function SynthControls({
               label="Swell"
               ariaLabel="Layer swell"
               value={layer.attack}
+              defaultValue={DEFAULTS.layer!.attack}
               min={0}
               max={5}
               step={0.01}
@@ -971,6 +995,7 @@ export default function SynthControls({
               label="Width"
               ariaLabel="Layer width"
               value={layer.width}
+              defaultValue={DEFAULTS.layer!.width}
               min={0}
               max={1}
               step={0.01}
@@ -1019,6 +1044,7 @@ export default function SynthControls({
               label="High-pass"
               ariaLabel="High-pass cutoff"
               value={parameters.filter.highpass ?? 0}
+              defaultValue={DEFAULTS.filter.highpass ?? 0}
               min={0}
               max={2000}
               step={5}
@@ -1031,6 +1057,7 @@ export default function SynthControls({
             <Knob
               label="Cutoff"
               value={parameters.filter.frequency}
+              defaultValue={DEFAULTS.filter.frequency}
               min={20}
               max={20000}
               step={10}
@@ -1043,6 +1070,7 @@ export default function SynthControls({
             <Knob
               label="Resonance"
               value={parameters.filter.q}
+              defaultValue={DEFAULTS.filter.q}
               min={0.1}
               max={20}
               step={0.1}
@@ -1059,6 +1087,7 @@ export default function SynthControls({
             <Knob
               label="Env Amt"
               value={parameters.filter.envAmount ?? 0}
+              defaultValue={DEFAULTS.filter.envAmount ?? 0}
               min={-1}
               max={1}
               step={0.01}
@@ -1071,6 +1100,7 @@ export default function SynthControls({
             <Knob
               label="Key Trk"
               value={parameters.filter.keyTracking ?? 0}
+              defaultValue={DEFAULTS.filter.keyTracking ?? 0}
               min={0}
               max={1}
               step={0.01}
@@ -1084,6 +1114,7 @@ export default function SynthControls({
               label="Drive"
               ariaLabel="Filter drive"
               value={parameters.filter.drive ?? 0}
+              defaultValue={DEFAULTS.filter.drive ?? 0}
               min={0}
               max={1}
               step={0.01}
@@ -1102,6 +1133,7 @@ export default function SynthControls({
             <Knob
               label="F Attack"
               value={filterEnvelope.attack}
+              defaultValue={DEFAULTS.filterEnvelope!.attack}
               min={0.001}
               max={2}
               step={0.001}
@@ -1114,6 +1146,7 @@ export default function SynthControls({
             <Knob
               label="F Decay"
               value={filterEnvelope.decay}
+              defaultValue={DEFAULTS.filterEnvelope!.decay}
               min={0.001}
               max={2}
               step={0.001}
@@ -1126,6 +1159,7 @@ export default function SynthControls({
             <Knob
               label="F Sustain"
               value={filterEnvelope.sustain}
+              defaultValue={DEFAULTS.filterEnvelope!.sustain}
               min={0}
               max={1}
               step={0.01}
@@ -1138,6 +1172,7 @@ export default function SynthControls({
             <Knob
               label="F Release"
               value={filterEnvelope.release}
+              defaultValue={DEFAULTS.filterEnvelope!.release}
               min={0.001}
               max={5}
               step={0.001}
@@ -1169,6 +1204,7 @@ export default function SynthControls({
             <Knob
               label="Vel Amp"
               value={velocity.amp}
+              defaultValue={DEFAULTS.velocity!.amp}
               min={0}
               max={1}
               step={0.01}
@@ -1181,6 +1217,7 @@ export default function SynthControls({
             <Knob
               label="Accent"
               value={velocity.filter}
+              defaultValue={DEFAULTS.velocity!.filter}
               min={0}
               max={1}
               step={0.01}
@@ -1272,6 +1309,7 @@ export default function SynthControls({
               <Knob
                 label="Rate"
                 value={parameters.lfo1.sync ? (parameters.lfo1.rate || 4) : parameters.lfo1.rate}
+                defaultValue={parameters.lfo1.sync ? 4 : DEFAULTS.lfo1.rate}
                 min={parameters.lfo1.sync ? 1 : 0.1}
                 max={parameters.lfo1.sync ? 128 : 20}
                 step={parameters.lfo1.sync ? 1 : 0.1}
@@ -1288,6 +1326,7 @@ export default function SynthControls({
             <Knob
               label="Depth"
               value={parameters.lfo1.depth}
+              defaultValue={DEFAULTS.lfo1.depth}
               min={0}
               max={1}
               step={0.01}
@@ -1380,6 +1419,7 @@ export default function SynthControls({
               <Knob
                 label="Rate"
                 value={parameters.lfo2.sync ? (parameters.lfo2.rate || 4) : parameters.lfo2.rate}
+                defaultValue={parameters.lfo2.sync ? 4 : DEFAULTS.lfo2.rate}
                 min={parameters.lfo2.sync ? 1 : 0.1}
                 max={parameters.lfo2.sync ? 128 : 20}
                 step={parameters.lfo2.sync ? 1 : 0.1}
@@ -1396,6 +1436,7 @@ export default function SynthControls({
             <Knob
               label="Depth"
               value={parameters.lfo2.depth}
+              defaultValue={DEFAULTS.lfo2.depth}
               min={0}
               max={1}
               step={0.01}
@@ -1449,6 +1490,7 @@ export default function SynthControls({
                     label="Amount"
                     ariaLabel={`Route ${index + 1} amount`}
                     value={route?.depth ?? 0}
+                    defaultValue={0}
                     min={-1}
                     max={1}
                     step={0.01}
@@ -1471,6 +1513,7 @@ export default function SynthControls({
             <Knob
               label="Attack"
               value={parameters.envelope.attack}
+              defaultValue={DEFAULTS.envelope.attack}
               min={0.001}
               max={2}
               step={0.001}
@@ -1483,6 +1526,7 @@ export default function SynthControls({
             <Knob
               label="Decay"
               value={parameters.envelope.decay}
+              defaultValue={DEFAULTS.envelope.decay}
               min={0.001}
               max={2}
               step={0.001}
@@ -1520,6 +1564,7 @@ export default function SynthControls({
             <Knob
               label="Sustain"
               value={parameters.envelope.sustain}
+              defaultValue={DEFAULTS.envelope.sustain}
               min={0}
               max={1}
               step={0.01}
@@ -1532,6 +1577,7 @@ export default function SynthControls({
             <Knob
               label="Release"
               value={parameters.envelope.release}
+              defaultValue={DEFAULTS.envelope.release}
               min={0.001}
               max={5}
               step={0.001}
@@ -1550,6 +1596,7 @@ export default function SynthControls({
             <Knob
               label="Reverb"
               value={parameters.fxSends.reverb}
+              defaultValue={DEFAULTS.fxSends.reverb}
               min={0}
               max={1}
               step={0.01}
@@ -1562,6 +1609,7 @@ export default function SynthControls({
             <Knob
               label="Delay"
               value={parameters.fxSends.delay}
+              defaultValue={DEFAULTS.fxSends.delay}
               min={0}
               max={1}
               step={0.01}
@@ -1580,6 +1628,7 @@ export default function SynthControls({
             <Knob
               label="Drive"
               value={parameters.fxSends.drive}
+              defaultValue={DEFAULTS.fxSends.drive}
               min={0}
               max={1}
               step={0.01}
@@ -1592,6 +1641,7 @@ export default function SynthControls({
             <Knob
               label="Phaser"
               value={parameters.fxSends.phaser}
+              defaultValue={DEFAULTS.fxSends.phaser}
               min={0}
               max={1}
               step={0.01}
@@ -1604,6 +1654,7 @@ export default function SynthControls({
             <Knob
               label="Chorus"
               value={parameters.fxSends.chorus ?? 0}
+              defaultValue={DEFAULTS.fxSends.chorus ?? 0}
               min={0}
               max={1}
               step={0.01}
@@ -1622,6 +1673,7 @@ export default function SynthControls({
             <Knob
               label="Duck"
               value={parameters.duck ?? 0}
+              defaultValue={DEFAULTS.duck ?? 0}
               min={0}
               max={1}
               step={0.01}
@@ -1639,6 +1691,7 @@ export default function SynthControls({
             <Knob
               label="Gain"
               value={parameters.gain}
+              defaultValue={DEFAULTS.gain}
               min={0}
               max={2}
               step={0.01}
@@ -1651,6 +1704,7 @@ export default function SynthControls({
             <Knob
               label="FX Return"
               value={parameters.fxReturn}
+              defaultValue={DEFAULTS.fxReturn}
               min={0}
               max={1}
               step={0.01}
@@ -1669,6 +1723,7 @@ export default function SynthControls({
             <Knob
               label="Pan"
               value={parameters.pan}
+              defaultValue={DEFAULTS.pan}
               min={-1}
               max={1}
               step={0.01}
@@ -1681,6 +1736,7 @@ export default function SynthControls({
             <Knob
               label="Spread"
               value={parameters.spread ?? 0}
+              defaultValue={DEFAULTS.spread ?? 0}
               min={0}
               max={1}
               step={0.01}
@@ -1704,6 +1760,7 @@ export default function SynthControls({
             <Knob
               label="Glide"
               value={parameters.portamento.glide}
+              defaultValue={DEFAULTS.portamento.glide}
               min={0.001}
               max={0.5}
               step={0.001}

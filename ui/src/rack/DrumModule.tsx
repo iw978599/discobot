@@ -10,6 +10,8 @@ import { BAR_CHOICES, drumBars } from '../services/patternLength';
 import CopyToScene from './CopyToScene';
 import type { Studio } from '../studio/useStudio';
 import { CYMBAL_TYPES } from '@discobot/engine';
+import { DRUM_SETTINGS_DEFAULT } from '../services/drumKits';
+import { DRUM_FX_DEFAULT } from '../services/effectSettings';
 import { DrumInstrument, DrumKitId, DrumState, CymbalType } from '../types';
 import DrumKnob from '../components/DrumKnob';
 
@@ -272,6 +274,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
           <DrumKnob
             label="Swing"
             value={drumSwing}
+            defaultValue={0}
             min={0}
             max={0.75}
             displayValue={percentText(drumSwing)}
@@ -282,6 +285,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
           <DrumKnob
             label="Master"
             value={drumMasterVolume}
+            defaultValue={1}
             displayValue={percentText(drumMasterVolume)}
             parseInputValue={parsePercent}
             onChange={studio.handleDrumMasterVolumeChange}
@@ -449,6 +453,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
             label="Volume"
             ariaLabel={`${LABELS[selected]} volume`}
             value={track.settings.volume}
+            defaultValue={DRUM_SETTINGS_DEFAULT[selected].volume}
             displayValue={percentText(track.settings.volume)}
             parseInputValue={parsePercent}
             onChange={(value) => onSettings(selected, { volume: value })}
@@ -458,6 +463,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
             label="Tone"
             ariaLabel={`${LABELS[selected]} tone`}
             value={track.settings.tone}
+            defaultValue={DRUM_SETTINGS_DEFAULT[selected].tone}
             displayValue={track.settings.tone.toFixed(2)}
             parseInputValue={parseNumber}
             onChange={(value) => onSettings(selected, { tone: value })}
@@ -467,6 +473,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
             label="Tune"
             ariaLabel={`${LABELS[selected]} tune`}
             value={track.settings.tune ?? 0}
+            defaultValue={DRUM_SETTINGS_DEFAULT[selected].tune}
             min={-1}
             max={1}
             displayValue={`${((track.settings.tune ?? 0) * 12).toFixed(1)} st`}
@@ -478,6 +485,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
             label={extra.knob}
             ariaLabel={`${LABELS[selected]} ${extra.knob}`}
             value={track.settings.extra}
+            defaultValue={DRUM_SETTINGS_DEFAULT[selected].extra}
             displayValue={extra.display(track.settings.extra)}
             parseInputValue={(input) => { const n = parseNumber(input); return n === null ? null : extra.parse(n); }}
             onChange={(value) => onSettings(selected, { extra: value })}
@@ -489,6 +497,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
                 label="Human"
                 ariaLabel={`${LABELS[selected]} humanize`}
                 value={track.settings.humanize ?? 0.35}
+                defaultValue={DRUM_SETTINGS_DEFAULT[selected].humanize}
                 displayValue={percentText(track.settings.humanize ?? 0.35)}
                 parseInputValue={parsePercent}
                 onChange={(value) => onSettings(selected, { humanize: value })}
@@ -501,6 +510,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
                 min={-1}
                 max={1}
                 value={track.settings.pan ?? 0}
+                defaultValue={0}
                 displayValue={(() => {
                   const pan = track.settings.pan ?? 0;
                   if (Math.abs(pan) < 0.05) return 'C';
@@ -539,6 +549,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
                   key={send}
                   label={label}
                   value={drumFx.sends[send] ?? 0}
+                  defaultValue={DRUM_FX_DEFAULT.sends[send] ?? 0}
                   displayValue={percentText(drumFx.sends[send] ?? 0)}
                   parseInputValue={parsePercent}
                   onChange={(value) => onFx({ sends: { [send]: value } })}
@@ -549,6 +560,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
             <DrumKnob
               label="FX Return"
               value={drumFx.returnLevel}
+              defaultValue={DRUM_FX_DEFAULT.returnLevel}
               displayValue={percentText(drumFx.returnLevel)}
               parseInputValue={parsePercent}
               onChange={(value) => onFx({ returnLevel: value })}

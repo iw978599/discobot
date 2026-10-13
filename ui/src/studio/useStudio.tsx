@@ -14,7 +14,8 @@ import { loadCymbals, loadLaneSample } from '../services/builtInWaves';
 import { MAX_EMBEDDED_TOTAL_BYTES, MAX_PROJECT_FILE_BYTES, adoptSamples, embedSamples } from '../services/projectSamples';
 import { exportPreset, importPreset, type ImportedPreset } from '../services/presetImport';
 import { BAR_CHOICES, DRUM_STEPS_PER_BAR, clampLengths, drumBars, laneBars, resizeBars, sceneAsBars, sceneBars } from '../services/patternLength';
-import { DRUM_INSTRUMENTS } from '../services/drumKits';
+import { DRUM_INSTRUMENTS, DRUM_SETTINGS_DEFAULT } from '../services/drumKits';
+import { DRUM_FX_DEFAULT, EFFECTS_DEFAULT } from '../services/effectSettings';
 import type { DrumSample } from '../../../engine/src/drums/DrumCore';
 import { guestCapture, guestLink, guestOrigin, guestUrl, trustOrigin, wallAtContextTime, wallNow, type Guest } from '../services/guests';
 import { playhead } from '../services/playhead';
@@ -45,19 +46,8 @@ import { DEFAULT_SYNTH_MODEL_ID, createDefaultSynthModelParams, enterSynthModel,
 
 const DEFAULT_PARAMS: SynthParameters = createDefaultSynthParameters();
 
-const DEFAULT_DRUM_FX: { sends: FxSendLevels; returnLevel: number } = {
-  sends: { reverb: 0.35, delay: 0.15, drive: 0.2, phaser: 0.1, chorus: 0 },
-  returnLevel: 0.7,
-};
-
-const DEFAULT_EFFECTS_LOOP: EffectsLoopState = {
-  enabled: true,
-  returns: { synth: 0.85, drums: 0.7 },
-  drive: { enabled: true, amount: 0.18, tone: 0.65 },
-  phaser: { enabled: false, rate: 0.45, depth: 0.45, feedback: 0.25, mix: 0.25 },
-  delay: { enabled: true, time: 0.22, feedback: 0.35, mix: 0.3 },
-  reverb: { enabled: true, decay: 2.1, mix: 0.38 },
-};
+const DEFAULT_DRUM_FX = DRUM_FX_DEFAULT;
+const DEFAULT_EFFECTS_LOOP = EFFECTS_DEFAULT;
 
 const DEFAULT_DRUM_KIT_ID: DrumKitId = 'clean-analog';
 const MAX_HISTORY = 80;
@@ -126,16 +116,9 @@ interface SynthState {
 }
 
 function createDefaultDrumState(): DrumState {
-  return {
-    kick: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5, tune: 0, humanize: 0.35 }, muted: false, solo: false },
-    snare: { steps: new Array(16).fill(false), settings: { volume: 0.68, tone: 0.46, extra: 0.68, tune: 0, humanize: 0.35 }, muted: false, solo: false },
-    openHH: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5, tune: 0, humanize: 0.35 }, muted: false, solo: false },
-    closedHH: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5, tune: 0, humanize: 0.35 }, muted: false, solo: false },
-    ride: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5, tune: 0, humanize: 0.35 }, muted: false, solo: false },
-    crash: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5, tune: 0, humanize: 0.35 }, muted: false, solo: false },
-    snare2: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5, tune: 0, humanize: 0.35 }, muted: false, solo: false },
-    clap: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5, tune: 0, humanize: 0.35 }, muted: false, solo: false },
-  };
+  return Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => [
+    instrument, { steps: new Array(16).fill(false), settings: { ...DRUM_SETTINGS_DEFAULT[instrument] }, muted: false, solo: false },
+  ])) as unknown as DrumState;
 }
 
 function clonePattern(pattern: Pattern): Pattern {

@@ -674,14 +674,12 @@ for new accounts.
     (semitones, octaves); and whether it rewrites the notes or is a setting
     that shifts them as they play, which could differ from scene to scene
     and be automated later. Drums are not transposed.
-    Built on 2026-10-13 as a draft waiting for the owner: four buttons in
-    a lane's Notes tab (−12, −1, +1, +12) rewrite the notes of that lane's
-    pattern in the open scene, chords together, as one undo step. A move
-    that would take any note below C0 or above B8 is not offered. Still
-    open, all three questions: one lane (as built), every lane in the
-    scene, or the whole song; semitones and octaves (as built) or
-    something else; and rewriting the notes (as built) or a setting that
-    shifts them as they play.
+    Done on 2026-10-13: four buttons in a lane's Notes tab (−12, −1, +1,
+    +12) rewrite the notes of that lane's pattern in the open scene,
+    chords together, as one undo step. A move that would take any note
+    below C0 or above B8 is not offered. The owner answered the questions
+    the same day, each as built: one lane in the open scene, those four
+    buttons, the notes rewritten, and a button disabled at the edge.
 
 20. **A randomizer.** (M) Asked for by the owner on 2026-10-12. To ask the
     owner before building, because it could mean several things: random
@@ -767,27 +765,47 @@ for new accounts.
 
 ## Questions waiting on the owner
 
-- **Controller knobs (draft pull request).** Three things to settle after
-  trying it with the Launchkey. Are the ties rightly kept with the browser,
-  so the controller works the same in every project, or should they be
-  saved with each project? When the knob on the controller and the knob on
-  screen are in different places, the parameter jumps to the controller's
-  as soon as it is turned: is that right, or should it wait until the
-  controller's knob passes the value? And the parameter is chosen from a
-  menu in the MIDI panel, not by pressing Learn on the knob itself on
-  screen: is the menu enough?
+- **Firefox guests.** The owner said on 2026-10-13 that the timing "still
+  seems off" on Firefox after PRs #76 and #77. Still to ask: what is
+  heard (a guest early, late, drifting further out as it plays, or
+  stuttering), and with which guest.
+- **Controller knobs and MIDI pads.** Both are built as the owner asked;
+  neither has been tried with the Launchkey.
 
-- **Did the Firefox guest fixes work?** PRs #76 and #77 changed how a guest
-  instrument's audio is timed for Firefox. Nobody has said whether a guest
-  now plays in time on a real desktop Firefox.
-- **Tape Loop Deck.** On hold: the owner took it off the Add Guest list on
-  2026-10-10. Its loops are not saved with a project either, which needs an
-  addition to the guest protocol and a new prompt for its author.
-- **Kids mode.** Staying a separate page is now decided. Still to answer:
-  whether what a child makes can be opened in the full app.
-- **The Polysix model and the chorus.** The chorus is one shared effect
-  with a send for each lane. May a model turn up its lane's send, or should
-  that model wait until a lane can have effects of its own?
+## Decided by the owner on 2026-10-13
+
+Answers given in one sitting. Each is settled; build to it without asking
+again.
+
+- **Transpose.** As built and merged: one lane in the open scene, four
+  buttons, the notes rewritten, a button disabled at the edge of the range.
+- **Controller knobs.** As built and merged: ties kept with the browser
+  for now, the value jumps to the controller's knob, the parameter chosen
+  from a menu.
+- **Randomizer.** As built: random notes for synth lanes only, the kind of
+  line it makes, the browser remembering the last key and scale, and no
+  question before it replaces a lane's notes.
+- **A knob's reset.** A middle click puts a knob back at its default, not
+  at zero.
+- **The scroll wheel on knobs.** The rule that the pointer must rest on a
+  knob before the wheel turns it is good.
+- **The piano keys' arrows.** Left and right standing aside while a step
+  is selected is fine.
+- **Time signatures.** The six agreed ones only. No custom number of
+  steps in a bar.
+- **Master mixer.** A new unit showing the same levels as the knobs that
+  exist, which stay. Each instrument has a channel.
+- **A delay and reverb send for each drum.** Yes: delay and reverb only,
+  with the kit's own sends as a master over them.
+- **Aux sends.** Two for now. Which effects they can be pointed at is the
+  builder's choice.
+- **MIDI.** Each pad can be given to any drum. When more than one device
+  is connected, each can have a destination of its own.
+- **Kids mode.** What a child makes cannot be opened in the full app.
+- **The Polysix model and the chorus.** When a lane can have effects of
+  its own, the Polysix's Ensemble moves from the lane's send on the shared
+  chorus to an effect of its own.
+- **Tape Loop Deck.** Stays off the Add Guest list.
 
 ## Suggested order
 
