@@ -598,6 +598,16 @@ export default function SynthControls({
                   color="#6366f1"
                   tooltip={TOOLTIPS.osc2Detune}
                 />
+                <label className="synth-sync" title="Hard sync: oscillator 2 starts its wave again each time oscillator 1 does. It takes oscillator 1's pitch, and its own tuning becomes its tone">
+                  <input
+                    type="checkbox"
+                    aria-label="Sync oscillator 2 to oscillator 1"
+                    checked={osc2.sync ?? false}
+                    disabled={!osc2.enabled}
+                    onChange={(e) => updateOscillator2({ sync: e.target.checked })}
+                  />
+                  Sync
+                </label>
               </div>
             </div>
 
@@ -617,16 +627,6 @@ export default function SynthControls({
                   color="#6366f1"
                   tooltip={TOOLTIPS.osc2Level}
                 />
-                <label className="synth-sync" title="Hard sync: oscillator 2 starts its wave again each time oscillator 1 does. It takes oscillator 1's pitch, and its own tuning becomes its tone">
-                  <input
-                    type="checkbox"
-                    aria-label="Sync oscillator 2 to oscillator 1"
-                    checked={osc2.sync ?? false}
-                    disabled={!osc2.enabled}
-                    onChange={(e) => updateOscillator2({ sync: e.target.checked })}
-                  />
-                  Sync
-                </label>
                 <Knob
                   label="Osc 1"
                   ariaLabel="Oscillator 1 level"
