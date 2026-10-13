@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useSynthAudio } from '../hooks/useSynthAudio';
 import { useDrumAudio } from '../hooks/useDrumAudio';
-import { MidiMode, MidiMessage, useMidiInput } from '../hooks/useMidiInput';
+import { MidiMode, MidiMessage, MidiSource, useMidiInput } from '../hooks/useMidiInput';
 import { MIDI_DRUM_CHANNEL, midiOut } from '../services/midiOutput';
 import { Pattern, SequencerStep, SynthParameters, DrumState, DrumInstrument, DrumSettings, DrumKitDefinition, DrumKitId, EffectsLoopState, FxSendLevels, Scene, Song, SynthModelId, SynthModelParams } from '../types';
 import { SongPosition, applySceneMutes, audibleLanes, entryStartBar, guestBarGains, sceneAtBar, sceneDrumState, songBars } from '../services/songPlayback';
@@ -30,7 +30,8 @@ import { transposeSteps } from '../services/transpose';
 import { randomLine, type RandomChoice } from '../services/randomize';
 import { STARTERS, projectIsEmpty, starterDrums, starterPattern } from '../services/starters';
 import { buildSampleSong } from '../services/sampleSong';
-import { DEFAULT_DRUM_CHANNEL, drumForNote } from '../services/midiDrums';
+import { DEFAULT_DRUM_CHANNEL, defaultPads, drumForNote, storePads, storedPads, withPad, type PadMap } from '../services/midiDrums';
+import { destinationFor, destinationLane, storeMidiDestinations, storedMidiDestinations, withDestination, type MidiDestination, type MidiDestinations } from '../services/midiDevices';
 import { DEFAULT_QUANTIZE, asQuantize, recordPosition } from '../services/recordTiming';
 import { LANE_PARAMS, fromUnit, lanePatch, parseTarget } from '../services/paramTargets';
 import { storeMidiTies, storedMidiTies, tieFor, withTie, withoutTie, type MidiTie } from '../services/midiTies';
@@ -357,6 +358,21 @@ export function useStudio() {
   const midiLearnRef = useRef(midiLearn);
   midiLearnRef.current = midiLearn;
   const applyParamTargetRef = useRef<(target: string, unit: number) => void>(() => {});
+  // The note each drum's pad sends and where each device's notes go, both kept for this browser
+  // like the ties, and the drum waiting for a pad to be hit. One Learn waits at a time, a knob's
+  // or a pad's: asking for either calls the other off.
+  const [midiPads, setMidiPads] = useState<PadMap>(storedPads);
+  const midiPadsRef = useRef(midiPads);
+  midiPadsRef.current = midiPads;
+  const [midiPadLearn, setMidiPadLearn] = useState<DrumInstrument | null>(null);
+  const midiPadLearnRef = useRef(midiPadLearn);
+  midiPadLearnRef.current = midiPadLearn;
+  const [midiDestinations, setMidiDestinations] = useState<MidiDestinations>(storedMidiDestinations);
+  const midiDestinationsRef = useRef(midiDestinations);
+  midiDestinationsRef.current = midiDestinations;
+  const handleMidiLearn = useCallback((target: string | null) => { setMidiPadLearn(null); setMidiLearn(target); }, []);
+  const handleMidiPadLearn = useCallback((drum: DrumInstrument | null) => { setMidiLearn(null); setMidiPadLearn(drum); }, []);
+  const handleMidiPadsReset = useCallback(() => { const next = defaultPads(); storePads(next); setMidiPadLearn(null); setMidiPads(next); }, []);
   const handleMidiTieRemove = useCallback((target: string) => {
     setMidiTies(current => { const next = withoutTie(current, target); storeMidiTies(next); return next; });
   }, []);
@@ -431,7 +447,8 @@ export function useStudio() {
   const historyRef = useRef<ProjectHistory>({ undo: [], redo: [] });
   const historyThrottleRef = useRef<Record<string, number>>({});
   const isRestoringRef = useRef(false);
-  const midiHeldRef = useRef(new Map<string, number>());
+  // Notes a lane is holding for a MIDI device, by device, channel and note.
+  const midiHeldRef = useRef(new Map<string, { synthId: number; note: string; device: string }>());
   const midiChordRef = useRef<{ synthId: number; stepIndex: number; at: number } | null>(null);
   const globalTempoRef = useRef(globalTempo);
   globalTempoRef.current = globalTempo;
@@ -1485,7 +1502,33 @@ export function useStudio() {
     onOctave: handleOctaveShift,
   });
 
-  const handleMidiMessage = useCallback((message: MidiMessage) => {
+  // A device is given somewhere else to go. What a lane holds for it is let go first: the keys'
+  // note-offs would otherwise arrive for a lane that no longer hears the device.
+  const handleMidiDestinationChange = useCallback((device: string, place: MidiDestination) => {
+    midiHeldRef.current.forEach((held, key) => {
+      if (held.device !== device) return;
+      midiHeldRef.current.delete(key);
+      void handleNoteRelease(held.synthId, held.note);
+    });
+    const next = withDestination(midiDestinationsRef.current, device, place);
+    midiDestinationsRef.current = next;
+    storeMidiDestinations(next);
+    setMidiDestinations(next);
+  }, [handleNoteRelease]);
+
+  const handleMidiMessage = useCallback((message: MidiMessage, source: MidiSource) => {
+    if (message.type === 'noteOff') {
+      // Release on the lane that took the note-on, even if the channel, the target or the device's
+      // place changed since. A pad's note-off means nothing: no lane holds it.
+      const heldKey = `${source.id}\n${message.channel}:${message.note}`;
+      const held = midiHeldRef.current.get(heldKey);
+      if (!held) return;
+      midiHeldRef.current.delete(heldKey);
+      void handleNoteRelease(held.synthId, held.note);
+      return;
+    }
+    const place = destinationFor(midiDestinationsRef.current, source.name);
+    if (place === 'off') return;
     if (message.type === 'controlChange') {
       // A knob on the controller. While a parameter is waiting to be learned, the first knob turned
       // is tied to it; otherwise a knob that is tied moves its parameter.
@@ -1499,12 +1542,23 @@ export function useStudio() {
       if (tie) applyParamTargetRef.current(tie.target, message.value / 127);
       return;
     }
-    // A note on the drum channel is a pad: it plays its drum, and while recording it is written
-    // on the step being played. A note that is no drum here does nothing. Its note-off means nothing.
-    // If the keyboard's channel is the same one, the lane keeps it, as it always had it.
-    if (message.channel === midiDrumChannelRef.current && message.channel !== midiChannelRef.current) {
-      if (message.type !== 'noteOn') return;
-      const instrument = drumForNote(message.note);
+    // While a drum is waiting to be learned, the first note played is its pad's from then on.
+    const waitingPad = midiPadLearnRef.current;
+    if (waitingPad) {
+      const next = withPad(midiPadsRef.current, waitingPad, message.note);
+      midiPadsRef.current = next;
+      midiPadLearnRef.current = null;
+      storePads(next);
+      setMidiPads(next);
+      setMidiPadLearn(null);
+      return;
+    }
+    // A pad is a note on the drum channel, or any note from a device sent to the drums: it plays
+    // its drum, and while recording it is written on the step being played. A note that is no drum
+    // here does nothing. If the keyboard's channel is the drum channel too, the lane keeps it, as
+    // it always had it.
+    if (place === 'drums' || (place === 'default' && message.channel === midiDrumChannelRef.current && message.channel !== midiChannelRef.current)) {
+      const instrument = drumForNote(message.note, midiPadsRef.current);
       const drums = drumStateRef.current;
       if (!instrument || !drums[instrument]) return;
       const velocity = Math.max(0.05, message.velocity / 127);
@@ -1528,20 +1582,14 @@ export function useStudio() {
       return;
     }
     const noteName = midiNoteToName(message.note);
-    const heldKey = `${message.channel}:${message.note}`;
-
-    if (message.type === 'noteOff') {
-      // Release on the lane that took the note-on, even if the channel or target changed since.
-      const heldSynthId = midiHeldRef.current.get(heldKey);
-      if (heldSynthId === undefined) return;
-      midiHeldRef.current.delete(heldKey);
-      void handleNoteRelease(heldSynthId, noteName);
-      return;
-    }
-    if (message.channel !== midiChannelRef.current) return;
+    // A device with a lane of its own plays it on every channel. A lane the project does not have
+    // plays nothing.
+    if (place === 'default' && message.channel !== midiChannelRef.current) return;
 
     const synthSnapshot = synthsRef.current;
-    const targetSynth = synthSnapshot.find(s => s.id === midiTargetSynthIdRef.current) ?? synthSnapshot[0];
+    const targetSynth = place === 'default'
+      ? synthSnapshot.find(s => s.id === midiTargetSynthIdRef.current) ?? synthSnapshot[0]
+      : synthSnapshot.find(s => s.id === (place === 'open' ? selectedSynthIdRef.current : destinationLane(place)));
     if (!targetSynth) return;
     if (targetSynth.muted || (synthSnapshot.some(s => s.solo) && !targetSynth.solo)) return;
 
@@ -1552,7 +1600,7 @@ export function useStudio() {
       if (targetSynth.synthParams?.arpeggiator.enabled) {
         triggerSynthNote(targetSynth.synthParams, noteName, 60 / globalTempo, velocity, targetSynth.id);
       } else if (targetSynth.synthParams) {
-        midiHeldRef.current.set(heldKey, targetSynth.id);
+        midiHeldRef.current.set(`${source.id}\n${message.channel}:${message.note}`, { synthId: targetSynth.id, note: noteName, device: source.name });
         void synthAudio.playNote(noteName, targetSynth.synthParams, undefined, velocity, browserMutedRef.current, effectsLoopRef.current, globalTempo, targetSynth.id);
       }
       return;
@@ -2358,7 +2406,8 @@ export function useStudio() {
   };
 
   return {
-    midiTies, midiLearn, setMidiLearn, handleMidiTieRemove,
+    midiTies, midiLearn, handleMidiLearn, handleMidiTieRemove,
+    midiPads, midiPadLearn, handleMidiPadLearn, handleMidiPadsReset, midiDestinations, handleMidiDestinationChange,
     handleCopyPartToScene, handleStarter, handleSampleSong, dismissStarters, showStarters, metronome, handleMetronomeChange,
     synths, selectedSynthId, setSelectedSynthId, drumState: memoizedDrumState, drumKits,
     selectedDrumKitId, drumMasterVolume, drumSwing, drumFx, effectsLoop, browserMuted, setBrowserMuted,

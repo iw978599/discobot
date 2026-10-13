@@ -125,7 +125,7 @@ export function lanePatch(key: string, value: number): Record<string, unknown> |
   return path.reduceRight<unknown>((inner, name) => ({ [name]: inner }), value) as Record<string, unknown>;
 }
 
-const DRUM_NAMES: Record<DrumInstrument, string> = {
+export const DRUM_NAMES: Record<DrumInstrument, string> = {
   kick: 'Kick', snare: 'Snare', clap: 'Clap', closedHH: 'Closed Hat', openHH: 'Open Hat', snare2: 'Low Tom', ride: 'High Tom', crash: 'Cymbal',
 };
 
