@@ -1,182 +1,234 @@
 # Discobot
 
-A browser-only music workstation: up to three synths, 16/32-step sequencing,
-piano-roll editing, an eight-instrument drum machine, MIDI and shared effects.
-Everything runs in your browser and no login is required.
+A music workstation that runs in the browser: three synth lanes, a step
+sequencer with a piano roll, an eight-instrument drum machine, scenes and a
+song, shared effects, MIDI, and audio export. Sound is made on your own device.
+No login is needed.
 
-An account is optional: a username and a password, by invitation, with no email
-address or personal details. A project can host **guest instruments**: another creator's web instrument,
-shown in a frame, following the tempo and playing through the mixer. See
+**Use it at https://iw978599.github.io/discobot/**
+
+It installs as an app and works offline once it has been opened. On a phone,
+and on Kindle and Fire tablets, it shows one part of the rack at a time with
+controls sized for a finger.
+
+## What is in it
+
+**Three synth lanes.** Each plays one of sixteen synth models: a plain engine
+with every control on show, and fifteen set up in the manner of a well-known
+instrument, each with four knobs of its own.
+
+| Mono | Poly | Digital |
+|---|---|---|
+| Minimoog Model D, TB-303, SH-101, Pro-One, Mono/Poly, MS-20, Odyssey | Juno-106, Prophet-5, Jupiter-8, OB-Xa, Polysix | DX7, JP-8000, Virus |
+
+A model is this synth's own voice set up to behave like the instrument it is
+named for. It is not that instrument's circuit and uses none of its samples.
+
+**Sixty-five presets** in six kinds: bass, lead, pad, keys, pluck and effects.
+They are level-matched, so choosing another does not mean reaching for the
+volume. You can save, export and import your own, including presets from some
+other synths.
+
+**A drum machine** with eight lanes and eight kits (Clean, Punchy, Lo-Fi,
+TR-808, TR-909, LinnDrum, DMX, TR-707). Any lane can play a sample of your own
+instead of its built-in voice, and a whole kit can be imported at once.
+
+**Scenes and a song.** A scene is every lane's pattern plus the drum grid,
+one, two, four or eight bars long. A song is scenes in order, each repeated as many times as
+you like. Scenes can be given a colour so a song's shape reads at a glance.
+
+**Effects** shared by the whole rack: drive, phaser, delay (free or in time
+with the tempo), chorus, reverb and a three-band master EQ. Each lane and the
+drums have their own sends.
+
+**Guest instruments.** A project can host another creator's web instrument in
+a frame, following the tempo and playing through the mixer. See
 `docs/GUEST_PROTOCOL.md` to make one.
 
-Signed in, projects are also kept in the account and follow it to other
-browsers; imported samples are not. The accounts API is
-in `server/` (see `server/README.md`).
-
-## Architecture
-
-```
-discobot/
-├── engine/    # Browser-compatible TypeScript DSP and shared types
-└── ui/        # React + Vite, Web Audio, local project/sample services
-```
-
-Two npm workspaces build to a static site in `ui/dist/`. Project operations and
-events run in-process; there is no REST server or WebSocket connection. Sound is
-generated locally and played through the browser's Web Audio API.
-
-## Run locally
-
-Use **Node.js 22+** and npm from the repository root:
-```bash
-npm ci
-npm run dev
-```
-
-Open **http://localhost:3000/discobot/**. To preview the production build:
-
-```bash
-npm run build
-npm start
-```
-
-Open **http://localhost:4173/discobot/**. `npm start` is Vite's static preview,
-not an application backend. The build's asset base is `/discobot/`.
+**Kids mode.** Big pads, a beat grid of pictures and one play button, for a
+small child. It keeps its own tune and is reached from the Project menu.
 
 ## Make music
 
-The screen is one rack, read top to bottom: the transport, three synth lanes,
-the drum grid, then the shared effects. Every lane's steps line up, so you can
-see how the parts sit against each other.
+The screen is one rack, read top to bottom: the transport, the scenes and
+song, three synth lanes, the drums, then the effects. Every lane's steps line
+up, so you can see how the parts sit against each other.
 
-1. Click a keyboard key or Play to unlock browser audio; start with low output volume.
-2. Click a synth lane's name plate to open its editor. Select a step in its row
-   and play a note onto it, or paint notes in the piano roll. Each lane has four
-   knobs and a level on its face; the editor's tabs (Notes, Osc, Filter, Amp,
-   LFO, Arp, Sends) hold the rest of the sound.
-   The computer keyboard plays the selected synth: the A S D F G H J K L row is
-   the white keys, W E T Y U O P the black keys, and Z / X shift the octave.
-   Tap tempo is Shift+T.
-3. Click cells in the drum grid to add hits, and select a kit. The strip under
-   the grid edits the instrument and step you last touched.
-   Each drum step has a velocity, a chance of playing, and a repeat count that
-   packs up to four hits into the step.
-4. Use Play All / Stop All, shared tempo and the mixer. Effects sends feed
-   drive, phaser, delay and reverb; a send and its return must be audible.
-5. Build a song from scenes. A scene is one bar of everything: all three
-   lanes' notes and the drum grid. Add scenes with + Copy or + Empty, then add
-   them to the song in order and set how many times each repeats. The Scene /
-   Song switch chooses whether Play loops the open scene or plays the song from
-   the marked block; in song mode the rack follows along. Sounds, tempo and
-   effects are shared by every scene.
-6. Your work saves itself. The Project menu starts a new project, keeps a
-   copy, makes a share link, and holds project files and MIDI import; the
-   Export menu holds the audio and MIDI exports. MIDI controller settings
-   and imported samples are behind the MIDI button.
+1. **Start.** A new project offers three beats to start from (House Beat, Slow
+   Groove, Electro), or build from nothing. Press Play, or the space bar.
+   Browser audio starts on your first click or key; begin with the volume low.
+2. **Play a synth.** Click a lane's name to open its editor. Pick a model and a
+   preset. Select a step in the lane's row and play a note onto it, or switch
+   from Keys to Roll and paint notes in the piano roll.
+   - A step can hold a chord of up to six notes and last several steps.
+   - Each step has a velocity, a chance of playing, a repeat count, and can sit
+     a little late, between steps.
+   - The computer keyboard plays the selected lane: the A S D F G H J K L row
+     is the white keys, W E T Y U O P the black keys, Z and X shift the octave.
+     Tap tempo is Shift+T.
+3. **Shape the sound.** Each lane has four knobs and a level on its face. The
+   editor's tabs (Notes, Osc, Filter, Amp, LFO, Arp, Sends) hold the rest. Turn
+   a knob by dragging, with the scroll wheel, or by typing its value.
+4. **Add drums.** Click cells in the drum grid and choose a kit. The strip
+   under the grid edits the drum and step you last touched: velocity, chance,
+   and up to four hits packed into one step.
+5. **Build a song.** Add scenes with + Copy or + Empty, add them to the song
+   in order, and set how many times each repeats. The Scene / Song switch
+   chooses whether Play loops the open scene or plays the song through.
+   Sounds, tempo and effects are shared by every scene; notes, drum hits and
+   mutes belong to each scene.
+6. **Undo** and **Redo** cover notes, drums, sounds, tempo and effects.
 
-### Local data
+The **?** button has a fuller guide and a walkthrough of the rack.
 
-You can keep any number of projects. Click the project's name in the top row to
-see them all, and to open, rename, copy or delete one. The open project saves
-itself as you work; **Save a Copy** keeps a version to go back to. Every project
-is stored in **IndexedDB**, and the open one also has a working copy in
-**localStorage** so nothing is lost when a tab closes. Imported sample bytes and
-metadata are stored in IndexedDB, then decoded locally for playback.
-Nothing is uploaded. Storage is specific to the browser profile and origin:
-localhost ports and the deployed site do not share projects. Clearing site data,
-private browsing or storage quotas can remove/prevent persistence. Storage errors
-are reported in the UI; local storage is not a backup. Edits are saved a moment
-after you stop changing things, and immediately when the tab is closed or hidden.
-If the same project is changed in a second tab, the first tab stops saving and
-asks which version to keep, so neither silently overwrites the other.
+## The synth voice
 
-**Export Project** downloads the open project as one JSON file: lanes, drums,
-scenes, song, effects and your synth presets. **Import Project** adds a file to
-your projects as a new one and opens it; nothing is replaced.
+One voice implementation (`engine/src/synth/SynthCore.ts`) plays live and
+renders exports, so both sound the same. Each of its eight notes has:
 
-**Share Link** makes a link with the whole song inside it. Whoever opens it gets
-a page that plays the song and can keep their own copy to edit. Nothing is
-uploaded and no account is involved, so a link cannot be taken back once sent,
-and very large projects do not fit in one. Use the pair as a backup or to move
-to another browser or device. Imported samples are not part of the file.
+- two band-limited oscillators, a sub and noise, each with its own level; the
+  second can be hard-synced to the first, and the two can be ring modulated;
+- up to seven detuned copies stacked on a note (unison), with a level for the
+  copies either side of the middle one;
+- a four-operator FM mode;
+- a high-pass, then a filter that can be a clean 12 or 24 dB state-variable
+  filter, a four-pole ladder whose resonance thins the bass and rings by
+  itself, or a two-pole in the manner of an MS-20 whose resonance distorts as
+  it is pushed;
+- separate envelopes for level and filter, key tracking, and velocity to level
+  and filter;
+- two LFOs, free or in time with the tempo;
+- four modulation routes: an LFO, an envelope, velocity, key or a stepped
+  random value, sent to pitch, the second oscillator's pitch, the filter, the
+  level, pulse width, pan or FM amount;
+- mono mode with glide between tied steps, and an arpeggiator.
 
-The site is installable and works offline. A service worker caches the built
-app on first visit; after that it opens with no connection. It checks the
-network first for the page itself, so a new release appears on the next visit
-while online.
+Each lane has a Duck amount that pulls it down on every kick and lets it swell
+back; it is applied the same way in an export.
 
-### MIDI and audio files
+One drum implementation (`engine/src/drums/DrumCore.ts`) likewise plays live
+and renders exports. Voices are mixed with no saturation, so drums that land
+together keep their levels. The LinnDrum, DMX and TR-707 kits are synthesized
+approximations of those sample-based machines.
 
-- **MIDI input:** select a device, channel, target synth and live/record/step mode.
-  Hardware input requires Web MIDI support, a secure context (HTTPS or localhost)
-  and permission. Unsupported browsers show an explanation instead of unusable
-  device controls; use the on-screen keyboard or import a file instead.
-- **Import MIDI:** choose a `.mid` file and a track; imported notes and detected
-  tempo are mapped to the sequencer. MIDI file import/export does not require
-  Web MIDI or a connected controller.
-- **Scene MIDI:** download a Standard MIDI File containing synth lanes, tempo
-  and drums on channel 10. MIDI stores note events, not synthesized audio.
-- **Scene WAV:** render the current arrangement locally to a stereo audio file:
-  one bar followed by its effect tail. The export runs the same synth and drum
-  code as live playback, offline. While any WAV export is being made a message
-  at the top says so, the other WAV exports wait, and the message changes when
-  the file has downloaded.
-- **Song WAV / Song MIDI:** the whole song from start to finish. The MIDI file
-  has a marker at the start of each section. Song audio is limited to 8 minutes.
-- **Loop WAV:** exactly one bar that repeats seamlessly. The pattern is rendered
-  for several bars and the last one is kept, so reverb and delay tails from the
-  end of the bar are already present at its start.
-- **Stems:** a zip with one WAV per synth lane that has notes (muted or not)
-  and one for the drums. All stems are the same length and line up.
-- Drum steps with a chance below 100% are decided by a fixed random sequence in
-  WAV and MIDI export, so the same project always exports the same file.
+Noise and every random choice in an export are seeded, so the same project
+always exports the same audio.
 
-### Audio implementation
+**None of this is a claim of exact emulation of vintage hardware.** The models
+and presets were designed from each instrument's documented architecture and
+checked by measurement; the owner has listened to most of them, and the most
+recent additions have not been heard by anyone yet (`docs/HANDOFF.md` says
+which).
 
-- One synth voice core (`engine/src/synth/SynthCore.ts`) runs both in the
-  AudioWorklet and in WAV export. Each of its eight voices has two band-limited
-  oscillators plus sub and noise, a zero-delay-feedback state-variable filter
-  with drive, separate exponential amp and filter envelopes, key tracking,
-  velocity-to-filter accent, two LFOs (retriggered or free-running) and a
-  four-operator FM mode. Mono mode glides between tied (slide) steps.
-- Unison stacks up to five detuned copies of the oscillators on each note. The
-  filter has a 12 dB and a steeper 24 dB per octave slope. Each synth lane has a
-  Duck amount that pulls it down on every kick and lets it swell back
-  (sidechain-style pumping); it is applied the same way in WAV export.
-- One drum core (`engine/src/drums/DrumCore.ts`) runs in the worklet and in
-  export. Voices are mixed linearly with no per-hit or bus saturation, so drums
-  that land on the same step keep the level their volume and velocity ask for.
-  The 808-style kits use six detuned square oscillators for hats and cymbals;
-  LinnDrum, DMX and TR-707 kits approximate those sample-based machines by
-  reducing the voices to their converter's bit depth and sample rate.
-- Noise is seeded, so the same arrangement always exports the same audio.
-- Audio-clock look-ahead sequencing rather than network-delivered audio.
-- Parallel effects sends preserve the dry signal when effects are bypassed;
-  the phaser mixes a dry tap with its all-pass stages.
-- The master bus has a peak limiter and a soft ceiling that only act near full
-  scale; below that the mix passes through unchanged. Sample previews use the
-  same output with short boundary fades.
+## Projects and your data
 
-These are implemented DSP safeguards, not a claim of listening-verified quality
-or exact emulation of vintage hardware.
+You can keep any number of projects. Click the project's name in the top row
+to see them all. A project and the copies the app names after it ("copy",
+"2", "this browser's version") share one row, with a chooser for which one to
+open, rename, copy or delete.
 
-## Validation
+- **It saves itself** a moment after you stop changing things, and at once
+  when the tab is closed or hidden. A word beside the project's name says
+  where the work is.
+- **Version History** keeps up to twenty earlier versions of each project, in
+  this browser only.
+- **Export Project** downloads the open project as one file: lanes, drums,
+  scenes, song, effects, your presets and the samples its drum lanes use.
+  **Import Project** adds a file as a new project; nothing is replaced.
+- Projects live in the browser's own storage (IndexedDB, with a working copy
+  in localStorage). That storage belongs to this browser on this device:
+  clearing site data or private browsing removes it, and it is not a backup.
+  Export the projects you care about.
+- If the same project is changed in a second tab, the first stops saving and
+  asks which version to keep.
 
-Existing checks: `npm run typecheck`, `npm test`, and `npm run test:browser`.
-See [the control audit](docs/CONTROL_AUDIT.md) for coverage and remaining limits.
-Automated browser/DSP checks do not verify subjective sound quality, real MIDI
-hardware or every browser/device; those require listening and hands-on testing.
+### Sharing
 
-## GitHub Pages publication
+- **Share Link** makes a link with the whole song inside it. Whoever opens it
+  gets a page that plays the song and can keep a copy to edit. Nothing is
+  uploaded and no account is involved, so such a link cannot be taken back,
+  and a very large project does not fit in one.
+- Signed in, a song can instead be **published** behind a short link, which
+  can be unpublished again, and each person has a page listing the songs they
+  have published.
 
-**Publication is not confirmed.** Repository metadata reported `has_pages: false`,
-the expected site's DNS lookup failed, and browser-only PR #58 was still unmerged
-when checked. No Pages-settings write API is available in this task.
+### Accounts (optional)
 
-Remaining maintainer steps:
-1. Merge the approved browser-only PR into `main`.
-2. In **Settings → Pages → Build and deployment → Source**, select **GitHub Actions**.
-3. Run **Publish GitHub Pages** on `main` and confirm its deployment succeeds.
+An account is a username and a password, by invitation, with no email address
+or personal details. Everything works without one.
 
-Expected URL: **https://iw978599.github.io/discobot/** — this is not a claim that
-the site is already published.
+Signed in, the projects you make, and any earlier ones you add, are also kept
+in the account and follow it to other browsers. Nothing is merged: a project changed in two places is kept
+twice. A project can be shared with another account by username, to work on in
+turns. Imported samples are not synced. The accounts service is in `server/`
+(see `server/README.md`).
+
+## MIDI and audio files
+
+- **MIDI in.** Play a lane from a controller: choose the device, channel,
+  lane, and whether notes play live, record, or step in. This needs a browser
+  with Web MIDI (Chrome or Edge), HTTPS or localhost, and permission. Where it
+  is not available the panel says so, and everything else still works.
+- **MIDI out.** The sequencer can play a hardware synth and send it clock:
+  lanes on channels 1 to 3, drums on channel 10.
+- **Import MIDI.** Bring notes and tempo in from a `.mid` file.
+- **Scene WAV / Scene MIDI.** The open scene as audio (with its effect tail)
+  or as a Standard MIDI File.
+- **Song WAV / Song MIDI.** The whole song, start to finish. Song audio is
+  limited to eight minutes; the MIDI file has a marker at each section.
+- **Loop WAV.** One pass of the scene that repeats seamlessly, with reverb and
+  delay tails from its end already present at its start.
+- **Stems.** A zip with one WAV for each synth lane, the drums, and each guest
+  instrument, all the same length.
+
+A guest instrument cannot be rendered offline, so an export that includes one
+first plays the arrangement through and records it.
+
+## For developers
+
+```
+discobot/
+├── engine/    # The synth and drum DSP, and the shared types
+├── ui/        # React + Vite: the rack, Web Audio, projects and samples
+└── server/    # The optional accounts service: a Cloudflare Worker with a D1 database
+```
+
+Three npm workspaces. The app builds to a static site in `ui/dist/` and never
+depends on the server: signed out, it makes no request to it at all.
+
+Use **Node.js 22+** from the repository root:
+
+```bash
+npm ci
+npm run dev            # the app, at http://localhost:3000/discobot/
+npm run build          # build the engine and the app
+npm start              # preview the built app, at http://localhost:4173/discobot/
+npm run dev:api        # the accounts service, in memory, at http://127.0.0.1:8787
+```
+
+Checks:
+
+```bash
+npm run typecheck
+npm test               # unit tests: the engine, the app's services, the server
+npm run test:browser   # Playwright, against the built app and a local accounts service
+```
+
+The same checks run on GitHub for every pull request, with the browser tests
+at desktop and phone widths. A merge to `main` publishes the site once they
+pass.
+
+Automated checks cannot judge how something sounds, and nobody has tested the
+app against every browser, device or piece of MIDI hardware. The unit tests do
+measure what can be measured: that presets of a kind are about as loud as each
+other, that filters have the slopes they claim, that an older project plays
+sample for sample as it did.
+
+Further reading:
+
+- `AGENTS.md`: how the code is organised and the rules a change must keep.
+- `docs/ROADMAP.md`: what is done and what is planned.
+- `docs/SYNTH_MODELS_PLAN.md`: the synth models, and where each differs from
+  its namesake.
+- `docs/GUEST_PROTOCOL.md`: how to make a guest instrument.
+- `docs/CONTROL_AUDIT.md`: what the tests cover.

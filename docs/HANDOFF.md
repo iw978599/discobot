@@ -260,8 +260,8 @@ fourteen, with the engine work each needs.
 5. The modulation matrix, then the Odyssey, the Virus and the CS-80. The
    matrix (#145) and the MS-20 (#144) are merged. The Odyssey, with sync
    and ring modulation for the voice, is built on
-   `feat/design-review-odyssey` (check its pull request's state). The
-   Virus and the CS-80 are next; the CS-80 needs two layers a note, the
+   `feat/design-review-odyssey` (check its pull request's state), and
+   the Virus on `feat/synth-model-virus`. The CS-80 is next; the CS-80 needs two layers a note, the
    largest change to the voice. The owner also asked on 2026-10-12 for the
    README to be brought up to date with all of this. The owner said on
    2026-10-12 to "just keep working" through this. What it said before:

@@ -223,6 +223,28 @@ test('the Odyssey is two oscillators with the second synced, a ring modulator, a
   assert.deepEqual(sound('odyssey', { ...MIDDLE, macro1: 0, macro4: 0 }).modMatrix, []);
 });
 
+test('the Virus morphs a saw into a pulse through a driven filter, and its fourth knob moves everything at once', () => {
+  const middle = voice('virus');
+  assert.deepEqual([middle.voiceMode, middle.filterSlope, middle.osc2Sync], ['poly', 24, false]);
+  assert.ok(middle.filterDrive >= 0.5 && middle.subLevel > 0);
+  // Morph: all saw at one end, all pulse at the other.
+  const saw = voice('virus', { ...MIDDLE, macro1: 0 }), pulse = voice('virus', { ...MIDDLE, macro1: 1 });
+  assert.deepEqual([saw.oscLevel, saw.osc2Level, saw.osc2Type], [0, 1, 'sawtooth']);
+  assert.deepEqual([pulse.oscLevel, pulse.osc2Enabled, pulse.oscType], [1, false, 'square']);
+  assert.ok(voice('virus', { ...MIDDLE, macro2: 1 }).filterQ > voice('virus', { ...MIDDLE, macro2: 0 }).filterQ, 'Resonance');
+  assert.ok(voice('virus', { ...MIDDLE, macro3: 1 }).filterFreq > voice('virus', { ...MIDDLE, macro3: 0 }).filterFreq, 'Cutoff');
+  // Mod Depth: nothing moves at the bottom, and every route grows with it.
+  assert.deepEqual(sound('virus', { ...MIDDLE, macro4: 0 }).modMatrix, []);
+  const half = sound('virus', { ...MIDDLE, macro4: 0.5 }).modMatrix!, full = sound('virus', { ...MIDDLE, macro4: 1 }).modMatrix!;
+  assert.equal(full.length, 4);
+  for (let index = 0; index < full.length; index++) {
+    assert.deepEqual([half[index].source, half[index].destination], [full[index].source, full[index].destination]);
+    assert.ok(full[index].depth > half[index].depth && half[index].depth > 0);
+  }
+  // Its LFOs are sources only: neither is switched on to its own target.
+  assert.deepEqual([middle.lfo1Enabled, middle.lfo2Enabled], [false, false]);
+});
+
 test('sync, the ring and the routes go when a lane leaves the Odyssey', () => {
   const lane = sound('odyssey', { macro1: 1, macro2: 1, macro3: 0.5, macro4: 1 });
   for (const model of SYNTH_MODELS.filter(entry => entry.id !== 'generic' && entry.id !== 'odyssey')) {
@@ -230,7 +252,8 @@ test('sync, the ring and the routes go when a lane leaves the Odyssey', () => {
     const flat = toVoiceParams(moved);
     assert.equal(flat.osc2Sync, false, model.id);
     assert.equal(flat.ringLevel, 0, model.id);
-    assert.deepEqual(moved.modMatrix, [], model.id);
+    // The Odyssey's routes are gone; a model with routes of its own has those, and no others.
+    assert.deepEqual(moved.modMatrix, mapSynthModelToEngineParams(model.id, MIDDLE).modMatrix ?? [], model.id);
   }
 });
 

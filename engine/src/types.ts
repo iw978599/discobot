@@ -205,7 +205,7 @@ export interface SynthParameters {
   };
 }
 
-export type SynthModelId = 'generic' | 'minimoog-model-d' | 'juno-106' | 'dx7' | 'tb-303' | 'prophet-5' | 'sh-101' | 'pro-one' | 'jupiter-8' | 'ob-xa' | 'jp-8000' | 'mono-poly' | 'polysix' | 'ms-20' | 'odyssey';
+export type SynthModelId = 'generic' | 'minimoog-model-d' | 'juno-106' | 'dx7' | 'tb-303' | 'prophet-5' | 'sh-101' | 'pro-one' | 'jupiter-8' | 'ob-xa' | 'jp-8000' | 'mono-poly' | 'polysix' | 'ms-20' | 'odyssey' | 'virus';
 
 export interface SynthModelParams {
   macro1: number;

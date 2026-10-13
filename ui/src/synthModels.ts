@@ -178,6 +178,18 @@ export const SYNTH_MODELS: SynthModelDefinition[] = [
     ],
   },
   {
+    id: 'virus',
+    name: 'Virus',
+    group: 'Digital',
+    subtitle: 'Modern and moving: a saw that morphs to a pulse, a driven filter, and everything modulated at once',
+    macros: [
+      { key: 'macro1', label: 'Morph' },
+      { key: 'macro2', label: 'Resonance' },
+      { key: 'macro3', label: 'Cutoff' },
+      { key: 'macro4', label: 'Mod Depth' },
+    ],
+  },
+  {
     id: 'pro-one',
     name: 'Pro-One',
     group: 'Mono',
@@ -521,6 +533,45 @@ function mapOdyssey(params: SynthModelParams): Partial<SynthParameters> {
   };
 }
 
+// A saw that the first macro turns into a pulse, a second saw beside it and a sub under them,
+// into a driven four-pole filter. The fourth macro is how much everything moves: a slow LFO
+// opens and closes the filter and drifts the sound from side to side, a second one moves the
+// pulse's width, and a harder note is brighter. At nothing it is a still sound with no routes.
+// The voice's first oscillator is the pulse, because only it has a width; the second is the saw.
+function mapVirus(params: SynthModelParams): Partial<SynthParameters> {
+  const pulse = clamp01(params.macro1), saw = 1 - pulse, depth = clamp01(params.macro4);
+  const by = (amount: number) => Number((depth * amount).toFixed(2));
+  return {
+    engine: 'subtractive',
+    voiceMode: 'poly',
+    oscillator: { type: 'square', detune: 0, pulseWidth: 0.5 },
+    oscillator2: { enabled: saw > 0, type: 'sawtooth', semitones: 0, detune: 9, level: Number(saw.toFixed(2)), sync: false },
+    mixer: { sub: 0.3, noise: 0, osc: Number(pulse.toFixed(2)), ring: 0 },
+    filter: {
+      type: 'lowpass',
+      frequency: Math.round(120 * (12000 / 120) ** clamp01(params.macro3)),
+      q: Number(range(0.5, 9, params.macro2).toFixed(2)),
+      envAmount: 0.35,
+      keyTracking: 0.5,
+      drive: 0.5,
+      slope: 24,
+    },
+    filterEnvelope: { attack: 0.005, decay: 0.5, sustain: 0.3, release: 0.4 },
+    envelope: { attack: 0.005, decay: 0.4, sustain: 0.75, release: 0.4 },
+    velocity: { amp: 1, filter: 0.1 },
+    portamento: { enabled: false, glide: 0.05 },
+    // Both LFOs are kept as sources for the routes and sent nowhere themselves.
+    lfo1: { sync: false, retrigger: false, enabled: false, target: 'filter', waveform: 'triangle', rate: 0.4, depth: 0 },
+    lfo2: { sync: false, retrigger: false, enabled: false, target: 'filter', waveform: 'triangle', rate: 0.9, depth: 0 },
+    modMatrix: depth > 0 ? [
+      { source: 'lfo1', destination: 'filter', depth: by(0.35) },
+      { source: 'lfo2', destination: 'pulseWidth', depth: by(0.6) },
+      { source: 'velocity', destination: 'filter', depth: by(0.4) },
+      { source: 'lfo1', destination: 'pan', depth: by(0.5) },
+    ] : [],
+  };
+}
+
 // What a lane is given when it moves to a model: the model's macros, and anything another model
 // may have left on the lane that this one does not set for itself. A lane that only has a macro
 // turned gets the macros alone (mapSynthModelToEngineParams), so a slope or a unison someone
@@ -556,6 +607,7 @@ export function mapSynthModelToEngineParams(modelId: SynthModelId, modelParams: 
   if (modelId === 'polysix') return mapPolysix(modelParams);
   if (modelId === 'ms-20') return mapMs20(modelParams);
   if (modelId === 'odyssey') return mapOdyssey(modelParams);
+  if (modelId === 'virus') return mapVirus(modelParams);
   if (modelId === 'mono-poly') {
     return {
       ...mapModel(modelParams, {
