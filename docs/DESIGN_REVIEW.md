@@ -753,7 +753,7 @@ asking what a person would reach for and not find.
     none, but I did not search every file, so treat "there is none" as
     likely, not certain. Small.
 
-11. **Help as a page with a list of parts, not one long scroll.** The Help
+11. **Help as a page with a list of parts, not one long scroll.** **The list of headings and the search box are built; "Help for this unit" on a name plate is not.** The Help
     dialog is about seven screens of solid text on a phone
     (`desktop/dialog-help.png`). Give it a list of headings at the top (or
     at the side on a desktop) and a search box, and make each rack unit's
@@ -840,6 +840,7 @@ on the owner's laptop.
 | `banner-message` | The message bar, after a file that is not audio was given to Import Kit |
 | `menu-project`, `menu-export` | The two menus open |
 | `dialog-help` | Help |
+| `dialog-help-search`, `dialog-help-search-nothing` | Help with a search that leaves two sections, and one that matches nothing |
 | `walkthrough-step-1`, `-4`, `-9` | The walkthrough at its first, fourth and last stop |
 | `dialog-midi-samples` | MIDI and samples, with no MIDI available |
 | `dialog-projects-one` | Projects, with one project |

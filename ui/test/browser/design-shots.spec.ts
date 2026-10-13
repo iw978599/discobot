@@ -304,6 +304,13 @@ test('design shots: menus, dialogs, the walkthrough and a guest', async ({ page 
     const help = page.getByRole('dialog', { name: 'How to use Discobot', exact: true });
     await expect(help).toBeVisible();
     await shot(walk, 'dialog-help');
+    await help.getByLabel('Search Help', { exact: true }).fill('kick');
+    await expect(help.getByRole('status')).toHaveText('2 of 6 sections match.');
+    await shot(walk, 'dialog-help-search');
+    await help.getByLabel('Search Help', { exact: true }).fill('zebra');
+    await expect(help.getByRole('status')).toContainText('Nothing in Help matches');
+    await shot(walk, 'dialog-help-search-nothing');
+    await help.getByRole('button', { name: 'Clear search', exact: true }).click();
     await help.getByRole('button', { name: 'Show the Walkthrough', exact: true }).click();
     const tour = page.getByRole('dialog', { name: 'Walkthrough', exact: true });
     for (let stop = 1; stop <= 9; stop += 1) {
