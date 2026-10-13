@@ -15,7 +15,7 @@ test.beforeEach(async ({ page }) => {
 test('a drum row and a lane\'s notes can each be copied into another scene, asking first when something is there', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
-  const drumCopy = page.locator('.drum-tools').first().getByRole('button', { name: /^Copy to/ });
+  const drumCopy = page.locator('.drum-strip .copy-to').getByRole('button', { name: /^Copy to/ });
   const lane = page.getByRole('region', { name: 'Synth 1 module', exact: true });
 
   // With one scene there is nowhere to copy to, and the menu says so.

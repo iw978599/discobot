@@ -380,14 +380,14 @@ function DrumModule({ studio }: { studio: Studio }) {
             <button className={`rack-btn ${follow ? 'on' : ''}`} aria-pressed={follow} title="Show whichever bar is playing" onClick={() => setFollow(value => !value)}>Follow</button>
           </span>
         )}
+        <CopyToScene
+          part={`the ${LABELS[selected]} row`}
+          scenes={studio.scenes}
+          currentSceneId={studio.currentSceneId}
+          filled={scene => Boolean(scene.drums[selected]?.steps.some(Boolean))}
+          onCopy={sceneId => studio.handleCopyPartToScene(sceneId, { drum: selected })}
+        />
         <div className="drum-tools">
-          <CopyToScene
-            part={`the ${LABELS[selected]} row`}
-            scenes={studio.scenes}
-            currentSceneId={studio.currentSceneId}
-            filled={scene => Boolean(scene.drums[selected]?.steps.some(Boolean))}
-            onCopy={sceneId => studio.handleCopyPartToScene(sceneId, { drum: selected })}
-          />
           <button
             className="rack-btn"
             title="Random fill for selected instrument"

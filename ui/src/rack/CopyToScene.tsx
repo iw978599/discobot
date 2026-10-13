@@ -21,7 +21,7 @@ export default function CopyToScene({ part, scenes, currentSceneId, filled, onCo
   const others = scenes.filter(scene => scene.id !== currentSceneId);
   const choose = (scene: Scene) => { if (filled(scene)) setAsking(scene); else onCopy(scene.id); };
   return (
-    <>
+    <span className="copy-to">
       <Menu
         label="Copy to"
         groups={[others.length > 0
@@ -38,6 +38,6 @@ export default function CopyToScene({ part, scenes, currentSceneId, filled, onCo
           {asking.name} already has something there. Copying {part} into it replaces that, and Undo will not bring it back.
         </ConfirmDialog>
       )}
-    </>
+    </span>
   );
 }
