@@ -59,6 +59,8 @@ test('with a chord shape chosen, a note put in the piano roll is the root of a w
   if (testInfo.project.name === 'chromium') {
     const lengths = async () => { const step = (await stored(page)).synths[0].pattern.steps[8]; return [step.length ?? 1, step.lengths ?? null]; };
     const drag = async (note: string, from: number, to: number) => {
+      // A click scrolls the roll to its cell; a bare mouse move does not, so the note is brought on show first.
+      await cell(note, from).scrollIntoViewIfNeeded();
       const handle = (await cell(note, from).locator('.piano-roll-resize').boundingBox())!, end = (await cell(note, to).boundingBox())!;
       await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
       await page.mouse.down();
