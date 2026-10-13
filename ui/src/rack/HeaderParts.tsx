@@ -237,6 +237,16 @@ function HelpContent({ at, onClose, onWalkthrough }: { at: string | null; onClos
             <li><strong>Your own sounds:</strong> <strong>Sound</strong> puts an imported sample on the selected lane. <strong>Import Kit</strong> takes several files at once and matches each to a lane by its name, such as “Kick” or “HH Open”; check the matches before using them. Samples stay in this browser.</li>
           </ul>
         </section>
+        <section id="help-mixer" hidden={off('help-mixer')}>
+          <h3 tabIndex={-1} onKeyDown={(event) => back(event, 'help-mixer')}>Mixer</h3>
+          <ul className="help-list help-list-plain">
+            <li><strong>Every level in one place:</strong> a strip for each synth lane, each guest instrument, each drum and the whole kit, the two effect returns and the main volume.</li>
+            <li><strong>The same controls:</strong> a fader here and the knob in its own unit are one setting. Move either and the other follows, and Undo takes back a move made in either place. The mixer adds nothing to the project.</li>
+            <li><strong>A strip:</strong> Pan, then the fader, then <strong>M</strong> to mute and <strong>S</strong> to solo. Drag a fader, turn the scroll wheel over it, step it with the arrow keys or type a figure under it; a middle click puts it back where it started, and a tap with a finger opens a large slider.</li>
+            <li><strong>Whose level it is:</strong> a lane's and a drum's level are the project's, the same in every scene. A guest's level and mute are kept with each scene. The main volume is this browser's: it is not saved with the project, shared or exported.</li>
+            <li><strong>Hide:</strong> folds the strips away. This browser remembers it.</li>
+          </ul>
+        </section>
         <section id="help-effects" hidden={off('help-effects')}>
           <h3 tabIndex={-1} onKeyDown={(event) => back(event, 'help-effects')}>Effects</h3>
           <ul className="help-list help-list-plain">

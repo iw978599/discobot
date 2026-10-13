@@ -1,5 +1,5 @@
 import type { DrumInstrument } from '../types';
-import { DRUM_INSTRUMENTS } from './drumKits';
+import { DRUM_INSTRUMENTS, DRUM_NAMES } from './drumKits';
 
 // One way of naming a parameter anywhere in the project, so that something outside the screen (a
 // controller's knob today, automation later) can say which one it means. A name is a short string:
@@ -125,9 +125,7 @@ export function lanePatch(key: string, value: number): Record<string, unknown> |
   return path.reduceRight<unknown>((inner, name) => ({ [name]: inner }), value) as Record<string, unknown>;
 }
 
-export const DRUM_NAMES: Record<DrumInstrument, string> = {
-  kick: 'Kick', snare: 'Snare', clap: 'Clap', closedHH: 'Closed Hat', openHH: 'Open Hat', snare2: 'Low Tom', ride: 'High Tom', crash: 'Cymbal',
-};
+export { DRUM_NAMES };
 
 // Every name there is, in the groups a menu shows them in.
 export function listTargets(laneIds: number[]): Array<{ group: string; targets: Array<{ id: string; label: string }> }> {

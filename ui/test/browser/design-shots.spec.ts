@@ -171,6 +171,7 @@ test('design shots: the rack, its units and the states of its controls', async (
       await part('unit-song', page.locator('.song-module'));
       await part('unit-synth-piano-roll', lane(page, 1));
       await part('unit-drums', page.locator('[data-unit="drums"]'));
+      await part('unit-mixer', page.locator('[data-unit="mixer"]'));
       await part('unit-effects', page.locator('.effects-unit'));
     }));
     await attempt(walk, 'step-tools-selected', async () => {
@@ -362,7 +363,7 @@ test('design shots: menus, dialogs, the walkthrough and a guest', async ({ page 
     await expect(help).toBeVisible();
     await shot(walk, 'dialog-help');
     await help.getByLabel('Search Help', { exact: true }).fill('kick');
-    await expect(help.getByRole('status')).toHaveText('2 of 8 sections match.');
+    await expect(help.getByRole('status')).toHaveText('2 of 9 sections match.');
     await shot(walk, 'dialog-help-search');
     await help.getByLabel('Search Help', { exact: true }).fill('zebra');
     await expect(help.getByRole('status')).toContainText('Nothing in Help matches');
@@ -568,6 +569,12 @@ test('design shots: a phone showing one unit at a time, the knob sheet, and a ph
     await shot(walk, 'phone-unit-drums');
     await scrollBy(walk, 0.7);
     await shot(walk, 'phone-unit-drums-2');
+  });
+  await attempt(walk, 'phone-unit-mixer', async () => {
+    await show('Show Mixer');
+    await shot(walk, 'phone-unit-mixer');
+    await page.locator('.mixer-desk').evaluate((desk) => { desk.scrollLeft = desk.scrollWidth; });
+    await shot(walk, 'phone-unit-mixer-2');
   });
   await attempt(walk, 'phone-unit-effects', async () => {
     await show('Show Effects');

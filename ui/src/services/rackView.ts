@@ -1,7 +1,7 @@
 // Which part of the rack a narrow screen shows. A phone has room for one unit at a time, so the
-// rack is paged: a lane, the drums, the song, the effects or the guests, or all of them as one
+// rack is paged: a lane, the drums, the mixer, the song, the effects or the guests, or all of them as one
 // long page. The choice is kept per browser, not with the project: it is about the screen.
-export const RACK_UNITS = ['song', 'synth-1', 'synth-2', 'synth-3', 'guests', 'drums', 'effects', 'all'] as const;
+export const RACK_UNITS = ['song', 'synth-1', 'synth-2', 'synth-3', 'guests', 'drums', 'mixer', 'effects', 'all'] as const;
 export type RackUnit = typeof RACK_UNITS[number];
 
 const UNIT_KEY = 'discobot_rack_unit_v1';
@@ -24,4 +24,15 @@ export function storedRackUnit(): RackUnit | null {
 
 export function storeRackUnit(unit: RackUnit) {
   try { localStorage.setItem(UNIT_KEY, unit); } catch { /* the next visit starts on the open lane */ }
+}
+
+// Whether the mixer's strips are put away behind its Hide button. Shown unless that was pressed.
+const MIXER_KEY = 'discobot_mixer_hidden_v1';
+
+export function storedMixerHidden(): boolean {
+  try { return localStorage.getItem(MIXER_KEY) === '1'; } catch { return false; }
+}
+
+export function storeMixerHidden(hidden: boolean) {
+  try { if (hidden) localStorage.setItem(MIXER_KEY, '1'); else localStorage.removeItem(MIXER_KEY); } catch { /* the next visit starts with the mixer shown */ }
 }

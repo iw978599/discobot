@@ -39,7 +39,7 @@ test('an edit to one lane leaves the other lanes and the drums as they are', asy
   page.on('pageerror', error => errors.push(error.message));
 
   let before = await settled(page);
-  expect(Object.keys(before).sort()).toEqual(['drums', 'synth 1', 'synth 2', 'synth 3']);
+  expect(Object.keys(before).sort()).toEqual(['drums', 'mixer', 'synth 1', 'synth 2', 'synth 3']);
 
   await setLevel(page, 1, '40%');
   let after = await settled(page);
@@ -47,12 +47,34 @@ test('an edit to one lane leaves the other lanes and the drums as they are', asy
   expect(after['synth 2'], 'another lane').toBe(before['synth 2']);
   expect(after['synth 3']).toBe(before['synth 3']);
   expect(after.drums, 'the drums').toBe(before.drums);
+  expect(after.mixer, 'the mixer shows that level').toBeGreaterThan(before.mixer);
 
   before = after;
   await page.getByRole('button', { name: 'Kick step 3', exact: true }).click();
   after = await settled(page);
   expect(after.drums).toBeGreaterThan(before.drums);
   expect([after['synth 1'], after['synth 2'], after['synth 3']], 'no lane for a drum step').toEqual([before['synth 1'], before['synth 2'], before['synth 3']]);
+  expect(after.mixer, 'a step is nothing the mixer shows').toBe(before.mixer);
+
+  // A note on a lane is nothing the mixer shows either.
+  before = after;
+  await page.locator('[data-unit="synth-1"]').getByRole('button', { name: /^Select step 1( |$)/ }).click();
+  await page.keyboard.press('a');
+  await expect(page.locator('[data-unit="synth-1"]').getByRole('button', { name: /^Select step 1 C/ })).toBeVisible();
+  after = await settled(page);
+  expect(after['synth 1'], 'the lane the note went on').toBeGreaterThan(before['synth 1']);
+  expect(after.mixer, 'the mixer for a note').toBe(before.mixer);
+
+  // A fader on the mixer draws the lane it belongs to and the mixer, and nothing else.
+  before = after;
+  const fader = page.getByLabel('Mixer Synth 2 level value', { exact: true });
+  await fader.fill('70%');
+  await fader.press('Enter');
+  await expect(level(page, 2)).toHaveValue('70%');
+  after = await settled(page);
+  expect(after.mixer).toBeGreaterThan(before.mixer);
+  expect(after['synth 2'], 'the lane whose level it is').toBeGreaterThan(before['synth 2']);
+  expect([after['synth 1'], after['synth 3'], after.drums], 'no other lane, and not the drums, for a mixer fader').toEqual([before['synth 1'], before['synth 3'], before.drums]);
 
   // A lane that sat those out still answers, and with the state as it is now.
   const mute = page.getByRole('button', { name: 'Mute Synth 2', exact: true });

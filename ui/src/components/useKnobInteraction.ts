@@ -13,8 +13,10 @@ export const TAP_HOLD_MS = 500;
 
 // `onTap` is called for a knob that was touched and let go without being turned. Only a finger
 // or a pen taps; a mouse click does nothing, as before. `resetTo` is where a press of a mouse's
-// middle button puts the knob: its default, or zero for a knob that was given none.
-export function useKnobInteraction(value: number, min: number, max: number, step: number, onChange: (value: number) => void, disabled = false, onTap?: () => void, resetTo = 0) {
+// middle button puts the knob: its default, or zero for a knob that was given none. `travel` is
+// how far, in pixels, a drag goes to cross the whole range: a fader passes the length of its slot,
+// so its cap stays under the pointer.
+export function useKnobInteraction(value: number, min: number, max: number, step: number, onChange: (value: number) => void, disabled = false, onTap?: () => void, resetTo = 0, travel = 150) {
   const drag = useRef<{ id: number; x: number; y: number; at: number; value: number; touch: boolean; moved: boolean } | null>(null);
   const tapped = useRef(false);
   const tapTimer = useRef<number | null>(null);
@@ -81,7 +83,7 @@ export function useKnobInteraction(value: number, min: number, max: number, step
         return;
       }
       start.moved = true;
-      onChange(normalize(start.value + (start.y - event.clientY) / 150 * (max - min)));
+      onChange(normalize(start.value + (start.y - event.clientY) / travel * (max - min)));
     },
     onPointerUp: (event: PointerEvent<HTMLDivElement>) => {
       const start = drag.current;
