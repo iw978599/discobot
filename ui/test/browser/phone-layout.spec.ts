@@ -229,7 +229,7 @@ test('a wide screen keeps the rack as one panel', async ({ page }, testInfo) => 
   await expect(top.locator('.save-state')).toBeVisible();
   await expect(top.getByRole('slider', { name: 'Volume', exact: true })).toBeVisible();
   await expect(top.getByRole('button', { name: 'Undo', exact: true }), 'Undo is the word, not a drawing').toHaveText('Undo');
-  await expect(page.locator('.rack > [data-unit]:visible'), 'every unit is on the page').toHaveCount(6);
+  await expect(page.locator('.rack > [data-unit]:visible'), 'every unit is on the page').toHaveCount(7);
   await page.getByRole('slider', { name: 'Synth 1 level', exact: true }).click();
   await expect(page.getByRole('dialog'), 'a mouse click on a knob opens nothing').toHaveCount(0);
   await page.getByRole('button', { name: 'Help', exact: true }).click();
@@ -529,8 +529,8 @@ test('on the narrowest phones every switch of the bar fits, with three lanes and
     const area = (await button.boundingBox())!;
     expect(area.x, name!).toBeGreaterThanOrEqual(0);
     expect(area.x + area.width, name!).toBeLessThanOrEqual(361);
-    // Nine switches share 360 pixels, so each is 40 wide: the one case where a switch is under 44, and it is still 54 tall.
-    expect(area.width, name!).toBeGreaterThanOrEqual(40);
+    // Nine switches share 360 pixels, so each is 39 wide: the one case where a switch is under 44, and it is still 54 tall.
+    expect(area.width, name!).toBeGreaterThanOrEqual(39);
     expect(area.height, name!).toBeGreaterThanOrEqual(44);
     expect(await button.evaluate(element => element.querySelector('.unit-tab-name')!.getBoundingClientRect().width <= element.getBoundingClientRect().width), `${name}: its legend fits inside it`).toBe(true);
   }

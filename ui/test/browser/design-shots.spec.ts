@@ -353,7 +353,7 @@ test('design shots: menus, dialogs, the walkthrough and a guest', async ({ page 
     await expect(help).toBeVisible();
     await shot(walk, 'dialog-help');
     await help.getByLabel('Search Help', { exact: true }).fill('kick');
-    await expect(help.getByRole('status')).toHaveText('2 of 8 sections match.');
+    await expect(help.getByRole('status')).toHaveText('2 of 9 sections match.');
     await shot(walk, 'dialog-help-search');
     await help.getByLabel('Search Help', { exact: true }).fill('zebra');
     await expect(help.getByRole('status')).toContainText('Nothing in Help matches');
