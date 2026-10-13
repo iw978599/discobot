@@ -12,6 +12,9 @@
   margin-bottom: 8px;
 }
 
+.piano-roll-chord { display: flex; align-items: center; gap: 6px; color: var(--text-label); font-family: var(--panel-font); font-size: var(--type-label); letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; }
+.piano-roll-chord select { background: var(--surface-field); border: 1px solid var(--edge-control); border-radius: var(--corner-control); color: var(--text); font: inherit; text-transform: none; letter-spacing: 0; padding: 3px 6px; }
+
 .piano-roll-header h2 {
   margin: 0;
   font-size: var(--type-label);

@@ -17,7 +17,7 @@ interface KeyboardPanelProps {
   releaseSignal: boolean;
   computerKeyNotes?: ReadonlySet<string>;
   onStepSelect: (stepIndex: number) => void;
-  onNoteAssign: (stepIndex: number, note: string, on: boolean, offset?: number) => void;
+  onNoteAssign: (stepIndex: number, note: string | string[], on: boolean, offset?: number) => void;
   onNoteLength: (stepIndex: number, length: number) => void;
   firstStep?: number;
   visibleSteps?: number;

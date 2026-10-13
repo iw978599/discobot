@@ -1298,7 +1298,9 @@ export function useStudio() {
   }, []);
 
   // Adds a note to a step's chord or takes it out.
-  const handlePianoRollNoteAssign = useCallback(async (synthId: number, stepIndex: number, note: string, on: boolean, offset = 0) => {
+  // One note, or the several notes of a chord put in with one press: they are one edit and one undo.
+  const handlePianoRollNoteAssign = useCallback(async (synthId: number, stepIndex: number, note: string | string[], on: boolean, offset = 0) => {
+    const changed = Array.isArray(note) ? note : [note];
     const synth = synthsRef.current.find(s => s.id === synthId);
     if (!synth?.pattern) return;
     pushHistorySnapshot(synthId, synth.pattern.id);
@@ -1310,7 +1312,7 @@ export function useStudio() {
         const current = stepNotes(step);
         // A late start is chosen when the step gets its first note; later notes join it there.
         const base = on && current.length === 0 && offset > 0 ? { ...step, offset } : step;
-        return withStepNotes(base, on ? [...current, note] : current.filter(entry => entry !== note));
+        return withStepNotes(base, on ? [...current, ...changed] : current.filter(entry => !changed.includes(entry)));
       }),
     };
 
