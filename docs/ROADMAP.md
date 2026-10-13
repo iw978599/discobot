@@ -770,6 +770,17 @@ for new accounts.
     meters must not set React state many times a second (the playhead rule
     in `AGENTS.md`). Levels are per scene for guests and project-wide for
     lanes, and a mixer has to show that honestly.
+    First version built on 2026-10-13, to the owner's answer ("a new unit,
+    same levels. Each instrument should have a channel"): a Mixer unit
+    between the drums and the effects, with a strip for each synth lane,
+    each guest, each of the eight drums and the kit as a whole, the two
+    effect returns and the main volume. Each strip is a fader, with a pan
+    knob, mute and solo where the channel has them. Nothing new is stored:
+    a fader and the knob it mirrors are one setting. Still open, and each
+    needs the owner's word or work in the audio layer first: meters; the
+    effect sends on each strip; a level for the whole mix that is saved
+    with the project (the main volume shown is this browser's); solo for a
+    guest.
 
 23. **Delay and reverb sends for each drum sound.** (M) Asked for by the
     owner on 2026-10-12. The drums have one set of sends for the whole kit

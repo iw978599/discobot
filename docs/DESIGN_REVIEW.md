@@ -901,7 +901,7 @@ on the owner's laptop.
 
 | Name | What it shows |
 |---|---|
-| `unit-transport`, `unit-song`, `unit-drums`, `unit-effects` | Each unit close up |
+| `unit-transport`, `unit-song`, `unit-drums`, `unit-mixer`, `unit-effects` | Each unit close up |
 | `unit-synth-piano-roll` | An open lane with the piano roll |
 | `unit-keyboard` | The on-screen keyboard |
 | `step-tools-selected` | The step controls with a step that holds a note |
@@ -916,6 +916,7 @@ on the owner's laptop.
 | Name | What it shows |
 |---|---|
 | `phone-unit-song`, `phone-unit-drums`, `phone-unit-drums-2`, `phone-unit-effects`, `phone-unit-effects-2` | One unit at a time; `-2` is the same unit scrolled down |
+| `phone-unit-mixer`, `phone-unit-mixer-2` | The mixer by itself, from its first strip and slid to its last |
 | `phone-unit-synth`, `phone-unit-synth-2`, `phone-unit-synth-3` | Lane 1 at the top and scrolled; lane 3, empty |
 | `phone-piano-roll`, `phone-keyboard` | The piano roll and the keyboard |
 | `phone-lane-editor-notes`, `phone-lane-editor-sound` | The open lane's editor on each of its two levels, from its top |

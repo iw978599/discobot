@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Studio } from '../studio/useStudio';
 import { playSample } from '../hooks/browserAudio';
 import EffectsPanel from '../components/EffectsPanel';
@@ -7,6 +7,8 @@ import SamplePanel from '../components/SamplePanel';
 import TransportUnit from './TransportUnit';
 import SynthModule from './SynthModule';
 import DrumModule from './DrumModule';
+import MixerModule from './MixerModule';
+import { mixerChannels, sameMixer } from '../services/mixerChannels';
 import SongModule from './SongModule';
 import StarterUnit from './StarterUnit';
 import Dialog from './Dialog';
@@ -32,7 +34,7 @@ import '@fontsource/share-tech-mono/latin-400.css';
 import './rack.css';
 
 // The whole instrument as one rack, read top to bottom: transport, three synth lanes,
-// the drum grid, then the shared effects.
+// the drum grid, the mixer, then the shared effects.
 export default function Rack({ studio }: { studio: Studio }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [projectsOpen, setProjectsOpen] = useState(false);
@@ -75,6 +77,16 @@ export default function Rack({ studio }: { studio: Studio }) {
   useWakeLock(studio.isAnyPlaying);
   const sync = useSyncStatus();
   const user = useAccountUser();
+
+  // The mixer is handed the levels it shows, already gathered, and the same object for as long as
+  // none of them changes: the lanes and the drums are new objects after every note and step.
+  const { synths, drumState, drumMasterVolume, guests, effectsLoop, browserVolume } = studio;
+  const levels = useMemo(
+    () => mixerChannels({ synths, drumState, drumMasterVolume, guests, effectsLoop, browserVolume }),
+    [synths, drumState, drumMasterVolume, guests, effectsLoop, browserVolume],
+  );
+  const mixer = useRef(levels);
+  if (!sameMixer(mixer.current, levels)) mixer.current = levels;
 
   // A narrow screen shows one unit at a time. Which one is view state, kept here and handed to
   // the stylesheet as an attribute: the units themselves are not told, so none of them renders
@@ -205,6 +217,7 @@ export default function Rack({ studio }: { studio: Studio }) {
         {[1, 2, 3].map(id => <SynthModule key={id} studio={studio} synthId={id} synth={studio.synths.find(entry => entry.id === id)} onHelp={openHelpAt} />)}
         {studio.guests.map(guest => <GuestModule key={guest.id} studio={studio} guest={guest} onHelp={openHelpAt} />)}
         <DrumModule studio={studio} onHelp={openHelpAt} />
+        <MixerModule studio={studio} channels={mixer.current} onHelp={openHelpAt} />
         <div className="rack-unit effects-unit" data-unit="effects">
           <EffectsPanel effectsLoop={studio.effectsLoop} onChange={studio.handleEffectsLoopChange} onHelp={openHelpAt} />
         </div>

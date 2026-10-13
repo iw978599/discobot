@@ -48,6 +48,7 @@ export default function UnitBar({ shown, synths, drums, playing, guests, onShow,
     }),
     ...(guests ? [{ id: 'guests' as const, label: 'Guests', name: 'Show Guests' }] : []),
     { id: 'drums', label: 'Drums', name: 'Show Drums', lamp: 'drums', muted: allDrumsMuted, mute: () => onMuteDrums(!allDrumsMuted) },
+    { id: 'mixer', label: 'Mixer', name: 'Show Mixer' },
     { id: 'effects', label: 'Effects', name: 'Show Effects' },
     { id: 'all', label: 'All', name: 'Show all units on one page' },
   ];
