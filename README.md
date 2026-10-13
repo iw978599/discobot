@@ -48,6 +48,10 @@ you like. Scenes can be given a colour so a song's shape reads at a glance.
 with the tempo), chorus, reverb and a three-band master EQ. Each lane and the
 drums have their own sends.
 
+**A mixer.** Every level side by side: a fader for each lane, each drum, each
+guest instrument and the effect returns, with pan, mute and solo. A fader and
+the knob in its own unit are the same setting.
+
 **Guest instruments.** A project can host another creator's web instrument in
 a frame, following the tempo and playing through the mixer. See
 `docs/GUEST_PROTOCOL.md` to make one.
@@ -58,7 +62,7 @@ small child. It keeps its own tune and is reached from the Project menu.
 ## Make music
 
 The screen is one rack, read top to bottom: the transport, the scenes and
-song, three synth lanes, the drums, then the effects. Every lane's steps line
+song, three synth lanes, the drums, the mixer, then the effects. Every lane's steps line
 up, so you can see how the parts sit against each other.
 
 1. **Start.** A new project offers three beats to start from (House Beat, Slow

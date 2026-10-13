@@ -189,6 +189,7 @@ test('each unit has a Help button on its name plate that opens Help at the secti
     ['Help for Synth 2', 'Synth lanes', 'synth-2'],
     ['Help for Synth 3', 'Synth lanes', 'synth-3'],
     ['Help for the drums', 'Drums', 'drums'],
+    ['Help for the mixer', 'Mixer', 'mixer'],
     ['Help for the effects', 'Effects', 'effects'],
   ] as const;
   for (const [name, title, unit] of units) {

@@ -1,0 +1,26 @@
+/* A fader: a cap that runs up and down a slot. The slot is the slider itself; the cap is 20px
+   tall and travels 100px (FADER_TRAVEL in Fader.tsx), so the slot is 120px. */
+.fader { display: inline-flex; flex-direction: column; align-items: center; gap: 6px; user-select: none; }
+.fader-slot { position: relative; width: 32px; height: 120px; cursor: ns-resize; border-radius: var(--corner-control); }
+.fader-groove {
+  position: absolute; left: 50%; top: 6px; bottom: 6px; width: 6px; margin-left: -3px;
+  background: var(--surface-well); border: 1px solid #000; border-radius: var(--corner-control);
+}
+/* Where a middle click puts it back to: a mark either side of the groove. */
+.fader-home {
+  position: absolute; left: 3px; right: 3px; bottom: calc(9px + var(--fader-at) * 100px); height: 2px;
+  background: linear-gradient(to right, var(--edge-strong) 0 6px, transparent 6px calc(100% - 6px), var(--edge-strong) calc(100% - 6px));
+}
+.fader-cap {
+  position: absolute; left: 3px; right: 3px; bottom: calc(var(--fader-at) * 100px); height: 20px; box-sizing: border-box;
+  background: var(--surface-control); border: 1px solid var(--edge-strong); border-radius: var(--corner-control);
+  box-shadow: var(--shadow-control);
+}
+/* The line across the cap is the figure being read, like a knob's pointer. */
+.fader-cap::after { content: ''; position: absolute; left: 2px; right: 2px; top: 50%; height: 2px; margin-top: -1px; background: var(--value); }
+.fader-slot:hover .fader-cap { border-color: var(--hover); }
+.fader-value {
+  box-sizing: border-box; width: 100%; min-width: 0; padding: 1px 2px; text-align: center;
+  font-family: var(--led-font); font-size: var(--type-caption); font-weight: 400; color: var(--value);
+  background: var(--surface-field); border: 1px solid transparent; border-radius: var(--corner-control);
+}

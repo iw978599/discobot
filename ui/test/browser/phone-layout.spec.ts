@@ -246,6 +246,7 @@ test('on a phone one unit is on screen at a time, and a bar along the bottom mov
   const song = page.getByRole('region', { name: 'Song module', exact: true });
   const lane = page.getByRole('region', { name: 'Synth 1 module', exact: true });
   const drums = page.getByRole('region', { name: 'Drums module', exact: true });
+  const mixer = page.getByRole('region', { name: 'Mixer module', exact: true });
   const effects = page.locator('.effects-unit');
   const onShow = page.locator('.rack > [data-unit]:visible');
   const play = page.getByRole('button', { name: /Play All/ });
@@ -256,14 +257,14 @@ test('on a phone one unit is on screen at a time, and a bar along the bottom mov
   await expect(lane).toBeVisible();
   await expect(lane.locator('.synth-controls-panel')).toBeVisible();
   await expect(onShow).toHaveCount(1);
-  for (const hidden of ['song', 'synth-2', 'synth-3', 'drums', 'effects']) await expect(page.locator(`[data-unit="${hidden}"]`), hidden).toBeHidden();
+  for (const hidden of ['song', 'synth-2', 'synth-3', 'drums', 'mixer', 'effects']) await expect(page.locator(`[data-unit="${hidden}"]`), hidden).toBeHidden();
 
   // The bar is the bottom edge of the screen, and each of its switches is big enough for a thumb.
   const strip = await box(bar(page));
   expect(strip.x).toBeCloseTo(0, 0);
   expect(strip.width).toBeCloseTo(view.width, 0);
   expect(strip.y + strip.height).toBeCloseTo(view.height, 0);
-  await expect(bar(page).getByRole('button')).toHaveCount(7);
+  await expect(bar(page).getByRole('button')).toHaveCount(8);
   for (const button of await bar(page).getByRole('button').all()) {
     const area = (await button.boundingBox())!;
     expect(area.width).toBeGreaterThanOrEqual(44);
@@ -286,7 +287,7 @@ test('on a phone one unit is on screen at a time, and a bar along the bottom mov
 
   // From the keyboard too. Whichever unit is on show, and however far the last one was scrolled,
   // it starts just under the transport, and Play is still there.
-  for (const [name, part] of [['Show Song', song], ['Show Effects', effects], ['Show Synth 1', lane], ['Show Drums', drums]] as const) {
+  for (const [name, part] of [['Show Song', song], ['Show Effects', effects], ['Show Mixer', mixer], ['Show Synth 1', lane], ['Show Drums', drums]] as const) {
     await scroller.evaluate(element => element.scrollTo(0, element.scrollHeight));
     await tab(page, name).focus();
     await page.keyboard.press('Enter');
@@ -307,7 +308,7 @@ test('on a phone one unit is on screen at a time, and a bar along the bottom mov
   // The whole rack is one of the choices, and the choice is remembered.
   await tab(page, ALL).click();
   await expect(tab(page, ALL)).toHaveAttribute('aria-current', 'true');
-  for (const part of [song, lane, drums, effects]) await expect(part).toBeVisible();
+  for (const part of [song, lane, drums, mixer, effects]) await expect(part).toBeVisible();
   await page.reload();
   await expect(tab(page, ALL)).toHaveAttribute('aria-current', 'true');
   await expect(drums).toBeVisible();
@@ -521,18 +522,19 @@ test('on the narrowest phones every switch of the bar fits, with three lanes and
   await paged(page);
   await addGuest(page, String(testInfo.project.use.baseURL));
   const switches = bar(page).getByRole('button');
-  await expect(switches).toHaveCount(8);
+  await expect(switches).toHaveCount(9);
   expect(await bar(page).evaluate(element => element.scrollWidth - element.clientWidth), 'the bar does not have to be slid').toBeLessThanOrEqual(1);
   for (const button of await switches.all()) {
     const name = await button.getAttribute('aria-label');
     const area = (await button.boundingBox())!;
     expect(area.x, name!).toBeGreaterThanOrEqual(0);
     expect(area.x + area.width, name!).toBeLessThanOrEqual(361);
-    expect(area.width, name!).toBeGreaterThanOrEqual(44);
+    // Nine switches share 360 pixels, so each is 40 wide: the one case where a switch is under 44, and it is still 54 tall.
+    expect(area.width, name!).toBeGreaterThanOrEqual(40);
     expect(area.height, name!).toBeGreaterThanOrEqual(44);
     expect(await button.evaluate(element => element.querySelector('.unit-tab-name')!.getBoundingClientRect().width <= element.getBoundingClientRect().width), `${name}: its legend fits inside it`).toBe(true);
   }
-  for (const name of ['Show Song', 'Show Synth 3', 'Show Guests', 'Show Drums', 'Show Effects', ALL]) {
+  for (const name of ['Show Song', 'Show Synth 3', 'Show Guests', 'Show Drums', 'Show Mixer', 'Show Effects', ALL]) {
     await tab(page, name).click();
     await expect(tab(page, name)).toHaveAttribute('aria-current', 'true');
   }
@@ -1219,7 +1221,7 @@ test('on a phone a held switch on the bar mutes its unit, and the lamps show wha
   // Only a unit that makes sound has a lamp. Nothing is lit while nothing plays, and the unit
   // on show is marked by its switch, not by a lamp.
   for (const name of ['Show Synth 1', 'Show Drums']) await expect(lamp(name), name).toBeVisible();
-  for (const name of ['Show Song', 'Show Effects', ALL]) await expect(lamp(name), name).toBeHidden();
+  for (const name of ['Show Song', 'Show Mixer', 'Show Effects', ALL]) await expect(lamp(name), name).toBeHidden();
   await expect(bar(page).locator('.unit-tab-led.lit')).toHaveCount(0);
   await expect(bar(page).locator('[data-muted]')).toHaveCount(0);
 

@@ -11,18 +11,15 @@ import CopyToScene from './CopyToScene';
 import CopyBar from './CopyBar';
 import type { Studio } from '../studio/useStudio';
 import { CYMBAL_TYPES } from '@discobot/engine';
-import { DRUM_SETTINGS_DEFAULT } from '../services/drumKits';
+import { DRUM_NAMES, DRUM_ROWS, DRUM_SETTINGS_DEFAULT } from '../services/drumKits';
 import { DRUM_FX_DEFAULT } from '../services/effectSettings';
 import { DrumInstrument, DrumKitId, DrumState, CymbalType } from '../types';
 import DrumKnob from '../components/DrumKnob';
 
-const INSTRUMENTS: DrumInstrument[] = ['kick', 'snare', 'clap', 'closedHH', 'openHH', 'snare2', 'ride', 'crash'];
+const INSTRUMENTS = DRUM_ROWS;
 const STEPS = Array.from({ length: 16 }, (_, i) => i);
 
-const LABELS: Record<DrumInstrument, string> = {
-  kick: 'Kick', snare: 'Snare', clap: 'Clap', closedHH: 'Closed Hat', openHH: 'Open Hat',
-  snare2: 'Low Tom', ride: 'High Tom', crash: 'Cymbal',
-};
+const LABELS = DRUM_NAMES;
 
 // The cymbals the Cymbal lane can be. A crash is the lane's own name; the others show theirs.
 const CYMBAL_NAMES: Record<CymbalType, string> = { crash: 'Crash', ride: 'Ride', bell: 'Bell', splash: 'Splash' };
