@@ -124,6 +124,8 @@ test('the middle button puts a knob at zero, or at the end nearest it, as one un
   await tab(page, 'Amp');
   await edit(synth.getByLabel('Gain value', { exact: true }), '50%');
   await expect(gain).toHaveAttribute('aria-valuenow', '0.5');
+  // Resting on the knob first puts the typed value and the press far enough apart to be two undo steps.
+  await rest(page, gain);
   const before = await scrolled(page);
   await gain.click({ button: 'middle' });
   await expect(gain).toHaveAttribute('aria-valuenow', '0');
