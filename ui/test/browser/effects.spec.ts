@@ -137,6 +137,7 @@ test('chorus, the reverb shape and the master EQ change the sound, in the export
 
   // A synth lane has the send too, and an LFO can be a fine vibrato.
   const synth = page.locator('.synth-controls-panel').first();
+  await page.getByRole('tab', { name: 'Sound', exact: true }).first().click();
   await page.getByRole('tab', { name: 'LFO', exact: true }).first().click();
   await synth.getByLabel('LFO 1 enabled', { exact: true }).check();
   await synth.getByLabel('LFO 1 target', { exact: true }).selectOption('vibrato');

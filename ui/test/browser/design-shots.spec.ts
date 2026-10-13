@@ -105,6 +105,8 @@ const menu = async (page: Page, name: 'Project', item?: string) => {
   if (item) await page.getByRole('menuitem', { name: item, exact: true }).click();
 };
 const lane = (page: Page, id: number) => page.getByRole('region', { name: `Synth ${id} module`, exact: true });
+// The open lane's editor has two levels. Notes is the one it opens on; the presets and the pages of the sound are on Sound.
+const level = (page: Page, name: 'Notes' | 'Sound') => page.locator('.synth-controls-panel').getByRole('tab', { name, exact: true }).click();
 
 // Some music, so nothing is photographed empty: notes on two lanes, a drum pattern, a second
 // scene and a song of two blocks.
@@ -179,8 +181,14 @@ test('design shots: the rack, its units and the states of its controls', async (
       await lane(page, 1).getByRole('button', { name: 'Keyboard', exact: true }).click();
       await near(walk, lane(page, 1).locator('.keyboard-panel'), 'unit-keyboard', 20);
     });
+    await attempt(walk, 'lane-editor-notes', () => near(walk, page.locator('.synth-controls-panel'), 'lane-editor-notes', 12));
+    await attempt(walk, 'lane-editor-sound', async () => {
+      await level(page, 'Sound');
+      await near(walk, page.locator('.synth-controls-panel'), 'lane-editor-sound', 12);
+    });
     for (const name of ['Osc', 'Filter', 'LFO', 'Sends']) {
       await attempt(walk, `synth-tab-${name.toLowerCase()}`, async () => {
+        await level(page, 'Sound');
         await lane(page, 1).getByRole('tab', { name, exact: true }).click();
         await near(walk, page.locator('.synth-controls-panel'), `synth-tab-${name.toLowerCase()}`, 12);
       });
@@ -316,6 +324,7 @@ test('design shots: menus, dialogs, the walkthrough and a guest', async ({ page 
   });
   await attempt(walk, 'menu-preset', async () => {
     const editor = page.locator('.synth-module').first();
+    await level(page, 'Sound');
     await editor.getByRole('button', { name: /^Synth preset/ }).click();
     await expect(editor.locator('[role="menuitem"][data-group]').first()).toBeVisible();
     await shot(walk, 'menu-preset-groups');
@@ -325,6 +334,7 @@ test('design shots: menus, dialogs, the walkthrough and a guest', async ({ page 
     await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
   });
+  await attempt(walk, 'back to the notes', () => level(page, 'Notes'));
   await attempt(walk, 'focus-menu-row', async () => {
     await menu(page, 'Project');
     await expect(page.getByRole('menuitem').first()).toBeVisible();
@@ -342,7 +352,7 @@ test('design shots: menus, dialogs, the walkthrough and a guest', async ({ page 
     await expect(help).toBeVisible();
     await shot(walk, 'dialog-help');
     await help.getByLabel('Search Help', { exact: true }).fill('kick');
-    await expect(help.getByRole('status')).toHaveText('2 of 6 sections match.');
+    await expect(help.getByRole('status')).toHaveText('2 of 8 sections match.');
     await shot(walk, 'dialog-help-search');
     await help.getByLabel('Search Help', { exact: true }).fill('zebra');
     await expect(help.getByRole('status')).toContainText('Nothing in Help matches');
@@ -384,6 +394,7 @@ test('design shots: menus, dialogs, the walkthrough and a guest', async ({ page 
     await page.keyboard.press('Escape');
   });
   await attempt(walk, 'dialog-preset-import', async () => {
+    await level(page, 'Sound');
     await page.locator('.synth-module').first().getByLabel('Import synth preset', { exact: true }).setInputFiles({
       name: '1985-1.preset.websynth.json', mimeType: 'application/json',
       buffer: Buffer.from(JSON.stringify({ format: 'websynth-preset', version: 1, name: '1985-1', params: {
@@ -395,6 +406,7 @@ test('design shots: menus, dialogs, the walkthrough and a guest', async ({ page 
     await shot(walk, 'dialog-preset-import');
     await page.keyboard.press('Escape');
   });
+  await attempt(walk, 'back to the notes', () => level(page, 'Notes'));
   await attempt(walk, 'banner-message', async () => {
     await page.getByLabel('Import drum kit files', { exact: true }).setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('not a drum') });
     const banner = page.locator('.app-alert').first();
@@ -478,8 +490,18 @@ test('design shots: a phone showing one unit at a time, the knob sheet, and a ph
     await toTop(walk, lane(page, 1).locator('.keyboard-panel'));
     await shot(walk, 'phone-keyboard');
   });
+  await attempt(walk, 'phone-lane-editor-notes', async () => {
+    await toTop(walk, page.locator('.synth-controls-panel'));
+    await shot(walk, 'phone-lane-editor-notes');
+  });
+  await attempt(walk, 'phone-lane-editor-sound', async () => {
+    await level(page, 'Sound');
+    await toTop(walk, page.locator('.synth-controls-panel'));
+    await shot(walk, 'phone-lane-editor-sound');
+  });
   for (const name of ['Osc', 'Filter', 'Sends']) {
     await attempt(walk, `phone-synth-tab-${name.toLowerCase()}`, async () => {
+      await level(page, 'Sound');
       await lane(page, 1).getByRole('tab', { name, exact: true }).click();
       await toTop(walk, page.locator('.synth-controls-panel'));
       await shot(walk, `phone-synth-tab-${name.toLowerCase()}`);

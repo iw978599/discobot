@@ -133,6 +133,12 @@ slow down every later change.
    five redesign suggestions and eleven suggested features. Still open:
    the owner choosing from it, and everything it lists as not looked at.
 
+   Redesign B (a lane's editor in two levels, Notes and Sound) is built,
+   with the presets and their tools inside Sound. Not built from its
+   proposal: the pages of the sound side by side on a wide screen, the
+   preset's name on the lane's top line, and the preset tools folded into
+   a "more" menu. The review says what was left and why.
+
 Done: the rack rebuild that emptied `App.tsx`; the two-tab guard; debounced
 saving; projects as IndexedDB records with version history; the Vibrato LFO
 target; removal of the AI review workflow.

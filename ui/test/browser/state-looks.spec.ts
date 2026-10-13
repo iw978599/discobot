@@ -144,7 +144,7 @@ test('everything that is on is the same amber, and the main button is not', asyn
     ['a lane\'s mute', page.getByRole('button', { name: 'Mute Synth 1', exact: true })],
     ['a pressed-in button', drums.getByRole('button', { name: 'More', exact: true })],
     ['the open scene', page.getByRole('group', { name: 'Scenes', exact: true }).getByRole('button').first()],
-    ['the open page of the sound editor', lane(page).getByRole('tab', { name: 'Notes', exact: true })],
+    ['the open level of the lane\'s editor', lane(page).getByRole('tab', { name: 'Notes', exact: true })],
     ['the keyboard and piano roll switch', lane(page).getByRole('button', { name: 'Keyboard', exact: true })],
   ];
   for (const [what, target] of lit) {
@@ -156,7 +156,7 @@ test('everything that is on is the same amber, and the main button is not', asyn
   const dark: Array<[string, Locator]> = [
     ['a lane\'s solo, which is off', page.getByRole('button', { name: 'Solo Synth 1', exact: true })],
     ['a button that is off', drums.getByRole('button', { name: 'Sends', exact: true })],
-    ['the page of the sound editor that is not open', lane(page).getByRole('tab', { name: 'Osc', exact: true })],
+    ['the level of the lane\'s editor that is not open', lane(page).getByRole('tab', { name: 'Sound', exact: true })],
   ];
   for (const [what, target] of dark) await expect(target, what).toHaveCSS('background-color', CONTROL);
 

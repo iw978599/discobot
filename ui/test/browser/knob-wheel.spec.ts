@@ -5,7 +5,11 @@ async function edit(control: Locator, text: string) {
   await control.press('Enter');
 }
 
-const tab = (page: Page, name: string) => page.getByRole('tab', { name, exact: true }).click();
+// The editor has two levels, Notes and Sound; the pages of the sound (Osc, Filter and the rest) are under Sound.
+const tab = async (page: Page, name: string) => {
+  if (name !== 'Notes' && name !== 'Sound') await page.getByRole('tab', { name: 'Sound', exact: true }).click();
+  await page.getByRole('tab', { name, exact: true }).click();
+};
 const scrolled = (page: Page) => page.locator('.rack-page').evaluate(element => element.scrollTop);
 
 // Puts the pointer on the knob and waits until the app says the wheel will turn it.

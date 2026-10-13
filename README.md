@@ -74,7 +74,9 @@ up, so you can see how the parts sit against each other.
      is the white keys, W E T Y U O P the black keys, Z and X shift the octave.
      Tap tempo is Shift+T.
 3. **Shape the sound.** Each lane has four knobs and a level on its face. The
-   editor's tabs (Notes, Osc, Filter, Amp, LFO, Arp, Sends) hold the rest. Turn
+   open lane's editor has two levels: Notes, for what the lane plays, and
+   Sound, which has the presets and a page each for Osc, Filter, Amp, LFO,
+   Arp and Sends. Turn
    a knob by dragging, with the scroll wheel, or by typing its value. A click
    of the middle mouse button puts a knob back at its default.
 4. **Add drums.** Click cells in the drum grid and choose a kit. The strip

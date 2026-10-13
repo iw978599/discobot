@@ -20,6 +20,8 @@ test.beforeEach(async ({ page }) => {
   });
   await page.goto('./');
   await expect(page.getByRole('heading', { name: 'Discobot', exact: true })).toBeVisible();
+  // The presets are on the editor's Sound level; a lane opens on Notes.
+  await lane(page).getByRole('tab', { name: 'Sound', exact: true }).click();
 });
 
 test('the preset menu lists the kinds, then a person\'s own presets, and each opens a list of its presets', async ({ page }) => {

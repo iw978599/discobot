@@ -40,6 +40,7 @@ test('a synth lane plays an imported sample: chosen, tuned and looped on the Osc
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   const synth = page.locator('.synth-controls-panel').first();
+  await page.getByRole('tab', { name: 'Sound', exact: true }).first().click();
   await page.getByRole('tab', { name: 'Osc', exact: true }).first().click();
   const engine = synth.getByLabel('Synth engine', { exact: true });
   const sample = synth.getByLabel('Synth sample', { exact: true });
@@ -76,6 +77,7 @@ test('a synth lane plays an imported sample: chosen, tuned and looped on the Osc
   // Still there after a reload.
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Discobot', exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Sound', exact: true }).first().click();
   await page.getByRole('tab', { name: 'Osc', exact: true }).first().click();
   await expect(page.locator('.synth-controls-panel').first().getByLabel('Synth sample', { exact: true }).locator('option:checked')).toHaveText('beep.wav');
 
@@ -87,6 +89,7 @@ test('a synth lane plays an imported sample: chosen, tuned and looped on the Osc
   await page.keyboard.press('Escape');
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Discobot', exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Sound', exact: true }).first().click();
   await page.getByRole('tab', { name: 'Osc', exact: true }).first().click();
   const after = page.locator('.synth-controls-panel').first();
   await expect(after.getByLabel('Synth sample', { exact: true }).locator('option:checked')).toHaveText('Sample not on this device');
