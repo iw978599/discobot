@@ -196,12 +196,16 @@ test('each unit has a Help button on its name plate that opens Help at the secti
     await expect(button, name).toHaveCount(1);
     expect(await button.evaluate(element => element.closest('[data-unit]')?.getAttribute('data-unit')), `${name} is in its unit`).toBe(unit);
 
-    // The plate is as tall with the button as without it.
-    const plate = button.locator('xpath=..');
-    const withIt = (await plate.boundingBox())!.height;
-    await button.evaluate((element) => { (element as HTMLElement).style.display = 'none'; });
-    const without = (await plate.boundingBox())!.height;
-    await button.evaluate((element) => { (element as HTMLElement).style.display = ''; });
+    // The plate is as tall with the button as without it. Measured in one go from the button
+    // itself: once it is hidden it can no longer be found by its role.
+    const [withIt, without] = await button.evaluate((element) => {
+      const help = element as HTMLElement, plate = help.parentElement!;
+      const before = plate.getBoundingClientRect().height;
+      help.style.display = 'none';
+      const after = plate.getBoundingClientRect().height;
+      help.style.display = '';
+      return [before, after];
+    });
     expect(withIt, `${name} does not make its plate taller`).toBe(without);
     if (phone) {
       const area = (await button.boundingBox())!;
