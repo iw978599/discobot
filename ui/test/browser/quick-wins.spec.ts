@@ -1,9 +1,30 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
+// At phone width the top bar is one line, and the rest of it is in the sheet its last button
+// raises. `more` raises the sheet before something in it is used, and does nothing on a wide
+// screen; `less` puts it away again after something that leaves it up.
+const onPhone = (page: Page) => {
+  const size = page.viewportSize();
+  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+};
+const more = async (page: Page) => {
+  if (!onPhone(page) || await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) return;
+  await page.getByRole('button', { name: 'More controls', exact: true }).click();
+};
+// A press on nothing, to bring the keyboard to the page. A wide screen has the app's name to press;
+// on a phone it is there for a screen reader only, so the press goes on the edge of the top bar.
+const aside = (page: Page) => (onPhone(page)
+  ? page.locator('.rack-unit.transport').click({ position: { x: 3, y: 3 } })
+  : page.getByRole('heading', { name: 'Discobot', exact: true }).click());
+const less = async (page: Page) => {
+  if (await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) await page.getByRole('button', { name: 'Close more controls', exact: true }).click();
+};
+
 // Export is a dialog: what (the scene or the song), as what, then Export. It is closed at once and
 // the file goes on being made, so the caller waits for the download as it did with the menu.
 async function exportAs(page: Page, item: string) {
+  await more(page);
   await page.locator('.transport').getByRole('button', { name: 'Export', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Export', exact: true });
   await dialog.getByRole('radio', { name: item.startsWith('Song') ? 'The whole song' : 'This scene', exact: true }).check();
@@ -19,13 +40,16 @@ const project = (page: Page) => page.evaluate(key => (window.dispatchEvent(new E
 type Captured = { type: string; note?: string; instrument?: string; time?: number };
 // A project that shares its row with copies of itself is chosen from that row's list first: pass the row's name as `family`.
 async function openProject(page: Page, name: string, family?: string) {
+  await more(page);
   await page.getByRole('button', { name: /^Project: / }).click();
   const dialog = page.getByRole('dialog', { name: 'Projects', exact: true });
   const row = dialog.getByRole('group', { name: `Project ${family ?? name}`, exact: true });
   if (family) await row.getByLabel(`Version of ${family}`, { exact: true }).selectOption(name);
   await row.getByRole('button', { name: 'Open', exact: true }).click();
   await expect(dialog).toHaveCount(0);
+  await more(page);
   await expect(page.getByRole('button', { name: `Project: ${name}`, exact: true })).toBeVisible();
+  await less(page);
 }
 async function setTempoTo(page: Page, bpm: number) {
   await page.locator('.tempo-led').click();
@@ -52,6 +76,7 @@ async function closePresetMenu(page: Page, scope: Page | Locator = page) {
 }
 async function menu(page: Page, name: 'Project' | 'Export', item: string) {
   if (name === 'Export') return exportAs(page, item);
+  await more(page);
   await page.getByRole('button', { name: 'Project ▾', exact: true }).click();
   await page.getByRole('menuitem', { name: item, exact: true }).click();
 }
@@ -80,7 +105,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('the computer keyboard plays the selected synth, shifts octave and stays out of text fields', async ({ page }) => {
-  await page.getByRole('heading', { name: 'Discobot', exact: true }).click();
+  await aside(page);
   const c4 = page.getByRole('button', { name: 'Play C4', exact: true });
   await page.keyboard.down('a');
   await expect(c4).toHaveAttribute('aria-pressed', 'true');
@@ -116,7 +141,7 @@ test('the computer keyboard plays the selected synth, shifts octave and stays ou
 
   // The second lane has its own octave and gets the notes once it is selected.
   await page.getByRole('button', { name: /^Synth 2/ }).click();
-  await page.getByRole('heading', { name: 'Discobot', exact: true }).click();
+  await aside(page);
   await page.keyboard.down('s');
   await expect(page.getByRole('button', { name: 'Play D4', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page.keyboard.up('s');
@@ -227,7 +252,9 @@ test('a project file restores lanes, drums, saved arrangements and presets over 
   // Start something else, then bring the file in: it arrives as its own project.
   await menu(page, 'Project', 'New Project');
   await expect(page.locator('.tempo-led-value')).toHaveText('120');
+  await more(page);
   await expect(page.getByRole('button', { name: 'Project: Untitled 2', exact: true })).toBeVisible();
+  await less(page);
   await choosePreset(page, 'My presets', 'Travel keys');
   await page.locator('.preset-controls').getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(presetButton(page)).toHaveAccessibleName('Synth preset: Preset…');
@@ -241,7 +268,9 @@ test('a project file restores lanes, drums, saved arrangements and presets over 
   const input = page.locator('input[aria-label="Import project file"]');
   await input.setInputFiles(path);
   await expect(page.locator('.tempo-led-value')).toHaveText('96');
+  await more(page);
   await expect(page.getByRole('button', { name: 'Project: Untitled 3', exact: true }), 'a name already in use gets a number').toBeVisible();
+  await less(page);
   await expect(page.getByRole('button', { name: 'G3 step 2', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'Select Snare', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Snare step 5', exact: true })).toHaveAttribute('aria-pressed', 'true');
@@ -253,6 +282,7 @@ test('a project file restores lanes, drums, saved arrangements and presets over 
   expect((await project(page)).tempo).toBe(96);
 
   // Nothing was replaced: the project started before the import is still there.
+  await more(page);
   await page.getByRole('button', { name: /^Project: / }).click();
   const projects = page.getByRole('dialog', { name: 'Projects', exact: true });
   await expect(projects.getByRole('group'), 'the three share a name, so they share a row').toHaveCount(1);

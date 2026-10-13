@@ -4,7 +4,21 @@ const PASSWORD = 'correct horse battery';
 const SEEN_KEY = 'discobot_walkthrough_v1';
 const apiUrl = (baseURL: string) => `http://127.0.0.1:${Number(new URL(baseURL).port) + 1000}`;
 
-// Each stop's title, and the first thing it lights up.
+// At phone width the top bar is one line, and the rest of it is in the sheet its last button
+// raises. `more` raises the sheet before something in it is used, and does nothing on a wide screen.
+const onPhone = (page: Page) => {
+  const size = page.viewportSize();
+  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+};
+const more = async (page: Page) => {
+  if (!onPhone(page) || await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) return;
+  await page.getByRole('button', { name: 'More controls', exact: true }).click();
+};
+
+// Each stop's title, and the first thing it lights up. On a phone the last three are about
+// things in the sheet, and light the button that raises it.
+const MORE = '.transport .more-button';
+const stopsOn = (page: Page) => STOPS.map(([title, target], index) => [title, onPhone(page) && index >= 6 ? MORE : target] as const);
 const STOPS = [
   ['Play and tempo', '.tempo-display-group'],
   ['Scenes and song', '.song-module'],
@@ -36,6 +50,7 @@ test('a new account is walked round the rack once, and the walkthrough can be se
   const account = page.getByRole('button', { name: 'Account: Ian', exact: true });
   const view = page.viewportSize()!;
 
+  await more(page);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await dialog.getByRole('tab', { name: 'Create Account', exact: true }).click();
   await dialog.getByLabel('Username', { exact: true }).fill('Ian');
@@ -53,7 +68,7 @@ test('a new account is walked round the rack once, and the walkthrough can be se
   expect(await page.evaluate(key => localStorage.getItem(key), SEEN_KEY), 'this browser has now had it').not.toBeNull();
 
   // Every stop: the card and the part it is about are both on screen, and the card is not over that part's corner.
-  for (const [index, [title, target]] of STOPS.entries()) {
+  for (const [index, [title, target]] of stopsOn(page).entries()) {
     await expect(tour.getByRole('heading', { name: title, exact: true })).toBeVisible();
     await expect(tour).toContainText(`Step ${index + 1} of ${STOPS.length}`);
     await expect(tour.getByRole('button', { name: index === STOPS.length - 1 ? 'Done' : 'Next', exact: true }), 'the way on has the keyboard').toBeFocused();
@@ -88,9 +103,10 @@ test('a new account is walked round the rack once, and the walkthrough can be se
   await tour.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(tour).toHaveCount(0);
   await expect(spot).toHaveCount(0);
-  await expect(account, 'the keyboard goes back where it was').toBeFocused();
+  await expect(onPhone(page) ? page.getByRole('button', { name: 'More controls', exact: true }) : account, 'the keyboard goes back where it was').toBeFocused();
 
   // It can be seen again from the account, and left with Skip or Escape.
+  await more(page);
   await account.click();
   await expect(dialog).toContainText('Signed in as Ian');
   await dialog.getByRole('button', { name: 'Show the Walkthrough', exact: true }).click();
@@ -98,6 +114,7 @@ test('a new account is walked round the rack once, and the walkthrough can be se
   await expect(tour.getByRole('heading', { name: 'Play and tempo', exact: true })).toBeVisible();
   await tour.getByRole('button', { name: 'Skip', exact: true }).click();
   await expect(tour).toHaveCount(0);
+  await more(page);
   await account.click();
   await dialog.getByRole('button', { name: 'Show the Walkthrough', exact: true }).click();
   await tour.getByRole('button', { name: 'Next', exact: true }).click();
@@ -106,6 +123,7 @@ test('a new account is walked round the rack once, and the walkthrough can be se
 
   // A recovery code that does not come from a new account is not followed by it, even in a browser that never had it.
   await page.evaluate(key => localStorage.removeItem(key), SEEN_KEY);
+  await more(page);
   await account.click();
   await dialog.getByRole('button', { name: 'New Recovery Code', exact: true }).click();
   await dialog.getByLabel('Password', { exact: true }).fill(PASSWORD);
@@ -120,6 +138,7 @@ test('a new account is walked round the rack once, and the walkthrough can be se
 test('a browser that has had the walkthrough is not shown it for a second account', async ({ page }) => {
   await page.evaluate(key => localStorage.setItem(key, 'seen'), SEEN_KEY);
   const dialog = accountDialog(page);
+  await more(page);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await dialog.getByRole('tab', { name: 'Create Account', exact: true }).click();
   await dialog.getByLabel('Username', { exact: true }).fill('Ian');
@@ -139,6 +158,7 @@ test('someone with no account can have the walkthrough from Help, and it says an
   const tour = tourCard(page);
   const help = page.getByRole('dialog', { name: 'How to use Discobot', exact: true });
 
+  await more(page);
   await page.getByRole('button', { name: 'Help', exact: true }).click();
   await help.getByRole('button', { name: 'Show the Walkthrough', exact: true }).click();
   await expect(help, 'Help makes way for it').toHaveCount(0);
@@ -150,6 +170,7 @@ test('someone with no account can have the walkthrough from Help, and it says an
   for (let stop = 1; stop < STOPS.length - 1; stop++) await page.keyboard.press('ArrowRight');
   await expect(tour.getByRole('heading', { name: 'An account, if you want one', exact: true })).toBeVisible();
   await expect(tour).toContainText('Everything works without an account');
+  if (onPhone(page)) await expect(tour, 'on a phone it says where Sign In is').toContainText('under the same button');
   await page.keyboard.press('ArrowRight');
   await expect(tour).toContainText('can show this walkthrough again');
   await tour.getByRole('button', { name: 'Done', exact: true }).click();

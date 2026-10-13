@@ -1,10 +1,26 @@
 import { expect, test, type Page } from '@playwright/test';
 
+// At phone width the top bar is one line, and the rest of it is in the sheet its last button
+// raises. `more` raises the sheet before something in it is used, and does nothing on a wide
+// screen; `less` puts it away again after something that leaves it up.
+const onPhone = (page: Page) => {
+  const size = page.viewportSize();
+  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+};
+const more = async (page: Page) => {
+  if (!onPhone(page) || await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) return;
+  await page.getByRole('button', { name: 'More controls', exact: true }).click();
+};
+const less = async (page: Page) => {
+  if (await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) await page.getByRole('button', { name: 'Close more controls', exact: true }).click();
+};
+
 const PASSWORD = 'correct horse battery';
 const apiUrl = (baseURL: string) => `http://127.0.0.1:${Number(new URL(baseURL).port) + 1000}`;
 const ready = (page: Page) => expect(page.getByRole('heading', { name: 'Discobot', exact: true })).toBeVisible();
 
 async function openAccount(page: Page) {
+  await more(page);
   await page.getByRole('button', { name: /^(Sign in|Account: .+)$/ }).click();
   return page.getByRole('dialog', { name: 'Account', exact: true });
 }
@@ -15,6 +31,7 @@ async function syncNow(page: Page) {
   await page.keyboard.press('Escape');
 }
 async function projects(page: Page) {
+  await more(page);
   await page.getByRole('button', { name: /^Project: / }).click();
   return page.getByRole('dialog', { name: 'Projects', exact: true });
 }
@@ -24,13 +41,15 @@ async function setTempo(page: Page, bpm: string) {
   await page.locator('.tempo-led-input').press('Enter');
 }
 async function newProject(page: Page, name: string) {
+  await more(page);
   await page.getByRole('button', { name: 'Project ▾', exact: true }).click();
   await page.getByRole('menuitem', { name: 'New Project', exact: true }).click();
   const dialog = await projects(page);
   await dialog.getByRole('group').filter({ hasText: 'Open now' }).getByRole('button', { name: 'Rename', exact: true }).click();
   await dialog.getByLabel('Project name', { exact: true }).fill(name);
   await dialog.getByLabel('Project name', { exact: true }).press('Enter');
-  await expect(page.getByRole('button', { name: `Project: ${name}`, exact: true })).toBeVisible();
+  // On a phone this button is in the top bar's sheet, which cannot be raised from under a dialog.
+  if (!onPhone(page)) await expect(page.getByRole('button', { name: `Project: ${name}`, exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
 }
 
@@ -106,7 +125,9 @@ test('projects follow the account to a second browser, and edits and conflicts a
   await syncNow(phone);
   await expect(phone.getByRole('alert')).toContainText('also changed in another browser');
   await expect(phone.locator('.tempo-led-value'), 'the phone keeps what it was editing').toHaveText('150');
+  await more(phone);
   await expect(phone.getByRole('button', { name: 'Project: Night Drive (this browser\'s version)', exact: true })).toBeVisible();
+  await less(phone);
   await phone.getByRole('button', { name: 'Dismiss sync message', exact: true }).click();
   // Both versions are in the one row; the phone's own is open, so the account's is chosen from the list.
   phoneList = await projects(phone);

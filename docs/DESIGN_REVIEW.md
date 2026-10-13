@@ -258,7 +258,7 @@ one face for sentences: I would use the dialog's plain face for anything
 longer than a label, on the rack and the share pages too, because condensed
 capitals are for labels and tire the eye in a paragraph.
 
-### 8. The phone's top bar takes almost half the first screen. Fault, medium.
+### 8. The phone's top bar takes almost half the first screen. Fault, medium. **Done as redesign A.** Not seen on a real phone.
 
 On a phone the bar wraps to three lines: name with Undo, Redo, Project and
 Export; then Sign In, MIDI, ?, Mute and a volume knob standing taller than
@@ -421,6 +421,14 @@ and has nothing to read.
 ## 3. Redesign suggestions
 
 ### A. The phone's top and bottom bars
+
+**Done.** The top bar is one line (tempo, Play, Undo and Redo as arrows from 375px wide, and a
+button for the rest), and the rest is a sheet from the bottom edge. What was built differently
+from the proposal below: Tap, Click and Count are in that sheet, not in a tempo sheet of their
+own, and tapping the tempo still opens the plain text field; "All" is still on the bottom bar;
+the sheet's rows have their explanation beside the button, not under it; the walkthrough
+points at the button for the three stops that are now under it and does not open the sheet.
+Not seen on a real phone.
 
 **Now.** Eleven controls wrap over three lines at the top (finding 8); seven
 or eight units share a bar at the bottom in 11-pixel letters.
@@ -698,7 +706,10 @@ asking what a person would reach for and not find.
    MIDI), a line saying how long the file will be, and the progress shown in
    the same place. Small to medium.
 
-3. **Lamps on the phone's bar that mean something.** Each unit's lamp is
+3. **Done**, for the synth lanes and the drums; the other units have no lamp. A lamp is lit for
+   the length of each step its unit sounds, so a run of notes is a steady light. A guest's
+   sound cannot be seen from outside its page, so guests have none.
+   **Lamps on the phone's bar that mean something.** Each unit's lamp is
    lit only for the unit on show (`phone/phone-unit-drums.png`). Let a lamp
    flash on that unit's notes while playing, and show a muted unit dimmed
    with a line through its name. A phone user then sees the whole song's
@@ -706,7 +717,9 @@ asking what a person would reach for and not find.
    roadmap. The step lights' rule in `AGENTS.md` (no rendering per step)
    applies.
 
-4. **Mute and solo for every lane in one place on a phone.** Related: on a
+4. **Done for mute**, by holding a lane's switch or the drums' for half a second (Shift+M on a
+   keyboard); the hint is in the top bar's sheet and in Help. Solo is not on the bar.
+   **Mute and solo for every lane in one place on a phone.** Related: on a
    phone, muting the drums while editing a lane means two taps away and two
    back. A long press on a unit's switch on the bar could mute it. For a
    phone user arranging. Small. Needs a hint, since a long press cannot be
@@ -857,7 +870,10 @@ on the owner's laptop.
 | `dialog-account-create-error` | Create Account with a refused password |
 | `dialog-account-recovery-code` | The recovery code |
 | `dialog-account-signed-in` | The account, signed in as the owner, with an invite code |
-| `transport-signed-in` | The top of the rack, signed in |
+| `transport-signed-in` | The top of the rack, signed in; on a phone, the top bar's sheet, signed in |
+| `phone-more-sheet`, `phone-more-sheet-menu` | Phone only: the sheet the top bar's last button raises, and the Project menu opened from it |
+| `phone-unit-bar-muted`, `phone-unit-bar-playing` | Phone only: the bar of units with Synth 2 muted from it, still and while playing with lamps lit |
+| `phone-landscape-more-sheet` | Phone only: that sheet on a phone on its side |
 | `dialog-projects-signed-in` | Projects, signed in |
 | `dialog-share-signed-in`, `dialog-share-published` | Share before and after publishing |
 | `page-share`, `page-share-playing` | A published song's page, before and after Listen |

@@ -85,10 +85,8 @@ export default function Rack({ studio }: { studio: Studio }) {
   useLayoutEffect(() => {
     const page = pageRef.current;
     if (!page || moves === 0) return;
-    // The new unit starts just under the line of the transport that stays, or lower if the
-    // page had not been scrolled that far.
-    const tuck = Number.parseFloat(page.querySelector<HTMLElement>('.rack-unit.transport')?.style.getPropertyValue('--transport-tuck') ?? '') || 0;
-    page.scrollTop = Math.min(page.scrollTop, tuck);
+    // The new unit starts at its top, just under the transport.
+    page.scrollTop = 0;
     // Focus goes into the unit that was asked for, so the next Tab is inside it and a screen
     // reader says where it is. The whole rack has no one place to go, and focus stays on the bar.
     if (shown === 'all') return;
@@ -199,14 +197,25 @@ export default function Rack({ studio }: { studio: Studio }) {
           <EffectsPanel effectsLoop={studio.effectsLoop} onChange={studio.handleEffectsLoopChange} />
         </div>
       </div>
-      {narrow && <UnitBar shown={shown} lanes={studio.synths.map(synth => synth.id)} guests={hasGuests} onShow={show} />}
+      {narrow && (
+        <UnitBar
+          shown={shown}
+          synths={studio.synths}
+          drums={studio.drumState}
+          playing={studio.isAnyPlaying}
+          guests={hasGuests}
+          onShow={show}
+          onMuteLane={(id, muted) => { void studio.handleSynthMixChange(id, { muted }); }}
+          onMuteDrums={studio.handleDrumMuteAll}
+        />
+      )}
 
       <HelpModal open={studio.helpOpen} onClose={() => studio.setHelpOpen(false)} onWalkthrough={startTour} />
       <MidiImportDialog studio={studio} />
       {projectsOpen && <ProjectsDialog studio={studio} onClose={() => setProjectsOpen(false)} />}
       {shareOpen && <ShareDialog onClose={() => setShareOpen(false)} />}
       {accountOpen && <AccountDialog onClose={() => setAccountOpen(false)} onWalkthrough={startTour} />}
-      {tourOpen && <Walkthrough onClose={endTour} signedIn={user !== null} unit={paged ? shown : undefined} onUnit={paged ? setUnit : undefined} />}
+      {tourOpen && <Walkthrough onClose={endTour} signedIn={user !== null} narrow={narrow} unit={paged ? shown : undefined} onUnit={paged ? setUnit : undefined} />}
       {guestOpen && <AddGuestDialog studio={studio} onClose={() => setGuestOpen(false)} onAdded={() => setUnit(current => (current === 'all' ? current : 'guests'))} />}
       {versionsOpen && <VersionsDialog studio={studio} onClose={() => setVersionsOpen(false)} />}
       {studio.presetImportReport && (

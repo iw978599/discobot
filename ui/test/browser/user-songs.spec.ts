@@ -1,21 +1,40 @@
 import { expect, test, type Page } from '@playwright/test';
 
+// At phone width the top bar is one line, and the rest of it is in the sheet its last button
+// raises. `more` raises the sheet before something in it is used, and does nothing on a wide
+// screen; `less` puts it away again after something that leaves it up.
+const onPhone = (page: Page) => {
+  const size = page.viewportSize();
+  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+};
+const more = async (page: Page) => {
+  if (!onPhone(page) || await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) return;
+  await page.getByRole('button', { name: 'More controls', exact: true }).click();
+};
+const less = async (page: Page) => {
+  if (await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) await page.getByRole('button', { name: 'Close more controls', exact: true }).click();
+};
+
 const PASSWORD = 'correct horse battery';
 const apiUrl = (baseURL: string) => `http://127.0.0.1:${Number(new URL(baseURL).port) + 1000}`;
 
 async function menu(page: Page, item: string) {
+  await more(page);
   await page.getByRole('button', { name: 'Project ▾', exact: true }).click();
   await page.getByRole('menuitem', { name: item, exact: true }).click();
 }
 
 async function nameOpenProject(page: Page, name: string) {
+  await more(page);
   await page.getByRole('button', { name: /^Project: / }).click();
   const projects = page.getByRole('dialog', { name: 'Projects', exact: true });
   await projects.locator('.rack-list-row.current').getByRole('button', { name: 'Rename', exact: true }).click();
   await projects.getByLabel('Project name', { exact: true }).fill(name);
   await projects.getByLabel('Project name', { exact: true }).press('Enter');
   await page.keyboard.press('Escape');
+  await more(page);
   await expect(page.getByRole('button', { name: `Project: ${name}`, exact: true })).toBeVisible();
+  await less(page);
 }
 
 async function publishOpenProject(page: Page) {
@@ -42,6 +61,7 @@ test('a person\'s page lists the songs they have published, for anyone with its 
   const baseURL = String(testInfo.project.use.baseURL);
   const api = apiUrl(baseURL);
 
+  await more(page);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   const account = page.getByRole('dialog', { name: 'Account', exact: true });
   await account.getByRole('tab', { name: 'Create Account', exact: true }).click();
@@ -57,7 +77,9 @@ test('a person\'s page lists the songs they have published, for anyone with its 
   const own = await publishOpenProject(page);
   expect(own, 'the link to your own page is where publishing is').toMatch(/\/discobot\/#u=Ian$/);
   await menu(page, 'New Project');
+  await more(page);
   await expect(page.getByRole('button', { name: 'Project: Friday Night', exact: true })).toHaveCount(0);
+  await less(page);
   await nameOpenProject(page, 'Sunday Morning');
   expect(await publishOpenProject(page)).toBe(own);
 
@@ -127,6 +149,8 @@ test('a person\'s page says so when the server is down or does not have such pag
 
   await list.getByRole('button', { name: 'Go to Discobot', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Discobot', exact: true })).toBeVisible();
+  await more(page);
   await expect(page.getByRole('button', { name: /^Project: / })).toBeVisible();
+  await less(page);
   expect(new URL(page.url()).hash).toBe('');
 });
