@@ -812,6 +812,23 @@ for new accounts.
     the owner: whether the kit's own sends stay as a master over the
     eight, and whether drive, phaser and chorus get a send for each drum
     too or only the two asked for.
+    **Built on 2026-10-13 to the owner's answer** (delay and reverb only,
+    the kit's sends a master over them), not verified by ear. Under Sends in
+    the drum strip the selected drum has two knobs, Delay and Reverb, before
+    the kit's. Each is a share from 0 to 100% of what the kit sends to that
+    effect: what reaches the delay from a drum is the drum, times its
+    share, times the kit's Dly Send. Every drum starts at 100%, which is
+    what it sent before, and a share of 100% is stored as nothing, so a
+    project that never turns one is the project it was and exports the
+    same file. A drum is turned down to keep it out; it cannot be sent
+    more than the kit is. `DrumCore` makes a second and a third mix of
+    its voices beside the kit; live they are the drum processor's second
+    and third outputs, and an export makes them only when a drum that
+    plays is held back. Choosing a kit or pressing Apply Kit leaves the
+    shares alone, as it leaves the cymbal type and an imported sample;
+    Reset drums puts them back to 100%. A stem of the drums has its
+    effects, as it had. A controller's knob can be tied to either. The
+    Mixer shows levels and pans only and has no knob for these.
 
 24. **Aux sends that can be routed to effects.** (L) Asked for by the owner
     on 2026-10-12. Today the sends are fixed: every lane has one send to
@@ -836,6 +853,14 @@ for new accounts.
 - **Controller knobs and MIDI pads.** Both are built as the owner asked,
   with pads that can be changed and a place for each device; none of it
   has been tried with the Launchkey.
+- **A drum's own delay and reverb sends** (features 23). Built so that a
+  drum's knob is a share of the kit's send and starts at 100%, which is
+  the only way an older project sounds the same. So a drum can be taken
+  out of an effect but not sent more than the rest of the kit; to have
+  reverb on the snare alone, the kit's Rev Send goes up and the other
+  drums' Reverb knobs go down. Is that the right way round? And: should
+  Apply Kit put the shares back to 100% (it leaves them), and should the
+  two knobs be with a drum's other knobs rather than under Sends?
 
 ## Decided by the owner on 2026-10-13
 

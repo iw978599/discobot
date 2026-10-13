@@ -234,7 +234,8 @@ function HelpContent({ at, onClose, onWalkthrough }: { at: string | null; onClos
           <h3 tabIndex={-1} onKeyDown={(event) => back(event, 'help-drums')}>Drums</h3>
           <ul className="help-list help-list-plain">
             <li><strong>Step details:</strong> each hit has a velocity, a chance of playing, and a repeat count that packs 2 to 4 hits into the step. Shift+click a hit to step through velocities.</li>
-            <li><strong>More / Sends:</strong> show the humanize and pan knobs, and the kit's effect sends.</li>
+            <li><strong>More / Sends:</strong> More shows the humanize and pan knobs. Sends shows the kit's effect sends, and before them the selected drum's own two, <strong>Delay</strong> and <strong>Reverb</strong>.</li>
+            <li><strong>A drum's own sends:</strong> each is that drum's share of what the kit sends to the delay or the reverb, so the kit's Dly Send and Rev Send are the master over all eight drums. Every drum starts at 100%, sent like the rest of the kit. Turn one down to keep that drum out: a dry kick under a snare with reverb on it. Drive, phaser and chorus are sent for the whole kit only. Choosing another kit leaves these where they are; Reset puts them back.</li>
             <li><strong>Your own sounds:</strong> <strong>Sound</strong> puts an imported sample on the selected lane. <strong>Import Kit</strong> takes several files at once and matches each to a lane by its name, such as “Kick” or “HH Open”; check the matches before using them. Samples stay in this browser.</li>
           </ul>
         </section>
@@ -252,7 +253,7 @@ function HelpContent({ at, onClose, onWalkthrough }: { at: string | null; onClos
           <h3 tabIndex={-1} onKeyDown={(event) => back(event, 'help-effects')}>Effects</h3>
           <ul className="help-list help-list-plain">
             <li><strong>One set for the whole rack:</strong> Drive, Phaser, Delay, Chorus and Reverb are shared. Each has its own switch, and <strong>Enabled</strong> at the top switches the five of them on and off together.</li>
-            <li><strong>Sends:</strong> an effect is heard only on what is sent to it. A lane's sends are on its Sends tab, the kit's are under <strong>Sends</strong> in the drum strip, and a guest instrument has a Sends button of its own.</li>
+            <li><strong>Sends:</strong> an effect is heard only on what is sent to it. A lane's sends are on its Sends tab, the kit's are under <strong>Sends</strong> in the drum strip, where each drum also has a share of its own of the delay and the reverb, and a guest instrument has a Sends button of its own.</li>
             <li><strong>Returns:</strong> Synth Return and Drum Return set how much of the effects comes back into the mix, for the lanes and for the kit.</li>
             <li><strong>In time:</strong> the Phaser, the Delay and the Chorus each have a Sync menu that sets them to a note value, so they follow the tempo. Turning the rate or time knob sets a free value again.</li>
             <li><strong>Master EQ:</strong> Low, Mid and High shape the whole mix, including sound that is sent to no effect. It has a switch of its own, and works whether or not the effects are enabled.</li>

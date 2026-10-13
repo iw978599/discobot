@@ -548,7 +548,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
 
       {showSends && (
         <div className="rack-row drum-sends" data-drum={selected}>
-          <span className="drum-strip-name">
+          <span className="drum-send-name">
             <span className="drum-selected-dot" />
             <b>{LABELS[selected]}'s share</b>
           </span>

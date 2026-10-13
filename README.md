@@ -48,7 +48,8 @@ you like. Scenes can be given a colour so a song's shape reads at a glance.
 
 **Effects** shared by the whole rack: drive, phaser, delay (free or in time
 with the tempo), chorus, reverb and a three-band master EQ. Each lane and the
-drums have their own sends.
+drums have their own sends, and each drum has a share of its own of the kit's
+delay and reverb sends, so a kick can stay dry under a snare with reverb on it.
 
 **A mixer.** Every level side by side: a fader for each lane, each drum, each
 guest instrument and the effect returns, with pan, mute and solo. A fader and
