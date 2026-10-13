@@ -1,5 +1,20 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
+// At phone width the top bar is one line, and the rest of it is in the sheet its last button
+// raises. `more` raises the sheet before something in it is used, and does nothing on a wide
+// screen; `less` puts it away again after something that leaves it up.
+const onPhone = (page: Page) => {
+  const size = page.viewportSize();
+  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+};
+const more = async (page: Page) => {
+  if (!onPhone(page) || await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) return;
+  await page.getByRole('button', { name: 'More controls', exact: true }).click();
+};
+const less = async (page: Page) => {
+  if (await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) await page.getByRole('button', { name: 'Close more controls', exact: true }).click();
+};
+
 const PASSWORD = 'correct horse battery';
 const apiUrl = (baseURL: string) => `http://127.0.0.1:${Number(new URL(baseURL).port) + 1000}`;
 const narrow = (page: Page) => (page.viewportSize()?.width ?? 1280) <= 720;
@@ -24,6 +39,7 @@ test.beforeEach(async ({ page, request }, testInfo) => {
 });
 
 test('the Project menu is in three groups with Reset All apart, and Export is a dialog of two choices', async ({ page }) => {
+  await more(page);
   await page.getByRole('button', { name: 'Project ▾', exact: true }).click();
   const menu = page.getByRole('menu', { name: 'Project', exact: true });
   await expect(menu.getByRole('menuitem')).toHaveCount(11);
@@ -49,9 +65,12 @@ test('the Project menu is in three groups with Reset All apart, and Export is a 
   await expect(menu.getByRole('menuitem', { name: 'Share Link', exact: true })).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(menu).toHaveCount(0);
+  await more(page);
   await expect(page.getByRole('button', { name: 'Project ▾', exact: true })).toBeFocused();
+  await less(page);
 
   // Export is a dialog of two choices: what, and as what.
+  await more(page);
   await page.locator('.transport').getByRole('button', { name: 'Export', exact: true }).click();
   const exports = page.getByRole('dialog', { name: 'Export', exact: true });
   await expect(exports.getByRole('group', { name: 'What', exact: true }).getByRole('radio')).toHaveCount(2);
@@ -61,12 +80,14 @@ test('the Project menu is in three groups with Reset All apart, and Export is a 
 });
 
 test('a menu row still does its job from its group', async ({ page }) => {
+  await more(page);
   await page.getByRole('button', { name: 'Project ▾', exact: true }).click();
   await page.getByRole('menuitem', { name: 'All Projects', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Projects', exact: true })).toBeVisible();
 });
 
 test('the signed-in account dialog has no amber Sign Out, owner tools under their own heading, Delete Account last in red', async ({ page }) => {
+  await more(page);
   await page.getByRole('button', { name: /^Sign in$/ }).click();
   const dialog = page.getByRole('dialog', { name: 'Account', exact: true });
   await dialog.getByRole('tab', { name: 'Create Account', exact: true }).click();

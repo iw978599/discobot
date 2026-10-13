@@ -1,9 +1,30 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
+// At phone width the top bar is one line, and the rest of it is in the sheet its last button
+// raises. `more` raises the sheet before something in it is used, and does nothing on a wide
+// screen; `less` puts it away again after something that leaves it up.
+const onPhone = (page: Page) => {
+  const size = page.viewportSize();
+  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+};
+const more = async (page: Page) => {
+  if (!onPhone(page) || await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) return;
+  await page.getByRole('button', { name: 'More controls', exact: true }).click();
+};
+// A press on nothing, to bring the keyboard to the page. A wide screen has the app's name to press;
+// on a phone it is there for a screen reader only, so the press goes on the edge of the top bar.
+const aside = (page: Page) => (onPhone(page)
+  ? page.locator('.rack-unit.transport').click({ position: { x: 3, y: 3 } })
+  : page.getByRole('heading', { name: 'Discobot', exact: true }).click());
+const less = async (page: Page) => {
+  if (await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) await page.getByRole('button', { name: 'Close more controls', exact: true }).click();
+};
+
 // Export is a dialog: what (the scene or the song), as what, then Export. It is closed at once and
 // the file goes on being made, so the caller waits for the download as it did with the menu.
 async function exportAs(page: Page, item: string) {
+  await more(page);
   await page.locator('.transport').getByRole('button', { name: 'Export', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Export', exact: true });
   await dialog.getByRole('radio', { name: item.startsWith('Song') ? 'The whole song' : 'This scene', exact: true }).check();
@@ -41,20 +62,27 @@ async function closePresetMenu(page: Page, scope: Page | Locator = page) {
 const tab = (page: Page, name: string) => page.getByRole('tab', { name, exact: true }).click();
 async function menu(page: Page, name: 'Project' | 'Export', item: string) {
   if (name === 'Export') return exportAs(page, item);
+  await more(page);
   await page.getByRole('button', { name: 'Project ▾', exact: true }).click();
   await page.getByRole('menuitem', { name: item, exact: true }).click();
 }
 // A project that shares its row with copies of itself is chosen from that row's list first: pass the row's name as `family`.
 async function openProject(page: Page, name: string, family?: string) {
+  await more(page);
   await page.getByRole('button', { name: /^Project: / }).click();
   const dialog = page.getByRole('dialog', { name: 'Projects', exact: true });
   const row = dialog.getByRole('group', { name: `Project ${family ?? name}`, exact: true });
   if (family) await row.getByLabel(`Version of ${family}`, { exact: true }).selectOption(name);
   await row.getByRole('button', { name: 'Open', exact: true }).click();
   await expect(dialog).toHaveCount(0);
+  await more(page);
   await expect(page.getByRole('button', { name: `Project: ${name}`, exact: true })).toBeVisible();
+  await less(page);
 }
-const openMidi = (page: Page) => page.getByRole('button', { name: 'MIDI and samples', exact: true }).click();
+const openMidi = async (page: Page) => {
+  await more(page);
+  await page.getByRole('button', { name: 'MIDI and samples', exact: true }).click();
+};
 
 async function project(page: Page) {
   return page.evaluate(key => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem(key) || '{}')), PROJECT_KEY);
@@ -191,7 +219,9 @@ test('full musical arrangement survives a kept copy, editing, reopening and relo
   await tab(page, 'Amp');
   await expect(page.getByLabel('Gain value', { exact: true })).toHaveValue('63%');
   await expect(page.getByRole('button', { name: 'Kick step 1', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await more(page);
   await expect(page.getByRole('button', { name: 'Project: Untitled copy', exact: true }), 'the project that was open is still open after a reload').toBeVisible();
+  await less(page);
   await openProject(page, 'Untitled', 'Untitled');
   await tab(page, 'Amp');
   await expect(page.getByLabel('Gain value', { exact: true }), 'the original still has the edit made after the copy').toHaveValue('20%');
@@ -249,7 +279,7 @@ test('rotary keyboard bounds, typed units, cancellation and pointer cleanup', as
 });
 
 test('keyboard sustain, hold, octave release and unsupported MIDI feedback', async ({ page }) => {
-  await page.getByRole('heading', { name: 'Discobot', exact: true }).click();
+  await aside(page);
   const key = page.getByRole('button', { name: 'Play C3', exact: true });
   await key.focus();
   await page.keyboard.down('Space');
@@ -287,7 +317,7 @@ test('releasing the first key during worklet loading cannot start a stuck note',
     };
   });
   await page.reload();
-  await page.getByRole('heading', { name: 'Discobot', exact: true }).click();
+  await aside(page);
   const key = page.getByRole('button', { name: 'Play C3', exact: true });
   await key.focus();
   await page.keyboard.down('Space');
@@ -372,6 +402,7 @@ test('piano-roll keyboard navigation, 32-step editing and cancelled painting pre
 
 test('projects dialog traps focus, closes with Escape, and renames, copies and deletes projects', async ({ page }) => {
   const opener = page.getByRole('button', { name: /^Project: / });
+  await more(page);
   await opener.click();
   const dialog = page.getByRole('dialog', { name: 'Projects', exact: true });
   await expect(dialog.getByRole('button', { name: 'Close projects', exact: true })).toBeFocused();
@@ -380,13 +411,17 @@ test('projects dialog traps focus, closes with Escape, and renames, copies and d
   await expect(dialog.getByRole('button', { name: 'Delete', exact: true }).last()).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
-  await expect(opener).toBeFocused();
+  // On a phone the name is in the top bar's sheet, which went away as the dialog opened: the
+  // keyboard goes back to the button that raises the sheet.
+  await expect(onPhone(page) ? page.getByRole('button', { name: 'More controls', exact: true }) : opener).toBeFocused();
 
+  await more(page);
   await opener.click();
   await dialog.getByRole('button', { name: 'Rename', exact: true }).click();
   await dialog.getByLabel('Project name', { exact: true }).fill('Friday jam');
   await dialog.getByLabel('Project name', { exact: true }).press('Enter');
-  await expect(page.getByRole('button', { name: 'Project: Friday jam', exact: true })).toBeVisible();
+  // On a phone this button is in the top bar's sheet, which cannot be raised from under a dialog.
+  if (!onPhone(page)) await expect(page.getByRole('button', { name: 'Project: Friday jam', exact: true })).toBeVisible();
   expect((await project(page)).name).toBe('Friday jam');
 
   await dialog.getByRole('button', { name: 'Copy', exact: true }).click();
@@ -418,7 +453,9 @@ test('projects dialog traps focus, closes with Escape, and renames, copies and d
   expect((await project(page)).projectId).not.toBe(first);
   await page.keyboard.press('Escape');
   await page.reload();
+  await more(page);
   await expect(page.getByRole('button', { name: 'Project: Untitled', exact: true })).toBeVisible();
+  await less(page);
 });
 
 test('all synth, effects and mixer control families update durable project state', async ({ page }) => {

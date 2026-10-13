@@ -1,5 +1,16 @@
 import { expect, test, type Page } from '@playwright/test';
 
+// At phone width the top bar is one line, and the rest of it is in the sheet its last button
+// raises. `more` raises the sheet before something in it is used, and does nothing on a wide screen.
+const onPhone = (page: Page) => {
+  const size = page.viewportSize();
+  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+};
+const more = async (page: Page) => {
+  if (!onPhone(page) || await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) return;
+  await page.getByRole('button', { name: 'More controls', exact: true }).click();
+};
+
 const PROJECT_KEY = 'discobot_browser_project_v1';
 const stored = (page: Page) => page.evaluate(key => JSON.parse(localStorage.getItem(key) || '{}'), PROJECT_KEY);
 
@@ -16,6 +27,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 const openHelp = async (page: Page) => {
+  await more(page);
   await page.getByRole('button', { name: 'Help', exact: true }).click();
   const help = page.getByRole('dialog', { name: 'How to use Discobot', exact: true });
   await expect(help).toBeVisible();

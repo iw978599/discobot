@@ -1,10 +1,26 @@
 import { expect, test, type Page } from '@playwright/test';
 
+// At phone width the top bar is one line, and the rest of it is in the sheet its last button
+// raises. `more` raises the sheet before something in it is used, and does nothing on a wide
+// screen; `less` puts it away again after something that leaves it up.
+const onPhone = (page: Page) => {
+  const size = page.viewportSize();
+  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+};
+const more = async (page: Page) => {
+  if (!onPhone(page) || await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) return;
+  await page.getByRole('button', { name: 'More controls', exact: true }).click();
+};
+const less = async (page: Page) => {
+  if (await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) await page.getByRole('button', { name: 'Close more controls', exact: true }).click();
+};
+
 const SESSION_KEY = 'discobot_session_v1';
 const PASSWORD = 'correct horse battery';
 const apiUrl = (baseURL: string) => `http://127.0.0.1:${Number(new URL(baseURL).port) + 1000}`;
 
 async function openAccount(page: Page) {
+  await more(page);
   await page.getByRole('button', { name: /^(Sign in|Account: .+)$/ }).click();
   return page.getByRole('dialog', { name: 'Account', exact: true });
 }
@@ -52,7 +68,8 @@ test('the owner creates an account, invites a friend, and both can get back in',
   const ownerCode = await keepRecoveryCode(page);
 
   await expect(dialog).toContainText('Signed in as Ian');
-  await expect(page.getByRole('button', { name: 'Account: Ian', exact: true })).toBeVisible();
+  // On a phone this button is in the top bar's sheet, which cannot be raised from under a dialog.
+  if (!onPhone(page)) await expect(page.getByRole('button', { name: 'Account: Ian', exact: true })).toBeVisible();
   const stored = await page.evaluate(key => localStorage.getItem(key) || '', SESSION_KEY);
   expect(stored, 'the browser keeps a session token, never the password or the recovery code').not.toContain(PASSWORD);
   expect(stored).not.toContain(ownerCode);
@@ -94,7 +111,9 @@ test('the owner creates an account, invites a friend, and both can get back in',
   expect(await keepRecoveryCode(friend), 'recovering hands out a fresh code').not.toBe(friendCode);
   await expect(friendDialog).toContainText('Signed in as Disco_Dana');
   await friend.reload();
+  await more(friend);
   await expect(friend.getByRole('button', { name: 'Account: Disco_Dana', exact: true }), 'a reload stays signed in').toBeVisible();
+  await less(friend);
 
   // The owner sees the invite was used, then removes the friend.
   await page.keyboard.press('Escape');
@@ -104,7 +123,9 @@ test('the owner creates an account, invites a friend, and both can get back in',
   await page.getByRole('dialog', { name: 'Remove this account?', exact: true }).getByRole('button', { name: 'Remove', exact: true }).click();
   await expect(dialog.getByRole('group', { name: 'Member Disco_Dana', exact: true })).toHaveCount(0);
   await openAccount(friend);
-  await expect(friend.getByRole('button', { name: 'Sign in', exact: true }), 'a removed account is signed out the next time it is checked').toBeVisible();
+  // On a phone this button is in the top bar's sheet, which cannot be raised from under a dialog.
+  if (onPhone(friend)) await expect(friend.getByRole('dialog', { name: 'Account', exact: true }).getByRole('tab', { name: 'Sign In', exact: true }), 'a removed account is signed out the next time it is checked').toBeVisible();
+  else await expect(friend.getByRole('button', { name: 'Sign in', exact: true }), 'a removed account is signed out the next time it is checked').toBeVisible();
   await friendContext.close();
 
   // Change password, then delete the account.
@@ -121,7 +142,8 @@ test('the owner creates an account, invites a friend, and both can get back in',
   await dialog.getByRole('button', { name: 'Delete My Account', exact: true }).click();
   await expect(dialog.getByRole('tab', { name: 'Sign In', exact: true })).toBeVisible();
   expect(await page.evaluate(key => localStorage.getItem(key), SESSION_KEY)).toBeNull();
-  await expect(page.getByRole('button', { name: /^Project: / }), 'the projects in this browser are untouched').toBeVisible();
+  // On a phone this button is in the top bar's sheet, which cannot be raised from under a dialog.
+  if (!onPhone(page)) await expect(page.getByRole('button', { name: /^Project: / }), 'the projects in this browser are untouched').toBeVisible();
 });
 
 test('a signed-out visit never contacts the account server, and the app works when it is down', async ({ page }, testInfo) => {

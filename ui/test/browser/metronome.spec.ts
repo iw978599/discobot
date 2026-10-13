@@ -1,5 +1,20 @@
 import { expect, test, type Page } from '@playwright/test';
 
+// At phone width the top bar is one line, and the rest of it is in the sheet its last button
+// raises. `more` raises the sheet before something in it is used, and does nothing on a wide
+// screen; `less` puts it away again after something that leaves it up.
+const onPhone = (page: Page) => {
+  const size = page.viewportSize();
+  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+};
+const more = async (page: Page) => {
+  if (!onPhone(page) || await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) return;
+  await page.getByRole('button', { name: 'More controls', exact: true }).click();
+};
+const less = async (page: Page) => {
+  if (await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) await page.getByRole('button', { name: 'Close more controls', exact: true }).click();
+};
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'requestMIDIAccess', { configurable: true, value: undefined });
@@ -24,6 +39,7 @@ async function setTempo(page: Page, bpm: number) {
 test('the metronome and the count-in are switches beside the tempo, off to begin with, and kept for the next visit', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
+  await more(page);
   await expect(click(page)).toHaveAttribute('aria-pressed', 'false');
   await expect(count(page)).toHaveAttribute('aria-pressed', 'false');
 
@@ -33,15 +49,18 @@ test('the metronome and the count-in are switches beside the tempo, off to begin
   // It is this browser's, not the project's: nothing about it is saved with the song.
   const project = await page.evaluate(() => localStorage.getItem('discobot_browser_project_v1') || '');
   expect(project).not.toContain('countIn');
+  await less(page);
 
   await page.getByRole('button', { name: /Play All/ }).click();
   await expect(playing(page).first()).toBeVisible();
   await page.waitForTimeout(700);
   await page.getByRole('button', { name: /Stop All/ }).click();
 
+  await more(page);
   await count(page).click();
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Discobot', exact: true })).toBeVisible();
+  await more(page);
   await expect(click(page)).toHaveAttribute('aria-pressed', 'true');
   await expect(count(page)).toHaveAttribute('aria-pressed', 'true');
   await click(page).click();
@@ -58,7 +77,9 @@ test('with the count-in on, a bar goes by before anything plays', async ({ page 
   await page.getByRole('button', { name: /Stop All/ }).click();
   await expect(playing(page)).toHaveCount(0);
 
+  await more(page);
   await count(page).click();
+  await less(page);
   await page.getByRole('button', { name: /Play All/ }).click();
   await page.waitForTimeout(2000);
   await expect(playing(page), 'half way through the count-in nothing is playing yet').toHaveCount(0);

@@ -1,8 +1,24 @@
 import { expect, test, type Page } from '@playwright/test';
 
+// At phone width the top bar is one line, and the rest of it is in the sheet its last button
+// raises. `more` raises the sheet before something in it is used, and does nothing on a wide
+// screen; `less` puts it away again after something that leaves it up.
+const onPhone = (page: Page) => {
+  const size = page.viewportSize();
+  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+};
+const more = async (page: Page) => {
+  if (!onPhone(page) || await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) return;
+  await page.getByRole('button', { name: 'More controls', exact: true }).click();
+};
+const less = async (page: Page) => {
+  if (await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) await page.getByRole('button', { name: 'Close more controls', exact: true }).click();
+};
+
 const PROJECT_KEY = 'discobot_browser_project_v1';
 const project = (page: Page) => page.evaluate(key => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem(key) || '{}')), PROJECT_KEY);
 async function menu(page: Page, item: string) {
+  await more(page);
   await page.getByRole('button', { name: 'Project ▾', exact: true }).click();
   await page.getByRole('menuitem', { name: item, exact: true }).click();
 }
@@ -17,6 +33,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('a share link opens a page that plays the song, and a visitor can keep a copy', async ({ page, browser }, testInfo) => {
+  await more(page);
   await page.getByRole('button', { name: /^Project: / }).click();
   const projects = page.getByRole('dialog', { name: 'Projects', exact: true });
   await projects.getByRole('button', { name: 'Rename', exact: true }).click();
@@ -64,13 +81,18 @@ test('a share link opens a page that plays the song, and a visitor can keep a co
   expect((await project(visitor)).name, 'listening does not save anything into the visitor\'s projects').toBe('Untitled');
 
   await shared.getByRole('button', { name: 'Open a Copy to Edit', exact: true }).click();
+  await more(visitor);
   await expect(visitor.getByRole('button', { name: 'Project: Friday Night', exact: true })).toBeVisible();
+  await less(visitor);
   await expect(visitor.locator('.tempo-led-value')).toHaveText('140');
   await expect(visitor.getByRole('button', { name: 'Snare step 5', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(visitor.locator('.scene-chip')).toHaveCount(2);
   expect(new URL(visitor.url()).hash, 'the link is cleared so a reload does not show the shared page again').toBe('');
   await visitor.reload();
+  await more(visitor);
   await expect(visitor.getByRole('button', { name: 'Project: Friday Night', exact: true })).toBeVisible();
+  await less(visitor);
+  await more(visitor);
   await visitor.getByRole('button', { name: /^Project: / }).click();
   await expect(visitor.getByRole('dialog', { name: 'Projects', exact: true }).getByRole('group'), 'their own project is still there').toHaveCount(2);
   expect(requests, 'opening a shared song contacts nobody').toEqual([]);
@@ -80,7 +102,9 @@ test('a share link opens a page that plays the song, and a visitor can keep a co
   await visitor.reload();
   await expect(visitor.getByRole('heading', { name: 'This link could not be opened', exact: true })).toBeVisible();
   await visitor.getByRole('button', { name: 'Go to Discobot', exact: true }).click();
+  await more(visitor);
   await expect(visitor.getByRole('button', { name: 'Project: Friday Night', exact: true })).toBeVisible();
+  await less(visitor);
   await visitorContext.close();
 });
 
@@ -104,6 +128,7 @@ test('arrangements saved by an earlier version turn into projects', async ({ pag
   await expect(page.locator('.app-alert'), 'upgrading is not reported as a problem').toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Kick step 3', exact: true }), 'the open project is untouched').toHaveAttribute('aria-pressed', 'true');
 
+  await more(page);
   await page.getByRole('button', { name: /^Project: / }).click();
   const dialog = page.getByRole('dialog', { name: 'Projects', exact: true });
   await dialog.getByRole('group', { name: 'Project Old groove', exact: true }).getByRole('button', { name: 'Open', exact: true }).click();
@@ -114,6 +139,7 @@ test('arrangements saved by an earlier version turn into projects', async ({ pag
   expect((await project(page)).savedPatterns, 'they are moved, not copied').toEqual([]);
 
   await page.reload();
+  await more(page);
   await page.getByRole('button', { name: /^Project: / }).click();
   await expect(dialog.getByRole('group'), 'a second load does not migrate them again').toHaveCount(2);
 });
@@ -121,7 +147,9 @@ test('arrangements saved by an earlier version turn into projects', async ({ pag
 test('new projects start empty and each project remembers its own work across reloads', async ({ page }) => {
   await page.getByRole('button', { name: 'Kick step 1', exact: true }).click();
   await menu(page, 'New Project');
+  await more(page);
   await expect(page.getByRole('button', { name: 'Project: Untitled 2', exact: true })).toBeVisible();
+  await less(page);
   await expect(page.locator('.drum-step-btn.active')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Synth 3', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Snare step 9', exact: true }).click();
@@ -130,7 +158,10 @@ test('new projects start empty and each project remembers its own work across re
   await page.getByRole('button', { name: 'Snare step 9', exact: true }).click();
 
   await page.reload();
+  await more(page);
   await expect(page.getByRole('button', { name: 'Project: Untitled 2', exact: true })).toBeVisible();
+  await less(page);
+  await more(page);
   await page.getByRole('button', { name: /^Project: / }).click();
   const dialog = page.getByRole('dialog', { name: 'Projects', exact: true });
   const row = dialog.getByRole('group', { name: 'Project Untitled', exact: true });
@@ -143,6 +174,7 @@ test('new projects start empty and each project remembers its own work across re
 });
 
 test('a project and the copies named after it share one row, with a list to choose between them', async ({ page }) => {
+  await more(page);
   await page.getByRole('button', { name: /^Project: / }).click();
   const dialog = page.getByRole('dialog', { name: 'Projects', exact: true });
   await dialog.getByRole('button', { name: 'Rename', exact: true }).click();
@@ -172,16 +204,20 @@ test('a project and the copies named after it share one row, with a list to choo
   await expect(row).toHaveClass(/current/);
   await row.getByRole('button', { name: 'Open', exact: true }).click();
   await expect(dialog).toHaveCount(0);
+  await more(page);
   await expect(page.getByRole('button', { name: 'Project: Friday jam copy', exact: true })).toBeVisible();
+  await less(page);
 
   // Renamed to something of its own, it leaves the family for a row of its own.
+  await more(page);
   await page.getByRole('button', { name: /^Project: / }).click();
   await expect(version).toHaveValue('Friday jam copy');
   await row.getByRole('button', { name: 'Rename', exact: true }).click();
   await expect(dialog.getByLabel('Project name', { exact: true }), 'the whole name is there to edit').toHaveValue('Friday jam copy');
   await dialog.getByLabel('Project name', { exact: true }).fill('Sunday');
   await dialog.getByLabel('Project name', { exact: true }).press('Enter');
-  await expect(page.getByRole('button', { name: 'Project: Sunday', exact: true })).toBeVisible();
+  // On a phone this button is in the top bar's sheet, which cannot be raised from under a dialog.
+  if (!onPhone(page)) await expect(page.getByRole('button', { name: 'Project: Sunday', exact: true })).toBeVisible();
   const sunday = dialog.getByRole('group', { name: 'Project Sunday', exact: true });
   await expect(sunday).toHaveClass(/current/);
   await expect(sunday.locator('select')).toHaveCount(0);

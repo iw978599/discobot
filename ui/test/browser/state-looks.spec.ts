@@ -1,5 +1,20 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
+// At phone width the top bar is one line, and the rest of it is in the sheet its last button
+// raises. `more` raises the sheet before something in it is used, and does nothing on a wide
+// screen; `less` puts it away again after something that leaves it up.
+const onPhone = (page: Page) => {
+  const size = page.viewportSize();
+  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+};
+const more = async (page: Page) => {
+  if (!onPhone(page) || await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) return;
+  await page.getByRole('button', { name: 'More controls', exact: true }).click();
+};
+const less = async (page: Page) => {
+  if (await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) await page.getByRole('button', { name: 'Close more controls', exact: true }).click();
+};
+
 // Four states each have a look of their own, and this holds them apart (design review, finding 3):
 // keyboard focus is a white ring held off the control by a dark gap; a pointer over a control gives
 // it a lighter edge; a selected step is framed inside its own edge; and anything that is on, or
@@ -93,6 +108,7 @@ test('on a step, focus is a ring outside it and selected is a frame inside it, a
 
 test('a focused button has the focus ring, and a hovered one only a lighter edge', async ({ page }, testInfo) => {
   const button = page.getByRole('button', { name: 'Help', exact: true });
+  await more(page);
   await expect(button).toHaveCSS('border-top-color', 'rgb(85, 88, 91)');
 
   if (testInfo.project.name === 'chromium') {
@@ -112,6 +128,7 @@ test('a focused button has the focus ring, and a hovered one only a lighter edge
   await expect(button).toHaveCSS('outline-offset', '2px');
   await expect(button, 'focus does not change the button\'s own edge').toHaveCSS('border-top-color', 'rgb(85, 88, 91)');
   await expect.poll(() => css(button, 'box-shadow')).toContain(`${GAP} 0px 0px 0px 2px`);
+  await less(page);
 
   const knob = lane(page).getByRole('slider', { name: 'Synth 1 level', exact: true });
   await knob.focus();
@@ -176,6 +193,7 @@ test('every control in the rack, a menu and a dialog shows the same focus ring',
   expect(rack.wrong, 'controls in the rack without the ring').toEqual([]);
   expect(rack.seen, 'the rack\'s controls were tried').toBeGreaterThan(100);
 
+  await more(page);
   await page.getByRole('button', { name: 'Project ▾', exact: true }).click();
   await expect(page.getByRole('menuitem').first()).toBeVisible();
   await byKeyboard(page);
