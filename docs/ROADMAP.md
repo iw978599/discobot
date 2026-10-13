@@ -172,8 +172,9 @@ target; removal of the AI review workflow.
    sample; links, published songs and sync do not, and there the lane plays
    its oscillator. On 2026-10-13, not verified by ear: Start says where
    in the recording a note begins, and Loop From and Loop To say which
-   part goes round. Open: a crossfade where the loop goes round, which can
-   click; several recordings across the keyboard for an imported sample;
+   part goes round, with the end of a chosen loop faded into what comes
+   before its start so the join does not click. Open: several recordings
+   across the keyboard for an imported sample;
    smoothing for a recording played far above its root, which at present
    aliases.
 

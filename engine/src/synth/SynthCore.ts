@@ -368,6 +368,8 @@ export class SynthCore {
     const sampleLoop = p.sampleLoop;
     // The part that goes round, as shares of the recording. The whole of it unless the sound says.
     const loopFrom = clamp(p.sampleLoopStart, 0, 1, 0), loopTo = Math.max(loopFrom, clamp(p.sampleLoopEnd, 0, 1, 1));
+    // The longest a loop's end is faded into what comes before its start: a hundredth of a second.
+    const loopFade = sample ? sample.rate * 0.01 : 0;
     // How many of the recording's frames one cycle of a note is worth, at the note it was recorded at.
     const sampleScale = sample ? sample.rate / (440 * 2 ** ((clamp(sample.root ?? p.sampleRoot, 0, 127, 60) - 69) / 12)) : 0;
     // A table of single cycles: how long each is, how many there are, how fast they are stepped
@@ -513,15 +515,27 @@ export class SynthCore {
             }
           } else {
             const data = v.sampleData ?? sample.data, end = data.length - 1;
-            let at = v.samplePosition;
+            let at = v.samplePosition, lead = -1, leadMix = 0;
             if (sampleLoop) {
               // A loop too short to hold a sample is the whole recording.
               const whole = (loopTo - loopFrom) * end < 2, from = whole ? 0 : loopFrom * end, round = whole ? end : loopTo * end;
               if (at >= round) at = from + (at - round) % (round - from);
+              // The last of the loop is faded into what the recording has just before the loop's
+              // start, which is what leads into the start, so the join does not click. A loop from
+              // the very beginning has nothing before it and goes round as it is.
+              const fade = Math.min(from, (round - from) / 2, loopFade);
+              if (fade >= 1 && at > round - fade) {
+                leadMix = (at - (round - fade)) / fade;
+                lead = at - (round - from);
+              }
             }
             if (at < end) {
               const index = Math.floor(at);
               source = data[index] + (data[index + 1] - data[index]) * (at - index);
+              if (lead >= 0) {
+                const before = Math.floor(lead);
+                source += (data[before] + (data[before + 1] - data[before]) * (lead - before) - source) * leadMix;
+              }
             } else {
               // Played once and finished: the voice is let go, so a held key does not keep it from
               // another note. With the second oscillator sounding beside it, the note goes on.
