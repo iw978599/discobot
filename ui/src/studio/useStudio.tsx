@@ -30,6 +30,8 @@ import { randomLine, type RandomChoice } from '../services/randomize';
 import { STARTERS, projectIsEmpty, starterDrums, starterPattern } from '../services/starters';
 import { buildSampleSong } from '../services/sampleSong';
 import { DEFAULT_QUANTIZE, asQuantize, recordPosition } from '../services/recordTiming';
+import { LANE_PARAMS, fromUnit, lanePatch, parseTarget } from '../services/paramTargets';
+import { storeMidiTies, storedMidiTies, tieFor, withTie, withoutTie, type MidiTie } from '../services/midiTies';
 import { COUNT_IN_BARS, clickAt, countInBeats, countInSeconds, storeMetronome, storedMetronome, type MetronomeSettings } from '../services/metronome';
 import { startsUndoStep } from './undoSteps';
 import { BrowserTransport, TransportTick } from '../services/browserTransport';
@@ -307,6 +309,8 @@ export function useStudio() {
   const drumAudio = useDrumAudio();
   const [synths, setSynths] = useState<SynthState[]>([]);
   const [selectedSynthId, setSelectedSynthId] = useState(1);
+  const selectedSynthIdRef = useRef(selectedSynthId);
+  selectedSynthIdRef.current = selectedSynthId;
   const [drumState, setDrumState] = useState<DrumState>(createDefaultDrumState);
   const [drumKits, setDrumKits] = useState<DrumKitDefinition[]>([]);
   const [selectedDrumKitId, setSelectedDrumKitId] = useState<DrumKitId>(DEFAULT_DRUM_KIT_ID);
@@ -360,6 +364,18 @@ export function useStudio() {
   const [songPosition, setSongPosition] = useState<SongPosition | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [midiMode, setMidiMode] = useState<MidiMode>('live');
+  // A controller's knobs tied to parameters, kept for this browser, and the parameter waiting for
+  // a knob to be turned (Learn). The MIDI handler reads the refs.
+  const [midiTies, setMidiTies] = useState<MidiTie[]>(storedMidiTies);
+  const midiTiesRef = useRef(midiTies);
+  midiTiesRef.current = midiTies;
+  const [midiLearn, setMidiLearn] = useState<string | null>(null);
+  const midiLearnRef = useRef(midiLearn);
+  midiLearnRef.current = midiLearn;
+  const applyParamTargetRef = useRef<(target: string, unit: number) => void>(() => {});
+  const handleMidiTieRemove = useCallback((target: string) => {
+    setMidiTies(current => { const next = withoutTie(current, target); storeMidiTies(next); return next; });
+  }, []);
   // Recording from the on-screen and computer keyboards, and how firmly a recorded note is moved
   // onto the nearest step. Both are for the session, like the MIDI settings.
   const [recording, setRecording] = useState(false);
@@ -1481,7 +1497,19 @@ export function useStudio() {
   });
 
   const handleMidiMessage = useCallback((message: MidiMessage) => {
-    if (message.type === 'controlChange') return;
+    if (message.type === 'controlChange') {
+      // A knob on the controller. While a parameter is waiting to be learned, the first knob turned
+      // is tied to it; otherwise a knob that is tied moves its parameter.
+      const waiting = midiLearnRef.current;
+      if (waiting) {
+        setMidiTies(current => { const next = withTie(current, { channel: message.channel, controller: message.controller, target: waiting }); storeMidiTies(next); return next; });
+        setMidiLearn(null);
+        return;
+      }
+      const tie = tieFor(midiTiesRef.current, message.channel, message.controller);
+      if (tie) applyParamTargetRef.current(tie.target, message.value / 127);
+      return;
+    }
     const noteName = midiNoteToName(message.note);
     const heldKey = `${message.channel}:${message.note}`;
 
@@ -2288,7 +2316,32 @@ export function useStudio() {
 
   const isAnyPlaying = synths.some(s => s.isPlaying);
 
+  // Sets a parameter by its name (services/paramTargets) from a position along a knob's travel.
+  // It goes through the same handlers the knobs on screen call, so undo, saving and the sound
+  // treat a controller's knob and the screen's alike.
+  applyParamTargetRef.current = (target, unit) => {
+    const parsed = parseTarget(target);
+    if (!parsed) return;
+    const value = fromUnit(parsed.range, unit);
+    if (parsed.kind === 'tempo') void handleTempoChange(value);
+    else if (parsed.kind === 'drumsMaster') handleDrumMasterVolumeChange(value);
+    else if (parsed.kind === 'drumsSwing') handleDrumSwingChange(value);
+    else if (parsed.kind === 'drum') handleDrumSettingsChange(parsed.instrument, { [parsed.key]: value });
+    else if (parsed.kind === 'fx') {
+      const loop = effectsLoopRef.current as unknown as Record<string, Record<string, unknown>>;
+      handleEffectsLoopChange({ [parsed.effect]: { ...loop[parsed.effect], [parsed.field]: value } } as Partial<EffectsLoopState>);
+    } else if (parsed.kind === 'lane') {
+      const synthId = parsed.lane === 'open' ? selectedSynthIdRef.current : parsed.lane;
+      const synth = synthsRef.current.find(entry => entry.id === synthId);
+      if (!synth) return;
+      const macro = LANE_PARAMS[parsed.key].macro;
+      if (macro) void handleSynthModelChange(synth.id, synth.synthModelId, { [macro]: value });
+      else { const patch = lanePatch(parsed.key, value); if (patch) void handleParameterChange(synth.id, patch as Partial<SynthParameters>); }
+    }
+  };
+
   return {
+    midiTies, midiLearn, setMidiLearn, handleMidiTieRemove,
     handleCopyPartToScene, handleStarter, handleSampleSong, dismissStarters, showStarters, metronome, handleMetronomeChange,
     synths, selectedSynthId, setSelectedSynthId, drumState: memoizedDrumState, drumKits,
     selectedDrumKitId, drumMasterVolume, drumSwing, drumFx, effectsLoop, browserMuted, setBrowserMuted,
