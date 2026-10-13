@@ -253,6 +253,8 @@ function SynthModule({ studio, synthId, synth }: SynthModuleProps) {
           onModelChange={(modelId) => { void studio.handleSynthModelChange(synthId, modelId); }}
           tab={tab}
           onTabChange={setTab}
+          sampleStoreVersion={studio.sampleStoreVersion}
+          onSampleError={studio.setStorageError}
           onRemove={synthId !== 1 ? () => { void studio.handleRemoveSynth(synthId); } : undefined}
           notes={synth.pattern && (
             <div className="synth-notes">

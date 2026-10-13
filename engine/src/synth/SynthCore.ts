@@ -11,6 +11,12 @@ export interface NoteOnMessage {
   time?: number;
 }
 
+// A recording for the sample engine to play: one channel, at its own rate.
+export interface SynthSample {
+  data: Float32Array;
+  rate: number;
+}
+
 interface Voice {
   active: boolean;
   note: string;
@@ -45,6 +51,8 @@ interface Voice {
   randomPhase: number;
   // Which layer of a layered sound this voice is playing: 0, or 1 for the second.
   layer: number;
+  // How far into the sample this voice has played, in the sample's own frames.
+  samplePosition: number;
 }
 
 const TWO_PI = 2 * Math.PI;
@@ -84,6 +92,7 @@ export class SynthCore {
   private routeDestination = new Int8Array(MOD_ROUTES);
   private routeDepth = new Float64Array(MOD_ROUTES);
   private routeCount = 0;
+  private sample: SynthSample | null = null;
   private age = 0;
   private lastFrequency = 440;
   private readonly smoothing: number;
@@ -98,12 +107,24 @@ export class SynthCore {
       fmPhase: [0, 0, 0, 0], fmFeedback: 0, fmEnv: 0, lfoPhase: [0, 0],
       amp: new Adsr(), filterEnv: new Adsr(), filter: new Svf(), filter2: new Svf(), ladder: new Ladder(), highpass: new Svf(), previousInput: 0,
       last: 0, transition: 0, transitionSamples: 0, age: 0, remaining: Infinity, releaseOverride: 0,
-      random: 0, randomPhase: 0, layer: 0,
+      random: 0, randomPhase: 0, layer: 0, samplePosition: 0,
     }));
     this.refreshDerived();
     Object.assign(this.smoothed, {
       gain: this.params.gain, filterFreq: this.params.filterFreq, filterQ: this.params.filterQ,
     });
+  }
+
+  // Gives the sample engine its recording, or with null takes it away. A lane set to the sample
+  // engine with no recording plays its oscillators.
+  setSample(sample: SynthSample | null): void {
+    this.sample = sample && sample.data.length > 1 && sample.rate > 0 ? sample : null;
+    if (this.params.engine !== 'sample') return;
+    for (const voice of this.voices) {
+      voice.samplePosition = 0;
+      voice.transition = voice.last;
+      voice.transitionSamples = this.transitionLength;
+    }
   }
 
   setParams(update: Partial<Record<keyof VoiceParams, unknown>> | null | undefined): void {
@@ -257,7 +278,12 @@ export class SynthCore {
       voice.previousInput = 0;
       voice.amp.reset();
       voice.filterEnv.reset();
+    } else if (this.params.engine === 'sample' && this.sample) {
+      // A recording starts again from its beginning, so the jump is crossfaded.
+      voice.transition = voice.last;
+      voice.transitionSamples = this.transitionLength;
     }
+    voice.samplePosition = 0;
     // A voice that is still sounding keeps its phase and envelope level, so stealing it cannot click.
     voice.active = true;
     voice.note = message.note;
@@ -307,6 +333,11 @@ export class SynthCore {
     const p = this.params, s = this.smoothed, d = this.derived, sr = this.sampleRate, k = this.smoothing;
     const maxCutoff = Math.min(20000, sr * 0.45);
     const fm = p.engine === 'fm';
+    // The sample engine, when it has a recording. Without one the lane plays its oscillators.
+    const sample = p.engine === 'sample' ? this.sample : null;
+    const sampleLoop = p.sampleLoop;
+    // How many of the recording's frames one cycle of a note is worth, at the note it was recorded at.
+    const sampleScale = sample ? sample.rate / (440 * 2 ** ((clamp(p.sampleRoot, 0, 127, 60) - 69) / 12)) : 0;
     const osc2Level = p.osc2Enabled ? clamp(p.osc2Level, 0, 1) : 0;
     const oscLevel = clamp(p.oscLevel, 0, 1, 1), subLevel = clamp(p.subLevel, 0, 1), noiseLevel = clamp(p.noiseLevel, 0, 1);
     // Ring modulation and sync both need the second oscillator running, whether or not it is heard itself.
@@ -426,6 +457,19 @@ export class SynthCore {
             source = 0.4 * (Math.sin(TWO_PI * ph[0]) + Math.sin(TWO_PI * ph[2])
               + depth * (Math.sin(TWO_PI * ph[1]) + opD));
           }
+        } else if (sample) {
+          const data = sample.data, end = data.length - 1;
+          let at = v.samplePosition;
+          if (at >= end && sampleLoop) at %= end;
+          if (at < end) {
+            const index = Math.floor(at);
+            source = data[index] + (data[index + 1] - data[index]) * (at - index);
+          } else {
+            // Played once and finished: the voice is let go, so a held key does not keep it from another note.
+            source = 0;
+            this.release(v);
+          }
+          v.samplePosition = at + step * sampleScale;
         } else {
           const pulseWidth = clamp(s.pulseWidth + pulseMod, 0.05, 0.95, 0.5);
           source = 0;

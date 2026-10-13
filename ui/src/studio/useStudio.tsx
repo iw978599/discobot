@@ -311,6 +311,8 @@ export function useStudio() {
   // Decoded samples for the drum lanes that use one, and the lanes whose sample is not on this device.
   const drumSamplesRef = useRef<Partial<Record<DrumInstrument, DrumSample>>>({});
   const [missingDrumSamples, setMissingDrumSamples] = useState<DrumInstrument[]>([]);
+  // The decoded recording each synth lane's sample engine plays, by lane id.
+  const synthSamplesRef = useRef<Record<number, DrumSample>>({});
   // Goes up when samples arrive from a project file, so a lane whose sample was missing looks again.
   const [sampleStoreVersion, setSampleStoreVersion] = useState(0);
   // What an imported preset was, and what did not carry over, shown once after importing.
@@ -1642,6 +1644,7 @@ export function useStudio() {
     tempo: globalTempoRef.current, synths: synthsRef.current, drumState: drumStateRef.current,
     drumKitId: selectedDrumKitIdRef.current, drumMasterVolume, drumSwing,
     drumFx: drumFxRef.current, effectsLoop: effectsLoopRef.current, drumSamples: { ...drumSamplesRef.current },
+    synthSamples: { ...synthSamplesRef.current },
     // A scene longer than one bar is rendered a bar at a time, each lane looping at its own length.
     ...(sceneBars(liveSceneRef.current()) > 1 ? { bars: sceneAsBars(liveSceneRef.current()) } : {}),
   }), [drumMasterVolume, drumSwing]);
@@ -1690,6 +1693,29 @@ export function useStudio() {
     });
     return () => { current = false; };
   }, [drumSampleKey, drumAudio, sampleStoreVersion]);
+
+  // The same for the synth lanes: which recording each one's sample engine plays.
+  const synthSampleKey = synths.map(entry => `${entry.id}:${entry.synthParams?.sample?.id ?? ''}`).join('|');
+  useEffect(() => {
+    let current = true;
+    void Promise.all(synthsRef.current.map(async (entry) => {
+      const id = entry.synthParams?.sample?.id;
+      return [entry.id, id ? await loadDrumSample(id) : null] as const;
+    })).then((loaded) => {
+      if (!current) return;
+      const next: Record<number, DrumSample> = {};
+      for (const [laneId, sample] of loaded) {
+        if (sample) next[laneId] = sample;
+        if (sample !== (synthSamplesRef.current[laneId] ?? null)) synthAudio.setSample(laneId, sample);
+      }
+      // A lane that has gone gives its recording back, so a lane added later under its number starts with none.
+      for (const laneId of Object.keys(synthSamplesRef.current).map(Number)) {
+        if (!loaded.some(([present]) => present === laneId)) synthAudio.setSample(laneId, null);
+      }
+      synthSamplesRef.current = next;
+    });
+    return () => { current = false; };
+  }, [synthSampleKey, synthAudio, sampleStoreVersion]);
 
   const handleDrumSampleChange = useCallback(async (instrument: DrumInstrument, sampleId: string | null) => {
     localService.setDrumSample(instrument, sampleId ?? undefined);

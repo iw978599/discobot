@@ -21,6 +21,7 @@ class SynthProcessor extends AudioWorkletProcessor {
     super();
     this.port.onmessage = ({ data }: MessageEvent<SynthWorkletMessage>) => {
       if (data.type === 'params') this.core.setParams(data.params);
+      else if (data.type === 'sample') this.core.setSample(data.sample);
       else if (data.type === 'noteOn') this.core.noteOn(data);
       else if (data.type === 'noteOff') this.core.noteOff(data.note, data.id);
       else if (data.type === 'allNotesOff') this.core.allNotesOff(data.release);

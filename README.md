@@ -94,6 +94,8 @@ renders exports, so both sound the same. Each of its eight notes has:
   filtered, faded in and placed differently, which halves the notes that can
   sound at once to four;
 - a four-operator FM mode;
+- a sample mode: an imported sample played up and down the keyboard in place
+  of the oscillators, once or looped;
 - a high-pass, then a filter that can be a clean 12 or 24 dB state-variable
   filter, a four-pole ladder whose resonance thins the bass and rings by
   itself, or a two-pole in the manner of an MS-20 whose resonance distorts as
@@ -136,7 +138,7 @@ open, rename, copy or delete.
 - **Version History** keeps up to twenty earlier versions of each project, in
   this browser only.
 - **Export Project** downloads the open project as one file: lanes, drums,
-  scenes, song, effects, your presets and the samples its drum lanes use.
+  scenes, song, effects, your presets and the samples its lanes use.
   **Import Project** adds a file as a new project; nothing is replaced.
 - Projects live in the browser's own storage (IndexedDB, with a working copy
   in localStorage). That storage belongs to this browser on this device:

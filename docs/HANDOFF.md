@@ -270,9 +270,14 @@ fourteen, with the engine work each needs.
    2026-10-12 to "just keep working" through this. What it said before:
    the modulation matrix, then the Odyssey, the Virus and the CS-80. Build
    here the one way of naming any parameter that step 4 needs too.
-6. The sample oscillator, then the M1, the D-50 and the Wavestation. These
-   may only ship waveforms the project is allowed to redistribute; bring the
-   owner the choices before building them.
+6. The sample oscillator, then the M1, the D-50 and the Wavestation. The
+   sample oscillator is built on `feat/design-review-sample-oscillator`
+   (check its pull request's state). The three models may only ship
+   waveforms the project is allowed to redistribute. The owner was asked on
+   2026-10-12 which way to go (waveforms the app makes itself in code;
+   recordings the owner makes or supplies; or a named, checked free
+   library) and had not answered when this was written. Do not build them
+   until they have.
 
 ### Step 4. MIDI work (roadmap features 6)
 

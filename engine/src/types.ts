@@ -78,7 +78,7 @@ export const MOD_SOURCES: ModSource[] = ['lfo1', 'lfo2', 'ampEnv', 'filterEnv', 
 export const MOD_DESTINATIONS: ModDestination[] = ['pitch', 'osc2Pitch', 'filter', 'amp', 'pulseWidth', 'pan', 'fmIndex'];
 
 export type FilterModel = 'svf' | 'ladder' | 'ms20';
-export type SynthEngineMode = 'subtractive' | 'fm';
+export type SynthEngineMode = 'subtractive' | 'fm' | 'sample';
 export type SynthVoiceMode = 'poly' | 'mono';
 
 export interface SynthLfo {
@@ -139,6 +139,16 @@ export interface SynthParameters {
     // how loud the copies either side of the middle one are, 0 to 1. Absent means 1: all alike,
     // as they always were. It only does anything with an odd number of copies, which has a middle.
     mix?: number;
+  };
+  // the imported sample a lane set to the sample engine plays in place of its oscillators.
+  // Absent, or with no id, means none, and the lane plays its oscillators. The audio itself is
+  // in this browser's sample store, as a drum lane's is.
+  sample?: {
+    id?: string;
+    // the MIDI note at which the sample plays at the pitch it was recorded, 0 to 127
+    root: number;
+    // go round again from the start while the note is held, instead of playing once
+    loop: boolean;
   };
   // a second layer on every note: the same sound again, tuned, filtered, faded in and placed
   // differently. Absent or not enabled means one layer, as there always was. Two layers take

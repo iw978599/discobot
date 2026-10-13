@@ -1,4 +1,4 @@
-import { DrumCore, type DrumSample, SynthCore, toVoiceParams } from '@discobot/engine';
+import { DrumCore, type DrumSample, SynthCore, type SynthSample, toVoiceParams } from '@discobot/engine';
 import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, Scene, SequencerStep, SynthParameters } from '../types';
 import { sceneDrumState } from './songPlayback';
 import { DRUM_INSTRUMENTS } from './drumKits';
@@ -23,6 +23,9 @@ export interface ExportArrangement {
   bars?: Scene[];
   // Decoded samples for the drum lanes that use one. A lane without an entry is synthesized.
   drumSamples?: Partial<Record<DrumInstrument, DrumSample>>;
+  // Decoded recordings for the synth lanes set to the sample engine, by lane id. A lane without
+  // one plays its oscillators, as it does live.
+  synthSamples?: Record<number, SynthSample>;
   // Guest instruments, recorded in real time at 44.1 kHz from the first beat. For a loop each
   // take is exactly one pass of the pattern, recorded once it had already been round once.
   // In a song `gains` is the guest's level in each bar, and is used instead of `gain`.
@@ -92,10 +95,11 @@ export function renderSynthLane(
 // The same, with different steps in each bar: a lane through a whole song.
 export function renderSynthBars(
   bars: SequencerStep[][], params: SynthParameters, tempo: number, frames: number, sampleRate: number,
-  barDuration = 240 / tempo,
+  barDuration = 240 / tempo, sample?: SynthSample | null,
 ): Stereo {
   const core = new SynthCore(sampleRate);
   core.setParams(toVoiceParams(params, tempo));
+  if (sample) core.setSample(sample);
   const random = seededRandom(2);
   bars.forEach((steps, bar) => {
     const stepDuration = barDuration / Math.max(1, steps.length);
@@ -261,7 +265,7 @@ export async function renderArrangement(arrangement: ExportArrangement, options:
     if (!lane.pattern || !lane.synthParams) continue;
     if (only !== undefined ? only !== lane.id : lane.muted || (synthSolo && !lane.solo)) continue;
     const laneBars = song ? song.map(scene => scene.lanes[lane.id] ?? []) : Array.from({ length: bars }, () => lane.pattern!.steps);
-    play(renderSynthBars(laneBars, lane.synthParams, arrangement.tempo, frames, sampleRate, barDuration),
+    play(renderSynthBars(laneBars, lane.synthParams, arrangement.tempo, frames, sampleRate, barDuration, arrangement.synthSamples?.[lane.id]),
       lane.synthParams.fxSends, lane.synthParams.fxReturn, 'synth', lane.synthParams.duck ?? 0);
   }
   if (only === undefined || only === 'drums') {

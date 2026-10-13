@@ -120,6 +120,10 @@ true before the first new model ships, and say so in the pull request.
   - A synced oscillator tuned very high aliases: the restart is not
     band-limited.
 
+- 2026-10-12: **The sample oscillator is built**, as a third engine. It
+  plays what a person imports. Group C still waits, on waveforms the
+  project may ship and the owner's choice of where they come from.
+
 - 2026-10-12: **The CS-80 is built**, and with it a second layer for the
   voice. Not verified by ear.
   - A layered sound plays every note on two voices. The second is the

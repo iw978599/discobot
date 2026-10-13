@@ -88,7 +88,12 @@ export function sanitizeSynthParams(value: unknown, defaults: SynthParameters): 
     lfo.retrigger = raw.retrigger !== false;
   }
   params.modMatrix = sanitizeModMatrix(input.modMatrix);
-  params.engine = input.engine === 'fm' ? 'fm' : 'subtractive';
+  params.engine = input.engine === 'fm' || input.engine === 'sample' ? input.engine : 'subtractive';
+  const sample = record(input.sample);
+  params.sample = {
+    ...(typeof sample.id === 'string' && /^[0-9a-f-]{36}$/.test(sample.id) ? { id: sample.id } : {}),
+    root: Math.round(number(sample.root, 60, 0, 127)), loop: sample.loop === true,
+  };
   params.voiceMode = input.voiceMode === 'mono' ? 'mono' : 'poly';
   params.oscillator.pulseWidth = number(params.oscillator.pulseWidth, .5, .05, .95);
   const osc2 = params.oscillator2!, osc2Defaults = defaults.oscillator2!;

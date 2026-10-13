@@ -59,10 +59,17 @@ export async function fromBase64(text: string, limit: number): Promise<Uint8Arra
   return bytes;
 }
 
-// The samples a project plays. A lane's sample belongs to the whole project, not to a scene,
+const synthLanes = (project: unknown): unknown[] => { const lanes = record(project).synths; return Array.isArray(lanes) ? lanes : []; };
+const laneSample = (lane: unknown) => record(record(record(lane).synthParams).sample);
+
+// The samples a project plays: its drum lanes', and its synth lanes' whether or not the lane is
+// set to the sample engine just now. A lane's sample belongs to the whole project, not to a scene,
 // so a lane that is silent in the open scene still counts.
 export function usedSampleIds(project: unknown): string[] {
-  const ids = Object.values(record(record(project).drumState)).map(track => record(track).sampleId);
+  const ids = [
+    ...Object.values(record(record(project).drumState)).map(track => record(track).sampleId),
+    ...synthLanes(project).map(lane => laneSample(lane).id),
+  ];
   return [...new Set(ids.filter((id): id is string => typeof id === 'string' && SAMPLE_ID.test(id)))];
 }
 
@@ -146,5 +153,9 @@ export async function adoptSamples(file: unknown, store: SampleStore = browserSa
     const to = renamed.get(record(track).sampleId);
     return [lane, to ? { ...track, sampleId: to } : track];
   }));
-  return { file: { ...rest, project: { ...project, drumState } }, added, dropped };
+  const synths = synthLanes(project).map((lane) => {
+    const to = renamed.get(laneSample(lane).id);
+    return to ? { ...record(lane), synthParams: { ...record(record(lane).synthParams), sample: { ...laneSample(lane), id: to } } } : lane;
+  });
+  return { file: { ...rest, project: { ...project, drumState, ...(Array.isArray(project.synths) ? { synths } : {}) } }, added, dropped };
 }

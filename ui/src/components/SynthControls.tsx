@@ -3,12 +3,13 @@
  * Organized like a classic analog synthesizer panel
  */
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { MAX_MOD_ROUTES, MOD_DESTINATIONS, MOD_SOURCES, createDefaultSynthParameters, type ModDestination, type ModRoute, type ModSource } from '@discobot/engine';
 import { SynthParameters, OscillatorType, SynthModelId } from '../types';
 import { SYNTH_MODELS, SYNTH_MODEL_GROUPS } from '../synthModels';
 import { groupPresets, type PresetKind } from '../services/presetKinds';
 import NestedMenu from '../rack/NestedMenu';
+import { listSamples, saveSample } from '../services/sampleStore';
 import Knob from './Knob';
 import './SynthControls.css';
 
@@ -29,6 +30,9 @@ interface SynthControlsProps {
   // shown on the Notes tab: step tools and the keyboard
   notes: ReactNode;
   onRemove?: () => void;
+  // Goes up when samples arrive from somewhere else (an imported project file), so the list is read again.
+  sampleStoreVersion?: number;
+  onSampleError?: (message: string) => void;
 }
 
 export type SynthTab = 'notes' | 'osc' | 'filter' | 'amp' | 'lfo' | 'arp' | 'sends';
@@ -101,6 +105,15 @@ const parsePercent = (min: number, max: number) => (input: string): number | nul
   return min + ((pct / 100) * (max - min));
 };
 
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const noteName = (midi: number) => `${NOTE_NAMES[((midi % 12) + 12) % 12]}${Math.floor(midi / 12) - 1}`;
+// A note typed by name (C4, f#3) or as its MIDI number.
+const parseNote = (input: string): number | null => {
+  const named = /^([a-g])(#?)(-?\d)$/i.exec(input.trim());
+  if (!named) return parseNumber(input);
+  return NOTE_NAMES.indexOf(named[1].toUpperCase() + named[2]) + (Number(named[3]) + 1) * 12;
+};
+
 const parseMilliseconds = (input: string): number | null => {
   const ms = parseNumber(input);
   return ms === null ? null : ms / 1000;
@@ -142,6 +155,8 @@ export default function SynthControls({
   onTabChange,
   notes,
   onRemove,
+  sampleStoreVersion,
+  onSampleError,
 }: SynthControlsProps) {
   const [presetName, setPresetName] = useState('');
   const [selectedPresetId, setSelectedPresetId] = useState('');
@@ -181,6 +196,17 @@ export default function SynthControls({
   const unison = parameters.unison ?? DEFAULTS.unison!;
   const layer = parameters.layer ?? DEFAULTS.layer!;
   const isFm = parameters.engine === 'fm';
+  const isSample = parameters.engine === 'sample';
+  const sample = parameters.sample ?? DEFAULTS.sample!;
+  const updateSample = (updates: Partial<NonNullable<SynthParameters['sample']>>) => {
+    onParameterChange({ sample: { ...sample, ...updates } });
+  };
+  // Imported samples the sample engine can play. Read when the engine is chosen, and again when one arrives.
+  const [samples, setSamples] = useState<Array<{ id: string; name: string }> | null>(null);
+  const sampleFileRef = useRef<HTMLInputElement>(null);
+  const refreshSamples = () => listSamples().then(list => setSamples(list.map(({ id, name }) => ({ id, name })))).catch(() => {});
+  useEffect(() => { if (isSample) void refreshSamples(); }, [isSample, sample.id, sampleStoreVersion]);
+  const sampleMissing = Boolean(sample.id) && samples !== null && !samples.some(entry => entry.id === sample.id);
 
   const updateOscillator2 = (updates: Partial<NonNullable<SynthParameters['oscillator2']>>) => {
     onParameterChange({ oscillator2: { ...osc2, ...updates } });
@@ -429,13 +455,15 @@ export default function SynthControls({
             <div className="synth-waveform-selector">
               <label>ENGINE</label>
               <select
-                value={isFm ? 'fm' : 'subtractive'}
+                value={isFm ? 'fm' : isSample ? 'sample' : 'subtractive'}
                 aria-label="Synth engine"
-                onChange={(e) => onParameterChange({ engine: e.target.value as 'subtractive' | 'fm' })}
+                title="Analog: oscillators. FM: four operators. Sample: an imported sample played up and down the keyboard"
+                onChange={(e) => onParameterChange({ engine: e.target.value as 'subtractive' | 'fm' | 'sample' })}
                 className="synth-select"
               >
                 <option value="subtractive">Analog</option>
                 <option value="fm">FM</option>
+                <option value="sample">Sample</option>
               </select>
             </div>
             <div className="synth-waveform-selector">
@@ -445,7 +473,7 @@ export default function SynthControls({
                 aria-label="Oscillator waveform"
                 onChange={(e) => updateOscillator({ type: e.target.value as OscillatorType })}
                 className="synth-select"
-                disabled={isFm}
+                disabled={isFm || isSample}
               >
                 <option value="sine">~</option>
                 <option value="square">⎍</option>
@@ -473,7 +501,7 @@ export default function SynthControls({
               displayValue={`${Math.round((parameters.oscillator.pulseWidth ?? 0.5) * 100)}%`}
               onChange={(v) => updateOscillator({ pulseWidth: v })}
               parseInputValue={parsePercent(0, 1)}
-              disabled={isFm || parameters.oscillator.type !== 'square'}
+              disabled={isFm || isSample || parameters.oscillator.type !== 'square'}
               color="#3b82f6"
               tooltip={TOOLTIPS.pulseWidth}
             />
@@ -545,6 +573,72 @@ export default function SynthControls({
                 color="#f97316"
                 tooltip={TOOLTIPS.fmFeedback}
               />
+            </div>
+          </div>
+        ) : isSample ? (
+          <div className="synth-column" data-tab="osc">
+            <h3>SAMPLE</h3>
+            <div className="synth-column-controls">
+              <div className="synth-waveform-selector">
+                <label>SOUND</label>
+                <select
+                  className="synth-select synth-sample-select"
+                  aria-label="Synth sample"
+                  title="The imported sample this lane plays up and down the keyboard, through its filter and envelopes"
+                  value={sample.id ?? ''}
+                  onFocus={() => { void refreshSamples(); }}
+                  onChange={(event) => {
+                    if (event.target.value === 'import') sampleFileRef.current?.click();
+                    else updateSample({ id: event.target.value });
+                  }}
+                >
+                  <option value="">None</option>
+                  {(samples ?? []).map(entry => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
+                  {sample.id && (samples === null || sampleMissing) && <option value={sample.id}>{sampleMissing ? 'Sample not on this device' : '…'}</option>}
+                  <option value="import">Import a sample…</option>
+                </select>
+              </div>
+              <input
+                ref={sampleFileRef}
+                type="file"
+                hidden
+                accept="audio/*,.wav,.mp3,.ogg,.flac,.m4a"
+                aria-label="Import synth sample"
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0];
+                  event.currentTarget.value = '';
+                  if (!file) return;
+                  void saveSample(file)
+                    .then(async (stored) => { await refreshSamples(); updateSample({ id: stored.id }); })
+                    .catch((cause) => onSampleError?.(cause instanceof Error ? cause.message : 'The sample could not be imported.'));
+                }}
+              />
+              <Knob
+                label="Root"
+                ariaLabel="Sample root note"
+                value={sample.root}
+                min={24}
+                max={96}
+                step={1}
+                displayValue={noteName(sample.root)}
+                onChange={(v) => updateSample({ root: Math.round(v) })}
+                parseInputValue={parseNote}
+                tooltip="The note at which the sample plays at the pitch it was recorded. Other notes play it faster or slower"
+              />
+              <label className="synth-sync" title="Go round again from the start while the note is held, instead of playing once">
+                <input
+                  type="checkbox"
+                  aria-label="Loop the sample"
+                  checked={sample.loop}
+                  onChange={(e) => updateSample({ loop: e.target.checked })}
+                />
+                Loop
+              </label>
+              {(!sample.id || sampleMissing) && (
+                <p className="synth-sample-note" role="status">
+                  {sampleMissing ? 'This sample is not on this device, so the lane plays its oscillator.' : 'Choose a sample. Until then the lane plays its oscillator.'}
+                </p>
+              )}
             </div>
           </div>
         ) : (

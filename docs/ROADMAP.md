@@ -151,7 +151,15 @@ target; removal of the AI review workflow.
    the server, which is waiting on a payment card for Cloudflare R2
    (`docs/STORAGE_AND_ACCOUNTS_PLAN.md`, stage 3 step 5).
 
-3. **A sample oscillator in the synth.** (M)
+3. **A sample oscillator in the synth.** (M) Done on 2026-10-12, not verified
+   by ear. A synth lane's engine can be Sample: it plays an imported sample
+   up and down the keyboard, through the lane's filter, envelopes, routes
+   and second layer. A root note says which key gives the recorded pitch,
+   and Loop sends it round while a key is held. Project files carry the
+   sample; links, published songs and sync do not, and there the lane plays
+   its oscillator. Open: loop points and a start offset; several recordings
+   across the keyboard; smoothing for a recording played far above its
+   root, which at present aliases.
 
 4. **A modulation matrix.** (M) First part done on 2026-10-12, not verified
    by ear: up to four routes a sound, on the LFO tab under Routing. Sources
