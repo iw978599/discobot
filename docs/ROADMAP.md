@@ -672,6 +672,14 @@ for new accounts.
     (semitones, octaves); and whether it rewrites the notes or is a setting
     that shifts them as they play, which could differ from scene to scene
     and be automated later. Drums are not transposed.
+    Built on 2026-10-13 as a draft waiting for the owner: four buttons in
+    a lane's Notes tab (−12, −1, +1, +12) rewrite the notes of that lane's
+    pattern in the open scene, chords together, as one undo step. A move
+    that would take any note below C0 or above B8 is not offered. Still
+    open, all three questions: one lane (as built), every lane in the
+    scene, or the whole song; semitones and octaves (as built) or
+    something else; and rewriting the notes (as built) or a setting that
+    shifts them as they play.
 
 20. **A randomizer.** (M) Asked for by the owner on 2026-10-12. To ask the
     owner before building, because it could mean several things: random
