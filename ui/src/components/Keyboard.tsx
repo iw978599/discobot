@@ -64,18 +64,25 @@ export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0, h
   const reachRef = useRef(reach);
   reachRef.current = reach;
 
-  // The keys are one stop for the Tab key: the key the keyboard was last on while its octave is
-  // on show, or else the first key that is.
+  // The keys are one stop for the Tab key: the key the keyboard is on, or was last on while its
+  // octave is on show, or else the first key that is. The key that has the focus is the stop
+  // wherever the strip is: the strip is moved to it a moment after it takes the focus, and until
+  // then a second stop among the keys would be where Tab went.
   const notes = useMemo(() => keyboardNotes(octaves), [octaves]);
   const [cursor, setCursor] = useState<string | null>(null);
+  const [keysFocused, setKeysFocused] = useState(false);
   const cursorOctave = cursor ? Math.floor(notes.indexOf(cursor) / 12) : -1;
-  const stop = cursor && cursorOctave >= reach.at && cursorOctave <= reach.at + 2 - reach.max ? cursor : notes[reach.at * 12];
+  const stop = cursor && (keysFocused || (cursorOctave >= reach.at && cursorOctave <= reach.at + 2 - reach.max)) ? cursor : notes[reach.at * 12];
   // A key that takes the focus is brought on show an octave at a time, as the two buttons
   // move the strip, so the strip never rests part of the way along.
   const reveal = (note: string) => {
     const { at, max } = reachRef.current;
     const index = Math.floor(notes.indexOf(note) / 12);
-    if (max > 0 && index >= 0) showOctave(octaveOnShow(index, at, 3 - max));
+    if (max <= 0 || index < 0) return;
+    const next = octaveOnShow(index, at, 3 - max);
+    showOctave(next);
+    // Said here as well as read back from the scroll, which is heard a frame later.
+    setReach(now => (now.at === next ? now : { ...now, at: next }));
   };
 
   useEffect(() => {
@@ -180,6 +187,7 @@ export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0, h
     style: { touchAction: 'none' },
     onFocus: () => {
       setCursor(note);
+      setKeysFocused(true);
       reveal(note);
     },
     onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -237,7 +245,7 @@ export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0, h
       handleNoteUp(note);
     },
     // A second finger takes the focus from the first one's key, which is still held.
-    onBlur: () => { if (!fingerOn(note)) handleNoteUp(note); },
+    onBlur: () => { setKeysFocused(false); if (!fingerOn(note)) handleNoteUp(note); },
     onClick: (event: React.MouseEvent<HTMLButtonElement>) => {
       if (event.detail !== 0) return;
       handleNoteDown(note);
