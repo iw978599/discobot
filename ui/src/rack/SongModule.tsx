@@ -1,16 +1,18 @@
 import { useState } from 'react';
 import type { Studio } from '../studio/useStudio';
 import type { Song } from '../types';
-import { MAX_REPEATS, MAX_SONG_ENTRIES, songLengthBars } from '../services/songPlayback';
+import { MAX_REPEATS, MAX_SONG_ENTRIES, songClock, songLengthBars } from '../services/songPlayback';
+import { storeSongView, storedSongView, type SongView } from '../services/songView';
 import ConfirmDialog from './ConfirmDialog';
+import SongPlaylist from './SongPlaylist';
 import { SCENE_COLORS, SCENE_COLOR_NAMES } from '../services/sceneColors';
-
-const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, '0')}`;
 
 // Scenes are one-bar sections of the whole arrangement; the song is the order they play in.
 // Everything below this module in the rack shows, and edits, the selected scene.
 export default function SongModule({ studio }: { studio: Studio }) {
   const { scenes, currentSceneId, song, playMode, songPosition, songStartEntry } = studio;
+  const [view, setView] = useState<SongView>(storedSongView);
+  const showAs = (next: SongView) => { setView(next); storeSongView(next); };
   const [renaming, setRenaming] = useState<string | null>(null);
   const [draftName, setDraftName] = useState('');
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -99,7 +101,7 @@ export default function SongModule({ studio }: { studio: Studio }) {
       <div className="rack-row song-row">
         <div className="rack-plate static">
           <b>Song</b>
-          <span>{bars} {bars === 1 ? 'bar' : 'bars'} · {clock(bars * 240 / studio.globalTempo)}</span>
+          <span>{bars} {bars === 1 ? 'bar' : 'bars'} · {songClock(bars * 240 / studio.globalTempo)}</span>
         </div>
         <div className="rack-ms mode-toggle" role="group" aria-label="Play mode">
           <button
@@ -119,7 +121,7 @@ export default function SongModule({ studio }: { studio: Studio }) {
             Song
           </button>
         </div>
-        <div className="song-chain" role="group" aria-label="Song order">
+        {view === 'playlist' ? <div className="rack-grow" /> : <div className="song-chain" role="group" aria-label="Song order">
           {song.entries.map((entry, index) => {
             const playing = songPosition?.entryIndex === index;
             const move = (to: number) => {
@@ -165,12 +167,31 @@ export default function SongModule({ studio }: { studio: Studio }) {
           >
             + Add {current?.name ?? 'scene'}
           </button>
+        </div>}
+        <div className="song-view" role="group" aria-label="Song layout">
+          <button
+            className={`rack-btn ${view === 'blocks' ? 'on' : ''}`}
+            aria-pressed={view === 'blocks'}
+            onClick={() => showAs('blocks')}
+            title="Show the song as a row of blocks"
+          >
+            Blocks
+          </button>
+          <button
+            className={`rack-btn ${view === 'playlist' ? 'on' : ''}`}
+            aria-pressed={view === 'playlist'}
+            onClick={() => showAs('playlist')}
+            title="Show the song as a list, a row for each part with its length and times"
+          >
+            Playlist
+          </button>
         </div>
         <label className="song-loop" title="When the song reaches the end, start it again">
           <input type="checkbox" aria-label="Loop the song" checked={song.loop} onChange={(event) => studio.handleSongChange({ loop: event.target.checked })} />
           Loop
         </label>
       </div>
+      {view === 'playlist' && <SongPlaylist studio={studio} />}
       {deleting && (() => {
         const scene = scenes.find(entry => entry.id === deleting);
         if (!scene) return null;
