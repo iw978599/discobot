@@ -13,18 +13,18 @@ controls sized for a finger.
 
 ## What is in it
 
-**Three synth lanes.** Each plays one of fifteen synth models: a plain engine
-with every control on show, and fourteen set up in the manner of a well-known
+**Three synth lanes.** Each plays one of sixteen synth models: a plain engine
+with every control on show, and fifteen set up in the manner of a well-known
 instrument, each with four knobs of its own.
 
 | Mono | Poly | Digital |
 |---|---|---|
-| Minimoog Model D, TB-303, SH-101, Pro-One, Mono/Poly, MS-20, Odyssey | Juno-106, Prophet-5, Jupiter-8, OB-Xa, Polysix | DX7, JP-8000 |
+| Minimoog Model D, TB-303, SH-101, Pro-One, Mono/Poly, MS-20, Odyssey | Juno-106, Prophet-5, Jupiter-8, OB-Xa, Polysix | DX7, JP-8000, Virus |
 
 A model is this synth's own voice set up to behave like the instrument it is
 named for. It is not that instrument's circuit and uses none of its samples.
 
-**Sixty-two presets** in six kinds: bass, lead, pad, keys, pluck and effects.
+**Sixty-five presets** in six kinds: bass, lead, pad, keys, pluck and effects.
 They are level-matched, so choosing another does not mean reaching for the
 volume. You can save, export and import your own, including presets from some
 other synths.
