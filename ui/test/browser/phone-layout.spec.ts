@@ -46,6 +46,19 @@ const bar = (page: Page) => page.getByRole('navigation', { name: 'Rack units', e
 const tab = (page: Page, name: string) => bar(page).getByRole('button', { name, exact: true });
 const ALL = 'Show all units on one page';
 
+// At phone width the top bar is one line, and the rest of it is in the sheet its last button
+// raises. `more` raises the sheet before something in it is used, and does nothing on a wide screen.
+const onPhone = (page: Page) => {
+  const size = page.viewportSize();
+  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+};
+const moreSheet = (page: Page) => page.getByRole('dialog', { name: 'More controls', exact: true });
+const moreButton = (page: Page) => page.getByRole('button', { name: 'More controls', exact: true });
+const more = async (page: Page) => {
+  if (!onPhone(page) || await moreSheet(page).isVisible()) return;
+  await moreButton(page).click();
+};
+
 // The notes the synth has been told to start and not yet to stop.
 const sounding = (page: Page) => page.evaluate(() => {
   const on = new Set<string>();
@@ -102,6 +115,7 @@ const centred = (locator: Locator) => locator.first().evaluate(element => elemen
 const within = (inner: { x: number; width: number }, outer: { x: number; width: number }, left = 0) => inner.x >= outer.x + left - 1 && inner.x + inner.width <= outer.x + outer.width + 1;
 
 const addGuest = async (page: Page, baseURL: string) => {
+  await more(page);
   await page.getByRole('button', { name: 'Project ▾', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Add Guest Instrument', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Add a guest instrument', exact: true });
@@ -159,15 +173,14 @@ test('on a phone showing the whole rack it fits the screen, with steps eight to 
     expect(area.x + area.width).toBeLessThanOrEqual(view.width);
     expect(area.y).toBeGreaterThanOrEqual(0);
     expect(area.y + area.height).toBeLessThan(view.height / 2);
-    // Scrolled, the bar is down to its last line: Play at the very top, the menus gone above it.
-    if (scrolled) {
-      expect(area.y, 'Play is the line that stays').toBeLessThan(30);
-      expect((await box(page.getByRole('button', { name: 'Project ▾', exact: true }))).y, 'the menus have scrolled away').toBeLessThan(0);
-    }
+    // The bar is its one line at the very top, scrolled or not.
+    expect(area.y, 'Play is on the line that stays').toBeLessThan(30);
+    expect((await box(page.locator('.rack-unit.transport'))).y).toBeCloseTo(0, 0);
   }
   await scroller.evaluate(element => element.scrollTo(0, 0));
 
   // A menu comes up from the bottom, wholly on screen, with rows a finger can hit.
+  await more(page);
   await page.getByRole('button', { name: 'Project ▾', exact: true }).click();
   const list = await box(page.getByRole('menu', { name: 'Project', exact: true }));
   expect(list.x).toBeGreaterThanOrEqual(0);
@@ -176,8 +189,10 @@ test('on a phone showing the whole rack it fits the screen, with steps eight to 
   expect(list.y + list.height).toBeLessThanOrEqual(view.height);
   expect((await box(page.getByRole('menuitem', { name: 'New Project', exact: true }))).height).toBeGreaterThanOrEqual(40);
   await page.keyboard.press('Escape');
+  await expect(page.getByRole('menu')).toHaveCount(0);
 
   // A dialog is the whole screen.
+  await more(page);
   await page.getByRole('button', { name: 'Help', exact: true }).click();
   const help = await box(page.getByRole('dialog', { name: 'How to use Discobot', exact: true }));
   expect(help.x).toBe(0);
@@ -202,6 +217,18 @@ test('a wide screen keeps the rack as one panel', async ({ page }, testInfo) => 
   expect((await box(page.getByRole('button', { name: 'Kick step 16', exact: true }))).y).toBeCloseTo((await box(page.getByRole('button', { name: 'Kick step 1', exact: true }))).y, 0);
   expect(await page.locator('.rack').evaluate(element => getComputedStyle(element).minWidth)).toBe('1060px');
   await expect(page.getByRole('navigation', { name: 'Rack units', exact: true }), 'no bar of units').toHaveCount(0);
+  // The top bar has all of its controls on it, by name, and no button for a sheet.
+  await expect(moreButton(page), 'no button for the rest of the bar: all of it is there').toHaveCount(0);
+  const top = page.locator('.rack-unit.transport');
+  for (const name of ['TAP', 'Click', 'Count', 'Undo', 'Redo', 'Project ▾', 'Export', 'MIDI and samples', 'Help', 'Mute']) {
+    const control = top.getByRole('button', { name, exact: true });
+    await expect(control, name).toBeVisible();
+    expect(await control.evaluate(element => element.closest('[role="dialog"]') === null), `${name} is on the bar itself`).toBe(true);
+  }
+  await expect(top.getByRole('button', { name: /^Project: / })).toBeVisible();
+  await expect(top.locator('.save-state')).toBeVisible();
+  await expect(top.getByRole('slider', { name: 'Volume', exact: true })).toBeVisible();
+  await expect(top.getByRole('button', { name: 'Undo', exact: true }), 'Undo is the word, not a drawing').toHaveText('Undo');
   await expect(page.locator('.rack > [data-unit]:visible'), 'every unit is on the page').toHaveCount(6);
   await page.getByRole('slider', { name: 'Synth 1 level', exact: true }).click();
   await expect(page.getByRole('dialog'), 'a mouse click on a knob opens nothing').toHaveCount(0);
@@ -391,10 +418,14 @@ test('on a phone the walkthrough turns to the unit each stop is about', async ({
     ['The sound editor', '.synth-controls-panel', 'Show Synth 1'],
     ['The drum grid', '.drum-grid', 'Show Drums'],
     ['Effects', '.effects-unit', 'Show Effects'],
-    ['Project and Export', '.transport .rack-menu', 'Show Effects'],
+    // What this stop is about is in the sheet, so it lights the button that raises the sheet.
+    ['Project and Export', '.transport .more-button', 'Show Effects'],
+    ['An account, if you want one', '.transport .more-button', 'Show Effects'],
+    ['Help', '.transport .more-button', 'Show Effects'],
   ] as const;
 
   await tab(page, 'Show Drums').click();
+  await more(page);
   await page.getByRole('button', { name: 'Help', exact: true }).click();
   await page.getByRole('dialog', { name: 'How to use Discobot', exact: true }).getByRole('button', { name: 'Show the Walkthrough', exact: true }).click();
   for (const [title, target, current] of stops) {
@@ -407,6 +438,10 @@ test('on a phone the walkthrough turns to the unit each stop is about', async ({
     const part = await box(page.locator(target));
     expect(part.y, title).toBeGreaterThanOrEqual(0);
     expect(part.y, title).toBeLessThan(view.height);
+    if (target === '.transport .more-button') {
+      await expect(tour, `${title}: the card says where the thing is`).toContainText(/(This|the same) button/);
+      await expect(moreSheet(page), 'the tour does not raise the sheet itself').toHaveCount(0);
+    }
     await page.keyboard.press('ArrowRight');
   }
   await page.keyboard.press('Escape');
@@ -457,8 +492,10 @@ test('a guest that arrives by itself does not pull the view to it, even after Ad
   await expect(tab(page, 'Show Guests')).toHaveAttribute('aria-current', 'true');
 
   // A second project with no guest, where Add Guest is opened and closed again.
+  await more(page);
   await page.getByRole('button', { name: 'Project ▾', exact: true }).click();
   await page.getByRole('menuitem', { name: 'New Project', exact: true }).click();
+  await more(page);
   await expect(page.getByRole('button', { name: 'Project: Untitled 2', exact: true })).toBeVisible();
   await expect(tab(page, 'Show Guests')).toHaveCount(0);
   await page.getByRole('button', { name: 'Project ▾', exact: true }).click();
@@ -467,6 +504,7 @@ test('a guest that arrives by itself does not pull the view to it, even after Ad
   await tab(page, 'Show Drums').click();
 
   // Back in the first project its guest arrives with it. The drums stay on show.
+  await more(page);
   await page.getByRole('button', { name: /^Project: / }).click();
   const first = page.getByRole('dialog', { name: 'Projects', exact: true }).getByRole('group', { name: 'Project Untitled', exact: true });
   await first.getByLabel('Version of Untitled', { exact: true }).selectOption('Untitled');
@@ -1016,4 +1054,246 @@ test('each grid of steps is one stop for the Tab key, and the arrow keys move in
   await page.keyboard.press('Enter');
   await expect(cell('C#3', 2)).toHaveAttribute('aria-pressed', 'true');
   expect(await stops(roll)).toBe(1);
+});
+
+test('on a phone the top bar is one line, and its last button raises the rest of it as a sheet', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium', 'this is the narrow layout');
+  await paged(page);
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const view = page.viewportSize()!;
+  const scroller = page.locator('.rack-page');
+  const top = page.locator('.rack-unit.transport');
+  const open = moreButton(page), sheet = moreSheet(page);
+  const undo = page.getByRole('button', { name: 'Undo', exact: true });
+
+  // One line at the very top: the tempo, Play, Undo, Redo and the button for the rest.
+  const line = await box(top);
+  expect(line.y).toBeCloseTo(0, 0);
+  expect(line.height, 'one line, where there were three').toBeLessThanOrEqual(64);
+  for (const [name, control] of [
+    ['the tempo', page.locator('.tempo-led')], ['Play', page.getByRole('button', { name: /Play All/ })], ['Undo', undo],
+    ['Redo', page.getByRole('button', { name: 'Redo', exact: true })], ['More controls', open],
+  ] as const) {
+    const area = await box(control);
+    expect(area.y, `${name} is on the line`).toBeGreaterThanOrEqual(line.y);
+    expect(area.y + area.height, `${name} is on the line`).toBeLessThanOrEqual(line.y + line.height + 1);
+    expect(area.x, name).toBeGreaterThanOrEqual(0);
+    expect(area.x + area.width, name).toBeLessThanOrEqual(view.width);
+    if (name !== 'the tempo') expect(area.height, `${name} is big enough for a thumb`).toBeGreaterThanOrEqual(40);
+  }
+  expect((await box(open)).width).toBeGreaterThanOrEqual(44);
+  expect(await top.evaluate(element => element.scrollWidth - element.clientWidth), 'nothing on the line is pushed off its end').toBeLessThanOrEqual(1);
+  // It does not scroll away.
+  await page.locator('[data-unit="synth-1"]').getByRole('button', { name: 'Piano Roll', exact: true }).click();
+  await scroller.evaluate(element => element.scrollTo(0, element.scrollHeight));
+  expect((await box(top)).y, 'the line stays when the page is scrolled').toBeCloseTo(0, 0);
+  expect((await box(top)).height).toBeCloseTo(line.height, 0);
+  await scroller.evaluate(element => element.scrollTo(0, 0));
+
+  // Nothing else of the bar is on the page until it is asked for.
+  await expect(sheet).toHaveCount(0);
+  for (const name of ['Project ▾', 'MIDI and samples', 'Help', 'Mute', 'TAP', 'Click', 'Count']) await expect(page.getByRole('button', { name, exact: true }), name).toHaveCount(0);
+  await expect(top.getByRole('button', { name: 'Export', exact: true })).toHaveCount(0);
+  await expect(open).toHaveAttribute('aria-haspopup', 'dialog');
+  await expect(open).toHaveAttribute('aria-expanded', 'false');
+
+  // The button raises a sheet from the bottom edge, wholly on screen, with all of it inside.
+  await open.click();
+  await expect(sheet).toBeVisible();
+  await expect(open).toHaveAttribute('aria-expanded', 'true');
+  const panel = await box(sheet);
+  expect(panel.x).toBeGreaterThanOrEqual(0);
+  expect(panel.x + panel.width).toBeLessThanOrEqual(view.width);
+  expect(panel.y, 'it does not reach the top of the screen').toBeGreaterThan(40);
+  expect(view.height - (panel.y + panel.height), 'it stands on the bottom edge').toBeLessThanOrEqual(24);
+  await expect(sheet.getByRole('button', { name: /^Project: / })).toBeVisible();
+  await expect(sheet.locator('.save-state'), 'the save state, spelled out').toHaveText(/\S/);
+  for (const name of ['Project ▾', 'Export', 'Sign in', 'MIDI and samples', 'Help', 'Mute', 'TAP']) {
+    const control = sheet.getByRole('button', { name, exact: true });
+    await expect(control, name).toBeVisible();
+    expect((await box(control)).height, `${name} is big enough for a thumb`).toBeGreaterThanOrEqual(40);
+  }
+  const metronome = sheet.getByRole('group', { name: 'Metronome', exact: true });
+  await expect(metronome.getByRole('button', { name: 'Count', exact: true })).toBeVisible();
+  await expect(sheet.getByRole('slider', { name: 'Volume', exact: true })).toBeVisible();
+  await expect(sheet, 'each thing that opens something says what it is for').toContainText('Save the scene or the whole song as audio or MIDI');
+  await expect(sheet, 'and it says how to mute from the bar below').toContainText('hold its switch');
+  await expect(undo, 'Undo is on the line here, so the sheet does not repeat it').toHaveCount(1);
+  expect(await undo.evaluate(element => element.closest('[role="dialog"]') === null)).toBe(true);
+
+  // A switch is worked where it is, and the sheet stays up for the next.
+  const click = metronome.getByRole('button', { name: 'Click', exact: true });
+  await click.click();
+  await expect(click).toHaveAttribute('aria-pressed', 'true');
+  await sheet.getByRole('button', { name: 'Mute', exact: true }).click();
+  await expect(sheet.getByRole('button', { name: 'Mute', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await sheet.getByRole('button', { name: 'Mute', exact: true }).click();
+  await click.click();
+  await expect(click).toHaveAttribute('aria-pressed', 'false');
+  await expect(sheet).toBeVisible();
+
+  // Tab stays inside it, Escape puts it away, and the keyboard goes back to the button.
+  for (let presses = 0; presses < 24; presses++) {
+    await page.keyboard.press('Tab');
+    expect(await page.evaluate(() => document.activeElement?.closest('[aria-label="More controls"][role="dialog"]') !== null), `Tab ${presses + 1} is still in the sheet`).toBe(true);
+  }
+  await page.keyboard.press('Escape');
+  await expect(sheet).toHaveCount(0);
+  await expect(open).toBeFocused();
+  await expect(open).toHaveAttribute('aria-expanded', 'false');
+
+  // A menu inside it is closed by Escape first, and the sheet by the next.
+  await open.click();
+  await sheet.getByRole('button', { name: 'Project ▾', exact: true }).click();
+  await expect(page.getByRole('menu', { name: 'Project', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(sheet).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(sheet).toHaveCount(0);
+
+  // Something that opens a dialog puts the sheet away, and the dialog hands the keyboard back to the button.
+  await open.click();
+  await sheet.getByRole('button', { name: 'Help', exact: true }).click();
+  await expect(sheet).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'How to use Discobot', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Close help', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(open).toBeFocused();
+  await open.click();
+  await sheet.getByRole('button', { name: 'Export', exact: true }).click();
+  await expect(sheet).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'Export', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await open.click();
+  await sheet.getByRole('button', { name: /^Project: / }).click();
+  await expect(page.getByRole('dialog', { name: 'Projects', exact: true })).toBeVisible();
+  await expect(sheet).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  // On the narrowest phones the line has no room for Undo and Redo, and they are in the sheet.
+  await page.setViewportSize({ width: 360, height: 740 });
+  await expect(undo).toHaveCount(0);
+  const narrowLine = await box(top);
+  expect(narrowLine.height, 'still one line').toBeLessThanOrEqual(64);
+  expect((await box(page.getByRole('button', { name: /Play All/ }))).x + (await box(page.getByRole('button', { name: /Play All/ }))).width).toBeLessThan((await box(open)).x);
+  expect((await box(open)).x + (await box(open)).width).toBeLessThanOrEqual(360);
+  await open.click();
+  await expect(sheet.getByRole('button', { name: 'Undo', exact: true })).toBeVisible();
+  await expect(sheet.getByRole('button', { name: 'Redo', exact: true })).toBeVisible();
+  await expect(undo).toHaveCount(1);
+  const small = await box(sheet);
+  expect(small.x).toBeGreaterThanOrEqual(0);
+  expect(small.x + small.width).toBeLessThanOrEqual(360);
+  expect(small.y).toBeGreaterThanOrEqual(0);
+  await page.keyboard.press('Escape');
+
+  // On its side a phone is very short: the sheet still fits, and scrolls inside itself.
+  await page.setViewportSize({ width: 740, height: 360 });
+  await open.click();
+  const low = await box(sheet);
+  expect(low.y, 'the sheet does not run off the top').toBeGreaterThanOrEqual(0);
+  expect(low.y + low.height).toBeLessThanOrEqual(361);
+  await sheet.getByRole('button', { name: 'Help', exact: true }).scrollIntoViewIfNeeded();
+  await sheet.getByRole('button', { name: 'Help', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'How to use Discobot', exact: true })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('on a phone a held switch on the bar mutes its unit, and the lamps show what is muted and what is playing', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium', 'this is the narrow layout');
+  await paged(page);
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const lane = page.getByRole('region', { name: 'Synth 1 module', exact: true });
+  const lamp = (name: string) => tab(page, name).locator('.unit-tab-led');
+  const struck = (name: string) => tab(page, name).locator('.unit-tab-name').evaluate(element => getComputedStyle(element).textDecorationLine);
+  const laneMute = page.getByRole('button', { name: 'Mute Synth 1', exact: true });
+
+  // Only a unit that makes sound has a lamp. Nothing is lit while nothing plays, and the unit
+  // on show is marked by its switch, not by a lamp.
+  for (const name of ['Show Synth 1', 'Show Drums']) await expect(lamp(name), name).toBeVisible();
+  for (const name of ['Show Song', 'Show Effects', ALL]) await expect(lamp(name), name).toBeHidden();
+  await expect(bar(page).locator('.unit-tab-led.lit')).toHaveCount(0);
+  await expect(bar(page).locator('[data-muted]')).toHaveCount(0);
+
+  // A note on each beat of the lane and a kick on each beat of the drums, played slowly.
+  for (const number of [1, 5, 9, 13]) {
+    await lane.getByRole('button', { name: new RegExp(`^Select step ${number}( |$)`) }).click();
+    await page.keyboard.press('a');
+  }
+  await tab(page, 'Show Drums').click();
+  for (const number of [1, 5, 9, 13]) await page.getByRole('button', { name: `Kick step ${number}`, exact: true }).click();
+  await page.locator('.tempo-led').click();
+  await page.locator('.tempo-led-input').fill('30');
+  await page.locator('.tempo-led-input').press('Enter');
+
+  // A mouse held on the lane's switch mutes the lane and does not turn to it.
+  const hold = async (name: string) => {
+    const area = await box(tab(page, name));
+    await page.mouse.move(area.x + area.width / 2, area.y + area.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(750);
+    await page.mouse.up();
+  };
+  await hold('Show Synth 1');
+  await expect(tab(page, 'Show Synth 1'), await trail(page)).toHaveAttribute('data-muted', 'true');
+  await expect(tab(page, 'Show Drums'), 'the hold did not show the lane').toHaveAttribute('aria-current', 'true');
+  expect(await struck('Show Synth 1'), 'a muted unit has its name struck through').toContain('line-through');
+  expect(await struck('Show Drums')).not.toContain('line-through');
+  await expect(tab(page, 'Show Synth 1')).toHaveAttribute('title', /^Muted/);
+  await expect(laneMute, 'it is the lane\'s own mute').toHaveAttribute('aria-pressed', 'true');
+
+  // The lamps while it plays. What a lamp shows and the step its unit is on are read together.
+  const reading = (unit: string, light: string, name: string) => page.evaluate(([unitSelector, lightSelector, label]) => {
+    const step = document.querySelector<HTMLElement>(`${unitSelector} ${lightSelector}`)?.dataset.step;
+    const led = document.querySelector(`nav[aria-label="Rack units"] button[aria-label="${label}"] .unit-tab-led`);
+    return step === undefined ? null : { beat: Number(step) % 4 === 0, lit: Boolean(led?.classList.contains('lit')) };
+  }, [unit, light, name]);
+  const laneReading = () => reading('[data-unit="synth-1"]', '.step-light.on', 'Show Synth 1');
+  const drumReading = () => reading('[data-unit="drums"]', '.drum-step-indicator.active', 'Show Drums');
+  const watch = { intervals: [120], timeout: 15_000 };
+  await page.getByRole('button', { name: /Play All/ }).click();
+  await expect.poll(drumReading, { ...watch, message: 'the drums\' lamp is lit on a step with a kick' }).toEqual({ beat: true, lit: true });
+  await expect.poll(drumReading, { ...watch, message: 'and dark on a step with none' }).toEqual({ beat: false, lit: false });
+  await expect.poll(laneReading, { ...watch, message: 'the muted lane\'s lamp stays dark on its notes' }).toEqual({ beat: true, lit: false });
+
+  // Tapped, the switch still shows the unit. Unmuted there, the bar follows, and the lamp lights on the lane's notes.
+  await tab(page, 'Show Synth 1').click();
+  await expect(tab(page, 'Show Synth 1')).toHaveAttribute('aria-current', 'true');
+  await expect(lane).toBeVisible();
+  await laneMute.click();
+  await expect(tab(page, 'Show Synth 1')).not.toHaveAttribute('data-muted', 'true');
+  expect(await struck('Show Synth 1')).not.toContain('line-through');
+  await expect.poll(laneReading, { ...watch, message: 'the lane\'s lamp is lit on a step with a note' }).toEqual({ beat: true, lit: true });
+  await expect.poll(laneReading, { ...watch, message: 'and dark on a step with none' }).toEqual({ beat: false, lit: false });
+
+  // A finger held on the drums' switch mutes every drum, from the lane, and its lamp goes dark.
+  const hand = await fingers(page);
+  await hand.touch(await at(tab(page, 'Show Drums')));
+  await page.waitForTimeout(750);
+  await hand.touch();
+  await expect(tab(page, 'Show Drums'), await trail(page)).toHaveAttribute('data-muted', 'true');
+  await expect(tab(page, 'Show Synth 1'), 'the hold did not show the drums').toHaveAttribute('aria-current', 'true');
+  await expect(page.getByRole('button', { name: 'Mute Kick', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'Mute Cymbal', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(drumReading, { ...watch, message: 'muted drums show nothing on a kick' }).toEqual({ beat: true, lit: false });
+
+  // Stopped, every lamp is dark. The keyboard mutes too: Shift+M on a switch.
+  await page.getByRole('button', { name: /Stop All/ }).click();
+  await expect(bar(page).locator('.unit-tab-led.lit')).toHaveCount(0);
+  await tab(page, 'Show Drums').focus();
+  await page.keyboard.press('Shift+M');
+  await expect(tab(page, 'Show Drums')).not.toHaveAttribute('data-muted', 'true');
+  await expect(page.getByRole('button', { name: 'Mute Kick', exact: true })).toHaveAttribute('aria-pressed', 'false');
+  await page.keyboard.press('Shift+M');
+  await expect(tab(page, 'Show Drums')).toHaveAttribute('data-muted', 'true');
+  await expect(tab(page, 'Show Synth 1'), 'and that did not turn the page either').toHaveAttribute('aria-current', 'true');
+  // A switch with nothing to mute is not muted by a hold: it is only shown.
+  await hold('Show Song');
+  await expect(bar(page).locator('[data-muted]')).toHaveCount(1);
+  expect(errors).toEqual([]);
 });
