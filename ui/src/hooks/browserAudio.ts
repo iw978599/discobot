@@ -175,28 +175,31 @@ export class AudioEngine {
   constructor(private readonly makeContext: () => AudioContext = () => new AudioContext({ latencyHint: 'interactive' })) {}
 
   private open(): Live {
-    if (!this.live || this.live.context.state === 'closed') {
-      const context = this.makeContext();
-      this.effects.clear();
-      this.workletLoading = undefined;
-      const master = context.createGain();
-      master.gain.value = this.masterLevel();
-      const limiter = context.createDynamicsCompressor();
-      configureLimiter(limiter);
-      const safety = context.createWaveShaper();
-      safety.curve = safetyCurve();
-      safety.oversample = '2x';
-      const eq = createMasterEq(context);
-      eqGains(this.loop?.eq).forEach((gain, band) => { eq[band].gain.value = gain; });
-      master.connect(eq[0]);
-      eq[2].connect(limiter).connect(safety).connect(context.destination);
-      this.live = { context, master, eq, limiter, safety };
-    }
+    if (this.live && this.live.context.state !== 'closed') return this.live;
+    const context = this.makeContext();
+    this.effects.clear();
+    this.workletLoading = undefined;
+    const master = context.createGain();
+    master.gain.value = this.masterLevel();
+    const limiter = context.createDynamicsCompressor();
+    configureLimiter(limiter);
+    const safety = context.createWaveShaper();
+    safety.curve = safetyCurve();
+    safety.oversample = '2x';
+    const eq = createMasterEq(context);
+    eqGains(this.loop?.eq).forEach((gain, band) => { eq[band].gain.value = gain; });
+    master.connect(eq[0]);
+    eq[2].connect(limiter).connect(safety).connect(context.destination);
+    this.live = { context, master, eq, limiter, safety };
     return this.live;
   }
 
   private masterLevel() {
     return this.masterMuted ? 0 : this.masterVolume * MASTER_LEVEL;
+  }
+
+  private applyMasterLevel() {
+    if (this.live) smooth(this.live.master.gain, this.masterLevel(), this.live.context);
   }
 
   getContext(): AudioContext {
@@ -213,12 +216,12 @@ export class AudioEngine {
 
   setMasterVolume(volume: number): void {
     this.masterVolume = limit(volume, 0, 1);
-    if (this.live) smooth(this.live.master.gain, this.masterLevel(), this.live.context);
+    this.applyMasterLevel();
   }
 
   setMasterMuted(muted: boolean): void {
     this.masterMuted = muted;
-    if (this.live) smooth(this.live.master.gain, this.masterLevel(), this.live.context);
+    this.applyMasterLevel();
   }
 
   stopAllSamples(): void {
@@ -490,6 +493,6 @@ export function setEffectsLoop(state: EffectsLoopState): void {
   audioEngine.setEffectsLoop(state);
 }
 
-export function createAudioLane(group: 'synth' | 'drums') {
+export function createAudioLane(group: Group) {
   return audioEngine.createLane(group);
 }

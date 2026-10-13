@@ -73,8 +73,12 @@ function make() {
   });
   return { engine, contexts };
 }
-const masterOf = (lane: { output: GainNode }) => (lane.output as unknown as Node).connections[0];
-const eqOf = (master: Node) => [master.connections[0], master.connections[0].connections[0], master.connections[0].connections[0].connections[0]];
+const fake = (node: AudioNode) => node as unknown as Node;
+const masterOf = (lane: { output: GainNode }) => fake(lane.output).connections[0];
+function eqOf(master: Node): Node[] {
+  const low = master.connections[0], mid = low.connections[0];
+  return [low, mid, mid.connections[0]];
+}
 
 test('an engine makes its context once and everything it is asked for goes through one master', async () => {
   const { engine, contexts } = make();
@@ -119,7 +123,7 @@ test('disposing stops and disconnects what the engine made and closes its contex
   assert.equal(attached.length, 6);
   assert.equal(ctx.nodes.length, made, 'disposing makes nothing');
   await new Promise(resolve => setTimeout(resolve, 150));
-  assert.equal((synth.input as unknown as Node).connections.length, 0, 'a lane the engine made went with it');
+  assert.equal(fake(synth.input).connections.length, 0, 'a lane the engine made went with it');
   synth.dispose();
   await engine.dispose();
 });
@@ -168,8 +172,8 @@ test('two engines at once keep their own buses, effects and samples', async () =
   assert.equal(sourceB.stopped, false);
   await a.engine.dispose();
   assert.equal(b.contexts[0].state, 'running');
-  assert.equal((laneB.output as unknown as Node).connections.length, 6, 'the other engine is untouched');
-  assert.equal((laneA.output as unknown as Node).connections.length, 0);
+  assert.equal(fake(laneB.output).connections.length, 6, 'the other engine is untouched');
+  assert.equal(fake(laneA.output).connections.length, 0);
   await b.engine.dispose();
 });
 
@@ -230,6 +234,6 @@ test('the functions the app calls all reach the one engine', async () => {
     assert.equal(made, 1);
     await audioEngine.dispose();
     assert.equal(ctx.state, 'closed');
-    assert.equal((lane.input as unknown as Node).connections.length, 0);
+    assert.equal(fake(lane.input).connections.length, 0);
   } finally { globalThis.AudioContext = original; }
 });
