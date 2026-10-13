@@ -1,5 +1,6 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useLayoutEffect, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import Dialog from './Dialog';
+import { helpCount, helpWords, matchHelp, type HelpSection } from '../services/helpSearch';
 
 export function TempoDisplay({ tempo, onChange }: { tempo: number; onChange: (bpm: number) => void }) {
   const [editing, setEditing] = useState(false);
@@ -101,14 +102,72 @@ export function TempoDisplay({ tempo, onChange }: { tempo: number; onChange: (bp
 
 export function HelpModal({ open, onClose, onWalkthrough }: { open: boolean; onClose: () => void; onWalkthrough: () => void }) {
   if (!open) return null;
+  return <HelpContent onClose={onClose} onWalkthrough={onWalkthrough} />;
+}
+
+function HelpContent({ onClose, onWalkthrough }: { onClose: () => void; onWalkthrough: () => void }) {
+  const [query, setQuery] = useState('');
+  const [sections, setSections] = useState<HelpSection[]>([]);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const contentsRef = useRef<HTMLElement>(null);
+
+  // The headings and the words searched are read from the sections as they are written below,
+  // so there is one copy of each.
+  useLayoutEffect(() => {
+    setSections(Array.from(bodyRef.current?.querySelectorAll('section') || []).map(section => ({
+      id: section.id,
+      title: section.querySelector('h3')?.textContent || '',
+      text: section.textContent || '',
+    })));
+  }, []);
+
+  const searching = helpWords(query).length > 0;
+  const found = matchHelp(sections, query);
+  const off = (id: string) => searching && !found.includes(id);
+  const listed = sections.filter(section => !off(section.id));
+
+  const jump = (id: string) => {
+    const section = bodyRef.current?.querySelector<HTMLElement>(`#${id}`);
+    section?.querySelector<HTMLElement>('h3')?.focus({ preventScroll: true });
+    section?.scrollIntoView({ block: 'start' });
+  };
+  // A heading is not a Tab stop, so Tab from one would leave the dialog: it goes back to the list.
+  const back = (event: ReactKeyboardEvent<HTMLHeadingElement>, id: string) => {
+    if (event.key !== 'Tab') return;
+    event.preventDefault();
+    // Kept from the dialog's own Tab handling, which would see the list's last button focused and wrap to the first.
+    event.stopPropagation();
+    contentsRef.current?.querySelector<HTMLElement>(`[data-section="${id}"]`)?.focus();
+  };
+  const clear = () => {
+    setQuery('');
+    searchRef.current?.focus();
+  };
+
   return (
     <Dialog title="How to use Discobot" closeLabel="Close help" onClose={onClose}>
       <div className="rack-dialog-actions start">
         <button className="rack-btn go" title="A short tour of the rack, one part at a time" onClick={onWalkthrough}>Show the Walkthrough</button>
       </div>
-      <div className="help-sections">
-        <section>
-          <h3>Quick start</h3>
+      <div className="account-field help-search">
+        <label htmlFor="help-search">Search Help</label>
+        <div className="help-search-row">
+          <input ref={searchRef} id="help-search" type="text" value={query} autoComplete="off" spellCheck={false} enterKeyHint="search" onChange={(event) => setQuery(event.target.value)} />
+          <button className="rack-btn" aria-label="Clear search" disabled={!query} onClick={clear}>Clear</button>
+        </div>
+        <p className="help-count" role="status">{helpCount(found.length, sections.length, query)}</p>
+      </div>
+      {listed.length > 0 && (
+        <nav ref={contentsRef} className="help-contents" aria-label="Help sections">
+          {listed.map(section => (
+            <button key={section.id} className="rack-btn" data-section={section.id} onClick={() => jump(section.id)}>{section.title}</button>
+          ))}
+        </nav>
+      )}
+      <div ref={bodyRef} className="help-sections">
+        <section id="help-start" hidden={off('help-start')}>
+          <h3 tabIndex={-1} onKeyDown={(event) => back(event, 'help-start')}>Quick start</h3>
           <ol className="help-list">
             <li>Everything runs in your browser. No account or server is needed, and it works offline after the first visit.</li>
             <li>The rack is read top to bottom: transport, three synth lanes, the drum grid, then the shared effects. Every lane's steps line up.</li>
@@ -117,8 +176,8 @@ export function HelpModal({ open, onClose, onWalkthrough }: { open: boolean; onC
             <li>Press <strong>Play All</strong> to start and <strong>Stop All</strong> to stop. The Space bar does the same, unless a button, a field or a dialog has the keyboard.</li>
           </ol>
         </section>
-        <section>
-          <h3>Top row</h3>
+        <section id="help-top" hidden={off('help-top')}>
+          <h3 tabIndex={-1} onKeyDown={(event) => back(event, 'help-top')}>Top row</h3>
           <ul className="help-list help-list-plain">
             <li><strong>BPM:</strong> click the display to type a tempo (20–400), or tap it in with <strong>Tap</strong>.</li>
             <li><strong>Projects:</strong> the small word beside the project's name says where its work is: Saved (in this browser), In account (signed in, and the account has this version), Browser only (signed in, but this project is not in the account), Saving, or Not saving when another tab has the project. Click the project's name to see every project in this browser. The open project saves itself as you work; <strong>Copy</strong> keeps a version to go back to. Arrangements saved in earlier versions are now projects.</li>
@@ -130,16 +189,16 @@ export function HelpModal({ open, onClose, onWalkthrough }: { open: boolean; onC
             <li><strong>MIDI:</strong> choose a controller, channel, target lane and live/record/step mode. Imported samples are kept there too.</li>
           </ul>
         </section>
-        <section>
-          <h3>Scenes and song</h3>
+        <section id="help-scenes" hidden={off('help-scenes')}>
+          <h3 tabIndex={-1} onKeyDown={(event) => back(event, 'help-scenes')}>Scenes and song</h3>
           <ul className="help-list help-list-plain">
             <li><strong>Scenes:</strong> a scene is one bar of everything: the notes on all three lanes and the drum grid. <strong>+ Copy</strong> adds one that starts the same as the open scene; <strong>+ Empty</strong> adds a blank one. Sounds, tempo and effects are shared by every scene.</li>
             <li><strong>Song:</strong> <strong>+ Add</strong> puts the open scene at the end of the song. Each block has − and + for how many times it repeats, arrows to move it, and ✕ to remove it.</li>
             <li><strong>Scene / Song:</strong> in Scene, Play loops the open scene. In Song, Play runs the song from the block you last clicked and the rack follows it. Tick Loop to start again at the end.</li>
           </ul>
         </section>
-        <section>
-          <h3>Synth lanes</h3>
+        <section id="help-lanes" hidden={off('help-lanes')}>
+          <h3 tabIndex={-1} onKeyDown={(event) => back(event, 'help-lanes')}>Synth lanes</h3>
           <ul className="help-list help-list-plain">
             <li><strong>Lane knobs:</strong> the four you reach for most, plus Level. Choosing a synth model swaps them for that model's own four.</li>
             <li><strong>Longer patterns:</strong> each lane's Notes tab and the drum strip have a Bars menu (1, 2, 4 or 8). A longer pattern is shown a bar at a time; pick the bar with the numbered buttons, or turn on Follow to watch the one that is playing. Lanes of different lengths loop against each other.</li>
@@ -148,16 +207,16 @@ export function HelpModal({ open, onClose, onWalkthrough }: { open: boolean; onC
             <li><strong>Presets:</strong> save, load and delete sounds without touching the pattern.</li>
           </ul>
         </section>
-        <section>
-          <h3>Drums</h3>
+        <section id="help-drums" hidden={off('help-drums')}>
+          <h3 tabIndex={-1} onKeyDown={(event) => back(event, 'help-drums')}>Drums</h3>
           <ul className="help-list help-list-plain">
             <li><strong>Step details:</strong> each hit has a velocity, a chance of playing, and a repeat count that packs 2 to 4 hits into the step. Shift+click a hit to step through velocities.</li>
             <li><strong>More / Sends:</strong> show the humanize and pan knobs, and the kit's effect sends.</li>
             <li><strong>Your own sounds:</strong> <strong>Sound</strong> puts an imported sample on the selected lane. <strong>Import Kit</strong> takes several files at once and matches each to a lane by its name, such as “Kick” or “HH Open”; check the matches before using them. Samples stay in this browser.</li>
           </ul>
         </section>
-        <section>
-          <h3>Keys</h3>
+        <section id="help-keys" hidden={off('help-keys')}>
+          <h3 tabIndex={-1} onKeyDown={(event) => back(event, 'help-keys')}>Keys</h3>
           <ul className="help-list help-list-plain">
             <li><strong>Play notes from the computer keyboard:</strong> the A S D F G H J K L row is the white keys and W E T Y U O P the black keys, on the open lane. Z and X shift the octave.</li>
             <li><strong>Move along the steps:</strong> with a step selected, the left and right arrow keys select the one before or after it.</li>

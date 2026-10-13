@@ -202,7 +202,7 @@
    it shows on a lit control and on a dark one alike. Where a ring outside would be cut off or lie
    under a neighbour (a menu's rows, a song block, piano keys, the piano roll, the bar of units) the
    same ring and gap are drawn just inside the edge instead. */
-.rack-page :is(button, select, input, textarea, a, summary, [role="slider"], [tabindex="0"]):focus-visible {
+.rack-page :is(button, select, input, textarea, a, summary, [role="slider"], [tabindex="0"], .help-sections h3):focus-visible {
   outline: 2px solid var(--focus); outline-offset: 2px; box-shadow: 0 0 0 2px var(--gap);
 }
 .rack-page :is(.rack-menu-list button, .song-block button, .piano-roll-cell, .key):focus-visible {
@@ -576,6 +576,12 @@
 .rack-list-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: var(--surface-inset); border: 1px solid var(--edge-faint); border-radius: var(--corner-panel); }
 .rack-list-row > span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .help-sections { display: flex; flex-direction: column; gap: 12px; }
+.help-sections section[hidden] { display: none; }
+.help-sections h3 { scroll-margin-top: 8px; }
+.help-search-row { display: flex; gap: 8px; }
+.help-search-row input { flex: 1; min-width: 0; }
+.help-count { min-height: 1.5em; }
+.help-contents { display: flex; flex-wrap: wrap; gap: 6px; }
 .help-list { margin: 4px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
 .help-list-plain { list-style: none; padding-left: 0; }
 
@@ -804,6 +810,7 @@
   .rack-dialog-body { flex: 1; }
   .rack-dialog-header .rack-btn { padding: 10px 14px; min-width: 44px; min-height: 44px; }
   .rack-dialog-body .rack-btn { font-size: var(--type-label); }
+  .help-contents .rack-btn, .help-search-row .rack-btn { min-height: 44px; }
   .rack-list-row { flex-wrap: wrap; }
   /* A name gets the whole first line; the buttons wrap under it instead of squeezing it to a word. */
   .rack-list-row > span:first-child, .rack-list-row > input { flex: 1 1 100%; }
