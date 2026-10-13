@@ -83,10 +83,12 @@ slow down every later change.
    key, with the arrow keys, Home and End moving inside; the on-screen
    keyboard's keys and the roll's squares have names and say whether they
    are pressed, and the buttons that move the roll and the keyboard along
-   are named. Still open: the three octaves of the on-screen keyboard are
-   still a tab stop for every key; the step numbers over the piano roll are
-   not column headers to a screen reader; and nothing, the walkthrough
-   included, has been tried with a screen reader.
+   are named. The on-screen keyboard is now one stop too, its keys reached
+   with the arrow keys, Home and End, and the piano roll is a grid whose
+   step numbers and note names are the headings of its columns and rows.
+   Still open: nothing, the walkthrough included, has been tried with a
+   screen reader; and whether left and right on the on-screen keys should
+   go on walking the selected step, as they do now, is the owner's to say.
 
 6. **Type the worklet messages.** Done: the hooks that send and the worklet
    that receives share one set of message types from the engine, so a renamed
