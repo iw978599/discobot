@@ -136,6 +136,8 @@ function HelpContent({ onClose, onWalkthrough }: { onClose: () => void; onWalkth
   const back = (event: ReactKeyboardEvent<HTMLHeadingElement>, id: string) => {
     if (event.key !== 'Tab') return;
     event.preventDefault();
+    // Kept from the dialog's own Tab handling, which would see the list's last button focused and wrap to the first.
+    event.stopPropagation();
     contentsRef.current?.querySelector<HTMLElement>(`[data-section="${id}"]`)?.focus();
   };
   const clear = () => {
