@@ -1,4 +1,4 @@
-// Where each lane's playhead is: the step it last played. The scheduler writes this many times
+// Where each lane's playhead is: the step it last played, or -1 during a count-in, when none has. The scheduler writes this many times
 // a second, so it is kept out of React state, where every change would render the whole rack.
 // Components read it through the hooks in `hooks/usePlayhead.ts`.
 

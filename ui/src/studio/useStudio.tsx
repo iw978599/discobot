@@ -838,6 +838,8 @@ export function useStudio() {
       // A count-in is for a person about to play, never for an export that is recording the guests.
       const countIn = metronomeRef.current.countIn && !exportingRef.current ? COUNT_IN_BARS : 0;
       countInBarsRef.current = countIn;
+      // Nothing is playing during the count-in, so no step is lit: the playhead is put before the first.
+      if (countIn > 0) for (const lane of ['drums' as const, ...synthsRef.current.map(synth => synth.id)]) playhead.set(lane, -1);
       // Guests count their beats from where the music starts, which is after the count-in.
       transport.onTempo = (bpm, time, beat) => {
         if (beat >= countInBeats(countIn)) guestLink.announce({ playing: true, bpm, anchorWall: wallAtContextTime(context, time), anchorBeat: beat - countInBeats(countIn) });

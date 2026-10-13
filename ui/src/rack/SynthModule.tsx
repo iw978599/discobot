@@ -59,7 +59,7 @@ function SynthModule({ studio, synthId, synth }: SynthModuleProps) {
     setViewBar(Math.floor(selectedStep / perBar));
     setFollow(false);
   }, [selectedStep, perBar]);
-  const barAtPlayhead = usePlayhead(synthId, step => Math.floor(step / perBar));
+  const barAtPlayhead = usePlayhead(synthId, step => Math.max(0, Math.floor(step / perBar)));
   const playingBar = synth?.isPlaying ? barAtPlayhead : null;
   const shownBar = Math.min(bars - 1, follow && playingBar !== null ? playingBar : viewBar);
   const firstStep = shownBar * perBar;
