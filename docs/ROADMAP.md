@@ -83,10 +83,12 @@ slow down every later change.
    key, with the arrow keys, Home and End moving inside; the on-screen
    keyboard's keys and the roll's squares have names and say whether they
    are pressed, and the buttons that move the roll and the keyboard along
-   are named. Still open: the three octaves of the on-screen keyboard are
-   still a tab stop for every key; the step numbers over the piano roll are
-   not column headers to a screen reader; and nothing, the walkthrough
-   included, has been tried with a screen reader.
+   are named. The on-screen keyboard is now one stop too, its keys reached
+   with the arrow keys, Home and End, and the piano roll is a grid whose
+   step numbers and note names are the headings of its columns and rows.
+   Still open: nothing, the walkthrough included, has been tried with a
+   screen reader; and whether left and right on the on-screen keys should
+   go on walking the selected step, as they do now, is the owner's to say.
 
 6. **Type the worklet messages.** Done: the hooks that send and the worklet
    that receives share one set of message types from the engine, so a renamed
@@ -678,6 +680,14 @@ for new accounts.
     (semitones, octaves); and whether it rewrites the notes or is a setting
     that shifts them as they play, which could differ from scene to scene
     and be automated later. Drums are not transposed.
+    Built on 2026-10-13 as a draft waiting for the owner: four buttons in
+    a lane's Notes tab (−12, −1, +1, +12) rewrite the notes of that lane's
+    pattern in the open scene, chords together, as one undo step. A move
+    that would take any note below C0 or above B8 is not offered. Still
+    open, all three questions: one lane (as built), every lane in the
+    scene, or the whole song; semitones and octaves (as built) or
+    something else; and rewriting the notes (as built) or a setting that
+    shifts them as they play.
 
 20. **A randomizer.** (M) Asked for by the owner on 2026-10-12. To ask the
     owner before building, because it could mean several things: random
@@ -754,10 +764,15 @@ for new accounts.
 
 ## Questions waiting on the owner
 
-- **MIDI pads (draft pull request).** Does the Launchkey's pad row play the
-  drums as it comes? If a pad plays the wrong drum or none, read the MIDI
-  panel's last-message line while pressing each pad and send the channel
-  and note numbers it shows.
+- **Controller knobs (draft pull request).** Three things to settle after
+  trying it with the Launchkey. Are the ties rightly kept with the browser,
+  so the controller works the same in every project, or should they be
+  saved with each project? When the knob on the controller and the knob on
+  screen are in different places, the parameter jumps to the controller's
+  as soon as it is turned: is that right, or should it wait until the
+  controller's knob passes the value? And the parameter is chosen from a
+  menu in the MIDI panel, not by pressing Learn on the knob itself on
+  screen: is the menu enough?
 
 - **Did the Firefox guest fixes work?** PRs #76 and #77 changed how a guest
   instrument's audio is timed for Firefox. Nobody has said whether a guest

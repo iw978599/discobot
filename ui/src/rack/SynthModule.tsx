@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { BAR_CHOICES, laneBars } from '../services/patternLength';
 import CopyToScene from './CopyToScene';
+import TransposeTool from './TransposeTool';
 import type { Studio } from '../studio/useStudio';
 import { SynthModelParams } from '../types';
 import { getSynthModelDefinition } from '../synthModels';
@@ -10,6 +11,7 @@ import KeyboardPanel from '../components/KeyboardPanel';
 import StepRow from './StepRow';
 import { usePlayhead } from '../hooks/usePlayhead';
 import { tracked } from '../studio/tracked';
+import UnitHelp, { UNIT_HELP } from './UnitHelp';
 
 const AMBER = '#ffb000';
 
@@ -35,6 +37,8 @@ interface SynthModuleProps {
   // `studio.synths`: that list is new whenever any lane changes, and reading it would render
   // every lane for an edit to one.
   synth: Studio['synths'][number] | undefined;
+  // Opens Help at a section. The same function on every render, or the lane would render for it.
+  onHelp?: (section: string) => void;
 }
 
 // One rack unit per synth lane: name plate, mute and solo, the pattern, and the few knobs
@@ -42,7 +46,7 @@ interface SynthModuleProps {
 // How late a step can start, as a fraction of a step.
 const TIMINGS: Array<[number, string]> = [[0, 'On the step'], [0.25, '¼ step late'], [1 / 3, '⅓ step late'], [0.5, '½ step late'], [2 / 3, '⅔ step late'], [0.75, '¾ step late']];
 
-function SynthModule({ studio, synthId, synth }: SynthModuleProps) {
+function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
   const [tab, setTab] = useState<SynthTab>('notes');
   const selected = studio.selectedSynthId === synthId;
   const sectionRef = useRef<HTMLElement>(null);
@@ -109,16 +113,19 @@ function SynthModule({ studio, synthId, synth }: SynthModuleProps) {
   return (
     <section ref={sectionRef} className={`rack-unit synth-module ${selected ? 'selected' : ''}`} aria-label={`Synth ${synthId} module`} data-unit={`synth-${synthId}`}>
       <div className="rack-row">
-        <button
-          className="rack-plate"
-          aria-label={`Synth ${synthId}`}
-          aria-pressed={selected}
-          onClick={() => studio.setSelectedSynthId(synthId)}
-          title={selected ? 'This lane is open for editing' : 'Open this lane for editing'}
-        >
-          <b>Synth {synthId}</b>
-          <span>{model.name}</span>
-        </button>
+        <div className="rack-plate-box">
+          <button
+            className="rack-plate"
+            aria-label={`Synth ${synthId}`}
+            aria-pressed={selected}
+            onClick={() => studio.setSelectedSynthId(synthId)}
+            title={selected ? 'This lane is open for editing' : 'Open this lane for editing'}
+          >
+            <b>Synth {synthId}</b>
+            <span>{model.name}</span>
+          </button>
+          {onHelp && <UnitHelp about={`Synth ${synthId}`} section={UNIT_HELP.synth} onHelp={onHelp} />}
+        </div>
         <div className="rack-ms">
           <button
             className={synth.muted ? 'on' : ''}
@@ -301,6 +308,7 @@ function SynthModule({ studio, synthId, synth }: SynthModuleProps) {
                   filled={scene => (scene.lanes[synthId] ?? []).some(step => step.active)}
                   onCopy={sceneId => studio.handleCopyPartToScene(sceneId, { synthId })}
                 />
+                <TransposeTool synthId={synthId} steps={synth.pattern.steps} onTranspose={semitones => studio.handleTransposeLane(synthId, semitones)} />
                 {/* The hint and the controls share one space, sized for whichever is taller. Selecting a
                     step then never changes the height of this row, which would move the piano roll
                     under a pointer that has just pressed a cell. */}

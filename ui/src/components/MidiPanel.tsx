@@ -1,4 +1,7 @@
+import { useState } from 'react';
 import { MidiDeviceInfo, MidiMode } from '../hooks/useMidiInput';
+import type { MidiTie } from '../services/midiTies';
+import { listTargets, targetLabel } from '../services/paramTargets';
 import './MidiPanel.css';
 
 interface MidiPanelProps {
@@ -15,6 +18,11 @@ interface MidiPanelProps {
   // The channel pads are listened to on, for the drums; 0 is none.
   drumChannel: number;
   onDrumChannelChange: (channel: number) => void;
+  // A controller's knobs tied to parameters, and the parameter waiting for a knob (Learn).
+  ties: MidiTie[];
+  learning: string | null;
+  onLearn: (target: string | null) => void;
+  onTieRemove: (target: string) => void;
   synthIds: number[];
   targetSynthId: number | null;
   onTargetSynthChange: (synthId: number) => void;
@@ -42,6 +50,10 @@ export default function MidiPanel({
   onChannelChange,
   drumChannel,
   onDrumChannelChange,
+  ties,
+  learning,
+  onLearn,
+  onTieRemove,
   synthIds,
   targetSynthId,
   onTargetSynthChange,
@@ -55,6 +67,7 @@ export default function MidiPanel({
   sendClock,
   onSendClockChange,
 }: MidiPanelProps) {
+  const [chosen, setChosen] = useState('lane:open:cutoff');
   if (!supported) return (
     <div className="midi-panel" role="status">
       MIDI input is not supported in this browser. Use Chrome or Edge over HTTPS, or import a MIDI file.
@@ -118,6 +131,40 @@ export default function MidiPanel({
             </span>
           )}
         </div>
+      )}
+
+      {supported && (
+        <>
+          <h3>Controller knobs</h3>
+          <div className="midi-panel midi-ties">
+            <select aria-label="Parameter to tie to a knob" value={chosen} onChange={(e) => setChosen(e.target.value)} disabled={learning !== null}>
+              {listTargets(synthIds).map(group => (
+                <optgroup key={group.group} label={group.group}>
+                  {group.targets.map(target => <option key={target.id} value={target.id}>{target.label}</option>)}
+                </optgroup>
+              ))}
+            </select>
+            {learning === null
+              ? <button className="rack-btn" title="Then turn the knob on the controller that should move it" onClick={() => onLearn(chosen)}>Learn</button>
+              : <button className="rack-btn on" aria-pressed="true" onClick={() => onLearn(null)}>Cancel</button>}
+            <span className="midi-learn-status" role="status">{learning !== null ? `Turn a knob on the controller for ${targetLabel(learning)}.` : ''}</span>
+          </div>
+          {ties.length > 0 && (
+            <ul className="midi-tie-list" aria-label="Knobs tied to parameters">
+              {ties.map(tie => (
+                <li key={tie.target}>
+                  <span>Knob {tie.controller} on channel {tie.channel}</span>
+                  <span className="midi-tie-arrow" aria-hidden="true">→</span>
+                  <b>{targetLabel(tie.target)}</b>
+                  <button className="rack-btn" aria-label={`Untie ${targetLabel(tie.target)}`} onClick={() => onTieRemove(tie.target)}>Untie</button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="midi-note">
+            Choose a parameter, press Learn and turn a knob on the controller: from then on that knob moves it, as the knob on screen would. "The open lane" follows whichever synth is open. The ties are kept in this browser for every project.
+          </p>
+        </>
       )}
 
       <h3>MIDI output</h3>

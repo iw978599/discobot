@@ -161,6 +161,13 @@
 .rack-plate:not(.static):hover b { text-decoration: underline; }
 .rack-plate span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .rack-plate-actions { display: flex; gap: 4px; }
+/* Help for a unit: a "?" in the top corner of its name plate, laid over room the plate already
+   has beside its name, so no plate is taller for it. A lane's plate is itself a button, so the
+   two stand side by side in a box that takes the plate's place in the row. */
+.rack-plate.helped, .rack-plate-box { position: relative; }
+.rack-plate-box { width: var(--plate); min-width: 0; flex: none; display: flex; }
+.rack-plate-box .rack-plate { width: 100%; }
+.rack-btn.unit-help { position: absolute; top: 0; right: 6px; width: 20px; height: 20px; padding: 0; font-size: var(--type-caption); line-height: 1; color: var(--text-faint); }
 
 /* buttons */
 .rack-btn {
@@ -494,6 +501,9 @@
 /* Copy to sits at the left of a lane and of the drum strip, so its list opens to the right of it. */
 .copy-to { display: inline-flex; }
 .copy-to .rack-menu-list { left: 0; right: auto; }
+.transpose-tool { display: inline-flex; gap: 3px; align-items: center; }
+.transpose-tool-name { color: var(--text-label); margin-right: 3px; }
+.transpose-tool .rack-btn { padding: 3px 8px; min-width: 0; }
 .drum-strip .rack-knobs, .drum-sends .rack-knobs { gap: 10px; flex: 1; justify-content: flex-start; }
 .drum-step-details input[type="range"] { width: 90px; }
 
@@ -664,6 +674,10 @@
   .rack-row { flex-wrap: wrap; gap: 8px; }
   .rack-grow { display: none; }
   .rack-plate, .drum-strip-name, .mode-toggle, .guest-unit .rack-plate { width: auto; }
+  /* A unit's "?" is a finger wide here, in room kept for it at the end of the plate. */
+  .rack-plate-box { width: auto; }
+  .rack-plate.helped, .rack-plate-box, .effects-unit .effects-panel-header { padding-right: 44px; }
+  .rack-btn.unit-help { right: 0; width: 36px; height: 36px; font-size: var(--type-label); }
   .app-alert { flex-wrap: wrap; }
 
   /* big enough for a finger */
@@ -681,6 +695,7 @@
   .synth-tabs { flex-wrap: wrap; }
   .synth-tabs button { padding: 9px 12px; }
   .bar-tabs .rack-btn { padding: 8px 12px; }
+  .transpose-tool .rack-btn { padding: 8px 12px; min-width: 44px; }
   .step-tools input[type="range"], .drum-step-details input[type="range"] { width: 130px; height: 28px; }
 
   /* The top bar is one line that never wraps and never scrolls away, clear of a notch: the

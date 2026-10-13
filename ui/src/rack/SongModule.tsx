@@ -6,10 +6,11 @@ import { storeSongView, storedSongView, type SongView } from '../services/songVi
 import ConfirmDialog from './ConfirmDialog';
 import SongPlaylist from './SongPlaylist';
 import { SCENE_COLORS, SCENE_COLOR_NAMES } from '../services/sceneColors';
+import UnitHelp, { UNIT_HELP } from './UnitHelp';
 
 // Scenes are one-bar sections of the whole arrangement; the song is the order they play in.
 // Everything below this module in the rack shows, and edits, the selected scene.
-export default function SongModule({ studio }: { studio: Studio }) {
+export default function SongModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: string) => void }) {
   const { scenes, currentSceneId, song, playMode, songPosition, songStartEntry } = studio;
   const [view, setView] = useState<SongView>(storedSongView);
   const showAs = (next: SongView) => { setView(next); storeSongView(next); };
@@ -31,9 +32,10 @@ export default function SongModule({ studio }: { studio: Studio }) {
   return (
     <section className="rack-unit song-module" aria-label="Song module" data-unit="song">
       <div className="rack-row">
-        <div className="rack-plate static">
+        <div className={onHelp ? 'rack-plate static helped' : 'rack-plate static'}>
           <b>Scenes</b>
           <span>Sections of the song</span>
+          {onHelp && <UnitHelp about="scenes and the song" section={UNIT_HELP.song} onHelp={onHelp} />}
         </div>
         <div className="scene-strip" role="group" aria-label="Scenes">
           {scenes.map(scene => (renaming === scene.id ? (

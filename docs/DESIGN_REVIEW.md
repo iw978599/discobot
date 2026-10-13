@@ -766,7 +766,7 @@ asking what a person would reach for and not find.
     none, but I did not search every file, so treat "there is none" as
     likely, not certain. Small.
 
-11. **Help as a page with a list of parts, not one long scroll.** **The list of headings and the search box are built; "Help for this unit" on a name plate is not.** The Help
+11. **Help as a page with a list of parts, not one long scroll.** **Built: the list of headings, the search box, and a "?" on each unit's name plate that opens Help at that unit's section. Not yet seen on a screen.** The Help
     dialog is about seven screens of solid text on a phone
     (`desktop/dialog-help.png`). Give it a list of headings at the top (or
     at the side on a desktop) and a search box, and make each rack unit's
@@ -846,6 +846,7 @@ on the owner's laptop.
 | `focus-button`, `focus-step`, `focus-knob` | The keyboard focus ring on a button or field, a step and a knob |
 | `states-step-row`, `states-step-row-2` | One row of steps with the states beside each other: a mute that is on, a step selected, a step focused and (desktop) a step under the pointer; in `-2` the selected step is the focused one |
 | `focus-step-empty`, `states-drum-grid` | The focus ring on an empty step two along from an empty selected one, and on a drum step beside a picked one |
+| `focus-unit-help` | A lane's name plate with the keyboard focus on its "?", the button that opens Help at that unit's section |
 | `states-song` | The song unit with the open scene lit and focus on the other scene |
 | `unit-song-playlist` | The song unit with the song shown as a playlist: a row for each entry, focus on a move button |
 | `focus-menu-row`, `focus-dialog-field` | The focus ring on a row of the Project menu and on a field in a dialog |
