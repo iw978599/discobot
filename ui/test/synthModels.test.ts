@@ -13,7 +13,7 @@ function onLane(base: SynthParameters, patch: Partial<SynthParameters>): SynthPa
   const result = structuredClone(base) as unknown as Record<string, unknown>;
   for (const [key, value] of Object.entries(patch)) {
     const current = result[key];
-    result[key] = value && typeof value === 'object' && current && typeof current === 'object' ? { ...(current as object), ...(value as object) } : value;
+    result[key] = value && typeof value === 'object' && !Array.isArray(value) && current && typeof current === 'object' ? { ...(current as object), ...(value as object) } : value;
   }
   return result as unknown as SynthParameters;
 }
@@ -214,6 +214,10 @@ test('a lane that moves to another model is given back what the one it leaves ha
   const chosen = onLane(sound('juno-106'), { unison: { voices: 3, detune: 0.4, mix: 1 }, filter: { ...sound('juno-106').filter, slope: 24 } });
   const turned = toVoiceParams(onLane(chosen, mapSynthModelToEngineParams('juno-106', { ...MIDDLE, macro3: 0.8 })));
   assert.deepEqual([turned.unisonVoices, turned.filterSlope], [3, 24]);
+  // Routes someone made on a lane go with the model they were made for, and stay while its macros are turned.
+  const routed = onLane(sound('juno-106'), { modMatrix: [{ source: 'velocity', destination: 'filter', depth: 0.5 }] });
+  assert.deepEqual(onLane(routed, enterSynthModel('prophet-5', MIDDLE, 'juno-106')).modMatrix, []);
+  assert.equal(onLane(routed, mapSynthModelToEngineParams('juno-106', { ...MIDDLE, macro2: 0.9 })).modMatrix!.length, 1);
   // The plain engine takes nothing away either: it is where a model's sound is taken to be changed by hand.
   assert.deepEqual(enterSynthModel('generic', MIDDLE), {});
 });

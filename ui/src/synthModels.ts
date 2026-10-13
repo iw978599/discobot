@@ -492,6 +492,8 @@ export function enterSynthModel(modelId: SynthModelId, modelParams: SynthModelPa
   return {
     ...mapped,
     unison: mapped.unison ?? { voices: 1, detune: 0.3, mix: 1 },
+    // No routes, unless the model sets its own.
+    modMatrix: mapped.modMatrix ?? [],
     // No high-pass and the clean filter, unless the model is one that sets them for itself.
     filter: { slope: ladder ? 24 : 12, highpass: 0, ...mapped.filter, model: mapped.filter?.model ?? (ladder ? 'ladder' : 'svf') } as SynthParameters['filter'],
     // The Polysix's ensemble is the lane's chorus send. It goes when the lane leaves the Polysix;

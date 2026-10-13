@@ -63,6 +63,20 @@ export interface EffectsLoopState {
 
 // 'pitch' is up to an octave either way; 'vibrato' is the same movement scaled to one semitone.
 export type LfoTarget = 'pitch' | 'filter' | 'amp' | 'pulseWidth' | 'vibrato';
+// Something that moves, and something it can move. A route sends one to the other by an amount.
+export type ModSource = 'lfo1' | 'lfo2' | 'ampEnv' | 'filterEnv' | 'velocity' | 'key' | 'random';
+export type ModDestination = 'pitch' | 'osc2Pitch' | 'filter' | 'amp' | 'pulseWidth' | 'pan' | 'fmIndex';
+export interface ModRoute {
+  source: ModSource;
+  destination: ModDestination;
+  // -1 to 1. At 1 a source swings the pitch an octave, the second oscillator three octaves,
+  // the filter four octaves, the level from nothing to full, the pan from side to side.
+  depth: number;
+}
+export const MAX_MOD_ROUTES = 4;
+export const MOD_SOURCES: ModSource[] = ['lfo1', 'lfo2', 'ampEnv', 'filterEnv', 'velocity', 'key', 'random'];
+export const MOD_DESTINATIONS: ModDestination[] = ['pitch', 'osc2Pitch', 'filter', 'amp', 'pulseWidth', 'pan', 'fmIndex'];
+
 export type FilterModel = 'svf' | 'ladder' | 'ms20';
 export type SynthEngineMode = 'subtractive' | 'fm';
 export type SynthVoiceMode = 'poly' | 'mono';
@@ -146,6 +160,9 @@ export interface SynthParameters {
   };
   lfo1: SynthLfo;
   lfo2: SynthLfo;
+  // further routes from a source to a destination, on top of where each LFO is already sent.
+  // Absent or empty means none, as there were none before routes existed. At most MAX_MOD_ROUTES.
+  modMatrix?: ModRoute[];
   filter: {
     frequency: number;
     q: number;

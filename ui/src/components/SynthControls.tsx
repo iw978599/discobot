@@ -4,7 +4,7 @@
  */
 
 import { useState, type ReactNode } from 'react';
-import { createDefaultSynthParameters } from '@discobot/engine';
+import { MAX_MOD_ROUTES, MOD_DESTINATIONS, MOD_SOURCES, createDefaultSynthParameters, type ModDestination, type ModRoute, type ModSource } from '@discobot/engine';
 import { SynthParameters, OscillatorType, SynthModelId } from '../types';
 import { SYNTH_MODELS, SYNTH_MODEL_GROUPS } from '../synthModels';
 import { groupPresets, type PresetKind } from '../services/presetKinds';
@@ -40,8 +40,15 @@ const COLUMN_TABS: Record<string, SynthTab> = {
   OSC: 'osc', FM: 'osc', 'OSC 2': 'osc', MIX: 'osc', VOICE: 'osc',
   FILTER: 'filter', 'FILTER MOD': 'filter', 'FILTER ENV': 'filter',
   'ENV A': 'amp', SHAPE: 'amp', 'ENV B': 'amp', MASTER: 'amp', STEREO: 'amp',
-  'LFO 1': 'lfo', 'LFO 1 MOD': 'lfo', 'LFO 2': 'lfo', 'LFO 2 MOD': 'lfo',
+  'LFO 1': 'lfo', 'LFO 1 MOD': 'lfo', 'LFO 2': 'lfo', 'LFO 2 MOD': 'lfo', ROUTING: 'lfo',
   'FX SEND A': 'sends', 'FX SEND B': 'sends',
+};
+
+const MOD_SOURCE_NAMES: Record<ModSource, string> = {
+  lfo1: 'LFO 1', lfo2: 'LFO 2', ampEnv: 'Level envelope', filterEnv: 'Filter envelope', velocity: 'Velocity', key: 'Key', random: 'Random',
+};
+const MOD_DESTINATION_NAMES: Record<ModDestination, string> = {
+  pitch: 'Pitch', osc2Pitch: 'Osc 2 pitch', filter: 'Filter', amp: 'Level', pulseWidth: 'Pulse width', pan: 'Pan', fmIndex: 'FM amount',
 };
 
 const TOOLTIPS = {
@@ -1116,6 +1123,62 @@ export default function SynthControls({
               color="#0891b2"
               tooltip={TOOLTIPS.lfoDepth}
             />
+          </div>
+        </div>
+
+        <div className="synth-column synth-routing" data-tab={COLUMN_TABS['ROUTING']}>
+          <h3>ROUTING</h3>
+          <div className="synth-routes">
+            {Array.from({ length: MAX_MOD_ROUTES }, (_, index) => {
+              const routes = parameters.modMatrix ?? [];
+              const route: ModRoute | undefined = routes[index];
+              // A row past the last route is the place the next one goes; the rows after it wait.
+              const usable = index <= routes.length;
+              const setRoute = (next: ModRoute | null) => onParameterChange({
+                modMatrix: next ? [...routes.slice(0, index), next, ...routes.slice(index + 1)] : routes.filter((_, at) => at !== index),
+              });
+              return (
+                <div className="synth-route" key={index} role="group" aria-label={`Route ${index + 1}`}>
+                  <select
+                    className="synth-select"
+                    aria-label={`Route ${index + 1} source`}
+                    value={route?.source ?? ''}
+                    disabled={!usable}
+                    title="What moves. Random is a new value each time LFO 1 comes round. Choose the dash to take the route away"
+                    onChange={(e) => setRoute(e.target.value ? { source: e.target.value as ModSource, destination: route?.destination ?? 'filter', depth: route?.depth ?? 0.5 } : null)}
+                  >
+                    <option value="">—</option>
+                    {MOD_SOURCES.map(source => <option key={source} value={source}>{MOD_SOURCE_NAMES[source]}</option>)}
+                  </select>
+                  <span aria-hidden="true">→</span>
+                  <select
+                    className="synth-select"
+                    aria-label={`Route ${index + 1} destination`}
+                    value={route?.destination ?? 'filter'}
+                    disabled={!route}
+                    title="What it moves"
+                    onChange={(e) => { if (route) setRoute({ ...route, destination: e.target.value as ModDestination }); }}
+                  >
+                    {MOD_DESTINATIONS.map(destination => <option key={destination} value={destination}>{MOD_DESTINATION_NAMES[destination]}</option>)}
+                  </select>
+                  <Knob
+                    size="small"
+                    label="Amount"
+                    ariaLabel={`Route ${index + 1} amount`}
+                    value={route?.depth ?? 0}
+                    min={-1}
+                    max={1}
+                    step={0.01}
+                    displayValue={`${Math.round((route?.depth ?? 0) * 100)}%`}
+                    onChange={(v) => { if (route) setRoute({ ...route, depth: v }); }}
+                    parseInputValue={(input) => { const percent = parseNumber(input); return percent === null ? null : percent / 100; }}
+                    disabled={!route}
+                    color="#0891b2"
+                    tooltip="How far, and which way: under zero it moves the other way"
+                  />
+                </div>
+              );
+            })}
           </div>
         </div>
 

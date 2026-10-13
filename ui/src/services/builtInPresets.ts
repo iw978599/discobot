@@ -23,7 +23,7 @@ function sound(patch: Patch, base: SynthParameters = createDefaultSynthParameter
   const result = structuredClone(base) as unknown as Record<string, unknown>;
   for (const [key, value] of Object.entries(patch)) {
     const current = result[key];
-    result[key] = value && typeof value === 'object' && current && typeof current === 'object'
+    result[key] = value && typeof value === 'object' && !Array.isArray(value) && current && typeof current === 'object'
       ? { ...(current as object), ...(value as object) } : value;
   }
   return result as unknown as SynthParameters;

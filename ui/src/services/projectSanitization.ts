@@ -1,4 +1,5 @@
 import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, Scene, SceneMutes, Song, SynthParameters, SynthModelParams } from '../types';
+import { MAX_MOD_ROUTES, MOD_DESTINATIONS, MOD_SOURCES, type ModRoute } from '@discobot/engine';
 import { DELAY_SYNCS } from './delayTime';
 import { CHORUS_DEFAULT, EQ_RANGE_DB, MAX_PRE_DELAY } from './effectSettings';
 import { MAX_STEP_NOTES, MAX_STEP_OFFSET } from './noteScheduling';
@@ -55,6 +56,17 @@ export function sanitizeSends(value: unknown, defaults: FxSendLevels): FxSendLev
   return Object.fromEntries(Object.entries(defaults).map(([key, fallback]) => [key, number(input[key], fallback, 0, 1)])) as unknown as FxSendLevels;
 }
 
+// Routes are kept only if both ends are ones this version knows, and no more than the voice has places for.
+export function sanitizeModMatrix(value: unknown): ModRoute[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry: unknown): ModRoute[] => {
+    const route = record(entry);
+    const source = MOD_SOURCES.find(known => known === route.source);
+    const destination = MOD_DESTINATIONS.find(known => known === route.destination);
+    return source && destination ? [{ source, destination, depth: number(route.depth, 0, -1, 1) }] : [];
+  }).slice(0, MAX_MOD_ROUTES);
+}
+
 export function sanitizeSynthParams(value: unknown, defaults: SynthParameters): SynthParameters {
   const input = record(value);
   const params = sanitizeShape(input, defaults);
@@ -75,6 +87,7 @@ export function sanitizeSynthParams(value: unknown, defaults: SynthParameters): 
     if (raw.sync !== undefined) lfo.sync = raw.sync === true;
     lfo.retrigger = raw.retrigger !== false;
   }
+  params.modMatrix = sanitizeModMatrix(input.modMatrix);
   params.engine = input.engine === 'fm' ? 'fm' : 'subtractive';
   params.voiceMode = input.voiceMode === 'mono' ? 'mono' : 'poly';
   params.oscillator.pulseWidth = number(params.oscillator.pulseWidth, .5, .05, .95);

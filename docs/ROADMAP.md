@@ -153,9 +153,14 @@ target; removal of the AI review workflow.
 
 3. **A sample oscillator in the synth.** (M)
 
-4. **A modulation matrix.** (M)
-   Sources (two LFOs, both envelopes, velocity, key, mod wheel) routed to any
-   destination with a depth, replacing the fixed LFO target dropdowns.
+4. **A modulation matrix.** (M) First part done on 2026-10-12, not verified
+   by ear: up to four routes a sound, on the LFO tab under Routing. Sources
+   are the two LFOs, both envelopes, velocity, key and a stepped random;
+   destinations are pitch, the second oscillator's pitch, the filter, the
+   level, pulse width, pan and FM amount. Open: the mod wheel as a source
+   (the app does not read a controller's wheel yet, which belongs with the
+   MIDI work, features 6); more than four routes; and the LFO tab's own
+   target menus are still there beside the routes, not replaced by them.
 
 5. **A true ladder filter.** (M) Done on 2026-10-12, not verified by ear.
    The voice has a four-pole ladder beside the state-variable filter, as a
