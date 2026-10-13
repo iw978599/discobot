@@ -58,6 +58,10 @@ verified by a test.
 11. **Swing for the synth lanes.** (S) The drums have swing; the lanes do
     not, so a swung beat has straight bass.
 
+11a. **The arpeggiator held under a key.** (S) A key held on the keyboard is
+    arpeggiated for one beat and stops, where a hardware arpeggiator runs for
+    as long as the key is down, and latches with Hold.
+
 ## The interface
 
 12. **A picture of the sound.** (M) A small oscilloscope or spectrum on a
