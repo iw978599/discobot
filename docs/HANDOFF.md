@@ -210,6 +210,8 @@ Look:
 Behaviour:
 
 3. **Feature 5:** copy a lane's pattern, or one drum row, to another scene.
+   Built on `feat/design-review-copy-to-scene` (check its pull request's
+   state).
 4. **Feature 2:** export as a small dialog (what, as what, how long, and
    the progress in the same place).
 5. **Feature 11:** Help with a list of headings and a search box. Merged

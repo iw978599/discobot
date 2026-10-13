@@ -6,6 +6,7 @@ import { usePlayhead, usePlayheadMark } from '../hooks/usePlayhead';
 import { tracked } from '../studio/tracked';
 import { gridKeyTarget } from './gridKeys';
 import { BAR_CHOICES, drumBars } from '../services/patternLength';
+import CopyToScene from './CopyToScene';
 import type { Studio } from '../studio/useStudio';
 import { CYMBAL_TYPES } from '@discobot/engine';
 import { DrumInstrument, DrumKitId, DrumState, CymbalType } from '../types';
@@ -380,6 +381,13 @@ function DrumModule({ studio }: { studio: Studio }) {
           </span>
         )}
         <div className="drum-tools">
+          <CopyToScene
+            part={`the ${LABELS[selected]} row`}
+            scenes={studio.scenes}
+            currentSceneId={studio.currentSceneId}
+            filled={scene => Boolean(scene.drums[selected]?.steps.some(Boolean))}
+            onCopy={sceneId => studio.handleCopyPartToScene(sceneId, { drum: selected })}
+          />
           <button
             className="rack-btn"
             title="Random fill for selected instrument"

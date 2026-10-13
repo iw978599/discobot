@@ -2085,6 +2085,13 @@ export function useStudio() {
     ]);
   }, [pushHistorySnapshot]);
 
+  // One part of the open scene into another scene. It is not an edit to the open scene, so it is not
+  // in the undo history; the control that calls this asks first when it would replace something.
+  const handleCopyPartToScene = useCallback((toSceneId: string, part: { synthId?: number; drum?: DrumInstrument }) => {
+    const result = localService.copyPartToScene(toSceneId, part);
+    if (!result.ok) setStorageError(result.error ?? 'That could not be copied.');
+  }, []);
+
   // The sample song is a project of its own, opened as a file is: nothing here is changed.
   const handleSampleSong = useCallback(async () => {
     const file = buildSampleSong(localService.exportProject(), createBuiltInPresets());
@@ -2208,7 +2215,7 @@ export function useStudio() {
   const isAnyPlaying = synths.some(s => s.isPlaying);
 
   return {
-    handleStarter, handleSampleSong, dismissStarters, showStarters, metronome, handleMetronomeChange,
+    handleCopyPartToScene, handleStarter, handleSampleSong, dismissStarters, showStarters, metronome, handleMetronomeChange,
     synths, selectedSynthId, setSelectedSynthId, drumState: memoizedDrumState, drumKits,
     selectedDrumKitId, drumMasterVolume, drumSwing, drumFx, effectsLoop, browserMuted, setBrowserMuted,
     browserVolume, setBrowserVolume, globalTempo, storageError, setStorageError, changedElsewhere, loadOtherTabVersion, keepThisTabVersion, helpOpen, setHelpOpen, midiMode, setMidiMode,

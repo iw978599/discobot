@@ -223,6 +223,42 @@ const cases: Case[] = [
     type: 'scene.color', title: 'a scene that does not exist cannot be coloured',
     body: { sceneId: 'nope', color: 'teal' }, status: 400, error: 'That scene is not in the project.',
   },
+  sceneChange('one drum row of the open scene is put into another scene, and the rest of that scene is left', {
+    type: 'scene.copyPart',
+    arrange: (service) => { const ids = twoScenes(service); ok(service.setDrumStep('snare', 5, true)); return ids; },
+    body: (ids: any) => ({ toSceneId: ids.first, drum: 'snare' }),
+    check: (result, _service, ids) => {
+      const [first, second] = result.events[0].data.scenes;
+      assert.equal(first.drums.snare.steps[5], true, 'the row is there');
+      assert.equal(first.drums.kick.steps[3], true, 'and the kick it had is still there');
+      assert.deepEqual(second.drums.snare.steps, first.drums.snare.steps, 'the open scene keeps its own');
+      assert.equal(result.events[0].data.currentSceneId, ids.second, 'copying does not open the other scene');
+    },
+  }),
+  sceneChange('a lane\'s notes are put into another scene with their length', {
+    type: 'scene.copyPart',
+    arrange: (service) => {
+      const ids = twoScenes(service);
+      const lane = service.snapshot().synths[0];
+      ok(service.writePattern(lane.synthId, lane.pattern.id, { steps: lane.pattern.steps.map((step: any, index: number) => (index === 2 ? { ...step, active: true, note: 'C3' } : step)) }));
+      return ids;
+    },
+    body: (ids: any) => ({ toSceneId: ids.first, synthId: 1 }),
+    check: (result) => {
+      const [first, second] = result.events[0].data.scenes;
+      assert.equal(first.lanes[1][2].note, 'C3');
+      assert.deepEqual(first.lanes[1], second.lanes[1]);
+      assert.notEqual(first.lanes[1], second.lanes[1], 'a copy, not the same steps shared');
+    },
+  }),
+  {
+    type: 'scene.copyPart', title: 'a part is not copied into the scene it is in, a scene that is not there, or without saying which part',
+    arrange: twoScenes, body: (ids: any) => ({ toSceneId: ids.second, drum: 'kick' }), status: 400, error: 'Choose another scene to copy to.',
+  },
+  { type: 'scene.copyPart', title: 'a scene that is not there', body: { toSceneId: 'nope', synthId: 1 }, status: 400, error: 'Choose another scene to copy to.' },
+  { type: 'scene.copyPart', title: 'no part named', arrange: twoScenes, body: (ids: any) => ({ toSceneId: ids.first }), status: 400, error: 'Choose a lane or a drum to copy.' },
+  { type: 'scene.copyPart', title: 'a drum that is not one', arrange: twoScenes, body: (ids: any) => ({ toSceneId: ids.first, drum: 'cowbell' }), status: 400, error: 'Choose a lane or a drum to copy.' },
+  { type: 'scene.copyPart', title: 'a lane that is not there', arrange: twoScenes, body: (ids: any) => ({ toSceneId: ids.first, synthId: 9 }), status: 404, error: 'Synth not found' },
   {
     type: 'scene.rename', title: 'a scene that does not exist is a 400 about the name, not a 404 (looks wrong)',
     body: { sceneId: 'nope', name: 'Verse' }, status: 400, error: 'A scene needs a name',
