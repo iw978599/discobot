@@ -19,6 +19,7 @@ export type {
   MuteFlags,
   SceneMutes,
   Pattern,
+  Automation,
 
   // Drum types
   DrumInstrument,

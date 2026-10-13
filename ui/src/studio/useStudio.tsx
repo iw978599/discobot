@@ -34,6 +34,7 @@ import { DEFAULT_DRUM_CHANNEL, defaultPads, drumForNote, storePads, storedPads, 
 import { destinationFor, destinationLane, storeMidiDestinations, storedMidiDestinations, withDestination, type MidiDestination, type MidiDestinations } from '../services/midiDevices';
 import { DEFAULT_QUANTIZE, asQuantize, recordPosition } from '../services/recordTiming';
 import { LANE_PARAMS, fromUnit, lanePatch, parseTarget } from '../services/paramTargets';
+import { canAutomate, copyAutomationBar, resizeAutomationBars, resizeAutomationEachBar, sentAutomation, splitAutomated, stepVoiceParams, stepsThrough, withAutomationValues, withoutAutomation } from '../services/automation';
 import { storeMidiTies, storedMidiTies, tieFor, withTie, withoutTie, type MidiTie } from '../services/midiTies';
 import { COUNT_IN_BARS, clickAt, countInBeats, countInSeconds, storeMetronome, storedMetronome, type MetronomeSettings } from '../services/metronome';
 import { startsUndoStep } from './undoSteps';
@@ -393,6 +394,20 @@ export function useStudio() {
   const quantizeRef = useRef(quantize);
   quantizeRef.current = quantize;
   const setQuantize = useCallback((value: number) => setQuantizeValue(asQuantize(value)), []);
+  // Auto: while the song plays, a knob turned on a lane is written into its pattern as automation
+  // and the lane's own sound is left as it is. For the session, like Rec.
+  const [autoRecording, setAutoRecordingValue] = useState(false);
+  const autoRecordingRef = useRef(autoRecording);
+  autoRecordingRef.current = autoRecording;
+  // The pass being recorded on each lane, from the first knob turned to Stop or Auto being switched
+  // off: for each parameter turned, the value its knob is at (`held`, which the scheduler plays in
+  // place of what the pattern holds), and the step and the transport tick it was last written at.
+  const autoPassRef = useRef(new Map<number, { patternId: string; held: Record<string, number>; step: Record<string, number>; tick: Record<string, number> }>());
+  const endAutoPassesRef = useRef<(write: boolean) => void>(() => {});
+  const setAutoRecording = useCallback((on: boolean) => {
+    if (!on) endAutoPassesRef.current(true);
+    setAutoRecordingValue(on);
+  }, []);
   const [midiChannel, setMidiChannel] = useState(1);
   // The channel pads are listened to on, for the drums. A keyboard on one channel and pads on
   // another play a lane and the drums at once. 0 is none.
@@ -627,13 +642,14 @@ export function useStudio() {
     const resigned = snapshot.signature !== undefined && snapshot.signature !== timeSignature(signatureOfRef.current(currentSceneIdRef.current));
     localService.applyAll([
       ...(resigned ? [{ type: 'scene.signature' as const, signature: snapshot.signature! }] : []),
-      ...(snapshot.lanes ?? []).map(lane => ({ type: 'pattern.write' as const, synthId: lane.synthId, patternId: lane.pattern.id, patch: lane.pattern })),
+      // A pattern with no automation says so: the store keeps what it has when none is sent.
+      ...(snapshot.lanes ?? []).map(lane => ({ type: 'pattern.write' as const, synthId: lane.synthId, patternId: lane.pattern.id, patch: { ...lane.pattern, automation: sentAutomation(lane.pattern.automation) } })),
       { type: 'drum.masterVolume', volume: snapshot.drumMasterVolume },
       { type: 'drum.swing', swing: snapshot.drumSwing },
       { type: 'drum.kit', kitId: snapshot.drumKitId, applyDefaults: false },
       { type: 'drum.fx', patch: snapshot.drumFx },
       { type: 'effects.set', patch: snapshot.effectsLoop },
-      { type: 'pattern.write', synthId, patternId: snapshot.pattern.id, patch: snapshot.pattern },
+      { type: 'pattern.write', synthId, patternId: snapshot.pattern.id, patch: { ...snapshot.pattern, automation: sentAutomation(snapshot.pattern.automation) } },
       { type: 'synth.params', synthId, patch: snapshot.synthParams || DEFAULT_PARAMS },
       { type: 'synth.model', synthId, modelId: snapshot.synthModelId, modelParams: snapshot.synthModelParams },
       { type: 'drum.state', state: snapshot.drumState },
@@ -784,6 +800,7 @@ export function useStudio() {
       ...(signature ? { signature } : {}),
       lanes: Object.fromEntries(lanes.map(synth => [synth.id, synth.pattern!.steps])),
       laneBars: Object.fromEntries(lanes.map(synth => [synth.id, laneBars(synth.pattern!.steps.length, synth.pattern!.bars, signature)])),
+      ...(lanes.some(synth => synth.pattern!.automation) ? { laneAutomation: Object.fromEntries(lanes.filter(synth => synth.pattern!.automation).map(synth => [synth.id, synth.pattern!.automation!])) } : {}),
       drums: drumStateRef.current,
     };
   };
@@ -872,6 +889,13 @@ export function useStudio() {
       if (step % divisor !== 0) continue;
       const index = (passBar % bars) * perBar + Math.floor(step / divisor) % perBar;
       const note = steps[index];
+      // The step's automation, sent to sound when the step does. The lane's own sound is not
+      // changed: this goes to the voice and nowhere else. A scene played from its stored copy
+      // brings its own. A knob being recorded plays where it is, whatever the pattern holds.
+      synthAudio.automate(synth.id, synth.synthParams, globalTempoRef.current, stepVoiceParams(
+        synth.synthParams, scene ? scene.laneAutomation?.[synth.id] : synth.pattern.automation, index, globalTempoRef.current,
+        scene ? undefined : autoPassRef.current.get(synth.id)?.held,
+      ), time);
       if (heard.has(synth.id) && note?.active && note.note) {
         triggerStep(synth.synthParams, note, duration * divisor, synth.id, time);
       }
@@ -938,6 +962,9 @@ export function useStudio() {
       midiClockGap = null;
       playhead.reset();
       synthAudio.stopAllNotes();
+      // Every lane is back at its own sound: automation only plays.
+      synthAudio.endAutomation();
+      autoPassRef.current.clear();
       drumAudio.stopAllNotes();
     }
   }, [transportPlaying]);
@@ -949,6 +976,7 @@ export function useStudio() {
         break;
       }
       case 'init': {
+        autoPassRef.current.clear();
         setGuests(message.data.guests ?? []);
         if (message.data.restored) initializedSynthLanesRef.current = true;
         if (message.data.synths) {
@@ -1012,6 +1040,8 @@ export function useStudio() {
         // Each guest takes on the settings the scene holds for it.
         if (message.data.guests) setGuests(message.data.guests);
         const switched = nextSceneId !== currentSceneIdRef.current;
+        // A pass being recorded belongs to the scene it was started in.
+        if (switched) autoPassRef.current.clear();
         // A scene brings its lanes' mutes and solos with it.
         const withScene = (s: SynthState): SynthState => {
           const lane = lanePatterns.find((entry: { synthId: number }) => entry.synthId === s.id);
@@ -1279,6 +1309,8 @@ export function useStudio() {
       return;
     }
 
+    // A knob held where it was put is written up to here before the transport stops counting.
+    endAutoPassesRef.current(true);
     const playingSynthIds = currentSynths.filter(s => s.isPlaying).map((s) => s.id);
     localService.applyAll(currentSynths.filter(s => s.isPlaying).map(s => ({ type: 'transport.stop' as const, synthId: s.id })));
     // The sequencerStop event has already turned each lane's release signal over once, and this
@@ -1425,6 +1457,8 @@ export function useStudio() {
     const updatedPattern = {
       ...synth.pattern,
       steps: synth.pattern.steps.map((step) => withStepNotes(step, [])),
+      // Clearing a pattern clears its automation with its notes.
+      automation: sentAutomation(undefined),
     };
     setSynths(prev => prev.map(s => (
       s.id === synthId ? { ...s, selectedStep: null } : s
@@ -1484,7 +1518,7 @@ export function useStudio() {
   // Where a note played now on this lane is recorded: the step the player is hearing, moved
   // towards the nearest step by the quantize strength. Null when the transport is not running, or
   // is still counting in.
-  const recordedStep = useCallback((synthId: number): { step: number; offset: number } | null => {
+  const recordedStep = useCallback((synthId: number, strength = quantizeRef.current): { step: number; offset: number } | null => {
     const transport = transportRef.current;
     const pattern = synthsRef.current.find(s => s.id === synthId)?.pattern;
     if (!transport?.running || !pattern || pattern.steps.length === 0 || playhead.get(synthId) < 0) return null;
@@ -1495,7 +1529,7 @@ export function useStudio() {
       // What is heard now left the clock a moment ago.
       heardTicks: transport.ticksAt(context.currentTime - (context.outputLatency || 0)),
       scheduledTicks: transport.scheduledTicks, playheadStep: playhead.get(synthId),
-      ticksPerStep: barTicks(signature) / perBar, steps: pattern.steps.length, strength: quantizeRef.current,
+      ticksPerStep: barTicks(signature) / perBar, steps: pattern.steps.length, strength,
     });
   }, []);
 
@@ -1681,11 +1715,87 @@ export function useStudio() {
 
   const midiState = useMidiInput({ onMessage: handleMidiMessage });
 
-  const handleParameterChange = useCallback(async (synthId: number, params: Partial<SynthParameters>) => {
+  // One parameter of a lane's pass written from the step it was last written at up to `step`:
+  // the steps passed since then keep the value the knob was left at, and `step` takes `value`.
+  const writePass = (lane: SynthState, pass: NonNullable<ReturnType<typeof autoPassRef.current.get>>, automation: Pattern['automation'], key: string, step: number, value: number) => {
+    const pattern = lane.pattern!, length = pattern.steps.length, last = pass.step[key], now = transportRef.current?.scheduledTicks ?? 0;
+    const signature = signatureOfRef.current(currentSceneIdRef.current);
+    const patternTicks = length * barTicks(signature) / stepsPerBar(length, pattern.bars, signature);
+    const passed = last === undefined ? [] : stepsThrough(last, step, length, now - pass.tick[key] >= patternTicks).filter(entry => entry !== step);
+    const filled = passed.length > 0 ? withAutomationValues(automation, key, passed, pass.held[key], length) : automation;
+    Object.assign(pass, { held: { ...pass.held, [key]: value }, step: { ...pass.step, [key]: step }, tick: { ...pass.tick, [key]: now } });
+    return withAutomationValues(filled, key, [step], value, length);
+  };
+
+  // Ends every pass being recorded. With `write`, each knob that was turned is first written at
+  // where it was left, up to the step being heard.
+  endAutoPassesRef.current = (write) => {
+    for (const [synthId, pass] of autoPassRef.current) {
+      const lane = synthsRef.current.find(entry => entry.id === synthId), at = write ? recordedStep(synthId, 0) : null;
+      if (!lane?.pattern || lane.pattern.id !== pass.patternId || !at) continue;
+      const automation = Object.keys(pass.held).reduce((next, key) => writePass(lane, pass, next, key, at.step, pass.held[key]), lane.pattern.automation);
+      localService.writePattern(synthId, lane.pattern.id, { automation: sentAutomation(automation) });
+    }
+    autoPassRef.current.clear();
+  };
+
+  // With Auto on and the lane playing, the automatable parameters a knob moves are written into
+  // the pattern at the step being heard, and the lane's own sound keeps the value it had. What is
+  // left of the change (anything that cannot be automated) is answered, to be made as it always
+  // was; null when nothing is left. The whole pass is one undo step: the entry is made before its
+  // first write. Nothing is recorded while the transport counts in.
+  const recordAutomation = useCallback((synth: SynthState | undefined, patch: Partial<SynthParameters>): Partial<SynthParameters> | null => {
+    if (!autoRecordingRef.current || !synth?.isPlaying || !synth.pattern || !synth.synthParams) return patch;
+    const at = recordedStep(synth.id, 0);
+    if (!at) return patch;
+    const pattern = synth.pattern;
+    const { moved, rest } = splitAutomated(patch, synth.synthParams, key => canAutomate(pattern.automation, key));
+    if (Object.keys(moved).length === 0) return rest as Partial<SynthParameters> | null;
+    let pass = autoPassRef.current.get(synth.id);
+    if (!pass || pass.patternId !== pattern.id) {
+      pushHistorySnapshot(synth.id, pattern.id);
+      pass = { patternId: pattern.id, held: {}, step: {}, tick: {} };
+      autoPassRef.current.set(synth.id, pass);
+    }
+    const recording = pass;
+    const automation = Object.entries(moved).reduce((next, [key, value]) => writePass(synth, recording, next, key, at.step, value), pattern.automation);
+    localService.writePattern(synth.id, pattern.id, { automation: sentAutomation(automation) });
+    // Heard at once, not when the pattern next comes round to this step.
+    synthAudio.automate(synth.id, synth.synthParams, globalTempoRef.current, stepVoiceParams(synth.synthParams, automation, at.step, globalTempoRef.current, recording.held));
+    return rest as Partial<SynthParameters> | null;
+  }, [recordedStep, pushHistorySnapshot, synthAudio]);
+
+  // A change to a lane's own sound.
+  const changeSound = useCallback(async (synthId: number, params: Partial<SynthParameters>) => {
     const synth = synthsRef.current.find((entry) => entry.id === synthId);
     if (synth?.pattern) pushHistorySnapshotThrottled(synthId, synth.pattern.id, `synth-params-${synthId}`);
     localService.setSynthParams(synthId, params);
   }, [pushHistorySnapshotThrottled]);
+
+  // What a knob calls, on screen or on a controller: recorded as automation where Auto says so,
+  // and otherwise a change to the sound. A preset is always the sound, and calls `changeSound`.
+  const handleParameterChange = useCallback(async (synthId: number, params: Partial<SynthParameters>) => {
+    const kept = recordAutomation(synthsRef.current.find((entry) => entry.id === synthId), params);
+    if (kept) await changeSound(synthId, kept);
+  }, [changeSound, recordAutomation]);
+
+  // One parameter's automation drawn on some steps of a lane's pattern, or rubbed out of them
+  // with null. Steps drawn one after another without a pause are one undo step, as a knob's turn is.
+  const handleAutomationDraw = useCallback((synthId: number, key: string, steps: number[], value: number | null) => {
+    const synth = synthsRef.current.find(entry => entry.id === synthId);
+    if (!synth?.pattern) return;
+    const automation = withAutomationValues(synth.pattern.automation, key, steps, value, synth.pattern.steps.length);
+    if (automation === synth.pattern.automation) return;
+    pushHistorySnapshotThrottled(synthId, synth.pattern.id, `automation-${key}`);
+    localService.writePattern(synthId, synth.pattern.id, { automation: sentAutomation(automation) });
+  }, [pushHistorySnapshotThrottled]);
+
+  const handleAutomationClear = useCallback((synthId: number, key: string) => {
+    const synth = synthsRef.current.find(entry => entry.id === synthId);
+    if (!synth?.pattern?.automation?.[key]) return;
+    pushHistorySnapshot(synthId, synth.pattern.id);
+    localService.writePattern(synthId, synth.pattern.id, { automation: sentAutomation(withoutAutomation(synth.pattern.automation, key)) });
+  }, [pushHistorySnapshot]);
 
   const handleSynthModelChange = useCallback(async (
     synthId: number,
@@ -1727,7 +1837,7 @@ export function useStudio() {
       const inBar = i % stepCount, source = inBar < perBar ? synth.pattern!.steps[Math.floor(i / stepCount) * perBar + inBar] : undefined;
       return source ? { ...source } : { active: false, velocity: 0.7 as const };
     }));
-    const nextPattern = { ...synth.pattern, steps: nextSteps };
+    const nextPattern = { ...synth.pattern, steps: nextSteps, automation: sentAutomation(resizeAutomationEachBar(synth.pattern.automation, perBar, stepCount)) };
     stepCount = nextSteps.length;
 
     playhead.set(synthId, playhead.get(synthId) % stepCount);
@@ -1814,7 +1924,7 @@ export function useStudio() {
     const perBar = synth.pattern.steps.length / current;
     const steps = clampLengths(resizeBars(synth.pattern.steps, perBar, bars, () => ({ active: false, velocity: 0.7 })));
     const { bars: _bars, ...rest } = synth.pattern;
-    const nextPattern: Pattern = { ...rest, steps, ...(bars > 1 ? { bars } : {}) };
+    const nextPattern: Pattern = { ...rest, steps, ...(bars > 1 ? { bars } : {}), automation: sentAutomation(resizeAutomationBars(rest.automation, perBar, bars)) };
     playhead.set(synthId, playhead.get(synthId) % steps.length);
     setSynths(prev => prev.map(s => (s.id === synthId
       ? { ...s, selectedStep: s.selectedStep !== null && s.selectedStep >= steps.length ? null : s.selectedStep }
@@ -1847,7 +1957,8 @@ export function useStudio() {
     const targets = barTargets(laneBars(steps.length, synth.pattern.bars, signature), from, to);
     if (!targets) return;
     pushHistorySnapshot(synthId, synth.pattern.id);
-    localService.writePattern(synthId, synth.pattern.id, { ...synth.pattern, steps: clampLengths(copyBar(steps, stepsPerBar(steps.length, synth.pattern.bars, signature), from, targets)) });
+    const perBar = stepsPerBar(steps.length, synth.pattern.bars, signature);
+    localService.writePattern(synthId, synth.pattern.id, { ...synth.pattern, steps: clampLengths(copyBar(steps, perBar, from, targets)), automation: sentAutomation(copyAutomationBar(synth.pattern.automation, perBar, from, targets)) });
   }, [pushHistorySnapshot]);
 
   const handleSynthMixChange = useCallback(async (synthId: number, mix: { muted?: boolean; solo?: boolean }) => {
@@ -1873,8 +1984,8 @@ export function useStudio() {
     const preset = synthPresets.find((entry) => entry.id === presetId);
     if (!preset) return;
     await handleSynthModelChange(synthId, preset.modelId, preset.modelParams);
-    await handleParameterChange(synthId, cloneSynthParams(preset.params) || DEFAULT_PARAMS);
-  }, [synthPresets, handleParameterChange, handleSynthModelChange]);
+    await changeSound(synthId, cloneSynthParams(preset.params) || DEFAULT_PARAMS);
+  }, [synthPresets, changeSound, handleSynthModelChange]);
 
   // Reads a preset made in Discobot or in another synth, keeps it with the user's presets and
   // puts it on the lane. Other synths' presets are translated; the report says what was lost.
@@ -1896,9 +2007,9 @@ export function useStudio() {
     const stored: SynthPreset = { id: `user-${Date.now()}`, name, params: preset.params, modelId: normalizeSynthModelId(undefined), modelParams: cloneSynthModelParams(undefined) };
     setSynthPresets(prev => [...prev, stored]);
     await handleSynthModelChange(synthId, stored.modelId, stored.modelParams);
-    await handleParameterChange(synthId, cloneSynthParams(stored.params) || DEFAULT_PARAMS);
+    await changeSound(synthId, cloneSynthParams(stored.params) || DEFAULT_PARAMS);
     setPresetImportReport({ name, source: preset.source, notes: preset.notes });
-  }, [handleParameterChange, handleSynthModelChange]);
+  }, [changeSound, handleSynthModelChange]);
 
   // The lane's sound as a file another Discobot can import.
   const handleExportSynthPreset = useCallback((synthId: number, name: string) => {
@@ -2249,7 +2360,8 @@ export function useStudio() {
       const fine = track.pattern.steps.length / (track.pattern.bars ?? 1) > barSteps() ? 2 : 1;
       const laid = plain ? { items: track.pattern.steps, bars: track.pattern.bars ?? 1 } : relayBars(track.pattern.steps, bar * fine, blankStep);
       // The store keeps the bar count it has when none is sent, so one bar is sent as 1.
-      const pattern: Pattern = { ...rest, steps: plain ? laid.items : clampLengths(laid.items), tempo, bars: laid.bars };
+      // The lane's automation belonged to the notes that are being replaced, and goes with them.
+      const pattern: Pattern = { ...rest, steps: plain ? laid.items : clampLengths(laid.items), tempo, bars: laid.bars, automation: sentAutomation(undefined) };
       setSynths(prev => prev.map(s =>
         s.id === synthId ? { ...s, selectedStep: null } : s
       ));
@@ -2340,7 +2452,7 @@ export function useStudio() {
     localService.applyAll([
       { type: 'tempo.set', tempo: starter.tempo },
       { type: 'drum.state', state: starterDrums(starter, drumsForUndoRef.current, signatureOfRef.current(currentSceneIdRef.current)) },
-      { type: 'pattern.write', synthId: synth.id, patternId: synth.pattern.id, patch: { steps: starterPattern(starter, synth.pattern, signatureOfRef.current(currentSceneIdRef.current)).steps } },
+      { type: 'pattern.write', synthId: synth.id, patternId: synth.pattern.id, patch: { steps: starterPattern(starter, synth.pattern, signatureOfRef.current(currentSceneIdRef.current)).steps, automation: sentAutomation(undefined) } },
     ]);
   }, [pushHistorySnapshot]);
 
@@ -2438,6 +2550,7 @@ export function useStudio() {
         const cleared = {
           ...synth.pattern,
           steps: synth.pattern.steps.map(s => ({ ...s, active: false, note: undefined })),
+          automation: sentAutomation(undefined),
         };
         localService.writePattern(synth.id, synth.pattern.id, cleared);
       }
@@ -2504,7 +2617,7 @@ export function useStudio() {
     synths, selectedSynthId, setSelectedSynthId, drumState: memoizedDrumState, drumKits,
     selectedDrumKitId, drumMasterVolume, drumSwing, drumFx, effectsLoop, browserMuted, setBrowserMuted,
     browserVolume, setBrowserVolume, globalTempo, storageError, setStorageError, changedElsewhere, loadOtherTabVersion, keepThisTabVersion, helpOpen, setHelpOpen, midiMode, setMidiMode,
-    recording, setRecording, quantize, setQuantize, midiChannel, setMidiChannel, midiDrumChannel, setMidiDrumChannel, midiOutNotes, setMidiOutNotes, midiOutClock, setMidiOutClock, midiTargetSynthId, setMidiTargetSynthId, projectId, projectName, projects, synthPresets, drumAudio,
+    recording, setRecording, autoRecording, setAutoRecording, handleAutomationDraw, handleAutomationClear, quantize, setQuantize, midiChannel, setMidiChannel, midiDrumChannel, setMidiDrumChannel, midiOutNotes, setMidiOutNotes, midiOutClock, setMidiOutClock, midiTargetSynthId, setMidiTargetSynthId, projectId, projectName, projects, synthPresets, drumAudio,
     handleUndo, handleRedo, midiImportData, setMidiImportData, midiImportAssignments, setMidiImportAssignments,
     handleMidiImportClick, handleMidiImportFile, handleMidiImportApplyAll, midiImportFileRef, handleRemoveSynth,
     ensureSynthExists, handleOctaveShift, handleTempoChange, handleGlobalPlayStop, handleStepChange, handleStepSelect, handleKeyboardModeChange,

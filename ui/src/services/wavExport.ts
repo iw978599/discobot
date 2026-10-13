@@ -1,9 +1,10 @@
 import { type CymbalType, DrumCore, type DrumSample, SynthCore, type SynthSample, toVoiceParams } from '@discobot/engine';
-import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, Scene, SequencerStep, SynthParameters, TimeSignature } from '../types';
+import type { Automation, DrumState, EffectsLoopState, FxSendLevels, Pattern, Scene, SequencerStep, SynthParameters, TimeSignature } from '../types';
 import { type BarTime, barSteps, barTimes, wholeNotes } from './patternLength';
 import { sceneDrumState } from './songPlayback';
 import { DRUM_INSTRUMENTS } from './drumKits';
 import { expandStepNotes } from './noteScheduling';
+import { automationChange, stepVoiceParams } from './automation';
 import { delaySeconds } from './delayTime';
 import { rateHz } from './rateSync';
 import { expandDrumStep, seededRandom } from './drumScheduling';
@@ -96,26 +97,32 @@ export function renderSynthLane(
   pattern: Pattern, params: SynthParameters, tempo: number, frames: number, sampleRate: number,
   bars = 1, barDuration = 240 / tempo,
 ): Stereo {
-  return renderSynthBars(Array.from({ length: bars }, () => pattern.steps), params, tempo, frames, sampleRate, barDuration);
+  return renderSynthBars(Array.from({ length: bars }, () => pattern.steps), params, tempo, frames, sampleRate, barDuration, undefined, undefined, Array.from({ length: bars }, () => pattern.automation));
 }
 
 const evenBars = (count: number, barDuration: number): BarTime[] => Array.from({ length: count }, (_, bar) => ({ start: bar * barDuration, duration: barDuration }));
 
 // The same, with different steps in each bar: a lane through a whole song. `times` says when
 // each bar starts and how long it is, for bars that are not all one length; without it every
-// bar lasts `barDuration`.
+// bar lasts `barDuration`. `automation` is each bar's automation, cut to the bar as its steps
+// are: at the start of every step the voice is sent what the live scheduler sends it then.
 export function renderSynthBars(
   bars: SequencerStep[][], params: SynthParameters, tempo: number, frames: number, sampleRate: number,
   barDuration = 240 / tempo, sample?: SynthSample | null, times: BarTime[] = evenBars(bars.length, barDuration),
+  automation: Array<Automation | undefined> = [],
 ): Stereo {
-  const core = new SynthCore(sampleRate);
-  core.setParams(toVoiceParams(params, tempo));
+  const core = new SynthCore(sampleRate), sound = toVoiceParams(params, tempo);
+  core.setParams(sound);
   if (sample) core.setSample(sample);
   const random = seededRandom(2);
+  let automated: ReturnType<typeof stepVoiceParams> = null;
   bars.forEach((steps, bar) => {
     const { start, duration } = times[bar];
     const stepDuration = duration / Math.max(1, steps.length);
     steps.forEach((step, index) => {
+      const now = stepVoiceParams(params, automation[bar], index, tempo), moved = automationChange(automated, now, sound);
+      if (moved) core.setParams(moved, start + index * stepDuration);
+      automated = now;
       for (const scheduled of expandStepNotes(step, params, stepDuration, tempo, random)) {
         core.noteOn({
           note: scheduled.note, velocity: step.velocity, duration: scheduled.duration,
@@ -301,7 +308,8 @@ export async function renderArrangement(arrangement: ExportArrangement, options:
     if (!lane.pattern || !lane.synthParams) continue;
     if (only !== undefined ? only !== lane.id : lane.muted || (synthSolo && !lane.solo)) continue;
     const laneBars = song ? song.map(scene => scene.lanes[lane.id] ?? []) : Array.from({ length: bars }, () => lane.pattern!.steps);
-    play(renderSynthBars(laneBars, lane.synthParams, arrangement.tempo, frames, sampleRate, barDuration, arrangement.synthSamples?.[lane.id], times),
+    const laneAutomation = song ? song.map(scene => scene.laneAutomation?.[lane.id]) : Array.from({ length: bars }, () => lane.pattern!.automation);
+    play(renderSynthBars(laneBars, lane.synthParams, arrangement.tempo, frames, sampleRate, barDuration, arrangement.synthSamples?.[lane.id], times, laneAutomation),
       lane.synthParams.fxSends, lane.synthParams.fxReturn, 'synth', lane.synthParams.duck ?? 0);
   }
   if (only === undefined || only === 'drums') {

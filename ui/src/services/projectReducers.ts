@@ -6,6 +6,7 @@ import { MAX_GUESTS, guestUrl, patchGuest, sanitizeGuests } from './guests';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
 import { BAR_CHOICES, TIME_SIGNATURES, barSteps, barTargets, clampLengths, copyBar, drumBars, laneBars, layAlong, resizeBars, resizeEachBar, stepsPerBar, storedSignature } from './patternLength';
 import { emptySteps } from './songPlayback';
+import { layAutomationAlong, resizeAutomationEachBar } from './automation';
 import { nextSceneColor, sceneColor } from './sceneColors';
 import { normalizeSynthModelId } from '../synthModels';
 import type { DrumState, Pattern, Scene, TimeSignature } from '../types';
@@ -104,6 +105,9 @@ export const captureScene = (state: ProjectState, id: string, name: string, colo
   lanes: Object.fromEntries(state.synths.map(synth => [synth.synthId, clone(synth.pattern.steps)])),
   ...(state.synths.some(synth => (synth.pattern.bars ?? 1) > 1)
     ? { laneBars: Object.fromEntries(state.synths.filter(synth => (synth.pattern.bars ?? 1) > 1).map(synth => [synth.synthId, synth.pattern.bars!])) } : {}),
+  // Automation is the pattern's, like its steps and its length, and goes into the scene with them.
+  ...(state.synths.some(synth => synth.pattern.automation)
+    ? { laneAutomation: Object.fromEntries(state.synths.filter(synth => synth.pattern.automation).map(synth => [synth.synthId, clone(synth.pattern.automation!)])) } : {}),
   ...(state.guests?.some(guest => guest.state !== undefined)
     ? { guests: Object.fromEntries(state.guests.filter(guest => guest.state !== undefined).map(guest => [guest.id, clone(guest.state)])) } : {}),
   ...(state.guests?.length ? { guestMix: Object.fromEntries(state.guests.map(guest => [guest.id, { volume: guest.volume, muted: guest.muted }])) } : {}),
@@ -144,6 +148,8 @@ const applyScene = (state: ProjectState, scene: Scene) => {
     synth.pattern.steps = clone(scene.lanes[synth.synthId] ?? emptySteps(barSteps(scene.signature)));
     const bars = laneBars(synth.pattern.steps.length, scene.laneBars?.[synth.synthId], scene.signature);
     if (bars > 1) synth.pattern.bars = bars; else delete synth.pattern.bars;
+    const automation = scene.laneAutomation?.[synth.synthId];
+    if (automation) synth.pattern.automation = clone(automation); else delete synth.pattern.automation;
     // Mutes and solos are the scene's. A scene from before they were kept holds none, and
     // the lanes carry on as they are.
     const flags = scene.mutes?.lanes?.[synth.synthId];
@@ -415,6 +421,7 @@ export const reducers: Reducers = {
     const scene = captureScene(state, op.sceneId, name, nextSceneColor(state.scenes), openSignature(state));
     if (op.empty === true) {
       for (const id of Object.keys(scene.lanes)) scene.lanes[Number(id)] = emptySteps(scene.lanes[Number(id)].length);
+      delete scene.laneAutomation;
       // An empty scene keeps the lengths of the one it was made from.
       for (const instrument of DRUM_INSTRUMENTS) scene.drums[instrument] = { steps: Array(scene.drums[instrument].steps.length).fill(false) };
     }
@@ -458,6 +465,10 @@ export const reducers: Reducers = {
       const bars = from.laneBars?.[op.synthId];
       if (bars && bars > 1) to.laneBars = { ...to.laneBars, [op.synthId]: bars };
       else if (to.laneBars) delete to.laneBars[op.synthId];
+      // The lane's automation goes with its notes, laid along the same length, in place of what was there.
+      const automation = layAutomationAlong(from.laneAutomation?.[op.synthId], to.lanes[op.synthId].length);
+      if (automation) to.laneAutomation = { ...to.laneAutomation, [op.synthId]: structuredClone(automation) };
+      else if (to.laneAutomation) { delete to.laneAutomation[op.synthId]; if (Object.keys(to.laneAutomation).length === 0) delete to.laneAutomation; }
     } else if (typeof op.drum === 'string' && from.drums[op.drum] && to.drums[op.drum]) {
       const row = from.drums[op.drum], length = to.drums[op.drum].steps.length;
       const along = <T,>(values: T[] | undefined) => (values?.length ? Array.from({ length }, (_, step) => values[step % values.length]) : undefined);
@@ -511,6 +522,8 @@ export const reducers: Reducers = {
     for (const synth of state.synths) {
       const perBar = stepsPerBar(synth.pattern.steps.length, synth.pattern.bars, scene.signature);
       synth.pattern.steps = clampLengths(resizeEachBar(synth.pattern.steps, perBar, perBar > from ? to * 2 : to, () => ({ active: false, velocity: .7 })));
+      const automation = resizeAutomationEachBar(synth.pattern.automation, perBar, perBar > from ? to * 2 : to);
+      if (automation) synth.pattern.automation = automation; else delete synth.pattern.automation;
     }
     for (const instrument of DRUM_INSTRUMENTS) {
       const lane = state.drumState[instrument];
