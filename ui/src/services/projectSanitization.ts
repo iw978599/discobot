@@ -4,7 +4,7 @@ import { DELAY_SYNCS } from './delayTime';
 import { storedRateSync } from './rateSync';
 import { CHORUS_DEFAULT, EQ_RANGE_DB, MAX_PRE_DELAY } from './effectSettings';
 import { MAX_STEP_NOTES, MAX_STEP_OFFSET } from './noteScheduling';
-import { BAR_CHOICES, DRUM_STEPS_PER_BAR, MAX_BARS, clampLengths, laneBars } from './patternLength';
+import { BAR_CHOICES, MAX_BARS, barSteps, clampLengths, laneBars, storedSignature } from './patternLength';
 import { sanitizeGuestMix, sanitizeSceneGuests } from './guests';
 import { MAX_REPEATS, MAX_SONG_ENTRIES } from './songPlayback';
 import { sceneColor } from './sceneColors';
@@ -153,18 +153,19 @@ export function sanitizeSynthParams(value: unknown, defaults: SynthParameters): 
   return params;
 }
 
-// `bars` is how many bars the steps cover; without it they are one bar of 16 or 32 steps.
-export function sanitizeSteps(value: unknown, bars: unknown = 1): Pattern['steps'] {
+// `bars` is how many bars the steps cover; without it they are one bar, of the length the
+// scene's time signature gives (16 steps in 4/4) or twice that.
+export function sanitizeSteps(value: unknown, bars: unknown = 1, signature?: unknown): Pattern['steps'] {
   const input = Array.isArray(value) ? value : [];
-  const count = laneBars(input.length, bars);
-  const perBar = count > 1 ? input.length / count : (input.length > 16 ? 32 : 16);
+  const count = laneBars(input.length, bars, signature), bar = barSteps(signature);
+  const perBar = count > 1 ? input.length / count : (input.length > bar ? bar * 2 : bar);
   return clampLengths(Array.from({ length: perBar * count }, (_, index) => {
     const step = record(input[index]);
     const note = typeof step.note === 'string' && noteNameToMidi(step.note) !== null ? step.note : undefined;
     const extras = note && Array.isArray(step.notes)
       ? [...new Set((step.notes as unknown[]).filter((entry): entry is string => typeof entry === 'string' && noteNameToMidi(entry) !== null && entry !== note))].slice(0, MAX_STEP_NOTES - 1)
       : [];
-    const whole = note && Number.isInteger(step.length) ? Math.max(1, Math.min(32 * MAX_BARS, step.length)) : 1;
+    const whole = note && Number.isInteger(step.length) ? Math.max(1, Math.min(bar * 2 * MAX_BARS, step.length)) : 1;
     // A length for each note, lowest first, each within the step's. The step's length is the longest of them.
     const own = note && Array.isArray(step.lengths)
       ? [note, ...extras].map((_, at) => (Number.isInteger(step.lengths[at]) ? Math.max(1, Math.min(whole, step.lengths[at])) : whole))
@@ -182,21 +183,21 @@ export function sanitizeSteps(value: unknown, bars: unknown = 1): Pattern['steps
   }));
 }
 
-export function sanitizePattern(value: unknown, tempo: number): Pattern | null {
+export function sanitizePattern(value: unknown, tempo: number, signature?: unknown): Pattern | null {
   const input = record(value);
   if (typeof input.id !== 'string' || !input.id || !Array.isArray(input.steps)) return null;
   return {
     id: input.id.slice(0, 200), name: typeof input.name === 'string' ? input.name.slice(0, 200) : 'Recovered pattern',
-    tempo, steps: sanitizeSteps(input.steps, input.bars),
-    ...(laneBars(input.steps.length, input.bars) > 1 ? { bars: laneBars(input.steps.length, input.bars) } : {}),
+    tempo, steps: sanitizeSteps(input.steps, input.bars, signature),
+    ...(laneBars(input.steps.length, input.bars, signature) > 1 ? { bars: laneBars(input.steps.length, input.bars, signature) } : {}),
   };
 }
 
-export function sanitizeDrums(value: unknown, defaults: DrumState): DrumState {
+export function sanitizeDrums(value: unknown, defaults: DrumState, signature?: unknown): DrumState {
   const input = record(value);
   // Every drum lane is as long as the kick's.
-  const kickSteps = record(input.kick).steps;
-  const total = DRUM_STEPS_PER_BAR * (BAR_CHOICES.find(choice => Array.isArray(kickSteps) && kickSteps.length === choice * DRUM_STEPS_PER_BAR) ?? 1);
+  const kickSteps = record(input.kick).steps, perBar = barSteps(signature);
+  const total = perBar * (BAR_CHOICES.find(choice => Array.isArray(kickSteps) && kickSteps.length === choice * perBar) ?? 1);
   return Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => {
     const track = record(input[instrument]), settings = record(track.settings), base = defaults[instrument];
     const state = {
@@ -246,20 +247,22 @@ export function sanitizeScenes(value: unknown, defaults: DrumState): Scene[] | n
     const input = record(entry);
     if (typeof input.id !== 'string' || !input.id || seen.has(input.id)) return [];
     seen.add(input.id);
+    const signature = storedSignature(input.signature);
     const lanes: Scene['lanes'] = {};
     const lengths: Record<number, number> = {};
     for (const id of [1, 2, 3]) {
       const steps = record(input.lanes)[id];
       if (!Array.isArray(steps)) continue;
-      const bars = laneBars(steps.length, record(input.laneBars)[id]);
-      lanes[id] = sanitizeSteps(steps, bars);
+      const bars = laneBars(steps.length, record(input.laneBars)[id], signature);
+      lanes[id] = sanitizeSteps(steps, bars, signature);
       if (bars > 1) lengths[id] = bars;
     }
-    const drums = sanitizeDrums(input.drums, defaults);
+    const drums = sanitizeDrums(input.drums, defaults, signature);
     return [{
       id: input.id.slice(0, 200),
       name: (typeof input.name === 'string' && input.name.trim() ? input.name.trim() : 'Scene').slice(0, 40),
       ...(sceneColor(input.color) ? { color: sceneColor(input.color) } : {}),
+      ...(signature ? { signature } : {}),
       lanes,
       ...(Object.keys(lengths).length ? { laneBars: lengths } : {}),
       ...(sanitizeSceneGuests(input.guests) ? { guests: sanitizeSceneGuests(input.guests) } : {}),

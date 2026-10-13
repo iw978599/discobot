@@ -292,6 +292,19 @@ test('design shots: the rack, its units and the states of its controls', async (
     await near(walk, page.locator('.tempo-led-input'), 'state-tempo-edit', 110);
     await page.keyboard.press('Escape');
   });
+  // The rack with the open scene in another time signature: a bar of twelve steps in beats of
+  // six, and one of fourteen counted two, two, three. Then back to 4/4 for what follows.
+  for (const [signature, name] of [['6/8', 'time-6-8'], ['7/8', 'time-7-8']] as const) {
+    await attempt(walk, name, async () => {
+      const time = page.locator('.song-module').getByLabel('Time signature of the open scene', { exact: true });
+      await time.selectOption(signature);
+      await expect(time).toHaveValue(signature);
+      await whole(walk, name);
+    });
+  }
+  await attempt(walk, 'time-4-4', async () => {
+    await page.locator('.song-module').getByLabel('Time signature of the open scene', { exact: true }).selectOption('4/4');
+  });
   await attempt(walk, 'rack-playing', async () => {
     await page.locator('.play-all-button').click();
     await expect(page.locator('.step-light.on').first()).toBeVisible();

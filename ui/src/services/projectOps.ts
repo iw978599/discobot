@@ -48,6 +48,8 @@ export type Operation =
   | { type: 'scene.create'; sceneId: string; name?: string; empty?: boolean }
   | { type: 'scene.rename'; sceneId: string; name: string }
   | { type: 'scene.color'; sceneId: string; color?: string }
+  // The open scene's time signature: one of the six, with every lane and the drum grid resized to it.
+  | { type: 'scene.signature'; signature: string }
   // One part of the open scene, a lane's notes or one drum's row, put into another scene.
   | { type: 'scene.copyPart'; toSceneId: string; synthId?: number; drum?: DrumInstrument }
   | { type: 'scene.replace'; scenes?: unknown; currentSceneId?: string; song?: unknown }
@@ -98,6 +100,7 @@ type OpResults = Total<{
   'scene.create': SceneAnswer;
   'scene.rename': SceneAnswer;
   'scene.color': SceneAnswer;
+  'scene.signature': SceneAnswer;
   'scene.copyPart': SceneAnswer;
   'scene.replace': SceneAnswer;
   'song.set': SceneAnswer;
@@ -150,6 +153,7 @@ export const OP_META: Record<OpType, { save: boolean; undoable: boolean; share: 
   'scene.create': { save: true, undoable: false, share: true },
   'scene.rename': { save: true, undoable: false, share: true },
   'scene.color': { save: true, undoable: false, share: true },
+  'scene.signature': { save: true, undoable: true, share: true },
   'scene.copyPart': { save: true, undoable: false, share: true },
   'scene.replace': { save: true, undoable: false, share: true },
   'song.set': { save: true, undoable: false, share: true },

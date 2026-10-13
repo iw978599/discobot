@@ -1,5 +1,5 @@
 import type { DrumInstrument, DrumState, MuteFlags, Scene, SequencerStep, Song } from '../types';
-import { sceneAsBars } from './patternLength';
+import { barQuarters, barSteps, barTicks, sceneAsBars } from './patternLength';
 
 export interface SongPosition {
   sceneId: string;
@@ -42,6 +42,46 @@ export function sceneAtBar(song: Song, bar: number, lengthOf: SceneLength = oneB
   return null;
 }
 
+// A scene's time signature, by its id. The song helpers that count time, not bars, ask for one.
+// Without one every scene is in 4/4.
+export type SceneSignature = (sceneId: string) => unknown;
+const fourFour: SceneSignature = () => undefined;
+
+export interface SongTick extends SongPosition {
+  // how many of the transport's ticks into that bar
+  tick: number;
+}
+
+// How many of the transport's ticks a song lasts. A scene's bars are as long as its time
+// signature makes them, so this is not the bar count times anything.
+export function songLengthTicks(song: Song, lengthOf: SceneLength = oneBar, signatureOf: SceneSignature = fourFour): number {
+  return song.entries.reduce((total, entry) => total + entry.repeats * passBars(lengthOf, entry.sceneId) * barTicks(signatureOf(entry.sceneId)), 0);
+}
+
+// The first tick of an entry, so playback can start from any block in the chain.
+export function entryStartTick(song: Song, entryIndex: number, lengthOf: SceneLength = oneBar, signatureOf: SceneSignature = fourFour): number {
+  return songLengthTicks({ ...song, entries: song.entries.slice(0, Math.max(0, entryIndex)) }, lengthOf, signatureOf);
+}
+
+// Which scene plays on a given tick of the song, which bar of it, and where in that bar. This is
+// what playback uses: scenes of different time signatures follow each other, so the transport's
+// ticks cannot be turned into a bar number without walking the song. Null means the song has ended.
+export function sceneAtTick(song: Song, tick: number, lengthOf: SceneLength = oneBar, signatureOf: SceneSignature = fourFour): SongTick | null {
+  const length = songLengthTicks(song, lengthOf, signatureOf);
+  if (length === 0 || tick < 0) return null;
+  if (tick >= length && !song.loop) return null;
+  let remaining = tick % length;
+  for (let entryIndex = 0; entryIndex < song.entries.length; entryIndex++) {
+    const entry = song.entries[entryIndex], perBar = barTicks(signatureOf(entry.sceneId)), pass = passBars(lengthOf, entry.sceneId) * perBar;
+    if (remaining < entry.repeats * pass) {
+      const inPass = remaining % pass;
+      return { sceneId: entry.sceneId, entryIndex, repeat: Math.floor(remaining / pass), bar: Math.floor(inPass / perBar), tick: inPass % perBar };
+    }
+    remaining -= entry.repeats * pass;
+  }
+  return null;
+}
+
 // Minutes and seconds, to the nearest second.
 export function songClock(seconds: number): string {
   const whole = Math.max(0, Math.round(seconds) || 0);
@@ -60,16 +100,23 @@ export interface SongRow {
 }
 
 // The song an entry at a time, in playing order, with where each starts and how long it lasts.
-// A bar is four beats, as it is everywhere else in the app.
-export function songRows(song: Song, lengthOf: SceneLength = oneBar, tempo = 120): SongRow[] {
-  const barSeconds = 240 / (tempo > 0 ? tempo : 120);
-  let startBar = 0;
+// A bar lasts as long as its scene's time signature makes it: four beats in 4/4.
+export function songRows(song: Song, lengthOf: SceneLength = oneBar, tempo = 120, signatureOf: SceneSignature = fourFour): SongRow[] {
+  const beatSeconds = 60 / (tempo > 0 ? tempo : 120);
+  let startBar = 0, startBeats = 0;
   return song.entries.map(entry => {
-    const pass = passBars(lengthOf, entry.sceneId), bars = pass * entry.repeats;
-    const row = { sceneId: entry.sceneId, repeats: entry.repeats, passBars: pass, bars, startBar, startSeconds: startBar * barSeconds, seconds: bars * barSeconds };
+    const pass = passBars(lengthOf, entry.sceneId), bars = pass * entry.repeats, beats = bars * barQuarters(signatureOf(entry.sceneId));
+    const row = { sceneId: entry.sceneId, repeats: entry.repeats, passBars: pass, bars, startBar, startSeconds: startBeats * beatSeconds, seconds: beats * beatSeconds };
     startBar += bars;
+    startBeats += beats;
     return row;
   });
+}
+
+// How long a song lasts, in seconds: its quarter notes at the tempo.
+export function songSeconds(song: Song, lengthOf: SceneLength = oneBar, tempo = 120, signatureOf: SceneSignature = fourFour): number {
+  const beats = song.entries.reduce((total, entry) => total + entry.repeats * passBars(lengthOf, entry.sceneId) * barQuarters(signatureOf(entry.sceneId)), 0);
+  return beats * 60 / (tempo > 0 ? tempo : 120);
 }
 
 // Edits to the order of a song. Each also says where the marked starting entry is afterwards,
@@ -155,7 +202,7 @@ export function sceneDrumState(scene: Scene, kit: DrumState): DrumState {
       settings: kit[instrument].settings,
       muted: scene.mutes?.drums?.[instrument]?.muted ?? kit[instrument].muted, solo: scene.mutes?.drums?.[instrument]?.solo ?? kit[instrument].solo,
       ...(kit[instrument].sampleId ? { sampleId: kit[instrument].sampleId } : {}),
-      steps: pattern?.steps ?? Array(16).fill(false),
+      steps: pattern?.steps ?? Array(barSteps(scene.signature)).fill(false),
       ...(pattern?.stepVelocities ? { stepVelocities: pattern.stepVelocities } : {}),
       ...(pattern?.stepProbabilities ? { stepProbabilities: pattern.stepProbabilities } : {}),
       ...(pattern?.stepRatchets ? { stepRatchets: pattern.stepRatchets } : {}),

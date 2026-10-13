@@ -909,6 +909,7 @@ on the owner's laptop.
 | `synth-tab-osc`, `-filter`, `-lfo`, `-sends` | Four pages of the sound editor, under Sound |
 | `unit-drums-more-sends` | The drums with More and Sends open |
 | `hover-button`, `hover-step` | A button and a step under the pointer |
+| `time-6-8`, `time-7-8` | The whole rack with the open scene in 6/8 (twelve steps, beats of six) and in 7/8 (fourteen, counted two, two, three); at phone width the rows break where a beat ends |
 
 **Phone only:**
 

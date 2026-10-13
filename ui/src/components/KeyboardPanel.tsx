@@ -22,6 +22,7 @@ interface KeyboardPanelProps {
   onNoteLength: (stepIndex: number, length: number, note?: string) => void;
   firstStep?: number;
   visibleSteps?: number;
+  signature?: unknown;
   onClearPattern: () => void;
   onNotePlay: (note: string) => void;
   onNoteRelease: (note: string) => void;
@@ -49,6 +50,7 @@ export default function KeyboardPanel({
   onNoteLength,
   firstStep,
   visibleSteps,
+  signature,
   onClearPattern,
   onNotePlay,
   onNoteRelease,
@@ -133,6 +135,7 @@ export default function KeyboardPanel({
           onNoteLength={onNoteLength}
           firstStep={firstStep}
           visibleSteps={visibleSteps}
+          signature={signature}
           onClear={onClearPattern}
         />
       )}

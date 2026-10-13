@@ -1,6 +1,6 @@
 import type { Pattern, SequencerStep } from '../types';
 import { transposeNote } from '../utils/midiExport';
-import { laneBars } from './patternLength';
+import { barSteps, beatPosition, laneBars } from './patternLength';
 
 export const RANDOM_KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
 export type RandomKey = typeof RANDOM_KEYS[number];
@@ -46,9 +46,11 @@ export function randomPool(choice: RandomChoice, octave: number): string[] {
     .filter((note): note is string => note !== null);
 }
 
-// How likely each sixteenth of a beat is to hold a note: the beat, then the three after it. They
-// average a half, so about half the steps of a bar are filled.
-const CHANCE = [0.85, 0.3, 0.55, 0.3];
+// How likely each sixteenth of a beat is to hold a note: the beat, then the ones after it, the
+// eighths more than the sixteenths between them. `into` is how many sixteenths into its beat a
+// step is. A beat of four averages a half, so about half the steps of a bar are filled; a beat of
+// six (6/8, 12/8) is the same pattern carried on.
+const chance = (into: number) => (into === 0 ? 0.85 : into % 2 ? 0.3 : 0.55);
 // How far the line moves from one note to the next, in notes of the scale, by how often.
 const MOVES: Array<[number, number]> = [[0.1, 0], [0.6, 1], [0.9, 2], [1, 3]];
 
@@ -56,17 +58,19 @@ const MOVES: Array<[number, number]> = [[0.1, 0], [0.6, 1], [0.9, 2], [1, 3]];
 // only from the scale, one to a step, starting on the key's root on the first step; neighbours are
 // mostly a second or a third apart, and now and then a note is held over the empty steps after it.
 // `octave` is the lowest octave the lane's piano roll shows. `random` answers 0 to 1 (not 1): pass
-// a seeded one to get the same line again.
-export function randomLine(pattern: Pattern, choice: RandomChoice, octave: number, random: () => number): Pattern {
-  const count = pattern.steps.length;
-  const perBar = count / laneBars(count, pattern.bars) || 16;
+// a seeded one to get the same line again. The rhythm follows the beats of the scene's time
+// signature, which is 4/4 when none is given.
+export function randomLine(pattern: Pattern, choice: RandomChoice, octave: number, random: () => number, signature?: unknown): Pattern {
+  const count = pattern.steps.length, bar = barSteps(signature);
+  const perBar = count / laneBars(count, pattern.bars, signature) || bar;
   // A lane with finer steps gets the same rhythm, on every second step, not one twice as busy.
-  const stride = perBar > 16 ? 2 : 1;
+  const stride = perBar > bar ? 2 : 1;
+  // How many sixteenths into its beat a step is.
+  const into = (index: number) => beatPosition(signature, (index / stride) % bar);
   const pool = randomPool(choice, octave);
   const filled = Array.from({ length: count }, (_, index) => {
     if (index % stride !== 0) return false;
-    const chance = CHANCE[(index / stride) % 4];
-    return index === 0 || random() < chance;
+    return index === 0 || random() < chance(into(index));
   });
   let at = 0;
   const steps: SequencerStep[] = filled.map((on, index) => {
@@ -78,7 +82,7 @@ export function randomLine(pattern: Pattern, choice: RandomChoice, octave: numbe
       const up = random() < (at === 0 ? 1 : at >= pool.length - 1 ? 0 : 0.5 - 0.3 * (at / (pool.length - 1) - 0.4));
       at = Math.max(0, Math.min(pool.length - 1, at + (up ? size : -size)));
     }
-    const onBeat = (index / stride) % 4 === 0;
+    const onBeat = into(index) === 0;
     const velocity = Math.round((0.66 + (onBeat ? 0.1 : 0) + random() * 0.14) * 100) / 100;
     const next = filled.indexOf(true, index + 1);
     const room = Math.floor(((next === -1 ? count : next) - index) / stride);

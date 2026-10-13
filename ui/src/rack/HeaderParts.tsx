@@ -215,6 +215,7 @@ function HelpContent({ at, onClose, onWalkthrough }: { at: string | null; onClos
           <h3 tabIndex={-1} onKeyDown={(event) => back(event, 'help-scenes')}>Scenes and song</h3>
           <ul className="help-list help-list-plain">
             <li><strong>Scenes:</strong> a scene is one bar of everything: the notes on all three lanes and the drum grid. <strong>+ Copy</strong> adds one that starts the same as the open scene; <strong>+ Empty</strong> adds a blank one. Sounds, tempo and effects are shared by every scene.</li>
+            <li><strong>Time:</strong> the open scene's time signature: 4/4, 3/4, 6/8, 5/4, 7/8 or 12/8. It sets how many steps a bar has on every lane and the drums (sixteen in 4/4, twelve in 3/4 and 6/8, twenty in 5/4, fourteen in 7/8, twenty-four in 12/8) and where the beats are marked and clicked. Each scene has its own, so a song can change from one to the next. A shorter bar cuts off the steps at its end and a longer one adds empty steps; Undo puts back what was cut. A MIDI file is read as 4/4.</li>
             <li><strong>Song:</strong> <strong>+ Add</strong> puts the open scene at the end of the song. Each block has − and + for how many times it repeats, arrows to move it, and ✕ to remove it.</li>
             <li><strong>Scene / Song:</strong> in Scene, Play loops the open scene. In Song, Play runs the song from the block you last clicked and the rack follows it. Tick Loop to start again at the end.</li>
           </ul>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Studio } from '../studio/useStudio';
-import { songLengthBars } from '../services/songPlayback';
+import { songLengthBars, songSeconds } from '../services/songPlayback';
+import { barQuarters } from '../services/patternLength';
 import Dialog from './Dialog';
 
 type What = 'scene' | 'song';
@@ -29,7 +30,9 @@ export default function ExportDialog({ studio, onClose }: { studio: Studio; onCl
   const status = studio.exportStatus;
   const working = status?.phase === 'working';
   const bars = what === 'song' ? songLengthBars(studio.song, studio.sceneLength) : studio.sceneLength(studio.currentSceneId);
-  const length = `${bars} ${bars === 1 ? 'bar' : 'bars'} at ${studio.globalTempo} BPM: ${clock(bars * 240 / studio.globalTempo)}`;
+  // A bar lasts as long as its scene's time signature makes it.
+  const seconds = what === 'song' ? songSeconds(studio.song, studio.sceneLength, studio.globalTempo, studio.sceneSignature) : bars * barQuarters(studio.signature) * 60 / studio.globalTempo;
+  const length = `${bars} ${bars === 1 ? 'bar' : 'bars'}${what === 'scene' && studio.signature !== '4/4' ? ` of ${studio.signature}` : ''} at ${studio.globalTempo} BPM: ${clock(seconds)}`;
 
   const run = () => {
     if (as === 'midi') {

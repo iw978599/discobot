@@ -133,11 +133,11 @@ test('WAV encoding writes valid interleaved stereo PCM and sanitizes nonfinite s
 
 test('shared transport schedules 32 synchronized ticks and skips stale work after suspension', () => {
   let time = 0, bpm = 120;
-  const ticks: { step: number; time: number; duration: number }[] = [];
+  const ticks: { tick: number; time: number; duration: number }[] = [];
   const transport = new BrowserTransport(() => time, () => bpm, tick => ticks.push(tick));
   transport.start();
   for (let i = 1; i <= 100; i++) { time = i * .02; transport.pump(); }
-  assert.deepEqual(ticks.slice(0, 32).map(t => t.step), Array.from({ length: 32 }, (_, i) => i));
+  assert.deepEqual(ticks.slice(0, 32).map(t => t.tick), Array.from({ length: 32 }, (_, i) => i));
   assert.ok(Math.abs(ticks[16].time - ticks[0].time - 1) < .0001);
   bpm = 240; time += .1; transport.pump();
   assert.equal(ticks[ticks.length - 1].duration, .03125);

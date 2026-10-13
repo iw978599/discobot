@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { localService } from '../services/localService';
-import { applySceneMutes, songBars, songLengthBars } from '../services/songPlayback';
+import { applySceneMutes, songBars, songLengthBars, songSeconds } from '../services/songPlayback';
 import { sceneBars } from '../services/patternLength';
 import { renderArrangementWav } from '../services/wavExport';
 import { loadCymbals, loadLaneSamples } from '../services/builtInWaves';
@@ -43,7 +43,10 @@ export default function SharedSongPage({ file, author, error: fetchError, onOpen
   }
 
   const project = read.project;
-  const bars = songLengthBars(project.song, sceneId => { const scene = project.scenes.find(entry => entry.id === sceneId); return scene ? sceneBars(scene) : 1; });
+  const lengthOf = (sceneId: string) => { const scene = project.scenes.find(entry => entry.id === sceneId); return scene ? sceneBars(scene) : 1; };
+  const bars = songLengthBars(project.song, lengthOf);
+  // A bar lasts as long as its scene's time signature makes it.
+  const seconds = songSeconds(project.song, lengthOf, project.tempo, sceneId => project.scenes.find(entry => entry.id === sceneId)?.signature);
   const laneCount = project.synths.filter(synth => project.scenes.some(scene => scene.lanes[synth.synthId]?.some(step => step.active && step.note))).length;
 
   const listen = async () => {
@@ -79,7 +82,7 @@ export default function SharedSongPage({ file, author, error: fetchError, onOpen
         </span>
         <h1>{project.name}</h1>
         <p className="shared-facts">
-          {project.tempo} BPM · {bars} {bars === 1 ? 'bar' : 'bars'} · {clock(bars * 240 / project.tempo)}
+          {project.tempo} BPM · {bars} {bars === 1 ? 'bar' : 'bars'} · {clock(seconds)}
           {' · '}{project.scenes.length} {project.scenes.length === 1 ? 'scene' : 'scenes'}
           {' · '}{laneCount === 0 ? 'drums' : `${laneCount} synth ${laneCount === 1 ? 'lane' : 'lanes'} and drums`}
         </p>
