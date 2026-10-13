@@ -1,8 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
 // At phone width the top bar is one line, and the rest of it is in the sheet its last button
-// raises. `more` raises the sheet before something in it is used, and does nothing on a wide
-// screen; `less` puts it away again after something that leaves it up.
+// raises. `more` raises the sheet before something in it is used, and does nothing on a wide screen.
 const onPhone = (page: Page) => {
   const size = page.viewportSize();
   return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
@@ -10,9 +9,6 @@ const onPhone = (page: Page) => {
 const more = async (page: Page) => {
   if (!onPhone(page) || await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) return;
   await page.getByRole('button', { name: 'More controls', exact: true }).click();
-};
-const less = async (page: Page) => {
-  if (await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) await page.getByRole('button', { name: 'Close more controls', exact: true }).click();
 };
 
 // Four states each have a look of their own, and this holds them apart (design review, finding 3):
@@ -128,7 +124,10 @@ test('a focused button has the focus ring, and a hovered one only a lighter edge
   await expect(button).toHaveCSS('outline-offset', '2px');
   await expect(button, 'focus does not change the button\'s own edge').toHaveCSS('border-top-color', 'rgb(85, 88, 91)');
   await expect.poll(() => css(button, 'box-shadow')).toContain(`${GAP} 0px 0px 0px 2px`);
-  await less(page);
+  // Put away with the keyboard: after a press on its Close button the browser would take the next
+  // focus to have come from a pointer, and draw no ring for it.
+  if (onPhone(page)) await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 
   const knob = lane(page).getByRole('slider', { name: 'Synth 1 level', exact: true });
   await knob.focus();

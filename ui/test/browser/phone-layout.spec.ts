@@ -433,7 +433,7 @@ test('on a phone the walkthrough turns to the unit each stop is about', async ({
     await expect(tab(page, current), title).toHaveAttribute('aria-current', 'true');
     await expect(page.locator(target).first(), `${title}: its part is on the page`).toBeVisible();
     await expect(spot, title).toBeVisible();
-    await expect(tour.getByRole('button', { name: 'Next', exact: true }), 'the way on has the keyboard').toBeFocused();
+    await expect(tour.getByRole('button', { name: title === 'Help' ? 'Done' : 'Next', exact: true }), 'the way on has the keyboard').toBeFocused();
     await expect.poll(async () => Math.abs((await box(spot)).x - (await box(page.locator(target))).x), `${title}: the light is on its part`).toBeLessThan(8);
     const part = await box(page.locator(target));
     expect(part.y, title).toBeGreaterThanOrEqual(0);
@@ -1211,7 +1211,10 @@ test('on a phone a held switch on the bar mutes its unit, and the lamps show wha
   const lane = page.getByRole('region', { name: 'Synth 1 module', exact: true });
   const lamp = (name: string) => tab(page, name).locator('.unit-tab-led');
   const struck = (name: string) => tab(page, name).locator('.unit-tab-name').evaluate(element => getComputedStyle(element).textDecorationLine);
-  const laneMute = page.getByRole('button', { name: 'Mute Synth 1', exact: true });
+  // Found by their labels, not by role: a unit that is not on show is out of the page for a
+  // role query, and these are read while their unit is hidden.
+  const laneMute = page.locator('button[aria-label="Mute Synth 1"]');
+  const drumMute = (name: string) => page.locator(`button[aria-label="Mute ${name}"]`);
 
   // Only a unit that makes sound has a lamp. Nothing is lit while nothing plays, and the unit
   // on show is marked by its switch, not by a lamp.
@@ -1278,8 +1281,8 @@ test('on a phone a held switch on the bar mutes its unit, and the lamps show wha
   await hand.touch();
   await expect(tab(page, 'Show Drums'), await trail(page)).toHaveAttribute('data-muted', 'true');
   await expect(tab(page, 'Show Synth 1'), 'the hold did not show the drums').toHaveAttribute('aria-current', 'true');
-  await expect(page.getByRole('button', { name: 'Mute Kick', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByRole('button', { name: 'Mute Cymbal', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(drumMute('Kick')).toHaveAttribute('aria-pressed', 'true');
+  await expect(drumMute('Cymbal')).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(drumReading, { ...watch, message: 'muted drums show nothing on a kick' }).toEqual({ beat: true, lit: false });
 
   // Stopped, every lamp is dark. The keyboard mutes too: Shift+M on a switch.
@@ -1288,7 +1291,7 @@ test('on a phone a held switch on the bar mutes its unit, and the lamps show wha
   await tab(page, 'Show Drums').focus();
   await page.keyboard.press('Shift+M');
   await expect(tab(page, 'Show Drums')).not.toHaveAttribute('data-muted', 'true');
-  await expect(page.getByRole('button', { name: 'Mute Kick', exact: true })).toHaveAttribute('aria-pressed', 'false');
+  await expect(drumMute('Kick')).toHaveAttribute('aria-pressed', 'false');
   await page.keyboard.press('Shift+M');
   await expect(tab(page, 'Show Drums')).toHaveAttribute('data-muted', 'true');
   await expect(tab(page, 'Show Synth 1'), 'and that did not turn the page either').toHaveAttribute('aria-current', 'true');

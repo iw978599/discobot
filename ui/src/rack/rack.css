@@ -674,7 +674,7 @@
   .bar-history { display: none; }
   @media (min-width: 375px) {
     .bar-history { display: inline-flex; }
-    .more-history { display: none; }
+    .more-group.more-history { display: none; }
   }
   /* The sheet: the project, the switches used while playing, then a row for each thing that
      opens something, with what it is for beside it. It scrolls where the screen is too short. */
