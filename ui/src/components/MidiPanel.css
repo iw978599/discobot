@@ -11,6 +11,8 @@
   min-width: 0;
 }
 
+.midi-drum-channel { display: flex; align-items: center; gap: 6px; color: var(--text-label); }
+
 .midi-status-dot {
   width: 7px;
   height: 7px;

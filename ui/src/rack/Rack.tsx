@@ -239,6 +239,8 @@ export default function Rack({ studio }: { studio: Studio }) {
             onModeChange={studio.setMidiMode}
             channel={studio.midiChannel}
             onChannelChange={studio.setMidiChannel}
+            drumChannel={studio.midiDrumChannel}
+            onDrumChannelChange={studio.setMidiDrumChannel}
             synthIds={studio.synths.map(synth => synth.id)}
             targetSynthId={studio.midiTargetSynthId}
             onTargetSynthChange={studio.setMidiTargetSynthId}

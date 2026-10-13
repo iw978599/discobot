@@ -12,6 +12,9 @@ interface MidiPanelProps {
   onModeChange: (mode: MidiMode) => void;
   channel: number;
   onChannelChange: (channel: number) => void;
+  // The channel pads are listened to on, for the drums; 0 is none.
+  drumChannel: number;
+  onDrumChannelChange: (channel: number) => void;
   synthIds: number[];
   targetSynthId: number | null;
   onTargetSynthChange: (synthId: number) => void;
@@ -37,6 +40,8 @@ export default function MidiPanel({
   onModeChange,
   channel,
   onChannelChange,
+  drumChannel,
+  onDrumChannelChange,
   synthIds,
   targetSynthId,
   onTargetSynthChange,
@@ -89,6 +94,15 @@ export default function MidiPanel({
               <option key={value} value={value}>Ch{value}</option>
             ))}
           </select>
+          <label className="midi-drum-channel" title="Notes on this channel play the drums: a pad controller's pads usually send on channel 10. In record mode a pad played while the song runs is written on the step being played. A keyboard on the other channel plays its lane at the same time">
+            Pads
+            <select aria-label="MIDI drum channel" value={drumChannel} onChange={(e) => onDrumChannelChange(Number(e.target.value))}>
+              <option value={0}>Off</option>
+              {Array.from({ length: 16 }, (_, i) => i + 1).map((value) => (
+                <option key={value} value={value}>Ch{value}</option>
+              ))}
+            </select>
+          </label>
           <select
             value={targetSynthId ?? synthIds[0] ?? 1}
             aria-label="MIDI target synth"
