@@ -122,6 +122,45 @@ test('a wheel that is the page scrolling, or comes before the pointer has rested
   await expect(gain).toHaveAttribute('aria-valuenow', '0.5');
 });
 
+test('the middle button puts a knob back at its default, as one undo step', async ({ page }) => {
+  const synth = page.locator('.synth-controls-panel');
+  const gain = synth.getByRole('slider', { name: 'Gain', exact: true });
+  await tab(page, 'Amp');
+  await expect(gain, 'a new lane starts at its default').toHaveAttribute('aria-valuenow', '1');
+  await edit(synth.getByLabel('Gain value', { exact: true }), '50%');
+  await expect(gain).toHaveAttribute('aria-valuenow', '0.5');
+  // Resting on the knob first puts the typed value and the press far enough apart to be two undo steps.
+  await rest(page, gain);
+  const before = await scrolled(page);
+  await gain.click({ button: 'middle' });
+  await expect(gain, 'back at the default, not at zero').toHaveAttribute('aria-valuenow', '1');
+  await expect(gain, 'the knob has the keyboard').toBeFocused();
+  expect(await scrolled(page), 'the page did not scroll').toBe(before);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(gain).toHaveAttribute('aria-valuenow', '0.5');
+  // The left button still only takes hold of the knob, and the right does nothing.
+  await gain.click();
+  await gain.click({ button: 'right' });
+  await expect(gain).toHaveAttribute('aria-valuenow', '0.5');
+
+  // An effects knob: the EQ's default is flat.
+  const eqEffects = page.locator('.effects-unit');
+  await eqEffects.getByLabel('Master EQ enabled', { exact: true }).check();
+  const eqLow = eqEffects.getByRole('slider', { name: 'EQ low', exact: true });
+  await rest(page, eqLow);
+  await page.mouse.wheel(0, -100);
+  await expect.poll(async () => Number(await eqLow.getAttribute('aria-valuenow'))).toBeGreaterThan(0);
+  await eqLow.click({ button: 'middle' });
+  await expect(eqLow).toHaveAttribute('aria-valuenow', '0');
+
+  // A drum knob: there is no swing to begin with.
+  const swing = page.getByRole('slider', { name: 'Swing', exact: true });
+  await edit(page.getByLabel('Swing value', { exact: true }), '30%');
+  await expect(swing).toHaveAttribute('aria-valuenow', '0.3');
+  await swing.click({ button: 'middle' });
+  await expect(swing).toHaveAttribute('aria-valuenow', '0');
+});
+
 test('the drum knobs and the effects knobs turn with the wheel too', async ({ page }) => {
   const swing = page.getByRole('slider', { name: 'Swing', exact: true });
   await rest(page, swing);

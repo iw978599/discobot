@@ -220,6 +220,11 @@ test('design shots: the rack, its units and the states of its controls', async (
     await knob.focus();
     await near(walk, knob, 'focus-knob', 90);
   });
+  await attempt(walk, 'focus-unit-help', async () => {
+    const help = page.getByRole('button', { name: 'Help for Synth 1', exact: true });
+    await help.focus();
+    await near(walk, help, 'focus-unit-help', 90);
+  });
   // The states beside each other in one row: a mute that is on, a step selected with the pointer,
   // another focused with the keyboard and, where there is a pointer, a third under it.
   const row = (number: number) => lane(page, 1).getByRole('button', { name: new RegExp(`^Select step ${number}( |$)`) });

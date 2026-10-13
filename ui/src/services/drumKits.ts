@@ -2,6 +2,13 @@ import type { DrumInstrument, DrumKitDefinition, DrumKitId, DrumKitModelVariant 
 
 export const DRUM_INSTRUMENTS: DrumInstrument[] = ['kick', 'snare', 'openHH', 'closedHH', 'ride', 'crash', 'snare2', 'clap'];
 
+// A drum's knobs as a project starts with them.
+const PLAIN_DRUM = { volume: 0.5, tone: 0.5, extra: 0.5, tune: 0, humanize: 0.35 };
+export const DRUM_SETTINGS_DEFAULT: Record<DrumInstrument, typeof PLAIN_DRUM> = {
+  kick: PLAIN_DRUM, snare: { volume: 0.68, tone: 0.46, extra: 0.68, tune: 0, humanize: 0.35 }, openHH: PLAIN_DRUM, closedHH: PLAIN_DRUM,
+  ride: PLAIN_DRUM, crash: PLAIN_DRUM, snare2: PLAIN_DRUM, clap: PLAIN_DRUM,
+};
+
 const definitions: [DrumKitId, string, DrumKitModelVariant, number[][]][] = [
   ['clean-analog', 'Clean / Analog', 'analog', [[.62,.48,.52],[.68,.46,.68],[.45,.52,.48],[.48,.55,.58],[.43,.52,.48],[.44,.5,.45],[.52,.45,.5],[.5,.5,.5]]],
   ['punchy-modern', 'Punchy / Modern', 'modern', [[.7,.6,.68],[.74,.54,.82],[.48,.66,.56],[.54,.7,.72],[.48,.66,.58],[.5,.62,.62],[.6,.62,.62],[.56,.6,.66]]],

@@ -6,6 +6,8 @@ import './DrumKnob.css';
 interface DrumKnobProps {
   label: string;
   value: number;
+  // Where a middle click puts the knob back to.
+  defaultValue?: number;
   min?: number;
   max?: number;
   step?: number;
@@ -19,6 +21,7 @@ interface DrumKnobProps {
 export default function DrumKnob({
   label,
   value,
+  defaultValue,
   min = 0,
   max = 1,
   step = 0.01,
@@ -48,7 +51,7 @@ export default function DrumKnob({
   const { normalize, ...interaction } = useKnobInteraction(localVal, min, max, step, (next) => {
     setLocalVal(next);
     onChange(next);
-  }, false, openSheet);
+  }, false, openSheet, defaultValue);
 
   const svgDeg = -240 + pct * 300;
 

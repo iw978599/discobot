@@ -33,6 +33,12 @@
   max-height: 180px;
 }
 
+/* A row and a cell's wrapper are there for a screen reader and have no box: what they hold is laid out by the grid. */
+.piano-roll-row,
+.piano-roll-slot {
+  display: contents;
+}
+
 .piano-roll-corner,
 .piano-roll-step-header,
 .piano-roll-note-label,

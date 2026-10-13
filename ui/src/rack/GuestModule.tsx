@@ -8,6 +8,7 @@ import {
   GUEST_SEND_NAMES, NO_SENDS,
 } from '../services/guests';
 import Knob from '../components/Knob';
+import UnitHelp, { UNIT_HELP } from './UnitHelp';
 
 const STATE_POLL_MS = 4000;
 const ANSWER_WAIT_MS = 6000;
@@ -21,7 +22,7 @@ interface Readout { blocks: number; late: number; latencyMs: number; failed: boo
 
 // One guest instrument: another creator's page in a frame, kept in time with the transport,
 // with its sound brought into the mixer and its settings saved in the project.
-function GuestModule({ studio, guest }: { studio: Studio; guest: Guest }) {
+function GuestModule({ studio, guest, onHelp }: { studio: Studio; guest: Guest; onHelp?: (section: string) => void }) {
   const origin = guestOrigin(guest.url);
   const [allowed, setAllowed] = useState(() => isTrustedOrigin(origin));
   const [status, setStatus] = useState<Status>('loading');
@@ -187,9 +188,10 @@ function GuestModule({ studio, guest }: { studio: Studio; guest: Guest }) {
       data-latency={readout.latencyMs}
     >
       <div className="rack-row">
-        <div className="rack-plate static">
+        <div className={onHelp ? 'rack-plate static helped' : 'rack-plate static'}>
           <b>Guest</b>
           <span title={guest.url}>{name}</span>
+          {onHelp && <UnitHelp about={`guest ${name}`} section={UNIT_HELP.guests} onHelp={onHelp} />}
         </div>
         <div className="rack-ms">
           <button className={guest.muted ? 'on' : ''} aria-label={`Mute guest ${name}`} aria-pressed={guest.muted} onClick={() => { void studio.handleGuestChange(guest.id, { muted: !guest.muted }); }}>M</button>
@@ -218,6 +220,7 @@ function GuestModule({ studio, guest }: { studio: Studio; guest: Guest }) {
           label="Level"
           ariaLabel={`Guest ${name} level`}
           value={guest.volume}
+          defaultValue={0.8}
           displayValue={`${Math.round(guest.volume * 100)}%`}
           parseInputValue={(input) => { const value = Number.parseFloat(input); return Number.isFinite(value) ? value / 100 : null; }}
           onChange={(value) => { void studio.handleGuestChange(guest.id, { volume: value }); }}
@@ -237,6 +240,7 @@ function GuestModule({ studio, guest }: { studio: Studio; guest: Guest }) {
                   label={{ reverb: 'Reverb', delay: 'Delay', drive: 'Drive', phaser: 'Phaser', chorus: 'Chorus' }[send]}
                   ariaLabel={`Guest ${name} ${send} send`}
                   value={value}
+                  defaultValue={0}
                   displayValue={`${Math.round(value * 100)}%`}
                   parseInputValue={(input) => { const parsed = Number.parseFloat(input); return Number.isFinite(parsed) ? parsed / 100 : null; }}
                   onChange={(next) => { void studio.handleGuestChange(guest.id, { sends: { ...NO_SENDS, ...guest.sends, [send]: next } }); }}

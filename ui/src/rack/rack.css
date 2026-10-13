@@ -161,6 +161,13 @@
 .rack-plate:not(.static):hover b { text-decoration: underline; }
 .rack-plate span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .rack-plate-actions { display: flex; gap: 4px; }
+/* Help for a unit: a "?" in the top corner of its name plate, laid over room the plate already
+   has beside its name, so no plate is taller for it. A lane's plate is itself a button, so the
+   two stand side by side in a box that takes the plate's place in the row. */
+.rack-plate.helped, .rack-plate-box { position: relative; }
+.rack-plate-box { width: var(--plate); min-width: 0; flex: none; display: flex; }
+.rack-plate-box .rack-plate { width: 100%; }
+.rack-btn.unit-help { position: absolute; top: 0; right: 6px; width: 20px; height: 20px; padding: 0; font-size: var(--type-caption); line-height: 1; color: var(--text-faint); }
 
 /* buttons */
 .rack-btn {
@@ -441,6 +448,7 @@
 .step-tools-swap > * { grid-area: 1 / 1; min-width: 0; }
 .step-tools-controls { display: flex; align-items: center; gap: 8px 18px; flex-wrap: wrap; }
 .step-tools-controls label { display: flex; align-items: center; gap: 6px; color: var(--text-label); }
+.randomize-tool { display: inline-flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; min-width: 0; }
 
 /* drums */
 .drum-grid { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
@@ -667,6 +675,10 @@
   .rack-row { flex-wrap: wrap; gap: 8px; }
   .rack-grow { display: none; }
   .rack-plate, .drum-strip-name, .mode-toggle, .guest-unit .rack-plate { width: auto; }
+  /* A unit's "?" is a finger wide here, in room kept for it at the end of the plate. */
+  .rack-plate-box { width: auto; }
+  .rack-plate.helped, .rack-plate-box, .effects-unit .effects-panel-header { padding-right: 44px; }
+  .rack-btn.unit-help { right: 0; width: 36px; height: 36px; font-size: var(--type-label); }
   .app-alert { flex-wrap: wrap; }
 
   /* big enough for a finger */

@@ -119,6 +119,7 @@ export default function KeyboardPanel({
           octaveShift={octaveShift}
           releaseSignal={releaseSignal}
           computerKeyNotes={computerKeyNotes}
+          arrowsWalk={selectedStep !== null}
         />
       ) : (
         <PianoRoll

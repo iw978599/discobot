@@ -114,12 +114,13 @@ export function TempoDisplay({ tempo, onChange, flash, onTap }: { tempo: number;
   );
 }
 
-export function HelpModal({ open, onClose, onWalkthrough }: { open: boolean; onClose: () => void; onWalkthrough: () => void }) {
+// `at` is the id of the section to open at, for Help asked for from one unit of the rack.
+export function HelpModal({ open, at, onClose, onWalkthrough }: { open: boolean; at?: string | null; onClose: () => void; onWalkthrough: () => void }) {
   if (!open) return null;
-  return <HelpContent onClose={onClose} onWalkthrough={onWalkthrough} />;
+  return <HelpContent at={at ?? null} onClose={onClose} onWalkthrough={onWalkthrough} />;
 }
 
-function HelpContent({ onClose, onWalkthrough }: { onClose: () => void; onWalkthrough: () => void }) {
+function HelpContent({ at, onClose, onWalkthrough }: { at: string | null; onClose: () => void; onWalkthrough: () => void }) {
   const [query, setQuery] = useState('');
   const [sections, setSections] = useState<HelpSection[]>([]);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -158,6 +159,11 @@ function HelpContent({ onClose, onWalkthrough }: { onClose: () => void; onWalkth
     setQuery('');
     searchRef.current?.focus();
   };
+  // Opened at a section: its heading takes the keyboard from the button the dialog gave it to,
+  // whose effect has already run because the dialog is inside this component.
+  useEffect(() => {
+    if (at) jump(at);
+  }, []);
 
   return (
     <Dialog title="How to use Discobot" closeLabel="Close help" onClose={onClose}>
@@ -231,11 +237,32 @@ function HelpContent({ onClose, onWalkthrough }: { onClose: () => void; onWalkth
             <li><strong>Your own sounds:</strong> <strong>Sound</strong> puts an imported sample on the selected lane. <strong>Import Kit</strong> takes several files at once and matches each to a lane by its name, such as “Kick” or “HH Open”; check the matches before using them. Samples stay in this browser.</li>
           </ul>
         </section>
+        <section id="help-effects" hidden={off('help-effects')}>
+          <h3 tabIndex={-1} onKeyDown={(event) => back(event, 'help-effects')}>Effects</h3>
+          <ul className="help-list help-list-plain">
+            <li><strong>One set for the whole rack:</strong> Drive, Phaser, Delay, Chorus and Reverb are shared. Each has its own switch, and <strong>Enabled</strong> at the top switches the five of them on and off together.</li>
+            <li><strong>Sends:</strong> an effect is heard only on what is sent to it. A lane's sends are on its Sends tab, the kit's are under <strong>Sends</strong> in the drum strip, and a guest instrument has a Sends button of its own.</li>
+            <li><strong>Returns:</strong> Synth Return and Drum Return set how much of the effects comes back into the mix, for the lanes and for the kit.</li>
+            <li><strong>In time:</strong> the Phaser, the Delay and the Chorus each have a Sync menu that sets them to a note value, so they follow the tempo. Turning the rate or time knob sets a free value again.</li>
+            <li><strong>Master EQ:</strong> Low, Mid and High shape the whole mix, including sound that is sent to no effect. It has a switch of its own, and works whether or not the effects are enabled.</li>
+          </ul>
+        </section>
+        <section id="help-guests" hidden={off('help-guests')}>
+          <h3 tabIndex={-1} onKeyDown={(event) => back(event, 'help-guests')}>Guest instruments</h3>
+          <ul className="help-list help-list-plain">
+            <li><strong>What one is:</strong> another creator's web instrument, shown as a unit of its own in the rack. It follows the tempo and the play button, and its sound goes through the mixer. Add one with <strong>Add Guest Instrument</strong> in the Project menu, by the address of its page.</li>
+            <li><strong>Another site:</strong> a guest is that site's page, so the browser contacts that site while the project is open, and the guest needs a connection to it. The page cannot read your projects or your account. A guest that arrives in a project someone shared asks before it is loaded.</li>
+            <li><strong>Its controls:</strong> M mutes it and Level sets how loud it is. <strong>Sends</strong> shows its sends to the shared effects, <strong>Hide</strong> folds its page away, <strong>Reload</strong> loads the page again and <strong>Remove</strong> takes it out of the project.</li>
+            <li><strong>Per scene:</strong> its settings, its level and its mute are kept with each scene, like a lane's notes.</li>
+            <li><strong>Exports:</strong> a guest cannot be made into a file directly, so an audio export first plays the music through to record it. Guests are not in a MIDI export.</li>
+          </ul>
+        </section>
         <section id="help-keys" hidden={off('help-keys')}>
           <h3 tabIndex={-1} onKeyDown={(event) => back(event, 'help-keys')}>Keys</h3>
           <ul className="help-list help-list-plain">
             <li><strong>Play notes from the computer keyboard:</strong> the A S D F G H J K L row is the white keys and W E T Y U O P the black keys, on the open lane. Z and X shift the octave.</li>
             <li><strong>Move along the steps:</strong> with a step selected, the left and right arrow keys select the one before or after it.</li>
+            <li><strong>Without a mouse:</strong> Tab stops once on a row of steps, on the drum grid, on the piano roll and on the on-screen keys. From there the arrow keys move from one to the next, Home and End go to the ends, and Space or Enter presses the one you are on. On the on-screen keys, up and down always move a key at a time; left and right do too, unless a step is selected.</li>
             <li><strong>Play and stop:</strong> Space, as the Play All button does. When a button has the keyboard, Space presses that button instead; in a text field it types a space.</li>
             <li><strong>Tap tempo:</strong> Shift + T</li>
             <li><strong>Undo:</strong> Ctrl/Cmd + Z. <strong>Redo:</strong> Ctrl/Cmd + Shift + Z or Ctrl/Cmd + Y. They step back through note, sound, drum, tempo and effects edits in the order you made them.</li>

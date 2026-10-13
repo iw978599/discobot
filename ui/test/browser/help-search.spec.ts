@@ -14,7 +14,7 @@ const more = async (page: Page) => {
 const PROJECT_KEY = 'discobot_browser_project_v1';
 const stored = (page: Page) => page.evaluate(key => JSON.parse(localStorage.getItem(key) || '{}'), PROJECT_KEY);
 
-const HEADINGS = ['Quick start', 'Top row', 'Scenes and song', 'Synth lanes', 'Drums', 'Keys'];
+const HEADINGS = ['Quick start', 'Top row', 'Scenes and song', 'Synth lanes', 'Drums', 'Effects', 'Guest instruments', 'Keys'];
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -38,7 +38,7 @@ test('Help lists its headings, and each one goes to its section', async ({ page 
   const help = await openHelp(page);
   const contents = help.getByRole('navigation', { name: 'Help sections', exact: true });
   await expect(contents.getByRole('button')).toHaveText(HEADINGS);
-  await expect(help.locator('.help-sections section:visible')).toHaveCount(6);
+  await expect(help.locator('.help-sections section:visible')).toHaveCount(HEADINGS.length);
   await expect(help.getByRole('status'), 'nothing is said until something is typed').toHaveText('');
 
   const keys = help.getByRole('heading', { name: 'Keys', exact: true });
@@ -68,13 +68,13 @@ test('a search leaves only the sections that match, says when nothing does, and 
   await search.fill('kick');
   await expect(shown).toHaveText(['Synth lanes', 'Drums']);
   await expect(contents.getByRole('button')).toHaveText(['Synth lanes', 'Drums']);
-  await expect(count).toHaveText('2 of 6 sections match.');
+  await expect(count).toHaveText('2 of 8 sections match.');
   await expect(help.getByRole('heading', { name: 'Keys', exact: true })).toHaveCount(0);
 
   // Capitals do not matter, and every word typed has to be in the section.
   await search.fill('UNISON');
   await expect(shown).toHaveText(['Synth lanes']);
-  await expect(count).toHaveText('1 of 6 sections matches.');
+  await expect(count).toHaveText('1 of 8 sections matches.');
   await search.fill('kick import');
   await expect(shown).toHaveText(['Drums']);
 
@@ -109,5 +109,5 @@ test('Escape closes Help from the search box, and it opens again with nothing ty
 
   help = await openHelp(page);
   await expect(help.getByLabel('Search Help', { exact: true })).toHaveValue('');
-  await expect(help.locator('.help-sections section:visible')).toHaveCount(6);
+  await expect(help.locator('.help-sections section:visible')).toHaveCount(HEADINGS.length);
 });

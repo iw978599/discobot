@@ -76,7 +76,8 @@ up, so you can see how the parts sit against each other.
    open lane's editor has two levels: Notes, for what the lane plays, and
    Sound, which has the presets and a page each for Osc, Filter, Amp, LFO,
    Arp and Sends. Turn
-   a knob by dragging, with the scroll wheel, or by typing its value.
+   a knob by dragging, with the scroll wheel, or by typing its value. A click
+   of the middle mouse button puts a knob back at its default.
 4. **Add drums.** Click cells in the drum grid and choose a kit. The strip
    under the grid edits the drum and step you last touched: velocity, chance,
    and up to four hits packed into one step.

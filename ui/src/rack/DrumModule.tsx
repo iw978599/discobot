@@ -4,11 +4,14 @@ import { MAX_KIT_FILES } from '../services/kitImport';
 import KitImportDialog from './KitImportDialog';
 import { usePlayhead, usePlayheadMark } from '../hooks/usePlayhead';
 import { tracked } from '../studio/tracked';
+import UnitHelp, { UNIT_HELP } from './UnitHelp';
 import { gridKeyTarget } from './gridKeys';
 import { BAR_CHOICES, drumBars } from '../services/patternLength';
 import CopyToScene from './CopyToScene';
 import type { Studio } from '../studio/useStudio';
 import { CYMBAL_TYPES } from '@discobot/engine';
+import { DRUM_SETTINGS_DEFAULT } from '../services/drumKits';
+import { DRUM_FX_DEFAULT } from '../services/effectSettings';
 import { DrumInstrument, DrumKitId, DrumState, CymbalType } from '../types';
 import DrumKnob from '../components/DrumKnob';
 
@@ -58,7 +61,7 @@ const percentText = (value: number) => `${Math.round(value * 100)}%`;
 
 // The whole drum kit as one grid: eight instruments down, sixteen steps across, lined up
 // with the synth lanes above. The strip underneath edits the instrument and step you last touched.
-function DrumModule({ studio }: { studio: Studio }) {
+function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: string) => void }) {
   const {
     drumState, drumAudio, drumKits, selectedDrumKitId, drumFx, drumMasterVolume, drumSwing,
     handleDrumStepToggle: onStepToggle, handleDrumStepVelocity: onStepVelocity, handleDrumStepDetail: onStepDetail,
@@ -150,8 +153,9 @@ function DrumModule({ studio }: { studio: Studio }) {
   return (
     <section className="rack-unit drum-machine" aria-label="Drums module" data-unit="drums">
       <div className="rack-row drum-top">
-        <div className="rack-plate static">
+        <div className={onHelp ? 'rack-plate static helped' : 'rack-plate static'}>
           <b>Drums</b>
+          {onHelp && <UnitHelp about="the drums" section={UNIT_HELP.drums} onHelp={onHelp} />}
           <select
             className="drum-kit-select"
             aria-label="Drum kit"
@@ -270,6 +274,7 @@ function DrumModule({ studio }: { studio: Studio }) {
           <DrumKnob
             label="Swing"
             value={drumSwing}
+            defaultValue={0}
             min={0}
             max={0.75}
             displayValue={percentText(drumSwing)}
@@ -280,6 +285,7 @@ function DrumModule({ studio }: { studio: Studio }) {
           <DrumKnob
             label="Master"
             value={drumMasterVolume}
+            defaultValue={1}
             displayValue={percentText(drumMasterVolume)}
             parseInputValue={parsePercent}
             onChange={studio.handleDrumMasterVolumeChange}
@@ -447,6 +453,7 @@ function DrumModule({ studio }: { studio: Studio }) {
             label="Volume"
             ariaLabel={`${LABELS[selected]} volume`}
             value={track.settings.volume}
+            defaultValue={DRUM_SETTINGS_DEFAULT[selected].volume}
             displayValue={percentText(track.settings.volume)}
             parseInputValue={parsePercent}
             onChange={(value) => onSettings(selected, { volume: value })}
@@ -456,6 +463,7 @@ function DrumModule({ studio }: { studio: Studio }) {
             label="Tone"
             ariaLabel={`${LABELS[selected]} tone`}
             value={track.settings.tone}
+            defaultValue={DRUM_SETTINGS_DEFAULT[selected].tone}
             displayValue={track.settings.tone.toFixed(2)}
             parseInputValue={parseNumber}
             onChange={(value) => onSettings(selected, { tone: value })}
@@ -465,6 +473,7 @@ function DrumModule({ studio }: { studio: Studio }) {
             label="Tune"
             ariaLabel={`${LABELS[selected]} tune`}
             value={track.settings.tune ?? 0}
+            defaultValue={DRUM_SETTINGS_DEFAULT[selected].tune}
             min={-1}
             max={1}
             displayValue={`${((track.settings.tune ?? 0) * 12).toFixed(1)} st`}
@@ -476,6 +485,7 @@ function DrumModule({ studio }: { studio: Studio }) {
             label={extra.knob}
             ariaLabel={`${LABELS[selected]} ${extra.knob}`}
             value={track.settings.extra}
+            defaultValue={DRUM_SETTINGS_DEFAULT[selected].extra}
             displayValue={extra.display(track.settings.extra)}
             parseInputValue={(input) => { const n = parseNumber(input); return n === null ? null : extra.parse(n); }}
             onChange={(value) => onSettings(selected, { extra: value })}
@@ -487,6 +497,7 @@ function DrumModule({ studio }: { studio: Studio }) {
                 label="Human"
                 ariaLabel={`${LABELS[selected]} humanize`}
                 value={track.settings.humanize ?? 0.35}
+                defaultValue={DRUM_SETTINGS_DEFAULT[selected].humanize}
                 displayValue={percentText(track.settings.humanize ?? 0.35)}
                 parseInputValue={parsePercent}
                 onChange={(value) => onSettings(selected, { humanize: value })}
@@ -499,6 +510,7 @@ function DrumModule({ studio }: { studio: Studio }) {
                 min={-1}
                 max={1}
                 value={track.settings.pan ?? 0}
+                defaultValue={0}
                 displayValue={(() => {
                   const pan = track.settings.pan ?? 0;
                   if (Math.abs(pan) < 0.05) return 'C';
@@ -537,6 +549,7 @@ function DrumModule({ studio }: { studio: Studio }) {
                   key={send}
                   label={label}
                   value={drumFx.sends[send] ?? 0}
+                  defaultValue={DRUM_FX_DEFAULT.sends[send] ?? 0}
                   displayValue={percentText(drumFx.sends[send] ?? 0)}
                   parseInputValue={parsePercent}
                   onChange={(value) => onFx({ sends: { [send]: value } })}
@@ -547,6 +560,7 @@ function DrumModule({ studio }: { studio: Studio }) {
             <DrumKnob
               label="FX Return"
               value={drumFx.returnLevel}
+              defaultValue={DRUM_FX_DEFAULT.returnLevel}
               displayValue={percentText(drumFx.returnLevel)}
               parseInputValue={parsePercent}
               onChange={(value) => onFx({ returnLevel: value })}

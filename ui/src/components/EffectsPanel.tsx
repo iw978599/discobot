@@ -2,13 +2,16 @@ import { memo } from 'react';
 import { DelaySync, EffectsLoopState, RateSync } from '../types';
 import { RATE_SYNCS, RATE_SYNC_LABELS } from '../services/rateSync';
 import { DELAY_SYNCS, DELAY_SYNC_LABELS } from '../services/delayTime';
-import { CHORUS_DEFAULT, EQ_DEFAULT, EQ_RANGE_DB, MAX_PRE_DELAY } from '../services/effectSettings';
+import { CHORUS_DEFAULT, EFFECTS_DEFAULT, EQ_DEFAULT, EQ_RANGE_DB, MAX_PRE_DELAY } from '../services/effectSettings';
 import Knob from './Knob';
+import UnitHelp, { UNIT_HELP } from '../rack/UnitHelp';
 import './EffectsPanel.css';
 
 interface EffectsPanelProps {
   effectsLoop: EffectsLoopState;
   onChange: (next: Partial<EffectsLoopState>) => void;
+  // Opens Help at a section. The same function on every render, or the panel would render for it.
+  onHelp?: (section: string) => void;
 }
 
 const parseNumber = (input: string): number | null => {
@@ -27,7 +30,7 @@ const parseMs = (input: string): number | null => {
   return n === null ? null : n / 1000;
 };
 
-function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProps) {
+function EffectsPanel({ effectsLoop, onChange, onHelp }: EffectsPanelProps) {
   const synced = Boolean(effectsLoop.delay.sync && effectsLoop.delay.sync !== 'off');
   const chorusSynced = Boolean(effectsLoop.chorus?.sync && effectsLoop.chorus.sync !== 'off');
   const phaserSynced = Boolean(effectsLoop.phaser.sync && effectsLoop.phaser.sync !== 'off');
@@ -37,6 +40,7 @@ function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProps) {
     <section className="effects-panel">
       <div className="effects-panel-header">
         <h3>Effects</h3>
+        {onHelp && <UnitHelp about="the effects" section={UNIT_HELP.effects} onHelp={onHelp} />}
         <label className="effects-toggle">
           <input type="checkbox" aria-label="Effects loop enabled" checked={effectsLoop.enabled} onChange={(event) => onChange({ enabled: event.target.checked })} />
           <span>Enabled</span>
@@ -47,6 +51,7 @@ function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProps) {
             ariaLabel="Synth return"
             size="small"
             value={effectsLoop.returns.synth}
+            defaultValue={EFFECTS_DEFAULT.returns.synth}
             displayValue={`${Math.round(effectsLoop.returns.synth * 100)}%`}
             parseInputValue={parsePercent}
             onChange={(value) => onChange({ returns: { ...effectsLoop.returns, synth: value } })}
@@ -57,6 +62,7 @@ function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProps) {
             ariaLabel="Drum return"
             size="small"
             value={effectsLoop.returns.drums}
+            defaultValue={EFFECTS_DEFAULT.returns.drums}
             displayValue={`${Math.round(effectsLoop.returns.drums * 100)}%`}
             parseInputValue={parsePercent}
             onChange={(value) => onChange({ returns: { ...effectsLoop.returns, drums: value } })}
@@ -83,6 +89,7 @@ function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProps) {
             <Knob
               label="Amount"
               value={effectsLoop.drive.amount}
+              defaultValue={EFFECTS_DEFAULT.drive.amount}
               min={0}
               max={1}
               displayValue={`${Math.round(effectsLoop.drive.amount * 100)}%`}
@@ -93,6 +100,7 @@ function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProps) {
             <Knob
               label="Tone"
               value={effectsLoop.drive.tone}
+              defaultValue={EFFECTS_DEFAULT.drive.tone}
               min={0}
               max={1}
               displayValue={`${Math.round(effectsLoop.drive.tone * 100)}%`}
@@ -131,6 +139,7 @@ function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProps) {
               label="Rate"
               ariaLabel="Phaser rate"
               value={effectsLoop.phaser.rate}
+              defaultValue={EFFECTS_DEFAULT.phaser.rate}
               min={0.05}
               max={8}
               step={0.01}
@@ -142,6 +151,7 @@ function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProps) {
             <Knob
               label="Depth"
               value={effectsLoop.phaser.depth}
+              defaultValue={EFFECTS_DEFAULT.phaser.depth}
               min={0}
               max={1}
               displayValue={`${Math.round(effectsLoop.phaser.depth * 100)}%`}
@@ -152,6 +162,7 @@ function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProps) {
             <Knob
               label="Feedback"
               value={effectsLoop.phaser.feedback}
+              defaultValue={EFFECTS_DEFAULT.phaser.feedback}
               min={0}
               max={0.95}
               displayValue={`${Math.round(effectsLoop.phaser.feedback * 100)}%`}
@@ -162,6 +173,7 @@ function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProps) {
             <Knob
               label="Mix"
               value={effectsLoop.phaser.mix}
+              defaultValue={EFFECTS_DEFAULT.phaser.mix}
               min={0}
               max={1}
               displayValue={`${Math.round(effectsLoop.phaser.mix * 100)}%`}
@@ -199,6 +211,7 @@ function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProps) {
             <Knob
               label="Time"
               value={effectsLoop.delay.time}
+              defaultValue={EFFECTS_DEFAULT.delay.time}
               min={0.01}
               max={1.5}
               step={0.001}
@@ -211,6 +224,7 @@ function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProps) {
             <Knob
               label="Feedback"
               value={effectsLoop.delay.feedback}
+              defaultValue={EFFECTS_DEFAULT.delay.feedback}
               min={0}
               max={0.95}
               displayValue={`${Math.round(effectsLoop.delay.feedback * 100)}%`}
@@ -221,6 +235,7 @@ function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProps) {
             <Knob
               label="Mix"
               value={effectsLoop.delay.mix}
+              defaultValue={EFFECTS_DEFAULT.delay.mix}
               min={0}
               max={1}
               displayValue={`${Math.round(effectsLoop.delay.mix * 100)}%`}
@@ -259,6 +274,7 @@ function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProps) {
               label="Rate"
               ariaLabel="Chorus rate"
               value={chorus.rate}
+              defaultValue={CHORUS_DEFAULT.rate}
               min={0.05}
               max={8}
               step={0.01}
@@ -271,6 +287,7 @@ function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProps) {
               label="Depth"
               ariaLabel="Chorus depth"
               value={chorus.depth}
+              defaultValue={CHORUS_DEFAULT.depth}
               min={0}
               max={1}
               displayValue={`${Math.round(chorus.depth * 100)}%`}
@@ -283,6 +300,7 @@ function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProps) {
               label="Mix"
               ariaLabel="Chorus mix"
               value={chorus.mix}
+              defaultValue={CHORUS_DEFAULT.mix}
               min={0}
               max={1}
               displayValue={`${Math.round(chorus.mix * 100)}%`}
@@ -310,6 +328,7 @@ function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProps) {
             <Knob
               label="Decay"
               value={effectsLoop.reverb.decay}
+              defaultValue={EFFECTS_DEFAULT.reverb.decay}
               min={0.2}
               max={8}
               step={0.01}
@@ -321,6 +340,7 @@ function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProps) {
               label="Pre"
               ariaLabel="Reverb pre-delay"
               value={effectsLoop.reverb.preDelay ?? 0}
+              defaultValue={0}
               min={0}
               max={MAX_PRE_DELAY}
               step={0.001}
@@ -334,6 +354,7 @@ function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProps) {
               label="Damp"
               ariaLabel="Reverb damping"
               value={effectsLoop.reverb.damping ?? 0}
+              defaultValue={0}
               min={0}
               max={1}
               displayValue={`${Math.round((effectsLoop.reverb.damping ?? 0) * 100)}%`}
@@ -345,6 +366,7 @@ function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProps) {
             <Knob
               label="Mix"
               value={effectsLoop.reverb.mix}
+              defaultValue={EFFECTS_DEFAULT.reverb.mix}
               min={0}
               max={1}
               displayValue={`${Math.round(effectsLoop.reverb.mix * 100)}%`}
@@ -375,6 +397,7 @@ function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProps) {
                 label={label}
                 ariaLabel={`EQ ${band}`}
                 value={eq[band]}
+                defaultValue={EQ_DEFAULT[band]}
                 min={-EQ_RANGE_DB}
                 max={EQ_RANGE_DB}
                 step={0.5}

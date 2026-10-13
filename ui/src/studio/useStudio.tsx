@@ -14,7 +14,8 @@ import { loadCymbals, loadLaneSample } from '../services/builtInWaves';
 import { MAX_EMBEDDED_TOTAL_BYTES, MAX_PROJECT_FILE_BYTES, adoptSamples, embedSamples } from '../services/projectSamples';
 import { exportPreset, importPreset, type ImportedPreset } from '../services/presetImport';
 import { BAR_CHOICES, DRUM_STEPS_PER_BAR, clampLengths, drumBars, laneBars, resizeBars, sceneAsBars, sceneBars } from '../services/patternLength';
-import { DRUM_INSTRUMENTS } from '../services/drumKits';
+import { DRUM_INSTRUMENTS, DRUM_SETTINGS_DEFAULT } from '../services/drumKits';
+import { DRUM_FX_DEFAULT, EFFECTS_DEFAULT } from '../services/effectSettings';
 import type { DrumSample } from '../../../engine/src/drums/DrumCore';
 import { guestCapture, guestLink, guestOrigin, guestUrl, trustOrigin, wallAtContextTime, wallNow, type Guest } from '../services/guests';
 import { playhead } from '../services/playhead';
@@ -26,8 +27,10 @@ import type { PresetKind } from '../services/presetKinds';
 import { createBuiltInPresets } from '../services/builtInPresets';
 import { expandStep, expandStepNotes, stepNotes, withStepLength, withStepNotes } from '../services/noteScheduling';
 import { transposeSteps } from '../services/transpose';
+import { randomLine, type RandomChoice } from '../services/randomize';
 import { STARTERS, projectIsEmpty, starterDrums, starterPattern } from '../services/starters';
 import { buildSampleSong } from '../services/sampleSong';
+import { DEFAULT_DRUM_CHANNEL, drumForNote } from '../services/midiDrums';
 import { DEFAULT_QUANTIZE, asQuantize, recordPosition } from '../services/recordTiming';
 import { LANE_PARAMS, fromUnit, lanePatch, parseTarget } from '../services/paramTargets';
 import { storeMidiTies, storedMidiTies, tieFor, withTie, withoutTie, type MidiTie } from '../services/midiTies';
@@ -44,19 +47,8 @@ import { DEFAULT_SYNTH_MODEL_ID, createDefaultSynthModelParams, enterSynthModel,
 
 const DEFAULT_PARAMS: SynthParameters = createDefaultSynthParameters();
 
-const DEFAULT_DRUM_FX: { sends: FxSendLevels; returnLevel: number } = {
-  sends: { reverb: 0.35, delay: 0.15, drive: 0.2, phaser: 0.1, chorus: 0 },
-  returnLevel: 0.7,
-};
-
-const DEFAULT_EFFECTS_LOOP: EffectsLoopState = {
-  enabled: true,
-  returns: { synth: 0.85, drums: 0.7 },
-  drive: { enabled: true, amount: 0.18, tone: 0.65 },
-  phaser: { enabled: false, rate: 0.45, depth: 0.45, feedback: 0.25, mix: 0.25 },
-  delay: { enabled: true, time: 0.22, feedback: 0.35, mix: 0.3 },
-  reverb: { enabled: true, decay: 2.1, mix: 0.38 },
-};
+const DEFAULT_DRUM_FX = DRUM_FX_DEFAULT;
+const DEFAULT_EFFECTS_LOOP = EFFECTS_DEFAULT;
 
 const DEFAULT_DRUM_KIT_ID: DrumKitId = 'clean-analog';
 const MAX_HISTORY = 80;
@@ -125,16 +117,9 @@ interface SynthState {
 }
 
 function createDefaultDrumState(): DrumState {
-  return {
-    kick: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5, tune: 0, humanize: 0.35 }, muted: false, solo: false },
-    snare: { steps: new Array(16).fill(false), settings: { volume: 0.68, tone: 0.46, extra: 0.68, tune: 0, humanize: 0.35 }, muted: false, solo: false },
-    openHH: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5, tune: 0, humanize: 0.35 }, muted: false, solo: false },
-    closedHH: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5, tune: 0, humanize: 0.35 }, muted: false, solo: false },
-    ride: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5, tune: 0, humanize: 0.35 }, muted: false, solo: false },
-    crash: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5, tune: 0, humanize: 0.35 }, muted: false, solo: false },
-    snare2: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5, tune: 0, humanize: 0.35 }, muted: false, solo: false },
-    clap: { steps: new Array(16).fill(false), settings: { volume: 0.5, tone: 0.5, extra: 0.5, tune: 0, humanize: 0.35 }, muted: false, solo: false },
-  };
+  return Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => [
+    instrument, { steps: new Array(16).fill(false), settings: { ...DRUM_SETTINGS_DEFAULT[instrument] }, muted: false, solo: false },
+  ])) as unknown as DrumState;
 }
 
 function clonePattern(pattern: Pattern): Pattern {
@@ -385,6 +370,11 @@ export function useStudio() {
   quantizeRef.current = quantize;
   const setQuantize = useCallback((value: number) => setQuantizeValue(asQuantize(value)), []);
   const [midiChannel, setMidiChannel] = useState(1);
+  // The channel pads are listened to on, for the drums. A keyboard on one channel and pads on
+  // another play a lane and the drums at once. 0 is none.
+  const [midiDrumChannel, setMidiDrumChannel] = useState(DEFAULT_DRUM_CHANNEL);
+  const midiDrumChannelRef = useRef(midiDrumChannel);
+  midiDrumChannelRef.current = midiDrumChannel;
   // What the sequencer sends to the chosen MIDI output. Kept for the session only.
   const [midiOutNotes, setMidiOutNotes] = useState(true);
   const [midiOutClock, setMidiOutClock] = useState(false);
@@ -1380,6 +1370,15 @@ export function useStudio() {
     localService.writePattern(synthId, synth.pattern.id, { ...synth.pattern, steps });
   }, [pushHistorySnapshot]);
 
+  // Replaces a lane's notes, in the open scene, with a new random line in a key and scale. The
+  // line starts in the lowest octave the lane's piano roll shows.
+  const handleRandomizeLane = useCallback((synthId: number, choice: RandomChoice) => {
+    const synth = synthsRef.current.find(s => s.id === synthId);
+    if (!synth?.pattern) return;
+    pushHistorySnapshot(synthId, synth.pattern.id);
+    localService.writePattern(synthId, synth.pattern.id, randomLine(synth.pattern, choice, 3 + synth.octaveShift, Math.random));
+  }, [pushHistorySnapshot]);
+
   // Writes a note to a step. `add` joins it to the chord already there instead of replacing it.
   const upsertStepNote = useCallback(async (synthId: number, stepIndex: number, note: string, velocity: number, add = false, offset?: number, select = true) => {
     const synth = synthsRef.current.find(s => s.id === synthId);
@@ -1500,6 +1499,34 @@ export function useStudio() {
       if (tie) applyParamTargetRef.current(tie.target, message.value / 127);
       return;
     }
+    // A note on the drum channel is a pad: it plays its drum, and while recording it is written
+    // on the step being played. A note that is no drum here does nothing. Its note-off means nothing.
+    // If the keyboard's channel is the same one, the lane keeps it, as it always had it.
+    if (message.channel === midiDrumChannelRef.current && message.channel !== midiChannelRef.current) {
+      if (message.type !== 'noteOn') return;
+      const instrument = drumForNote(message.note);
+      const drums = drumStateRef.current;
+      if (!instrument || !drums[instrument]) return;
+      const velocity = Math.max(0.05, message.velocity / 127);
+      const silenced = drums[instrument].muted || (Object.values(drums).some(track => track.solo) && !drums[instrument].solo);
+      if (!silenced) void drumAudio.playDrumHit(instrument, drums[instrument].settings, velocity);
+      const transport = transportRef.current;
+      if (midiModeRef.current === 'record' && transport?.running && playhead.get('drums') >= 0) {
+        // On the step the player is hearing, as a recorded note is: the scheduler is ahead of that.
+        const context = getAudioContext();
+        const { step } = recordPosition({
+          heardTicks: transport.ticksAt(context.currentTime - (context.outputLatency || 0)), scheduledTicks: transport.scheduledTicks,
+          playheadStep: playhead.get('drums'), ticksPerStep: 2, steps: drums[instrument].steps.length, strength: 1,
+        });
+        const lane = synthsRef.current[0];
+        if (lane?.pattern) pushHistorySnapshot(lane.id, lane.pattern.id);
+        localService.applyAll([
+          { type: 'drum.step', instrument, step, active: true },
+          { type: 'drum.stepVelocity', instrument, step, velocity },
+        ]);
+      }
+      return;
+    }
     const noteName = midiNoteToName(message.note);
     const heldKey = `${message.channel}:${message.note}`;
 
@@ -1545,7 +1572,7 @@ export function useStudio() {
     const stepIndex = joins ? chord.stepIndex : targetSynth.stepRecordPointer % pattern.steps.length;
     midiChordRef.current = { synthId: targetSynth.id, stepIndex, at: now };
     void upsertStepNote(targetSynth.id, stepIndex, noteName, velocity, joins);
-  }, [handleNoteRelease, upsertStepNote, triggerSynthNote, globalTempo, synthAudio, recordNote]);
+  }, [handleNoteRelease, upsertStepNote, triggerSynthNote, globalTempo, synthAudio, recordNote, drumAudio, pushHistorySnapshot]);
 
   const midiState = useMidiInput({ onMessage: handleMidiMessage });
 
@@ -2336,11 +2363,11 @@ export function useStudio() {
     synths, selectedSynthId, setSelectedSynthId, drumState: memoizedDrumState, drumKits,
     selectedDrumKitId, drumMasterVolume, drumSwing, drumFx, effectsLoop, browserMuted, setBrowserMuted,
     browserVolume, setBrowserVolume, globalTempo, storageError, setStorageError, changedElsewhere, loadOtherTabVersion, keepThisTabVersion, helpOpen, setHelpOpen, midiMode, setMidiMode,
-    recording, setRecording, quantize, setQuantize, midiChannel, setMidiChannel, midiOutNotes, setMidiOutNotes, midiOutClock, setMidiOutClock, midiTargetSynthId, setMidiTargetSynthId, projectId, projectName, projects, synthPresets, drumAudio,
+    recording, setRecording, quantize, setQuantize, midiChannel, setMidiChannel, midiDrumChannel, setMidiDrumChannel, midiOutNotes, setMidiOutNotes, midiOutClock, setMidiOutClock, midiTargetSynthId, setMidiTargetSynthId, projectId, projectName, projects, synthPresets, drumAudio,
     handleUndo, handleRedo, midiImportData, setMidiImportData, midiImportAssignments, setMidiImportAssignments,
     handleMidiImportClick, handleMidiImportFile, handleMidiImportApplyAll, midiImportFileRef, handleRemoveSynth,
     ensureSynthExists, handleOctaveShift, handleTempoChange, handleGlobalPlayStop, handleStepChange, handleStepSelect, handleKeyboardModeChange,
-    handlePianoRollNoteAssign, handleClearPatternNotes, handleTransposeLane, handleNotePlay, handleNoteRelease, computerKeyNotes, midiState,
+    handlePianoRollNoteAssign, handleClearPatternNotes, handleTransposeLane, handleRandomizeLane, handleNotePlay, handleNoteRelease, computerKeyNotes, midiState,
     handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange, guests, handleAddGuest, handleRemoveGuest, handleGuestChange, guestRecording, handleExportWav, exportStatus, dismissExportStatus, missingDrumSamples, sampleStoreVersion, handleDrumSampleChange, handleLaneBarsChange, handleDrumBarsChange, sceneLength,
     handleSynthMixChange, handleSaveSynthPreset, handleLoadSynthPreset, handleDeleteSynthPreset,
     handleExportMidi, currentArrangement, reportExportError, handleExportProject, projectImportFileRef, handleImportProjectFile, handleImportProject,
