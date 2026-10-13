@@ -640,6 +640,33 @@ for new accounts.
     in `AGENTS.md`). Levels are per scene for guests and project-wide for
     lanes, and a mixer has to show that honestly.
 
+23. **Delay and reverb sends for each drum sound.** (M) Asked for by the
+    owner on 2026-10-12. The drums have one set of sends for the whole kit
+    today (`drumFx`), so reverb on the snare is reverb on the kick as well.
+    Each of the eight drums should have its own send to the delay and to
+    the reverb. All eight are mixed to one stereo signal inside `DrumCore`
+    before anything outside can reach them, so the core has to hand each
+    drum out separately, or hand out a second mix for each send, in live
+    playback and in export alike. Stored per drum, absent meaning what the
+    kit's sends give today, so an older project sounds as it did. To ask
+    the owner: whether the kit's own sends stay as a master over the
+    eight, and whether drive, phaser and chorus get a send for each drum
+    too or only the two asked for.
+
+24. **Aux sends that can be routed to effects.** (L) Asked for by the owner
+    on 2026-10-12. Today the sends are fixed: every lane has one send to
+    each of the five shared effects (drive, phaser, delay, reverb, chorus),
+    and each effect is always there. Routable aux sends would mean a small
+    number of aux buses, each with a chain of effects the person chooses
+    and orders, and a send to each bus from every lane, the drums (or each
+    drum, item 23) and each guest. To ask the owner before building: how
+    many buses; whether an effect can be used on more than one bus; whether
+    one bus can feed another (a delay into the reverb); and whether this
+    replaces the five fixed sends or is added to them. Projects saved with
+    the fixed sends must open sounding the same. It belongs with the master
+    mixer (item 22), which is where the sends and the buses would be
+    shown, and needs the audio layer's single owner (improvements 4) first.
+
 ## Questions waiting on the owner
 
 - **Did the Firefox guest fixes work?** PRs #76 and #77 changed how a guest

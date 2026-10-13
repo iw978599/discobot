@@ -249,8 +249,13 @@ in Firefox (section 5) and work from that.
    the roadmap item's questions before building. Placed here by the
    builder, because the meters and a level for the whole mix belong to the
    audio layer.
-3. **Insert effects for each lane, and an algorithmic reverb** (sound 6).
-4. What the sound work of 2026-10-12 left open, each small: loop points, a
+3. **Delay and reverb sends for each drum sound** (features 23), and
+   **aux sends that can be routed to effects** (features 24). Both asked
+   for on 2026-10-12, and placed here by the builder beside the mixer,
+   which is where they would be shown. Each has questions for the owner in
+   its roadmap item.
+4. **Insert effects for each lane, and an algorithmic reverb** (sound 6).
+5. What the sound work of 2026-10-12 left open, each small: loop points, a
    start offset and several recordings for an imported sample (sound 3);
    smoothing for a sample, a wave or a synced oscillator played high, which
    alias today; more than four modulation routes, and the LFO tab's own
@@ -346,9 +351,9 @@ Still waiting:
 - **The Launchkey's numbers**, when the MIDI work (step 5) is reached.
 - **The cymbal** (step 2): which one sounds bad, in which kit, and how; and
   whether new cymbals may be recordings or must all be synthesized.
-- **Transpose, the randomizer and the master mixer** (steps 11 and 9):
-  what each should do. The roadmap items (features 19, 20 and 22) list the
-  questions.
+- **Transpose, the randomizer, the master mixer, the drums' own sends and
+  routable aux sends** (steps 11 and 9): what each should do. The roadmap
+  items (features 19, 20 and 22 to 24) list the questions.
 - **Not heard, added on 2026-10-12:** modulation routes, the Odyssey with
   sync and ring, the Virus, the CS-80 and the second layer, the sample
   engine, and the M1, D-50 and Wavestation with the app's own waves. Which
