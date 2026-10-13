@@ -1,6 +1,6 @@
 import { useRef, useCallback, useEffect, useMemo } from 'react';
 import type { SynthParameters, EffectsLoopState } from '../types';
-import { toVoiceParams, type SynthWorkletMessage } from '@discobot/engine';
+import { toVoiceParams, type SynthSample, type SynthWorkletMessage } from '@discobot/engine';
 import { createAudioLane, getAudioContext, ensureAudioReady, loadAudioWorklet, setEffectsLoop } from './browserAudio';
 
 interface SynthLane {
@@ -8,6 +8,8 @@ interface SynthLane {
   audio?: ReturnType<typeof createAudioLane>;
   loading?: Promise<AudioWorkletNode>;
   parameters?: SynthParameters;
+  // The recording the lane's sample engine plays, kept for a node that does not exist yet.
+  sample?: SynthSample | null;
   bpm: number;
   generation: number;
   // Note-ons still waiting on audio resume or worklet loading, keyed by note name.
@@ -55,6 +57,7 @@ export function useSynthAudio() {
           send(node, { type: 'params', params: toVoiceParams(lane.parameters, lane.bpm) });
           audio.setSends(lane.parameters.fxSends, lane.parameters.fxReturn);
         }
+        if (lane.sample) send(node, { type: 'sample', sample: lane.sample });
         return node;
       }).finally(() => { lane.loading = undefined; });
     }
@@ -101,6 +104,12 @@ export function useSynthAudio() {
     lane.starting.clear();
     send(lane.node, { type: 'allNotesOff', release });
   }, []);
+  // A lane's recording for its sample engine, or null for none. The worklet gets its own copy.
+  const setSample = useCallback((synthId: number, sample: SynthSample | null) => {
+    const lane = laneFor(synthId);
+    lane.sample = sample;
+    send(lane.node, { type: 'sample', sample });
+  }, []);
   const duck = useCallback((synthId: number, time: number, amount: number) => {
     lanesRef.current.get(synthId)?.audio?.duck(time, amount);
   }, []);
@@ -123,6 +132,6 @@ export function useSynthAudio() {
   // The same object on every render, so effects and callbacks that depend on it do not re-run.
   return useMemo(() => ({
     ensureAudioReady, tryResume: () => { void ensureAudioReady(); },
-    playNote, stopNote, stopSynth, stopAllNotes, updateParameters, setEffectsLoop, setVolume, duck, dispose,
-  }), [playNote, stopNote, stopSynth, stopAllNotes, updateParameters, setVolume, duck, dispose]);
+    playNote, stopNote, stopSynth, stopAllNotes, updateParameters, setEffectsLoop, setVolume, setSample, duck, dispose,
+  }), [playNote, stopNote, stopSynth, stopAllNotes, updateParameters, setVolume, setSample, duck, dispose]);
 }

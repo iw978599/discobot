@@ -21,6 +21,8 @@ export interface VoiceParams {
   unisonVoices: number;
   unisonDetune: number;
   unisonMix: number;
+  sampleRoot: number;
+  sampleLoop: boolean;
   layerEnabled: boolean;
   layerMix: number;
   layerDetune: number;
@@ -90,6 +92,7 @@ export function createDefaultSynthParameters(): SynthParameters {
     oscillator2: { enabled: false, type: 'sawtooth', semitones: 0, detune: 7, level: 0.7, sync: false },
     mixer: { sub: 0, noise: 0, osc: 1, ring: 0 },
     unison: { voices: 1, detune: 0.3, mix: 1 },
+    sample: { root: 60, loop: false },
     layer: { enabled: false, mix: 0.5, detune: 8, brightness: 0, attack: 0, width: 0 },
     duck: 0,
     lfo1: { enabled: false, target: 'pitch', waveform: 'sine', rate: 5, depth: 0.2, sync: false, retrigger: true },
@@ -144,6 +147,7 @@ export function toVoiceParams(p: SynthParameters, bpm = 120): VoiceParams {
     osc2Sync: osc2.sync ?? false, ringLevel: mixer.ring ?? 0,
     oscLevel: mixer.osc ?? 1, subLevel: mixer.sub, noiseLevel: mixer.noise,
     unisonVoices: unison.voices, unisonDetune: unison.detune, unisonMix: unison.mix ?? 1,
+    sampleRoot: p.sample?.root ?? 60, sampleLoop: p.sample?.loop ?? false,
     layerEnabled: layer.enabled, layerMix: layer.mix, layerDetune: layer.detune,
     layerBrightness: layer.brightness, layerAttack: layer.attack, layerWidth: layer.width,
     fmAlgorithm: fm.algorithm, fmRatio: fm.ratio, fmIndex: fm.index, fmDecay: fm.decay, fmFeedback: fm.feedback,

@@ -1,4 +1,4 @@
-import type { NoteOnMessage } from './synth/SynthCore';
+import type { NoteOnMessage, SynthSample } from './synth/SynthCore';
 import type { VoiceParams } from './synth/voiceParams';
 import type { DrumHitMessage, DrumSample } from './drums/DrumCore';
 import type { DrumInstrument } from './types';
@@ -9,6 +9,8 @@ import type { DrumInstrument } from './types';
 
 export type SynthWorkletMessage =
   | { type: 'params'; params: VoiceParams }
+  // null takes the lane's recording away, and it plays its oscillators
+  | { type: 'sample'; sample: SynthSample | null }
   | ({ type: 'noteOn' } & NoteOnMessage)
   | { type: 'noteOff'; note: string; id?: number }
   | { type: 'allNotesOff'; release?: number };
