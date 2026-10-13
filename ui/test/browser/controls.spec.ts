@@ -422,7 +422,7 @@ test('projects dialog traps focus, closes with Escape, and renames, copies and d
   await dialog.getByLabel('Project name', { exact: true }).press('Enter');
   // On a phone this button is in the top bar's sheet, which cannot be raised from under a dialog.
   if (!onPhone(page)) await expect(page.getByRole('button', { name: 'Project: Friday jam', exact: true })).toBeVisible();
-  expect((await project(page)).name).toBe('Friday jam');
+  await expect.poll(async () => (await project(page)).name).toBe('Friday jam');
 
   await dialog.getByRole('button', { name: 'Copy', exact: true }).click();
   // The copy shares the row of the project it was made from, and is chosen from that row's list.
