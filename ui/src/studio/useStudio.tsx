@@ -27,6 +27,7 @@ import { createBuiltInPresets } from '../services/builtInPresets';
 import { expandStep, expandStepNotes, stepNotes, withStepLength, withStepNotes } from '../services/noteScheduling';
 import { STARTERS, projectIsEmpty, starterDrums, starterPattern } from '../services/starters';
 import { buildSampleSong } from '../services/sampleSong';
+import { DEFAULT_QUANTIZE, asQuantize, recordPosition } from '../services/recordTiming';
 import { COUNT_IN_BARS, clickAt, countInBeats, countInSeconds, storeMetronome, storedMetronome, type MetronomeSettings } from '../services/metronome';
 import { startsUndoStep } from './undoSteps';
 import { BrowserTransport, TransportTick } from '../services/browserTransport';
@@ -357,6 +358,15 @@ export function useStudio() {
   const [songPosition, setSongPosition] = useState<SongPosition | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [midiMode, setMidiMode] = useState<MidiMode>('live');
+  // Recording from the on-screen and computer keyboards, and how firmly a recorded note is moved
+  // onto the nearest step. Both are for the session, like the MIDI settings.
+  const [recording, setRecording] = useState(false);
+  const recordingRef = useRef(recording);
+  recordingRef.current = recording;
+  const [quantize, setQuantizeValue] = useState(DEFAULT_QUANTIZE);
+  const quantizeRef = useRef(quantize);
+  quantizeRef.current = quantize;
+  const setQuantize = useCallback((value: number) => setQuantizeValue(asQuantize(value)), []);
   const [midiChannel, setMidiChannel] = useState(1);
   // What the sequencer sends to the chosen MIDI output. Kept for the session only.
   const [midiOutNotes, setMidiOutNotes] = useState(true);
@@ -1343,7 +1353,7 @@ export function useStudio() {
   }, [pushHistorySnapshot]);
 
   // Writes a note to a step. `add` joins it to the chord already there instead of replacing it.
-  const upsertStepNote = useCallback(async (synthId: number, stepIndex: number, note: string, velocity: number, add = false) => {
+  const upsertStepNote = useCallback(async (synthId: number, stepIndex: number, note: string, velocity: number, add = false, offset?: number, select = true) => {
     const synth = synthsRef.current.find(s => s.id === synthId);
     if (!synth?.pattern) return;
     pushHistorySnapshot(synthId, synth.pattern.id);
@@ -1352,11 +1362,16 @@ export function useStudio() {
     const updatedPattern = {
       ...synth.pattern,
       steps: synth.pattern.steps.map((step, idx) => (
-        idx === stepIndex ? withStepNotes({ ...step, velocity: boundedVelocity }, add ? [...stepNotes(step), note] : [note]) : step
+        idx === stepIndex
+          // A recorded note brings how late it was played; a note joining a chord starts where the chord does.
+          ? withStepNotes({ ...step, velocity: boundedVelocity, ...(offset !== undefined && !add ? { offset } : {}) }, add ? [...stepNotes(step), note] : [note])
+          : step
       )),
     };
 
-    setSynths(prev => prev.map(s => {
+    // A note put on a chosen step selects it and moves the step pointer on. A recorded note does
+    // neither: left selected, its step would take the next key played and lose what was recorded.
+    if (select) setSynths(prev => prev.map(s => {
       if (s.id !== synthId) return s;
       const nextPointer = (stepIndex + 1) % updatedPattern.steps.length;
       return { ...s, selectedStep: stepIndex, stepRecordPointer: nextPointer };
@@ -1366,10 +1381,41 @@ export function useStudio() {
     lanesBeforeEditRef.current.delete(synthId);
   }, [pushHistorySnapshot]);
 
+  // Where a note played now on this lane is recorded: the step the player is hearing, moved
+  // towards the nearest step by the quantize strength. Null when the transport is not running, or
+  // is still counting in.
+  const recordedStep = useCallback((synthId: number): { step: number; offset: number } | null => {
+    const transport = transportRef.current;
+    const pattern = synthsRef.current.find(s => s.id === synthId)?.pattern;
+    if (!transport?.running || !pattern || pattern.steps.length === 0 || playhead.get(synthId) < 0) return null;
+    const context = getAudioContext();
+    const perBar = pattern.steps.length / laneBars(pattern.steps.length, pattern.bars);
+    return recordPosition({
+      // What is heard now left the clock a moment ago.
+      heardTicks: transport.ticksAt(context.currentTime - (context.outputLatency || 0)),
+      scheduledTicks: transport.scheduledTicks, playheadStep: playhead.get(synthId),
+      ticksPerStep: 32 / perBar, steps: pattern.steps.length, strength: quantizeRef.current,
+    });
+  }, []);
+
+  // A note recorded from the keys: one played with another, within a moment, joins its chord.
+  const recordNote = useCallback((synthId: number, note: string, velocity: number): boolean => {
+    const now = performance.now(), chord = midiChordRef.current;
+    const joins = chord !== null && chord.synthId === synthId && now - chord.at < CHORD_WINDOW_MS;
+    const at = joins ? { step: chord.stepIndex, offset: 0 } : recordedStep(synthId);
+    if (!at) return false;
+    midiChordRef.current = { synthId, stepIndex: at.step, at: now };
+    void upsertStepNote(synthId, at.step, note, velocity, joins, at.offset, false);
+    return true;
+  }, [recordedStep, upsertStepNote]);
+
   const handleNotePlay = useCallback(async (synthId: number, note: string) => {
     const synth = synthsRef.current.find(s => s.id === synthId);
     if (!synth?.synthParams) return;
     if (synth.muted || (synthsRef.current.some(s => s.solo) && !synth.solo)) return;
+    // Recording: the note goes where it was played in the bar, not on the selected step. It is
+    // taken before the sound starts, so starting audio cannot make it late.
+    const recorded = recordingRef.current && synth.isPlaying && recordNote(synthId, note, 1);
 
     await synthAudio.ensureAudioReady();
     if (synth.synthParams.arpeggiator.enabled) {
@@ -1382,7 +1428,7 @@ export function useStudio() {
     // was when the key went down, or a quick second note would undo the first.
     const step = synth.selectedStep;
     const pattern = synthsRef.current.find(s => s.id === synthId)?.pattern;
-    if (step === null || !pattern) return;
+    if (recorded || step === null || !pattern) return;
     pushHistorySnapshot(synthId, pattern.id);
 
     const updated = {
@@ -1391,7 +1437,7 @@ export function useStudio() {
     };
 
     localService.writePattern(synthId, pattern.id, updated);
-  }, [synthAudio, triggerSynthNote, globalTempo, pushHistorySnapshot]);
+  }, [synthAudio, triggerSynthNote, globalTempo, pushHistorySnapshot, recordNote]);
 
   const handleNoteRelease = useCallback(async (synthId: number, note: string) => {
     const synthParams = synthsRef.current.find(s => s.id === synthId)?.synthParams;
@@ -1448,15 +1494,18 @@ export function useStudio() {
     const pattern = targetSynth.pattern;
     if (!pattern || pattern.steps.length === 0) return;
 
-    if (mode === 'record' && !targetSynth.isPlaying) return;
+    if (mode === 'record') {
+      // Written where it was played in the bar, moved to the nearest step by the quantize strength.
+      if (targetSynth.isPlaying) recordNote(targetSynth.id, noteName, velocity);
+      return;
+    }
     // Keys pressed together are a chord: they go on the step the first of them landed on.
     const now = performance.now(), chord = midiChordRef.current;
     const joins = chord !== null && chord.synthId === targetSynth.id && now - chord.at < CHORD_WINDOW_MS;
-    const stepIndex = joins ? chord.stepIndex
-      : (mode === 'record' ? playhead.get(targetSynth.id) : targetSynth.stepRecordPointer) % pattern.steps.length;
+    const stepIndex = joins ? chord.stepIndex : targetSynth.stepRecordPointer % pattern.steps.length;
     midiChordRef.current = { synthId: targetSynth.id, stepIndex, at: now };
     void upsertStepNote(targetSynth.id, stepIndex, noteName, velocity, joins);
-  }, [handleNoteRelease, upsertStepNote, triggerSynthNote, globalTempo, synthAudio]);
+  }, [handleNoteRelease, upsertStepNote, triggerSynthNote, globalTempo, synthAudio, recordNote]);
 
   const midiState = useMidiInput({ onMessage: handleMidiMessage });
 
@@ -2222,7 +2271,7 @@ export function useStudio() {
     synths, selectedSynthId, setSelectedSynthId, drumState: memoizedDrumState, drumKits,
     selectedDrumKitId, drumMasterVolume, drumSwing, drumFx, effectsLoop, browserMuted, setBrowserMuted,
     browserVolume, setBrowserVolume, globalTempo, storageError, setStorageError, changedElsewhere, loadOtherTabVersion, keepThisTabVersion, helpOpen, setHelpOpen, midiMode, setMidiMode,
-    midiChannel, setMidiChannel, midiOutNotes, setMidiOutNotes, midiOutClock, setMidiOutClock, midiTargetSynthId, setMidiTargetSynthId, projectId, projectName, projects, synthPresets, drumAudio,
+    recording, setRecording, quantize, setQuantize, midiChannel, setMidiChannel, midiOutNotes, setMidiOutNotes, midiOutClock, setMidiOutClock, midiTargetSynthId, setMidiTargetSynthId, projectId, projectName, projects, synthPresets, drumAudio,
     handleUndo, handleRedo, midiImportData, setMidiImportData, midiImportAssignments, setMidiImportAssignments,
     handleMidiImportClick, handleMidiImportFile, handleMidiImportApplyAll, midiImportFileRef, handleRemoveSynth,
     ensureSynthExists, handleOctaveShift, handleTempoChange, handleGlobalPlayStop, handleStepChange, handleStepSelect, handleKeyboardModeChange,

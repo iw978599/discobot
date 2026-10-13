@@ -1,3 +1,6 @@
+.keyboard-quantize { display: flex; align-items: center; gap: 6px; color: var(--text-label); font-family: var(--panel-font); font-size: var(--type-label); letter-spacing: 0.08em; text-transform: uppercase; }
+.keyboard-quantize select { background: var(--surface-field); border: 1px solid var(--edge-control); border-radius: var(--corner-control); color: var(--text); font: inherit; letter-spacing: 0; padding: 3px 6px; }
+
 .keyboard-panel {
   width: 100%;
   min-height: 0;

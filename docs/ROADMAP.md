@@ -360,6 +360,15 @@ may redistribute.
    one-bar count-in (Count), beside Tap, kept per browser and in no export.
    Still open: quantize strength, recording from the on-screen keyboard,
    a level for the click, and a count-in of more than one bar.
+   Done on 2026-10-13, not tried by a person playing: Rec in a lane's
+   keyboard panel records the on-screen and computer keyboards while the
+   song runs; a Quantize menu (100, 75, 50, 0%) says how firmly a played
+   note is moved onto the nearest step, for those and for MIDI's record
+   mode. A recorded note now lands on the step the player hears; it used
+   to land on the step the scheduler had reached, up to a step early.
+   Still open: how long a recorded note is held (every one is a step
+   long); the click's level and a longer count-in are in
+   `docs/ROADMAP_V2.md`.
 
 4. **More ways to edit patterns.** (M)
    Lengths that are not a whole number of bars (a 12-step lane against 16);
