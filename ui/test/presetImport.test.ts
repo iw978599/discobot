@@ -32,7 +32,7 @@ test('a VAST preset is translated using that synth\'s own meanings', () => {
   assert.deepEqual(params.oscillator, { type: 'sawtooth', detune: 0, pulseWidth: 0.7 }, 'wave 2 is a saw');
   assert.equal(params.oscillator2!.type, 'square', 'wave 3 is a square');
   assert.deepEqual([params.oscillator2!.enabled, params.oscillator2!.semitones, params.oscillator2!.detune, params.oscillator2!.level], [true, 12, 5, 0.5], 'oscillator 2 keeps its octave and level relative to oscillator 1');
-  assert.deepEqual(params.mixer, { sub: 0.9, noise: 0.18, osc: 1 });
+  assert.deepEqual(params.mixer, { sub: 0.9, noise: 0.18, osc: 1, ring: 0 });
   assert.deepEqual(params.unison, { voices: 3, detune: 0.5, mix: 1 }, 'cents become a share of the detune range');
   assert.deepEqual(params.portamento, { enabled: true, glide: 0.08 });
 

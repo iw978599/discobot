@@ -274,6 +274,8 @@
   opacity: 0.9;
 }
 
+.synth-sync { display: flex; align-items: center; gap: 6px; color: var(--text-label); font-size: var(--type-caption); }
+
 /* Routes: each a source, an arrow, a destination and how far, one to a row. */
 .synth-routes { display: flex; flex-direction: column; gap: 6px; }
 .synth-route { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; color: var(--text-faint); }

@@ -598,6 +598,16 @@ export default function SynthControls({
                   color="#6366f1"
                   tooltip={TOOLTIPS.osc2Detune}
                 />
+                <label className="synth-sync" title="Hard sync: oscillator 2 starts its wave again each time oscillator 1 does. It takes oscillator 1's pitch, and its own tuning becomes its tone">
+                  <input
+                    type="checkbox"
+                    aria-label="Sync oscillator 2 to oscillator 1"
+                    checked={osc2.sync ?? false}
+                    disabled={!osc2.enabled}
+                    onChange={(e) => updateOscillator2({ sync: e.target.checked })}
+                  />
+                  Sync
+                </label>
               </div>
             </div>
 
@@ -653,6 +663,20 @@ export default function SynthControls({
                   parseInputValue={parsePercent(0, 1)}
                   color="#6366f1"
                   tooltip={TOOLTIPS.noise}
+                />
+                <Knob
+                  label="Ring"
+                  ariaLabel="Ring modulation"
+                  value={mixer.ring ?? 0}
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  displayValue={`${Math.round((mixer.ring ?? 0) * 100)}%`}
+                  onChange={(v) => updateMixer({ ring: v })}
+                  parseInputValue={parsePercent(0, 1)}
+                  disabled={!osc2.enabled}
+                  color="#6366f1"
+                  tooltip="Ring modulation: the two oscillators multiplied together, for clangs and bells. It needs oscillator 2 switched on"
                 />
               </div>
             </div>

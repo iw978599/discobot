@@ -13,6 +13,8 @@ export interface VoiceParams {
   osc2Semitones: number;
   osc2Detune: number;
   osc2Level: number;
+  osc2Sync: boolean;
+  ringLevel: number;
   oscLevel: number;
   subLevel: number;
   noiseLevel: number;
@@ -79,8 +81,8 @@ export function createDefaultSynthParameters(): SynthParameters {
     portamento: { enabled: false, glide: 0.05 },
     arpeggiator: { enabled: false, mode: 'up', rate: '1/16', gate: 0.7 },
     oscillator: { type: 'sine', detune: 0, pulseWidth: 0.5 },
-    oscillator2: { enabled: false, type: 'sawtooth', semitones: 0, detune: 7, level: 0.7 },
-    mixer: { sub: 0, noise: 0, osc: 1 },
+    oscillator2: { enabled: false, type: 'sawtooth', semitones: 0, detune: 7, level: 0.7, sync: false },
+    mixer: { sub: 0, noise: 0, osc: 1, ring: 0 },
     unison: { voices: 1, detune: 0.3, mix: 1 },
     duck: 0,
     lfo1: { enabled: false, target: 'pitch', waveform: 'sine', rate: 5, depth: 0.2, sync: false, retrigger: true },
@@ -131,6 +133,7 @@ export function toVoiceParams(p: SynthParameters, bpm = 120): VoiceParams {
     engine: p.engine ?? 'subtractive', voiceMode: p.voiceMode ?? 'poly',
     oscType: p.oscillator.type, detune: p.oscillator.detune, pulseWidth: p.oscillator.pulseWidth ?? 0.5,
     osc2Enabled: osc2.enabled, osc2Type: osc2.type, osc2Semitones: osc2.semitones, osc2Detune: osc2.detune, osc2Level: osc2.level,
+    osc2Sync: osc2.sync ?? false, ringLevel: mixer.ring ?? 0,
     oscLevel: mixer.osc ?? 1, subLevel: mixer.sub, noiseLevel: mixer.noise,
     unisonVoices: unison.voices, unisonDetune: unison.detune, unisonMix: unison.mix ?? 1,
     fmAlgorithm: fm.algorithm, fmRatio: fm.ratio, fmIndex: fm.index, fmDecay: fm.decay, fmFeedback: fm.feedback,

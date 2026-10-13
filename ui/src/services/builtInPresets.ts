@@ -164,6 +164,10 @@ const LEAD: BuiltInPreset[] = [
     fxReturn: 0.7, fxSends: { reverb: 0.25, delay: 0.3, drive: 0.1, phaser: 0, chorus: 0 },
     lfo2: { enabled: true, target: 'vibrato', waveform: 'sine', rate: 5.5, depth: 0.2, sync: false, retrigger: true },
   }),
+  model('lead-odyssey', 'Odyssey Sync', 'lead', 'odyssey', [0.6, 0, 0.6, 0], {
+    gain: 1.3,
+    fxReturn: 0.7, fxSends: { reverb: 0.2, delay: 0.3, drive: 0.15, phaser: 0, chorus: 0 },
+  }),
   generic('lead-square', 'Square Lead', 'lead', {
     gain: 0.75,
     voiceMode: 'mono', portamento: { enabled: true, glide: 0.06 },
@@ -411,6 +415,14 @@ const PLUCK: BuiltInPreset[] = [
 ];
 
 const EFFECTS: BuiltInPreset[] = [
+  model('fx-odyssey-ring', 'Odyssey Clang', 'effects', 'odyssey', [0.35, 0.9, 0.55, 0.15], {
+    gain: 1.1,
+    fxReturn: 0.8, fxSends: { reverb: 0.35, delay: 0.3, drive: 0.1, phaser: 0, chorus: 0 },
+  }),
+  model('fx-odyssey-bubbles', 'Odyssey Bubbles', 'effects', 'odyssey', [0.1, 0.1, 0.4, 0.95], {
+    gain: 0.8,
+    fxReturn: 0.8, fxSends: { reverb: 0.4, delay: 0.35, drive: 0, phaser: 0, chorus: 0 },
+  }),
   generic('fx-riser', 'Noise Riser', 'effects', {
     gain: 2,
     mixer: { sub: 0, noise: 1, osc: 0 },
