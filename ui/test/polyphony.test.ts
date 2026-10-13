@@ -55,7 +55,7 @@ test('the arpeggiator runs through a chord\'s own notes, across its length', () 
   arp.arpeggiator.mode = 'updown';
   assert.deepEqual(expandStepNotes({ ...step, length: 6 }, arp, 0.125, 120).map(note => note.note), ['C3', 'D#3', 'G3', 'D#3', 'C3', 'D#3']);
   arp.arpeggiator.mode = 'up';
-  assert.deepEqual(expandStepNotes({ active: true, note: 'C3', velocity: 1, length: 4 }, arp, 0.125, 120).map(note => note.note), ['C3', 'E3', 'G3', 'C4'], 'a single note keeps the old behaviour');
+  assert.deepEqual(expandStepNotes({ active: true, note: 'C3', velocity: 1, length: 4 }, arp, 0.125, 120).map(note => note.note), ['C3', 'C4', 'C5', 'C3'], 'a single note goes through its own octaves');
 });
 
 test('chords and lengths read from storage are checked', () => {

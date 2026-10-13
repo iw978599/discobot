@@ -30,14 +30,17 @@ export interface ScheduledNote {
   duration: number;
 }
 
+// What one note alone is arpeggiated through: itself and the two octaves above it. It was a major
+// chord until people using the app said a single key should give octaves of that key, which fits
+// whatever key the song is in.
 const ARP_PATTERNS: Record<string, number[]> = {
-  up: [0, 4, 7, 12],
-  down: [12, 7, 4, 0],
-  updown: [0, 4, 7, 12, 7, 4],
-  downup: [12, 7, 4, 0, 4, 7],
-  converge: [0, 12, 4, 7],
-  diverge: [7, 4, 12, 0],
-  random: [0, 4, 7, 12],
+  up: [0, 12, 24],
+  down: [24, 12, 0],
+  updown: [0, 12, 24, 12],
+  downup: [24, 12, 0, 12],
+  converge: [0, 24, 12],
+  diverge: [12, 0, 24],
+  random: [0, 12, 24],
 };
 
 function chordOrder(intervals: number[], mode: string): number[] {
@@ -60,7 +63,7 @@ export function expandStep(
     return [{ note, offset: 0, duration: held + (slide ? windowSeconds * 1.1 : Math.max(0.05, windowSeconds * 0.92)) }];
   }
   windowSeconds += held;
-  // A chord is arpeggiated through its own notes; a single note through a major chord above it.
+  // A chord is arpeggiated through its own notes; a single note through its own octaves.
   const semitones = chord && chord.length > 1
     ? chordOrder(chord.map(entry => (noteNameToMidi(entry) ?? 0) - (noteNameToMidi(note) ?? 0)), arp.mode)
     : ARP_PATTERNS[arp.mode] ?? ARP_PATTERNS.up;

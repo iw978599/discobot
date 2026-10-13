@@ -26,6 +26,7 @@ import type { PresetKind } from '../services/presetKinds';
 import { createBuiltInPresets } from '../services/builtInPresets';
 import { expandStep, expandStepNotes, stepNotes, withStepNotes } from '../services/noteScheduling';
 import { STARTERS, projectIsEmpty, starterDrums, starterPattern } from '../services/starters';
+import { buildSampleSong } from '../services/sampleSong';
 import { startsUndoStep } from './undoSteps';
 import { BrowserTransport, TransportTick } from '../services/browserTransport';
 import { downloadFile, ExportArrangement } from '../services/wavExport';
@@ -2047,6 +2048,13 @@ export function useStudio() {
     ]);
   }, [pushHistorySnapshot]);
 
+  // The sample song is a project of its own, opened as a file is: nothing here is changed.
+  const handleSampleSong = useCallback(async () => {
+    const file = buildSampleSong(localService.exportProject(), createBuiltInPresets());
+    if (!file) { setStorageError('The sample song could not be made.'); return; }
+    if (await handleImportProject(file)) setPlayMode('song');
+  }, [handleImportProject]);
+
   // The offer is decided when a project is opened and found empty, and it leaves only by its own
   // Hide button. It must not go away because a note was put in: that would move the whole rack
   // under the pointer that had just put it in.
@@ -2163,7 +2171,7 @@ export function useStudio() {
   const isAnyPlaying = synths.some(s => s.isPlaying);
 
   return {
-    handleStarter, dismissStarters, showStarters,
+    handleStarter, handleSampleSong, dismissStarters, showStarters,
     synths, selectedSynthId, setSelectedSynthId, drumState: memoizedDrumState, drumKits,
     selectedDrumKitId, drumMasterVolume, drumSwing, drumFx, effectsLoop, browserMuted, setBrowserMuted,
     browserVolume, setBrowserVolume, globalTempo, storageError, setStorageError, changedElsewhere, loadOtherTabVersion, keepThisTabVersion, helpOpen, setHelpOpen, midiMode, setMidiMode,
