@@ -754,15 +754,11 @@ for new accounts.
 
 ## Questions waiting on the owner
 
-- **Controller knobs (draft pull request).** Three things to settle after
-  trying it with the Launchkey. Are the ties rightly kept with the browser,
-  so the controller works the same in every project, or should they be
-  saved with each project? When the knob on the controller and the knob on
-  screen are in different places, the parameter jumps to the controller's
-  as soon as it is turned: is that right, or should it wait until the
-  controller's knob passes the value? And the parameter is chosen from a
-  menu in the MIDI panel, not by pressing Learn on the knob itself on
-  screen: is the menu enough?
+- **Controller knobs.** Merged on 2026-10-13 with the owner's answers,
+  each as built: the ties are kept with the browser for now, the
+  parameter jumps to the controller's knob as soon as it is turned, and
+  choosing the parameter from a menu is enough. Still to do: try it with
+  the Launchkey.
 
 - **Did the Firefox guest fixes work?** PRs #76 and #77 changed how a guest
   instrument's audio is timed for Firefox. Nobody has said whether a guest

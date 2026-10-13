@@ -118,17 +118,18 @@ test('a wheel that is the page scrolling, or comes before the pointer has rested
   await expect(gain).toHaveAttribute('aria-valuenow', '0.5');
 });
 
-test('the middle button puts a knob at zero, or at the end nearest it, as one undo step', async ({ page }) => {
+test('the middle button puts a knob back at its default, as one undo step', async ({ page }) => {
   const synth = page.locator('.synth-controls-panel');
   const gain = synth.getByRole('slider', { name: 'Gain', exact: true });
   await tab(page, 'Amp');
+  await expect(gain, 'a new lane starts at its default').toHaveAttribute('aria-valuenow', '1');
   await edit(synth.getByLabel('Gain value', { exact: true }), '50%');
   await expect(gain).toHaveAttribute('aria-valuenow', '0.5');
   // Resting on the knob first puts the typed value and the press far enough apart to be two undo steps.
   await rest(page, gain);
   const before = await scrolled(page);
   await gain.click({ button: 'middle' });
-  await expect(gain).toHaveAttribute('aria-valuenow', '0');
+  await expect(gain, 'back at the default, not at zero').toHaveAttribute('aria-valuenow', '1');
   await expect(gain, 'the knob has the keyboard').toBeFocused();
   expect(await scrolled(page), 'the page did not scroll').toBe(before);
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
@@ -138,7 +139,7 @@ test('the middle button puts a knob at zero, or at the end nearest it, as one un
   await gain.click({ button: 'right' });
   await expect(gain).toHaveAttribute('aria-valuenow', '0.5');
 
-  // A knob that goes either side of zero is put in the middle.
+  // An effects knob: the EQ's default is flat.
   const eqEffects = page.locator('.effects-unit');
   await eqEffects.getByLabel('Master EQ enabled', { exact: true }).check();
   const eqLow = eqEffects.getByRole('slider', { name: 'EQ low', exact: true });
@@ -148,7 +149,7 @@ test('the middle button puts a knob at zero, or at the end nearest it, as one un
   await eqLow.click({ button: 'middle' });
   await expect(eqLow).toHaveAttribute('aria-valuenow', '0');
 
-  // One that does not reach zero goes to the end nearest it, and a drum knob answers too.
+  // A drum knob: there is no swing to begin with.
   const swing = page.getByRole('slider', { name: 'Swing', exact: true });
   await rest(page, swing);
   await page.mouse.wheel(0, -100);

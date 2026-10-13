@@ -4,13 +4,18 @@ import CopyToScene from './CopyToScene';
 import TransposeTool from './TransposeTool';
 import type { Studio } from '../studio/useStudio';
 import { SynthModelParams } from '../types';
-import { getSynthModelDefinition } from '../synthModels';
+import { createDefaultSynthModelParams, getSynthModelDefinition } from '../synthModels';
+import { createDefaultSynthParameters } from '@discobot/engine';
 import Knob from '../components/Knob';
 import SynthControls, { type SynthTab } from '../components/SynthControls';
 import KeyboardPanel from '../components/KeyboardPanel';
 import StepRow from './StepRow';
 import { usePlayhead } from '../hooks/usePlayhead';
 import { tracked } from '../studio/tracked';
+
+// Where a middle click puts a lane's knobs back to.
+const SOUND_DEFAULTS = createDefaultSynthParameters();
+const MACRO_DEFAULTS = createDefaultSynthModelParams();
 
 const AMBER = '#ffb000';
 
@@ -165,6 +170,7 @@ function SynthModule({ studio, synthId, synth }: SynthModuleProps) {
                     tooltip={macro.label}
                     ariaLabel={`Synth ${synthId} ${macro.label.toLowerCase()}`}
                     value={synth.synthModelParams[macro.key]}
+                    defaultValue={MACRO_DEFAULTS[macro.key]}
                     displayValue={`${Math.round(synth.synthModelParams[macro.key] * 100)}%`}
                     parseInputValue={percent}
                     onChange={(value) => { void studio.handleSynthModelChange(synthId, synth.synthModelId, { [macro.key]: value } as Partial<SynthModelParams>); }}
@@ -179,6 +185,7 @@ function SynthModule({ studio, synthId, synth }: SynthModuleProps) {
                   label="Cutoff"
                   ariaLabel={`Synth ${synthId} cutoff`}
                   value={params.filter.frequency}
+                  defaultValue={SOUND_DEFAULTS.filter.frequency}
                   min={20}
                   max={20000}
                   step={10}
@@ -193,6 +200,7 @@ function SynthModule({ studio, synthId, synth }: SynthModuleProps) {
                   tooltip="Resonance"
                   ariaLabel={`Synth ${synthId} resonance`}
                   value={params.filter.q}
+                  defaultValue={SOUND_DEFAULTS.filter.q}
                   min={0.1}
                   max={20}
                   step={0.1}
@@ -204,6 +212,7 @@ function SynthModule({ studio, synthId, synth }: SynthModuleProps) {
                   label="Env"
                   ariaLabel={`Synth ${synthId} filter envelope`}
                   value={params.filter.envAmount ?? 0}
+                  defaultValue={SOUND_DEFAULTS.filter.envAmount ?? 0}
                   min={-1}
                   max={1}
                   displayValue={`${Math.round((params.filter.envAmount ?? 0) * 100)}%`}
@@ -216,6 +225,7 @@ function SynthModule({ studio, synthId, synth }: SynthModuleProps) {
                   label="Decay"
                   ariaLabel={`Synth ${synthId} decay`}
                   value={params.envelope.decay}
+                  defaultValue={SOUND_DEFAULTS.envelope.decay}
                   min={0}
                   max={2}
                   displayValue={`${Math.round(params.envelope.decay * 1000)}ms`}
@@ -230,6 +240,7 @@ function SynthModule({ studio, synthId, synth }: SynthModuleProps) {
               label="Level"
               ariaLabel={`Synth ${synthId} level`}
               value={params.gain}
+              defaultValue={SOUND_DEFAULTS.gain}
               min={0}
               max={2}
               displayValue={`${Math.round(params.gain * 100)}%`}

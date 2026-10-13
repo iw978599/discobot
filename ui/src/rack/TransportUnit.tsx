@@ -144,6 +144,7 @@ export default function TransportUnit({ studio, onOpenSettings, onOpenProjects, 
       size="small"
       label="Volume"
       value={studio.browserVolume}
+      defaultValue={1}
       displayValue={`${Math.round(studio.browserVolume * 100)}%`}
       parseInputValue={(input) => { const value = Number.parseFloat(input); return Number.isFinite(value) ? value / 100 : null; }}
       onChange={studio.setBrowserVolume}

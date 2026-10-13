@@ -12,8 +12,9 @@ const TAP_WAIT_MS = 300;
 export const TAP_HOLD_MS = 500;
 
 // `onTap` is called for a knob that was touched and let go without being turned. Only a finger
-// or a pen taps; a mouse click does nothing, as before.
-export function useKnobInteraction(value: number, min: number, max: number, step: number, onChange: (value: number) => void, disabled = false, onTap?: () => void) {
+// or a pen taps; a mouse click does nothing, as before. `resetTo` is where a press of a mouse's
+// middle button puts the knob: its default, or zero for a knob that was given none.
+export function useKnobInteraction(value: number, min: number, max: number, step: number, onChange: (value: number) => void, disabled = false, onTap?: () => void, resetTo = 0) {
   const drag = useRef<{ id: number; x: number; y: number; at: number; value: number; touch: boolean; moved: boolean } | null>(null);
   const tapped = useRef(false);
   const tapTimer = useRef<number | null>(null);
@@ -51,14 +52,13 @@ export function useKnobInteraction(value: number, min: number, max: number, step
     // The middle button would start the browser's own scrolling from the knob.
     onMouseDown: (event: MouseEvent<HTMLDivElement>) => { if (event.button === 1) event.preventDefault(); },
     onPointerDown: (event: PointerEvent<HTMLDivElement>) => {
-      // A press of a mouse's middle button puts the knob at zero: the middle of a knob that goes
-      // either side of it, and the end nearest zero of one that does not reach it.
+      // A press of a mouse's middle button puts the knob back at its default.
       if (!disabled && event.button === 1 && event.pointerType === 'mouse') {
         event.preventDefault();
         event.currentTarget.focus();
         drag.current = null;
-        const zero = normalize(0);
-        if (zero !== value) onChange(zero);
+        const home = normalize(resetTo);
+        if (home !== value) onChange(home);
         return;
       }
       if (disabled || event.button !== 0) return;
