@@ -93,6 +93,8 @@ export function sanitizeSynthParams(value: unknown, defaults: SynthParameters): 
   params.sample = {
     ...(typeof sample.id === 'string' && /^[0-9a-f-]{36}$/.test(sample.id) ? { id: sample.id } : {}),
     root: Math.round(number(sample.root, 60, 0, 127)), loop: sample.loop === true,
+    ...(typeof sample.wave === 'string' && /^[a-z0-9-]{1,32}$/.test(sample.wave)
+      ? { wave: sample.wave, scan: number(sample.scan, 2, 0, 40), fade: number(sample.fade, 1, 0, 1) } : {}),
   };
   params.voiceMode = input.voiceMode === 'mono' ? 'mono' : 'poly';
   params.oscillator.pulseWidth = number(params.oscillator.pulseWidth, .5, .05, .95);

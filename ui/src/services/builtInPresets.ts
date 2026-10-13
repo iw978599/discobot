@@ -253,6 +253,18 @@ const PAD: BuiltInPreset[] = [
     gain: 0.7,
     spread: 0.5, fxReturn: 0.9, fxSends: { reverb: 0.45, delay: 0.15, drive: 0, phaser: 0 },
   }),
+  model('pad-m1-voices', 'M1 Voices', 'pad', 'm1', [0.9, 0.6, 0.5, 0.6], {
+    gain: 1.05,
+    fxReturn: 0.9, fxSends: { reverb: 0.55, delay: 0.15, drive: 0, phaser: 0, chorus: 0.25 },
+  }),
+  model('pad-d50-breath', 'D-50 Breath Pad', 'pad', 'd-50', [0.7, 0.1, 0.5, 0.6], {
+    gain: 1.3,
+    fxReturn: 0.9, fxSends: { reverb: 0.5, delay: 0.2, drive: 0, phaser: 0, chorus: 0.2 },
+  }),
+  model('pad-wavestation', 'Wavestation Drift', 'pad', 'wavestation', [0.4, 0.3, 1, 0.6], {
+    gain: 1,
+    spread: 0.3, fxReturn: 0.9, fxSends: { reverb: 0.5, delay: 0.3, drive: 0, phaser: 0.1, chorus: 0.2 },
+  }),
   model('pad-cs80', 'CS-80 Strings', 'pad', 'cs-80', [0.5, 0.6, 0.6, 0.55], {
     gain: 1,
     fxReturn: 0.9, fxSends: { reverb: 0.5, delay: 0.15, drive: 0, phaser: 0, chorus: 0.25 },
@@ -323,6 +335,18 @@ const PAD: BuiltInPreset[] = [
 ];
 
 const KEYS: BuiltInPreset[] = [
+  model('keys-m1-piano', 'M1 Piano', 'keys', 'm1', [0.1, 0.75, 0, 0.3], {
+    gain: 1.25,
+    fxReturn: 0.8, fxSends: { reverb: 0.3, delay: 0.05, drive: 0, phaser: 0, chorus: 0 },
+  }),
+  model('keys-m1-organ', 'M1 Organ', 'keys', 'm1', [0.6, 0.65, 0, 0.1], {
+    gain: 0.8,
+    fxReturn: 0.8, fxSends: { reverb: 0.2, delay: 0, drive: 0.1, phaser: 0, chorus: 0.2 },
+  }),
+  model('keys-d50-bell', 'D-50 Bell Keys', 'keys', 'd-50', [0.8, 0.9, 0.55, 0.4], {
+    gain: 1,
+    fxReturn: 0.85, fxSends: { reverb: 0.4, delay: 0.2, drive: 0, phaser: 0, chorus: 0.15 },
+  }),
   model('grand-piano', 'Electric Piano', 'keys', 'dx7', [0.95, 0.19, 0.3, 0.5], {
     gain: 0.85,
     fxReturn: 0.82, fxSends: { reverb: 0.3, delay: 0.05, drive: 0, phaser: 0.05, chorus: 0.3 },
@@ -389,6 +413,10 @@ const PLUCK: BuiltInPreset[] = [
     gain: 0.75,
     fxReturn: 0.9, fxSends: { reverb: 0.45, delay: 0.2, drive: 0, phaser: 0, chorus: 0.1 },
   }),
+  model('pluck-m1-marimba', 'M1 Marimba', 'pluck', 'm1', [0.35, 0.75, 0, 0.2], {
+    gain: 1.05,
+    fxReturn: 0.8, fxSends: { reverb: 0.3, delay: 0.15, drive: 0, phaser: 0, chorus: 0 },
+  }),
   generic('pluck-marimba', 'Marimba', 'pluck', {
     gain: 1.1,
     engine: 'fm', fm: { algorithm: 1, ratio: 4, index: 0.3, decay: 0.08, feedback: 0 },
@@ -439,6 +467,10 @@ const PLUCK: BuiltInPreset[] = [
 ];
 
 const EFFECTS: BuiltInPreset[] = [
+  model('fx-wavestation-steps', 'Wavestation Steps', 'effects', 'wavestation', [0.9, 0.75, 0, 0.7], {
+    gain: 0.7,
+    fxReturn: 0.85, fxSends: { reverb: 0.3, delay: 0.4, drive: 0, phaser: 0, chorus: 0 },
+  }),
   model('fx-odyssey-ring', 'Odyssey Clang', 'effects', 'odyssey', [0.35, 0.9, 0.55, 0.15], {
     gain: 1.1,
     fxReturn: 0.8, fxSends: { reverb: 0.35, delay: 0.3, drive: 0.1, phaser: 0, chorus: 0 },

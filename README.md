@@ -13,18 +13,22 @@ controls sized for a finger.
 
 ## What is in it
 
-**Three synth lanes.** Each plays one of seventeen synth models: a plain engine
-with every control on show, and sixteen set up in the manner of a well-known
+**Three synth lanes.** Each plays one of twenty synth models: a plain engine
+with every control on show, and nineteen set up in the manner of a well-known
 instrument, each with four knobs of its own.
 
 | Mono | Poly | Digital |
 |---|---|---|
-| Minimoog Model D, TB-303, SH-101, Pro-One, Mono/Poly, MS-20, Odyssey | Juno-106, Prophet-5, Jupiter-8, OB-Xa, Polysix, CS-80 | DX7, JP-8000, Virus |
+| Minimoog Model D, TB-303, SH-101, Pro-One, Mono/Poly, MS-20, Odyssey | Juno-106, Prophet-5, Jupiter-8, OB-Xa, Polysix, CS-80 | DX7, JP-8000, Virus, M1, D-50, Wavestation |
 
 A model is this synth's own voice set up to behave like the instrument it is
 named for. It is not that instrument's circuit and uses none of its samples.
+The M1, D-50 and Wavestation play recordings and waves from two free
+libraries, VSCO 2 Community Edition (Versilian Studios, with an upright piano
+sampled by Simon Dalzell of Ivy Audio) and Adventure Kid Waveforms (Kristoffer
+Ekstrand), both in the public domain; `docs/BUNDLED_AUDIO.md` has the details.
 
-**Sixty-eight presets** in six kinds: bass, lead, pad, keys, pluck and effects.
+**Seventy-six presets** in six kinds: bass, lead, pad, keys, pluck and effects.
 They are level-matched, so choosing another does not mean reaching for the
 volume. You can save, export and import your own, including presets from some
 other synths.
@@ -94,8 +98,10 @@ renders exports, so both sound the same. Each of its eight notes has:
   filtered, faded in and placed differently, which halves the notes that can
   sound at once to four;
 - a four-operator FM mode;
-- a sample mode: an imported sample played up and down the keyboard in place
-  of the oscillators, once or looped;
+- a sample mode: an imported sample, or one of the sounds that come with the
+  app (a piano, a marimba, an organ, a voice, four recorded attacks and four
+  sequences of waves), played up and down the keyboard in place of the
+  oscillators;
 - a high-pass, then a filter that can be a clean 12 or 24 dB state-variable
   filter, a four-pole ladder whose resonance thins the bass and rings by
   itself, or a two-pole in the manner of an MS-20 whose resonance distorts as

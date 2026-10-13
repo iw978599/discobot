@@ -261,7 +261,8 @@ test('the second layer goes when a lane leaves the CS-80', () => {
   const lane = sound('cs-80', { macro1: 1, macro2: 1, macro3: 1, macro4: 1 });
   for (const model of SYNTH_MODELS.filter(entry => entry.id !== 'generic' && entry.id !== 'cs-80')) {
     const moved = toVoiceParams(onLane(lane, enterSynthModel(model.id, MIDDLE, 'cs-80')));
-    assert.equal(moved.layerEnabled, false, model.id);
+    // A model with a layer of its own has that one, and not the CS-80's.
+    assert.equal(moved.layerEnabled, mapSynthModelToEngineParams(model.id, MIDDLE).layer?.enabled ?? false, model.id);
     assert.equal(moved.filterHighpass, mapSynthModelToEngineParams(model.id, MIDDLE).filter?.highpass ?? 0, model.id);
   }
   // Only turning a macro leaves a layer someone switched on by hand where it is.

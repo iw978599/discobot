@@ -15,6 +15,13 @@ export interface NoteOnMessage {
 export interface SynthSample {
   data: Float32Array;
   rate: number;
+  // The note the recording sounds at. Absent, the sound's own root setting says.
+  root?: number;
+  // More recordings of the same instrument at other notes. A note plays the one whose root is nearest.
+  zones?: Array<{ data: Float32Array; rate: number; root: number }>;
+  // Set when `data` is not a recording but single cycles end to end, each this many samples long.
+  // It is then played as an oscillator, and stepped through from one cycle to the next.
+  frame?: number;
 }
 
 interface Voice {
@@ -51,8 +58,13 @@ interface Voice {
   randomPhase: number;
   // Which layer of a layered sound this voice is playing: 0, or 1 for the second.
   layer: number;
-  // How far into the sample this voice has played, in the sample's own frames.
+  // How far into the sample this voice has played, in the sample's own frames; for a table of
+  // cycles, which cycle it has reached.
   samplePosition: number;
+  // The recording chosen for this note out of an instrument's several, and its frames per cycle of
+  // the note. Null for a sample with one recording and no root of its own, which is read as it is set.
+  sampleData: Float32Array | null;
+  sampleScale: number;
 }
 
 const TWO_PI = 2 * Math.PI;
@@ -107,7 +119,7 @@ export class SynthCore {
       fmPhase: [0, 0, 0, 0], fmFeedback: 0, fmEnv: 0, lfoPhase: [0, 0],
       amp: new Adsr(), filterEnv: new Adsr(), filter: new Svf(), filter2: new Svf(), ladder: new Ladder(), highpass: new Svf(), previousInput: 0,
       last: 0, transition: 0, transitionSamples: 0, age: 0, remaining: Infinity, releaseOverride: 0,
-      random: 0, randomPhase: 0, layer: 0, samplePosition: 0,
+      random: 0, randomPhase: 0, layer: 0, samplePosition: 0, sampleData: null, sampleScale: 0,
     }));
     this.refreshDerived();
     Object.assign(this.smoothed, {
@@ -119,6 +131,7 @@ export class SynthCore {
   // engine with no recording plays its oscillators.
   setSample(sample: SynthSample | null): void {
     this.sample = sample && sample.data.length > 1 && sample.rate > 0 ? sample : null;
+    for (const voice of this.voices) voice.sampleData = null;
     if (this.params.engine !== 'sample') return;
     for (const voice of this.voices) {
       voice.samplePosition = 0;
@@ -284,6 +297,18 @@ export class SynthCore {
       voice.transitionSamples = this.transitionLength;
     }
     voice.samplePosition = 0;
+    voice.sampleData = null;
+    const sample = this.sample;
+    if (sample && !sample.frame && (sample.zones || sample.root !== undefined)) {
+      // The recording made nearest this note.
+      const midi = 69 + 12 * Math.log2(frequency / 440);
+      let data = sample.data, rate = sample.rate, root = sample.root ?? clamp(this.params.sampleRoot, 0, 127, 60);
+      for (const zone of sample.zones ?? []) {
+        if (Math.abs(zone.root - midi) < Math.abs(root - midi)) { data = zone.data; rate = zone.rate; root = zone.root; }
+      }
+      voice.sampleData = data;
+      voice.sampleScale = rate / (440 * 2 ** ((root - 69) / 12));
+    }
     // A voice that is still sounding keeps its phase and envelope level, so stealing it cannot click.
     voice.active = true;
     voice.note = message.note;
@@ -337,7 +362,12 @@ export class SynthCore {
     const sample = p.engine === 'sample' ? this.sample : null;
     const sampleLoop = p.sampleLoop;
     // How many of the recording's frames one cycle of a note is worth, at the note it was recorded at.
-    const sampleScale = sample ? sample.rate / (440 * 2 ** ((clamp(p.sampleRoot, 0, 127, 60) - 69) / 12)) : 0;
+    const sampleScale = sample ? sample.rate / (440 * 2 ** ((clamp(sample.root ?? p.sampleRoot, 0, 127, 60) - 69) / 12)) : 0;
+    // A table of single cycles: how long each is, how many there are, how fast they are stepped
+    // through, and how much of each step is a crossfade into the next.
+    const tableFrame = sample?.frame ? Math.floor(sample.frame) : 0;
+    const tableFrames = tableFrame > 1 ? Math.floor(sample!.data.length / tableFrame) : 0;
+    const tableScan = clamp(p.sampleScan, 0, 40, 2) / sr, tableFade = clamp(p.sampleFade, 0, 1, 1);
     const osc2Level = p.osc2Enabled ? clamp(p.osc2Level, 0, 1) : 0;
     const oscLevel = clamp(p.oscLevel, 0, 1, 1), subLevel = clamp(p.subLevel, 0, 1), noiseLevel = clamp(p.noiseLevel, 0, 1);
     // Ring modulation and sync both need the second oscillator running, whether or not it is heard itself.
@@ -458,18 +488,43 @@ export class SynthCore {
               + depth * (Math.sin(TWO_PI * ph[1]) + opD));
           }
         } else if (sample) {
-          const data = sample.data, end = data.length - 1;
-          let at = v.samplePosition;
-          if (at >= end && sampleLoop) at %= end;
-          if (at < end) {
-            const index = Math.floor(at);
-            source = data[index] + (data[index + 1] - data[index]) * (at - index);
+          if (tableFrames > 0) {
+            const data = sample.data;
+            v.phase1[0] = (v.phase1[0] + step) % 1;
+            const place = v.phase1[0] * tableFrame, index = Math.floor(place), next = (index + 1) % tableFrame, part = place - index;
+            const position = v.samplePosition, cycle = Math.floor(position) % tableFrames, first = cycle * tableFrame;
+            source = data[first + index] + (data[first + next] - data[first + index]) * part;
+            if (tableFrames > 1) {
+              // Each cycle is held, then crossfaded into the next over the last part of its turn.
+              const turn = position - Math.floor(position);
+              const blend = tableFade <= 0 ? 0 : clamp((turn - (1 - tableFade)) / tableFade, 0, 1, 0);
+              if (blend > 0) {
+                const after = ((cycle + 1) % tableFrames) * tableFrame;
+                source += (data[after + index] + (data[after + next] - data[after + index]) * part - source) * blend;
+              }
+              v.samplePosition = (position + tableScan) % tableFrames;
+            }
           } else {
-            // Played once and finished: the voice is let go, so a held key does not keep it from another note.
-            source = 0;
-            this.release(v);
+            const data = v.sampleData ?? sample.data, end = data.length - 1;
+            let at = v.samplePosition;
+            if (at >= end && sampleLoop) at %= end;
+            if (at < end) {
+              const index = Math.floor(at);
+              source = data[index] + (data[index + 1] - data[index]) * (at - index);
+            } else {
+              // Played once and finished: the voice is let go, so a held key does not keep it from
+              // another note. With the second oscillator sounding beside it, the note goes on.
+              source = 0;
+              if (!secondRuns) this.release(v);
+            }
+            v.samplePosition = at + step * (v.sampleData ? v.sampleScale : sampleScale);
           }
-          v.samplePosition = at + step * sampleScale;
+          source *= oscLevel;
+          if (secondRuns) {
+            const step2 = clamp(step * d.osc2Ratio * osc2Mod, 0.000001, 0.45);
+            v.phase2[0] = (v.phase2[0] + step2) % 1;
+            source += oscillator(p.osc2Type, v.phase2[0], step2) * osc2Level;
+          }
         } else {
           const pulseWidth = clamp(s.pulseWidth + pulseMod, 0.05, 0.95, 0.5);
           source = 0;

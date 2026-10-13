@@ -190,6 +190,42 @@ export const SYNTH_MODELS: SynthModelDefinition[] = [
     ],
   },
   {
+    id: 'm1',
+    name: 'M1',
+    group: 'Digital',
+    subtitle: 'Recorded instruments through a filter: a piano, a marimba, an organ and a voice',
+    macros: [
+      { key: 'macro1', label: 'Sound' },
+      { key: 'macro2', label: 'Brightness' },
+      { key: 'macro3', label: 'Attack' },
+      { key: 'macro4', label: 'Release' },
+    ],
+  },
+  {
+    id: 'd-50',
+    name: 'D-50',
+    group: 'Digital',
+    subtitle: 'A recorded attack on a synth sustain: the start of a real instrument, then a saw',
+    macros: [
+      { key: 'macro1', label: 'Attack Level' },
+      { key: 'macro2', label: 'Tone' },
+      { key: 'macro3', label: 'Brightness' },
+      { key: 'macro4', label: 'Chorus' },
+    ],
+  },
+  {
+    id: 'wavestation',
+    name: 'Wavestation',
+    group: 'Digital',
+    subtitle: 'A sequence of waves, one after another, stepping or melting into each other',
+    macros: [
+      { key: 'macro1', label: 'Sequence' },
+      { key: 'macro2', label: 'Speed' },
+      { key: 'macro3', label: 'Crossfade' },
+      { key: 'macro4', label: 'Brightness' },
+    ],
+  },
+  {
     id: 'virus',
     name: 'Virus',
     group: 'Digital',
@@ -614,6 +650,71 @@ function mapCs80(params: SynthModelParams): Partial<SynthParameters> {
   };
 }
 
+// The three models that play the app's own waves (services/builtInWaves.ts). A knob that chooses
+// between sounds has as many equal parts as there are sounds.
+const pick = (list: string[], macro: number) => list[Math.min(list.length - 1, Math.floor(clamp01(macro) * list.length))];
+const brightness = (macro: number) => Math.round(400 * (16000 / 400) ** clamp01(macro));
+const NO_SECOND = { enabled: false, type: 'sawtooth' as const, semitones: 0, detune: 0, level: 0, sync: false };
+
+// Recorded instruments through a filter and an envelope, which is all the instrument's sounds were.
+const M1_SOUNDS = ['piano', 'mallet', 'organ', 'choir'];
+function mapM1(params: SynthModelParams): Partial<SynthParameters> {
+  const attack = clamp01(params.macro3), release = clamp01(params.macro4);
+  return {
+    engine: 'sample',
+    voiceMode: 'poly',
+    sample: { root: 60, loop: false, wave: pick(M1_SOUNDS, params.macro1), scan: 2, fade: 1 },
+    oscillator2: NO_SECOND,
+    mixer: { sub: 0, noise: 0, osc: 1, ring: 0 },
+    filter: { type: 'lowpass', frequency: brightness(params.macro2), q: 0.7, envAmount: 0, keyTracking: 0.5, drive: 0, slope: 12 },
+    filterEnvelope: { attack: 0.005, decay: 0.4, sustain: 0.5, release: 0.4 },
+    envelope: { attack: Number((0.002 + attack * attack * 1.5).toFixed(3)), decay: 0.3, sustain: 1, release: Number((0.05 + release * release * 3).toFixed(2)) },
+    velocity: { amp: 0.8, filter: 0.3 },
+    portamento: { enabled: false, glide: 0.05 },
+  };
+}
+
+// The start of a recorded instrument laid over a saw that carries the note on, the instrument's
+// idea. Its chorus was built in; here the fourth macro is a second layer, tuned and placed apart.
+const D50_ATTACKS = ['attack-breath', 'attack-pluck', 'attack-mallet', 'attack-bell'];
+function mapD50(params: SynthModelParams): Partial<SynthParameters> {
+  const chorus = clamp01(params.macro4);
+  return {
+    engine: 'sample',
+    voiceMode: 'poly',
+    sample: { root: 60, loop: false, wave: pick(D50_ATTACKS, params.macro2), scan: 2, fade: 1 },
+    oscillator2: { enabled: true, type: 'sawtooth', semitones: 0, detune: 0, level: 0.6, sync: false },
+    mixer: { sub: 0, noise: 0, osc: Number(clamp01(params.macro1).toFixed(2)), ring: 0 },
+    filter: { type: 'lowpass', frequency: brightness(params.macro3), q: 0.9, envAmount: 0.2, keyTracking: 0.5, drive: 0, slope: 12 },
+    filterEnvelope: { attack: 0.005, decay: 0.6, sustain: 0.4, release: 0.5 },
+    envelope: { attack: 0.005, decay: 0.6, sustain: 0.8, release: 0.5 },
+    velocity: { amp: 0.8, filter: 0.25 },
+    portamento: { enabled: false, glide: 0.05 },
+    layer: { enabled: chorus > 0, mix: 0.5, detune: Number((chorus * 20).toFixed(1)), brightness: 0, attack: 0, width: Number(chorus.toFixed(2)) },
+  };
+}
+
+// Eight waves in a row, gone through at the second macro's speed. With no crossfade each one
+// starts abruptly, which makes a rhythm of them; with all of it they melt into one another.
+const WAVE_SEQUENCES = ['seq-harmonics', 'seq-overtones', 'seq-voices', 'seq-fm'];
+function mapWavestation(params: SynthModelParams): Partial<SynthParameters> {
+  return {
+    engine: 'sample',
+    voiceMode: 'poly',
+    sample: {
+      root: 60, loop: false, wave: pick(WAVE_SEQUENCES, params.macro1),
+      scan: Number((0.25 * 64 ** clamp01(params.macro2)).toFixed(2)), fade: Number(clamp01(params.macro3).toFixed(2)),
+    },
+    oscillator2: NO_SECOND,
+    mixer: { sub: 0, noise: 0, osc: 1, ring: 0 },
+    filter: { type: 'lowpass', frequency: brightness(params.macro4), q: 0.8, envAmount: 0, keyTracking: 0.4, drive: 0, slope: 12 },
+    filterEnvelope: { attack: 0.005, decay: 0.4, sustain: 0.5, release: 0.4 },
+    envelope: { attack: 0.03, decay: 0.3, sustain: 1, release: 0.6 },
+    velocity: { amp: 0.8, filter: 0.2 },
+    portamento: { enabled: false, glide: 0.05 },
+  };
+}
+
 // What a lane is given when it moves to a model: the model's macros, and anything another model
 // may have left on the lane that this one does not set for itself. A lane that only has a macro
 // turned gets the macros alone (mapSynthModelToEngineParams), so a slope or a unison someone
@@ -653,6 +754,9 @@ export function mapSynthModelToEngineParams(modelId: SynthModelId, modelParams: 
   if (modelId === 'odyssey') return mapOdyssey(modelParams);
   if (modelId === 'virus') return mapVirus(modelParams);
   if (modelId === 'cs-80') return mapCs80(modelParams);
+  if (modelId === 'm1') return mapM1(modelParams);
+  if (modelId === 'd-50') return mapD50(modelParams);
+  if (modelId === 'wavestation') return mapWavestation(modelParams);
   if (modelId === 'mono-poly') {
     return {
       ...mapModel(modelParams, {

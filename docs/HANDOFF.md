@@ -273,11 +273,11 @@ fourteen, with the engine work each needs.
 6. The sample oscillator, then the M1, the D-50 and the Wavestation. The
    sample oscillator is built on `feat/design-review-sample-oscillator`
    (check its pull request's state). The three models may only ship
-   waveforms the project is allowed to redistribute. The owner was asked on
-   2026-10-12 which way to go (waveforms the app makes itself in code;
-   recordings the owner makes or supplies; or a named, checked free
-   library) and had not answered when this was written. Do not build them
-   until they have.
+   waveforms the project is allowed to redistribute. The owner chose on
+   2026-10-12 to take them from two free libraries, both CC0
+   (`docs/BUNDLED_AUDIO.md`). The three models are built on
+   `feat/design-review-sampled-models` (check its pull request's state).
+   That finishes the synth models plan. The owner has heard none of it.
 
 ### Step 4. MIDI work (roadmap features 6)
 

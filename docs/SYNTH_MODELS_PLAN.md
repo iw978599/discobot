@@ -120,6 +120,25 @@ true before the first new model ships, and say so in the pull request.
   - A synced oscillator tuned very high aliases: the restart is not
     band-limited.
 
+- 2026-10-12: **The M1, the D-50 and the Wavestation are built**, which is
+  all of group C and the end of this plan. Not verified by ear.
+  - Their sounds are from VSCO 2 Community Edition and Adventure Kid
+    Waveforms, both CC0, chosen by the owner (`docs/BUNDLED_AUDIO.md`). None
+    is a recording of the instrument the model is named for.
+  - M1: four sounds on the first knob (piano, marimba, organ, voice), then
+    brightness, attack and release. The piano is five recorded notes, each
+    two seconds or less with no loop, so a held piano note dies away sooner
+    than a real one.
+  - D-50: a recorded attack (flute, harp, mallet or bell) over a saw. Its
+    chorus is a second layer, tuned and placed apart, not an effect, because
+    only the Polysix was agreed to set an effect send.
+  - Wavestation: four sequences of eight single cycles, with speed and
+    crossfade. The instrument's sequences had a length and a level for
+    every step and followed the tempo; these go round at one speed.
+  - Which waves went into each sequence was chosen by their folder and
+    number, without hearing them.
+  - A single cycle played high aliases, as a recording does.
+
 - 2026-10-12: **The sample oscillator is built**, as a third engine. It
   plays what a person imports. Group C still waits, on waveforms the
   project may ship and the owner's choice of where they come from.
