@@ -16,6 +16,7 @@ test.beforeEach(async ({ page }) => {
 
 test('a second layer is switched on and set on the Osc tab, is saved, and the CS-80 model sets it by itself', async ({ page }) => {
   const synth = page.locator('.synth-controls-panel').first();
+  await page.getByRole('tab', { name: 'Sound', exact: true }).first().click();
   await page.getByRole('tab', { name: 'Osc', exact: true }).first().click();
   const enabled = synth.getByLabel('Second layer enabled', { exact: true });
   const detune = synth.getByLabel('Layer detune value', { exact: true });
@@ -40,6 +41,7 @@ test('a second layer is switched on and set on the Osc tab, is saved, and the CS
   await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Discobot', exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Sound', exact: true }).first().click();
   await page.getByRole('tab', { name: 'Osc', exact: true }).first().click();
   await expect(page.locator('.synth-controls-panel').first().getByLabel('Second layer enabled', { exact: true })).toBeChecked();
 

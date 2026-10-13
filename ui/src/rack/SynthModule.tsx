@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { BAR_CHOICES, laneBars } from '../services/patternLength';
 import CopyToScene from './CopyToScene';
+import CopyBar from './CopyBar';
 import TransposeTool from './TransposeTool';
 import RandomizeTool from './RandomizeTool';
 import type { Studio } from '../studio/useStudio';
@@ -313,6 +314,7 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
                     <button className={`rack-btn ${follow ? 'on' : ''}`} aria-pressed={follow} title="Show whichever bar is playing" onClick={() => setFollow(value => !value)}>Follow</button>
                   </span>
                 )}
+                {bars > 1 && <CopyBar part={`Synth ${synthId}`} bar={shownBar} bars={bars} onCopy={to => studio.handleCopyLaneBar(synthId, shownBar, to)} />}
                 <CopyToScene
                   part={`Synth ${synthId}'s notes`}
                   scenes={studio.scenes}

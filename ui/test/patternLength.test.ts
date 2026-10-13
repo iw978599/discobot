@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { barOf, clampLengths, drumBars, laneBars, resizeBars, sceneAsBars, sceneBar, sceneBars, stepsPerBar } from '../src/services/patternLength.ts';
+import { barOf, barTargets, clampLengths, copyBar, drumBars, laneBars, resizeBars, sceneAsBars, sceneBar, sceneBars, stepsPerBar } from '../src/services/patternLength.ts';
 import { entryStartBar, sceneAtBar, songBars, songLengthBars } from '../src/services/songPlayback.ts';
 import { sanitizeDrums, sanitizePattern, sanitizeScenes } from '../src/services/projectSanitization.ts';
 import { renderPlan, renderSynthBars, renderDrums } from '../src/services/wavExport.ts';
@@ -171,4 +171,24 @@ test('the project store keeps bar counts through scenes, drum resizing and a pro
     assert.deepEqual([stored.laneBars, stored.lanes[1].length, stored.drums.kick.steps.length, sceneBars(stored)], [{ 1: 2 }, 32, 32, 2]);
     assert.equal(sceneBars(read.project.scenes.find(entry => entry.id !== first)!), 1);
   }
+});
+
+test('one bar is laid over others, and the rest is left alone', () => {
+  const items = [1, 2, 3, 4, 5, 6, 7, 8];
+  assert.deepEqual(copyBar(items, 2, 0, [2]), [1, 2, 3, 4, 1, 2, 7, 8]);
+  assert.deepEqual(copyBar(items, 2, 3, [0, 1, 2]), [7, 8, 7, 8, 7, 8, 7, 8]);
+  assert.deepEqual(items, [1, 2, 3, 4, 5, 6, 7, 8], 'what it was given is not changed');
+  const steps = [{ on: true }, { on: false }];
+  const copied = copyBar(steps, 1, 0, [1]);
+  assert.deepEqual(copied, [{ on: true }, { on: true }]);
+  assert.notEqual(copied[1], steps[0], 'a copy of a step, not the same step twice');
+});
+
+test('a bar can be copied only over other bars the pattern has', () => {
+  assert.deepEqual(barTargets(4, 0, [1, 2, 3]), [1, 2, 3]);
+  assert.deepEqual(barTargets(4, 1, [1, 2, 2]), [2], 'not over itself, and each bar once');
+  for (const [from, to] of [[4, [0]], [-1, [0]], [0.5, [1]], ['0', [1]], [0, [4]], [0, [1.5]], [0, []], [0, [0]], [0, 'all'], [0, undefined], [undefined, [1]]] as const) {
+    assert.equal(barTargets(4, from, to), null, JSON.stringify([from, to]));
+  }
+  assert.equal(barTargets(1, 0, [0]), null, 'a pattern of one bar has nowhere to copy to');
 });

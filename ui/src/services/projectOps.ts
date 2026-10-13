@@ -25,6 +25,7 @@ export type Operation =
   | { type: 'drum.state'; state: unknown }
   | { type: 'drum.reset' }
   | { type: 'drum.bars'; bars: number }
+  | { type: 'drum.copyBar'; from: number; to: number[] }
   | { type: 'drum.step'; instrument: DrumInstrument; step: number; active: boolean }
   | { type: 'drum.stepVelocity'; instrument: DrumInstrument; step: number; velocity: number }
   | { type: 'drum.stepDetail'; instrument: DrumInstrument; step: number; probability?: number; ratchet?: number }
@@ -74,6 +75,7 @@ type OpResults = Total<{
   'drum.state': DrumAnswer;
   'drum.reset': DrumAnswer;
   'drum.bars': DrumAnswer;
+  'drum.copyBar': DrumAnswer;
   'drum.step': DrumAnswer;
   'drum.stepVelocity': DrumAnswer;
   'drum.stepDetail': DrumAnswer;
@@ -125,6 +127,7 @@ export const OP_META: Record<OpType, { save: boolean; undoable: boolean; share: 
   'drum.state': { save: true, undoable: true, share: true },
   'drum.reset': { save: true, undoable: true, share: true },
   'drum.bars': { save: true, undoable: true, share: true },
+  'drum.copyBar': { save: true, undoable: true, share: true },
   'drum.step': { save: true, undoable: true, share: true },
   'drum.stepVelocity': { save: true, undoable: true, share: true },
   'drum.stepDetail': { save: true, undoable: true, share: true },

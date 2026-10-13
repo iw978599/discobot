@@ -130,6 +130,7 @@ const drumSettings = drumCase('drum.settings', (service, body) => service.setDru
 const drumSample = drumCase('drum.sample', (service, body) => service.setDrumSample(body.instrument, body.sampleId));
 const drumMix = drumCase('drum.mix', (service, body) => service.setDrumMix(body.instrument, { muted: body.muted, solo: body.solo }));
 const drumBars = drumCase('drum.bars', (service, body) => service.setDrumBars(body.bars));
+const drumCopyBar = drumCase('drum.copyBar', (service, body) => service.copyDrumBar(body.from, body.to));
 const drumReset = drumCase('drum.reset', service => service.resetDrums());
 const drumWhole = drumCase('drum.state', (service, body) => service.setDrumState(body.state));
 const drumKit = drumCase('drum.kit', (service, body) => service.setDrumKit(body.kitId, body.applyDefaults));
@@ -234,6 +235,9 @@ const drumCases: Case[] = [
   },
 
   drumBars('a longer pattern repeats what was there: steps, velocity, chance and repeats together', { bars: 2 }, { answer: drumsDressed({}, 32, [3, 19]) }, dressedDrums),
+  drumCopyBar('a bar laid over another takes its steps, velocity, chance and repeats with it', { from: 0, to: [1] }, { answer: drumsDressed({}, 32, [3, 19]) },
+    service => { twoBars(service); dressedDrums(service); }),
+  drumCopyBar('a bar the pattern does not have is refused', { from: 0, to: [2] }, { status: 400, error: 'There is no such bar to copy' }, twoBars),
   drumBars('a shorter pattern keeps the first bars and loses the rest', { bars: 1 }, { answer: drumsDressed({ snare: { stepVelocities: beside() } }) },
     service => { dressedDrums(service); twoBars(service); assert.ok(service.setDrumStep('snare', 20, true).ok); assert.ok(service.setDrumStepVelocity('snare', 20, .4).ok); }),
   drumBars('eight bars is the longest', { bars: 8 }, { answer: drums({ kick: { on: [3, 19, 35, 51, 67, 83, 99, 115] } }, 128) }, kickOn),

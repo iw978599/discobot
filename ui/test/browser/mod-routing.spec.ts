@@ -16,6 +16,7 @@ test.beforeEach(async ({ page }) => {
 
 test('a route sends a source to a destination by an amount, is saved, and can be taken away', async ({ page }) => {
   const synth = page.locator('.synth-controls-panel').first();
+  await page.getByRole('tab', { name: 'Sound', exact: true }).first().click();
   await page.getByRole('tab', { name: 'LFO', exact: true }).first().click();
   const source = (row: number) => synth.getByLabel(`Route ${row} source`, { exact: true });
   const destination = (row: number) => synth.getByLabel(`Route ${row} destination`, { exact: true });
@@ -46,6 +47,7 @@ test('a route sends a source to a destination by an amount, is saved, and can be
   // It is still there after the page is loaded again.
   await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
   await page.reload();
+  await page.getByRole('tab', { name: 'Sound', exact: true }).first().click();
   await page.getByRole('tab', { name: 'LFO', exact: true }).first().click();
   await expect(source(1)).toHaveValue('velocity');
   await expect(destination(2)).toHaveValue('osc2Pitch');

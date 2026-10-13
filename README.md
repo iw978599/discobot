@@ -40,7 +40,8 @@ Any lane can play a sample of your own instead of its built-in voice, and a
 whole kit can be imported at once.
 
 **Scenes and a song.** A scene is every lane's pattern plus the drum grid,
-one, two, four or eight bars long. A song is scenes in order, each repeated as many times as
+one, two, four or eight bars long; Copy bar lays one bar of a longer pattern over another.
+A song is scenes in order, each repeated as many times as
 you like. Scenes can be given a colour so a song's shape reads at a glance.
 
 **Effects** shared by the whole rack: drive, phaser, delay (free or in time
@@ -73,7 +74,9 @@ up, so you can see how the parts sit against each other.
      is the white keys, W E T Y U O P the black keys, Z and X shift the octave.
      Tap tempo is Shift+T.
 3. **Shape the sound.** Each lane has four knobs and a level on its face. The
-   editor's tabs (Notes, Osc, Filter, Amp, LFO, Arp, Sends) hold the rest. Turn
+   open lane's editor has two levels: Notes, for what the lane plays, and
+   Sound, which has the presets and a page each for Osc, Filter, Amp, LFO,
+   Arp and Sends. Turn
    a knob by dragging, with the scroll wheel, or by typing its value. A click
    of the middle mouse button puts a knob back at its default.
 4. **Add drums.** Click cells in the drum grid and choose a kit. The strip

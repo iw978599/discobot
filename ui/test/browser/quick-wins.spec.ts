@@ -59,7 +59,9 @@ async function setTempoTo(page: Page, bpm: number) {
 // The preset menu: a button, a list of groups, and a list of the chosen group's presets.
 const presetButton = (scope: Page | Locator) => scope.getByRole('button', { name: /^Synth preset/ });
 const presetRow = (scope: Page | Locator, group: string, name: string) => scope.getByRole('menu', { name: group, exact: true }).getByRole('menuitem', { name, exact: true });
+// The presets are on the editor's Sound level.
 async function openPresetGroup(scope: Page | Locator, group: string) {
+  await scope.getByRole('tab', { name: 'Sound', exact: true }).click();
   await presetButton(scope).click();
   await scope.locator(`[role="menuitem"][data-group="${group}"]`).click();
 }
@@ -230,6 +232,7 @@ test('a project file restores lanes, drums, saved arrangements and presets over 
   await page.getByRole('button', { name: 'Select Snare', exact: true }).click();
   await page.getByRole('button', { name: 'Snare step 5', exact: true }).click();
   await page.getByLabel('Snare step 5 repeats', { exact: true }).selectOption('3');
+  await page.getByRole('tab', { name: 'Sound', exact: true }).click();
   await page.getByLabel('Preset name', { exact: true }).fill('Travel keys');
   await page.locator('.preset-controls').getByRole('button', { name: 'Save', exact: true }).click();
 
@@ -263,6 +266,8 @@ test('a project file restores lanes, drums, saved arrangements and presets over 
   await expect(page.locator('[role="menuitem"][data-group="My presets"]')).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(presetButton(page)).toHaveAttribute('aria-expanded', 'false');
+  // Back to the notes, where the piano roll is looked at below.
+  await page.getByRole('tab', { name: 'Notes', exact: true }).click();
   await setTempoTo(page, 150);
 
   const input = page.locator('input[aria-label="Import project file"]');

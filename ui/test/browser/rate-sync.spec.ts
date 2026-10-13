@@ -59,6 +59,7 @@ test('the phaser, the chorus and a sequence of waves can each follow the tempo, 
 
   // A sequence of waves steps in time.
   const synth = page.locator('.synth-controls-panel').first();
+  await page.getByRole('tab', { name: 'Sound', exact: true }).first().click();
   await page.getByRole('tab', { name: 'Osc', exact: true }).first().click();
   await synth.getByLabel('Synth engine', { exact: true }).selectOption('sample');
   await synth.getByLabel('Synth sample', { exact: true }).selectOption({ label: 'Sequence: FM' });

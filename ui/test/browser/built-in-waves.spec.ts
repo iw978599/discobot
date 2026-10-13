@@ -18,6 +18,7 @@ test('the sample engine offers the app\'s own sounds, fetched from this site, an
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   const synth = page.locator('.synth-controls-panel').first();
+  await page.getByRole('tab', { name: 'Sound', exact: true }).first().click();
   await page.getByRole('tab', { name: 'Osc', exact: true }).first().click();
   const sample = synth.getByLabel('Synth sample', { exact: true });
   const root = synth.getByRole('slider', { name: 'Sample root note', exact: true });

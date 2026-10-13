@@ -29,7 +29,11 @@ async function exportAs(page: Page, item: string) {
   await expect(dialog).toHaveCount(0);
 }
 
-const tab = (page: Page, name: string) => page.getByRole('tab', { name, exact: true }).click();
+// The editor has two levels, Notes and Sound; the pages of the sound (Osc, Filter and the rest) are under Sound.
+const tab = async (page: Page, name: string) => {
+  if (name !== 'Notes' && name !== 'Sound') await page.getByRole('tab', { name: 'Sound', exact: true }).click();
+  await page.getByRole('tab', { name, exact: true }).click();
+};
 async function menu(page: Page, name: 'Project' | 'Export', item: string) {
   if (name === 'Export') return exportAs(page, item);
   await more(page);

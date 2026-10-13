@@ -28,7 +28,11 @@ async function exportAs(page: Page, item: string) {
 const PROJECT_KEY = 'discobot_browser_project_v1';
 // What is in storage right now, without nudging the app to save first.
 const stored = (page: Page) => page.evaluate(key => JSON.parse(localStorage.getItem(key) || '{}'), PROJECT_KEY);
-const tab = (page: Page, name: string) => page.getByRole('tab', { name, exact: true }).click();
+// The editor has two levels, Notes and Sound; the pages of the sound (Osc, Filter and the rest) are under Sound.
+const tab = async (page: Page, name: string) => {
+  if (name !== 'Notes' && name !== 'Sound') await page.getByRole('tab', { name: 'Sound', exact: true }).click();
+  await page.getByRole('tab', { name, exact: true }).click();
+};
 
 async function setTempo(page: Page, bpm: number) {
   await page.locator('.tempo-led').click();

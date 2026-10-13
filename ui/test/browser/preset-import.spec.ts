@@ -6,7 +6,10 @@ const stored = (page: Page) => page.evaluate(key => (window.dispatchEvent(new Ev
 // The preset menu: a button, a list of groups, and a list of the chosen group's presets.
 const presetButton = (scope: Page | Locator) => scope.getByRole('button', { name: /^Synth preset/ });
 const presetRow = (scope: Page | Locator, group: string, name: string) => scope.getByRole('menu', { name: group, exact: true }).getByRole('menuitem', { name, exact: true });
+// The presets and their tools are on the editor's Sound level.
+const toSound = (scope: Page | Locator) => scope.getByRole('tab', { name: 'Sound', exact: true }).click();
 async function openPresetGroup(scope: Page | Locator, group: string) {
+  await toSound(scope);
   await presetButton(scope).click();
   await scope.locator(`[role="menuitem"][data-group="${group}"]`).click();
 }
@@ -30,6 +33,7 @@ test('a preset from another synth is imported with a report, and Discobot\'s own
   const lane = page.locator('.synth-module').first();
   const input = lane.getByLabel('Import synth preset', { exact: true });
   const report = page.getByRole('dialog', { name: 'Preset imported', exact: true });
+  await toSound(lane);
 
   // A VAST G1-J8 preset: wave 2 is a saw, cutoff 69 is the note A440, and its pan LFO has no equivalent.
   await input.setInputFiles(file('1985-1.preset.websynth.json', { format: 'websynth-preset', version: 1, name: '1985-1', params: {
@@ -78,6 +82,7 @@ test('a preset from another synth is imported with a report, and Discobot\'s own
 
   await page.getByRole('button', { name: 'Synth 2', exact: true }).click();
   const second = page.locator('.synth-module').nth(1);
+  await toSound(second);
   await second.getByLabel('Import synth preset', { exact: true }).setInputFiles(file('Night Bass.discobot-preset.json', exported));
   await expect(report).toContainText('Night Bass was imported from Discobot');
   await expect(report.getByRole('listitem')).toHaveCount(0);
@@ -128,6 +133,7 @@ test('your own presets are kept in IndexedDB, and ones from before are moved the
   }));
 
   // A preset saved now goes to the database, and nothing is written to the old place.
+  await toSound(lane);
   await lane.getByLabel('Preset name', { exact: true }).fill('Night Bass');
   await lane.getByRole('button', { name: 'Save', exact: true }).click();
   await expect.poll(inDatabase).toEqual(['Night Bass']);

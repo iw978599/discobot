@@ -25,7 +25,7 @@ const stopsFor = (signedIn: boolean, narrow: boolean): Stop[] => [
   },
   { target: '.song-module', title: 'Scenes and song', text: 'A scene is one pattern of everything: every lane and the drum grid. Add more scenes, then put them in order as a song with + Add.' },
   { target: '.synth-module[aria-label="Synth 1 module"] .step-row', title: 'A lane\'s steps', text: 'Each synth lane is a row of steps. Select a step, then play a key to put a note on it. Click the lane\'s name to open it for editing.' },
-  { target: '.synth-controls-panel', title: 'The sound editor', text: 'This is the open lane\'s editor. Notes has the keyboard and the piano roll. The other tabs shape the sound, and a sound you like can be saved as a preset.' },
+  { target: '.synth-controls-panel', title: 'The sound editor', text: 'This is the open lane\'s editor. It has two levels. Notes is what the lane plays: the keyboard and the piano roll. Sound is what it sounds like: the presets, and a page for each part of the sound. A sound you like can be saved as a preset.' },
   { target: '.drum-grid', title: 'The drum grid', text: 'Click cells to add hits. The strip under the grid edits the drum and the step you last touched.' },
   { target: '.effects-unit', title: 'Effects', text: 'The effects are shared by the whole rack. Each lane and the drums have sends that set how much of them goes through.' },
   ...(narrow ? [
