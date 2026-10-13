@@ -1,6 +1,21 @@
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 import { writeFileSync } from 'node:fs';
 
+// At phone width the top bar is one line, and the rest of it is in the sheet its last button
+// raises. `more` raises the sheet before something in it is used, and does nothing on a wide
+// screen; `less` puts it away again after something that leaves it up.
+const onPhone = (page: Page) => {
+  const size = page.viewportSize();
+  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+};
+const more = async (page: Page) => {
+  if (!onPhone(page) || await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) return;
+  await page.getByRole('button', { name: 'More controls', exact: true }).click();
+};
+const less = async (page: Page) => {
+  if (await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) await page.getByRole('button', { name: 'Close more controls', exact: true }).click();
+};
+
 // Pictures of the real app for a design review (docs/DESIGN_REVIEW.md). Nothing here checks the
 // app: each test walks to a screen and saves a picture of it into test-results/, which the check
 // on GitHub uploads. It runs only when DESIGN_SHOTS is set, which ci.yml does for a branch whose
@@ -85,6 +100,7 @@ const open = async (page: Page, address = './') => {
 };
 const ready = (page: Page) => expect(page.getByRole('heading', { name: 'Discobot', exact: true })).toBeVisible();
 const menu = async (page: Page, name: 'Project', item?: string) => {
+  await more(page);
   await page.getByRole('button', { name: `${name} ▾`, exact: true }).click();
   if (item) await page.getByRole('menuitem', { name: item, exact: true }).click();
 };
@@ -276,9 +292,11 @@ test('design shots: menus, dialogs, the walkthrough and a guest', async ({ page 
     await expect(page.getByRole('menuitem').first()).toBeVisible();
     await shot(walk, 'menu-project');
     await page.keyboard.press('Escape');
+    await less(page);
   });
   // Export was a menu and is now a dialog; its picture keeps the name it had.
   await attempt(walk, 'menu-export', async () => {
+    await more(page);
     await page.locator('.transport').getByRole('button', { name: 'Export', exact: true }).click();
     await expect(page.getByRole('dialog', { name: 'Export', exact: true })).toBeVisible();
     await shot(walk, 'menu-export');
@@ -303,8 +321,10 @@ test('design shots: menus, dialogs, the walkthrough and a guest', async ({ page 
     if (!walk.phone) await page.getByRole('menuitem').nth(3).hover();
     await near(walk, page.locator('.rack-menu-list'), 'focus-menu-row', 40);
     await page.keyboard.press('Escape');
+    await less(page);
   });
   await attempt(walk, 'dialog-help and the walkthrough', async () => {
+    await more(page);
     await page.getByRole('button', { name: 'Help', exact: true }).click();
     const help = page.getByRole('dialog', { name: 'How to use Discobot', exact: true });
     await expect(help).toBeVisible();
@@ -326,12 +346,14 @@ test('design shots: menus, dialogs, the walkthrough and a guest', async ({ page 
     await expect(tour).toHaveCount(0);
   });
   await attempt(walk, 'dialog-midi-samples', async () => {
+    await more(page);
     await page.getByRole('button', { name: 'MIDI and samples', exact: true }).click();
     await expect(page.getByRole('dialog', { name: 'MIDI and samples', exact: true })).toBeVisible();
     await shot(walk, 'dialog-midi-samples');
     await page.keyboard.press('Escape');
   });
   await attempt(walk, 'dialog-projects-one', async () => {
+    await more(page);
     await page.getByRole('button', { name: /^Project: / }).click();
     await expect(page.getByRole('dialog', { name: 'Projects', exact: true })).toBeVisible();
     await shot(walk, 'dialog-projects-one');
@@ -396,6 +418,7 @@ test('design shots: menus, dialogs, the walkthrough and a guest', async ({ page 
   });
   await attempt(walk, 'dialog-projects', async () => {
     await menu(page, 'Project', 'New Project');
+    await more(page);
     await page.getByRole('button', { name: /^Project: / }).click();
     const projects = page.getByRole('dialog', { name: 'Projects', exact: true });
     // "Untitled" and "Untitled 2" share a row, with a list to choose between them.
@@ -476,6 +499,36 @@ test('design shots: a phone showing one unit at a time, the knob sheet, and a ph
     await scrollBy(walk, 0.7);
     await shot(walk, 'phone-unit-effects-2');
   });
+  // The sheet the top bar's last button raises, and the Project menu from inside it.
+  await attempt(walk, 'phone-more-sheet', async () => {
+    await show('Show Synth 1');
+    await more(page);
+    const sheet = page.getByRole('dialog', { name: 'More controls', exact: true });
+    await expect(sheet).toBeVisible();
+    await shot(walk, 'phone-more-sheet');
+    await sheet.getByRole('button', { name: 'Project ▾', exact: true }).click();
+    await expect(page.getByRole('menuitem').first()).toBeVisible();
+    await shot(walk, 'phone-more-sheet-menu');
+    await page.keyboard.press('Escape');
+    await less(page);
+    await expect(sheet).toHaveCount(0);
+  });
+  // The bar of units with a lane muted from it, still and while playing, when the lamps of the
+  // units that sound are lit on their steps.
+  await attempt(walk, 'phone-unit-bar-muted', async () => {
+    await show('Show Drums');
+    await bar.getByRole('button', { name: 'Show Synth 2', exact: true }).focus();
+    await page.keyboard.press('Shift+M');
+    await expect(bar.getByRole('button', { name: 'Show Synth 2', exact: true })).toHaveAttribute('data-muted', 'true');
+    await shot(walk, 'phone-unit-bar-muted');
+    await page.locator('.play-all-button').click();
+    await expect(bar.locator('.unit-tab-led.lit').first()).toBeVisible();
+    await shot(walk, 'phone-unit-bar-playing');
+    await page.locator('.play-all-button').click();
+    await bar.getByRole('button', { name: 'Show Synth 2', exact: true }).focus();
+    await page.keyboard.press('Shift+M');
+    await expect(bar.locator('[data-muted]')).toHaveCount(0);
+  });
   await attempt(walk, 'phone-unit-all', async () => { await show('Show all units on one page'); await shot(walk, 'phone-unit-all'); });
 
   // A phone on its side.
@@ -484,6 +537,10 @@ test('design shots: a phone showing one unit at a time, the knob sheet, and a ph
     await page.setViewportSize({ width: 740, height: 360 });
     await show('Show Synth 1');
     await shot(walk, 'phone-landscape-synth');
+    await more(page);
+    await expect(page.getByRole('dialog', { name: 'More controls', exact: true })).toBeVisible();
+    await shot(walk, 'phone-landscape-more-sheet');
+    await less(page);
     await toTop(walk, lane(page, 1).locator('.keyboard-panel'), 50);
     await shot(walk, 'phone-landscape-keyboard');
     await show('Show Drums');
@@ -503,6 +560,7 @@ test('design shots: an account, sharing, a published song and a person\'s page',
   let long = '', short = '', own = '';
 
   await attempt(walk, 'dialog-account', async () => {
+    await more(page);
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
     await expect(account).toBeVisible();
     await shot(walk, 'dialog-account-signed-out');
@@ -526,10 +584,13 @@ test('design shots: an account, sharing, a published song and a person\'s page',
     await expect(account).toHaveCount(0);
   });
   await attempt(walk, 'transport-signed-in', async () => {
+    await more(page);
     await expect(page.getByRole('button', { name: 'Account: Ian', exact: true })).toBeVisible();
     await shot(walk, 'transport-signed-in');
+    await less(page);
   });
   await attempt(walk, 'dialog-projects-signed-in', async () => {
+    await more(page);
     await page.getByRole('button', { name: /^Project: / }).click();
     const projects = page.getByRole('dialog', { name: 'Projects', exact: true });
     await projects.locator('.rack-list-row.current').getByRole('button', { name: 'Rename', exact: true }).click();
