@@ -184,3 +184,18 @@ test('a start and loop points are stored only where they are not the whole recor
   assert.deepEqual(kept({ start: 7, loopStart: -1, loopEnd: 'x' }), { root: 60, loop: true, start: 0.99 });
   assert.deepEqual(kept({ loopStart: 0.6, loopEnd: 0.2 }), { root: 60, loop: true, loopStart: 0.6, loopEnd: 0.61 }, 'the end is kept after the start');
 });
+
+test('a chosen loop is faded into what comes before it, so going round does not click', () => {
+  // The first half holds still where the loop begins; the second half, the loop, climbs away from
+  // there, so going straight back to its start is a jump.
+  const rate = 44100;
+  const climb: SynthSample = { data: Float32Array.from({ length: rate }, (_, index) => (index < rate / 2 ? -0.5 : -0.5 + (index - rate / 2) / (rate / 2))), rate };
+  const jump = (samples: Float32Array) => { let most = 0; for (let index = 1; index < samples.length; index += 1) most = Math.max(most, Math.abs(samples[index] - samples[index - 1])); return most; };
+  const open: Partial<SynthParameters> = { filter: { ...createDefaultSynthParameters().filter, frequency: 20000 } };
+  const round = play({ ...open, ...sampled({ loop: true, loopStart: 0.5 }) }, climb, 'A4', 3).subarray(SR);
+  assert.ok(jump(round) < 0.02, `the join is smooth: ${jump(round)}`);
+  assert.ok(loudness(round) > -30, 'and it is still sounding');
+  // The whole recording going round has nothing before its start to fade into, and is as it was.
+  const whole = play({ ...open, ...sampled({ loop: true }) }, climb, 'A4', 3).subarray(SR);
+  assert.ok(jump(whole) > jump(round) * 10, `the whole of it still jumps where it always did: ${jump(whole)} against ${jump(round)}`);
+});
