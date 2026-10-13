@@ -142,6 +142,7 @@ export class SynthCore {
     d.osc2Ratio = 2 ** (clamp(p.osc2Semitones, -36, 36, 0) / 12 + clamp(p.osc2Detune, -100, 100, 0) / 1200);
     const osc2 = p.osc2Enabled ? clamp(p.osc2Level, 0, 1) : 0;
     const osc1 = clamp(p.oscLevel, 0, 1, 1), sub = clamp(p.subLevel, 0, 1), noise = clamp(p.noiseLevel, 0, 1);
+    const ring = p.osc2Enabled ? clamp(p.ringLevel, 0, 1, 0) : 0;
     d.unisonCount = Math.round(clamp(p.unisonVoices, 1, MAX_UNISON, 1));
     // Copies are spread evenly across plus and minus the detune amount, up to 50 cents each way.
     const spreadCents = clamp(p.unisonDetune, 0, 1) * 50;
@@ -158,7 +159,7 @@ export class SynthCore {
     // at full level, as it always was, the sum is never under one, so this is what it always was.
     // Turned down with nothing else on, it is simply quieter: nothing is brought back up.
     // With the side copies at full level, as they always were, `copies` is their number.
-    const power = copies * (osc1 * osc1 + osc2 * osc2) + sub * sub + noise * noise;
+    const power = copies * (osc1 * osc1 + osc2 * osc2 + ring * ring) + sub * sub + noise * noise;
     d.mixScale = power > 1 ? 1 / Math.sqrt(power) : 1;
     d.twoStage = p.filterSlope >= 24 && (p.filterType === 'lowpass' || p.filterType === 'highpass' || p.filterType === 'bandpass');
     d.fmDecay = approachCoefficient(clamp(p.fmDecay, 0.01, 10, 0.6), sr, 4.6);
@@ -289,6 +290,10 @@ export class SynthCore {
     const fm = p.engine === 'fm';
     const osc2Level = p.osc2Enabled ? clamp(p.osc2Level, 0, 1) : 0;
     const oscLevel = clamp(p.oscLevel, 0, 1, 1), subLevel = clamp(p.subLevel, 0, 1), noiseLevel = clamp(p.noiseLevel, 0, 1);
+    // Ring modulation and sync both need the second oscillator running, whether or not it is heard itself.
+    const ringLevel = p.osc2Enabled ? clamp(p.ringLevel, 0, 1, 0) : 0;
+    const sync = p.osc2Enabled && p.osc2Sync;
+    const secondRuns = osc2Level > 0 || ringLevel > 0;
     const lfoRates = [clamp(p.lfo1Rate, 0, 100) / sr, clamp(p.lfo2Rate, 0, 100) / sr];
     const lfoDepths = [p.lfo1Enabled ? clamp(p.lfo1Depth, 0, 1) : 0, p.lfo2Enabled ? clamp(p.lfo2Depth, 0, 1) : 0];
     const lfoTargets = [p.lfo1Target, p.lfo2Target];
@@ -405,11 +410,16 @@ export class SynthCore {
             const step1 = clamp(step * d.unisonRatios[u], 0.000001, 0.45);
             v.phase1[u] = (v.phase1[u] + step1) % 1;
             const level = d.unisonLevels[u];
-            source += oscillator(p.oscType, v.phase1[u], step1, pulseWidth) * oscLevel * level;
-            if (osc2Level > 0) {
+            const first = oscillator(p.oscType, v.phase1[u], step1, pulseWidth);
+            source += first * oscLevel * level;
+            if (secondRuns) {
               const step2 = clamp(step1 * d.osc2Ratio * osc2Mod, 0.000001, 0.45);
-              v.phase2[u] = (v.phase2[u] + step2) % 1;
-              source += oscillator(p.osc2Type, v.phase2[u], step2) * osc2Level * level;
+              // Synced, it starts again when the first has just come round, as far into its wave as the
+              // first is past the start of its own, so the restart does not jitter from sample to sample.
+              v.phase2[u] = sync && v.phase1[u] < step1 ? (v.phase1[u] / step1 * step2) % 1 : (v.phase2[u] + step2) % 1;
+              const second = oscillator(p.osc2Type, v.phase2[u], step2);
+              source += second * osc2Level * level;
+              if (ringLevel > 0) source += first * second * ringLevel * level;
             }
           }
           if (subLevel > 0) {

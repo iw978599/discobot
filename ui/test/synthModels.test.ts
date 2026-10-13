@@ -201,6 +201,39 @@ test('the high-pass and the distorting filter go when a lane leaves the MS-20', 
   assert.equal(toVoiceParams(onLane(own, mapSynthModelToEngineParams('juno-106', { ...MIDDLE, macro3: 0.9 }))).filterHighpass, 300);
 });
 
+test('the Odyssey is two oscillators with the second synced, a ring modulator, and a filter stepped at random', () => {
+  const middle = voice('odyssey');
+  assert.deepEqual([middle.voiceMode, middle.osc2Enabled, middle.osc2Sync, middle.filterSlope], ['mono', true, true, 24]);
+  assert.ok(middle.portamentoEnabled);
+  // Sync: how far the second oscillator is tuned over the first, and how far the filter's envelope sweeps it.
+  const unswept = sound('odyssey', { ...MIDDLE, macro1: 0 }), swept = sound('odyssey', { ...MIDDLE, macro1: 1 });
+  assert.equal(unswept.oscillator2!.semitones, 0);
+  assert.ok(swept.oscillator2!.semitones >= 19);
+  assert.equal(unswept.modMatrix!.some(route => route.destination === 'osc2Pitch'), false);
+  assert.deepEqual(swept.modMatrix!.find(route => route.destination === 'osc2Pitch'), { source: 'filterEnv', destination: 'osc2Pitch', depth: 0.5 });
+  // Ring.
+  assert.equal(voice('odyssey', { ...MIDDLE, macro2: 0 }).ringLevel, 0);
+  assert.equal(voice('odyssey', { ...MIDDLE, macro2: 1 }).ringLevel, 1);
+  assert.ok(voice('odyssey', { ...MIDDLE, macro3: 1 }).filterFreq > voice('odyssey', { ...MIDDLE, macro3: 0 }).filterFreq, 'Cutoff');
+  // S&H: the random source to the filter, clocked by the first LFO, which is sent nowhere itself.
+  assert.equal(sound('odyssey', { ...MIDDLE, macro4: 0 }).modMatrix!.some(route => route.source === 'random'), false);
+  assert.deepEqual(sound('odyssey', { ...MIDDLE, macro4: 1 }).modMatrix!.find(route => route.source === 'random'), { source: 'random', destination: 'filter', depth: 0.6 });
+  assert.deepEqual([middle.lfo1Enabled, middle.lfo1Rate], [false, 6]);
+  // With everything down it has no routes at all.
+  assert.deepEqual(sound('odyssey', { ...MIDDLE, macro1: 0, macro4: 0 }).modMatrix, []);
+});
+
+test('sync, the ring and the routes go when a lane leaves the Odyssey', () => {
+  const lane = sound('odyssey', { macro1: 1, macro2: 1, macro3: 0.5, macro4: 1 });
+  for (const model of SYNTH_MODELS.filter(entry => entry.id !== 'generic' && entry.id !== 'odyssey')) {
+    const moved = onLane(lane, enterSynthModel(model.id, MIDDLE, 'odyssey'));
+    const flat = toVoiceParams(moved);
+    assert.equal(flat.osc2Sync, false, model.id);
+    assert.equal(flat.ringLevel, 0, model.id);
+    assert.deepEqual(moved.modMatrix, [], model.id);
+  }
+});
+
 test('a lane that moves to another model is given back what the one it leaves had set', () => {
   // Out of the supersaw: no stack of seven. Out of a four-pole model: the two-pole slope.
   const fromJp = onLane(sound('jp-8000'), enterSynthModel('juno-106', MIDDLE));

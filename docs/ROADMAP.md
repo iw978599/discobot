@@ -198,9 +198,12 @@ target; removal of the AI review workflow.
        namesakes, and one may be left out if no usable waveforms are found.
    Asked for by the owner on 2026-10-12, as well as more presets: a review
    of every built-in preset's sound, redesigning the weak ones.
+   Done on 2026-10-12: the Odyssey, with oscillator sync and ring
+   modulation for the voice and three presets. Five models to go: the
+   Virus and the CS-80, and three that wait on the sample oscillator.
+   Not verified by ear.
    Done on 2026-10-12: the MS-20, the first model that needed engine work,
-   with three presets. Six models to go: three wait on the modulation
-   matrix and three on the sample oscillator. Not verified by ear.
+   with three presets. Not verified by ear.
    Done on 2026-10-12: the seven models that needed nothing new from the
    voice, SH-101, Pro-One, Jupiter-8, OB-Xa, JP-8000, Mono/Poly and
    Polysix, with fifteen presets between them and the model menu grouped

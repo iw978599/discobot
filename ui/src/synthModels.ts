@@ -166,6 +166,18 @@ export const SYNTH_MODELS: SynthModelDefinition[] = [
     ],
   },
   {
+    id: 'odyssey',
+    name: 'Odyssey',
+    group: 'Mono',
+    subtitle: 'Mono lead: a synced second oscillator swept by the envelope, ring modulation, and a filter stepped at random',
+    macros: [
+      { key: 'macro1', label: 'Sync' },
+      { key: 'macro2', label: 'Ring' },
+      { key: 'macro3', label: 'Cutoff' },
+      { key: 'macro4', label: 'S&H' },
+    ],
+  },
+  {
     id: 'pro-one',
     name: 'Pro-One',
     group: 'Mono',
@@ -257,9 +269,10 @@ function mapModel(params: SynthModelParams, voicing: ModelVoicing): Partial<Synt
       semitones: osc2?.semitones ?? 0,
       detune: osc2 ? Math.round(range(osc2.spread[0], osc2.spread[1], params.macro1)) : 0,
       level: osc2?.level ?? 0,
+      sync: false,
     },
-    // The first oscillator at full level, whatever a model the lane had before left it at.
-    mixer: { sub: voicing.sub ?? 0, noise: voicing.noise ?? 0, osc: 1 },
+    // The first oscillator at full level and no ring, whatever a model the lane had before left them at.
+    mixer: { sub: voicing.sub ?? 0, noise: voicing.noise ?? 0, osc: 1, ring: 0 },
     filter: {
       type: 'lowpass',
       frequency: Math.round(range(voicing.cutoff[0], voicing.cutoff[1], params.macro3)),
@@ -475,6 +488,39 @@ function mapMs20(params: SynthModelParams): Partial<SynthParameters> {
   };
 }
 
+// Two oscillators with the second synced to the first. Sync is how far the second is tuned over
+// the first, and how far the filter's envelope sweeps it from there, which is the sound sync is
+// known for. Ring is how much of the two multiplied together there is. S&H steps the filter at
+// random, six times a second: the first LFO is the clock for it and is sent nowhere itself.
+function mapOdyssey(params: SynthModelParams): Partial<SynthParameters> {
+  const sync = clamp01(params.macro1), stepped = clamp01(params.macro4);
+  return {
+    engine: 'subtractive',
+    voiceMode: 'mono',
+    oscillator: { type: 'sawtooth', detune: 0, pulseWidth: 0.5 },
+    oscillator2: { enabled: true, type: 'sawtooth', semitones: Math.round(range(0, 19, sync)), detune: 0, level: 0.9, sync: true },
+    mixer: { sub: 0, noise: 0, osc: 1, ring: Number(clamp01(params.macro2).toFixed(2)) },
+    filter: {
+      type: 'lowpass',
+      frequency: Math.round(150 * (10000 / 150) ** clamp01(params.macro3)),
+      q: 2.5,
+      envAmount: 0.35,
+      keyTracking: 0.5,
+      drive: 0.2,
+      slope: 24,
+    },
+    filterEnvelope: { attack: 0.003, decay: 0.4, sustain: 0.2, release: 0.3 },
+    envelope: { attack: 0.003, decay: 0.3, sustain: 0.75, release: 0.25 },
+    velocity: { amp: 1, filter: 0.25 },
+    portamento: { enabled: true, glide: 0.04 },
+    lfo1: { sync: false, retrigger: false, enabled: false, target: 'filter', waveform: 'sawtooth', rate: 6, depth: 0 },
+    modMatrix: [
+      ...(sync > 0 ? [{ source: 'filterEnv' as const, destination: 'osc2Pitch' as const, depth: Number((sync * 0.5).toFixed(2)) }] : []),
+      ...(stepped > 0 ? [{ source: 'random' as const, destination: 'filter' as const, depth: Number((stepped * 0.6).toFixed(2)) }] : []),
+    ],
+  };
+}
+
 // What a lane is given when it moves to a model: the model's macros, and anything another model
 // may have left on the lane that this one does not set for itself. A lane that only has a macro
 // turned gets the macros alone (mapSynthModelToEngineParams), so a slope or a unison someone
@@ -492,8 +538,10 @@ export function enterSynthModel(modelId: SynthModelId, modelParams: SynthModelPa
   return {
     ...mapped,
     unison: mapped.unison ?? { voices: 1, detune: 0.3, mix: 1 },
-    // No routes, unless the model sets its own.
+    // No routes, no sync and no ring modulation, unless the model sets its own.
     modMatrix: mapped.modMatrix ?? [],
+    oscillator2: { ...mapped.oscillator2, sync: mapped.oscillator2?.sync ?? false } as SynthParameters['oscillator2'],
+    mixer: { ...mapped.mixer, ring: mapped.mixer?.ring ?? 0 } as SynthParameters['mixer'],
     // No high-pass and the clean filter, unless the model is one that sets them for itself.
     filter: { slope: ladder ? 24 : 12, highpass: 0, ...mapped.filter, model: mapped.filter?.model ?? (ladder ? 'ladder' : 'svf') } as SynthParameters['filter'],
     // The Polysix's ensemble is the lane's chorus send. It goes when the lane leaves the Polysix;
@@ -507,6 +555,7 @@ export function mapSynthModelToEngineParams(modelId: SynthModelId, modelParams: 
   if (modelId === 'jp-8000') return mapJp8000(modelParams);
   if (modelId === 'polysix') return mapPolysix(modelParams);
   if (modelId === 'ms-20') return mapMs20(modelParams);
+  if (modelId === 'odyssey') return mapOdyssey(modelParams);
   if (modelId === 'mono-poly') {
     return {
       ...mapModel(modelParams, {

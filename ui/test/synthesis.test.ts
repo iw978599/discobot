@@ -94,7 +94,7 @@ test('projects and presets saved before the new voice existed load with neutral 
   assert.equal(hostile.oscillator2!.type, defaults.oscillator2!.type);
   assert.equal(hostile.oscillator2!.semitones, 36);
   assert.equal(hostile.oscillator2!.level, 1);
-  assert.deepEqual(hostile.mixer, { sub: 0, noise: 0, osc: 1 });
+  assert.deepEqual(hostile.mixer, { sub: 0, noise: 0, osc: 1, ring: 0 });
   assert.equal(hostile.fm!.algorithm, 3);
   assert.equal(hostile.filter.envAmount, 1);
   assert.equal(hostile.filter.keyTracking, 0);

@@ -113,6 +113,9 @@ export interface SynthParameters {
     semitones: number;
     detune: number;
     level: number;
+    // hard sync: the second oscillator starts its wave again each time the first does, so it
+    // takes the first one's pitch and its own tuning becomes its tone. Absent means off.
+    sync?: boolean;
   };
   mixer?: {
     sub: number;
@@ -120,6 +123,9 @@ export interface SynthParameters {
     // how loud the first oscillator is, 0 to 1. Absent means 1, as it always was before it
     // could be turned down; at 0 a sound can be made of noise, the sub or the second oscillator alone.
     osc?: number;
+    // ring modulation: how much of the two oscillators multiplied together is in the sound,
+    // 0 to 1. Absent means none. It needs the second oscillator switched on.
+    ring?: number;
   };
   filterEnvelope?: SynthEnvelope;
   velocity?: {
@@ -199,7 +205,7 @@ export interface SynthParameters {
   };
 }
 
-export type SynthModelId = 'generic' | 'minimoog-model-d' | 'juno-106' | 'dx7' | 'tb-303' | 'prophet-5' | 'sh-101' | 'pro-one' | 'jupiter-8' | 'ob-xa' | 'jp-8000' | 'mono-poly' | 'polysix' | 'ms-20';
+export type SynthModelId = 'generic' | 'minimoog-model-d' | 'juno-106' | 'dx7' | 'tb-303' | 'prophet-5' | 'sh-101' | 'pro-one' | 'jupiter-8' | 'ob-xa' | 'jp-8000' | 'mono-poly' | 'polysix' | 'ms-20' | 'odyssey';
 
 export interface SynthModelParams {
   macro1: number;

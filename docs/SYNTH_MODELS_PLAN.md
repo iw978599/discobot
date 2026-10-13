@@ -107,6 +107,19 @@ true before the first new model ships, and say so in the pull request.
   voice; the CS-80 needs two layers a note; the Virus a waveshaper or a
   second filter for its harder sounds.
 
+- 2026-10-12: **The Odyssey is built**, with oscillator sync and ring
+  modulation added to the voice for it. Not verified by ear.
+  - The instrument's ring modulator is an exclusive-or of the two
+    oscillators' pulse waves. This one multiplies the two oscillators,
+    which is the same thing for pulses and gentler for other waves.
+  - It is mono. The instrument's two-note mode, one oscillator a note, is
+    not modelled, nor its static high-pass (the voice has one now; the
+    model does not set it).
+  - S&H is the random source to the filter, stepped six times a second by
+    the first LFO, which the model keeps for that and sends nowhere.
+  - A synced oscillator tuned very high aliases: the restart is not
+    band-limited.
+
 ## The fourteen, in three groups
 
 The grouping is by what each needs from the voice, because that decides when
