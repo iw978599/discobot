@@ -14,6 +14,10 @@ export interface Starter {
   // How hard a hit is played, by drum and step, where it is not full: the quiet hats between the
   // loud ones and the ghost notes are what make a beat move.
   velocities?: Partial<Record<DrumInstrument, Record<number, number>>>;
+  // A hit that is not played every time round (its chance, under 1), and one played more than
+  // once within its step, by drum and step. A few of each keep a one-bar loop from being the same bar.
+  chances?: Partial<Record<DrumInstrument, Record<number, number>>>;
+  repeats?: Partial<Record<DrumInstrument, Record<number, number>>>;
   bass: Array<{ step: number; note: string; length?: number; velocity?: number; slide?: boolean }>;
 }
 
@@ -23,10 +27,12 @@ export const STARTERS: Starter[] = [
   {
     id: 'house',
     name: 'House Beat',
-    hint: 'Four kicks to the bar, claps, open hats between the beats over quiet closed ones, and a bass note off each beat, at 124 BPM',
+    hint: 'Four kicks to the bar, claps, open hats between the beats over quiet closed ones, a ghost snare that comes and goes, and a bass note off each beat, at 124 BPM',
     tempo: 124,
     drums: { kick: [0, 4, 8, 12], clap: [4, 12], closedHH: [0, 1, 3, 4, 5, 7, 8, 9, 11, 12, 13, 15], openHH: [2, 6, 10, 14], snare: [15] },
     velocities: { closedHH: { ...quiet([0, 4, 8, 12], 0.6), ...quiet([1, 3, 5, 7, 9, 11, 13, 15], 0.3) }, openHH: quiet([2, 6, 10], 0.75), snare: { 15: 0.35 } },
+    chances: { snare: { 15: 0.5 } },
+    repeats: { closedHH: { 15: 2 } },
     bass: [
       { step: 2, note: 'C3' }, { step: 6, note: 'C3' }, { step: 7, note: 'G3', velocity: 0.6 }, { step: 10, note: 'C3' },
       { step: 14, note: 'D#3' }, { step: 15, note: 'F3', velocity: 0.7 },
@@ -35,10 +41,12 @@ export const STARTERS: Starter[] = [
   {
     id: 'slow',
     name: 'Slow Groove',
-    hint: 'A laid-back kick and snare with ghost notes, steady hats and a bass line that slides, at 88 BPM',
+    hint: 'A laid-back kick and snare with ghost notes, one of them a drag into the next bar, steady hats and a bass line that slides, at 88 BPM',
     tempo: 88,
     drums: { kick: [0, 7, 10], snare: [4, 9, 12, 15], closedHH: [0, 2, 4, 6, 8, 10, 12], openHH: [14] },
     velocities: { snare: { 9: 0.3, 15: 0.35 }, closedHH: quiet([2, 6, 10], 0.5), openHH: { 14: 0.6 }, kick: { 7: 0.8 } },
+    chances: { snare: { 9: 0.7 }, openHH: { 14: 0.75 } },
+    repeats: { snare: { 15: 2 } },
     bass: [
       { step: 0, note: 'E3', length: 3 }, { step: 7, note: 'G3', velocity: 0.8, slide: true }, { step: 8, note: 'A3', velocity: 0.7 },
       { step: 10, note: 'A3', length: 2 }, { step: 14, note: 'G3', velocity: 0.8 },
@@ -47,13 +55,15 @@ export const STARTERS: Starter[] = [
   {
     id: 'electro',
     name: 'Electro',
-    hint: 'A broken kick, a snare on two and four, quick hats, a tom fill and a bass that follows the kick, at 110 BPM',
+    hint: 'A broken kick, a snare on two and four with a ghost between, quick hats, a tom fill that rolls and a bass that follows the kick, at 110 BPM',
     tempo: 110,
     drums: {
-      kick: [0, 3, 6, 10], snare: [4, 12], clap: [12], closedHH: [0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14], openHH: [15],
+      kick: [0, 3, 6, 10], snare: [4, 7, 12], clap: [12], closedHH: [0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14], openHH: [15],
       ride: [13], snare2: [14],
     },
-    velocities: { closedHH: quiet([1, 5, 9, 13], 0.3), clap: { 12: 0.7 }, ride: { 13: 0.6 }, snare2: { 14: 0.7 }, kick: { 3: 0.8 } },
+    velocities: { closedHH: quiet([1, 5, 9, 13], 0.3), clap: { 12: 0.7 }, ride: { 13: 0.6 }, snare2: { 14: 0.7 }, kick: { 3: 0.8 }, snare: { 7: 0.3 } },
+    chances: { snare: { 7: 0.6 }, openHH: { 15: 0.7 } },
+    repeats: { ride: { 13: 2 } },
     bass: [
       { step: 0, note: 'D3' }, { step: 3, note: 'D3', velocity: 0.8 }, { step: 6, note: 'F3' }, { step: 8, note: 'A3', velocity: 0.6 },
       { step: 10, note: 'D3' }, { step: 13, note: 'D3', velocity: 0.6 }, { step: 14, note: 'C3' },
@@ -88,16 +98,22 @@ export function starterPattern(starter: Starter, pattern: Pattern): Pattern {
   return { ...pattern, steps };
 }
 
-// The drum grid with the starter's hits in every bar, each at its own strength. Sounds, levels
-// and mutes are left alone.
+// The drum grid with the starter's hits in every bar, each at its own strength, chance and number
+// of repeats. Sounds, levels and mutes are left alone. A drum's chances and repeats are written
+// whenever the grid already holds some, so those of a beat tried before do not stay under this one.
 export function starterDrums(starter: Starter, drums: DrumState): DrumState {
   const next = {} as DrumState;
   for (const instrument of Object.keys(drums) as DrumInstrument[]) {
     const hits = starter.drums[instrument] ?? [];
     const strength = starter.velocities?.[instrument] ?? {};
+    const chance = starter.chances?.[instrument], repeat = starter.repeats?.[instrument];
+    const track = drums[instrument];
+    const along = (values: Record<number, number> | undefined) => track.steps.map((_, step) => (hits.includes(step % 16) ? values?.[step % 16] ?? 1 : 1));
     next[instrument] = {
-      ...drums[instrument], steps: drums[instrument].steps.map((_, step) => hits.includes(step % 16)),
-      stepVelocities: drums[instrument].steps.map((_, step) => (hits.includes(step % 16) ? strength[step % 16] ?? 1 : 1)),
+      ...track, steps: track.steps.map((_, step) => hits.includes(step % 16)),
+      stepVelocities: along(strength),
+      ...(chance || track.stepProbabilities ? { stepProbabilities: along(chance) } : {}),
+      ...(repeat || track.stepRatchets ? { stepRatchets: along(repeat) } : {}),
     };
   }
   return next;
