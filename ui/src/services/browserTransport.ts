@@ -1,7 +1,7 @@
 export interface TransportTick {
-  step: number;
-  // bars since the transport started; it only counts, and knows nothing about songs
-  bar: number;
+  // ticks since the transport started. It only counts: how long a bar is, and so which bar and
+  // step a tick falls on, depends on the scene that is playing, which the scheduler knows.
+  tick: number;
   time: number;
   duration: number;
 }
@@ -9,8 +9,6 @@ export interface TransportTick {
 export class BrowserTransport {
   private timer: ReturnType<typeof setInterval> | null = null;
   private nextTime = 0;
-  private step = 0;
-  private bar = 0;
   private ticks = 0;
   private lastTempo = 0;
   private tickSeconds = 0;
@@ -29,8 +27,6 @@ export class BrowserTransport {
   // built-in lanes to hear about a start and line up with it.
   start(lead = .04) {
     if (this.timer !== null) return;
-    this.step = 0;
-    this.bar = 0;
     this.ticks = 0;
     this.lastTempo = this.tempo();
     this.nextTime = this.startTime = this.clock() + lead;
@@ -38,7 +34,7 @@ export class BrowserTransport {
     this.pump();
   }
 
-  // One tick is a 32nd note; 16-step lanes and the drum grid use every second tick.
+  // One tick is a 32nd note; the drum grid and a lane of sixteenth steps use every second tick.
   pump() {
     const now = this.clock();
     const tempo = Math.max(20, Math.min(400, this.tempo()));
@@ -49,14 +45,12 @@ export class BrowserTransport {
     // Skip missed beats after a suspended tab instead of playing a burst of stale notes.
     while (this.nextTime < now - duration) this.advance(duration);
     while (this.nextTime < now + .08) {
-      this.schedule({ step: this.step, bar: this.bar, time: this.nextTime, duration });
+      this.schedule({ tick: this.ticks, time: this.nextTime, duration });
       this.advance(duration);
     }
   }
 
   private advance(duration: number) {
-    this.step = (this.step + 1) % 32;
-    if (this.step === 0) this.bar++;
     this.ticks++;
     this.nextTime += duration;
   }
@@ -64,7 +58,6 @@ export class BrowserTransport {
   stop() {
     if (this.timer !== null) clearInterval(this.timer);
     this.timer = null;
-    this.step = 0;
   }
 
   get running() { return this.timer !== null; }

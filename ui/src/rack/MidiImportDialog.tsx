@@ -10,6 +10,7 @@ export default function MidiImportDialog({ studio }: { studio: Studio }) {
         Detected tempo: <strong>{midiImportData.detectedTempo} BPM</strong> &middot; Length: <strong>{midiImportData.bars} {midiImportData.bars === 1 ? 'bar' : 'bars'}</strong> &middot; Steps per bar: <strong>{midiImportData.detectedStepCount}</strong>
       </p>
       {midiImportData.truncated && <p role="status">This file is longer than 8 bars. Only its first 8 bars are imported.</p>}
+      {studio.signature !== '4/4' && <p role="status">A MIDI file is read in bars of 4/4. The open scene is in {studio.signature}, so the notes are laid from the start along its bars, as many as hold them, up to 8.</p>}
       <p className="rack-empty">Assign each track to a synth or the drums:</p>
       {midiImportData.tracks.map((track, index) => (
         <div key={index} className="rack-list-row">

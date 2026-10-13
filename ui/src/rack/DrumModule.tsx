@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { isAudioFile, listSamples, saveSample } from '../services/sampleStore';
 import { MAX_KIT_FILES } from '../services/kitImport';
 import KitImportDialog from './KitImportDialog';
@@ -6,7 +6,7 @@ import { usePlayhead, usePlayheadMark } from '../hooks/usePlayhead';
 import { tracked } from '../studio/tracked';
 import UnitHelp, { UNIT_HELP } from './UnitHelp';
 import { gridKeyTarget } from './gridKeys';
-import { BAR_CHOICES, drumBars } from '../services/patternLength';
+import { BAR_CHOICES, barSteps, drumBars, onBeat, stepsAcross } from '../services/patternLength';
 import CopyToScene from './CopyToScene';
 import CopyBar from './CopyBar';
 import type { Studio } from '../studio/useStudio';
@@ -17,7 +17,6 @@ import { DrumInstrument, DrumKitId, DrumState, CymbalType } from '../types';
 import DrumKnob from '../components/DrumKnob';
 
 const INSTRUMENTS = DRUM_ROWS;
-const STEPS = Array.from({ length: 16 }, (_, i) => i);
 
 const LABELS = DRUM_NAMES;
 
@@ -70,21 +69,25 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
   const [showMore, setShowMore] = useState(false);
   const [showSends, setShowSends] = useState(false);
   // A drum pattern longer than one bar is shown a bar at a time. `base` is the first step on show.
-  const bars = drumBars(drumState);
+  // How long a bar is comes from the open scene's time signature.
+  const signature = studio.signature, perBar = barSteps(signature);
+  const STEPS = Array.from({ length: perBar }, (_, i) => i);
+  const cellsStyle = { '--bar': perBar, '--across': stepsAcross(signature) } as CSSProperties;
+  const bars = drumBars(drumState, signature);
   const [viewBar, setViewBar] = useState(0);
   const [follow, setFollow] = useState(true);
-  const barAtPlayhead = usePlayhead('drums', step => Math.max(0, Math.floor(step / 16)));
+  const barAtPlayhead = usePlayhead('drums', step => Math.max(0, Math.floor(step / perBar)));
   const playingBar = studio.isAnyPlaying ? barAtPlayhead : null;
   const gridRef = useRef<HTMLDivElement>(null);
   usePlayheadMark(gridRef, 'drums', studio.isAnyPlaying, '.drum-step-indicator', 'active');
   usePlayheadMark(gridRef, 'drums', studio.isAnyPlaying, '.drum-step-btn', 'current');
   const shownBar = Math.min(bars - 1, follow && playingBar !== null ? playingBar : viewBar);
-  const base = shownBar * 16;
+  const base = shownBar * perBar;
   // The grid's steps are one stop for the Tab key, on the step the keyboard was last on.
   const [gridCursor, setGridCursor] = useState<{ instrument: DrumInstrument; step: number } | null>(null);
-  const gridStop = gridCursor && gridCursor.step >= base && gridCursor.step < base + 16 ? gridCursor : { instrument: selected, step: selectedStep >= base && selectedStep < base + 16 ? selectedStep : base };
+  const gridStop = gridCursor && gridCursor.step >= base && gridCursor.step < base + perBar ? gridCursor : { instrument: selected, step: selectedStep >= base && selectedStep < base + perBar ? selectedStep : base };
   // A pattern made shorter can leave the selected step past its end.
-  useEffect(() => { if (selectedStep >= bars * 16) setSelectedStep(0); }, [bars, selectedStep]);
+  useEffect(() => { if (selectedStep >= bars * perBar) setSelectedStep(0); }, [bars, perBar, selectedStep]);
   // Imported samples a lane can play instead of its built-in sound.
   const [samples, setSamples] = useState<Array<{ id: string; name: string }>>([]);
   const sampleFileRef = useRef<HTMLInputElement>(null);
@@ -112,7 +115,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
     setSelected(instrument);
     setSelectedStep(step);
     // Editing a bar holds the view on it.
-    setViewBar(Math.floor(step / 16));
+    setViewBar(Math.floor(step / perBar));
     setFollow(false);
     const row = drumState[instrument];
     if (shiftKey && row.steps[step]) {
@@ -195,7 +198,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
           <div className="drum-grid-row header">
             <span />
             <span />
-            <div className="drum-cells">
+            <div className="drum-cells" style={cellsStyle}>
               {STEPS.map((column) => (
                 <span key={column} className="drum-step-indicator" data-step={base + column}>{column + 1}</span>
               ))}
@@ -237,7 +240,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
                     S
                   </button>
                 </div>
-                <div className="drum-cells">
+                <div className="drum-cells" style={cellsStyle}>
                   {STEPS.map((column) => {
                     const step = base + column;
                     const active = row.steps[step];
@@ -248,7 +251,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
                     return (
                       <button
                         key={step}
-                        className={`drum-step-btn ${active ? 'active' : ''} ${active && chance < 1 ? 'chance' : ''} ${picked ? 'picked' : ''} ${column % 4 === 0 ? 'beat' : ''}`}
+                        className={`drum-step-btn ${active ? 'active' : ''} ${active && chance < 1 ? 'chance' : ''} ${picked ? 'picked' : ''} ${onBeat(signature, column) ? 'beat' : ''}`}
                         data-step={step}
                         aria-label={`${LABELS[instrument]} step ${step + 1}`}
                         aria-pressed={active}
@@ -376,7 +379,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
                 className={`rack-btn ${bar === shownBar ? 'on' : ''} ${bar === playingBar ? 'playing' : ''}`}
                 aria-label={`Drum bar ${bar + 1}`}
                 aria-pressed={bar === shownBar}
-                onClick={() => { setViewBar(bar); setFollow(false); setSelectedStep(bar * 16 + (selectedStep % 16)); }}
+                onClick={() => { setViewBar(bar); setFollow(false); setSelectedStep(bar * perBar + (selectedStep % perBar)); }}
               >
                 {bar + 1}
               </button>
@@ -404,9 +407,9 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
           >
             Fill
           </button>
-          <button className="rack-btn" title="Shift pattern right" aria-label="Shift right" onClick={() => rearrange((step) => (step + 15) % 16)}>→ Shift</button>
-          <button className="rack-btn" title="Reverse pattern" aria-label="Reverse" onClick={() => rearrange((step) => 15 - step)}>⇄ Reverse</button>
-          <button className="rack-btn" title="Duplicate first 8 steps to last 8" aria-label="Repeat first half" onClick={() => rearrange((step) => (step >= 8 ? step - 8 : step))}>⇈ Repeat Half</button>
+          <button className="rack-btn" title="Shift pattern right" aria-label="Shift right" onClick={() => rearrange((step) => (step + perBar - 1) % perBar)}>→ Shift</button>
+          <button className="rack-btn" title="Reverse pattern" aria-label="Reverse" onClick={() => rearrange((step) => perBar - 1 - step)}>⇄ Reverse</button>
+          <button className="rack-btn" title={`Duplicate first ${perBar / 2} steps to last ${perBar / 2}`} aria-label="Repeat first half" onClick={() => rearrange((step) => (step >= perBar / 2 ? step - perBar / 2 : step))}>⇈ Repeat Half</button>
         </div>
         <div className="drum-step-details">
           <span className="step-tools-name">Step {selectedStep + 1}</span>

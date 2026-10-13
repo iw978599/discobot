@@ -119,8 +119,8 @@ export default function KidsPage() {
   const tickRef = useRef<(tick: TransportTick) => void>(() => {});
   tickRef.current = (tick) => {
     // The transport ticks in 32nd notes; a step here is an eighth.
-    if (tick.step % 4 !== 0) return;
-    const count = (tick.bar * 32 + tick.step) / 4, duration = tick.duration * 4;
+    if (tick.tick % 4 !== 0) return;
+    const count = tick.tick / 4, duration = tick.duration * 4;
     lastStep.current = { count, time: tick.time, duration };
     KIDS_PADS.forEach((_, pad) => {
       if (padSounds(stateRef.current, pad, count) && tapped.current.get(pad) !== count) sound(pad, tick.time, duration * 0.9);

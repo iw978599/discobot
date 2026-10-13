@@ -62,19 +62,21 @@ test('a bar number maps to the right scene, repeat and block; a song ends unless
   assert.deepEqual(songBars(song, scenes).map(scene => scene.name), ['A', 'A', 'B', 'A', 'A', 'A']);
 });
 
-test('the transport counts bars from when it starts', () => {
+// The transport only counts ticks. Which bar a tick is in depends on the time signature of the
+// scene that is playing, which the scheduler works out (sceneAtTick).
+test('the transport counts ticks from when it starts', () => {
   let time = 0;
-  const ticks: Array<{ step: number; bar: number }> = [];
+  const ticks: Array<{ tick: number }> = [];
   const transport = new BrowserTransport(() => time, () => 120, tick => ticks.push(tick));
   transport.start();
   for (let i = 1; i <= 260; i++) { time = i * 0.02; transport.pump(); }
   transport.stop();
-  assert.deepEqual(ticks.slice(0, 3).map(tick => [tick.bar, tick.step]), [[0, 0], [0, 1], [0, 2]]);
-  assert.deepEqual(ticks.filter(tick => tick.step === 0).map(tick => tick.bar), [0, 1, 2]);
-  assert.deepEqual([ticks[31].bar, ticks[32].bar], [0, 1]);
+  assert.deepEqual(ticks.map(tick => tick.tick), ticks.map((_, index) => index), 'every tick once, in order');
+  assert.ok(ticks.length > 64, 'well into a third bar of 4/4');
+  const played = ticks.length;
   transport.start();
   transport.stop();
-  assert.equal(ticks.at(-1)!.bar, 0, 'starting again counts from the first bar');
+  assert.equal(ticks[played].tick, 0, 'starting again counts from the first tick');
 });
 
 test('a project from before scenes existed becomes one scene and a one-block song', async () => {

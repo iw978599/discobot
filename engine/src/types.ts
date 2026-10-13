@@ -355,6 +355,8 @@ export interface DrumLanePattern {
   stepRatchets?: number[];
 }
 
+export type TimeSignature = '4/4' | '3/4' | '6/8' | '5/4' | '7/8' | '12/8';
+
 // One bar of the whole arrangement: every synth lane's notes and the drum grid. Sounds,
 // tempo and effects are not part of a scene; they belong to the project.
 export interface Scene {
@@ -363,6 +365,9 @@ export interface Scene {
   // the name of the colour the scene is marked with in the scene strip and the song. Absent
   // means none, as every scene was before scenes had colours.
   color?: string;
+  // how long a bar of this scene is and where its beats fall, for every lane and the drum grid.
+  // Absent means 4/4, as every scene was before there was a choice.
+  signature?: TimeSignature;
   // steps per synth lane id; a missing lane is silent in this scene
   lanes: Record<number, SequencerStep[]>;
   drums: Record<DrumInstrument, DrumLanePattern>;

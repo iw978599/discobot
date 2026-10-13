@@ -1,5 +1,5 @@
 import type { DrumInstrument, DrumState, Pattern } from '../types';
-import { laneBars } from './patternLength';
+import { barSteps, laneBars } from './patternLength';
 import { withStepNotes } from './noteScheduling';
 
 // Something to change, offered on a project with nothing in it: a tempo, a bar of drums and a
@@ -68,16 +68,17 @@ export function projectIsEmpty(patterns: Array<Pattern | null | undefined>, drum
     && Object.values(drums).every(track => !track.steps.some(Boolean));
 }
 
-// The lane's pattern with the bass line in every bar, whatever its length and step size.
-export function starterPattern(starter: Starter, pattern: Pattern): Pattern {
-  const bars = laneBars(pattern.steps.length, pattern.bars);
+// The lane's pattern with the bass line in every bar, whatever its length and step size. A
+// starter is written in 4/4: in a scene whose bar is shorter each bar takes as much as fits.
+export function starterPattern(starter: Starter, pattern: Pattern, signature?: unknown): Pattern {
+  const bars = laneBars(pattern.steps.length, pattern.bars, signature);
   const perBar = pattern.steps.length / bars;
-  const scale = perBar === 32 ? 2 : 1;
+  const scale = perBar > barSteps(signature) ? 2 : 1;
   const steps = pattern.steps.map(step => withStepNotes(step, []));
   for (let bar = 0; bar < bars; bar += 1) {
     for (const entry of starter.bass) {
       const at = bar * perBar + entry.step * scale;
-      if (at >= steps.length) continue;
+      if (entry.step * scale >= perBar || at >= steps.length) continue;
       const length = (entry.length ?? 1) * scale;
       steps[at] = {
         ...withStepNotes(steps[at], [entry.note]), ...(length > 1 ? { length } : {}),
@@ -90,14 +91,14 @@ export function starterPattern(starter: Starter, pattern: Pattern): Pattern {
 
 // The drum grid with the starter's hits in every bar, each at its own strength. Sounds, levels
 // and mutes are left alone.
-export function starterDrums(starter: Starter, drums: DrumState): DrumState {
-  const next = {} as DrumState;
+export function starterDrums(starter: Starter, drums: DrumState, signature?: unknown): DrumState {
+  const next = {} as DrumState, perBar = barSteps(signature);
   for (const instrument of Object.keys(drums) as DrumInstrument[]) {
     const hits = starter.drums[instrument] ?? [];
     const strength = starter.velocities?.[instrument] ?? {};
     next[instrument] = {
-      ...drums[instrument], steps: drums[instrument].steps.map((_, step) => hits.includes(step % 16)),
-      stepVelocities: drums[instrument].steps.map((_, step) => (hits.includes(step % 16) ? strength[step % 16] ?? 1 : 1)),
+      ...drums[instrument], steps: drums[instrument].steps.map((_, step) => hits.includes(step % perBar)),
+      stepVelocities: drums[instrument].steps.map((_, step) => (hits.includes(step % perBar) ? strength[step % perBar] ?? 1 : 1)),
     };
   }
   return next;

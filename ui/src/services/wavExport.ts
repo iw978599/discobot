@@ -1,5 +1,6 @@
 import { type CymbalType, DrumCore, type DrumSample, SynthCore, type SynthSample, toVoiceParams } from '@discobot/engine';
-import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, Scene, SequencerStep, SynthParameters } from '../types';
+import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, Scene, SequencerStep, SynthParameters, TimeSignature } from '../types';
+import { type BarTime, barSteps, barTimes, wholeNotes } from './patternLength';
 import { sceneDrumState } from './songPlayback';
 import { DRUM_INSTRUMENTS } from './drumKits';
 import { expandStepNotes } from './noteScheduling';
@@ -20,8 +21,11 @@ export interface ExportArrangement {
   drumFx: { sends: FxSendLevels; returnLevel: number };
   effectsLoop: EffectsLoopState;
   // A whole song, one scene per bar. When present these are rendered end to end and each
-  // lane's own pattern and the steps in `drumState` are ignored.
+  // lane's own pattern and the steps in `drumState` are ignored. Each bar is as long as its
+  // own time signature makes it.
   bars?: Scene[];
+  // The time signature of the one bar that is rendered when there are no `bars`. Absent means 4/4.
+  signature?: TimeSignature;
   // Decoded samples for the drum lanes that use one. A lane without an entry is synthesized.
   drumSamples?: Partial<Record<DrumInstrument, DrumSample>>;
   // The app's cymbal recordings, by kind. Without them the cymbal lane is synthesized.
@@ -95,22 +99,27 @@ export function renderSynthLane(
   return renderSynthBars(Array.from({ length: bars }, () => pattern.steps), params, tempo, frames, sampleRate, barDuration);
 }
 
-// The same, with different steps in each bar: a lane through a whole song.
+const evenBars = (count: number, barDuration: number): BarTime[] => Array.from({ length: count }, (_, bar) => ({ start: bar * barDuration, duration: barDuration }));
+
+// The same, with different steps in each bar: a lane through a whole song. `times` says when
+// each bar starts and how long it is, for bars that are not all one length; without it every
+// bar lasts `barDuration`.
 export function renderSynthBars(
   bars: SequencerStep[][], params: SynthParameters, tempo: number, frames: number, sampleRate: number,
-  barDuration = 240 / tempo, sample?: SynthSample | null,
+  barDuration = 240 / tempo, sample?: SynthSample | null, times: BarTime[] = evenBars(bars.length, barDuration),
 ): Stereo {
   const core = new SynthCore(sampleRate);
   core.setParams(toVoiceParams(params, tempo));
   if (sample) core.setSample(sample);
   const random = seededRandom(2);
   bars.forEach((steps, bar) => {
-    const stepDuration = barDuration / Math.max(1, steps.length);
+    const { start, duration } = times[bar];
+    const stepDuration = duration / Math.max(1, steps.length);
     steps.forEach((step, index) => {
       for (const scheduled of expandStepNotes(step, params, stepDuration, tempo, random)) {
         core.noteOn({
           note: scheduled.note, velocity: step.velocity, duration: scheduled.duration,
-          time: bar * barDuration + index * stepDuration + scheduled.offset,
+          time: start + index * stepDuration + scheduled.offset,
         });
       }
     });
@@ -118,29 +127,35 @@ export function renderSynthBars(
   return renderCore(core, frames);
 }
 
-type DrumArrangement = Pick<ExportArrangement, 'tempo' | 'drumState' | 'drumKitId' | 'drumMasterVolume' | 'drumSwing' | 'bars' | 'drumSamples' | 'drumCymbals'>;
+type DrumArrangement = Pick<ExportArrangement, 'tempo' | 'drumState' | 'drumKitId' | 'drumMasterVolume' | 'drumSwing' | 'bars' | 'signature' | 'drumSamples' | 'drumCymbals'>;
+// The time signature of each bar a render plays.
+const barSignatures = (arrangement: Pick<ExportArrangement, 'bars' | 'signature'>, bars: number): unknown[] =>
+  (arrangement.bars ? arrangement.bars.map(scene => scene.signature) : Array.from({ length: bars }, () => arrangement.signature));
 interface DrumHit { instrument: DrumInstrument; time: number; velocity: number; settings: DrumSettings }
 
 // Every drum hit the export plays, with its start time. Worked out once so the drum render
-// and the kick ducking on the synth lanes agree on which chance steps played.
+// and the kick ducking on the synth lanes agree on which chance steps played. `barDuration` is
+// how long a bar of 4/4 lasts; a drum step is a sixteenth of it in every time signature.
 export function drumHits(arrangement: DrumArrangement, bars = 1, barDuration = 240 / arrangement.tempo): DrumHit[] {
   const stepDuration = barDuration / 16;
   const random = seededRandom(1);
   const hits: DrumHit[] = [];
   const count = arrangement.bars ? arrangement.bars.length : bars;
+  const signatures = barSignatures(arrangement, count), times = barTimes(signatures, barDuration);
   for (let bar = 0; bar < count; bar++) {
+    const steps = barSteps(signatures[bar]), start = times[bar].start;
     const state = arrangement.bars ? sceneDrumState(arrangement.bars[bar], arrangement.drumState) : arrangement.drumState;
     // Mutes and solos can differ from scene to scene.
     const solo = DRUM_INSTRUMENTS.some(instrument => state[instrument].solo);
     for (const instrument of DRUM_INSTRUMENTS) {
       const track = state[instrument];
       if (track.muted || (solo && !track.solo)) continue;
-      for (let step = 0; step < 16; step++) {
+      for (let step = 0; step < steps; step++) {
         for (const offset of expandDrumStep(track, step, random)) {
           hits.push({
             instrument, velocity: track.stepVelocities?.[step] ?? 1,
             settings: { ...track.settings, volume: track.settings.volume * arrangement.drumMasterVolume },
-            time: bar * barDuration + (step + (step % 2 ? arrangement.drumSwing : 0) + offset) * stepDuration,
+            time: start + (step + (step % 2 ? arrangement.drumSwing : 0) + offset) * stepDuration,
           });
         }
       }
@@ -205,20 +220,35 @@ function connectEffects(ctx: OfflineAudioContext, input: AudioNode, master: Audi
   }
 }
 
-// How many bars a render covers and how long each is. A loop plays the bar enough times
-// for every tail to have wrapped round, then keeps only the last bar, which is what the
-// pattern sounds like once it has been looping for a while.
-// `length` is how many bars the pattern (or song) is.
-export function renderPlan(tempo: number, tail: number, sampleRate: number, loop: boolean, length = 1) {
+// One pass of a looped pattern, in samples, and how long a bar of 4/4 then lasts: a whole number
+// of samples in the pass, so the kept pass starts exactly on a bar line. `wholes` is the pattern's
+// length in whole notes, which is its length in bars when they are all 4/4.
+export function loopPass(tempo: number, sampleRate: number, wholes: number) {
+  if (Number.isInteger(wholes)) {
+    const barFrames = Math.round(240 / tempo * sampleRate);
+    return { frames: barFrames * wholes, barDuration: barFrames / sampleRate };
+  }
+  const frames = Math.round(240 / tempo * sampleRate * wholes);
+  return { frames, barDuration: frames / wholes / sampleRate };
+}
+
+// How many bars a render covers and how long a bar of 4/4 is in it. A loop plays the pattern
+// enough times for every tail to have wrapped round, then keeps only the last pass, which is what
+// the pattern sounds like once it has been looping for a while.
+// `length` is how many bars the pattern (or song) is, and `wholes` how long that is in whole
+// notes: the same number unless a bar is not in 4/4.
+export function renderPlan(tempo: number, tail: number, sampleRate: number, loop: boolean, length = 1, wholes = length) {
   if (!loop) {
     const barDuration = 240 / tempo;
-    return { bars: length, barDuration, frames: Math.ceil((length * barDuration + tail) * sampleRate), start: 0 };
+    return { bars: length, barDuration, frames: Math.ceil((wholes * barDuration + tail) * sampleRate), start: 0 };
   }
-  // A whole number of samples per bar, so the kept pass starts exactly on a bar line.
-  const barFrames = Math.round(240 / tempo * sampleRate);
-  const passes = 1 + Math.ceil(tail * sampleRate / (barFrames * length));
-  return { bars: passes * length, barDuration: barFrames / sampleRate, frames: passes * length * barFrames, start: (passes - 1) * length * barFrames };
+  const pass = loopPass(tempo, sampleRate, wholes);
+  const passes = 1 + Math.ceil(tail * sampleRate / pass.frames);
+  return { bars: passes * length, barDuration: pass.barDuration, frames: passes * pass.frames, start: (passes - 1) * pass.frames };
 }
+
+// How long an arrangement lasts, in whole notes: its bars, each as long as its time signature.
+export const arrangementWholes = (arrangement: Pick<ExportArrangement, 'bars' | 'signature'>): number => wholeNotes(barSignatures(arrangement, 1));
 
 export async function renderArrangement(arrangement: ExportArrangement, options: RenderOptions = {}): Promise<{ channels: Stereo; sampleRate: number }> {
   const sampleRate = 44100;
@@ -228,15 +258,17 @@ export async function renderArrangement(arrangement: ExportArrangement, options:
   // With `loop`, the bars are one pattern to be looped, not a song with an ending.
   const looping = options.loop === true;
   const pattern = arrangement.bars;
-  if (pattern && pattern.length * 240 / arrangement.tempo > MAX_EXPORT_SECONDS) {
+  if (pattern && arrangementWholes(arrangement) * 240 / arrangement.tempo > MAX_EXPORT_SECONDS) {
     throw new Error(`Songs longer than ${MAX_EXPORT_SECONDS / 60} minutes cannot be exported as audio. Shorten the song or raise the tempo.`);
   }
   if (pattern && pattern.length === 0) throw new Error('The song is empty.');
-  const plan = renderPlan(arrangement.tempo, tail, sampleRate, looping, pattern?.length ?? 1);
+  const plan = renderPlan(arrangement.tempo, tail, sampleRate, looping, pattern?.length ?? 1, arrangementWholes(arrangement));
   // For a loop, the pattern is laid end to end as many times as the plan asks for.
   const song = pattern ? Array.from({ length: plan.bars }, (_, bar) => pattern[bar % pattern.length]) : undefined;
   if (song) arrangement = { ...arrangement, bars: song };
   const bars = plan.bars, barDuration = plan.barDuration, start = plan.start, frames = plan.frames;
+  // When each bar starts: bars of different time signatures are of different lengths.
+  const times = barTimes(barSignatures(arrangement, bars), barDuration);
   const ctx = new OfflineAudioContext(2, frames, sampleRate);
   const master = ctx.createGain(), limiter = ctx.createDynamicsCompressor(), safety = ctx.createWaveShaper();
   safety.curve = safetyCurve();
@@ -269,7 +301,7 @@ export async function renderArrangement(arrangement: ExportArrangement, options:
     if (!lane.pattern || !lane.synthParams) continue;
     if (only !== undefined ? only !== lane.id : lane.muted || (synthSolo && !lane.solo)) continue;
     const laneBars = song ? song.map(scene => scene.lanes[lane.id] ?? []) : Array.from({ length: bars }, () => lane.pattern!.steps);
-    play(renderSynthBars(laneBars, lane.synthParams, arrangement.tempo, frames, sampleRate, barDuration, arrangement.synthSamples?.[lane.id]),
+    play(renderSynthBars(laneBars, lane.synthParams, arrangement.tempo, frames, sampleRate, barDuration, arrangement.synthSamples?.[lane.id], times),
       lane.synthParams.fxSends, lane.synthParams.fxReturn, 'synth', lane.synthParams.duck ?? 0);
   }
   if (only === undefined || only === 'drums') {
@@ -294,8 +326,8 @@ export async function renderArrangement(arrangement: ExportArrangement, options:
     // next bar starts at its own level.
     for (let bar = 1; take.gains && bar < bars; bar++) {
       if (gainAt(bar) === gainAt(bar - 1)) continue;
-      level.gain.setValueAtTime(gainAt(bar - 1), bar * barDuration - GUEST_FADE);
-      level.gain.linearRampToValueAtTime(gainAt(bar), bar * barDuration);
+      level.gain.setValueAtTime(gainAt(bar - 1), times[bar].start - GUEST_FADE);
+      level.gain.linearRampToValueAtTime(gainAt(bar), times[bar].start);
     }
     source.connect(level);
     connectEffects(ctx, level, master, take.sends ?? { reverb: 0, delay: 0, drive: 0, phaser: 0 }, 1, arrangement.effectsLoop, 'synth', arrangement.tempo);

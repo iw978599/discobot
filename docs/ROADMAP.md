@@ -546,6 +546,22 @@ may redistribute.
     counting in song mode and every export have to take each scene's own bar
     length, where today one length serves the whole song. Keep these agreed
     metre options and the backward-compatible four-four default.
+    **Built on 2026-10-13, not verified by ear and not tried by a person:** a
+    Time menu in the song unit sets the open scene's signature, one of the
+    six, and no custom number of steps. Every lane and the drum grid of
+    that scene become bars of it (16, 12, 12, 20, 14 or 24 sixteenth steps;
+    twice that on a lane of finer steps), keeping how many bars they have:
+    a shorter bar loses the steps at its end and one Undo brings them back,
+    a longer one gains empty steps. The beat marks, the metronome and the
+    count-in, the phone's rows, the playhead, song mode, the playlist's
+    times, and WAV, loop, stem and MIDI export all take each scene's own
+    bar length; a MIDI file carries the signature and each change of it.
+    A project in 4/4 stores nothing new and renders as it did. Still open:
+    7/8 is counted two, two, three and nothing else; the delay's tempo sync
+    is in note values and so was left alone; MIDI import still reads a file
+    as 4/4 and lays it along the scene's bars; a guest is told beats, never
+    the signature; a browser still running the version before this reads a
+    bar of fewer than sixteen steps as damage and pads it.
 
 12. **Turn a knob with the scroll wheel.** (S) Asked for by the owner on
     2026-10-11: with the pointer over a knob, the wheel turns it, with no

@@ -345,7 +345,7 @@
 [data-color="violet"] { --scene-color: var(--scene-violet); }
 [data-color="pink"] { --scene-color: var(--scene-pink); }
 .scene-strip .scene-chip[data-color], .song-chain .song-block[data-color], .shared-song-order span[data-color] { border-left: 5px solid var(--scene-color); }
-.scene-color { display: flex; align-items: center; gap: 6px; color: var(--text-label); }
+.scene-color, .scene-time { display: flex; align-items: center; gap: 6px; color: var(--text-label); }
 .mode-toggle { width: var(--side); }
 .mode-toggle button { width: auto; flex: 1; height: 24px; padding: 0 4px; font-size: var(--type-caption); text-transform: inherit; letter-spacing: inherit; }
 .song-block { display: flex; align-items: stretch; background: var(--surface-control); border: 1px solid var(--edge-control); border-radius: var(--corner-control); overflow: hidden; }
@@ -425,7 +425,7 @@
 .step-cell.selected.has-note { box-shadow: inset 0 0 0 1px var(--gap), inset 0 0 0 3px var(--select), inset 0 0 0 4px var(--gap), var(--shadow-lit); }
 .rack-page .step-cell.selected:focus-visible, .rack-page .drum-step-btn.picked:focus-visible { box-shadow: inset 0 0 0 1px var(--gap), inset 0 0 0 3px var(--select), inset 0 0 0 4px var(--gap), 0 0 0 2px var(--gap); }
 .rack-page .step-cell:focus-visible, .rack-page .drum-step-btn:focus-visible { z-index: 2; }
-.steps-32 .step-cell { font-size: var(--type-caption); }
+.steps-32 .step-cell, .step-row.fine .step-cell { font-size: var(--type-caption); }
 .step-light { position: absolute; top: 2px; left: 50%; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: transparent; }
 .step-light.on { background: #fff; box-shadow: 0 0 6px #fff; }
 .step-cell:not(.has-note) .step-light.on { background: var(--on); box-shadow: var(--shadow-lamp); }
@@ -462,7 +462,8 @@
 }
 .drum-name:hover { border-color: var(--hover); color: var(--text); }
 .drum-grid-row.selected .drum-name { background: var(--drum-color); border-color: var(--drum-color); color: var(--text-on); }
-.drum-cells { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 3px; min-width: 0; }
+/* --bar is how many steps the scene's time signature puts in a bar; DrumModule sets it. */
+.drum-cells { display: grid; grid-template-columns: repeat(var(--bar, 16), minmax(0, 1fr)); gap: 3px; min-width: 0; }
 .drum-step-indicator { text-align: center; font-family: var(--led-font); font-size: var(--type-caption); letter-spacing: 0; color: var(--text-faint); }
 .drum-step-indicator.active { color: var(--on); text-shadow: 0 0 6px var(--on); }
 .drum-step-btn {
@@ -774,10 +775,11 @@
   .synth-module > .rack-row { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
   .synth-module > .rack-row > .step-row, .synth-module > .rack-row > .rack-knobs { grid-column: 1 / -1; }
   .synth-module > .rack-row > .rack-knobs { justify-content: space-between; }
-  /* The row sets its own column count inline, for 16 or 32 steps; here it is always eight. */
-  .step-row { grid-template-columns: repeat(8, minmax(0, 1fr)) !important; gap: 4px; }
+  /* The row sets its own column count inline, for a bar of steps or twice that; here it is eight
+     to a row, or six where the scene's beats are six steps (--across), so a row ends on a beat. */
+  .step-row { grid-template-columns: repeat(var(--across, 8), minmax(0, 1fr)) !important; gap: 4px; }
   .step-cell { height: 44px; font-size: var(--type-label); }
-  .steps-32 .step-cell { height: 36px; font-size: var(--type-caption); }
+  .steps-32 .step-cell, .step-row.fine .step-cell { height: 36px; font-size: var(--type-caption); }
 
   /* the sound editor */
   .rack .synth-controls-panel { padding: 8px; }
@@ -841,7 +843,7 @@
   .drum-grid { gap: 6px; }
   .drum-grid-row { grid-template-columns: 52px 64px minmax(0, 1fr); align-items: stretch; }
   .drum-grid-row .rack-ms { align-items: center; }
-  .drum-cells { grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; }
+  .drum-cells { grid-template-columns: repeat(var(--across, 8), minmax(0, 1fr)); gap: 4px; }
   .drum-name { height: auto; min-height: 30px; font-size: var(--type-label); white-space: normal; line-height: 1.1; padding: 2px; overflow-wrap: anywhere; }
   .drum-step-btn { height: 30px; font-size: var(--type-caption); }
   .drum-step-indicator { font-size: var(--type-caption); }
@@ -951,7 +953,7 @@
   .piano-roll-grid { max-height: max(180px, calc(100dvh - 150px)); }
 }
 @media (min-width: 700px) and (max-width: 960px) and (max-height: 500px) and (orientation: landscape) {
-  .step-row { grid-template-columns: repeat(16, minmax(0, 1fr)) !important; }
+  .step-row { grid-template-columns: repeat(var(--bar, 16), minmax(0, 1fr)) !important; }
 }
 
 @media (prefers-reduced-motion: reduce) {

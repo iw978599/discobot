@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { BAR_CHOICES, laneBars } from '../services/patternLength';
+import { BAR_CHOICES, barSteps, laneBars } from '../services/patternLength';
 import CopyToScene from './CopyToScene';
 import CopyBar from './CopyBar';
 import TransposeTool from './TransposeTool';
@@ -61,8 +61,10 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
   const stepCount = synth?.pattern?.steps.length ?? 0;
   const selectStep = studio.handleStepSelect;
   // A pattern longer than one bar is shown a bar at a time.
-  const bars = laneBars(stepCount, synth?.pattern?.bars);
-  const perBar = stepCount / bars || 16;
+  // How long a bar is comes from the open scene's time signature.
+  const signature = studio.signature, barLength = barSteps(signature);
+  const bars = laneBars(stepCount, synth?.pattern?.bars, signature);
+  const perBar = stepCount / bars || barLength;
   const [viewBar, setViewBar] = useState(0);
   // While playing, the view follows the playhead until a bar or a step is picked by hand.
   const [follow, setFollow] = useState(true);
@@ -159,6 +161,7 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
             selectedStep={synth.selectedStep}
             firstStep={firstStep}
             visibleSteps={perBar}
+            signature={signature}
             arrowsWalk={selected && synth.selectedStep !== null}
             onStepClick={(step) => {
               studio.setSelectedSynthId(synthId);
@@ -286,10 +289,10 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
                     aria-label="Sequence length"
                     title="Steps in each bar"
                     value={perBar}
-                    onChange={(event) => { void studio.handleStepCountChange(synthId, Number(event.target.value) as 16 | 32); }}
+                    onChange={(event) => { void studio.handleStepCountChange(synthId, Number(event.target.value)); }}
                   >
-                    <option value={16}>16 steps</option>
-                    <option value={32}>32 steps</option>
+                    <option value={barLength}>{barLength} steps</option>
+                    <option value={barLength * 2}>{barLength * 2} steps</option>
                   </select>
                 </label>
                 <label title="How many bars this lane's pattern lasts. Lanes of different lengths loop against each other">
@@ -427,6 +430,7 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
                 onNoteLength={(stepIndex, length, note) => { void studio.handleStepLengthChange(synthId, stepIndex, length, note); }}
                 firstStep={firstStep}
                 visibleSteps={perBar}
+                signature={signature}
                 onClearPattern={() => { void studio.handleClearPatternNotes(synthId); }}
                 onNotePlay={(note) => { void studio.handleNotePlay(synthId, note); }}
                 onNoteRelease={(note) => { void studio.handleNoteRelease(synthId, note); }}

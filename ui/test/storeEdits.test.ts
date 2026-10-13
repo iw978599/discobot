@@ -219,6 +219,48 @@ const cases: Case[] = [
       assert.equal('color' in service.snapshot().scenes[0], false);
     },
   }),
+  sceneChange('the open scene is given a time signature, and every lane and the drums become bars of it', {
+    type: 'scene.signature',
+    arrange: (service) => {
+      const ids = twoScenes(service);
+      ok(service.setDrumBars(2));
+      ok(service.setDrumStep('kick', 11, true));
+      ok(service.setDrumStep('kick', 15, true));
+      ok(service.setDrumStepVelocity('kick', 16, .4));
+      const pattern = service.snapshot().synths[0].pattern;
+      ok(service.writePattern(1, pattern.id, { steps: [...blank(11), note('C4'), ...blank(3), note('D4'), note('E4'), ...blank(15)] as any, bars: 2 }));
+      return ids;
+    },
+    body: { signature: '3/4' },
+    check: (result, service, ids) => {
+      const { scenes, drumState, synths, currentSceneId } = result.events[0].data;
+      assert.equal(currentSceneId, ids.second);
+      assert.deepEqual(scenes.map((scene: any) => scene.signature), [undefined, '3/4'], 'only the open scene');
+      assert.equal(scenes[0].drums.kick.steps.length, 16, 'the other scene is left as it was');
+      assert.equal(synths[0].pattern.steps.length, 24);
+      assert.equal(synths[0].pattern.bars, 2, 'the bars are kept');
+      assert.deepEqual([synths[0].pattern.steps[11].note, synths[0].pattern.steps[12].note, synths[0].pattern.steps.filter((step: any) => step.active).length], ['C4', 'E4', 2], 'the step past the end of the first bar is cut off');
+      assert.equal(drumState.kick.steps.length, 24);
+      assert.deepEqual([drumState.kick.steps[11], drumState.kick.steps.filter(Boolean).length, drumState.kick.stepVelocities[12]], [true, 1, .4]);
+      assert.deepEqual(scenes[1].lanes[1], synths[0].pattern.steps, 'the open scene\'s slot holds what the lanes hold');
+      ok(service.setDrumStep('snare', 2, true));
+      assert.equal(service.snapshot().scenes[1].signature, '3/4', 'and keeps its signature when the next edit rebuilds it');
+    },
+  }),
+  sceneChange('4/4 is stored as nothing, and a longer bar gains empty steps', {
+    type: 'scene.signature',
+    arrange: (service) => { ok(service.setSceneSignature('7/8')); ok(service.setDrumStep('kick', 13, true)); },
+    body: { signature: '4/4' },
+    check: (result) => {
+      const { scenes, drumState, synths } = result.events[0].data;
+      assert.equal('signature' in scenes[0], false);
+      assert.deepEqual(synths[0].pattern.steps, blank(16));
+      assert.deepEqual(drumState.kick.steps.flatMap((hit: boolean, index: number) => (hit ? [index] : [])), [13]);
+      assert.equal(drumState.kick.steps.length, 16);
+    },
+  }),
+  { type: 'scene.signature', title: 'a signature that is not one of the six is refused', body: { signature: '9/8' }, status: 400, error: 'A scene is in 4/4, 3/4, 6/8, 5/4, 7/8, 12/8' },
+  { type: 'scene.signature', title: 'nor is anything that is not text', body: { signature: wrong({ toString: () => '3/4' }) }, status: 400, error: 'A scene is in 4/4, 3/4, 6/8, 5/4, 7/8, 12/8' },
   {
     type: 'scene.color', title: 'a scene that does not exist cannot be coloured',
     body: { sceneId: 'nope', color: 'teal' }, status: 400, error: 'That scene is not in the project.',

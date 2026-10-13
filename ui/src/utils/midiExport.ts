@@ -1,5 +1,6 @@
 import { DrumInstrument, DrumState, Pattern, SequencerStep } from '../types';
 import { expandDrumStep, seededRandom } from '../services/drumScheduling';
+import { barSteps, beatStarts, signatureFraction, timeSignature } from '../services/patternLength';
 
 interface MidiSynthLane {
   id: number;
@@ -14,9 +15,12 @@ interface MidiExportPayload {
   drumState: DrumState;
   drumSwing?: number;
   drumMasterVolume?: number;
+  // The time signature of the one bar that is written when there are no `bars`. Absent means 4/4.
+  signature?: unknown;
   // A whole song, one entry per bar. When present, each lane's own pattern and
-  // `drumState` above are ignored for notes and these are written end to end instead.
-  bars?: Array<{ name: string; lanes: Record<number, SequencerStep[]>; drumState: DrumState }>;
+  // `drumState` above are ignored for notes and these are written end to end instead. Each bar
+  // is as long as its own time signature makes it.
+  bars?: Array<{ name: string; lanes: Record<number, SequencerStep[]>; drumState: DrumState; signature?: unknown }>;
 }
 
 interface MidiEvent {
@@ -26,7 +30,12 @@ interface MidiEvent {
 
 const PPQ = 480;
 const TICKS_PER_STEP = PPQ / 4;
-const TICKS_PER_BAR = PPQ * 4;
+// The tick each bar starts on, and how many ticks it lasts: a bar is its time signature's steps long.
+const barTicks = (signatures: unknown[]) => {
+  let tick = 0;
+  return signatures.map(signature => { const bar = { start: tick, length: barSteps(signature) * TICKS_PER_STEP }; tick += bar.length; return bar; });
+};
+type BarTicks = ReturnType<typeof barTicks>;
 const DEFAULT_SYNTH_VELOCITY = 96;
 const DRUM_CHANNEL = 9;
 
@@ -133,24 +142,33 @@ function markerEvent(tick: number, text: string): MidiEvent {
   return { tick, data: [0xff, 0x06, ...encodeVlq(payload.length), ...payload] };
 }
 
-function buildTempoTrack(tempo: number, markers: MidiEvent[] = []): number[] {
+// A time signature (meta event 0x58): the numerator, the denominator as a power of two, how many
+// MIDI clocks a metronome click is, and 32nd notes to a quarter. The click is the signature's
+// beat: a quarter note is 24 clocks, a dotted quarter 36, and 7/8 is given its eighth, 12.
+function signatureEvent(tick: number, signature: unknown): MidiEvent {
+  const { numerator, denominator } = signatureFraction(signature), beats = beatStarts(signature);
+  const click = denominator === 4 ? 24 : barSteps(signature) / beats.length === 6 ? 36 : 12;
+  return { tick, data: [0xff, 0x58, 0x04, numerator, Math.log2(denominator), click, 8] };
+}
+
+function buildTempoTrack(tempo: number, markers: MidiEvent[] = [], signatures: MidiEvent[] = [signatureEvent(0, undefined)]): number[] {
   const safeTempo = Math.max(20, Math.min(400, Math.round(tempo)));
   const mpqn = Math.round(60000000 / safeTempo);
   const events: MidiEvent[] = [
     textMetaEvent(0, 'Discobot MIDI Export'),
     { tick: 0, data: [0xff, 0x51, 0x03, (mpqn >> 16) & 0xff, (mpqn >> 8) & 0xff, mpqn & 0xff] },
-    { tick: 0, data: [0xff, 0x58, 0x04, 4, 2, 24, 8] },
+    ...signatures,
     ...markers,
   ];
   return makeTrackChunk(encodeTrack(events));
 }
 
 // `bars` is the lane's steps for each bar in turn.
-function buildSynthTrack(id: number, bars: SequencerStep[][], channel: number): number[] {
+function buildSynthTrack(id: number, bars: SequencerStep[][], channel: number, times: BarTicks): number[] {
   const events: MidiEvent[] = [textMetaEvent(0, `Synth ${id}`)];
   const random = seededRandom(2);
   bars.forEach((steps, bar) => {
-    const ticksPerStep = TICKS_PER_BAR / Math.max(1, steps.length);
+    const ticksPerStep = times[bar].length / Math.max(1, steps.length);
     for (let stepIndex = 0; stepIndex < steps.length; stepIndex += 1) {
       const step = steps[stepIndex];
       if (!step.active || !step.note || step.velocity <= 0) continue;
@@ -165,7 +183,7 @@ function buildSynthTrack(id: number, bars: SequencerStep[][], channel: number): 
       // A note of a chord can have a length of its own. Repeats share out the step's whole length.
       const own = step.lengths?.[at];
       const noteTicks = repeats === 1 && own !== undefined && own >= 1 ? ticksPerStep * Math.min(own, step.length ?? 1) : spanTicks;
-      const tick = bar * TICKS_PER_BAR + Math.round((stepIndex + Math.max(0, Math.min(0.95, step.offset ?? 0))) * ticksPerStep + repeat * spanTicks);
+      const tick = times[bar].start + Math.round((stepIndex + Math.max(0, Math.min(0.95, step.offset ?? 0))) * ticksPerStep + repeat * spanTicks);
       const velocity = clampVelocity(step.velocity * 127, DEFAULT_SYNTH_VELOCITY);
       const noteOnStatus = 0x90 | (channel & 0x0f);
       const noteOffStatus = 0x80 | (channel & 0x0f);
@@ -177,7 +195,7 @@ function buildSynthTrack(id: number, bars: SequencerStep[][], channel: number): 
   return makeTrackChunk(encodeTrack(events));
 }
 
-function buildDrumTrack(bars: DrumState[], swing = 0, masterVolume = 1): number[] {
+function buildDrumTrack(bars: DrumState[], swing = 0, masterVolume = 1, times: BarTicks): number[] {
   const events: MidiEvent[] = [textMetaEvent(0, 'Drums (GM ch10)')];
   const random = seededRandom(1);
   bars.forEach((drumState, bar) => {
@@ -192,7 +210,7 @@ function buildDrumTrack(bars: DrumState[], swing = 0, masterVolume = 1): number[
       const velocity = clampVelocity(track.settings.volume * stepVelocity * masterVolume * 127, 100);
       const length = Math.max(1, Math.round(TICKS_PER_STEP * 0.5 / offsets.length));
       for (const offset of offsets) {
-        const tick = bar * TICKS_PER_BAR + Math.round((stepIndex + (stepIndex % 2 ? swing : 0) + offset) * TICKS_PER_STEP);
+        const tick = times[bar].start + Math.round((stepIndex + (stepIndex % 2 ? swing : 0) + offset) * TICKS_PER_STEP);
         events.push({ tick, data: [0x90 | DRUM_CHANNEL, note, velocity] });
         events.push({ tick: tick + length, data: [0x80 | DRUM_CHANNEL, note, 0] });
       }
@@ -207,19 +225,23 @@ export function createMidiFile(payload: MidiExportPayload): Uint8Array {
   const laneBars = (lane: MidiSynthLane) => payload.bars ? payload.bars.map(bar => bar.lanes[lane.id] ?? []) : [lane.pattern.steps];
   const activeSynths = payload.synthLanes.filter((lane) => !lane.muted && (!hasSolo || lane.solo)
     && laneBars(lane).some(steps => steps.some((step) => step.active && Boolean(step.note))));
+  const signatures = payload.bars ? payload.bars.map(bar => timeSignature(bar.signature)) : [timeSignature(payload.signature)];
+  const times = barTicks(signatures);
   // One marker where each section starts, so the song's structure shows up in a DAW.
   const markers = (payload.bars ?? []).flatMap((bar, index, bars) => (
-    index === 0 || bars[index - 1].name !== bar.name ? [markerEvent(index * TICKS_PER_BAR, bar.name)] : []
+    index === 0 || bars[index - 1].name !== bar.name ? [markerEvent(times[index].start, bar.name)] : []
   ));
-  const trackChunks: number[][] = [buildTempoTrack(payload.tempo, markers)];
+  // The time signature at the start, and again wherever the song changes it.
+  const changes = signatures.flatMap((signature, index) => (index === 0 || signatures[index - 1] !== signature ? [signatureEvent(times[index]?.start ?? 0, signature)] : []));
+  const trackChunks: number[][] = [buildTempoTrack(payload.tempo, markers, changes.length ? changes : undefined)];
 
   const nonDrumChannels = [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15];
   activeSynths.forEach((lane, index) => {
     const channel = nonDrumChannels[index % nonDrumChannels.length];
-    trackChunks.push(buildSynthTrack(lane.id, laneBars(lane), channel));
+    trackChunks.push(buildSynthTrack(lane.id, laneBars(lane), channel, times));
   });
 
-  trackChunks.push(buildDrumTrack(payload.bars ? payload.bars.map(bar => bar.drumState) : [payload.drumState], payload.drumSwing, payload.drumMasterVolume));
+  trackChunks.push(buildDrumTrack(payload.bars ? payload.bars.map(bar => bar.drumState) : [payload.drumState], payload.drumSwing, payload.drumMasterVolume, times));
 
   const header = [
     0x4d, 0x54, 0x68, 0x64,
