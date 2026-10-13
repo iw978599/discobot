@@ -257,7 +257,11 @@ fourteen, with the engine work each needs.
    and the owner asked for sound work. The MS-20, with its filter and a
    high-pass for the voice, is built on `feat/design-review-ms20-model`
    (check its pull request's state).
-5. The modulation matrix, then the Odyssey, the Virus and the CS-80. Build
+5. The modulation matrix, then the Odyssey, the Virus and the CS-80. The
+   matrix is built on `feat/design-review-mod-matrix` (check its pull
+   request's state); the MS-20 (#144) is merged. The owner said on
+   2026-10-12 to "just keep working" through this. What it said before:
+   the modulation matrix, then the Odyssey, the Virus and the CS-80. Build
    here the one way of naming any parameter that step 4 needs too.
 6. The sample oscillator, then the M1, the D-50 and the Wavestation. These
    may only ship waveforms the project is allowed to redistribute; bring the

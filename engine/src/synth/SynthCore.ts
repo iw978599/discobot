@@ -40,6 +40,9 @@ interface Voice {
   age: number;
   remaining: number;
   releaseOverride: number;
+  // The value the random source is holding for this note, and where the LFO that steps it was last.
+  random: number;
+  randomPhase: number;
 }
 
 const TWO_PI = 2 * Math.PI;
@@ -52,6 +55,9 @@ const SECOND_STAGE_DAMPING = Math.SQRT2;
 // the instrument's feedback does: with the peak down it is the clean two-pole, and pushed, the peak stops
 // growing and flattens, which is the distortion it is known for. This is how fast the holding back comes on.
 const MS20_HOLD = 0.1;
+const MOD_SOURCES = ['lfo1', 'lfo2', 'ampEnv', 'filterEnv', 'velocity', 'key', 'random'];
+const MOD_DESTINATIONS = ['pitch', 'osc2Pitch', 'filter', 'amp', 'pulseWidth', 'pan', 'fmIndex'];
+const MOD_ROUTES = 4;
 
 // The one synth voice implementation. The AudioWorklet runs it block by block for live
 // playback and the WAV exporter runs it offline, so both produce the same audio.
@@ -69,6 +75,12 @@ export class SynthCore {
   private pending: Array<NoteOnMessage & { frame: number }> = [];
   private globalLfoPhase: [number, number] = [0, 0];
   private noise = new Noise();
+  // The random source has a sequence of its own, so routing it never changes what the noise oscillator plays.
+  private chance = new Noise(0x9e3779b9);
+  private routeSource = new Int8Array(MOD_ROUTES);
+  private routeDestination = new Int8Array(MOD_ROUTES);
+  private routeDepth = new Float64Array(MOD_ROUTES);
+  private routeCount = 0;
   private age = 0;
   private lastFrequency = 440;
   private readonly smoothing: number;
@@ -83,6 +95,7 @@ export class SynthCore {
       fmPhase: [0, 0, 0, 0], fmFeedback: 0, fmEnv: 0, lfoPhase: [0, 0],
       amp: new Adsr(), filterEnv: new Adsr(), filter: new Svf(), filter2: new Svf(), ladder: new Ladder(), highpass: new Svf(), previousInput: 0,
       last: 0, transition: 0, transitionSamples: 0, age: 0, remaining: Infinity, releaseOverride: 0,
+      random: 0, randomPhase: 0,
     }));
     this.refreshDerived();
     Object.assign(this.smoothed, {
@@ -149,6 +162,18 @@ export class SynthCore {
     d.mixScale = power > 1 ? 1 / Math.sqrt(power) : 1;
     d.twoStage = p.filterSlope >= 24 && (p.filterType === 'lowpass' || p.filterType === 'highpass' || p.filterType === 'bandpass');
     d.fmDecay = approachCoefficient(clamp(p.fmDecay, 0.01, 10, 0.6), sr, 4.6);
+    // The routes in use, as numbers the voice loop can switch on.
+    const flat = p as unknown as Record<string, unknown>;
+    this.routeCount = 0;
+    for (let n = 1; n <= MOD_ROUTES; n++) {
+      const source = MOD_SOURCES.indexOf(String(flat[`mod${n}Source`]));
+      const destination = MOD_DESTINATIONS.indexOf(String(flat[`mod${n}Destination`]));
+      const depth = clamp(Number(flat[`mod${n}Depth`]), -1, 1, 0);
+      if (source < 0 || destination < 0 || depth === 0) continue;
+      this.routeSource[this.routeCount] = source;
+      this.routeDestination[this.routeCount] = destination;
+      this.routeDepth[this.routeCount++] = depth;
+    }
     const drive = clamp(p.filterDrive, 0, 1);
     d.driveGain = 1 + drive * 5;
     d.driveMakeup = 1 / (1 + drive * 1.6);
@@ -223,6 +248,8 @@ export class SynthCore {
     voice.velocity = velocity;
     voice.keyOctaves = keyOctaves;
     voice.lfoPhase = [0, 0];
+    voice.random = this.chance.next();
+    voice.randomPhase = 0;
     voice.fmEnv = 1;
     voice.amp.gateOn();
     voice.filterEnv.gateOn();
@@ -311,11 +338,46 @@ export class SynthCore {
           else if (lfoTargets[n] === 'pulseWidth') pulseMod += value * 0.45;
         }
 
+        // The routes. With none, every sum here is nothing and every product one, and the sound is what it was.
+        let osc2Mod = 1, fmMod = 0, panMod = 0, routedFilter = 0;
+        if (this.routeCount > 0) {
+          let osc2Octaves = 0;
+          for (let r = 0; r < this.routeCount; r++) {
+            const source = this.routeSource[r], depth = this.routeDepth[r];
+            // Each source as it swings (-1 to 1) and as an amount (0 to 1).
+            let swing: number, amount: number;
+            if (source <= 1) {
+              swing = lfoShape(lfoWaves[source], lfoRetrigger[source] ? v.lfoPhase[source] : this.globalLfoPhase[source]);
+              amount = (swing + 1) * 0.5;
+            } else if (source === 2) { amount = amp; swing = amp; }
+            else if (source === 3) { amount = filterEnv; swing = filterEnv; }
+            else if (source === 4) { amount = v.velocity; swing = v.velocity; }
+            else if (source === 5) { swing = clamp(v.keyOctaves * 0.5, -1, 1); amount = (swing + 1) * 0.5; }
+            else {
+              // Random: a new value each time the first LFO comes round, held until the next.
+              const phase = lfoRetrigger[0] ? v.lfoPhase[0] : this.globalLfoPhase[0];
+              if (phase < v.randomPhase) v.random = this.chance.next();
+              v.randomPhase = phase;
+              swing = v.random;
+              amount = (swing + 1) * 0.5;
+            }
+            const destination = this.routeDestination[r];
+            if (destination === 0) pitchMod += depth * swing;
+            else if (destination === 1) osc2Octaves += depth * 3 * swing;
+            else if (destination === 2) routedFilter += depth * 4 * swing;
+            else if (destination === 3) ampMod *= 1 - Math.abs(depth) * (1 - (depth >= 0 ? amount : 1 - amount));
+            else if (destination === 4) pulseMod += depth * 0.45 * swing;
+            else if (destination === 5) panMod += depth * swing;
+            else fmMod += depth * swing;
+          }
+          if (osc2Octaves !== 0) osc2Mod = 2 ** osc2Octaves;
+        }
+
         const step = clamp(v.frequency * 2 ** (s.detune / 1200 + pitchMod) / sr, 0.000001, 0.45);
         let source: number;
         if (fm) {
           v.fmEnv += (0.2 - v.fmEnv) * d.fmDecay;
-          const depth = fmIndex * v.fmEnv * (0.4 + 0.6 * v.velocity);
+          const depth = (fmMod === 0 ? fmIndex : clamp(fmIndex + fmMod, 0, 1)) * v.fmEnv * (0.4 + 0.6 * v.velocity);
           const ph = v.fmPhase;
           ph[0] = (ph[0] + step) % 1;
           ph[1] = (ph[1] + step * fmRatio) % 1;
@@ -345,7 +407,7 @@ export class SynthCore {
             const level = d.unisonLevels[u];
             source += oscillator(p.oscType, v.phase1[u], step1, pulseWidth) * oscLevel * level;
             if (osc2Level > 0) {
-              const step2 = clamp(step1 * d.osc2Ratio, 0.000001, 0.45);
+              const step2 = clamp(step1 * d.osc2Ratio * osc2Mod, 0.000001, 0.45);
               v.phase2[u] = (v.phase2[u] + step2) % 1;
               source += oscillator(p.osc2Type, v.phase2[u], step2) * osc2Level * level;
             }
@@ -360,7 +422,7 @@ export class SynthCore {
 
         if (d.driveGain > 1) source = Math.tanh(source * d.driveGain) * d.driveMakeup;
         const octaves = clamp(filterMod, -1, 1) * 2 + envAmount * 5 * filterEnv
-          + keyTracking * v.keyOctaves + velocityFilter * 3 * (v.velocity - 0.5);
+          + keyTracking * v.keyOctaves + velocityFilter * 3 * (v.velocity - 0.5) + routedFilter;
         // Run the filter twice per sample: cheap 2x oversampling keeps resonance clean near Nyquist.
         const g = svfCoefficient(clamp(s.filterFreq * 2 ** octaves, 20, maxCutoff, 1000), sr * 2);
         const damping = 1 / s.filterQ;
@@ -401,7 +463,7 @@ export class SynthCore {
           v.transitionSamples--;
         }
         v.last = value;
-        const angle = (clamp(s.pan + clamp(v.keyOctaves / 3 - 0.25, -1, 1) * s.spread, -1, 1) + 1) * Math.PI / 4;
+        const angle = (clamp(s.pan + clamp(v.keyOctaves / 3 - 0.25, -1, 1) * s.spread + panMod, -1, 1) + 1) * Math.PI / 4;
         l += value * Math.cos(angle);
         r += value * Math.sin(angle);
       }

@@ -274,6 +274,11 @@
   opacity: 0.9;
 }
 
+/* Routes: each a source, an arrow, a destination and how far, one to a row. */
+.synth-routes { display: flex; flex-direction: column; gap: 6px; }
+.synth-route { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; color: var(--text-faint); }
+.synth-route .synth-select { min-width: 0; text-transform: none; text-align: left; }
+
 .synth-env-viz .synth-column-controls {
   padding: 4px 0;
 }

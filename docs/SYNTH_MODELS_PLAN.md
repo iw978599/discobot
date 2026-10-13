@@ -101,6 +101,12 @@ true before the first new model ships, and say so in the pull request.
     more than a scream; `MS20_HOLD` is the one number to raise if the
     owner wants more.
 
+- 2026-10-12: **The modulation matrix is built** (roadmap sound 4), the
+  engine work the Odyssey, Virus and CS-80 wait on. Four routes a sound.
+  The Odyssey still needs oscillator sync and ring modulation in the
+  voice; the CS-80 needs two layers a note; the Virus a waveshaper or a
+  second filter for its harder sounds.
+
 ## The fourteen, in three groups
 
 The grouping is by what each needs from the voice, because that decides when

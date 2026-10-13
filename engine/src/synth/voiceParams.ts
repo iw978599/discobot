@@ -60,6 +60,11 @@ export interface VoiceParams {
   lfo2Rate: number;
   lfo2Depth: number;
   lfo2Retrigger: boolean;
+  // The routes, flattened: an empty source means the place is not used.
+  mod1Source: string; mod1Destination: string; mod1Depth: number;
+  mod2Source: string; mod2Destination: string; mod2Depth: number;
+  mod3Source: string; mod3Destination: string; mod3Depth: number;
+  mod4Source: string; mod4Destination: string; mod4Depth: number;
 }
 
 export function createDefaultSynthParameters(): SynthParameters {
@@ -80,6 +85,7 @@ export function createDefaultSynthParameters(): SynthParameters {
     duck: 0,
     lfo1: { enabled: false, target: 'pitch', waveform: 'sine', rate: 5, depth: 0.2, sync: false, retrigger: true },
     lfo2: { enabled: false, target: 'filter', waveform: 'triangle', rate: 0.8, depth: 0.25, sync: false, retrigger: true },
+    modMatrix: [],
     filter: { frequency: 20000, q: 1, type: 'lowpass', envAmount: 0, keyTracking: 0, drive: 0, slope: 12, model: 'svf', highpass: 0 },
     envelope: { attack: 0.01, decay: 0.1, sustain: 0.7, release: 0.3 },
     filterEnvelope: { attack: 0.005, decay: 0.25, sustain: 0.2, release: 0.3 },
@@ -96,6 +102,20 @@ export function createDefaultSynthParameters(): SynthParameters {
 // A synced rate N means one LFO cycle per 1/N note, so 1/4 at 120 BPM is 2 Hz.
 export function syncedLfoHz(rate: number, bpm: number): number {
   return Math.max(20, Math.min(400, bpm)) * Math.max(1, Math.round(rate)) / 240;
+}
+
+type FlatRoutes = Pick<VoiceParams,
+  'mod1Source' | 'mod1Destination' | 'mod1Depth' | 'mod2Source' | 'mod2Destination' | 'mod2Depth' |
+  'mod3Source' | 'mod3Destination' | 'mod3Depth' | 'mod4Source' | 'mod4Destination' | 'mod4Depth'>;
+
+function flatRoutes(routes: SynthParameters['modMatrix']): FlatRoutes {
+  const at = (index: number) => routes?.[index];
+  return {
+    mod1Source: at(0)?.source ?? '', mod1Destination: at(0)?.destination ?? '', mod1Depth: at(0)?.depth ?? 0,
+    mod2Source: at(1)?.source ?? '', mod2Destination: at(1)?.destination ?? '', mod2Depth: at(1)?.depth ?? 0,
+    mod3Source: at(2)?.source ?? '', mod3Destination: at(2)?.destination ?? '', mod3Depth: at(2)?.depth ?? 0,
+    mod4Source: at(3)?.source ?? '', mod4Destination: at(3)?.destination ?? '', mod4Depth: at(3)?.depth ?? 0,
+  };
 }
 
 export function toVoiceParams(p: SynthParameters, bpm = 120): VoiceParams {
@@ -127,5 +147,6 @@ export function toVoiceParams(p: SynthParameters, bpm = 120): VoiceParams {
     lfo1Rate: lfoRate(p.lfo1), lfo1Depth: p.lfo1.depth, lfo1Retrigger: p.lfo1.retrigger ?? true,
     lfo2Enabled: p.lfo2.enabled, lfo2Target: p.lfo2.target, lfo2Waveform: p.lfo2.waveform,
     lfo2Rate: lfoRate(p.lfo2), lfo2Depth: p.lfo2.depth, lfo2Retrigger: p.lfo2.retrigger ?? true,
+    ...flatRoutes(p.modMatrix),
   };
 }
