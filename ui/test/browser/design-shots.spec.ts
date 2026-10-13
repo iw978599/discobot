@@ -455,6 +455,27 @@ test('design shots: menus, dialogs, the walkthrough and a guest', async ({ page 
     await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
   });
+  // Last in this walk: from here on the page has two MIDI inputs.
+  await attempt(walk, 'dialog-midi-devices', async () => {
+    await page.addInitScript(() => {
+      const inputs = [['keys', 'Test keys'], ['pads', 'Test pads']].map(([id, name]) => ({ id, name, state: 'connected', onmidimessage: null }));
+      const access = { inputs: new Map(inputs.map(input => [input.id, input])), onstatechange: null };
+      Object.defineProperty(navigator, 'requestMIDIAccess', { configurable: true, value: async () => access });
+    });
+    await page.reload();
+    await ready(page);
+    await more(page);
+    await page.getByRole('button', { name: 'MIDI and samples', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'MIDI and samples', exact: true });
+    await dialog.getByLabel('Where Test keys is sent', { exact: true }).selectOption('synth:2');
+    await dialog.getByLabel('Where Test pads is sent', { exact: true }).selectOption('drums');
+    await shot(walk, 'dialog-midi-devices');
+    await dialog.getByRole('button', { name: 'Learn a pad for Clap', exact: true }).click();
+    await expect(dialog.locator('.midi-pad-status')).toContainText('Clap');
+    await dialog.getByRole('button', { name: 'Reset pads', exact: true }).scrollIntoViewIfNeeded();
+    await shot(walk, 'dialog-midi-pads');
+    await page.keyboard.press('Escape');
+  });
   finish(walk);
 });
 

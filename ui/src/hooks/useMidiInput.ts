@@ -14,8 +14,14 @@ export type MidiMessage =
   | { type: 'noteOff'; note: number; channel: number }
   | { type: 'controlChange'; controller: number; value: number; channel: number };
 
+// The input a message came from. Its name is what a device's place is kept by.
+export interface MidiSource {
+  id: string;
+  name: string;
+}
+
 interface UseMidiInputOptions {
-  onMessage: (message: MidiMessage) => void;
+  onMessage: (message: MidiMessage, source: MidiSource) => void;
 }
 
 const ALL_DEVICES_ID = '__all__';
@@ -65,12 +71,14 @@ export function useMidiInput({ onMessage }: UseMidiInputOptions) {
     let mounted = true;
     // Notes each input is still holding, so a device that goes away cannot leave them sounding.
     const held = new Map<string, Map<string, { note: number; channel: number }>>();
+    const names = new Map<string, string>();
+    const sourceOf = (inputId: string): MidiSource => ({ id: inputId, name: names.get(inputId) ?? inputId });
 
     const releaseInput = (inputId: string) => {
       const notes = held.get(inputId);
       if (!notes) return;
       held.delete(inputId);
-      notes.forEach(({ note, channel }) => onMessageRef.current({ type: 'noteOff', note, channel }));
+      notes.forEach(({ note, channel }) => onMessageRef.current({ type: 'noteOff', note, channel }, sourceOf(inputId)));
     };
 
     const onMidiInput = (inputId: string, event: any) => {
@@ -87,7 +95,7 @@ export function useMidiInput({ onMessage }: UseMidiInputOptions) {
       } else {
         setLastMessage(`Ch ${parsed.channel} CC ${parsed.controller} (${parsed.value})`);
       }
-      onMessageRef.current(parsed);
+      onMessageRef.current(parsed, sourceOf(inputId));
     };
 
     // Points the sequencer's MIDI output at the chosen device, or at nothing if it has gone.
@@ -112,11 +120,9 @@ export function useMidiInput({ onMessage }: UseMidiInputOptions) {
       Array.from(access.inputs.values()).forEach((input: any) => {
         const id = String(input.id);
         const state = String(input.state || 'connected');
-        nextDevices.push({
-          id,
-          name: input.name || `MIDI ${id.slice(0, 6)}`,
-          state,
-        });
+        const name = input.name || `MIDI ${id.slice(0, 6)}`;
+        names.set(id, name);
+        nextDevices.push({ id, name, state });
 
         const shouldAttach = selectedDeviceId === ALL_DEVICES_ID || selectedDeviceId === id;
         input.onmidimessage = shouldAttach ? (event: any) => onMidiInput(id, event) : null;

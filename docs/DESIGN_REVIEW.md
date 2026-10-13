@@ -870,6 +870,7 @@ on the owner's laptop.
 | `dialog-help-search`, `dialog-help-search-nothing` | Help with a search that leaves two sections, and one that matches nothing |
 | `walkthrough-step-1`, `-4`, `-9` | The walkthrough at its first, fourth and last stop |
 | `dialog-midi-samples` | MIDI and samples, with no MIDI available |
+| `dialog-midi-devices`, `dialog-midi-pads` | MIDI and samples with two controllers connected: each device sent somewhere of its own, and the pads' notes with one drum waiting for a pad |
 | `dialog-projects-one` | Projects, with one project |
 | `dialog-projects-family` | Projects, with two that share a name in one row |
 | `dialog-projects` | Projects, with that row being renamed |

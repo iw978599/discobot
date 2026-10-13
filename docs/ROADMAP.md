@@ -439,8 +439,21 @@ may redistribute.
    owner to try with their controller: pads on channel 10 (or another
    chosen in the MIDI panel) play the drums and, in record mode, are
    written on the step being played; the keyboard on its own channel plays
-   its lane at the same time. Still open: giving a pad another lane by
-   hand; a place for each device; knobs by learning; the mod wheel.
+   its lane at the same time. Knobs by learning are merged.
+
+   The rest of what the owner asked for was built on 2026-10-13, not tried
+   with real hardware: each drum's pad can be changed (Learn beside the drum
+   in the MIDI panel, then hit the pad; a note has one drum and a drum one
+   note; Reset pads puts the General MIDI notes back), and with more than
+   one controller connected each has a place of its own (as before, the
+   open lane, Synth 1 to 3, the drums, or off). Both are kept in the
+   browser, not the project. Still open from this item: the mod wheel and
+   pitch bend, aftertouch, following an external clock, sending notes
+   played by hand, and choosing the output channels. Choices made in
+   building it that the owner has not confirmed: a device's place is kept
+   by its name; a device sent to a lane plays it on every channel; Off
+   stops a device's knobs as well as its notes; and a drum still on its
+   usual note goes on answering to the General MIDI notes near it.
 
 7. **Collaborative sessions.** (L) First version done, in turns: the owner
    of a synced project shares it by username, the other person opens it from
@@ -784,8 +797,9 @@ for new accounts.
   seems off" on Firefox after PRs #76 and #77. Still to ask: what is
   heard (a guest early, late, drifting further out as it plays, or
   stuttering), and with which guest.
-- **Controller knobs and MIDI pads.** Both are built as the owner asked;
-  neither has been tried with the Launchkey.
+- **Controller knobs and MIDI pads.** Both are built as the owner asked,
+  with pads that can be changed and a place for each device; none of it
+  has been tried with the Launchkey.
 
 ## Decided by the owner on 2026-10-13
 

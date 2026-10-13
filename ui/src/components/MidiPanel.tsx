@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { MidiDeviceInfo, MidiMode } from '../hooks/useMidiInput';
 import type { MidiTie } from '../services/midiTies';
-import { listTargets, targetLabel } from '../services/paramTargets';
+import { PAD_DRUMS, padNoteLabel, padsAreDefault, type PadMap } from '../services/midiDrums';
+import { MIDI_DESTINATIONS, destinationFor, type MidiDestination, type MidiDestinations } from '../services/midiDevices';
+import { DRUM_NAMES, listTargets, targetLabel } from '../services/paramTargets';
+import type { DrumInstrument } from '../types';
 import './MidiPanel.css';
 
 interface MidiPanelProps {
@@ -23,6 +26,14 @@ interface MidiPanelProps {
   learning: string | null;
   onLearn: (target: string | null) => void;
   onTieRemove: (target: string) => void;
+  // The note each drum's pad sends, and the drum waiting for a pad to be hit (Learn).
+  pads: PadMap;
+  padLearning: DrumInstrument | null;
+  onPadLearn: (drum: DrumInstrument | null) => void;
+  onPadsReset: () => void;
+  // Where each device's notes go, by the device's name.
+  destinations: MidiDestinations;
+  onDestinationChange: (device: string, place: MidiDestination) => void;
   synthIds: number[];
   targetSynthId: number | null;
   onTargetSynthChange: (synthId: number) => void;
@@ -54,6 +65,12 @@ export default function MidiPanel({
   learning,
   onLearn,
   onTieRemove,
+  pads,
+  padLearning,
+  onPadLearn,
+  onPadsReset,
+  destinations,
+  onDestinationChange,
   synthIds,
   targetSynthId,
   onTargetSynthChange,
@@ -68,6 +85,10 @@ export default function MidiPanel({
   onSendClockChange,
 }: MidiPanelProps) {
   const [chosen, setChosen] = useState('lane:open:cutoff');
+  // A place is kept by name, so two devices with one name are one row.
+  const deviceNames = [...new Set(devices.map(device => device.name))];
+  const showDevices = deviceNames.length > 1 || deviceNames.some(name => destinationFor(destinations, name) !== 'default');
+  const waiting = learning !== null || padLearning !== null;
   if (!supported) return (
     <div className="midi-panel" role="status">
       MIDI input is not supported in this browser. Use Chrome or Edge over HTTPS, or import a MIDI file.
@@ -133,11 +154,51 @@ export default function MidiPanel({
         </div>
       )}
 
+      {supported && showDevices && (
+        <>
+          <h3>Devices</h3>
+          <ul className="midi-device-list" aria-label="Where each MIDI device is sent">
+            {deviceNames.map(name => (
+              <li key={name}>
+                <b>{name}</b>
+                <span className="midi-tie-arrow" aria-hidden="true">→</span>
+                <select aria-label={`Where ${name} is sent`} value={destinationFor(destinations, name)} onChange={(e) => onDestinationChange(name, e.target.value as MidiDestination)}>
+                  {MIDI_DESTINATIONS.map(place => <option key={place.id} value={place.id}>{place.label}</option>)}
+                </select>
+              </li>
+            ))}
+          </ul>
+          <p className="midi-note">
+            Each device can be sent somewhere of its own. "As set above" is the channel, the Pads channel and the lane chosen above. A lane takes every note from the device, whatever its channel; "The open lane" follows whichever synth is open; Drums makes every note a pad; Off has the device ignored, knobs and all. A lane this project does not have plays nothing. Kept in this browser by the device's name.
+          </p>
+        </>
+      )}
+
       {supported && (
         <>
+          <h3>Pads</h3>
+          <ul className="midi-pad-list" aria-label="The note each drum's pad sends">
+            {PAD_DRUMS.map(drum => (
+              <li key={drum}>
+                <b>{DRUM_NAMES[drum]}</b>
+                <span className={pads[drum] === null ? 'midi-pad-note none' : 'midi-pad-note'}>{padNoteLabel(pads[drum])}</span>
+                {padLearning === drum
+                  ? <button className="rack-btn on" aria-pressed="true" aria-label={`Cancel learning a pad for ${DRUM_NAMES[drum]}`} onClick={() => onPadLearn(null)}>Cancel</button>
+                  : <button className="rack-btn" aria-label={`Learn a pad for ${DRUM_NAMES[drum]}`} title="Then hit the pad on the controller that should play it" disabled={waiting} onClick={() => onPadLearn(drum)}>Learn</button>}
+              </li>
+            ))}
+          </ul>
+          <div className="midi-panel midi-ties">
+            <button className="rack-btn" title="Put every drum back on its General MIDI note" disabled={padsAreDefault(pads) && padLearning === null} onClick={onPadsReset}>Reset pads</button>
+            <span className="midi-pad-status" role="status">{padLearning !== null ? `Hit a pad on the controller for ${DRUM_NAMES[padLearning]}.` : ''}</span>
+          </div>
+          <p className="midi-note">
+            Press Learn beside a drum and hit a pad on the controller: from then on that pad plays that drum, and a drum that had the note is left with none. A drum still on its usual note also answers to the General MIDI notes near it. Reset pads puts every drum back on its General MIDI note. Pads are heard on the Pads channel above, or on every channel of a device sent to Drums. The notes are kept in this browser for every project, and a MIDI file is always exported with the General MIDI notes.
+          </p>
+
           <h3>Controller knobs</h3>
           <div className="midi-panel midi-ties">
-            <select aria-label="Parameter to tie to a knob" value={chosen} onChange={(e) => setChosen(e.target.value)} disabled={learning !== null}>
+            <select aria-label="Parameter to tie to a knob" value={chosen} onChange={(e) => setChosen(e.target.value)} disabled={waiting}>
               {listTargets(synthIds).map(group => (
                 <optgroup key={group.group} label={group.group}>
                   {group.targets.map(target => <option key={target.id} value={target.id}>{target.label}</option>)}
@@ -145,7 +206,7 @@ export default function MidiPanel({
               ))}
             </select>
             {learning === null
-              ? <button className="rack-btn" title="Then turn the knob on the controller that should move it" onClick={() => onLearn(chosen)}>Learn</button>
+              ? <button className="rack-btn" title="Then turn the knob on the controller that should move it" disabled={waiting} onClick={() => onLearn(chosen)}>Learn</button>
               : <button className="rack-btn on" aria-pressed="true" onClick={() => onLearn(null)}>Cancel</button>}
             <span className="midi-learn-status" role="status">{learning !== null ? `Turn a knob on the controller for ${targetLabel(learning)}.` : ''}</span>
           </div>

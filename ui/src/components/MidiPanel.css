@@ -13,9 +13,15 @@
 
 .midi-drum-channel { display: flex; align-items: center; gap: 6px; color: var(--text-label); }
 .midi-ties { flex-wrap: wrap; }
-.midi-learn-status { color: var(--text-plain); font-family: var(--sentence-font); }
+.midi-learn-status, .midi-pad-status { color: var(--text-plain); font-family: var(--sentence-font); }
 .midi-tie-list { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.midi-tie-list li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: var(--surface-inset); border: 1px solid var(--edge-faint); border-radius: var(--corner-control); padding: 4px 8px; color: var(--text-plain); }
+/* The pads and the devices are lists of the same rows as the ties; the pads go two across where there is room. */
+.midi-pad-list, .midi-device-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.midi-pad-list { grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr)); }
+.midi-pad-list b, .midi-device-list b { color: var(--text); flex: 1; min-width: 0; }
+.midi-pad-note { color: var(--value); font-family: var(--led-font); font-size: var(--type-label); min-width: 9ch; text-align: right; }
+.midi-pad-note.none { color: var(--text-faint); }
+.midi-tie-list li, .midi-pad-list li, .midi-device-list li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: var(--surface-inset); border: 1px solid var(--edge-faint); border-radius: var(--corner-control); padding: 4px 8px; color: var(--text-plain); }
 .midi-tie-list b { color: var(--text); flex: 1; }
 .midi-tie-arrow { color: var(--text-faint); }
 

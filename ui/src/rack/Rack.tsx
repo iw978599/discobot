@@ -264,8 +264,14 @@ export default function Rack({ studio }: { studio: Studio }) {
             onDrumChannelChange={studio.setMidiDrumChannel}
             ties={studio.midiTies}
             learning={studio.midiLearn}
-            onLearn={studio.setMidiLearn}
+            onLearn={studio.handleMidiLearn}
             onTieRemove={studio.handleMidiTieRemove}
+            pads={studio.midiPads}
+            padLearning={studio.midiPadLearn}
+            onPadLearn={studio.handleMidiPadLearn}
+            onPadsReset={studio.handleMidiPadsReset}
+            destinations={studio.midiDestinations}
+            onDestinationChange={studio.handleMidiDestinationChange}
             synthIds={studio.synths.map(synth => synth.id)}
             targetSynthId={studio.midiTargetSynthId}
             onTargetSynthChange={studio.setMidiTargetSynthId}

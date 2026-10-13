@@ -189,6 +189,11 @@ turns. Imported samples are not synced. The accounts service is in `server/`
   lane, and whether notes play live, record, or step in. This needs a browser
   with Web MIDI (Chrome or Edge), HTTPS or localhost, and permission. Where it
   is not available the panel says so, and everything else still works.
+- **Pads and knobs.** Pads on channel 10 play the drums. Each drum's pad can
+  be changed: press Learn beside the drum and hit the pad. A controller's
+  knob is tied to a parameter the same way. With more than one controller
+  connected, each can be sent to a lane of its own, to the drums, or nowhere.
+  These are kept in the browser, not in the project.
 - **MIDI out.** The sequencer can play a hardware synth and send it clock:
   lanes on channels 1 to 3, drums on channel 10.
 - **Import MIDI.** Bring notes and tempo in from a `.mid` file.
