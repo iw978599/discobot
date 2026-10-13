@@ -1,6 +1,7 @@
 import Keyboard from './Keyboard';
 import PianoRoll from './PianoRoll';
 import { Pattern } from '../types';
+import { QUANTIZE_CHOICES } from '../services/recordTiming';
 import './KeyboardPanel.css';
 
 interface KeyboardPanelProps {
@@ -24,6 +25,11 @@ interface KeyboardPanelProps {
   onClearPattern: () => void;
   onNotePlay: (note: string) => void;
   onNoteRelease: (note: string) => void;
+  // Recording what is played while the song runs, and how firmly it is moved onto the nearest step.
+  recording: boolean;
+  onRecordingChange: (recording: boolean) => void;
+  quantize: number;
+  onQuantizeChange: (strength: number) => void;
 }
 
 export default function KeyboardPanel({
@@ -46,6 +52,10 @@ export default function KeyboardPanel({
   onClearPattern,
   onNotePlay,
   onNoteRelease,
+  recording,
+  onRecordingChange,
+  quantize,
+  onQuantizeChange,
 }: KeyboardPanelProps) {
   return (
     <div className="keyboard-panel">
@@ -85,6 +95,20 @@ export default function KeyboardPanel({
         >
           Oct +
         </button>
+        <button
+          className={recording ? 'rack-btn on' : 'rack-btn'}
+          aria-pressed={recording}
+          title="Record: while the song plays, notes played on these keys or the computer keyboard are written where they are played in the bar. Use Click and Count on the top bar to play in time"
+          onClick={() => onRecordingChange(!recording)}
+        >
+          Rec
+        </button>
+        <label className="keyboard-quantize" title="How firmly a recorded note is moved onto the nearest step. 100% is exactly on it; 0% leaves it where it was played">
+          Quantize
+          <select aria-label="Record quantize" value={quantize} onChange={(event) => onQuantizeChange(Number(event.target.value))}>
+            {QUANTIZE_CHOICES.map(value => <option key={value} value={value}>{Math.round(value * 100)}%</option>)}
+          </select>
+        </label>
       </div>
 
       {mode === 'keyboard' ? (
