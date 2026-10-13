@@ -41,9 +41,11 @@ export function resizeBars<T>(items: T[], perBar: number, nextBars: number, blan
 export function clampLengths(steps: SequencerStep[]): SequencerStep[] {
   return steps.map((step, index) => {
     if (!step.length || step.length <= steps.length - index) return step;
-    const { length: _length, ...rest } = step;
+    const { length: _length, lengths, ...rest } = step;
     const room = steps.length - index;
-    return room > 1 ? { ...rest, length: room } : rest;
+    // Each note's own length is held to the same room; notes that then last alike need none of their own.
+    const own = lengths?.map(length => Math.min(length, room));
+    return { ...rest, ...(room > 1 ? { length: room } : {}), ...(own?.some(length => length !== room) ? { lengths: own } : {}) };
   });
 }
 

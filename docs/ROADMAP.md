@@ -554,6 +554,18 @@ may redistribute.
     or repeats, are still design choices. This is the project's song
     arrangement, not a playlist of published songs, a discovery page or a new
     cloud service.
+    **Done on 2026-10-13**, as a second way of showing the song beside the
+    blocks: a Blocks/Playlist switch in the song unit, remembered per browser,
+    with the blocks still the default. The playlist is a row for each entry in
+    playing order with its place, the scene's colour and name, its repeats, the
+    bars of one pass and of the whole row, when it starts and how long it lasts
+    at the project's tempo, a lamp on the row that is playing, and a total at
+    the foot. Each row has buttons to move it earlier or later, change its
+    repeats, remove it, add a chosen scene after it and open its scene; a
+    scene can also be added at the end. A row's duration is shown both ways,
+    in bars and in repeats. Still open: dragging a row to reorder it was not
+    built; times assume four beats to a bar, as the rest of the app does; the
+    playlist has not been seen on a real screen or tried with a screen reader.
 
 15. **Chord buttons in the piano roll.** (S) Asked for by the owner on
     2026-10-12. Offer buttons to insert editable chord notes at the selected
@@ -584,6 +596,13 @@ may redistribute.
     itself. Still open: a length for each note, so one note of a chord can
     be made longer than the others, and the toggle between one note and
     the whole step; inversions.
+    Second part done on 2026-10-13: each note of a chord has a length of
+    its own. Dragging a note's end in the piano roll changes that note
+    alone; a Whole step switch beside the Chord menu makes every note of
+    the step go together, as before. Playback, WAV and MIDI export and MIDI
+    import all carry it. The switch is the "perhaps a toggle" the owner
+    spoke of, and is theirs to keep or drop. Inversions are in
+    `docs/ROADMAP_V2.md`.
 
 16. **One row for a project and its copies.** Done: asked for by the owner on
     2026-10-12 and built. In Projects, a project and the ones the app named

@@ -397,7 +397,7 @@ function SynthModule({ studio, synthId, synth }: SynthModuleProps) {
                 computerKeyNotes={studio.computerKeyNotes}
                 onStepSelect={(step) => { studio.handleStepSelect(synthId, step); }}
                 onNoteAssign={(stepIndex, note, on, offset) => { void studio.handlePianoRollNoteAssign(synthId, stepIndex, note, on, offset); }}
-                onNoteLength={(stepIndex, length) => { void studio.handleStepLengthChange(synthId, stepIndex, length); }}
+                onNoteLength={(stepIndex, length, note) => { void studio.handleStepLengthChange(synthId, stepIndex, length, note); }}
                 firstStep={firstStep}
                 visibleSteps={perBar}
                 onClearPattern={() => { void studio.handleClearPatternNotes(synthId); }}

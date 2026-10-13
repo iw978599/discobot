@@ -360,6 +360,29 @@
 .song-block-tools button:hover:not(:disabled) { background: var(--surface-hover); color: var(--text); }
 .song-block-tools button:disabled { color: var(--text-faint); cursor: not-allowed; }
 .song-loop { display: flex; align-items: center; gap: 5px; flex: none; }
+/* The song as a playlist: a row for each entry in playing order, with a lamp that is lit on the
+   one playing. Each row is the same fixed columns, so they line up down the list, and wraps where
+   it must, so a narrow screen needs no rules of its own. */
+.song-view { display: flex; gap: 3px; flex: none; }
+.song-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.song-list-row { background: var(--surface-inset); border: 1px solid var(--edge-faint); border-left: 5px solid var(--scene-color, var(--edge-faint)); border-radius: var(--corner-panel); }
+.song-list-row.start { border-top-color: var(--text); border-right-color: var(--text); border-bottom-color: var(--text); }
+.song-list-row.playing { border-top-color: var(--on); border-right-color: var(--on); border-bottom-color: var(--on); box-shadow: var(--shadow-lit); }
+.song-list-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 5px 8px; }
+.song-list-place { flex: none; width: 36px; font-family: var(--led-font); letter-spacing: 0; color: var(--value); white-space: nowrap; }
+.song-list-name { flex: 1 1 130px; min-width: 0; max-width: 280px; display: flex; align-items: center; gap: 8px; text-align: left; }
+.song-list-scene { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.song-list-start { flex: none; font-size: var(--type-caption); color: var(--text-label); }
+.song-list-repeats { display: flex; align-items: center; gap: 4px; flex: none; }
+.song-list-repeats .rack-btn, .song-list-tools .rack-btn:not([data-control="add"], .danger) { min-width: 34px; padding-left: 0; padding-right: 0; }
+.song-list-count { min-width: 5ch; text-align: center; font-family: var(--led-font); letter-spacing: 0; color: var(--value); }
+.song-list-bars { flex: none; width: 180px; color: var(--text-plain); white-space: nowrap; }
+.song-list-time { flex: none; width: 150px; color: var(--text-label); white-space: nowrap; }
+.song-list-bars b, .song-list-time b, .song-list-total b { font-family: var(--led-font); font-weight: 400; letter-spacing: 0; color: var(--value); }
+.song-list-tools { display: flex; gap: 4px; flex: none; margin-left: auto; }
+.song-list-tools .rack-btn.danger { margin-left: 10px; }
+.song-list-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 8px; }
+.song-list-total { color: var(--text-label); }
 
 /* synth lanes */
 .synth-module > .rack-row, .drum-top {

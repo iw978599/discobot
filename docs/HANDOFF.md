@@ -228,7 +228,8 @@ Behaviour:
    item has it in full, and says why it needs a length for each note.
    First part built on `feat/design-review-chord-buttons` (check its pull
    request's state): a shape, then the root, and each note taken out by
-   itself. A length for each note, and the toggle, are still to do.
+   itself. A length for each note, and the toggle, are built on
+   `feat/design-review-note-lengths` (check its pull request's state).
 
 ### Step 5. MIDI work (roadmap features 6)
 

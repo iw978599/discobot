@@ -437,6 +437,18 @@ export default function SynthControls({
             <option value="1/16">1/16</option>
             <option value="1/32">1/32</option>
           </select>
+          <select
+            className="synth-select arp-select"
+            value={parameters.arpeggiator.octaves || 0}
+            aria-label="Arpeggiator range"
+            title="How many octaves the arpeggio runs through. Auto: a single note through three octaves, a chord through its own notes"
+            onChange={(e) => updateArpeggiator({ octaves: Number(e.target.value) })}
+          >
+            <option value={0}>Auto</option>
+            <option value={1}>1 oct</option>
+            <option value={2}>2 oct</option>
+            <option value={3}>3 oct</option>
+          </select>
           <label className="arp-gate-label" title="Arpeggiator gate length - proportion of step duration the note plays">
             Gate
             <input

@@ -15,12 +15,44 @@ export const MAX_STEP_OFFSET = 0.95;
 // How far into its step a step's notes start, as a fraction of a step.
 export const stepOffset = (step: SequencerStep | undefined) => Math.max(0, Math.min(MAX_STEP_OFFSET, step?.offset ?? 0));
 
-// The step with exactly these notes. No notes leaves an empty step.
+// How many steps each of a step's notes lasts, in the order of `stepNotes`. A note with no length
+// of its own lasts as long as the step does.
+export function noteLengths(step: SequencerStep | undefined): number[] {
+  const whole = Math.max(1, step?.length ?? 1);
+  return stepNotes(step).map((_, index) => {
+    const own = step!.lengths?.[index];
+    return own !== undefined && Number.isInteger(own) && own >= 1 ? Math.min(own, whole) : whole;
+  });
+}
+
+// The step's length fields for these lengths, one for each note: the longest as `length`, and
+// each note's own only where they differ.
+function lengthFields(lengths: number[]): Pick<SequencerStep, 'length' | 'lengths'> {
+  const longest = Math.max(1, ...lengths);
+  return {
+    ...(longest > 1 ? { length: longest } : {}),
+    ...(lengths.some(length => length !== longest) ? { lengths } : {}),
+  };
+}
+
+// The step with exactly these notes. No notes leaves an empty step. A note that stays keeps its
+// length; one that is new lasts as long as the step did.
 export function withStepNotes(step: SequencerStep, notes: string[]): SequencerStep {
   const sorted = [...new Set(notes)].sort((a, b) => (noteNameToMidi(a) ?? 0) - (noteNameToMidi(b) ?? 0)).slice(0, MAX_STEP_NOTES);
-  const { note: _note, notes: _notes, length, probability, ratchet, offset, ...rest } = step;
+  const { note: _note, notes: _notes, length, lengths: _lengths, probability, ratchet, offset, ...rest } = step;
   if (sorted.length === 0) return { ...rest, active: false };
-  return { ...rest, ...(offset && offset > 0 ? { offset } : {}), ...(probability !== undefined && probability < 1 ? { probability } : {}), ...(ratchet && ratchet > 1 ? { ratchet } : {}), active: true, note: sorted[0], ...(sorted.length > 1 ? { notes: sorted.slice(1) } : {}), ...(length && length > 1 ? { length } : {}) };
+  const before = new Map(stepNotes(step).map((note, index) => [note, noteLengths(step)[index]]));
+  const whole = Math.max(1, length ?? 1);
+  return { ...rest, ...(offset && offset > 0 ? { offset } : {}), ...(probability !== undefined && probability < 1 ? { probability } : {}), ...(ratchet && ratchet > 1 ? { ratchet } : {}), active: true, note: sorted[0], ...(sorted.length > 1 ? { notes: sorted.slice(1) } : {}), ...lengthFields(sorted.map(note => before.get(note) ?? whole)) };
+}
+
+// The step with every note lasting this many steps, or with one note doing so and the rest as they were.
+export function withStepLength(step: SequencerStep, length: number, note?: string): SequencerStep {
+  const notes = stepNotes(step), wanted = Math.max(1, Math.round(length));
+  const { length: _length, lengths: _lengths, ...rest } = step;
+  if (notes.length === 0) return rest;
+  const current = noteLengths(step);
+  return { ...rest, ...lengthFields(notes.map((entry, index) => (note === undefined || entry === note ? wanted : current[index]))) };
 }
 
 export interface ScheduledNote {
@@ -51,6 +83,20 @@ function chordOrder(intervals: number[], mode: string): number[] {
   return up;
 }
 
+// The order an arpeggio with a chosen range goes in. `up` is every note it has, lowest first.
+function rangeOrder(up: number[], mode: string): number[] {
+  if (mode === 'converge' || mode === 'diverge') {
+    // From the two ends inwards, or the same turned round: from the middle outwards.
+    const inward: number[] = [];
+    for (let low = 0, high = up.length - 1; low <= high; low += 1, high -= 1) {
+      inward.push(up[low]);
+      if (high !== low) inward.push(up[high]);
+    }
+    return mode === 'converge' ? inward : inward.reverse();
+  }
+  return chordOrder(up, mode);
+}
+
 // What one sequencer step (or one live key press) actually plays. Live playback and WAV
 // export both call this, so arpeggios and slides come out the same in each.
 export function expandStep(
@@ -64,9 +110,14 @@ export function expandStep(
   }
   windowSeconds += held;
   // A chord is arpeggiated through its own notes; a single note through its own octaves.
-  const semitones = chord && chord.length > 1
-    ? chordOrder(chord.map(entry => (noteNameToMidi(entry) ?? 0) - (noteNameToMidi(note) ?? 0)), arp.mode)
-    : ARP_PATTERNS[arp.mode] ?? ARP_PATTERNS.up;
+  const own = chord && chord.length > 1 ? chord.map(entry => (noteNameToMidi(entry) ?? 0) - (noteNameToMidi(note) ?? 0)) : null;
+  const range = Number.isInteger(arp.octaves) && arp.octaves! >= 1 ? Math.min(3, arp.octaves!) : 0;
+  let semitones: number[];
+  if (range > 0) {
+    // A chosen range: the note, or the chord's notes, laid out again in each octave above.
+    const base = own ? [...own].sort((a, b) => a - b) : [0];
+    semitones = rangeOrder(Array.from({ length: range }, (_, octave) => base.map(interval => interval + 12 * octave)).flat(), arp.mode);
+  } else semitones = own ? chordOrder(own, arp.mode) : ARP_PATTERNS[arp.mode] ?? ARP_PATTERNS.up;
   const divisor = arp.rate === '1/4' ? 1 : arp.rate === '1/8' ? 2 : arp.rate === '1/16' ? 4 : 8;
   const interval = 60 / tempo / divisor;
   const duration = Math.max(0.03, interval * Math.max(0.1, Math.min(1, arp.gate)));
@@ -96,7 +147,8 @@ export function expandStepNotes(
   function onTheStep(): ScheduledNote[] {
   if (params.arpeggiator?.enabled) return expandStep(notes[0], params, windowSeconds, tempo, step.slide, step.length, notes);
   const repeats = Math.max(1, Math.min(MAX_RATCHET, Math.round(step.ratchet ?? 1)));
-  if (repeats === 1) return notes.flatMap(note => expandStep(note, params, windowSeconds, tempo, step.slide, step.length));
+  const lengths = noteLengths(step);
+  if (repeats === 1) return notes.flatMap((note, index) => expandStep(note, params, windowSeconds, tempo, step.slide, lengths[index]));
   // Repeats split the step's whole length evenly; only the last one can slide on.
   const span = windowSeconds * Math.max(1, step.length ?? 1) / repeats;
   return Array.from({ length: repeats }, (_, index) => index).flatMap(index => notes.map(note => ({

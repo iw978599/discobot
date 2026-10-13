@@ -159,15 +159,18 @@ function buildSynthTrack(id: number, bars: SequencerStep[][], channel: number): 
       const repeats = Math.max(1, Math.min(4, Math.round(step.ratchet ?? 1)));
       const spanTicks = ticksPerStep * (step.length ?? 1) / repeats;
       for (let repeat = 0; repeat < repeats; repeat += 1)
-      for (const name of [...new Set([step.note, ...(step.notes ?? [])])]) {
+      for (const [at, name] of [...new Set([step.note, ...(step.notes ?? [])])].entries()) {
       const midiNote = noteNameToMidi(name);
       if (midiNote === null) continue;
+      // A note of a chord can have a length of its own. Repeats share out the step's whole length.
+      const own = step.lengths?.[at];
+      const noteTicks = repeats === 1 && own !== undefined && own >= 1 ? ticksPerStep * Math.min(own, step.length ?? 1) : spanTicks;
       const tick = bar * TICKS_PER_BAR + Math.round((stepIndex + Math.max(0, Math.min(0.95, step.offset ?? 0))) * ticksPerStep + repeat * spanTicks);
       const velocity = clampVelocity(step.velocity * 127, DEFAULT_SYNTH_VELOCITY);
       const noteOnStatus = 0x90 | (channel & 0x0f);
       const noteOffStatus = 0x80 | (channel & 0x0f);
       events.push({ tick, data: [noteOnStatus, midiNote, velocity] });
-      events.push({ tick: tick + Math.max(1, Math.round(spanTicks - ticksPerStep * 0.08 / repeats)), data: [noteOffStatus, midiNote, 0] });
+      events.push({ tick: tick + Math.max(1, Math.round(noteTicks - ticksPerStep * 0.08 / repeats)), data: [noteOffStatus, midiNote, 0] });
       }
     }
   });

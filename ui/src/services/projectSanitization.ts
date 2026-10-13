@@ -142,6 +142,9 @@ export function sanitizeSynthParams(value: unknown, defaults: SynthParameters): 
   if (!['up', 'down', 'updown', 'downup', 'random', 'converge', 'diverge'].includes(params.arpeggiator.mode)) params.arpeggiator.mode = defaults.arpeggiator.mode;
   if (!['1/4', '1/8', '1/16', '1/32'].includes(params.arpeggiator.rate)) params.arpeggiator.rate = defaults.arpeggiator.rate;
   params.arpeggiator.gate = number(params.arpeggiator.gate, defaults.arpeggiator.gate, .1, 1);
+  const arpOctaves = Math.round(number(record(input.arpeggiator).octaves, 0, 0, 3));
+  if (arpOctaves >= 1) params.arpeggiator.octaves = arpOctaves;
+  else delete params.arpeggiator.octaves;
   params.effects.reverb.wet = number(params.effects.reverb.wet, defaults.effects.reverb.wet, 0, 1);
   params.effects.reverb.decay = number(params.effects.reverb.decay, defaults.effects.reverb.decay, .1, 8);
   params.effects.delay.wet = number(params.effects.delay.wet, defaults.effects.delay.wet, 0, 1);
@@ -161,11 +164,17 @@ export function sanitizeSteps(value: unknown, bars: unknown = 1): Pattern['steps
     const extras = note && Array.isArray(step.notes)
       ? [...new Set((step.notes as unknown[]).filter((entry): entry is string => typeof entry === 'string' && noteNameToMidi(entry) !== null && entry !== note))].slice(0, MAX_STEP_NOTES - 1)
       : [];
-    const length = note && Number.isInteger(step.length) ? Math.max(1, Math.min(32 * MAX_BARS, step.length)) : 1;
+    const whole = note && Number.isInteger(step.length) ? Math.max(1, Math.min(32 * MAX_BARS, step.length)) : 1;
+    // A length for each note, lowest first, each within the step's. The step's length is the longest of them.
+    const own = note && Array.isArray(step.lengths)
+      ? [note, ...extras].map((_, at) => (Number.isInteger(step.lengths[at]) ? Math.max(1, Math.min(whole, step.lengths[at])) : whole))
+      : null;
+    const length = own ? Math.max(...own) : whole;
+    const lengths = own?.some(entry => entry !== length) ? own : null;
     return {
       active: step.active === true && Boolean(note), ...(note ? { note } : {}), velocity: number(step.velocity, .7, 0, 1),
       ...(step.slide === true ? { slide: true } : {}),
-      ...(extras.length ? { notes: extras } : {}), ...(length > 1 ? { length } : {}),
+      ...(extras.length ? { notes: extras } : {}), ...(length > 1 ? { length } : {}), ...(lengths ? { lengths } : {}),
       ...(note && typeof step.probability === 'number' && step.probability >= 0 && step.probability < 1 ? { probability: step.probability } : {}),
       ...(note && Number.isInteger(step.ratchet) && step.ratchet > 1 ? { ratchet: Math.min(4, step.ratchet) } : {}),
       ...(note && typeof step.offset === 'number' && step.offset > 0 ? { offset: Math.min(MAX_STEP_OFFSET, step.offset) } : {}),

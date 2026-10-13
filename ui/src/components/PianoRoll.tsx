@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Fragment } from 'react';
 import { Pattern } from '../types';
-import { MAX_STEP_NOTES, stepNotes, stepOffset } from '../services/noteScheduling';
+import { MAX_STEP_NOTES, noteLengths, stepNotes, stepOffset } from '../services/noteScheduling';
 import { CHORD_SHAPES, chordNotes, type ChordShapeId } from '../services/chords';
 import { usePlayheadMark } from '../hooks/usePlayhead';
 import { useNarrow } from '../hooks/useNarrow';
@@ -20,7 +20,8 @@ interface PianoRollProps {
   // `offset` starts a new step's note that far into the step.
   onNoteAssign: (stepIndex: number, note: string | string[], on: boolean, offset?: number) => void;
   // Sets how many steps the notes starting on a step last.
-  onNoteLength: (stepIndex: number, length: number) => void;
+  // With a note, that note of the step's chord alone; without, every note of the step.
+  onNoteLength: (stepIndex: number, length: number, note?: string) => void;
   onClear: () => void;
   // The bar on show, for a pattern longer than one bar. Defaults to the whole pattern.
   firstStep?: number;
@@ -58,6 +59,11 @@ export default function PianoRoll({
   const pressedAt = useRef({ x: 0, y: 0 });
   const gridRef = useRef<HTMLDivElement>(null);
   usePlayheadMark(gridRef, lane, isPlaying, '.piano-roll-cell, .piano-roll-step-header', 'playing');
+  // Whether stretching a note by its end stretches every note of its step with it. Off, each note
+  // of a chord has a length of its own. The window's listeners read the ref.
+  const [wholeStep, setWholeStep] = useState(false);
+  const wholeStepRef = useRef(wholeStep);
+  wholeStepRef.current = wholeStep;
   // Which chord a note put in brings with it. It is how the roll is being used, not part of the song.
   const [chord, setChord] = useState<ChordShapeId | 'off'>('off');
   const onNoteAssignRef = useRef(onNoteAssign);
@@ -114,16 +120,17 @@ export default function PianoRoll({
   const held = useMemo(() => {
     const cells = new Map<string, number>();
     pattern?.steps.forEach((step, start) => {
-      for (let offset = 1; offset < (step.length ?? 1) && start + offset < pattern.steps.length; offset += 1) {
-        for (const note of stepNotes(step)) cells.set(`${start + offset}:${note}`, start);
-      }
+      const lengths = noteLengths(step);
+      stepNotes(step).forEach((note, index) => {
+        for (let offset = 1; offset < lengths[index] && start + offset < pattern.steps.length; offset += 1) cells.set(`${start + offset}:${note}`, start);
+      });
     });
     return cells;
   }, [pattern]);
   // The note being stretched by its end: where it starts and how long it was last set to. A
   // finger that lands on the end of a one-step note may only be tapping the note: `tap` is
   // that touch, until it moves.
-  const resizing = useRef<{ start: number; length: number; tap?: { id: number; note: string; x: number; y: number; at: number } } | null>(null);
+  const resizing = useRef<{ start: number; length: number; note: string; tap?: { id: number; note: string; x: number; y: number; at: number } } | null>(null);
   const onNoteLengthRef = useRef(onNoteLength);
   onNoteLengthRef.current = onNoteLength;
 
@@ -142,7 +149,7 @@ export default function PianoRoll({
       const length = Math.max(1, Number(under.dataset.step) - drag.start + 1);
       if (length === drag.length) return;
       drag.length = length;
-      onNoteLengthRef.current(drag.start, length);
+      onNoteLengthRef.current(drag.start, length, wholeStepRef.current ? undefined : drag.note);
     };
     const end = (event: PointerEvent) => {
       const drag = resizing.current;
@@ -293,6 +300,15 @@ export default function PianoRoll({
             <button className="rack-btn" type="button" aria-label="Later steps" disabled={from >= lastFirst} onClick={() => turn(1)}>▶</button>
           </div>
         )}
+        <button
+          className={`rack-btn piano-roll-whole ${wholeStep ? 'on' : ''}`}
+          type="button"
+          aria-pressed={wholeStep}
+          title="Off: dragging a note's end makes that one note longer. On: every note in its step goes with it"
+          onClick={() => setWholeStep(value => !value)}
+        >
+          Whole step
+        </button>
         <label className="piano-roll-chord" title="Choose a chord shape, then put a note in: it is the root, and the rest of the chord comes with it. Each note can still be taken out by itself">
           Chord
           <select aria-label="Chord shape" value={chord} onChange={(event) => setChord(event.target.value as ChordShapeId | 'off')}>
@@ -340,14 +356,14 @@ export default function PianoRoll({
               const active = stepNotes(step).includes(note);
               const sustained = !active && held.has(`${stepIndex}:${note}`);
               const noteStart = active ? stepIndex : held.get(`${stepIndex}:${note}`);
-              const noteLength = noteStart === undefined ? 1 : pattern.steps[noteStart].length ?? 1;
+              const noteLength = noteStart === undefined ? 1 : noteLengths(pattern.steps[noteStart])[stepNotes(pattern.steps[noteStart]).indexOf(note)] ?? 1;
               // The handle sits on the last cell a note covers.
               const isEnd = noteStart !== undefined && stepIndex === Math.min(pattern.steps.length - 1, noteStart + noteLength - 1);
               const late = active ? stepOffset(step) : 0;
               return (
                 <button
                   key={`${note}-${stepIndex}`}
-                  className={`piano-roll-cell ${active ? 'active' : ''} ${late > 0 ? 'late' : ''} ${active && (step.length ?? 1) > 1 ? 'long' : ''} ${sustained ? 'held' : ''} ${selectedStep === stepIndex ? 'selected' : ''}`}
+                  className={`piano-roll-cell ${active ? 'active' : ''} ${late > 0 ? 'late' : ''} ${active && noteLength > 1 ? 'long' : ''} ${sustained ? 'held' : ''} ${selectedStep === stepIndex ? 'selected' : ''}`}
                   aria-label={`${note} step ${stepIndex + 1}`}
                   aria-pressed={active}
                   tabIndex={stopStep === stepIndex && stopNote === note ? 0 : -1}
@@ -423,6 +439,7 @@ export default function PianoRoll({
                         resizing.current = {
                           start: noteStart!,
                           length: noteLength,
+                          note,
                           tap: event.pointerType !== 'mouse' && active ? { id: event.pointerId, note, x: event.clientX, y: event.clientY, at: event.timeStamp } : undefined,
                         };
                         onStepSelect(noteStart!);

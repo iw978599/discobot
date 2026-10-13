@@ -201,6 +201,9 @@ export interface SynthParameters {
     mode: 'up' | 'down' | 'updown' | 'downup' | 'random' | 'converge' | 'diverge';
     rate: '1/4' | '1/8' | '1/16' | '1/32';
     gate: number;
+    // how many octaves it runs through, 1 to 3. Absent means as it was before there was a choice:
+    // a single note through three octaves, a chord through its own notes once.
+    octaves?: number;
   };
   oscillator: {
     type: OscillatorType;
@@ -267,6 +270,10 @@ export interface SequencerStep {
   notes?: string[];
   // how many steps the notes last; absent means one
   length?: number;
+  // how many steps each note lasts, lowest note first, where the notes of a chord differ. Absent
+  // means every note lasts `length`, as they all did before a note could have its own. `length`
+  // is then the longest of them, so anything that only knows `length` still gets the step's extent.
+  lengths?: number[];
   // how often the step plays, 0 to 1; absent means always
   probability?: number;
   // hits packed evenly into the step's length; absent means one
