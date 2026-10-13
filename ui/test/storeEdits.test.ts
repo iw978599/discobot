@@ -609,6 +609,27 @@ const cases: Case[] = [
     type: 'pattern.write', echo: false, body: { synthId: 1, patternId: 'long', patch: { name: 'Long', steps: blank(32), bars: 2 } },
     check: result => { assert.equal(result.data.bars, 2); assert.equal(result.data.steps.length, 32); },
   }, ['patternCreated']),
+  changed('a pattern\'s automation is kept as checked: known parameters, inside their ranges, as long as the steps', {
+    type: 'pattern.write', echo: false, arrange: service => service.snapshot().synths[0].pattern,
+    body: (pattern: any) => ({ synthId: 1, patternId: pattern.id, patch: { automation: { cutoff: [300, 1e9, null, 'x'], macro1: [1], reverbSend: [1] } } }),
+    check: (result, service, pattern) => {
+      const kept = { cutoff: [300, 20000, ...Array(14).fill(null)] };
+      assert.deepEqual(result.data, { ...pattern, automation: kept });
+      assert.deepEqual(result.events[0].data, { synthId: 1, pattern: result.data });
+      const project = service.snapshot();
+      assert.deepEqual(project.scenes[0].laneAutomation, { 1: kept }, 'and it is in the open scene with the steps');
+    },
+  }, ['patternUpdated']),
+  changed('automation is kept by a write that does not send any, and taken away by one that sends none', {
+    type: 'pattern.write', echo: false,
+    arrange: service => { const { id } = service.snapshot().synths[0].pattern; ok(service.writePattern(1, id, { automation: { level: [0.5] } })); ok(service.writePattern(1, id, { steps: [note('C4')] as any })); return id; },
+    body: (id: string) => ({ synthId: 1, patternId: id, patch: { automation: {} } }),
+    check: (result, service, _id, before) => {
+      assert.deepEqual(before.synths[0].pattern.automation, { level: [0.5, ...Array(15).fill(null)] }, 'the write of steps kept it');
+      assert.equal('automation' in result.data, false);
+      assert.equal('laneAutomation' in service.snapshot().scenes[0], false);
+    },
+  }, ['patternUpdated']),
   {
     type: 'pattern.write', title: 'steps that are not a list, for a pattern that exists', arrange: service => service.snapshot().synths[0].pattern.id,
     body: (id: string) => ({ synthId: 1, patternId: id, patch: { steps: { 0: note('C4') } } }), status: 400, error: 'Invalid sequence pattern',

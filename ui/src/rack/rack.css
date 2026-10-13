@@ -403,7 +403,7 @@
 .rack-knobs .synth-model-macro-grid { display: flex; gap: 4px; margin: 0; padding: 0; border: 0; background: none; }
 .rack-knobs .knob-label { max-width: 46px; }
 
-.step-row { display: grid; gap: 3px; min-width: 0; }
+.step-row, .auto-strip { display: grid; gap: 3px; min-width: 0; }
 .step-cell {
   position: relative; height: 36px; min-width: 0; padding: 0;
   background: var(--surface-well); border: 1px solid var(--edge-strong); border-radius: var(--corner-panel);
@@ -430,6 +430,29 @@
 .step-light.on { background: #fff; box-shadow: 0 0 6px #fff; }
 .step-cell:not(.has-note) .step-light.on { background: var(--on); box-shadow: var(--shadow-lamp); }
 .step-velocity-bar { position: absolute; left: 0; bottom: 0; height: 3px; background: rgba(0, 0, 0, 0.45); }
+
+/* Automation: one parameter's values under the open lane's steps. The row is laid out on the
+   lane's own columns and the strip takes the steps' column and the steps' own grid, so every bar
+   stands under its step. A bar is a figure being read (--value); the line across each step is the
+   sound's own setting, which is what a step with no bar plays. */
+.synth-module > .auto-row > .auto-pick { grid-column: 1 / 3; }
+.auto-pick { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--text-label); }
+.auto-pick select { flex: 1; min-width: 0; }
+.auto-cell {
+  position: relative; height: 36px; min-width: 0; box-sizing: border-box; overflow: hidden; cursor: crosshair; touch-action: none;
+  background: var(--surface-well); border: 1px solid var(--edge-strong); border-radius: var(--corner-panel);
+}
+.auto-cell.beat { border-color: var(--edge-beat); }
+.auto-cell:hover { border-color: var(--hover); }
+.auto-bar { position: absolute; left: 0; right: 0; bottom: 0; background: var(--value); pointer-events: none; }
+.auto-rest { position: absolute; left: 0; right: 0; height: 1px; background: var(--edge-control); pointer-events: none; }
+.auto-cell.playing { background: var(--surface-hover); border-color: var(--on-bright); }
+.auto-cell.playing .auto-bar { background: var(--on-bright); }
+.rack-page .auto-cell:focus-visible { z-index: 2; }
+.auto-empty { min-height: 36px; display: flex; align-items: center; }
+.auto-tools { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; }
+.auto-tools .rack-btn { padding: 3px 8px; min-width: 0; }
+.auto-readout { flex: none; width: 9ch; text-align: right; white-space: nowrap; overflow: hidden; }
 
 /* synth editor */
 .synth-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--edge-faint); }
@@ -777,9 +800,17 @@
   .synth-module > .rack-row > .rack-knobs { justify-content: space-between; }
   /* The row sets its own column count inline, for a bar of steps or twice that; here it is eight
      to a row, or six where the scene's beats are six steps (--across), so a row ends on a beat. */
-  .step-row { grid-template-columns: repeat(var(--across, 8), minmax(0, 1fr)) !important; gap: 4px; }
+  .step-row, .auto-strip { grid-template-columns: repeat(var(--across, 8), minmax(0, 1fr)) !important; gap: 4px; }
   .step-cell { height: 44px; font-size: var(--type-label); }
   .steps-32 .step-cell, .step-row.fine .step-cell { height: 36px; font-size: var(--type-caption); }
+  /* automation: the parameter, then the strip breaking where the steps above it do, then its buttons */
+  .synth-module > .auto-row > .auto-pick, .synth-module > .auto-row > .auto-strip, .synth-module > .auto-row > .auto-empty, .synth-module > .auto-row > .auto-tools { grid-column: 1 / -1; }
+  .auto-cell { height: 44px; }
+  .auto-strip.fine .auto-cell { height: 36px; }
+  .auto-pick select { min-height: 44px; }
+  .auto-tools { justify-content: flex-start; }
+  .auto-tools .rack-btn { padding: 8px 12px; min-width: 44px; min-height: 44px; }
+  .auto-readout { margin-left: auto; }
 
   /* the sound editor */
   .rack .synth-controls-panel { padding: 8px; }
@@ -953,7 +984,7 @@
   .piano-roll-grid { max-height: max(180px, calc(100dvh - 150px)); }
 }
 @media (min-width: 700px) and (max-width: 960px) and (max-height: 500px) and (orientation: landscape) {
-  .step-row { grid-template-columns: repeat(var(--bar, 16), minmax(0, 1fr)) !important; }
+  .step-row, .auto-strip { grid-template-columns: repeat(var(--bar, 16), minmax(0, 1fr)) !important; }
 }
 
 @media (prefers-reduced-motion: reduce) {
