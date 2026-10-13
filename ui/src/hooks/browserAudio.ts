@@ -137,251 +137,359 @@ export function eqGains(eq: EffectsLoopState['eq']): [number, number, number] {
   return eq?.enabled ? [band(eq.low), band(eq.mid), band(eq.high)] : [0, 0, 0];
 }
 const EFFECT_NAMES: EffectName[] = ['reverb', 'delay', 'drive', 'phaser', 'chorus'];
+type Group = 'synth' | 'drums';
+type Live = { context: AudioContext; master: GainNode; eq: BiquadFilterNode[]; limiter: DynamicsCompressorNode; safety: WaveShaperNode };
 
-let context: AudioContext | undefined;
-let master: GainNode;
-let masterEq: BiquadFilterNode[] = [];
-let loop: EffectsLoopState | undefined;
-let workletLoading: Promise<void> | undefined;
-let masterVolume = 1;
-let masterMuted = false;
-const effects = new Map<'synth' | 'drums', Effects>();
+const halt = (source: AudioScheduledSourceNode) => {
+  try { source.stop(); } catch { /* already stopped */ }
+};
 
-export function getAudioContext(): AudioContext {
-  if (!context || context.state === 'closed') {
-    context = new AudioContext({ latencyHint: 'interactive' });
-    effects.clear();
-    workletLoading = undefined;
-    master = context.createGain();
-    master.gain.value = masterMuted ? 0 : masterVolume * MASTER_LEVEL;
-    const limiter = context.createDynamicsCompressor();
-    configureLimiter(limiter);
-    const safety = context.createWaveShaper();
-    safety.curve = safetyCurve();
-    safety.oversample = '2x';
-    masterEq = createMasterEq(context);
-    eqGains(loop?.eq).forEach((gain, band) => { masterEq[band].gain.value = gain; });
-    master.connect(masterEq[0]);
-    masterEq[2].connect(limiter).connect(safety).connect(context.destination);
+// The chorus keeps two delays and an inverter to itself; cut off from the bus they go with the context.
+function releaseEffects(bus: Effects) {
+  halt(bus.lfo);
+  halt(bus.chorus.lfo);
+  const nodes: AudioNode[] = [
+    ...Object.values(bus.inputs), ...Object.values(bus.wet), bus.output, bus.delay, bus.feedback,
+    bus.reverb, bus.reverbFade, bus.drive, bus.driveFade, bus.tone, ...bus.phaser, bus.phaserFeedback,
+    bus.lfo, bus.depth, bus.chorus.input, bus.chorus.output, bus.chorus.lfo, bus.chorus.depth,
+  ];
+  nodes.forEach(node => node.disconnect());
+}
+
+// Everything live playback keeps: the context, the protected master, the effect buses and what is
+// sounding on them. The app has one (`audioEngine`); a test makes its own and disposes of it.
+export class AudioEngine {
+  private live?: Live;
+  private loop?: EffectsLoopState;
+  private workletLoading?: Promise<void>;
+  private masterVolume = 1;
+  private masterMuted = false;
+  // A tempo-synced delay, phaser and chorus follow this.
+  private effectsTempo = 120;
+  private readonly effects = new Map<Group, Effects>();
+  private readonly samples = new Map<AudioBufferSourceNode, GainNode>();
+  private readonly clicks = new Map<OscillatorNode, GainNode>();
+  private readonly lanes = new Set<() => void>();
+  private readonly retiring = new Map<ReturnType<typeof setTimeout>, () => void>();
+
+  constructor(private readonly makeContext: () => AudioContext = () => new AudioContext({ latencyHint: 'interactive' })) {}
+
+  private open(): Live {
+    if (!this.live || this.live.context.state === 'closed') {
+      const context = this.makeContext();
+      this.effects.clear();
+      this.workletLoading = undefined;
+      const master = context.createGain();
+      master.gain.value = this.masterLevel();
+      const limiter = context.createDynamicsCompressor();
+      configureLimiter(limiter);
+      const safety = context.createWaveShaper();
+      safety.curve = safetyCurve();
+      safety.oversample = '2x';
+      const eq = createMasterEq(context);
+      eqGains(this.loop?.eq).forEach((gain, band) => { eq[band].gain.value = gain; });
+      master.connect(eq[0]);
+      eq[2].connect(limiter).connect(safety).connect(context.destination);
+      this.live = { context, master, eq, limiter, safety };
+    }
+    return this.live;
   }
-  return context;
-}
 
-export async function ensureAudioReady(): Promise<boolean> {
-  const ctx = getAudioContext();
-  try {
-    if (ctx.state === 'suspended') await ctx.resume();
-    return ctx.state === 'running';
-  } catch { return false; }
-}
-
-export function setMasterVolume(volume: number): void {
-  masterVolume = limit(volume, 0, 1);
-  if (context) smooth(master.gain, masterMuted ? 0 : masterVolume * MASTER_LEVEL, context);
-}
-
-export function setMasterMuted(muted: boolean): void {
-  masterMuted = muted;
-  if (context) smooth(master.gain, masterMuted ? 0 : masterVolume * MASTER_LEVEL, context);
-}
-
-const activeSampleSources = new Set<AudioBufferSourceNode>();
-
-export function stopAllSamples(): void {
-  for (const source of activeSampleSources) {
-    try { source.stop(); } catch { /* already stopped */ }
+  private masterLevel() {
+    return this.masterMuted ? 0 : this.masterVolume * MASTER_LEVEL;
   }
-  activeSampleSources.clear();
-}
 
-export async function playSample(data: ArrayBuffer): Promise<void> {
-  if (!await ensureAudioReady()) return;
-  stopAllSamples();
-  const ctx = getAudioContext();
-  const buffer = await ctx.decodeAudioData(data.slice(0));
-  const source = ctx.createBufferSource();
-  const gain = ctx.createGain();
-  source.buffer = buffer;
-  // Samples join the same protected master; short boundary ramps avoid cropped-file clicks.
-  const end = ctx.currentTime + buffer.duration;
-  gain.gain.setValueAtTime(0, ctx.currentTime);
-  gain.gain.linearRampToValueAtTime(0.7, ctx.currentTime + Math.min(0.005, buffer.duration / 2));
-  gain.gain.setValueAtTime(0.7, Math.max(ctx.currentTime, end - 0.005));
-  gain.gain.linearRampToValueAtTime(0, end);
-  source.connect(gain).connect(master);
-  source.onended = () => { activeSampleSources.delete(source); source.disconnect(); gain.disconnect(); };
-  activeSampleSources.add(source);
-  source.start();
-}
-
-export function loadAudioWorklet(): Promise<void> {
-  const ctx = getAudioContext();
-  if (!workletLoading) {
-    const base = (import.meta as ImportMeta & { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
-    workletLoading = ctx.audioWorklet.addModule(`${base}audio-worklet.js`)
-      .catch(error => { workletLoading = undefined; throw error; });
+  getContext(): AudioContext {
+    return this.open().context;
   }
-  return workletLoading;
-}
 
-function createEffects(group: 'synth' | 'drums'): Effects {
-  const ctx = getAudioContext();
-  const existing = effects.get(group);
-  if (existing) return existing;
-  const output = ctx.createGain();
-  output.connect(master);
-  const inputs = {} as Effects['inputs'], wet = {} as Effects['wet'];
-  for (const name of EFFECT_NAMES) {
-    inputs[name] = ctx.createGain();
-    wet[name] = ctx.createGain();
-    wet[name].gain.value = 0;
-    wet[name].connect(output);
+  async ensureReady(): Promise<boolean> {
+    const ctx = this.getContext();
+    try {
+      if (ctx.state === 'suspended') await ctx.resume();
+      return ctx.state === 'running';
+    } catch { return false; }
   }
-  const delay = ctx.createDelay(2), feedback = ctx.createGain();
-  feedback.gain.value = 0;
-  inputs.delay.connect(delay);
-  delay.connect(feedback).connect(delay);
-  delay.connect(wet.delay);
-  const reverb = ctx.createConvolver(), reverbFade = ctx.createGain();
-  inputs.reverb.connect(reverb).connect(reverbFade).connect(wet.reverb);
-  const drive = ctx.createWaveShaper(), driveFade = ctx.createGain(), tone = ctx.createBiquadFilter();
-  drive.oversample = '4x';
-  inputs.drive.connect(drive).connect(driveFade).connect(tone).connect(wet.drive);
-  const phaser = Array.from({ length: 4 }, () => ctx.createBiquadFilter());
-  phaser.forEach(node => { node.type = 'allpass'; node.Q.value = 0.7; });
-  inputs.phaser.connect(phaser[0]);
-  for (let i = 1; i < phaser.length; i++) phaser[i - 1].connect(phaser[i]);
-  const phaserFeedback = ctx.createGain();
-  phaserFeedback.gain.value = 0;
-  phaser[3].connect(phaserFeedback).connect(phaser[0]);
-  phaser[3].connect(wet.phaser);
-  // An all-pass alone only rotates phase; mixing a dry tap creates the moving notches.
-  inputs.phaser.connect(wet.phaser);
-  const lfo = ctx.createOscillator(), depth = ctx.createGain();
-  lfo.connect(depth);
-  phaser.forEach(node => depth.connect(node.frequency));
-  lfo.start();
-  const chorus = createChorus(ctx);
-  inputs.chorus.connect(chorus.input);
-  chorus.output.connect(wet.chorus);
-  const bus = { inputs, wet, output, delay, feedback, reverb, reverbFade, decay: 0, drive, driveFade, driveAmount: -1, tone, phaser, phaserFeedback, lfo, depth, chorus, reverbShape: '' };
-  effects.set(group, bus);
-  if (loop) updateEffects(bus, group, loop, ctx);
-  return bus;
-}
 
-function updateEffects(bus: Effects, group: 'synth' | 'drums', state: EffectsLoopState, ctx: AudioContext) {
-  const enabled = state.enabled;
-  smooth(bus.output.gain, enabled ? limit(state.returns[group], 0, 1) : 0, ctx);
-  smooth(bus.delay.delayTime, delaySeconds(state.delay, effectsTempo), ctx);
-  smooth(bus.feedback.gain, state.delay.enabled && enabled ? limit(state.delay.feedback, 0, 0.85) : 0, ctx);
-  smooth(bus.wet.delay.gain, state.delay.enabled ? limit(state.delay.mix, 0, 1) : 0, ctx);
-  smooth(bus.wet.reverb.gain, state.reverb.enabled ? limit(state.reverb.mix, 0, 1) : 0, ctx);
-  const decay = limit(state.reverb.decay, 0.1, 8);
-  const shape = `${(state.reverb.preDelay ?? 0).toFixed(3)}/${(state.reverb.damping ?? 0).toFixed(2)}`;
-  if (Math.abs(decay - bus.decay) > 0.04 || shape !== bus.reverbShape) {
-    const buffer = reverbImpulse(ctx, decay, Math.random, state.reverb.preDelay, state.reverb.damping);
-    bus.reverbShape = shape;
-    if (bus.reverb.buffer) {
-      const previous = bus.reverb, previousFade = bus.reverbFade;
-      const next = ctx.createConvolver(), fade = ctx.createGain();
-      next.buffer = buffer;
-      fade.gain.value = 0;
-      bus.inputs.reverb.connect(next).connect(fade).connect(bus.wet.reverb);
-      smooth(previousFade.gain, 0, ctx);
-      smooth(fade.gain, 1, ctx);
-      setTimeout(() => { bus.inputs.reverb.disconnect(previous); previous.disconnect(); previousFade.disconnect(); }, 120);
-      bus.reverb = next;
-      bus.reverbFade = fade;
-    } else bus.reverb.buffer = buffer;
-    bus.decay = decay;
+  setMasterVolume(volume: number): void {
+    this.masterVolume = limit(volume, 0, 1);
+    if (this.live) smooth(this.live.master.gain, this.masterLevel(), this.live.context);
   }
-  const driveAmount = limit(state.drive.amount, 0, 1);
-  if (Math.abs(driveAmount - bus.driveAmount) > 0.005) {
-    const curve = driveCurve(driveAmount);
-    if (bus.drive.curve) {
-      const previous = bus.drive, previousFade = bus.driveFade;
-      const next = ctx.createWaveShaper(), fade = ctx.createGain();
-      next.curve = curve; next.oversample = '4x';
-      fade.gain.value = 0;
-      bus.inputs.drive.connect(next).connect(fade).connect(bus.tone);
-      smooth(previousFade.gain, 0, ctx); smooth(fade.gain, 1, ctx);
-      setTimeout(() => { bus.inputs.drive.disconnect(previous); previous.disconnect(); previousFade.disconnect(); }, 120);
-      bus.drive = next; bus.driveFade = fade;
-    } else bus.drive.curve = curve;
-    bus.driveAmount = driveAmount;
+
+  setMasterMuted(muted: boolean): void {
+    this.masterMuted = muted;
+    if (this.live) smooth(this.live.master.gain, this.masterLevel(), this.live.context);
   }
-  smooth(bus.wet.drive.gain, state.drive.enabled ? 0.5 : 0, ctx);
-  smooth(bus.tone.frequency, 400 * Math.pow(40, limit(state.drive.tone, 0, 1)), ctx);
-  smooth(bus.lfo.frequency, limit(rateHz(state.phaser, effectsTempo), 0.02, 20), ctx);
-  smooth(bus.depth.gain, limit(state.phaser.depth, 0, 1) * 650, ctx);
-  bus.phaser.forEach((node, i) => smooth(node.frequency, 900 + i * 350, ctx));
-  smooth(bus.phaserFeedback.gain, enabled && state.phaser.enabled ? limit(state.phaser.feedback, 0, 0.75) : 0, ctx);
-  smooth(bus.wet.phaser.gain, state.phaser.enabled ? limit(state.phaser.mix, 0, 1) * 0.5 : 0, ctx);
-  smooth(bus.chorus.lfo.frequency, limit(rateHz(state.chorus, effectsTempo, 0.6), 0.02, 20, 0.6), ctx);
-  smooth(bus.chorus.depth.gain, chorusSweep(state.chorus?.depth ?? 0), ctx);
-  smooth(bus.wet.chorus.gain, state.chorus?.enabled ? limit(state.chorus.mix, 0, 1) : 0, ctx);
-}
 
-// One click of the metronome, at a time on the audio clock: a short high tone, higher and louder on
-// the first beat of the bar. It goes to the master level, past the lanes and the effects, so it
-// follows the volume and Mute and is in no export.
-export function scheduleClick(time: number, accent: boolean): void {
-  const ctx = getAudioContext();
-  if (!master) return;
-  const tone = ctx.createOscillator(), level = ctx.createGain();
-  const at = Math.max(time, ctx.currentTime);
-  tone.type = 'square';
-  tone.frequency.value = accent ? 1760 : 1175;
-  level.gain.setValueAtTime(0, at);
-  level.gain.linearRampToValueAtTime(accent ? 0.22 : 0.14, at + 0.001);
-  level.gain.exponentialRampToValueAtTime(0.0001, at + 0.04);
-  tone.connect(level).connect(master);
-  tone.start(at);
-  tone.stop(at + 0.05);
-  tone.onended = () => { tone.disconnect(); level.disconnect(); };
-}
-
-// A tempo-synced delay, phaser and chorus follow this.
-let effectsTempo = 120;
-export function setEffectsTempo(tempo: number): void {
-  if (!(tempo > 0) || tempo === effectsTempo) return;
-  effectsTempo = tempo;
-  if (context && loop) effects.forEach((bus, group) => updateEffects(bus, group, loop!, context!));
-}
-
-export function setEffectsLoop(state: EffectsLoopState): void {
-  loop = state;
-  if (!context) return;
-  effects.forEach((bus, group) => updateEffects(bus, group, state, context!));
-  // The EQ is on the whole mix, so it works whether or not the effects loop is on.
-  eqGains(state.eq).forEach((gain, band) => smooth(masterEq[band].gain, gain, context!));
-}
-
-export function createAudioLane(group: 'synth' | 'drums') {
-  const ctx = getAudioContext(), bus = createEffects(group);
-  // input carries the lane volume; ducker sits after it so the dry signal and the sends pump together.
-  const input = ctx.createGain(), ducker = ctx.createGain();
-  input.connect(ducker);
-  ducker.connect(master);
-  const sends = {} as Record<EffectName, GainNode>;
-  for (const name of EFFECT_NAMES) {
-    sends[name] = ctx.createGain();
-    sends[name].gain.value = 0;
-    ducker.connect(sends[name]).connect(bus.inputs[name]);
+  stopAllSamples(): void {
+    for (const source of this.samples.keys()) halt(source);
+    this.samples.clear();
   }
-  return {
-    input,
-    output: ducker,
-    duck(time: number, amount: number) { scheduleDuck(ducker.gain, time, amount); },
-    setVolume(value: number) { smooth(input.gain, limit(value, 0, 1), ctx); },
-    setSends(values: FxSendLevels, returnLevel = 1) {
-      for (const name of Object.keys(sends) as EffectName[]) smooth(sends[name].gain, limit(values[name], 0, 1) * limit(returnLevel, 0, 1), ctx);
-    },
-    dispose() {
+
+  async playSample(data: ArrayBuffer): Promise<void> {
+    if (!await this.ensureReady()) return;
+    this.stopAllSamples();
+    const { context: ctx, master } = this.open();
+    const buffer = await ctx.decodeAudioData(data.slice(0));
+    const source = ctx.createBufferSource();
+    const gain = ctx.createGain();
+    source.buffer = buffer;
+    // Samples join the same protected master; short boundary ramps avoid cropped-file clicks.
+    const end = ctx.currentTime + buffer.duration;
+    gain.gain.setValueAtTime(0, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.7, ctx.currentTime + Math.min(0.005, buffer.duration / 2));
+    gain.gain.setValueAtTime(0.7, Math.max(ctx.currentTime, end - 0.005));
+    gain.gain.linearRampToValueAtTime(0, end);
+    source.connect(gain).connect(master);
+    source.onended = () => { this.samples.delete(source); source.disconnect(); gain.disconnect(); };
+    this.samples.set(source, gain);
+    source.start();
+  }
+
+  loadWorklet(): Promise<void> {
+    const ctx = this.getContext();
+    if (!this.workletLoading) {
+      const base = (import.meta as ImportMeta & { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
+      this.workletLoading = ctx.audioWorklet.addModule(`${base}audio-worklet.js`)
+        .catch(error => { this.workletLoading = undefined; throw error; });
+    }
+    return this.workletLoading;
+  }
+
+  private bus(group: Group): Effects {
+    const { context: ctx, master } = this.open();
+    const existing = this.effects.get(group);
+    if (existing) return existing;
+    const output = ctx.createGain();
+    output.connect(master);
+    const inputs = {} as Effects['inputs'], wet = {} as Effects['wet'];
+    for (const name of EFFECT_NAMES) {
+      inputs[name] = ctx.createGain();
+      wet[name] = ctx.createGain();
+      wet[name].gain.value = 0;
+      wet[name].connect(output);
+    }
+    const delay = ctx.createDelay(2), feedback = ctx.createGain();
+    feedback.gain.value = 0;
+    inputs.delay.connect(delay);
+    delay.connect(feedback).connect(delay);
+    delay.connect(wet.delay);
+    const reverb = ctx.createConvolver(), reverbFade = ctx.createGain();
+    inputs.reverb.connect(reverb).connect(reverbFade).connect(wet.reverb);
+    const drive = ctx.createWaveShaper(), driveFade = ctx.createGain(), tone = ctx.createBiquadFilter();
+    drive.oversample = '4x';
+    inputs.drive.connect(drive).connect(driveFade).connect(tone).connect(wet.drive);
+    const phaser = Array.from({ length: 4 }, () => ctx.createBiquadFilter());
+    phaser.forEach(node => { node.type = 'allpass'; node.Q.value = 0.7; });
+    inputs.phaser.connect(phaser[0]);
+    for (let i = 1; i < phaser.length; i++) phaser[i - 1].connect(phaser[i]);
+    const phaserFeedback = ctx.createGain();
+    phaserFeedback.gain.value = 0;
+    phaser[3].connect(phaserFeedback).connect(phaser[0]);
+    phaser[3].connect(wet.phaser);
+    // An all-pass alone only rotates phase; mixing a dry tap creates the moving notches.
+    inputs.phaser.connect(wet.phaser);
+    const lfo = ctx.createOscillator(), depth = ctx.createGain();
+    lfo.connect(depth);
+    phaser.forEach(node => depth.connect(node.frequency));
+    lfo.start();
+    const chorus = createChorus(ctx);
+    inputs.chorus.connect(chorus.input);
+    chorus.output.connect(wet.chorus);
+    const bus = { inputs, wet, output, delay, feedback, reverb, reverbFade, decay: 0, drive, driveFade, driveAmount: -1, tone, phaser, phaserFeedback, lfo, depth, chorus, reverbShape: '' };
+    this.effects.set(group, bus);
+    if (this.loop) this.update(bus, group, this.loop, ctx);
+    return bus;
+  }
+
+  // A replaced reverb or drive is let go once its fade is over, or at once if the engine goes first.
+  private retire(release: () => void) {
+    const timer = setTimeout(() => { this.retiring.delete(timer); release(); }, 120);
+    this.retiring.set(timer, release);
+  }
+
+  private update(bus: Effects, group: Group, state: EffectsLoopState, ctx: AudioContext) {
+    const enabled = state.enabled, tempo = this.effectsTempo;
+    smooth(bus.output.gain, enabled ? limit(state.returns[group], 0, 1) : 0, ctx);
+    smooth(bus.delay.delayTime, delaySeconds(state.delay, tempo), ctx);
+    smooth(bus.feedback.gain, state.delay.enabled && enabled ? limit(state.delay.feedback, 0, 0.85) : 0, ctx);
+    smooth(bus.wet.delay.gain, state.delay.enabled ? limit(state.delay.mix, 0, 1) : 0, ctx);
+    smooth(bus.wet.reverb.gain, state.reverb.enabled ? limit(state.reverb.mix, 0, 1) : 0, ctx);
+    const decay = limit(state.reverb.decay, 0.1, 8);
+    const shape = `${(state.reverb.preDelay ?? 0).toFixed(3)}/${(state.reverb.damping ?? 0).toFixed(2)}`;
+    if (Math.abs(decay - bus.decay) > 0.04 || shape !== bus.reverbShape) {
+      const buffer = reverbImpulse(ctx, decay, Math.random, state.reverb.preDelay, state.reverb.damping);
+      bus.reverbShape = shape;
+      if (bus.reverb.buffer) {
+        const previous = bus.reverb, previousFade = bus.reverbFade;
+        const next = ctx.createConvolver(), fade = ctx.createGain();
+        next.buffer = buffer;
+        fade.gain.value = 0;
+        bus.inputs.reverb.connect(next).connect(fade).connect(bus.wet.reverb);
+        smooth(previousFade.gain, 0, ctx);
+        smooth(fade.gain, 1, ctx);
+        this.retire(() => { bus.inputs.reverb.disconnect(previous); previous.disconnect(); previousFade.disconnect(); });
+        bus.reverb = next;
+        bus.reverbFade = fade;
+      } else bus.reverb.buffer = buffer;
+      bus.decay = decay;
+    }
+    const driveAmount = limit(state.drive.amount, 0, 1);
+    if (Math.abs(driveAmount - bus.driveAmount) > 0.005) {
+      const curve = driveCurve(driveAmount);
+      if (bus.drive.curve) {
+        const previous = bus.drive, previousFade = bus.driveFade;
+        const next = ctx.createWaveShaper(), fade = ctx.createGain();
+        next.curve = curve; next.oversample = '4x';
+        fade.gain.value = 0;
+        bus.inputs.drive.connect(next).connect(fade).connect(bus.tone);
+        smooth(previousFade.gain, 0, ctx); smooth(fade.gain, 1, ctx);
+        this.retire(() => { bus.inputs.drive.disconnect(previous); previous.disconnect(); previousFade.disconnect(); });
+        bus.drive = next; bus.driveFade = fade;
+      } else bus.drive.curve = curve;
+      bus.driveAmount = driveAmount;
+    }
+    smooth(bus.wet.drive.gain, state.drive.enabled ? 0.5 : 0, ctx);
+    smooth(bus.tone.frequency, 400 * Math.pow(40, limit(state.drive.tone, 0, 1)), ctx);
+    smooth(bus.lfo.frequency, limit(rateHz(state.phaser, tempo), 0.02, 20), ctx);
+    smooth(bus.depth.gain, limit(state.phaser.depth, 0, 1) * 650, ctx);
+    bus.phaser.forEach((node, i) => smooth(node.frequency, 900 + i * 350, ctx));
+    smooth(bus.phaserFeedback.gain, enabled && state.phaser.enabled ? limit(state.phaser.feedback, 0, 0.75) : 0, ctx);
+    smooth(bus.wet.phaser.gain, state.phaser.enabled ? limit(state.phaser.mix, 0, 1) * 0.5 : 0, ctx);
+    smooth(bus.chorus.lfo.frequency, limit(rateHz(state.chorus, tempo, 0.6), 0.02, 20, 0.6), ctx);
+    smooth(bus.chorus.depth.gain, chorusSweep(state.chorus?.depth ?? 0), ctx);
+    smooth(bus.wet.chorus.gain, state.chorus?.enabled ? limit(state.chorus.mix, 0, 1) : 0, ctx);
+  }
+
+  // One click of the metronome, at a time on the audio clock: a short high tone, higher and louder on
+  // the first beat of the bar. It goes to the master level, past the lanes and the effects, so it
+  // follows the volume and Mute and is in no export.
+  scheduleClick(time: number, accent: boolean): void {
+    const { context: ctx, master } = this.open();
+    const tone = ctx.createOscillator(), level = ctx.createGain();
+    const at = Math.max(time, ctx.currentTime);
+    tone.type = 'square';
+    tone.frequency.value = accent ? 1760 : 1175;
+    level.gain.setValueAtTime(0, at);
+    level.gain.linearRampToValueAtTime(accent ? 0.22 : 0.14, at + 0.001);
+    level.gain.exponentialRampToValueAtTime(0.0001, at + 0.04);
+    tone.connect(level).connect(master);
+    tone.start(at);
+    tone.stop(at + 0.05);
+    tone.onended = () => { this.clicks.delete(tone); tone.disconnect(); level.disconnect(); };
+    this.clicks.set(tone, level);
+  }
+
+  setEffectsTempo(tempo: number): void {
+    if (!(tempo > 0) || tempo === this.effectsTempo) return;
+    this.effectsTempo = tempo;
+    const { live, loop } = this;
+    if (live && loop) this.effects.forEach((bus, group) => this.update(bus, group, loop, live.context));
+  }
+
+  setEffectsLoop(state: EffectsLoopState): void {
+    this.loop = state;
+    const live = this.live;
+    if (!live) return;
+    this.effects.forEach((bus, group) => this.update(bus, group, state, live.context));
+    // The EQ is on the whole mix, so it works whether or not the effects loop is on.
+    eqGains(state.eq).forEach((gain, band) => smooth(live.eq[band].gain, gain, live.context));
+  }
+
+  createLane(group: Group) {
+    const { context: ctx, master } = this.open(), bus = this.bus(group);
+    // input carries the lane volume; ducker sits after it so the dry signal and the sends pump together.
+    const input = ctx.createGain(), ducker = ctx.createGain();
+    input.connect(ducker);
+    ducker.connect(master);
+    const sends = {} as Record<EffectName, GainNode>;
+    for (const name of EFFECT_NAMES) {
+      sends[name] = ctx.createGain();
+      sends[name].gain.value = 0;
+      ducker.connect(sends[name]).connect(bus.inputs[name]);
+    }
+    const dispose = () => {
+      this.lanes.delete(dispose);
       input.disconnect();
       ducker.disconnect();
       Object.values(sends).forEach(node => node.disconnect());
-    },
-  };
+    };
+    this.lanes.add(dispose);
+    return {
+      input,
+      output: ducker,
+      duck(time: number, amount: number) { scheduleDuck(ducker.gain, time, amount); },
+      setVolume(value: number) { smooth(input.gain, limit(value, 0, 1), ctx); },
+      setSends(values: FxSendLevels, returnLevel = 1) {
+        for (const name of Object.keys(sends) as EffectName[]) smooth(sends[name].gain, limit(values[name], 0, 1) * limit(returnLevel, 0, 1), ctx);
+      },
+      dispose,
+    };
+  }
+
+  // Stops and disconnects everything the engine made and closes its context. The volume, mute,
+  // effects and tempo it was given stay, as they do when a closed context is made again.
+  async dispose(): Promise<void> {
+    const live = this.live;
+    this.live = undefined;
+    this.workletLoading = undefined;
+    for (const [timer, release] of this.retiring) { clearTimeout(timer); release(); }
+    this.retiring.clear();
+    [...this.lanes].forEach(release => release());
+    for (const sounding of [this.samples, this.clicks]) {
+      for (const [source, level] of sounding) { halt(source); source.disconnect(); level.disconnect(); }
+      sounding.clear();
+    }
+    this.effects.forEach(releaseEffects);
+    this.effects.clear();
+    if (!live) return;
+    [live.master, ...live.eq, live.limiter, live.safety].forEach(node => node.disconnect());
+    if (live.context.state !== 'closed') await live.context.close().catch(() => {});
+  }
+}
+
+export const audioEngine = new AudioEngine();
+
+export function getAudioContext(): AudioContext {
+  return audioEngine.getContext();
+}
+
+export function ensureAudioReady(): Promise<boolean> {
+  return audioEngine.ensureReady();
+}
+
+export function setMasterVolume(volume: number): void {
+  audioEngine.setMasterVolume(volume);
+}
+
+export function setMasterMuted(muted: boolean): void {
+  audioEngine.setMasterMuted(muted);
+}
+
+export function stopAllSamples(): void {
+  audioEngine.stopAllSamples();
+}
+
+export function playSample(data: ArrayBuffer): Promise<void> {
+  return audioEngine.playSample(data);
+}
+
+export function loadAudioWorklet(): Promise<void> {
+  return audioEngine.loadWorklet();
+}
+
+export function scheduleClick(time: number, accent: boolean): void {
+  audioEngine.scheduleClick(time, accent);
+}
+
+export function setEffectsTempo(tempo: number): void {
+  audioEngine.setEffectsTempo(tempo);
+}
+
+export function setEffectsLoop(state: EffectsLoopState): void {
+  audioEngine.setEffectsLoop(state);
+}
+
+export function createAudioLane(group: 'synth' | 'drums') {
+  return audioEngine.createLane(group);
 }
