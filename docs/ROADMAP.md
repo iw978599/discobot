@@ -65,11 +65,13 @@ slow down every later change.
    not to the effects. Still open: the transport bar and the song strip
    still render on every edit.
 
-4. **Give the audio layer a single owner.** (M)
-   `browserAudio.ts` keeps the context, buses and effects in module-level
-   variables, which makes it awkward to test and impossible to tear down
-   cleanly. Wrap them in an `AudioEngine` class created once and passed to the
-   hooks.
+4. **Give the audio layer a single owner.** First part done on 2026-10-13,
+   with no change to any sound intended; not verified by ear. The context,
+   the master chain, the effect buses and what is sounding belong to one
+   `AudioEngine` in `browserAudio.ts`, which can be disposed of and made
+   again, and tests make their own. Still open: every caller still goes
+   through the module's functions, which call the app's one engine. Passing
+   the engine to the hooks explicitly is the next step.
 
 5. **Accessibility pass on custom controls.** (M)
    Steps are labelled and dialogs trap focus. The phone's bar of units is a
