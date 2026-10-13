@@ -1,10 +1,11 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNarrow } from '../hooks/useNarrow';
 import SaveState from './SaveState';
 import { spaceBelongsToTarget } from '../hooks/useComputerKeyboard';
 import type { Studio } from '../studio/useStudio';
 import Knob from '../components/Knob';
 import Menu from './Menu';
+import ExportDialog from './ExportDialog';
 import { TempoDisplay } from './HeaderParts';
 import { accountsEnabled } from '../services/account';
 import { useAccountUser } from './AccountDialog';
@@ -24,7 +25,7 @@ interface TransportUnitProps {
 // everything you do once per session instead of once per bar.
 export default function TransportUnit({ studio, onOpenSettings, onOpenProjects, onShare, onOpenAccount, onAddGuest, onOpenVersions }: TransportUnitProps) {
   const { midiState } = studio;
-  const exporting = studio.exportStatus?.phase === 'working';
+  const [exporting, setExporting] = useState(false);
   const user = useAccountUser();
   const narrow = useNarrow();
   // Space plays and stops, unless it belongs to whatever has the keyboard: a button or link it
@@ -119,18 +120,8 @@ export default function TransportUnit({ studio, onOpenSettings, onOpenProjects, 
             { label: 'Reset All', title: 'Clear every lane, the drums and the effects of this project', danger: true, onSelect: () => { void studio.handleReset(); } },
           ]]}
         />
-        <Menu
-          label="Export"
-          groups={[[
-            { label: 'Scene WAV', title: 'The open scene: one bar with its effect tail', disabled: exporting, onSelect: () => { void studio.handleExportWav('pattern').catch(studio.reportExportError); } },
-            { label: 'Loop WAV', title: 'One bar that loops seamlessly, with effect tails wrapped in', disabled: exporting, onSelect: () => { void studio.handleExportWav('loop').catch(studio.reportExportError); } },
-            { label: 'Stems', title: 'Each synth lane, the drums and each guest instrument as separate WAV files in a zip', disabled: exporting, onSelect: () => { void studio.handleExportWav('stems').catch(studio.reportExportError); } },
-            { label: 'Scene MIDI', title: 'A Standard MIDI File of the open scene', onSelect: studio.handleExportMidi },
-          ], [
-            { label: 'Song WAV', title: 'The whole song, start to finish, as one audio file', disabled: exporting, onSelect: () => { void studio.handleExportWav('song').catch(studio.reportExportError); } },
-            { label: 'Song MIDI', title: 'The whole song as a MIDI file, with a marker at each section', onSelect: () => { void studio.handleExportSongMidi().catch(studio.reportExportError); } },
-          ]]}
-        />
+        <button className="rack-btn" aria-haspopup="dialog" title="Save the scene or the whole song as audio or MIDI" onClick={() => setExporting(true)}>Export</button>
+        {exporting && <ExportDialog studio={studio} onClose={() => setExporting(false)} />}
         {accountsEnabled && (
           <button className="rack-btn account-button" onClick={onOpenAccount} title={user ? 'Your account' : 'Sign in or create an account. Optional'} aria-label={user ? `Account: ${user.username}` : 'Sign in'}>
             {user ? user.username : 'Sign In'}

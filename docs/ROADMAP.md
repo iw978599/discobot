@@ -538,6 +538,9 @@ may redistribute.
     greyed out, and the message says when the file has downloaded (Stems say
     which file of how many). Still open: a true progress bar or percentage,
     since the browser's offline renderer does not report how far it has got.
+    Done on 2026-10-13: Export is one dialog in place of the menu, with what
+    to export, as what, how long the file will be, and the message about
+    its making in the same place.
 
 14. **A playlist-style layout for scenes.** (M) Asked for by the owner on
     2026-10-12. Show each scene occurrence in song playback order so the

@@ -1,6 +1,18 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
+// Export is a dialog: what (the scene or the song), as what, then Export. It is closed at once and
+// the file goes on being made, so the caller waits for the download as it did with the menu.
+async function exportAs(page: Page, item: string) {
+  await page.getByRole('button', { name: 'Export', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Export', exact: true });
+  await dialog.getByRole('radio', { name: item.startsWith('Song') ? 'The whole song' : 'This scene', exact: true }).check();
+  await dialog.getByRole('radio', { name: item === 'Loop WAV' ? 'Seamless loop' : item === 'Stems' ? 'Stems' : item.endsWith('MIDI') ? 'MIDI' : 'Audio', exact: true }).check();
+  await dialog.getByRole('button', { name: 'Export', exact: true }).click();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+}
+
 const PROJECT_KEY = 'discobot_browser_project_v1';
 // What is in storage right now, without nudging the app to save first.
 const stored = (page: Page) => page.evaluate(key => JSON.parse(localStorage.getItem(key) || '{}'), PROJECT_KEY);
@@ -80,8 +92,7 @@ test('unison, the 24 dB filter and kick ducking are saved, and ducking is audibl
 
   const stemOpening = async (name: string) => {
     const download = page.waitForEvent('download');
-    await page.getByRole('button', { name: 'Export ▾', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Stems', exact: true }).click();
+    await exportAs(page, 'Stems');
     const path = testInfo.outputPath(name);
     await (await download).saveAs(path);
     const zip = await readFile(path);

@@ -499,6 +499,16 @@
 .rack-dialog-overlay.small .rack-dialog { font-family: var(--panel-font); font-weight: 600; font-size: var(--type-label); letter-spacing: 0.06em; text-transform: uppercase; width: min(440px, 100%); height: auto; max-height: min(86vh, 760px); padding: 0; border: 1px solid var(--edge-strong); border-radius: var(--corner-control); }
 .rack-dialog-overlay.small .rack-dialog-body { flex: none; gap: 14px; }
 .confirm-actions { gap: 6px; }
+/* Export: two sets of choices, a line saying how long, and the making of it. */
+.export-dialog { display: flex; flex-direction: column; gap: 12px; }
+.export-choice { border: 1px solid var(--edge-faint); border-radius: var(--corner-panel); padding: 8px 10px; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.export-choice legend { font-family: var(--panel-font); font-size: var(--type-label); letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-label); padding: 0 4px; }
+.export-choice label { color: var(--text); cursor: pointer; }
+.export-choice label:has(input:disabled) { color: var(--text-faint); cursor: not-allowed; }
+.export-hint { display: block; margin-left: 22px; color: var(--text-faint); font-size: var(--type-label); }
+.export-length, .export-progress { margin: 0; color: var(--text-plain); }
+.export-progress { min-height: 2.6em; color: var(--text-faint); }
+.export-progress[data-phase="done"] { color: var(--text); }
 .rack-dialog-body .confirm-actions .rack-btn.danger { border-color: var(--danger); color: var(--danger); }
 /* A sheet is a dialog docked to the bottom edge: the large slider a touched knob opens. */
 .rack-dialog-overlay.sheet { place-items: end center; padding: 0 max(8px, env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); }

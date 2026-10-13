@@ -213,7 +213,8 @@ Behaviour:
    Built on `feat/design-review-copy-to-scene` (check its pull request's
    state).
 4. **Feature 2:** export as a small dialog (what, as what, how long, and
-   the progress in the same place).
+   the progress in the same place). Built on
+   `feat/design-review-export-dialog` (check its pull request's state).
 5. **Feature 11:** Help with a list of headings and a search box. Merged
    (#153). "Help for this unit" on each unit's name plate, the other half
    of that feature in the review, is not built.
