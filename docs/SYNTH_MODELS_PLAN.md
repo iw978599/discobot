@@ -120,6 +120,18 @@ true before the first new model ships, and say so in the pull request.
   - A synced oscillator tuned very high aliases: the restart is not
     band-limited.
 
+- 2026-10-12: **The Virus is built.** It needed nothing more from the
+  voice: the routes carry its movement and the filter's drive is its
+  saturation. Not verified by ear.
+  - The instrument has three oscillators, two filters with a saturation
+    stage between them and three LFOs. This has two oscillators and a sub,
+    one driven filter and two LFOs.
+  - The plan's first macro is Morph. The sources read for this did not
+    confirm a wave-morph control on the instrument's ordinary oscillators;
+    it is built as a saw turning into a pulse.
+  - Mod Depth scales four routes at once and uses all four of a sound's
+    places, so a Virus lane has none left for routes of the person's own.
+
 ## The fourteen, in three groups
 
 The grouping is by what each needs from the voice, because that decides when

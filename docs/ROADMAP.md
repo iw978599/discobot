@@ -198,10 +198,11 @@ target; removal of the AI review workflow.
        namesakes, and one may be left out if no usable waveforms are found.
    Asked for by the owner on 2026-10-12, as well as more presets: a review
    of every built-in preset's sound, redesigning the weak ones.
+   Done on 2026-10-12: the Virus, with three presets. Four models to go:
+   the CS-80, which needs two layers a note, and three that wait on the
+   sample oscillator. Not verified by ear.
    Done on 2026-10-12: the Odyssey, with oscillator sync and ring
-   modulation for the voice and three presets. Five models to go: the
-   Virus and the CS-80, and three that wait on the sample oscillator.
-   Not verified by ear.
+   modulation for the voice and three presets. Not verified by ear.
    Done on 2026-10-12: the MS-20, the first model that needed engine work,
    with three presets. Not verified by ear.
    Done on 2026-10-12: the seven models that needed nothing new from the
