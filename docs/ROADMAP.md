@@ -250,6 +250,23 @@ tempo-synced delay; kick ducking; the three-band master EQ. Recordings of the
 LinnDrum, DMX and TR-707 will not be bundled: none were found that the project
 may redistribute.
 
+8. **The drum machine's cymbal, and more cymbals to choose from.** (M) Asked
+   for by the owner on 2026-10-12: "the cymbal on the drum machine sounds
+   bad. also give more cymbal options on drums". The Cymbal lane has two
+   sounds, Ride and Crash, both synthesized. Two parts:
+   - A pass at how the cymbal sounds. Ask the owner first which is bad
+     (the ride, the crash, or both), in which kit, and in what way (harsh,
+     thin, too short, like noise), then change `renderRide` and
+     `renderCrash` in `DrumCore` to answer it. A sound that was changed
+     must be listed for the owner to hear; a test cannot say it is better.
+   - More cymbals on that lane: for example a splash, a china, a ride bell
+     and a sizzle beside Ride and Crash. To settle in building it: whether
+     they are further choices on the one Cymbal lane, as Ride and Crash are
+     today, or a second cymbal lane; and whether any should be a recording
+     from a library the project may ship (`docs/BUNDLED_AUDIO.md`), which
+     needs the owner's say-so, or all synthesized.
+   A saved project must go on playing the cymbal it chose.
+
 ## Features
 
 1. **A layout for phones and the installed app.** (L) First part done: at
@@ -557,6 +574,12 @@ for new accounts.
   that model wait until a lane can have effects of its own?
 
 ## Suggested order
+
+The order the owner is working in, with every open item on this page in it,
+is the queue in `docs/HANDOFF.md` (section 4) while that file exists. The
+list below is the older reasoning behind it. Since it was written the owner
+put sound first, and on 2026-10-12 asked for the drum cymbals (sound 8),
+which goes to the front.
 
 1. **Listen and tune** (sound 1). It needs the owner's ears, not an agent, so
    it can go on alongside everything else.
