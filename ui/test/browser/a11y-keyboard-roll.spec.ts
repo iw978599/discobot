@@ -1,5 +1,17 @@
 import { expect, test, type Page } from '@playwright/test';
 
+// At phone width the top bar is one line, and the rest of it is in the sheet its last button
+// raises. `more` raises the sheet before something in it is used, and does nothing on a wide screen.
+// A unit's own Help button is on the unit, not in the sheet, and needs no such step.
+const onPhone = (page: Page) => {
+  const size = page.viewportSize();
+  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+};
+const more = async (page: Page) => {
+  if (!onPhone(page) || await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) return;
+  await page.getByRole('button', { name: 'More controls', exact: true }).click();
+};
+
 const PROJECT_KEY = 'discobot_browser_project_v1';
 const stored = (page: Page) => page.evaluate(key => JSON.parse(localStorage.getItem(key) || '{}'), PROJECT_KEY);
 const guestAddress = (baseURL: string) => `http://127.0.0.1:${Number(new URL(baseURL).port) + 1000}/__guest`;
@@ -215,12 +227,12 @@ test('each unit has a Help button on its name plate that opens Help at the secti
   expect(errors).toEqual([]);
 });
 
-test('Help opened from the top bar after a unit\'s own button starts at the top again', async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== 'chromium', 'on a phone the top bar\'s Help button is in a sheet of its own, which its own tests open');
+test('Help opened from the top bar after a unit\'s own button starts at the top again', async ({ page }) => {
   await page.getByRole('button', { name: 'Help for the effects', exact: true }).click();
   await expect(helpDialog(page).getByRole('heading', { name: 'Effects', exact: true })).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(helpDialog(page)).toHaveCount(0);
+  await more(page);
   await page.getByRole('button', { name: 'Help', exact: true }).click();
   await expect(helpDialog(page).getByRole('button', { name: 'Close help', exact: true })).toBeFocused();
   await expect(helpDialog(page).getByRole('heading', { name: 'Quick start', exact: true })).toBeInViewport();
@@ -228,8 +240,8 @@ test('Help opened from the top bar after a unit\'s own button starts at the top 
 });
 
 test('a guest instrument\'s unit has a Help button that opens Help at the section about guests', async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== 'chromium', 'a guest is added from the Project menu, which the phone keeps in a sheet of its own; the button is the same one at both widths');
   const address = guestAddress(String(testInfo.project.use.baseURL));
+  await more(page);
   await page.getByRole('button', { name: 'Project ▾', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Add Guest Instrument', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Add a guest instrument', exact: true });
