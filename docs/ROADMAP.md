@@ -582,6 +582,13 @@ may redistribute.
     itself. Still open: a length for each note, so one note of a chord can
     be made longer than the others, and the toggle between one note and
     the whole step; inversions.
+    Second part done on 2026-10-13: each note of a chord has a length of
+    its own. Dragging a note's end in the piano roll changes that note
+    alone; a Whole step switch beside the Chord menu makes every note of
+    the step go together, as before. Playback, WAV and MIDI export and MIDI
+    import all carry it. The switch is the "perhaps a toggle" the owner
+    spoke of, and is theirs to keep or drop. Inversions are in
+    `docs/ROADMAP_V2.md`.
 
 16. **One row for a project and its copies.** Done: asked for by the owner on
     2026-10-12 and built. In Projects, a project and the ones the app named

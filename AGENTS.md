@@ -148,6 +148,7 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 - New `SynthParameters` fields must be optional in the type, present in `createDefaultSynthParameters()` with a neutral value, and clamped in `sanitizeSynthParams`, so older saved projects load unchanged. Bump `SCHEMA` in `localService.ts` when adding one.
 - The lanes labelled Low Tom and High Tom are the `snare2` and `ride` instrument ids, kept for saved-project compatibility.
 - The piano roll's Chord menu (`services/chords.ts`) is how the roll is being used, not part of the song: with a shape chosen, a note put in is handed to `handlePianoRollNoteAssign` as the whole chord, which is one write and one undo entry. Notes the roll has no row for are left out. Taking a note out is always one note.
+- Each note of a chord can have a length of its own (`step.lengths`, lowest note first), stored only where the notes differ; `step.length` is then the longest of them, so whatever only knows `length` (the step row, the arpeggiator's window, repeats, an older version of the app) still has the step's whole extent. Read a note's length with `noteLengths(step)` and set it with `withStepLength(step, length, note?)`; never write `lengths` by hand, and anything that scales or cuts `length` must do the same to `lengths` (`clampLengths` does). In the piano roll, dragging a note's end changes that note alone unless Whole step is on; the step controls' Note length is always the whole step.
 - A step can hold a chord and last several steps. `note` is the lowest note and `notes` the rest (up to six in all); `length` is in steps and absent means one. Never read `step.note` to find what a step plays: use `stepNotes(step)`, and change a chord with `withStepNotes` so the order and the limit hold. With the arpeggiator on, a chord is arpeggiated through its own notes.
 - A step also has optional `probability` (chance), `ratchet` (repeats across the step's length) and `offset` (how late it starts, as a fraction of a step, which is how a note sits between steps). `withStepNotes` drops all of them when a step is emptied. `expandStepNotes` takes a `random` argument: pass `seededRandom` in exports.
 - A note's length is dragged by the handle on its last piano-roll cell. The handle moves as the note grows, so the drag is followed by listeners on `window`, not on the handle.
@@ -411,6 +412,7 @@ npm run migrate --workspace=server  # Apply new database migrations to the live 
 ## Potential Next Steps
 - Split `useStudio.tsx` into hooks per concern (the typed store makes it possible), then undo in the store
 - See `docs/ROADMAP.md` and `docs/STORAGE_AND_ACCOUNTS_PLAN.md`
+- `docs/ROADMAP_V2.md` holds ideas for after the current roadmap is finished. Add to it; do not start it without the owner's word
 - Sync samples (project files already carry them)
 - The sample engine plays a recording as it is: no loop points, no start offset, one recording across the whole keyboard, and no smoothing when it is played far above its root
 
