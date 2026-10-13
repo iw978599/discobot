@@ -574,6 +574,72 @@ for new accounts.
 
 17. **Kindle and Fire tablets get the phone layout.** (S) Asked for by the owner on 2026-10-12. Built: a Silk, Kindle or Fire model user agent makes the page report a 640px layout width, which the existing phone rules treat as a phone upright or on its side. Not verified on a real Kindle.
 
+18. **Tempo sync on everything that has a rate.** (M) Asked for by the owner
+    on 2026-10-12, and put at the front of the queue: "everything with a
+    rate knob should have a sync button that syncs to tempo". Today the two
+    LFOs of a lane have a Sync box and the delay has a Sync menu. These
+    have a rate and no sync:
+    - the phaser's Rate and the chorus's Rate, in the effects unit;
+    - the Speed of a sequence of waves in the sample engine, and with it
+      the Wavestation model's Speed knob;
+    - rates a model sets and does not show, such as the Odyssey's
+      sample-and-hold and the Polysix's pulse movement, which could follow
+      the tempo when the model is chosen.
+    Synced, a rate is a note value (one cycle or one step a bar, a half, a
+    quarter and so on) and follows the tempo as it changes, live and in
+    every export, as the LFOs and the delay do. Each new sync is a stored
+    setting: absent means off, so an older project plays as it did. To
+    settle in building it: one look for all of them (the LFOs use a tick
+    box and the delay a menu), and whether dotted and triplet values are
+    offered. A control added later that has a rate should come with its
+    sync.
+
+19. **Transpose.** (S to M) Asked for by the owner on 2026-10-12. Nothing
+    moves notes up or down today except a lane's octave setting, which
+    changes what the keyboard and the piano roll show, not the notes
+    stored. To ask the owner before building: what is moved (one lane's
+    pattern, every lane in a scene, or the whole song); by how much
+    (semitones, octaves); and whether it rewrites the notes or is a setting
+    that shifts them as they play, which could differ from scene to scene
+    and be automated later. Drums are not transposed.
+
+20. **A randomizer.** (M) Asked for by the owner on 2026-10-12. To ask the
+    owner before building, because it could mean several things: random
+    notes in a lane's pattern (held to a scale, so they sound like music);
+    a random drum pattern; a random sound for a lane (every knob, or only
+    some, or a gentle nudge of the sound that is there); or all of these
+    on one button. Whatever it is, one press is one undo step, and it never
+    touches what it was not pointed at.
+
+21. **A full song among the starting points.** (S to M) Asked for by the
+    owner on 2026-10-12: "add a full song example along with the beat
+    examples". The strip on an empty project offers three beats, each a
+    tempo, a drum grid and one lane's pattern in a single scene
+    (`ui/src/services/starters.ts`). A song is several scenes in order,
+    with all three lanes, their sounds, and the song's arrangement, so a
+    starter must be able to carry scenes, a song and sounds, which a beat
+    does not. It is also a good place to show what the app can do: the new
+    models, a scene's colour, mutes that differ from scene to scene.
+    Nobody can write a good song by reasoning alone: it is made, then the
+    owner listens, and it is changed until they like it.
+
+22. **A master mixer.** (M) Asked for by the owner on 2026-10-12. Levels are
+    spread about today: each synth lane has a Level knob on its face and
+    its pan and sends in its editor, the drums have a master volume and a
+    volume for each drum, a guest has a level in its own unit, and the
+    master EQ is in the effects unit. There is no one place that shows
+    everything side by side, no meters, and no level for the whole mix.
+    A mixer would be one unit with a strip for each synth lane, the drums
+    and each guest (level, pan, mute, solo, the effect sends), a strip for
+    the whole mix, and meters that show what is sounding. To ask the owner
+    before building: whether it replaces the knobs where they are now or
+    sits beside them, showing the same values; whether each drum has a
+    strip or the drums are one; and whether the whole mix gets its own
+    level, since the output is only limited near full scale today. The
+    meters must not set React state many times a second (the playhead rule
+    in `AGENTS.md`). Levels are per scene for guests and project-wide for
+    lanes, and a mixer has to show that honestly.
+
 ## Questions waiting on the owner
 
 - **Did the Firefox guest fixes work?** PRs #76 and #77 changed how a guest
