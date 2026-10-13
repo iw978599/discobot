@@ -1,5 +1,20 @@
 import { expect, test, type Page } from '@playwright/test';
 
+// At phone width the top bar is one line, and the rest of it is in the sheet its last button
+// raises. `more` raises the sheet before something in it is used, and does nothing on a wide
+// screen; `less` puts it away again after something that leaves it up.
+const onPhone = (page: Page) => {
+  const size = page.viewportSize();
+  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+};
+const more = async (page: Page) => {
+  if (!onPhone(page) || await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) return;
+  await page.getByRole('button', { name: 'More controls', exact: true }).click();
+};
+const less = async (page: Page) => {
+  if (await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) await page.getByRole('button', { name: 'Close more controls', exact: true }).click();
+};
+
 const PASSWORD = 'correct horse battery';
 const apiUrl = (baseURL: string) => `http://127.0.0.1:${Number(new URL(baseURL).port) + 1000}`;
 const ready = (page: Page) => expect(page.getByRole('heading', { name: 'Discobot', exact: true })).toBeVisible();
@@ -22,6 +37,7 @@ async function expectWord(page: Page, text: string | RegExp) {
     await expect(word).toContainText(text);
     return;
   }
+  await more(page);
   await page.getByRole('button', { name: /^Project: / }).click();
   const dialog = page.getByRole('dialog', { name: 'Projects', exact: true });
   const word = dialog.locator('.save-state');
@@ -53,6 +69,7 @@ test('Space plays and stops, and leaves a focused button, a field and a dialog t
 
   // A focused button is pressed by Space and nothing else happens.
   const mute = page.getByRole('button', { name: 'Mute', exact: true });
+  await more(page);
   await mute.focus();
   await page.keyboard.press('Space');
   await expect(mute).toHaveAttribute('aria-pressed', 'true');
@@ -60,6 +77,7 @@ test('Space plays and stops, and leaves a focused button, a field and a dialog t
   await page.keyboard.press('Space');
   await expect(mute).toHaveAttribute('aria-pressed', 'false');
   await expect(page.getByRole('button', { name: /Play All/ })).toBeVisible();
+  await less(page);
 
   // A field keeps the key.
   await page.locator('.tempo-led').click();
@@ -70,6 +88,7 @@ test('Space plays and stops, and leaves a focused button, a field and a dialog t
   await field.press('Escape');
 
   // A dialog keeps it, even with nothing focused inside it.
+  await more(page);
   await page.getByRole('button', { name: 'Help', exact: true }).click();
   const help = page.getByRole('dialog', { name: 'How to use Discobot', exact: true });
   await expect(help).toContainText('Space');
@@ -126,6 +145,7 @@ test('the project says it is saved, and says so when another tab has taken over'
 test('signed in, the word tells the account from this browser only', async ({ page }) => {
   test.setTimeout(90_000);
   await page.getByRole('button', { name: 'Kick step 1', exact: true }).click();
+  await more(page);
   await page.getByRole('button', { name: /^Sign in$/ }).click();
   const account = page.getByRole('dialog', { name: 'Account', exact: true });
   await account.getByRole('tab', { name: 'Create Account', exact: true }).click();
@@ -142,6 +162,7 @@ test('signed in, the word tells the account from this browser only', async ({ pa
   // The project that was here before signing in is not the account's.
   await expectWord(page, 'Saved in this browser only, not in your account');
 
+  await more(page);
   await page.getByRole('button', { name: /^Project: / }).click();
   const list = page.getByRole('dialog', { name: 'Projects', exact: true });
   await list.getByRole('button', { name: 'Add to Account', exact: true }).click();

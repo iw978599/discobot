@@ -42,6 +42,66 @@ export function sceneAtBar(song: Song, bar: number, lengthOf: SceneLength = oneB
   return null;
 }
 
+// Minutes and seconds, to the nearest second.
+export function songClock(seconds: number): string {
+  const whole = Math.max(0, Math.round(seconds) || 0);
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
+}
+
+export interface SongRow {
+  sceneId: string;
+  repeats: number;
+  // one pass through the scene, and every pass of this entry together
+  passBars: number;
+  bars: number;
+  startBar: number;
+  startSeconds: number;
+  seconds: number;
+}
+
+// The song an entry at a time, in playing order, with where each starts and how long it lasts.
+// A bar is four beats, as it is everywhere else in the app.
+export function songRows(song: Song, lengthOf: SceneLength = oneBar, tempo = 120): SongRow[] {
+  const barSeconds = 240 / (tempo > 0 ? tempo : 120);
+  let startBar = 0;
+  return song.entries.map(entry => {
+    const pass = passBars(lengthOf, entry.sceneId), bars = pass * entry.repeats;
+    const row = { sceneId: entry.sceneId, repeats: entry.repeats, passBars: pass, bars, startBar, startSeconds: startBar * barSeconds, seconds: bars * barSeconds };
+    startBar += bars;
+    return row;
+  });
+}
+
+// Edits to the order of a song. Each also says where the marked starting entry is afterwards,
+// so the mark stays on the entry it was on (or the nearest, when that one is taken out).
+export interface SongOrder { entries: Song['entries']; start: number }
+
+export function moveSongEntry(entries: Song['entries'], start: number, from: number, to: number): SongOrder {
+  if (from === to || from < 0 || to < 0 || from >= entries.length || to >= entries.length) return { entries, start };
+  const next = [...entries];
+  next.splice(to, 0, ...next.splice(from, 1));
+  const moved = start === from ? to : start > from && start <= to ? start - 1 : start < from && start >= to ? start + 1 : start;
+  return { entries: next, start: moved };
+}
+
+// A song always has at least one entry, so the last one is never taken out.
+export function removeSongEntry(entries: Song['entries'], start: number, index: number): SongOrder {
+  if (entries.length < 2 || index < 0 || index >= entries.length) return { entries, start };
+  const next = entries.filter((_, i) => i !== index);
+  return { entries: next, start: Math.max(0, Math.min(next.length - 1, start > index ? start - 1 : start)) };
+}
+
+export function insertSongEntry(entries: Song['entries'], start: number, at: number, sceneId: string): SongOrder {
+  if (entries.length >= MAX_SONG_ENTRIES) return { entries, start };
+  const index = Math.max(0, Math.min(entries.length, at));
+  return { entries: [...entries.slice(0, index), { sceneId, repeats: 1 }, ...entries.slice(index)], start: start >= index ? start + 1 : start };
+}
+
+export function repeatSongEntry(entries: Song['entries'], index: number, repeats: number): Song['entries'] {
+  const held = Math.max(1, Math.min(MAX_REPEATS, Math.round(repeats) || 1));
+  return entries.map((entry, i) => (i === index ? { ...entry, repeats: held } : entry));
+}
+
 // The song a bar at a time, in order, for export: each entry is a one-bar slice of its scene.
 export function songBars(song: Song, scenes: Scene[]): Scene[] {
   const byId = new Map(scenes.map(scene => [scene.id, scene]));

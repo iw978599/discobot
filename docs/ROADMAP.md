@@ -360,6 +360,15 @@ may redistribute.
    one-bar count-in (Count), beside Tap, kept per browser and in no export.
    Still open: quantize strength, recording from the on-screen keyboard,
    a level for the click, and a count-in of more than one bar.
+   Done on 2026-10-13, not tried by a person playing: Rec in a lane's
+   keyboard panel records the on-screen and computer keyboards while the
+   song runs; a Quantize menu (100, 75, 50, 0%) says how firmly a played
+   note is moved onto the nearest step, for those and for MIDI's record
+   mode. A recorded note now lands on the step the player hears; it used
+   to land on the step the scheduler had reached, up to a step early.
+   Still open: how long a recorded note is held (every one is a step
+   long); the click's level and a longer count-in are in
+   `docs/ROADMAP_V2.md`.
 
 4. **More ways to edit patterns.** (M)
    Lengths that are not a whole number of bars (a 12-step lane against 16);
@@ -560,6 +569,18 @@ may redistribute.
     or repeats, are still design choices. This is the project's song
     arrangement, not a playlist of published songs, a discovery page or a new
     cloud service.
+    **Done on 2026-10-13**, as a second way of showing the song beside the
+    blocks: a Blocks/Playlist switch in the song unit, remembered per browser,
+    with the blocks still the default. The playlist is a row for each entry in
+    playing order with its place, the scene's colour and name, its repeats, the
+    bars of one pass and of the whole row, when it starts and how long it lasts
+    at the project's tempo, a lamp on the row that is playing, and a total at
+    the foot. Each row has buttons to move it earlier or later, change its
+    repeats, remove it, add a chosen scene after it and open its scene; a
+    scene can also be added at the end. A row's duration is shown both ways,
+    in bars and in repeats. Still open: dragging a row to reorder it was not
+    built; times assume four beats to a bar, as the rest of the app does; the
+    playlist has not been seen on a real screen or tried with a screen reader.
 
 15. **Chord buttons in the piano roll.** (S) Asked for by the owner on
     2026-10-12. Offer buttons to insert editable chord notes at the selected
