@@ -65,7 +65,7 @@ test('a knob on a controller is tied to a parameter by Learn, moves it over its 
   await emit(page, [0xb0, 22, 0]);
   await expect(tied.getByRole('listitem')).toHaveCount(2);
   await emit(page, [0xb0, 22, 127]);
-  await expect.poll(async () => (await stored(page)).effectsLoop.delay.feedback).toBeCloseTo(0.95, 2);
+  await expect.poll(async () => (await stored(page)).effectsLoop.delay.feedback).toBeCloseTo(0.85, 2);
   await page.keyboard.press('Escape');
   await page.reload();
   await openMidi(page);

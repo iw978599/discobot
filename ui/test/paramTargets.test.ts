@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { createDefaultSynthParameters } from '@discobot/engine';
 import { DRUM_PARAMS, FX_PARAMS, LANE_PARAMS, fromUnit, lanePatch, listTargets, parseTarget, targetLabel } from '../src/services/paramTargets.ts';
 import { MAX_MIDI_TIES, asMidiTies, storeMidiTies, storedMidiTies, tieFor, withTie, withoutTie } from '../src/services/midiTies.ts';
-import { sanitizeSynthParams } from '../src/services/projectSanitization.ts';
+import { sanitizeEffects, sanitizeSynthParams } from '../src/services/projectSanitization.ts';
+import type { EffectsLoopState } from '../src/types.ts';
 
 test('every name in the menu means something, and a name that is not one means nothing', () => {
   const groups = listTargets([1, 2, 3]);
@@ -57,6 +58,24 @@ test('setting a lane\'s parameter is a change the store can merge, and what it s
     }
   }
   assert.ok(Object.keys(DRUM_PARAMS).length >= 4 && Object.keys(FX_PARAMS).length >= 8);
+});
+
+test('every effect parameter, at both ends of its travel, is a value the store keeps', () => {
+  const loop: EffectsLoopState = {
+    enabled: true, returns: { synth: .8, drums: .7 }, drive: { enabled: true, amount: .2, tone: .6 },
+    phaser: { enabled: false, rate: .5, depth: .4, feedback: .2, mix: .2 },
+    delay: { enabled: true, time: .2, feedback: .3, mix: .3 }, reverb: { enabled: true, decay: 2, mix: .3 },
+  };
+  for (const [key, range] of Object.entries(FX_PARAMS)) {
+    const [effect, field] = key.split('.');
+    for (const unit of [0, 1]) {
+      const value = fromUnit(range, unit);
+      const changed = structuredClone(loop) as unknown as Record<string, Record<string, unknown>>;
+      changed[effect][field] = value;
+      const kept = sanitizeEffects(changed, loop) as unknown as Record<string, Record<string, unknown>>;
+      assert.equal(kept[effect][field], value, `${key} at ${unit}`);
+    }
+  }
 });
 
 test('ties are a knob and a parameter each used once, kept between visits, and anything odd stored is dropped', () => {

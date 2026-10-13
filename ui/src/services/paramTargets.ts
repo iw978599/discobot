@@ -68,7 +68,7 @@ export const FX_PARAMS: Record<string, ParamRange> = {
   'phaser.depth': { label: 'Phaser depth', min: 0, max: 1 },
   'phaser.mix': { label: 'Phaser mix', min: 0, max: 1 },
   'delay.time': { label: 'Delay time', min: 0.01, max: 1.5, curve: 'log' },
-  'delay.feedback': { label: 'Delay feedback', min: 0, max: 0.95 },
+  'delay.feedback': { label: 'Delay feedback', min: 0, max: 0.85 },
   'delay.mix': { label: 'Delay mix', min: 0, max: 1 },
   'reverb.decay': { label: 'Reverb decay', min: 0.2, max: 8, curve: 'log' },
   'reverb.mix': { label: 'Reverb mix', min: 0, max: 1 },
