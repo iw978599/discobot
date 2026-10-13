@@ -143,170 +143,151 @@ is pushed.
 
 ## 4. The queue, in the owner's order
 
-Tick things off here as they merge.
+Rewritten on 2026-10-12 at the owner's request, to hold every open item in
+`docs/ROADMAP.md` and not only the current run of work. Tick things off
+here as they merge. Steps 1 to 6 are in the order the owner gave; from step
+7 on the order is the builder's suggestion, and the owner has not confirmed
+it. Live collaboration is last because the owner said so.
 
-### Step 1. Design-review findings 1 to 6
+Finished since this file was first written, so no longer in the queue: all
+of the design review's findings that were chosen (1 to 14); redesign C, all
+three parts; design-review features 1, 6, 7, 9 and 10 (starting beats, the
+save state, scene colours, full drum names, Space plays); the preset
+sounds; and every synth model in `docs/SYNTH_MODELS_PLAN.md`, with the
+voice work they needed (the ladder and MS-20 filters, a high-pass,
+modulation routes, sync and ring, a second layer, the sample engine and the
+app's own waves). The owner has heard little of the sound work: see section 5.
 
-Findings 1, 2, 3, 5 and 6 are merged. **Finding 4** (the piano roll,
-keyboard and sound editor still in an older colour scheme) is built as
-redesign C part 2, on the branch `feat/design-review-older-components`.
-It is merged (#129).
+### Step 1. The drum cymbals (roadmap sound 8)
+
+Asked for on 2026-10-12: "the cymbal on the drum machine sounds bad. also
+give more cymbal options on drums". Ask which cymbal, in which kit, and
+what is wrong with it before changing anything; then a pass at the sound,
+and more cymbals to choose from. Whether any of them may be a recording is
+the owner's decision.
 
 ### Step 2. The rest of the owner's picks from the design review
 
-The owner chose: findings 7 to 14; redesigns A, B and C; features 1 to 8,
-10 and 11; and chord buttons in the piano roll (roadmap features 15). Not
-chosen: findings 15 and 16, redesigns D and E, feature 9.
+A branch with `design-review` in its name gets pictures of the app from
+the checks; look at the pictures of what changed before calling it done.
 
-Two tracks, so that two builders keep out of each other's files. A branch
-with `design-review` in its name gets pictures of the app from the checks,
-and a builder should look at the pictures of what it changed before calling
-it done.
+Look:
 
-**Look track (Opus, with the frontend-design skill), in order:**
-
-1. **Redesign C part 2, with findings 4 and 11.** Built on
-   `feat/design-review-older-components` on 2026-10-12 by the session that
-   picked this file up, and merged (#129). What it was: move `PianoRoll.css`,
-   `Keyboard.css`, `KeyboardPanel.css`, `SynthControls.css`,
-   `EffectsPanel.css`, `MidiPanel.css`, `Knob.css` and `DrumKnob.css` onto
-   the named colours and delete the `.rack .…` overrides in `rack.css`.
-   Notes and pressed keys become `--on`. Replace the two emoji on the
-   keyboard and piano-roll switch. The MIDI and samples dialog is tidied in
-   the same pass. `docs/DESIGN_REVIEW.md`, under redesign C, says what part
-   1 left for it.
-2. **Redesign C part 3, with finding 7.** Built on
-   `feat/design-review-type-and-corners` (the owner said yes to both the
-   larger base size and the plain face for sentences); check its pull
-   request's state. What it was: one scale of type sizes, two
-   corners, three shadows, named beside the colours. Browser tests measure
-   sizes on a phone, so some of their numbers will move.
-3. **Redesign A, with finding 8 and features 3 and 4.** The phone's top
+1. **Redesign A, with finding 8 and features 3 and 4.** The phone's top
    bar as one line (tempo, Play, a "more" button) with everything else in a
    sheet; lamps on the bar of units that show activity and mute; a way to
    mute a unit from the bar. The walkthrough points at buttons that move
    into the sheet.
-4. **Redesign B, with finding 9.** A lane's editor as two levels, Notes and
+2. **Redesign B, with finding 9.** A lane's editor as two levels, Notes and
    Sound, with presets inside Sound and the preset's name on the lane's top
-   line. Build the review's small first step (presets into a tab) on the
-   way if that helps.
+   line.
 
-**Behaviour track (Sonnet), in order:**
+Behaviour:
 
-1. Batch 1, done and merged: Space plays, and a save state beside the
-   project's name (features 10 and 6, #125); the account dialog and the
-   Project menu in groups (findings 12 and 13, #126); one set of names for
-   the drums and the knobs (finding 14, and with it the full drum names of
-   feature 9, #127).
-2. **Finding 10** is merged (#130), with a fix for lit buttons going dark
-   after a tap on a phone, which #129 had brought in. What it was: the app's own dialog in place of the browser's "are you
-   sure" for deleting a scene, a project or a member; its own button over
-   the file chooser in MIDI and samples; its own small player on the share
-   page; the phone browser's tap mark turned off for the whole page.
-3. **Feature 1** is merged (#131): three beats in a strip on a project
-   opened empty, which stays until Hide is pressed. Nobody has heard the
-   beats; they are data in `ui/src/services/starters.ts`.
-4. **Feature 7:** a colour for each scene. Built on
-   `feat/design-review-scene-colours`; check its pull request's state.
-5. **Feature 5:** copy a lane's pattern, or one drum row, to another scene.
-6. **Feature 2:** export as a small dialog (what, as what, how long, and
-   the progress in the same place). The message and the names are already
-   built (#115).
-7. **Feature 11:** Help with a list of headings and a search box.
-8. **Feature 8:** a metronome and a count-in, with the switch beside Tap.
-   The review only placed the switch; the metronome does not exist yet. The
-   owner was told this would be read as "build it" and did not object.
-9. **Chord buttons in the piano roll** (roadmap features 15).
+3. **Feature 5:** copy a lane's pattern, or one drum row, to another scene.
+4. **Feature 2:** export as a small dialog (what, as what, how long, and
+   the progress in the same place).
+5. **Feature 11:** Help with a list of headings and a search box.
+6. **Feature 8:** a metronome and a count-in, with the switch beside Tap.
+   The metronome does not exist yet.
+7. **Chord buttons in the piano roll** (roadmap features 15). The owner
+   said on 2026-10-12 how it should work: choose a shape, then the root
+   note; each note of a chord can then be deleted or lengthened by itself,
+   perhaps with a toggle between one note and the whole step. The roadmap
+   item has it in full, and says why it needs a length for each note.
 
-### Step 2b. The preset sounds (asked for by the owner on 2026-10-12)
-
-First part built on `feat/preset-sounds`: forty presets in place of
-seventeen, level-matched by measurement, and a level for the first
-oscillator. Check its pull request's state. The owner has not heard them.
-
-The owner: "would also like to add reviewing/redesigning the synth preset
-sounds as well as adding more presets". Go through every built-in preset,
-redesign the ones that are weak, and add more (roadmap sound 7 lists the
-kinds, and no kind has an Effects preset yet). Where it sits in the order
-was not said; it is placed here, before the new models, because the new
-models' presets build on the same work. Ask the owner if that matters.
-Sound cannot be checked by a test: bring the owner a list of what changed
-to listen to. The starting beats (`starters.ts`) may also be dressed up
-later; the owner has heard them and said they "sound good".
-
-### Step 3. Every synth model in `docs/SYNTH_MODELS_PLAN.md`
-
-The owner: "tackle everything to add all synths from the roadmap". All
-fourteen, with the engine work each needs.
-
-1. Group A, which needs nothing new, is all built. SH-101 and Pro-One
-   (#139) and Jupiter-8 and OB-Xa (#140) are merged. JP-8000 and Mono/Poly
-   (#141, with the unison limit raised to seven as the owner said) and
-   Polysix (`feat/synth-models-polysix`) were open when this was written:
-   check their state. Then the owner listens (item 2). The list was;
-   `docs/SYNTH_MODELS_PLAN.md` has what was found. The full list: SH-101; Pro-One; Jupiter-8 with
-   OB-Xa; JP-8000 with Mono/Poly; Polysix last. The Polysix may turn up its
-   lane's chorus send (the owner answered for the Polysix only; ask again
-   before another model does it). Sonnet.
-2. **Stop for the owner to listen.** Done on 2026-10-12: "things generally
-   sound good to me". What this said before: No sound in the app, old or new, has
-   been checked by ear.
-3. The audio engine's single owner (roadmap improvements 4).
-4. The ladder filter and filter models, then the MS-20. The ladder is
-   merged (#143); it was taken before item 3 because it does not need it
-   and the owner asked for sound work. The MS-20, with its filter and a
-   high-pass for the voice, is built on `feat/design-review-ms20-model`
-   (check its pull request's state).
-5. The modulation matrix, then the Odyssey, the Virus and the CS-80. The
-   matrix (#145) and the MS-20 (#144) are merged. The Odyssey, with sync
-   and ring modulation for the voice, is built on
-   `feat/design-review-odyssey` (check its pull request's state), and
-   the Virus on `feat/synth-model-virus`; both are merged (#146, #147), and
-   #147 brought the README up to date as the owner asked. The CS-80, with
-   a second layer for the voice, is built on `feat/design-review-cs80`
-   (check its pull request's state). That is every model that does not
-   need samples. Keep the README's model table and counts current when a
-   model or preset is added. The owner said on
-   2026-10-12 to "just keep working" through this. What it said before:
-   the modulation matrix, then the Odyssey, the Virus and the CS-80. Build
-   here the one way of naming any parameter that step 4 needs too.
-6. The sample oscillator, then the M1, the D-50 and the Wavestation. The
-   sample oscillator is built on `feat/design-review-sample-oscillator`
-   (check its pull request's state). The three models may only ship
-   waveforms the project is allowed to redistribute. The owner chose on
-   2026-10-12 to take them from two free libraries, both CC0
-   (`docs/BUNDLED_AUDIO.md`). The three models are built on
-   `feat/design-review-sampled-models` (check its pull request's state).
-   That finishes the synth models plan. The owner has heard none of it.
-
-### Step 4. MIDI work (roadmap features 6)
+### Step 3. MIDI work (roadmap features 6)
 
 Pads to the drums; more than one place for incoming notes at once; knobs
 tied to parameters by learning; and the older items (following an external
-clock, sending notes played by hand, choosing the output channels). A mapped
-knob must change a parameter by the same store operation the knob on screen
-sends. The owner's controller is a Novation Launchkey Mini MK2 (25 keys, 16
-pads, 8 knobs). Make it work as it comes, and get its real note and
-controller numbers from the owner reading the MIDI panel's last-message
-line, not from memory. Nobody has tested the app against real MIDI hardware,
-so the owner tests each part.
+clock, sending notes played by hand, choosing the output channels). The mod
+wheel as a source for the modulation routes belongs here too (roadmap sound
+4). A mapped knob must change a parameter by the same store operation the
+knob on screen sends. The owner's controller is a Novation Launchkey Mini
+MK2 (25 keys, 16 pads, 8 knobs). Make it work as it comes, and get its real
+note and controller numbers from the owner reading the MIDI panel's
+last-message line, not from memory. Nobody has tested the app against real
+MIDI hardware, so the owner tests each part.
 
-### Step 5. Parameter automation (roadmap features 5)
+### Step 4. Parameter automation (roadmap features 5)
 
 Recordable from the screen and from a mapped hardware knob. A hardware knob
 sends 128 positions, so playback needs smoothing.
 
-### Step 6. Bar length and scenes as a playlist
+### Step 5. Bar length and scenes as a playlist
 
 Changing a bar's length, designed together with time signatures (roadmap
 features 11: per scene; 4/4, 3/4, 6/8, 5/4, 7/8 and 12/8 are agreed;
 whether a bar may have any custom number of steps is for the owner). Then
 the playlist-style layout for scenes (roadmap features 14).
 
-### Not in the queue
+### Step 6. Firefox
 
-Undo as a store feature, recording live playing, more ways to edit
-patterns, and live collaboration, which the owner wants built last of all.
+"lets get feature complete in chrome then work back to firefox." When the
+steps above are done, ask the owner what they see with guest instruments
+in Firefox (section 5) and work from that.
+
+### Step 7. The audio layer, and the sound work that waits on it
+
+1. **Give the audio layer a single owner** (roadmap improvements 4).
+2. **Insert effects for each lane, and an algorithmic reverb** (sound 6).
+3. What the sound work of 2026-10-12 left open, each small: loop points, a
+   start offset and several recordings for an imported sample (sound 3);
+   smoothing for a sample, a wave or a synced oscillator played high, which
+   alias today; more than four modulation routes, and the LFO tab's own
+   target menus beside them (sound 4); the ladder filter's level (sound 5).
+
+### Step 8. Under the surface
+
+1. **Undo as a store feature** (improvements 2): every edit recorded by
+   the store, a drag as one entry, and an entry that restores the whole
+   project and not one lane.
+2. **Split `useStudio.tsx` into hooks per concern**, the rest of
+   improvements 1. The typed store is done.
+3. What the typed store left open (`AGENTS.md`, Known Issues).
+
+### Step 9. Playing and editing
+
+1. **Record live playing against the clock** (features 3): quantize
+   strength, and recording from the on-screen keyboard. The metronome and
+   count-in come with step 2.
+2. **More ways to edit patterns** (features 4): lengths that are not a
+   whole number of bars, copying one bar to another, copy and paste between
+   scenes, and a part shared between scenes.
+
+### Step 10. Finishing what is part done
+
+1. **Accessibility** (improvements 5): the on-screen keyboard as one tab
+   stop, the piano roll's step numbers as column headers, and a try with a
+   real screen reader.
+2. **The phone layout** (features 1) and **kids mode** (features 2):
+   whatever those items still list as open, and trying both on real
+   devices, a Kindle among them.
+3. **The design review's leftovers**: what `docs/DESIGN_REVIEW.md` lists as
+   not looked at.
+4. **A true progress bar for exports** (features 13). The browser's
+   offline renderer does not report how far it has got, so this needs the
+   render done in pieces.
+
+### Step 11. Live collaboration (the rest of roadmap features 7)
+
+Last of all, by the owner's word. Live editing needs a connection held
+open, which `AGENTS.md` rules out today, so that rule would have to be
+changed on purpose. Also open there: seeing that the other person has the
+project open, sharing by a code or a link, and passing a project to a new
+owner.
+
+### Waiting on something outside the work
+
+- **Listen and tune** (sound 1). Only the owner can do it, at any time.
+  Section 5 lists what has not been heard.
+- **Samples that sync** (sound 2). Needs file storage on the server, which
+  waits on a payment card for Cloudflare R2.
+
+### Not chosen, so not in the queue
+
+Design-review findings 15 and 16, redesigns D and E, and its feature 9
+apart from the drum names. Tape Loop Deck stays off the guest list.
 
 ## 5. Waiting on the owner
 
@@ -339,7 +320,13 @@ Still waiting:
   good to me". Not heard: the ladder filter and the four presets on the
   Minimoog and TB-303 as they sound through it; the MS-20, its filter, its
   three presets and the high-pass.
-- **The Launchkey's numbers**, when step 4 is reached.
+- **The Launchkey's numbers**, when the MIDI work (step 3) is reached.
+- **The cymbal** (step 1): which one sounds bad, in which kit, and how; and
+  whether new cymbals may be recordings or must all be synthesized.
+- **Not heard, added on 2026-10-12:** modulation routes, the Odyssey with
+  sync and ring, the Virus, the CS-80 and the second layer, the sample
+  engine, and the M1, D-50 and Wavestation with the app's own waves. Which
+  waves went into each Wavestation sequence was chosen without hearing them.
 
 Decided, so do not ask again: kids mode stays a separate page, and a kids
 tune not opening in the full app is fine; published songs have a page for

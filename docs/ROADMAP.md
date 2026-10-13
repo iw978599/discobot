@@ -250,6 +250,23 @@ tempo-synced delay; kick ducking; the three-band master EQ. Recordings of the
 LinnDrum, DMX and TR-707 will not be bundled: none were found that the project
 may redistribute.
 
+8. **The drum machine's cymbal, and more cymbals to choose from.** (M) Asked
+   for by the owner on 2026-10-12: "the cymbal on the drum machine sounds
+   bad. also give more cymbal options on drums". The Cymbal lane has two
+   sounds, Ride and Crash, both synthesized. Two parts:
+   - A pass at how the cymbal sounds. Ask the owner first which is bad
+     (the ride, the crash, or both), in which kit, and in what way (harsh,
+     thin, too short, like noise), then change `renderRide` and
+     `renderCrash` in `DrumCore` to answer it. A sound that was changed
+     must be listed for the owner to hear; a test cannot say it is better.
+   - More cymbals on that lane: for example a splash, a china, a ride bell
+     and a sizzle beside Ride and Crash. To settle in building it: whether
+     they are further choices on the one Cymbal lane, as Ride and Crash are
+     today, or a second cymbal lane; and whether any should be a recording
+     from a library the project may ship (`docs/BUNDLED_AUDIO.md`), which
+     needs the owner's say-so, or all synthesized.
+   A saved project must go on playing the cymbal it chose.
+
 ## Features
 
 1. **A layout for phones and the installed app.** (L) First part done: at
@@ -519,6 +536,21 @@ may redistribute.
     synthesis feature; chords already play. Basic major and minor chords are a
     reasonable starting point. The final chord set, inversions and whether
     insertion adds to or replaces notes are still design choices.
+    How the owner wants it to work, said on 2026-10-12:
+    - Choose a shape first (major, minor and so on), then the root note:
+      with a shape chosen, pressing a note in the roll puts the whole chord
+      there, built on that note.
+    - Once a chord is in the roll, each of its notes can be deleted or made
+      longer by itself.
+    - "Perhaps a toggle" between changing one note and changing the whole
+      chord, meaning every note in the step. The owner was unsure of the
+      toggle; show them a way of doing it before settling.
+    What this needs that the app does not have: a step holds one length for
+    all its notes (`step.length`), so a note of a chord cannot yet be longer
+    than its neighbours. Each note needs a length of its own, stored so that
+    older projects play as they did, and carried through playback, the
+    arpeggiator, WAV and MIDI export and MIDI import (`expandStepNotes`).
+    That makes this larger than the (S) above: (M).
 
 16. **One row for a project and its copies.** Done: asked for by the owner on
     2026-10-12 and built. In Projects, a project and the ones the app named
@@ -557,6 +589,12 @@ for new accounts.
   that model wait until a lane can have effects of its own?
 
 ## Suggested order
+
+The order the owner is working in, with every open item on this page in it,
+is the queue in `docs/HANDOFF.md` (section 4) while that file exists. The
+list below is the older reasoning behind it. Since it was written the owner
+put sound first, and on 2026-10-12 asked for the drum cymbals (sound 8),
+which goes to the front.
 
 1. **Listen and tune** (sound 1). It needs the owner's ears, not an agent, so
    it can go on alongside everything else.
