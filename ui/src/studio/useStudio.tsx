@@ -1353,7 +1353,7 @@ export function useStudio() {
   }, [pushHistorySnapshot]);
 
   // Writes a note to a step. `add` joins it to the chord already there instead of replacing it.
-  const upsertStepNote = useCallback(async (synthId: number, stepIndex: number, note: string, velocity: number, add = false, offset?: number) => {
+  const upsertStepNote = useCallback(async (synthId: number, stepIndex: number, note: string, velocity: number, add = false, offset?: number, select = true) => {
     const synth = synthsRef.current.find(s => s.id === synthId);
     if (!synth?.pattern) return;
     pushHistorySnapshot(synthId, synth.pattern.id);
@@ -1369,7 +1369,9 @@ export function useStudio() {
       )),
     };
 
-    setSynths(prev => prev.map(s => {
+    // A note put on a chosen step selects it and moves the step pointer on. A recorded note does
+    // neither: left selected, its step would take the next key played and lose what was recorded.
+    if (select) setSynths(prev => prev.map(s => {
       if (s.id !== synthId) return s;
       const nextPointer = (stepIndex + 1) % updatedPattern.steps.length;
       return { ...s, selectedStep: stepIndex, stepRecordPointer: nextPointer };
@@ -1403,7 +1405,7 @@ export function useStudio() {
     const at = joins ? { step: chord.stepIndex, offset: 0 } : recordedStep(synthId);
     if (!at) return false;
     midiChordRef.current = { synthId, stepIndex: at.step, at: now };
-    void upsertStepNote(synthId, at.step, note, velocity, joins, at.offset);
+    void upsertStepNote(synthId, at.step, note, velocity, joins, at.offset, false);
     return true;
   }, [recordedStep, upsertStepNote]);
 
