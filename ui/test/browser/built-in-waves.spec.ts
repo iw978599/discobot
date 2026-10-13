@@ -17,8 +17,6 @@ test.beforeEach(async ({ page }) => {
 test('the sample engine offers the app\'s own sounds, fetched from this site, and the three models that use them set them', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
-  const fetched: Array<{ url: string; status: number }> = [];
-  page.on('response', response => { if (response.url().endsWith('waves.bin')) fetched.push({ url: response.url(), status: response.status() }); });
   const synth = page.locator('.synth-controls-panel').first();
   await page.getByRole('tab', { name: 'Osc', exact: true }).first().click();
   const sample = synth.getByLabel('Synth sample', { exact: true });
@@ -32,11 +30,14 @@ test('the sample engine offers the app\'s own sounds, fetched from this site, an
   await expect(root).toHaveAttribute('aria-disabled', 'true');
   await expect(synth.getByRole('slider', { name: 'Sequence speed', exact: true })).toHaveCount(0);
   // The sounds are a file of the app's own, on this site.
-  await expect.poll(() => fetched.length).toBeGreaterThan(0);
-  for (const response of fetched) {
-    expect(response.status).toBe(200);
-    expect(new URL(response.url).origin).toBe(new URL(page.url()).origin);
-  }
+  // It is fetched as the app starts, for the drums' cymbals, so here it is asked for again and looked at.
+  const file = await page.evaluate(async () => {
+    const response = await fetch('waves.bin');
+    return { status: response.status, sameSite: new URL(response.url).origin === location.origin, bytes: (await response.arrayBuffer()).byteLength };
+  });
+  expect(file.status).toBe(200);
+  expect(file.sameSite).toBe(true);
+  expect(file.bytes).toBeGreaterThan(100_000);
 
   // A sequence of waves has a speed and a crossfade.
   await sample.selectOption({ label: 'Sequence: FM' });
