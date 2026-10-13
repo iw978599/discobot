@@ -83,6 +83,10 @@ const BASS: BuiltInPreset[] = [
     gain: 1.55,
     fxReturn: 0.55, fxSends: { reverb: 0.04, delay: 0.03, drive: 0.25, phaser: 0, chorus: 0 },
   }),
+  model('bass-virus', 'Virus Bass', 'bass', 'virus', [0.15, 0.4, 0.3, 0.3], {
+    gain: 2,
+    fxReturn: 0.55, fxSends: { reverb: 0.04, delay: 0.03, drive: 0.25, phaser: 0, chorus: 0 },
+  }),
   generic('bass-rubber', 'Rubber Bass', 'bass', {
     gain: 1.05,
     voiceMode: 'mono', portamento: { enabled: true, glide: 0.05 },
@@ -168,6 +172,10 @@ const LEAD: BuiltInPreset[] = [
     gain: 1.3,
     fxReturn: 0.7, fxSends: { reverb: 0.2, delay: 0.3, drive: 0.15, phaser: 0, chorus: 0 },
   }),
+  model('lead-virus', 'Virus Lead', 'lead', 'virus', [0.3, 0.35, 0.7, 0.5], {
+    gain: 1.65,
+    fxReturn: 0.75, fxSends: { reverb: 0.25, delay: 0.3, drive: 0.1, phaser: 0, chorus: 0.15 },
+  }),
   generic('lead-square', 'Square Lead', 'lead', {
     gain: 0.75,
     voiceMode: 'mono', portamento: { enabled: true, glide: 0.06 },
@@ -240,6 +248,10 @@ const PAD: BuiltInPreset[] = [
   model('pad-polysix', 'Polysix Pad', 'pad', 'polysix', [0.6, 0.2, 0.45, 0.7], {
     gain: 0.7,
     spread: 0.5, fxReturn: 0.9, fxSends: { reverb: 0.45, delay: 0.15, drive: 0, phaser: 0 },
+  }),
+  model('pad-virus', 'Virus Motion', 'pad', 'virus', [0.6, 0.3, 0.45, 1], {
+    gain: 1.15,
+    spread: 0.4, fxReturn: 0.9, fxSends: { reverb: 0.5, delay: 0.25, drive: 0, phaser: 0.1, chorus: 0.3 },
   }),
   generic('pad-strings', 'String Ensemble', 'pad', {
     gain: 0.9,
