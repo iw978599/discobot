@@ -37,6 +37,24 @@ export function resizeBars<T>(items: T[], perBar: number, nextBars: number, blan
   });
 }
 
+// Which of the bars asked for a bar can be copied over: whole numbers, inside the pattern, not the
+// bar itself, each once. Null when the bar to copy is not one, or nothing is left to copy it to.
+export function barTargets(bars: number, from: unknown, to: unknown): number[] | null {
+  const inside = (bar: unknown): bar is number => typeof bar === 'number' && Number.isInteger(bar) && bar >= 0 && bar < bars;
+  if (!inside(from) || !Array.isArray(to) || !to.every(inside)) return null;
+  const targets = [...new Set(to)].filter(bar => bar !== from);
+  return targets.length > 0 ? targets : null;
+}
+
+// One bar laid over others of the same pattern. The rest is left as it is.
+export function copyBar<T>(items: T[], perBar: number, from: number, to: number[]): T[] {
+  return items.map((item, index) => {
+    if (!to.includes(Math.floor(index / perBar))) return item;
+    const source = items[from * perBar + (index % perBar)];
+    return typeof source === 'object' && source !== null ? { ...source } : source;
+  });
+}
+
 // A long note must not ring past where the pattern now ends.
 export function clampLengths(steps: SequencerStep[]): SequencerStep[] {
   return steps.map((step, index) => {

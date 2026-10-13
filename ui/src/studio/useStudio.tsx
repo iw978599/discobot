@@ -13,7 +13,7 @@ import { loadDrumSample } from '../services/drumSamples';
 import { loadCymbals, loadLaneSample } from '../services/builtInWaves';
 import { MAX_EMBEDDED_TOTAL_BYTES, MAX_PROJECT_FILE_BYTES, adoptSamples, embedSamples } from '../services/projectSamples';
 import { exportPreset, importPreset, type ImportedPreset } from '../services/presetImport';
-import { BAR_CHOICES, DRUM_STEPS_PER_BAR, clampLengths, drumBars, laneBars, resizeBars, sceneAsBars, sceneBars } from '../services/patternLength';
+import { BAR_CHOICES, DRUM_STEPS_PER_BAR, barTargets, clampLengths, copyBar, drumBars, laneBars, resizeBars, sceneAsBars, sceneBars, stepsPerBar } from '../services/patternLength';
 import { DRUM_INSTRUMENTS, DRUM_SETTINGS_DEFAULT } from '../services/drumKits';
 import { DRUM_FX_DEFAULT, EFFECTS_DEFAULT } from '../services/effectSettings';
 import type { DrumSample } from '../../../engine/src/drums/DrumCore';
@@ -1721,6 +1721,26 @@ export function useStudio() {
     localService.setDrumBars(bars);
   }, [pushHistorySnapshot]);
 
+  // Lays one bar of the drum grid over others, as one undo step.
+  const handleCopyDrumBar = useCallback((from: number, to: number[]) => {
+    if (!barTargets(drumBars(drumStateRef.current), from, to)) return;
+    const synth = synthsRef.current[0];
+    if (synth?.pattern) pushHistorySnapshot(synth.id, synth.pattern.id);
+    localService.copyDrumBar(from, to);
+  }, [pushHistorySnapshot]);
+
+  // Lays one bar of a lane's pattern over others, as one undo step. A note that was held past the
+  // end of its bar is held as long in its new place, and stopped at the end of the pattern.
+  const handleCopyLaneBar = useCallback((synthId: number, from: number, to: number[]) => {
+    const synth = synthsRef.current.find(s => s.id === synthId);
+    if (!synth?.pattern) return;
+    const { steps } = synth.pattern;
+    const targets = barTargets(laneBars(steps.length, synth.pattern.bars), from, to);
+    if (!targets) return;
+    pushHistorySnapshot(synthId, synth.pattern.id);
+    localService.writePattern(synthId, synth.pattern.id, { ...synth.pattern, steps: clampLengths(copyBar(steps, stepsPerBar(steps.length, synth.pattern.bars), from, targets)) });
+  }, [pushHistorySnapshot]);
+
   const handleSynthMixChange = useCallback(async (synthId: number, mix: { muted?: boolean; solo?: boolean }) => {
     localService.setSynthMix(synthId, mix);
   }, []);
@@ -2367,7 +2387,7 @@ export function useStudio() {
     handleUndo, handleRedo, midiImportData, setMidiImportData, midiImportAssignments, setMidiImportAssignments,
     handleMidiImportClick, handleMidiImportFile, handleMidiImportApplyAll, midiImportFileRef, handleRemoveSynth,
     ensureSynthExists, handleOctaveShift, handleTempoChange, handleGlobalPlayStop, handleStepChange, handleStepSelect, handleKeyboardModeChange,
-    handlePianoRollNoteAssign, handleClearPatternNotes, handleTransposeLane, handleRandomizeLane, handleNotePlay, handleNoteRelease, computerKeyNotes, midiState,
+    handlePianoRollNoteAssign, handleClearPatternNotes, handleCopyLaneBar, handleCopyDrumBar, handleTransposeLane, handleRandomizeLane, handleNotePlay, handleNoteRelease, computerKeyNotes, midiState,
     handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange, guests, handleAddGuest, handleRemoveGuest, handleGuestChange, guestRecording, handleExportWav, exportStatus, dismissExportStatus, missingDrumSamples, sampleStoreVersion, handleDrumSampleChange, handleLaneBarsChange, handleDrumBarsChange, sceneLength,
     handleSynthMixChange, handleSaveSynthPreset, handleLoadSynthPreset, handleDeleteSynthPreset,
     handleExportMidi, currentArrangement, reportExportError, handleExportProject, projectImportFileRef, handleImportProjectFile, handleImportProject,
