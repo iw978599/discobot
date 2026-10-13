@@ -220,6 +220,8 @@ function normalizeSynthParams(params: SynthParameters | null): SynthParameters |
       mode,
       rate,
       gate: Math.max(0.1, Math.min(1, params.arpeggiator?.gate ?? DEFAULT_PARAMS.arpeggiator.gate)),
+      // Always present here, so choosing Auto reaches the store instead of being merged away.
+      octaves: params.arpeggiator?.octaves ?? 0,
     },
     fxSends: normalizeFxSends(params.fxSends),
   };

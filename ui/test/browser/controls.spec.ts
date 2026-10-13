@@ -436,6 +436,8 @@ test('all synth, effects and mixer control families update durable project state
   await synth.getByLabel('Arpeggiator enabled').check();
   await synth.getByLabel('Arpeggiator mode').selectOption('converge');
   await synth.getByLabel('Arpeggiator rate').selectOption('1/8');
+  await expect(synth.getByLabel('Arpeggiator range')).toHaveValue('0');
+  await synth.getByLabel('Arpeggiator range').selectOption('2');
   await tab(page, 'Amp');
   await synth.getByLabel('Portamento enabled').check();
   let turned = 0;
@@ -477,7 +479,7 @@ test('all synth, effects and mixer control families update durable project state
   const state = await project(page);
   expect(state.synths[0].synthParams.oscillator.type).toBe('sawtooth');
   expect(state.synths[0].synthParams.filter.type).toBe('highpass');
-  expect(state.synths[0].synthParams.arpeggiator).toMatchObject({ enabled: true, mode: 'converge', rate: '1/8' });
+  expect(state.synths[0].synthParams.arpeggiator).toMatchObject({ enabled: true, mode: 'converge', rate: '1/8', octaves: 2 });
   expect(state.synths[0].synthParams.gain).toBeCloseTo(0.72);
   expect(state.synths[0].synthParams.pan).toBeCloseTo(0.35);
   expect(state.synths[0].synthParams.fxReturn).toBeCloseTo(0.44);
