@@ -10,6 +10,7 @@ import { localService } from '../services/localService';
 import type { GuestPatch } from '../services/projectOps';
 import { projectSync, startProjectSync } from '../services/projectSync';
 import { loadDrumSample } from '../services/drumSamples';
+import { loadLaneSample } from '../services/builtInWaves';
 import { MAX_EMBEDDED_TOTAL_BYTES, MAX_PROJECT_FILE_BYTES, adoptSamples, embedSamples } from '../services/projectSamples';
 import { exportPreset, importPreset, type ImportedPreset } from '../services/presetImport';
 import { BAR_CHOICES, DRUM_STEPS_PER_BAR, clampLengths, drumBars, laneBars, resizeBars, sceneAsBars, sceneBars } from '../services/patternLength';
@@ -1695,12 +1696,11 @@ export function useStudio() {
   }, [drumSampleKey, drumAudio, sampleStoreVersion]);
 
   // The same for the synth lanes: which recording each one's sample engine plays.
-  const synthSampleKey = synths.map(entry => `${entry.id}:${entry.synthParams?.sample?.id ?? ''}`).join('|');
+  const synthSampleKey = synths.map(entry => `${entry.id}:${entry.synthParams?.sample?.wave ?? ''}:${entry.synthParams?.sample?.id ?? ''}`).join('|');
   useEffect(() => {
     let current = true;
     void Promise.all(synthsRef.current.map(async (entry) => {
-      const id = entry.synthParams?.sample?.id;
-      return [entry.id, id ? await loadDrumSample(id) : null] as const;
+      return [entry.id, await loadLaneSample(entry.synthParams)] as const;
     })).then((loaded) => {
       if (!current) return;
       const next: Record<number, DrumSample> = {};

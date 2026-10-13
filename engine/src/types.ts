@@ -149,6 +149,13 @@ export interface SynthParameters {
     root: number;
     // go round again from the start while the note is held, instead of playing once
     loop: boolean;
+    // one of the sounds that come with the app, by name, played instead of an imported sample.
+    // Absent means none. A name this copy of the app does not have plays the oscillators.
+    wave?: string;
+    // for a built-in sound that is a sequence of waves: how many it steps through a second,
+    // and how much of each step is spent crossfading into the next, 0 (none) to 1 (all of it)
+    scan?: number;
+    fade?: number;
   };
   // a second layer on every note: the same sound again, tuned, filtered, faded in and placed
   // differently. Absent or not enabled means one layer, as there always was. Two layers take
@@ -231,7 +238,7 @@ export interface SynthParameters {
   };
 }
 
-export type SynthModelId = 'generic' | 'minimoog-model-d' | 'juno-106' | 'dx7' | 'tb-303' | 'prophet-5' | 'sh-101' | 'pro-one' | 'jupiter-8' | 'ob-xa' | 'jp-8000' | 'mono-poly' | 'polysix' | 'ms-20' | 'odyssey' | 'virus' | 'cs-80';
+export type SynthModelId = 'generic' | 'minimoog-model-d' | 'juno-106' | 'dx7' | 'tb-303' | 'prophet-5' | 'sh-101' | 'pro-one' | 'jupiter-8' | 'ob-xa' | 'jp-8000' | 'mono-poly' | 'polysix' | 'ms-20' | 'odyssey' | 'virus' | 'cs-80' | 'm1' | 'd-50' | 'wavestation';
 
 export interface SynthModelParams {
   macro1: number;

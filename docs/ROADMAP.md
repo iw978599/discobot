@@ -207,8 +207,12 @@ target; removal of the AI review workflow.
    Asked for by the owner on 2026-10-12, as well as more presets: a review
    of every built-in preset's sound, redesigning the weak ones.
    Done on 2026-10-12: the CS-80, with a second layer for the voice (any
-   sound can have one) and three presets. Three models to go, all waiting
-   on the sample oscillator. Not verified by ear.
+   sound can have one) and three presets. Not verified by ear.
+   Done on 2026-10-12: the M1, the D-50 and the Wavestation, the last
+   three, with eight presets. They play recordings and single-cycle waves
+   from two CC0 libraries the owner chose (`docs/BUNDLED_AUDIO.md`), 430 KB
+   in all. Every model in the plan is now built. Not verified by ear, and
+   which waves went into each sequence was chosen without hearing them.
    Done on 2026-10-12: the Virus, with three presets. Not verified by ear.
    Done on 2026-10-12: the Odyssey, with oscillator sync and ring
    modulation for the voice and three presets. Not verified by ear.

@@ -10,6 +10,7 @@ import { SYNTH_MODELS, SYNTH_MODEL_GROUPS } from '../synthModels';
 import { groupPresets, type PresetKind } from '../services/presetKinds';
 import NestedMenu from '../rack/NestedMenu';
 import { listSamples, saveSample } from '../services/sampleStore';
+import { BUILT_IN_WAVES } from '../services/builtInWaves';
 import Knob from './Knob';
 import './SynthControls.css';
 
@@ -206,7 +207,8 @@ export default function SynthControls({
   const sampleFileRef = useRef<HTMLInputElement>(null);
   const refreshSamples = () => listSamples().then(list => setSamples(list.map(({ id, name }) => ({ id, name })))).catch(() => {});
   useEffect(() => { if (isSample) void refreshSamples(); }, [isSample, sample.id, sampleStoreVersion]);
-  const sampleMissing = Boolean(sample.id) && samples !== null && !samples.some(entry => entry.id === sample.id);
+  const builtIn = BUILT_IN_WAVES.find(wave => wave.id === sample.wave);
+  const sampleMissing = !sample.wave && Boolean(sample.id) && samples !== null && !samples.some(entry => entry.id === sample.id);
 
   const updateOscillator2 = (updates: Partial<NonNullable<SynthParameters['oscillator2']>>) => {
     onParameterChange({ oscillator2: { ...osc2, ...updates } });
@@ -585,17 +587,26 @@ export default function SynthControls({
                   className="synth-select synth-sample-select"
                   aria-label="Synth sample"
                   title="The imported sample this lane plays up and down the keyboard, through its filter and envelopes"
-                  value={sample.id ?? ''}
+                  value={sample.wave ? `wave:${sample.wave}` : sample.id ?? ''}
                   onFocus={() => { void refreshSamples(); }}
                   onChange={(event) => {
-                    if (event.target.value === 'import') sampleFileRef.current?.click();
-                    else updateSample({ id: event.target.value });
+                    const chosen = event.target.value;
+                    if (chosen === 'import') sampleFileRef.current?.click();
+                    // An empty name or id is sent, not left out: the store keeps whatever a change does not mention.
+                    else if (chosen.startsWith('wave:')) updateSample({ wave: chosen.slice(5), id: '', scan: sample.scan ?? 2, fade: sample.fade ?? 1 });
+                    else updateSample({ id: chosen, wave: '' });
                   }}
                 >
                   <option value="">None</option>
-                  {(samples ?? []).map(entry => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
-                  {sample.id && (samples === null || sampleMissing) && <option value={sample.id}>{sampleMissing ? 'Sample not on this device' : '…'}</option>}
-                  <option value="import">Import a sample…</option>
+                  <optgroup label="Built in">
+                    {BUILT_IN_WAVES.map(wave => <option key={wave.id} value={`wave:${wave.id}`}>{wave.name}</option>)}
+                    {sample.wave && !builtIn && <option value={`wave:${sample.wave}`}>Not in this version</option>}
+                  </optgroup>
+                  <optgroup label="Imported">
+                    {(samples ?? []).map(entry => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
+                    {!sample.wave && sample.id && (samples === null || sampleMissing) && <option value={sample.id}>{sampleMissing ? 'Sample not on this device' : '…'}</option>}
+                    <option value="import">Import a sample…</option>
+                  </optgroup>
                 </select>
               </div>
               <input
@@ -609,7 +620,7 @@ export default function SynthControls({
                   event.currentTarget.value = '';
                   if (!file) return;
                   void saveSample(file)
-                    .then(async (stored) => { await refreshSamples(); updateSample({ id: stored.id }); })
+                    .then(async (stored) => { await refreshSamples(); updateSample({ id: stored.id, wave: '' }); })
                     .catch((cause) => onSampleError?.(cause instanceof Error ? cause.message : 'The sample could not be imported.'));
                 }}
               />
@@ -623,18 +634,60 @@ export default function SynthControls({
                 displayValue={noteName(sample.root)}
                 onChange={(v) => updateSample({ root: Math.round(v) })}
                 parseInputValue={parseNote}
+                disabled={Boolean(sample.wave)}
                 tooltip="The note at which the sample plays at the pitch it was recorded. Other notes play it faster or slower"
               />
+              <Knob
+                label="Level"
+                ariaLabel="Sample level"
+                value={mixer.osc ?? 1}
+                min={0}
+                max={1}
+                step={0.01}
+                displayValue={`${Math.round((mixer.osc ?? 1) * 100)}%`}
+                onChange={(v) => updateMixer({ osc: v })}
+                parseInputValue={parsePercent(0, 1)}
+                tooltip="How loud the sample is"
+              />
+              {(builtIn?.steps ?? 0) > 1 && (
+                <>
+                  <Knob
+                    label="Speed"
+                    ariaLabel="Sequence speed"
+                    value={sample.scan ?? 2}
+                    min={0}
+                    max={16}
+                    step={0.05}
+                    displayValue={`${(sample.scan ?? 2).toFixed(2)}/s`}
+                    onChange={(v) => updateSample({ scan: v })}
+                    parseInputValue={parseNumber}
+                    tooltip="How many waves of the sequence go by each second. At 0 it stays on the first"
+                  />
+                  <Knob
+                    label="Fade"
+                    ariaLabel="Sequence crossfade"
+                    value={sample.fade ?? 1}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    displayValue={`${Math.round((sample.fade ?? 1) * 100)}%`}
+                    onChange={(v) => updateSample({ fade: v })}
+                    parseInputValue={parsePercent(0, 1)}
+                    tooltip="How much of each wave's turn is spent melting into the next: none at 0%, so each starts abruptly"
+                  />
+                </>
+              )}
               <label className="synth-sync" title="Go round again from the start while the note is held, instead of playing once">
                 <input
                   type="checkbox"
                   aria-label="Loop the sample"
+                  disabled={Boolean(builtIn?.steps)}
                   checked={sample.loop}
                   onChange={(e) => updateSample({ loop: e.target.checked })}
                 />
                 Loop
               </label>
-              {(!sample.id || sampleMissing) && (
+              {!sample.wave && (!sample.id || sampleMissing) && (
                 <p className="synth-sample-note" role="status">
                   {sampleMissing ? 'This sample is not on this device, so the lane plays its oscillator.' : 'Choose a sample. Until then the lane plays its oscillator.'}
                 </p>

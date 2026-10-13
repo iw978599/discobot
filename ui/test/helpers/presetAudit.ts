@@ -1,7 +1,9 @@
 // What can be said about a preset without ears: how loud it gets, whether it clips, how bright
 // it is, how fast it speaks and how long it rings after the key is let go. It renders the
 // preset through the same SynthCore the app plays, on notes of the kind it is meant for.
+import { readFileSync } from 'node:fs';
 import { SynthCore, toVoiceParams } from '@discobot/engine';
+import { parseWaveBundle } from '../../src/services/builtInWaves.ts';
 import type { SynthParameters } from '../../src/types.ts';
 import type { PresetKind } from '../../src/services/presetKinds.ts';
 
@@ -31,6 +33,10 @@ export interface PresetMeasure {
   ring: number;
   finite: boolean;
 }
+
+// The app's own waves, read from the file the build ships, so a preset made of one is measured with it.
+const bundle = readFileSync(new URL('../../public/waves.bin', import.meta.url));
+export const BUNDLED_WAVES = parseWaveBundle(bundle.buffer.slice(bundle.byteOffset, bundle.byteOffset + bundle.byteLength) as ArrayBuffer);
 
 const HOLD = 1.5;
 export const RING_LIMIT = 12;
@@ -69,6 +75,7 @@ function spectrumCentroid(samples: Float32Array, at: number): number {
 export function measurePreset(params: SynthParameters, kind: PresetKind, notes = AUDIT_NOTES[kind]): PresetMeasure {
   const core = new SynthCore(AUDIT_RATE);
   core.setParams(toVoiceParams(params));
+  if (params.sample?.wave) core.setSample(BUNDLED_WAVES.get(params.sample.wave) ?? null);
   for (const note of notes) core.noteOn({ note, velocity: 0.9 });
   const held = Math.round(HOLD * AUDIT_RATE), total = held + RING_LIMIT * AUDIT_RATE;
   const mono = new Float32Array(total);
