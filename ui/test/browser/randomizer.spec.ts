@@ -6,6 +6,10 @@ const steps = async (page: Page): Promise<Step[]> => (await stored(page)).synths
 // The lane's line as one string: each step's notes, or a dash for an empty one.
 const tune = async (page: Page) => (await steps(page)).map(step => (step.active ? [step.note, ...(step.notes ?? [])].join('+') : '-')).join(' ');
 
+// Every drum's steps. Undo writes the drums back with their defaults spelled out, so the whole
+// state is not compared, only what the drums play.
+const drumSteps = async (page: Page) => JSON.stringify(Object.entries((await stored(page)).drumState).map(([drum, lane]) => [drum, (lane as { steps: boolean[] }).steps]).sort());
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'requestMIDIAccess', { configurable: true, value: undefined });
@@ -30,7 +34,7 @@ test('Randomize fills the lane with a line in the chosen key and scale, a second
   await cell('D3', 3).click();
   const mine = '- F#3 D3 - - - - - - - - - - - - -';
   await expect.poll(() => tune(page)).toBe(mine);
-  const drums = JSON.stringify((await stored(page)).drumState);
+  const drums = await drumSteps(page);
 
   await expect(scale.locator('option')).toHaveText(['Major', 'Minor', 'Major pentatonic', 'Minor pentatonic']);
   await expect(key.locator('option')).toHaveCount(12);
@@ -79,7 +83,7 @@ test('Randomize fills the lane with a line in the chosen key and scale, a second
 
   // Nothing else was touched, and the key and scale are the browser's, not the project's.
   const project = await stored(page);
-  expect(JSON.stringify(project.drumState), 'the drums are as they were').toBe(drums);
+  expect(await drumSteps(page), 'the drums are as they were').toBe(drums);
   expect(JSON.stringify(project)).not.toContain('pentatonic');
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('discobot_randomize_v1') || 'null'))).toEqual({ key: 'F', scale: 'major' });
   await page.reload();
