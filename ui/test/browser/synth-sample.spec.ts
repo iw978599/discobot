@@ -1,5 +1,16 @@
 import { expect, test, type Page } from '@playwright/test';
 
+// At phone width the top bar is one line, and the rest of it is in the sheet its last button
+// raises. `more` raises the sheet before something in it is used, and does nothing on a wide screen.
+const onPhone = (page: Page) => {
+  const size = page.viewportSize();
+  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+};
+const more = async (page: Page) => {
+  if (!onPhone(page) || await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) return;
+  await page.getByRole('button', { name: 'More controls', exact: true }).click();
+};
+
 const PROJECT_KEY = 'discobot_browser_project_v1';
 const stored = (page: Page) => page.evaluate(key => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem(key) || '{}')), PROJECT_KEY);
 const sound = async (page: Page) => (await stored(page)).synths[0].synthParams;
@@ -69,6 +80,7 @@ test('a synth lane plays an imported sample: chosen, tuned and looped on the Osc
   await expect(page.locator('.synth-controls-panel').first().getByLabel('Synth sample', { exact: true }).locator('option:checked')).toHaveText('beep.wav');
 
   // The sample is deleted from this browser: the lane says so and plays its oscillator.
+  await more(page);
   await page.getByRole('button', { name: 'MIDI and samples', exact: true }).click();
   await page.getByRole('button', { name: 'Delete sample beep.wav', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Delete sample beep.wav', exact: true })).toHaveCount(0);

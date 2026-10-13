@@ -32,6 +32,8 @@ export default function Dialog({ title, closeLabel, onClose, children, sheet = f
     const onKeyDown = (event: KeyboardEvent) => {
       if (open[open.length - 1] !== self) return;
       if (event.key === 'Escape') {
+        // A menu that is open inside the dialog takes the Escape for itself, and closes.
+        if (dialogRef.current?.querySelector('[role="menu"]')) return;
         event.preventDefault();
         closeRef.current();
       }

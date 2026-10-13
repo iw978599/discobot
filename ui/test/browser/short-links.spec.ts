@@ -1,9 +1,25 @@
 import { expect, test, type Page } from '@playwright/test';
 
+// At phone width the top bar is one line, and the rest of it is in the sheet its last button
+// raises. `more` raises the sheet before something in it is used, and does nothing on a wide
+// screen; `less` puts it away again after something that leaves it up.
+const onPhone = (page: Page) => {
+  const size = page.viewportSize();
+  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+};
+const more = async (page: Page) => {
+  if (!onPhone(page) || await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) return;
+  await page.getByRole('button', { name: 'More controls', exact: true }).click();
+};
+const less = async (page: Page) => {
+  if (await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) await page.getByRole('button', { name: 'Close more controls', exact: true }).click();
+};
+
 const PASSWORD = 'correct horse battery';
 const apiUrl = (baseURL: string) => `http://127.0.0.1:${Number(new URL(baseURL).port) + 1000}`;
 
 async function menu(page: Page, item: string) {
+  await more(page);
   await page.getByRole('button', { name: 'Project ▾', exact: true }).click();
   await page.getByRole('menuitem', { name: item, exact: true }).click();
 }
@@ -29,6 +45,7 @@ test('a published song has a short link that anyone can open, update keeps the l
   const long = await share.getByLabel('Share link', { exact: true }).inputValue();
   await page.keyboard.press('Escape');
 
+  await more(page);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   const account = page.getByRole('dialog', { name: 'Account', exact: true });
   await account.getByRole('tab', { name: 'Create Account', exact: true }).click();
@@ -40,6 +57,7 @@ test('a published song has a short link that anyone can open, update keeps the l
   await account.getByRole('button', { name: 'Done', exact: true }).click();
   await page.keyboard.press('Escape');
 
+  await more(page);
   await page.getByRole('button', { name: /^Project: / }).click();
   const projects = page.getByRole('dialog', { name: 'Projects', exact: true });
   await projects.getByRole('button', { name: 'Rename', exact: true }).click();
@@ -71,7 +89,9 @@ test('a published song has a short link that anyone can open, update keeps the l
   await song.getByRole('button', { name: /Listen/ }).click();
   await expect(song.locator('audio')).toBeAttached({ timeout: 20_000 });
   await song.getByRole('button', { name: 'Open a Copy to Edit', exact: true }).click();
+  await more(visitor);
   await expect(visitor.getByRole('button', { name: 'Project: Friday Night', exact: true })).toBeVisible();
+  await less(visitor);
   await expect(visitor.getByRole('button', { name: 'Kick step 1', exact: true })).toHaveAttribute('aria-pressed', 'true');
   expect(new URL(visitor.url()).hash).toBe('');
 
@@ -99,6 +119,8 @@ test('a published song has a short link that anyone can open, update keeps the l
   await expect(visitor.getByRole('heading', { name: 'This link could not be opened', exact: true })).toBeVisible();
   await expect(visitor.getByRole('alert')).toContainText('may have been unpublished');
   await visitor.getByRole('button', { name: 'Go to Discobot', exact: true }).click();
+  await more(visitor);
   await expect(visitor.getByRole('button', { name: 'Project: Friday Night', exact: true }), 'the copy they kept is theirs').toBeVisible();
+  await less(visitor);
   await visitorContext.close();
 });
