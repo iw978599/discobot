@@ -137,10 +137,6 @@
   gap: 0.3rem;
 }
 
-.synth-toggle.small {
-  transform: scale(0.8);
-}
-
 .synth-header-tools,
 .preset-controls {
   display: flex;
