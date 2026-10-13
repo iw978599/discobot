@@ -142,6 +142,9 @@ export function sanitizeSynthParams(value: unknown, defaults: SynthParameters): 
   if (!['up', 'down', 'updown', 'downup', 'random', 'converge', 'diverge'].includes(params.arpeggiator.mode)) params.arpeggiator.mode = defaults.arpeggiator.mode;
   if (!['1/4', '1/8', '1/16', '1/32'].includes(params.arpeggiator.rate)) params.arpeggiator.rate = defaults.arpeggiator.rate;
   params.arpeggiator.gate = number(params.arpeggiator.gate, defaults.arpeggiator.gate, .1, 1);
+  const arpOctaves = Math.round(number(record(input.arpeggiator).octaves, 0, 0, 3));
+  if (arpOctaves >= 1) params.arpeggiator.octaves = arpOctaves;
+  else delete params.arpeggiator.octaves;
   params.effects.reverb.wet = number(params.effects.reverb.wet, defaults.effects.reverb.wet, 0, 1);
   params.effects.reverb.decay = number(params.effects.reverb.decay, defaults.effects.reverb.decay, .1, 8);
   params.effects.delay.wet = number(params.effects.delay.wet, defaults.effects.delay.wet, 0, 1);

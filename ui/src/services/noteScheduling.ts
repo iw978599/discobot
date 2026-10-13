@@ -51,6 +51,20 @@ function chordOrder(intervals: number[], mode: string): number[] {
   return up;
 }
 
+// The order an arpeggio with a chosen range goes in. `up` is every note it has, lowest first.
+function rangeOrder(up: number[], mode: string): number[] {
+  if (mode === 'converge' || mode === 'diverge') {
+    // From the two ends inwards, or the same turned round: from the middle outwards.
+    const inward: number[] = [];
+    for (let low = 0, high = up.length - 1; low <= high; low += 1, high -= 1) {
+      inward.push(up[low]);
+      if (high !== low) inward.push(up[high]);
+    }
+    return mode === 'converge' ? inward : inward.reverse();
+  }
+  return chordOrder(up, mode);
+}
+
 // What one sequencer step (or one live key press) actually plays. Live playback and WAV
 // export both call this, so arpeggios and slides come out the same in each.
 export function expandStep(
@@ -64,9 +78,14 @@ export function expandStep(
   }
   windowSeconds += held;
   // A chord is arpeggiated through its own notes; a single note through its own octaves.
-  const semitones = chord && chord.length > 1
-    ? chordOrder(chord.map(entry => (noteNameToMidi(entry) ?? 0) - (noteNameToMidi(note) ?? 0)), arp.mode)
-    : ARP_PATTERNS[arp.mode] ?? ARP_PATTERNS.up;
+  const own = chord && chord.length > 1 ? chord.map(entry => (noteNameToMidi(entry) ?? 0) - (noteNameToMidi(note) ?? 0)) : null;
+  const range = Number.isInteger(arp.octaves) && arp.octaves! >= 1 ? Math.min(3, arp.octaves!) : 0;
+  let semitones: number[];
+  if (range > 0) {
+    // A chosen range: the note, or the chord's notes, laid out again in each octave above.
+    const base = own ? [...own].sort((a, b) => a - b) : [0];
+    semitones = rangeOrder(Array.from({ length: range }, (_, octave) => base.map(interval => interval + 12 * octave)).flat(), arp.mode);
+  } else semitones = own ? chordOrder(own, arp.mode) : ARP_PATTERNS[arp.mode] ?? ARP_PATTERNS.up;
   const divisor = arp.rate === '1/4' ? 1 : arp.rate === '1/8' ? 2 : arp.rate === '1/16' ? 4 : 8;
   const interval = 60 / tempo / divisor;
   const duration = Math.max(0.03, interval * Math.max(0.1, Math.min(1, arp.gate)));
