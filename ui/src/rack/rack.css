@@ -494,6 +494,9 @@
 /* Copy to sits at the left of a lane and of the drum strip, so its list opens to the right of it. */
 .copy-to { display: inline-flex; }
 .copy-to .rack-menu-list { left: 0; right: auto; }
+.transpose-tool { display: inline-flex; gap: 3px; align-items: center; }
+.transpose-tool-name { color: var(--text-label); margin-right: 3px; }
+.transpose-tool .rack-btn { padding: 3px 8px; min-width: 0; }
 .drum-strip .rack-knobs, .drum-sends .rack-knobs { gap: 10px; flex: 1; justify-content: flex-start; }
 .drum-step-details input[type="range"] { width: 90px; }
 
@@ -681,6 +684,7 @@
   .synth-tabs { flex-wrap: wrap; }
   .synth-tabs button { padding: 9px 12px; }
   .bar-tabs .rack-btn { padding: 8px 12px; }
+  .transpose-tool .rack-btn { padding: 8px 12px; min-width: 44px; }
   .step-tools input[type="range"], .drum-step-details input[type="range"] { width: 130px; height: 28px; }
 
   /* The top bar is one line that never wraps and never scrolls away, clear of a notch: the
