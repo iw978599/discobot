@@ -173,10 +173,12 @@ target; removal of the AI review workflow.
    its oscillator. On 2026-10-13, not verified by ear: Start says where
    in the recording a note begins, and Loop From and Loop To say which
    part goes round, with the end of a chosen loop faded into what comes
-   before its start so the join does not click. Open: several recordings
-   across the keyboard for an imported sample;
-   smoothing for a recording played far above its root, which at present
-   aliases.
+   before its start so the join does not click; and a recording played
+   two or more times faster than it was made no longer folds its top back
+   as false tones (measured: from 27 dB under the note to inaudible).
+   Open: several recordings across the keyboard for an imported sample;
+   the last octave of folding, for a recording played between one and two
+   times its speed, which is read as it is.
 
 4. **A modulation matrix.** (M) First part done on 2026-10-12, not verified
    by ear: up to four routes a sound, on the LFO tab under Routing. Sources

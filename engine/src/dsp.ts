@@ -170,3 +170,34 @@ export class Adsr {
     return this.level;
   }
 }
+
+// A low-pass that keeps the lower half of what a recording can hold: a windowed sinc, its taps
+// adding up to one. Used only by `halve`.
+const HALF_BAND = (() => {
+  const taps = new Float64Array(63), middle = (taps.length - 1) / 2;
+  let sum = 0;
+  for (let index = 0; index < taps.length; index += 1) {
+    const x = index - middle, phase = 2 * Math.PI * index / (taps.length - 1);
+    const sinc = x === 0 ? 0.42 : Math.sin(2 * Math.PI * 0.21 * x) / (Math.PI * x);
+    taps[index] = sinc * (0.42 - 0.5 * Math.cos(phase) + 0.08 * Math.cos(2 * phase));
+    sum += taps[index];
+  }
+  return taps.map(tap => tap / sum);
+})();
+
+// A recording at half its rate: everything above a quarter of the old rate is taken out first, so
+// nothing folds back, then every second sample is kept. Read at half the position, it is the same
+// sound with its top octave gone.
+export function halve(data: Float32Array): Float32Array {
+  const out = new Float32Array(Math.ceil(data.length / 2)), middle = (HALF_BAND.length - 1) / 2, last = data.length - 1;
+  for (let index = 0; index < out.length; index += 1) {
+    const centre = index * 2;
+    let sum = 0;
+    for (let tap = 0; tap < HALF_BAND.length; tap += 1) {
+      const at = centre + tap - middle;
+      sum += HALF_BAND[tap] * data[at < 0 ? 0 : at > last ? last : at];
+    }
+    out[index] = sum;
+  }
+  return out;
+}

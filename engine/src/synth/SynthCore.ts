@@ -1,4 +1,4 @@
-import { Adsr, Ladder, Noise, Svf, approachCoefficient, finiteClamp as clamp, ladderFeedback, lfoShape, noteFrequency, oscillator, svfCoefficient } from '../dsp';
+import { Adsr, Ladder, Noise, Svf, approachCoefficient, finiteClamp as clamp, halve, ladderFeedback, lfoShape, noteFrequency, oscillator, svfCoefficient } from '../dsp';
 import { VoiceParams, createDefaultSynthParameters, toVoiceParams } from './voiceParams';
 
 export interface NoteOnMessage {
@@ -65,6 +65,9 @@ interface Voice {
   // the note. Null for a sample with one recording and no root of its own, which is read as it is set.
   sampleData: Float32Array | null;
   sampleScale: number;
+  // Which copy of the recording this voice reads: 0 is the recording, 1 one with its top octave
+  // taken out, and so on. -1 until the note's first sample has chosen.
+  sampleLevel: number;
 }
 
 const TWO_PI = 2 * Math.PI;
@@ -105,6 +108,10 @@ export class SynthCore {
   private routeDepth = new Float64Array(MOD_ROUTES);
   private routeCount = 0;
   private sample: SynthSample | null = null;
+  // Each recording's copies at half, a quarter and an eighth of its rate, for notes played two,
+  // four and eight times faster than it was recorded: read as it is, a recording played that
+  // fast holds more than the output can, and the rest comes back as tones that were never in it.
+  private sampleCopies = new WeakMap<Float32Array, Float32Array[]>();
   private age = 0;
   private lastFrequency = 440;
   private readonly smoothing: number;
@@ -119,7 +126,7 @@ export class SynthCore {
       fmPhase: [0, 0, 0, 0], fmFeedback: 0, fmEnv: 0, lfoPhase: [0, 0],
       amp: new Adsr(), filterEnv: new Adsr(), filter: new Svf(), filter2: new Svf(), ladder: new Ladder(), highpass: new Svf(), previousInput: 0,
       last: 0, transition: 0, transitionSamples: 0, age: 0, remaining: Infinity, releaseOverride: 0,
-      random: 0, randomPhase: 0, layer: 0, samplePosition: 0, sampleData: null, sampleScale: 0,
+      random: 0, randomPhase: 0, layer: 0, samplePosition: 0, sampleData: null, sampleScale: 0, sampleLevel: -1,
     }));
     this.refreshDerived();
     Object.assign(this.smoothed, {
@@ -131,6 +138,14 @@ export class SynthCore {
   // engine with no recording plays its oscillators.
   setSample(sample: SynthSample | null): void {
     this.sample = sample && sample.data.length > 1 && sample.rate > 0 ? sample : null;
+    if (this.sample && !this.sample.frame) {
+      for (const data of [this.sample.data, ...(this.sample.zones ?? []).map(zone => zone.data)]) {
+        if (this.sampleCopies.has(data)) continue;
+        const copies: Float32Array[] = [];
+        for (let from = data; copies.length < 3 && from.length > 128;) copies.push(from = halve(from));
+        this.sampleCopies.set(data, copies);
+      }
+    }
     for (const voice of this.voices) voice.sampleData = null;
     if (this.params.engine !== 'sample') return;
     for (const voice of this.voices) {
@@ -298,6 +313,7 @@ export class SynthCore {
     }
     voice.samplePosition = 0;
     voice.sampleData = null;
+    voice.sampleLevel = -1;
     const sample = this.sample;
     let recording = sample && !sample.frame ? sample.data : null;
     if (sample && !sample.frame && (sample.zones || sample.root !== undefined)) {
@@ -515,6 +531,14 @@ export class SynthCore {
             }
           } else {
             const data = v.sampleData ?? sample.data, end = data.length - 1;
+            const advance = step * (v.sampleData ? v.sampleScale : sampleScale);
+            // Within an octave above its own pitch the recording is read as it is. Faster than
+            // that, a copy with its top taken out is read, and the copy is changed only once the
+            // speed is plainly past the next octave, so a vibrato across one does not flicker.
+            const wanted = advance < 2 ? 0 : advance < 4 ? 1 : advance < 8 ? 2 : 3;
+            if (wanted !== v.sampleLevel && (v.sampleLevel < 0 || advance >= 2.2 * 2 ** v.sampleLevel || advance < 0.9 * 2 ** v.sampleLevel)) v.sampleLevel = wanted;
+            const copy = v.sampleLevel > 0 ? this.sampleCopies.get(data)?.[v.sampleLevel - 1] : undefined;
+            const read = copy ?? data, shrink = copy ? 1 / 2 ** v.sampleLevel : 1;
             let at = v.samplePosition, lead = -1, leadMix = 0;
             if (sampleLoop) {
               // A loop too short to hold a sample is the whole recording.
@@ -530,11 +554,11 @@ export class SynthCore {
               }
             }
             if (at < end) {
-              const index = Math.floor(at);
-              source = data[index] + (data[index + 1] - data[index]) * (at - index);
+              const place = at * shrink, index = Math.floor(place), here = read[index];
+              source = here + ((read[index + 1] ?? here) - here) * (place - index);
               if (lead >= 0) {
-                const before = Math.floor(lead);
-                source += (data[before] + (data[before + 1] - data[before]) * (lead - before) - source) * leadMix;
+                const led = lead * shrink, before = Math.floor(led), then = read[before];
+                source += (then + ((read[before + 1] ?? then) - then) * (led - before) - source) * leadMix;
               }
             } else {
               // Played once and finished: the voice is let go, so a held key does not keep it from
@@ -542,7 +566,7 @@ export class SynthCore {
               source = 0;
               if (!secondRuns) this.release(v);
             }
-            v.samplePosition = at + step * (v.sampleData ? v.sampleScale : sampleScale);
+            v.samplePosition = at + advance;
           }
           source *= oscLevel;
           if (secondRuns) {
