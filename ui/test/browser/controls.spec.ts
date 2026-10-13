@@ -599,6 +599,28 @@ test('simulated MIDI device routes step notes by channel and target; permission 
   await expect.poll(async () => (await project(page)).synths[0].pattern.steps[0].note).toBe('C4');
   await page.evaluate(() => (window as unknown as { emitMidi: (data: number[]) => void }).emitMidi([0x81, 60, 0]));
   await expect(page.getByText('Ch 2 Note Off 60', { exact: true })).toBeVisible();
+
+  // Pads on channel 10 are the drums, beside the keyboard on its own channel. Played while the
+  // song records, a pad is written on the step being played; a note that is no drum does nothing.
+  await expect(page.getByLabel('MIDI drum channel')).toHaveValue('10');
+  await page.getByRole('button', { name: 'record', exact: true }).click();
+  await page.keyboard.press('Escape');
+  await page.locator('.tempo-led').click();
+  await edit(page.locator('.tempo-led-input'), '60');
+  await page.getByRole('button', { name: /Play All/ }).click();
+  await page.waitForTimeout(400);
+  await page.evaluate(() => { const emit = (window as unknown as { emitMidi: (data: number[]) => void }).emitMidi; emit([0x99, 36, 64]); emit([0x99, 40, 127]); emit([0x99, 12, 127]); });
+  await page.getByRole('button', { name: /Stop All/ }).click();
+  const drums = (await project(page)).drumState;
+  const kick = drums.kick.steps.indexOf(true);
+  expect(kick, 'the pad for note 36 is the kick').toBeGreaterThanOrEqual(0);
+  expect(drums.kick.steps.filter(Boolean)).toHaveLength(1);
+  expect(drums.kick.stepVelocities[kick]).toBeCloseTo(64 / 127, 2);
+  expect(drums.snare.steps.filter(Boolean), 'note 40 is the nearest thing to a snare').toHaveLength(1);
+  for (const other of ['clap', 'closedHH', 'openHH', 'snare2', 'ride', 'crash']) expect(drums[other].steps.some(Boolean), other).toBe(false);
+  expect((await project(page)).synths[0].pattern.steps.filter((step: { active: boolean }) => step.active), 'the lane took none of them').toHaveLength(1);
+  await openMidi(page);
+  await page.getByLabel('MIDI drum channel').selectOption('0');
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'requestMIDIAccess', { configurable: true, value: async () => { throw new Error('Denied'); } });
   });

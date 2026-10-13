@@ -260,6 +260,8 @@ export default function Rack({ studio }: { studio: Studio }) {
             onModeChange={studio.setMidiMode}
             channel={studio.midiChannel}
             onChannelChange={studio.setMidiChannel}
+            drumChannel={studio.midiDrumChannel}
+            onDrumChannelChange={studio.setMidiDrumChannel}
             ties={studio.midiTies}
             learning={studio.midiLearn}
             onLearn={studio.setMidiLearn}

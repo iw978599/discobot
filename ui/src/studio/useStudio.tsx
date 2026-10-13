@@ -30,6 +30,7 @@ import { transposeSteps } from '../services/transpose';
 import { randomLine, type RandomChoice } from '../services/randomize';
 import { STARTERS, projectIsEmpty, starterDrums, starterPattern } from '../services/starters';
 import { buildSampleSong } from '../services/sampleSong';
+import { DEFAULT_DRUM_CHANNEL, drumForNote } from '../services/midiDrums';
 import { DEFAULT_QUANTIZE, asQuantize, recordPosition } from '../services/recordTiming';
 import { LANE_PARAMS, fromUnit, lanePatch, parseTarget } from '../services/paramTargets';
 import { storeMidiTies, storedMidiTies, tieFor, withTie, withoutTie, type MidiTie } from '../services/midiTies';
@@ -369,6 +370,11 @@ export function useStudio() {
   quantizeRef.current = quantize;
   const setQuantize = useCallback((value: number) => setQuantizeValue(asQuantize(value)), []);
   const [midiChannel, setMidiChannel] = useState(1);
+  // The channel pads are listened to on, for the drums. A keyboard on one channel and pads on
+  // another play a lane and the drums at once. 0 is none.
+  const [midiDrumChannel, setMidiDrumChannel] = useState(DEFAULT_DRUM_CHANNEL);
+  const midiDrumChannelRef = useRef(midiDrumChannel);
+  midiDrumChannelRef.current = midiDrumChannel;
   // What the sequencer sends to the chosen MIDI output. Kept for the session only.
   const [midiOutNotes, setMidiOutNotes] = useState(true);
   const [midiOutClock, setMidiOutClock] = useState(false);
@@ -1493,6 +1499,34 @@ export function useStudio() {
       if (tie) applyParamTargetRef.current(tie.target, message.value / 127);
       return;
     }
+    // A note on the drum channel is a pad: it plays its drum, and while recording it is written
+    // on the step being played. A note that is no drum here does nothing. Its note-off means nothing.
+    // If the keyboard's channel is the same one, the lane keeps it, as it always had it.
+    if (message.channel === midiDrumChannelRef.current && message.channel !== midiChannelRef.current) {
+      if (message.type !== 'noteOn') return;
+      const instrument = drumForNote(message.note);
+      const drums = drumStateRef.current;
+      if (!instrument || !drums[instrument]) return;
+      const velocity = Math.max(0.05, message.velocity / 127);
+      const silenced = drums[instrument].muted || (Object.values(drums).some(track => track.solo) && !drums[instrument].solo);
+      if (!silenced) void drumAudio.playDrumHit(instrument, drums[instrument].settings, velocity);
+      const transport = transportRef.current;
+      if (midiModeRef.current === 'record' && transport?.running && playhead.get('drums') >= 0) {
+        // On the step the player is hearing, as a recorded note is: the scheduler is ahead of that.
+        const context = getAudioContext();
+        const { step } = recordPosition({
+          heardTicks: transport.ticksAt(context.currentTime - (context.outputLatency || 0)), scheduledTicks: transport.scheduledTicks,
+          playheadStep: playhead.get('drums'), ticksPerStep: 2, steps: drums[instrument].steps.length, strength: 1,
+        });
+        const lane = synthsRef.current[0];
+        if (lane?.pattern) pushHistorySnapshot(lane.id, lane.pattern.id);
+        localService.applyAll([
+          { type: 'drum.step', instrument, step, active: true },
+          { type: 'drum.stepVelocity', instrument, step, velocity },
+        ]);
+      }
+      return;
+    }
     const noteName = midiNoteToName(message.note);
     const heldKey = `${message.channel}:${message.note}`;
 
@@ -1538,7 +1572,7 @@ export function useStudio() {
     const stepIndex = joins ? chord.stepIndex : targetSynth.stepRecordPointer % pattern.steps.length;
     midiChordRef.current = { synthId: targetSynth.id, stepIndex, at: now };
     void upsertStepNote(targetSynth.id, stepIndex, noteName, velocity, joins);
-  }, [handleNoteRelease, upsertStepNote, triggerSynthNote, globalTempo, synthAudio, recordNote]);
+  }, [handleNoteRelease, upsertStepNote, triggerSynthNote, globalTempo, synthAudio, recordNote, drumAudio, pushHistorySnapshot]);
 
   const midiState = useMidiInput({ onMessage: handleMidiMessage });
 
@@ -2329,7 +2363,7 @@ export function useStudio() {
     synths, selectedSynthId, setSelectedSynthId, drumState: memoizedDrumState, drumKits,
     selectedDrumKitId, drumMasterVolume, drumSwing, drumFx, effectsLoop, browserMuted, setBrowserMuted,
     browserVolume, setBrowserVolume, globalTempo, storageError, setStorageError, changedElsewhere, loadOtherTabVersion, keepThisTabVersion, helpOpen, setHelpOpen, midiMode, setMidiMode,
-    recording, setRecording, quantize, setQuantize, midiChannel, setMidiChannel, midiOutNotes, setMidiOutNotes, midiOutClock, setMidiOutClock, midiTargetSynthId, setMidiTargetSynthId, projectId, projectName, projects, synthPresets, drumAudio,
+    recording, setRecording, quantize, setQuantize, midiChannel, setMidiChannel, midiDrumChannel, setMidiDrumChannel, midiOutNotes, setMidiOutNotes, midiOutClock, setMidiOutClock, midiTargetSynthId, setMidiTargetSynthId, projectId, projectName, projects, synthPresets, drumAudio,
     handleUndo, handleRedo, midiImportData, setMidiImportData, midiImportAssignments, setMidiImportAssignments,
     handleMidiImportClick, handleMidiImportFile, handleMidiImportApplyAll, midiImportFileRef, handleRemoveSynth,
     ensureSynthExists, handleOctaveShift, handleTempoChange, handleGlobalPlayStop, handleStepChange, handleStepSelect, handleKeyboardModeChange,

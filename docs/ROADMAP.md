@@ -426,6 +426,12 @@ may redistribute.
    Web MIDI is in Chrome and Edge on a computer and on Android, and in
    Firefox with its own permission; not on an iPhone or iPad. None of this
    has been tried with real hardware.
+   First two parts built on 2026-10-13 and waiting as a draft for the
+   owner to try with their controller: pads on channel 10 (or another
+   chosen in the MIDI panel) play the drums and, in record mode, are
+   written on the step being played; the keyboard on its own channel plays
+   its lane at the same time. Still open: giving a pad another lane by
+   hand; a place for each device; knobs by learning; the mod wheel.
 
 7. **Collaborative sessions.** (L) First version done, in turns: the owner
    of a synced project shares it by username, the other person opens it from
