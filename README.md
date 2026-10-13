@@ -41,12 +41,18 @@ whole kit can be imported at once.
 
 **Scenes and a song.** A scene is every lane's pattern plus the drum grid,
 one, two, four or eight bars long; Copy bar lays one bar of a longer pattern over another.
-A song is scenes in order, each repeated as many times as
+Each scene has a time signature of its own (4/4, 3/4, 6/8, 5/4, 7/8 or 12/8),
+which sets how long its bars are and where the beats fall, so a song can
+change from one to the next. A song is scenes in order, each repeated as many times as
 you like. Scenes can be given a colour so a song's shape reads at a glance.
 
 **Effects** shared by the whole rack: drive, phaser, delay (free or in time
 with the tempo), chorus, reverb and a three-band master EQ. Each lane and the
 drums have their own sends.
+
+**A mixer.** Every level side by side: a fader for each lane, each drum, each
+guest instrument and the effect returns, with pan, mute and solo. A fader and
+the knob in its own unit are the same setting.
 
 **Guest instruments.** A project can host another creator's web instrument in
 a frame, following the tempo and playing through the mixer. See
@@ -58,7 +64,7 @@ small child. It keeps its own tune and is reached from the Project menu.
 ## Make music
 
 The screen is one rack, read top to bottom: the transport, the scenes and
-song, three synth lanes, the drums, then the effects. Every lane's steps line
+song, three synth lanes, the drums, the mixer, then the effects. Every lane's steps line
 up, so you can see how the parts sit against each other.
 
 1. **Start.** A new project offers three beats to start from (House Beat, Slow

@@ -2,6 +2,13 @@ import type { DrumInstrument, DrumKitDefinition, DrumKitId, DrumKitModelVariant 
 
 export const DRUM_INSTRUMENTS: DrumInstrument[] = ['kick', 'snare', 'openHH', 'closedHH', 'ride', 'crash', 'snare2', 'clap'];
 
+// The one name each drum has, wherever it is shown. Low Tom and High Tom are the snare2 and ride ids.
+export const DRUM_NAMES: Record<DrumInstrument, string> = {
+  kick: 'Kick', snare: 'Snare', clap: 'Clap', closedHH: 'Closed Hat', openHH: 'Open Hat', snare2: 'Low Tom', ride: 'High Tom', crash: 'Cymbal',
+};
+// The drums in the order the grid has them down the page, and the mixer across it.
+export const DRUM_ROWS: DrumInstrument[] = ['kick', 'snare', 'clap', 'closedHH', 'openHH', 'snare2', 'ride', 'crash'];
+
 // A drum's knobs as a project starts with them.
 const PLAIN_DRUM = { volume: 0.5, tone: 0.5, extra: 0.5, tune: 0, humanize: 0.35 };
 export const DRUM_SETTINGS_DEFAULT: Record<DrumInstrument, typeof PLAIN_DRUM> = {

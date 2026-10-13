@@ -610,6 +610,27 @@
 .guest-frame { width: 100%; height: 560px; border: 1px solid var(--edge-strong); border-radius: var(--corner-panel); background: #fff; }
 .guest-ask { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; font-family: var(--sentence-font); text-transform: none; letter-spacing: 0; font-weight: 400; font-size: var(--type-body); color: var(--text-plain); }
 .guest-ask p { margin: 0; max-width: 70ch; }
+/* The mixer: a desk of channel strips, in groups, that slides sideways when the rack is too
+   narrow for all of them. A strip is its name, a pan knob, the fader, then mute and solo; a part
+   a channel does not have keeps its room, so the faders stand in one line. A drum's strip has
+   its drum's colour along the top, as the drum grid's rows have it. */
+.mixer-desk { --mixer-pan: 72px; display: flex; align-items: stretch; gap: 10px; min-width: 0; overflow-x: auto; padding-bottom: 6px; }
+.mixer-group {
+  flex: none; display: flex; flex-direction: column; gap: 6px; padding: 5px 6px 8px;
+  background: var(--surface-inset); border: 1px solid var(--edge-faint); border-radius: var(--corner-panel);
+}
+.mixer-group-name { display: flex; align-items: baseline; gap: 8px; color: var(--text-faint); font-size: var(--type-caption); white-space: nowrap; }
+.mixer-group-name b { color: var(--text-label); font-size: var(--type-label); font-weight: 700; }
+.mixer-strips { display: flex; justify-content: center; gap: 2px; }
+.mixer-strip { flex: none; width: 60px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 5px; border-top: 3px solid var(--edge); }
+.mixer-strip[data-drum] { border-top-color: var(--drum-color); }
+.mixer-name { width: 100%; height: 3.45em; overflow: hidden; display: flex; flex-direction: column; align-items: center; text-align: center; font-size: var(--type-caption); line-height: 1.15; letter-spacing: 0.02em; }
+.mixer-name b { color: var(--text); font-weight: 700; }
+.mixer-name span { max-width: 100%; color: var(--text-faint); overflow: hidden; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.mixer-strip[data-muted] .mixer-name b { color: var(--text-faint); text-decoration: line-through; }
+.mixer-pan { min-height: var(--mixer-pan); display: flex; justify-content: center; }
+.mixer-ms { min-height: 24px; display: flex; gap: 3px; justify-content: center; }
+.mixer-ms .rack-btn { width: 26px; height: 24px; padding: 0; border-radius: var(--corner-panel); }
 .account-button { max-width: 14ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .account-tabs, .account-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .account-form { display: flex; flex-direction: column; gap: 10px; }
@@ -845,6 +866,7 @@
   .rack[data-shown="synth-3"] > [data-unit]:not([data-unit="synth-3"]):not([data-unit="guests"]),
   .rack[data-shown="guests"] > [data-unit]:not([data-unit="guests"]),
   .rack[data-shown="drums"] > [data-unit]:not([data-unit="drums"]):not([data-unit="guests"]),
+  .rack[data-shown="mixer"] > [data-unit]:not([data-unit="mixer"]):not([data-unit="guests"]),
   .rack[data-shown="effects"] > [data-unit]:not([data-unit="effects"]):not([data-unit="guests"]) { display: none; }
   /* A guest is another site's page, and a page that is not rendered is not run in full: a
      browser stops its animation frames and may slow its timers. So a guest that is not on show
@@ -874,7 +896,7 @@
     user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: manipulation;
   }
   .unit-tab:last-child { border-right: 0; }
-  /* Eight switches, with a guest in the project, still fit the narrowest phones. */
+  /* Nine switches, with a guest in the project, still fit the narrowest phones. */
   @media (max-width: 400px) {
     .unit-tab { font-size: var(--type-caption); letter-spacing: 0; }
   }
@@ -890,7 +912,15 @@
 
   /* A knob is as big as the fingertip that turns it, and the figure under it big enough to tap and type in. */
   .rack .knob-small .knob-svg { width: 44px; height: 44px; }
-  .rack .knob-value-input, .rack .drum-knob-value-input { font-size: var(--type-label); padding: 3px 2px; }
+  .rack .knob-value-input, .rack .drum-knob-value-input, .rack .fader-value { font-size: var(--type-label); padding: 3px 2px; }
+  /* The mixer's strips are wide enough for a fader a finger can hold, with mute over solo, each a
+     finger square. The desk slides sideways by its names and the room between its faders: a finger
+     on a fader or a knob is turning it. */
+  .mixer-desk { --mixer-pan: 90px; }
+  .mixer-strip { width: 68px; }
+  .rack .fader-slot { width: 44px; }
+  .mixer-ms { flex-direction: column; gap: 6px; min-height: 94px; }
+  .mixer-ms .rack-btn { width: 44px; height: 44px; }
 
   /* dialogs are the whole screen */
   .rack-dialog-overlay { padding: 0; place-items: stretch; }

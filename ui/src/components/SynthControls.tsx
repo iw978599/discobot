@@ -146,6 +146,7 @@ const parsePan = (input: string): number | null => {
   return n === null ? null : (text.startsWith('L') ? -Math.abs(n) : n) / 100;
 };
 
+const LFO_SYNCS: Array<[number, string]> = [[1, RATE_SYNC_LABELS['1bar']], [2, '1/2'], [4, '1/4'], [8, '1/8'], [16, '1/16'], [32, '1/32']];
 const parseSyncedRate = (input: string): number | null => parseNumber(input.includes('/') ? input.split('/').pop()! : input);
 
 const parseCutoff = (input: string): number | null => {
@@ -212,6 +213,19 @@ export default function SynthControls({
       sync,
       rate: sync ? Math.max(1, Math.min(128, Math.round(rate))) : Math.max(0.1, Math.min(20, rate)),
     });
+  };
+
+  // An LFO's sync is stored as a switch and a rate of N, one sweep each 1/N note. Its menu is the
+  // effects' Sync menu as far as an LFO goes (nothing slower than a bar), with whichever other
+  // note value the sound already has.
+  const lfoSyncNow = (lfo: 'lfo1' | 'lfo2') => (parameters[lfo].sync ? Math.max(1, Math.min(128, Math.round(parameters[lfo].rate || 4))) : 0);
+  const lfoSyncChoices = (lfo: 'lfo1' | 'lfo2'): Array<[number, string]> => {
+    const now = lfoSyncNow(lfo);
+    return [[0, RATE_SYNC_LABELS.off], ...LFO_SYNCS, ...(now > 0 && !LFO_SYNCS.some(([value]) => value === now) ? [[now, `1/${now}`] as [number, string]] : [])];
+  };
+  const chooseLfoSync = (lfo: 'lfo1' | 'lfo2', value: number) => {
+    if (value > 0) updateLfo(lfo, { sync: true, rate: value });
+    else updateLfoSync(lfo, false);
   };
 
   // Projects saved before these sections existed load without them.
@@ -757,7 +771,53 @@ export default function SynthControls({
                   />
                 </>
               )}
-              <label className="synth-sync" title="Go round again from the start while the note is held, instead of playing once">
+              {!builtIn?.steps && (
+                <>
+                <Knob
+                  label="Start"
+                  ariaLabel="Sample start"
+                  value={sample.start ?? 0}
+                  defaultValue={0}
+                  min={0}
+                  max={0.99}
+                  step={0.01}
+                  displayValue={`${Math.round((sample.start ?? 0) * 100)}%`}
+                  onChange={(v) => updateSample({ start: v })}
+                  parseInputValue={parsePercent(0, 1)}
+                  disabled={false}
+                  tooltip="Where in the recording a note begins: 0% is its beginning"
+                />
+                  <Knob
+                  label="Loop From"
+                  ariaLabel="Sample loop start"
+                  value={sample.loopStart ?? 0}
+                  defaultValue={0}
+                  min={0}
+                  max={0.99}
+                  step={0.01}
+                  displayValue={`${Math.round((sample.loopStart ?? 0) * 100)}%`}
+                  onChange={(v) => updateSample({ loopStart: v })}
+                  parseInputValue={parsePercent(0, 1)}
+                  disabled={!sample.loop}
+                  tooltip="With Loop on: where the part that goes round begins"
+                />
+                  <Knob
+                  label="Loop To"
+                  ariaLabel="Sample loop end"
+                  value={sample.loopEnd ?? 1}
+                  defaultValue={1}
+                  min={0.01}
+                  max={1}
+                  step={0.01}
+                  displayValue={`${Math.round((sample.loopEnd ?? 1) * 100)}%`}
+                  onChange={(v) => updateSample({ loopEnd: v })}
+                  parseInputValue={parsePercent(0, 1)}
+                  disabled={!sample.loop}
+                  tooltip="With Loop on: where the part that goes round ends, and goes back to Loop From"
+                />
+                  </>
+              )}
+              <label className="synth-sync" title="Go round again while the note is held, instead of playing once">
                 <input
                   type="checkbox"
                   aria-label="Loop the sample"
@@ -1340,16 +1400,19 @@ export default function SynthControls({
           <h3>LFO 1 MOD</h3>
           <div className="synth-column-controls">
             <div className="synth-lfo-rate-row">
-              <label className="synth-toggle small">
-                <input
-                  type="checkbox"
-                  checked={parameters.lfo1.sync ?? false}
-                  aria-label="LFO 1 tempo sync"
-                  onChange={(e) => updateLfoSync('lfo1', e.target.checked)}
+              <div className="synth-waveform-selector">
+                <label>SYNC</label>
+                <select
+                  className="synth-select"
+                  aria-label="LFO 1 sync"
+                  title="Follow the tempo: one sweep each note value, whatever the tempo"
+                  value={lfoSyncNow('lfo1')}
+                  onChange={(e) => chooseLfoSync('lfo1', Number(e.target.value))}
                   disabled={!parameters.lfo1.enabled}
-                />
-                <span className="synth-toggle-slider" />
-              </label>
+                >
+                  {lfoSyncChoices('lfo1').map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              </div>
               <Knob
                 label="Rate"
                 value={parameters.lfo1.sync ? (parameters.lfo1.rate || 4) : parameters.lfo1.rate}
@@ -1364,7 +1427,7 @@ export default function SynthControls({
                 parseInputValue={parameters.lfo1.sync ? parseSyncedRate : parseNumber}
                 disabled={!parameters.lfo1.enabled}
                 color="#06b6d4"
-                tooltip="LFO rate - BPM sync converts to note values"
+                tooltip={parameters.lfo1.sync ? 'Following the tempo: the knob steps through note values' : 'How fast the LFO sweeps'}
               />
             </div>
             <Knob
@@ -1450,16 +1513,19 @@ export default function SynthControls({
           <h3>LFO 2 MOD</h3>
           <div className="synth-column-controls">
             <div className="synth-lfo-rate-row">
-              <label className="synth-toggle small">
-                <input
-                  type="checkbox"
-                  checked={parameters.lfo2.sync ?? false}
-                  aria-label="LFO 2 tempo sync"
-                  onChange={(e) => updateLfoSync('lfo2', e.target.checked)}
+              <div className="synth-waveform-selector">
+                <label>SYNC</label>
+                <select
+                  className="synth-select"
+                  aria-label="LFO 2 sync"
+                  title="Follow the tempo: one sweep each note value, whatever the tempo"
+                  value={lfoSyncNow('lfo2')}
+                  onChange={(e) => chooseLfoSync('lfo2', Number(e.target.value))}
                   disabled={!parameters.lfo2.enabled}
-                />
-                <span className="synth-toggle-slider" />
-              </label>
+                >
+                  {lfoSyncChoices('lfo2').map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              </div>
               <Knob
                 label="Rate"
                 value={parameters.lfo2.sync ? (parameters.lfo2.rate || 4) : parameters.lfo2.rate}
@@ -1474,7 +1540,7 @@ export default function SynthControls({
                 parseInputValue={parameters.lfo2.sync ? parseSyncedRate : parseNumber}
                 disabled={!parameters.lfo2.enabled}
                 color="#0891b2"
-                tooltip="LFO rate - BPM sync converts to note values"
+                tooltip={parameters.lfo2.sync ? 'Following the tempo: the knob steps through note values' : 'How fast the LFO sweeps'}
               />
             </div>
             <Knob

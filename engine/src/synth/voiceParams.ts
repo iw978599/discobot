@@ -23,6 +23,9 @@ export interface VoiceParams {
   unisonMix: number;
   sampleRoot: number;
   sampleLoop: boolean;
+  sampleStart: number;
+  sampleLoopStart: number;
+  sampleLoopEnd: number;
   sampleScan: number;
   sampleFade: number;
   layerEnabled: boolean;
@@ -162,6 +165,7 @@ export function toVoiceParams(p: SynthParameters, bpm = 120): VoiceParams {
     oscLevel: mixer.osc ?? 1, subLevel: mixer.sub, noiseLevel: mixer.noise,
     unisonVoices: unison.voices, unisonDetune: unison.detune, unisonMix: unison.mix ?? 1,
     sampleRoot: p.sample?.root ?? 60, sampleLoop: p.sample?.loop ?? false,
+    sampleStart: p.sample?.start ?? 0, sampleLoopStart: p.sample?.loopStart ?? 0, sampleLoopEnd: p.sample?.loopEnd ?? 1,
     sampleScan: syncedRateHz(p.sample?.sync, bpm) ?? p.sample?.scan ?? 2, sampleFade: p.sample?.fade ?? 1,
     layerEnabled: layer.enabled, layerMix: layer.mix, layerDetune: layer.detune,
     layerBrightness: layer.brightness, layerAttack: layer.attack, layerWidth: layer.width,

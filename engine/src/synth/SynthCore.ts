@@ -299,6 +299,7 @@ export class SynthCore {
     voice.samplePosition = 0;
     voice.sampleData = null;
     const sample = this.sample;
+    let recording = sample && !sample.frame ? sample.data : null;
     if (sample && !sample.frame && (sample.zones || sample.root !== undefined)) {
       // The recording made nearest this note.
       const midi = 69 + 12 * Math.log2(frequency / 440);
@@ -308,7 +309,11 @@ export class SynthCore {
       }
       voice.sampleData = data;
       voice.sampleScale = rate / (440 * 2 ** ((root - 69) / 12));
+      recording = data;
     }
+    // A note begins where the sound says, as a share of whichever recording it plays.
+    const start = clamp(this.params.sampleStart, 0, 1, 0);
+    if (recording && start > 0) voice.samplePosition = start * (recording.length - 1);
     // A voice that is still sounding keeps its phase and envelope level, so stealing it cannot click.
     voice.active = true;
     voice.note = message.note;
@@ -361,6 +366,10 @@ export class SynthCore {
     // The sample engine, when it has a recording. Without one the lane plays its oscillators.
     const sample = p.engine === 'sample' ? this.sample : null;
     const sampleLoop = p.sampleLoop;
+    // The part that goes round, as shares of the recording. The whole of it unless the sound says.
+    const loopFrom = clamp(p.sampleLoopStart, 0, 1, 0), loopTo = Math.max(loopFrom, clamp(p.sampleLoopEnd, 0, 1, 1));
+    // The longest a loop's end is faded into what comes before its start: a hundredth of a second.
+    const loopFade = sample ? sample.rate * 0.01 : 0;
     // How many of the recording's frames one cycle of a note is worth, at the note it was recorded at.
     const sampleScale = sample ? sample.rate / (440 * 2 ** ((clamp(sample.root ?? p.sampleRoot, 0, 127, 60) - 69) / 12)) : 0;
     // A table of single cycles: how long each is, how many there are, how fast they are stepped
@@ -506,11 +515,27 @@ export class SynthCore {
             }
           } else {
             const data = v.sampleData ?? sample.data, end = data.length - 1;
-            let at = v.samplePosition;
-            if (at >= end && sampleLoop) at %= end;
+            let at = v.samplePosition, lead = -1, leadMix = 0;
+            if (sampleLoop) {
+              // A loop too short to hold a sample is the whole recording.
+              const whole = (loopTo - loopFrom) * end < 2, from = whole ? 0 : loopFrom * end, round = whole ? end : loopTo * end;
+              if (at >= round) at = from + (at - round) % (round - from);
+              // The last of the loop is faded into what the recording has just before the loop's
+              // start, which is what leads into the start, so the join does not click. A loop from
+              // the very beginning has nothing before it and goes round as it is.
+              const fade = Math.min(from, (round - from) / 2, loopFade);
+              if (fade >= 1 && at > round - fade) {
+                leadMix = (at - (round - fade)) / fade;
+                lead = at - (round - from);
+              }
+            }
             if (at < end) {
               const index = Math.floor(at);
               source = data[index] + (data[index + 1] - data[index]) * (at - index);
+              if (lead >= 0) {
+                const before = Math.floor(lead);
+                source += (data[before] + (data[before + 1] - data[before]) * (lead - before) - source) * leadMix;
+              }
             } else {
               // Played once and finished: the voice is let go, so a held key does not keep it from
               // another note. With the second oscillator sounding beside it, the note goes on.

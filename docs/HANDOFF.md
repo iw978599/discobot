@@ -84,6 +84,57 @@ session should save them to its memory.
 
 ## 3. Where things stand
 
+### 2026-10-13: what went in, and what comes next
+
+The owner gave a standing instruction that day: work through the roadmap
+and merge; improve what a change makes better; leave an item with open
+questions as a draft; use up to two builders; expect little intervention;
+put new ideas in `docs/ROADMAP_V2.md`; keep the computer awake while work
+is going on. Later the same day they answered every open question, so
+nothing is being held as a draft for an answer. The answers are in
+`docs/ROADMAP.md` under "Decided by the owner on 2026-10-13": build to
+them without asking again.
+
+Merged that day, each with all eleven checks green and nothing retried:
+transpose (#169); a controller's knobs tied to parameters by Learn (#170);
+the piano keys and piano roll for the keyboard and a screen reader, and a
+"?" on each unit (#171); the randomizer (#172); a middle click puts a knob
+back at its default (#173); MIDI pads to the drums (#166); the lane's
+editor as Notes and Sound (#174) and Copy bar (#175), both merged by the
+owner; the piano keys kept one Tab stop while their strip moves (#177); a
+pad for each drum by Learn and a place for each controller (#176); the
+LFOs' Sync menu (#178); a sample's start and loop points (#179); the
+mixer unit (#180). Earlier in the same stretch: #146 to #168 (chords,
+recording, the playlist, the audio engine's one owner, the phone's top
+bar, the cymbals, and the rest listed in the roadmap).
+
+Open or in a builder's hands when this was written: the crossfade on a
+sample's loop (#181); time signatures for the six agreed, per scene (a
+builder, the largest item left, told to stage it if one pull request
+cannot do it well); a pass over the built-in sounds and the starting
+beats (a builder; every change is listed for the owner to hear).
+
+What is left, in the order planned: parameter automation, using the names
+in `paramTargets.ts`; a delay and reverb send for each drum, and two aux
+sends; insert effects for a lane and an algorithmic reverb, and with them
+the Polysix's Ensemble moved to an effect of its own; undo as a store
+feature, then `useStudio.tsx` split into hooks; the leftovers (the
+design review's "not looked at" list, export progress by rendering in
+pieces, smoothing for a sample played far above its root, the mod wheel
+as a modulation source, the Loop tick box's place in the sample box on a
+phone). Not to be built without the owner: Firefox guests (they said the
+timing "still seems off" and have been asked what they hear), live
+collaboration (a proposal only), synced samples (costs money: not
+planned).
+
+Not heard by anyone: the randomizer's lines, the sample engine's start,
+loop points and crossfade, and everything in the list in section 5. Not
+tried with hardware: anything MIDI (pads, knobs, a place for each device).
+Not tried with a screen reader: the keys and the roll.
+
+The sections below this one are as they were on 2026-10-12 and are kept
+for their detail; where they disagree with this one, this one is right.
+
 ### Finished and on `main` (2026-10-10 to 2026-10-12)
 
 - **The typed project store**, all eight steps (#99 to #114). The old
@@ -142,10 +193,12 @@ times). An undo did not take within seven seconds. It is older than those
 pull requests. Step 8 of the typed store changed how undo restores a
 snapshot, so start there. It has not been looked into.
 
-### Nothing is running
+### Builders
 
-No builder is at work. The worktrees on the laptop are clean and everything
-is pushed.
+Builders work in `.claude/worktrees/`, one worktree each, and are
+resumed with a message after a usage limit cuts them off. A worktree
+whose branch is merged can be removed. They share the scratchpad, so
+each uses a folder of its own there.
 
 ## 4. The queue, in the owner's order
 
@@ -390,6 +443,25 @@ redesign; the knob wheel's behaviour is fine as built; the phone layout and
 kids mode look good on the owner's phone.
 
 ## 6. Things learned the hard way
+
+- A script that edits a file with Windows line endings must turn them to
+  plain ones on reading and put the file's own back on writing. Text put
+  in before a bare line feed leaves a stray carriage return in the middle
+  of a line, and the whole file then conflicts in the next merge
+  (`AGENTS.md`, 2026-10-13).
+- A pull request that was green before others merged is not green now.
+  Bring it up to date and let the checks run again before merging, and
+  look in every browser job's log for `retry #` and `flaky`: fetch a
+  job's log with `gh api repos/<owner>/<repo>/actions/jobs/<id>/logs`,
+  because `gh run view --log-failed` comes back empty here.
+- A bare pointer move in a browser test does not scroll, and the top bar
+  stays stuck over whatever is under it. Click the thing, which scrolls it
+  clear, or scroll first.
+- Two edits made within about a quarter of a second are one undo step. A
+  test that makes two and undoes one must put time between them.
+- The pictures the checks take show only the screens the spec visits. A
+  new control on a screen it does not visit is merged unseen unless the
+  screen is added first.
 
 - **A touch is steered to the nearest thing that answers a click.** A small
   thing laid over a control must not have an `onClick`, or a finger on the

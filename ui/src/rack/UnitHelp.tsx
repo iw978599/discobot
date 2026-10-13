@@ -3,6 +3,7 @@ export const UNIT_HELP = {
   song: 'help-scenes',
   synth: 'help-lanes',
   drums: 'help-drums',
+  mixer: 'help-mixer',
   effects: 'help-effects',
   guests: 'help-guests',
 } as const;

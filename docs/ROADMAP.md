@@ -170,9 +170,13 @@ target; removal of the AI review workflow.
    and second layer. A root note says which key gives the recorded pitch,
    and Loop sends it round while a key is held. Project files carry the
    sample; links, published songs and sync do not, and there the lane plays
-   its oscillator. Open: loop points and a start offset; several recordings
-   across the keyboard; smoothing for a recording played far above its
-   root, which at present aliases.
+   its oscillator. On 2026-10-13, not verified by ear: Start says where
+   in the recording a note begins, and Loop From and Loop To say which
+   part goes round, with the end of a chosen loop faded into what comes
+   before its start so the join does not click. Open: several recordings
+   across the keyboard for an imported sample;
+   smoothing for a recording played far above its root, which at present
+   aliases.
 
 4. **A modulation matrix.** (M) First part done on 2026-10-12, not verified
    by ear: up to four routes a sound, on the LFO tab under Routing. Sources
@@ -540,6 +544,22 @@ may redistribute.
     counting in song mode and every export have to take each scene's own bar
     length, where today one length serves the whole song. Keep these agreed
     metre options and the backward-compatible four-four default.
+    **Built on 2026-10-13, not verified by ear and not tried by a person:** a
+    Time menu in the song unit sets the open scene's signature, one of the
+    six, and no custom number of steps. Every lane and the drum grid of
+    that scene become bars of it (16, 12, 12, 20, 14 or 24 sixteenth steps;
+    twice that on a lane of finer steps), keeping how many bars they have:
+    a shorter bar loses the steps at its end and one Undo brings them back,
+    a longer one gains empty steps. The beat marks, the metronome and the
+    count-in, the phone's rows, the playhead, song mode, the playlist's
+    times, and WAV, loop, stem and MIDI export all take each scene's own
+    bar length; a MIDI file carries the signature and each change of it.
+    A project in 4/4 stores nothing new and renders as it did. Still open:
+    7/8 is counted two, two, three and nothing else; the delay's tempo sync
+    is in note values and so was left alone; MIDI import still reads a file
+    as 4/4 and lays it along the scene's bars; a guest is told beats, never
+    the signature; a browser still running the version before this reads a
+    bar of fewer than sixteen steps as damage and pads it.
 
 12. **Turn a knob with the scroll wheel.** (S) Asked for by the owner on
     2026-10-11: with the pointer over a knob, the wheel turns it, with no
@@ -687,9 +707,12 @@ for new accounts.
     Built on 2026-10-12, not verified by ear: the phaser, the chorus and
     the speed of a sequence of waves each have a Sync menu, from once every
     eight bars to once a sixteenth. The knob shows the note value while
-    synced, and turning it sets a free rate again. Still open: the three
-    looks are still three (a tick box on the LFOs, the delay's own menu
-    with dotted and triplet values, and this menu without them); the
+    synced, and turning it sets a free rate again. On 2026-10-13 the
+    LFOs' tick box became a Sync menu like the effects' (Free, then a bar
+    down to 1/32; an LFO cannot go slower than a bar), with the knob still
+    stepping through note values while synced. Still open: the delay's
+    own menu has dotted and triplet values and the others do not; an
+    LFO's knob steps note values where an effect's goes back to free; the
     Wavestation model's Speed knob does nothing while its sequence is
     synced; and the rates a model sets without showing them are LFOs, which
     can be synced on the LFO tab but are not when the model is chosen.
@@ -763,6 +786,17 @@ for new accounts.
     meters must not set React state many times a second (the playhead rule
     in `AGENTS.md`). Levels are per scene for guests and project-wide for
     lanes, and a mixer has to show that honestly.
+    First version built on 2026-10-13, to the owner's answer ("a new unit,
+    same levels. Each instrument should have a channel"): a Mixer unit
+    between the drums and the effects, with a strip for each synth lane,
+    each guest, each of the eight drums and the kit as a whole, the two
+    effect returns and the main volume. Each strip is a fader, with a pan
+    knob, mute and solo where the channel has them. Nothing new is stored:
+    a fader and the knob it mirrors are one setting. Still open, and each
+    needs the owner's word or work in the audio layer first: meters; the
+    effect sends on each strip; a level for the whole mix that is saved
+    with the project (the main volume shown is this browser's); solo for a
+    guest.
 
 23. **Delay and reverb sends for each drum sound.** (M) Asked for by the
     owner on 2026-10-12. The drums have one set of sends for the whole kit

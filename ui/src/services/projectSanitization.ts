@@ -94,6 +94,10 @@ export function sanitizeSynthParams(value: unknown, defaults: SynthParameters): 
   params.sample = {
     ...(typeof sample.id === 'string' && /^[0-9a-f-]{36}$/.test(sample.id) ? { id: sample.id } : {}),
     root: Math.round(number(sample.root, 60, 0, 127)), loop: sample.loop === true,
+    // Kept only where they are not the whole recording, so a sound that never set them is unchanged.
+    ...(number(sample.start, 0, 0, 0.99) > 0 ? { start: number(sample.start, 0, 0, 0.99) } : {}),
+    ...(number(sample.loopStart, 0, 0, 0.99) > 0 ? { loopStart: number(sample.loopStart, 0, 0, 0.99) } : {}),
+    ...(number(sample.loopEnd, 1, 0.01, 1) < 1 ? { loopEnd: Math.max(number(sample.loopEnd, 1, 0.01, 1), Math.min(1, number(sample.loopStart, 0, 0, 0.99) + 0.01)) } : {}),
     ...(typeof sample.wave === 'string' && /^[a-z0-9-]{1,32}$/.test(sample.wave)
       ? { wave: sample.wave, scan: number(sample.scan, 2, 0, 40), fade: number(sample.fade, 1, 0, 1), ...(storedRateSync(sample.sync) ? { sync: storedRateSync(sample.sync) } : {}) } : {}),
   };
