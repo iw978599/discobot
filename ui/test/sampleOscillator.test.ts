@@ -140,3 +140,47 @@ test('an export plays the lane\'s recording, and a project file knows which samp
   assert.deepEqual(usedSampleIds(project).sort(), [ID, other].sort());
   assert.deepEqual(usedSampleIds({ drumState: {}, synths: 'no' }), []);
 });
+
+// A second of recording: its first half one thing, its second half another.
+const halves = (first: (index: number) => number, second: (index: number) => number, rate = 44100): SynthSample =>
+  ({ data: Float32Array.from({ length: rate }, (_, index) => (index < rate / 2 ? first(index) : second(index))), rate });
+const tone = (hz: number, rate = 44100) => (index: number) => 0.8 * Math.sin(2 * Math.PI * hz * index / rate);
+
+test('a note can begin part of the way into a recording, and a sound that never said so is unchanged', () => {
+  const late = halves(() => 0, tone(440));
+  const whole = { start: 0, loopStart: 0, loopEnd: 1 };
+  assert.ok(same(play(sampled(), late), play(sampled(whole), late)), 'the whole recording, said or unsaid');
+  assert.ok(same(play(sampled({ loop: true }), late, 'A4', 3), play(sampled({ loop: true, ...whole }), late, 'A4', 3)), 'and the whole of it going round');
+
+  const fromStart = play(sampled(), late), fromHalf = play(sampled({ start: 0.5 }), late);
+  assert.ok(loudness(fromStart.subarray(SR * 0.05, SR * 0.3)) < -90, 'from its beginning the recording is silent at first');
+  assert.ok(level(fromHalf.subarray(SR * 0.05, SR * 0.3), 440) > -30, 'from half way it sounds at once');
+  assert.ok(loudness(fromHalf.subarray(SR * 0.6)) < -90, 'and ends half a recording sooner');
+  // A recorded instrument of several notes begins the same share of the way into whichever one plays.
+  const zoned: SynthSample = { ...late, root: 69, zones: [{ ...halves(() => 0, tone(880)), root: 81 }] };
+  assert.ok(level(play(sampled({ start: 0.5 }), zoned, 'A5').subarray(SR * 0.05, SR * 0.3), 880) > -30);
+});
+
+test('the part of a recording that goes round can be chosen', () => {
+  const two = halves(tone(440), tone(880));
+  const after = (extra: Partial<NonNullable<SynthParameters['sample']>>) => play(sampled({ loop: true, ...extra }), two, 'A4', 3).subarray(SR * 2);
+  const low = after({ loopEnd: 0.5 }), high = after({ loopStart: 0.5 }), all = after({});
+  assert.ok(level(low, 440) > -30 && level(low, 880) < level(low, 440) - 20, 'the first half alone');
+  assert.ok(level(high, 880) > -30 && level(high, 440) < level(high, 880) - 20, 'the second half alone, once the first has been played through');
+  // Each tone is there half the time, so half as strong.
+  assert.ok(level(all, 440) > -35 && level(all, 880) > -35, 'and the whole of it has both');
+  // Without Loop the points do nothing: it plays once to its end.
+  assert.ok(same(play(sampled({ loopStart: 0.5, loopEnd: 0.75 }), two), play(sampled(), two)));
+  // A loop with nothing in it is the whole recording, not a stuck sample.
+  const none = after({ loopStart: 0.5, loopEnd: 0.5 });
+  assert.ok(level(none, 440) > -35 && level(none, 880) > -35);
+});
+
+test('a start and loop points are stored only where they are not the whole recording, and held in range', () => {
+  const kept = (sample: Record<string, unknown>) => sanitizeSynthParams({ ...createDefaultSynthParameters(), engine: 'sample', sample: { root: 60, loop: true, ...sample } }, createDefaultSynthParameters()).sample!;
+  assert.deepEqual(kept({ start: 0, loopStart: 0, loopEnd: 1 }), { root: 60, loop: true });
+  assert.deepEqual(kept({}), { root: 60, loop: true });
+  assert.deepEqual(kept({ start: 0.25, loopStart: 0.5, loopEnd: 0.75 }), { root: 60, loop: true, start: 0.25, loopStart: 0.5, loopEnd: 0.75 });
+  assert.deepEqual(kept({ start: 7, loopStart: -1, loopEnd: 'x' }), { root: 60, loop: true, start: 0.99 });
+  assert.deepEqual(kept({ loopStart: 0.6, loopEnd: 0.2 }), { root: 60, loop: true, loopStart: 0.6, loopEnd: 0.61 }, 'the end is kept after the start');
+});

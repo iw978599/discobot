@@ -166,6 +166,12 @@ export interface SynthParameters {
     fade?: number;
     // step through the sequence in time with the tempo instead of at `scan`; absent means off
     sync?: RateSync;
+    // where in a recording a note begins, and the part of it that goes round while `loop` is on,
+    // each a share of the recording's length from 0 to 1. Absent means the whole of it: a start
+    // of 0, a loop from 0 to 1. A sequence of waves has none of these.
+    start?: number;
+    loopStart?: number;
+    loopEnd?: number;
   };
   // a second layer on every note: the same sound again, tuned, filtered, faded in and placed
   // differently. Absent or not enabled means one layer, as there always was. Two layers take

@@ -65,9 +65,23 @@ test('a synth lane plays an imported sample: chosen, tuned and looped on the Osc
   await expect(root).toHaveValue('C4');
   await root.fill('A4');
   await root.press('Enter');
+  // The loop's two ends wait for Loop; where a note begins does not.
+  const type = async (label: string, text: string) => { const box = synth.getByLabel(`${label} value`, { exact: true }); await box.fill(text); await box.press('Enter'); };
+  await expect(synth.getByRole('slider', { name: 'Sample loop start', exact: true })).toHaveAttribute('aria-disabled', 'true');
+  await expect(synth.getByRole('slider', { name: 'Sample start', exact: true })).toHaveAttribute('aria-disabled', 'false');
   await synth.getByLabel('Loop the sample', { exact: true }).check();
   await expect.poll(async () => { const now = (await sound(page)).sample; return [now.root, now.loop]; }).toEqual([69, true]);
   await expect(root).toHaveValue('A4');
+  await type('Sample start', '25%');
+  await type('Sample loop start', '50%');
+  await type('Sample loop end', '75%');
+  await expect.poll(async () => { const now = (await sound(page)).sample; return [now.start, now.loopStart, now.loopEnd]; }).toEqual([0.25, 0.5, 0.75]);
+  // Back at the whole recording they are not stored at all, as in a sound that never had them.
+  await type('Sample start', '0%');
+  await type('Sample loop start', '0%');
+  await type('Sample loop end', '100%');
+  await expect.poll(async () => { const now = (await sound(page)).sample; return ['start' in now, 'loopStart' in now, 'loopEnd' in now]; }).toEqual([false, false, false]);
+  await type('Sample loop start', '50%');
 
   // It plays without complaint.
   await page.getByRole('button', { name: /Play All/ }).click();
