@@ -248,6 +248,8 @@ function normalizeEffectsLoop(loop: Partial<EffectsLoopState> | undefined): Effe
       depth: Math.max(0, Math.min(1, loop?.phaser?.depth ?? DEFAULT_EFFECTS_LOOP.phaser.depth)),
       feedback: Math.max(0, Math.min(0.95, loop?.phaser?.feedback ?? DEFAULT_EFFECTS_LOOP.phaser.feedback)),
       mix: Math.max(0, Math.min(1, loop?.phaser?.mix ?? DEFAULT_EFFECTS_LOOP.phaser.mix)),
+      // Always present here, like the delay's, so turning sync off reaches the store.
+      sync: loop?.phaser?.sync ?? 'off',
     },
     delay: {
       enabled: loop?.delay?.enabled ?? DEFAULT_EFFECTS_LOOP.delay.enabled,

@@ -145,9 +145,9 @@ is pushed.
 
 Rewritten on 2026-10-12 at the owner's request, to hold every open item in
 `docs/ROADMAP.md` and not only the current run of work. Tick things off
-here as they merge. Steps 1 to 6 are in the order the owner gave; from step
-7 on the order is the builder's suggestion, and the owner has not confirmed
-it. Live collaboration is last because the owner said so.
+here as they merge. Steps 1 to 8 are in the order the owner gave, except step 3, which the
+builder placed; from step 9 on the order is the builder's suggestion, and
+the owner has not confirmed it. Live collaboration is last because the owner said so.
 
 Finished since this file was first written, so no longer in the queue: all
 of the design review's findings that were chosen (1 to 14); redesign C, all
@@ -158,7 +158,16 @@ voice work they needed (the ladder and MS-20 filters, a high-pass,
 modulation routes, sync and ring, a second layer, the sample engine and the
 app's own waves). The owner has heard little of the sound work: see section 5.
 
-### Step 1. The drum cymbals (roadmap sound 8)
+### Step 1. Tempo sync on everything that has a rate (roadmap features 18)
+
+Asked for on 2026-10-12 and put first by the owner: "everything with a
+rate knob should have a sync button that syncs to tempo ... bump it to the
+top". Built on `feat/design-review-tempo-sync` for the phaser, the chorus
+and the speed of a sequence of waves (check its pull request's state).
+The roadmap item says what is still open, and the owner has not said
+whether that is enough.
+
+### Step 2. The drum cymbals (roadmap sound 8)
 
 Asked for on 2026-10-12: "the cymbal on the drum machine sounds bad. also
 give more cymbal options on drums". Ask which cymbal, in which kit, and
@@ -166,7 +175,13 @@ what is wrong with it before changing anything; then a pass at the sound,
 and more cymbals to choose from. Whether any of them may be a recording is
 the owner's decision.
 
-### Step 2. The rest of the owner's picks from the design review
+### Step 3. A full song among the starting points (roadmap features 21)
+
+Beside the three beats. It is made, the owner listens, and it is changed
+until they like it. Placed here by the builder, as content that shows the
+sound work off; the owner did not say where it goes.
+
+### Step 4. The rest of the owner's picks from the design review
 
 A branch with `design-review` in its name gets pictures of the app from
 the checks; look at the pictures of what changed before calling it done.
@@ -196,7 +211,7 @@ Behaviour:
    perhaps with a toggle between one note and the whole step. The roadmap
    item has it in full, and says why it needs a length for each note.
 
-### Step 3. MIDI work (roadmap features 6)
+### Step 5. MIDI work (roadmap features 6)
 
 Pads to the drums; more than one place for incoming notes at once; knobs
 tied to parameters by learning; and the older items (following an external
@@ -209,35 +224,45 @@ note and controller numbers from the owner reading the MIDI panel's
 last-message line, not from memory. Nobody has tested the app against real
 MIDI hardware, so the owner tests each part.
 
-### Step 4. Parameter automation (roadmap features 5)
+### Step 6. Parameter automation (roadmap features 5)
 
 Recordable from the screen and from a mapped hardware knob. A hardware knob
 sends 128 positions, so playback needs smoothing.
 
-### Step 5. Bar length and scenes as a playlist
+### Step 7. Bar length and scenes as a playlist
 
 Changing a bar's length, designed together with time signatures (roadmap
 features 11: per scene; 4/4, 3/4, 6/8, 5/4, 7/8 and 12/8 are agreed;
 whether a bar may have any custom number of steps is for the owner). Then
 the playlist-style layout for scenes (roadmap features 14).
 
-### Step 6. Firefox
+### Step 8. Firefox
 
 "lets get feature complete in chrome then work back to firefox." When the
 steps above are done, ask the owner what they see with guest instruments
 in Firefox (section 5) and work from that.
 
-### Step 7. The audio layer, and the sound work that waits on it
+### Step 9. The audio layer, and the sound work that waits on it
 
 1. **Give the audio layer a single owner** (roadmap improvements 4).
-2. **Insert effects for each lane, and an algorithmic reverb** (sound 6).
-3. What the sound work of 2026-10-12 left open, each small: loop points, a
+2. **A master mixer** (features 22): every lane, the drums and the guests
+   side by side with meters, and a strip for the whole mix. Ask the owner
+   the roadmap item's questions before building. Placed here by the
+   builder, because the meters and a level for the whole mix belong to the
+   audio layer.
+3. **Delay and reverb sends for each drum sound** (features 23), and
+   **aux sends that can be routed to effects** (features 24). Both asked
+   for on 2026-10-12, and placed here by the builder beside the mixer,
+   which is where they would be shown. Each has questions for the owner in
+   its roadmap item.
+4. **Insert effects for each lane, and an algorithmic reverb** (sound 6).
+5. What the sound work of 2026-10-12 left open, each small: loop points, a
    start offset and several recordings for an imported sample (sound 3);
    smoothing for a sample, a wave or a synced oscillator played high, which
    alias today; more than four modulation routes, and the LFO tab's own
    target menus beside them (sound 4); the ladder filter's level (sound 5).
 
-### Step 8. Under the surface
+### Step 10. Under the surface
 
 1. **Undo as a store feature** (improvements 2): every edit recorded by
    the store, a drag as one entry, and an entry that restores the whole
@@ -246,16 +271,20 @@ in Firefox (section 5) and work from that.
    improvements 1. The typed store is done.
 3. What the typed store left open (`AGENTS.md`, Known Issues).
 
-### Step 9. Playing and editing
+### Step 11. Playing and editing
 
 1. **Record live playing against the clock** (features 3): quantize
    strength, and recording from the on-screen keyboard. The metronome and
-   count-in come with step 2.
+   count-in come with step 4.
 2. **More ways to edit patterns** (features 4): lengths that are not a
    whole number of bars, copying one bar to another, copy and paste between
    scenes, and a part shared between scenes.
+3. **Transpose** (features 19). Ask the owner what is moved and whether
+   it rewrites the notes before building.
+4. **A randomizer** (features 20). Ask the owner what it randomizes before
+   building.
 
-### Step 10. Finishing what is part done
+### Step 12. Finishing what is part done
 
 1. **Accessibility** (improvements 5): the on-screen keyboard as one tab
    stop, the piano roll's step numbers as column headers, and a try with a
@@ -269,7 +298,7 @@ in Firefox (section 5) and work from that.
    offline renderer does not report how far it has got, so this needs the
    render done in pieces.
 
-### Step 11. Live collaboration (the rest of roadmap features 7)
+### Step 13. Live collaboration (the rest of roadmap features 7)
 
 Last of all, by the owner's word. Live editing needs a connection held
 open, which `AGENTS.md` rules out today, so that rule would have to be
@@ -320,9 +349,12 @@ Still waiting:
   good to me". Not heard: the ladder filter and the four presets on the
   Minimoog and TB-303 as they sound through it; the MS-20, its filter, its
   three presets and the high-pass.
-- **The Launchkey's numbers**, when the MIDI work (step 3) is reached.
-- **The cymbal** (step 1): which one sounds bad, in which kit, and how; and
+- **The Launchkey's numbers**, when the MIDI work (step 5) is reached.
+- **The cymbal** (step 2): which one sounds bad, in which kit, and how; and
   whether new cymbals may be recordings or must all be synthesized.
+- **Transpose, the randomizer, the master mixer, the drums' own sends and
+  routable aux sends** (steps 11 and 9): what each should do. The roadmap
+  items (features 19, 20 and 22 to 24) list the questions.
 - **Not heard, added on 2026-10-12:** modulation routes, the Odyssey with
   sync and ring, the Virus, the CS-80 and the second layer, the sample
   engine, and the M1, D-50 and Wavestation with the app's own waves. Which

@@ -5,12 +5,13 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { MAX_MOD_ROUTES, MOD_DESTINATIONS, MOD_SOURCES, createDefaultSynthParameters, type ModDestination, type ModRoute, type ModSource } from '@discobot/engine';
-import { SynthParameters, OscillatorType, SynthModelId } from '../types';
+import { SynthParameters, OscillatorType, RateSync, SynthModelId } from '../types';
 import { SYNTH_MODELS, SYNTH_MODEL_GROUPS } from '../synthModels';
 import { groupPresets, type PresetKind } from '../services/presetKinds';
 import NestedMenu from '../rack/NestedMenu';
 import { listSamples, saveSample } from '../services/sampleStore';
 import { BUILT_IN_WAVES } from '../services/builtInWaves';
+import { RATE_SYNCS, RATE_SYNC_LABELS } from '../services/rateSync';
 import Knob from './Knob';
 import './SynthControls.css';
 
@@ -208,6 +209,7 @@ export default function SynthControls({
   const refreshSamples = () => listSamples().then(list => setSamples(list.map(({ id, name }) => ({ id, name })))).catch(() => {});
   useEffect(() => { if (isSample) void refreshSamples(); }, [isSample, sample.id, sampleStoreVersion]);
   const builtIn = BUILT_IN_WAVES.find(wave => wave.id === sample.wave);
+  const sequenceSynced = Boolean(sample.sync && sample.sync !== 'off');
   const sampleMissing = !sample.wave && Boolean(sample.id) && samples !== null && !samples.some(entry => entry.id === sample.id);
 
   const updateOscillator2 = (updates: Partial<NonNullable<SynthParameters['oscillator2']>>) => {
@@ -651,6 +653,18 @@ export default function SynthControls({
               />
               {(builtIn?.steps ?? 0) > 1 && (
                 <>
+                  <div className="synth-waveform-selector">
+                    <label>SYNC</label>
+                    <select
+                      className="synth-select"
+                      aria-label="Sequence sync"
+                      title="Step through the sequence in time: one wave each note value, whatever the tempo"
+                      value={sample.sync ?? 'off'}
+                      onChange={(e) => updateSample({ sync: e.target.value as RateSync })}
+                    >
+                      {RATE_SYNCS.map(value => <option key={value} value={value}>{RATE_SYNC_LABELS[value]}</option>)}
+                    </select>
+                  </div>
                   <Knob
                     label="Speed"
                     ariaLabel="Sequence speed"
@@ -658,10 +672,10 @@ export default function SynthControls({
                     min={0}
                     max={16}
                     step={0.05}
-                    displayValue={`${(sample.scan ?? 2).toFixed(2)}/s`}
-                    onChange={(v) => updateSample({ scan: v })}
+                    displayValue={sequenceSynced ? RATE_SYNC_LABELS[sample.sync!] : `${(sample.scan ?? 2).toFixed(2)}/s`}
+                    onChange={(v) => updateSample({ scan: v, sync: 'off' })}
                     parseInputValue={parseNumber}
-                    tooltip="How many waves of the sequence go by each second. At 0 it stays on the first"
+                    tooltip={sequenceSynced ? 'Following the tempo. Turn the knob to set a free speed instead' : 'How many waves of the sequence go by each second. At 0 it stays on the first'}
                   />
                   <Knob
                     label="Fade"

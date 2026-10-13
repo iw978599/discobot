@@ -8,6 +8,10 @@ export interface FxSendLevels {
   chorus?: number;
 }
 
+// A rate that follows the tempo: once every so many bars, or once every note of this length.
+export type RateSync = 'off' | '8bar' | '4bar' | '2bar' | '1bar' | '1/2' | '1/4' | '1/8' | '1/16';
+export const RATE_SYNCS: RateSync[] = ['off', '8bar', '4bar', '2bar', '1bar', '1/2', '1/4', '1/8', '1/16'];
+
 export type DelaySync = 'off' | '1/4' | '1/8d' | '1/8' | '1/8t' | '1/16';
 
 export interface EffectsLoopState {
@@ -24,6 +28,8 @@ export interface EffectsLoopState {
   phaser: {
     enabled: boolean;
     rate: number;
+    // follow the tempo instead of `rate`; absent means off, as before it existed
+    sync?: RateSync;
     depth: number;
     feedback: number;
     mix: number;
@@ -49,6 +55,8 @@ export interface EffectsLoopState {
   chorus?: {
     enabled: boolean;
     rate: number;
+    // follow the tempo instead of `rate`; absent means off
+    sync?: RateSync;
     depth: number;
     mix: number;
   };
@@ -156,6 +164,8 @@ export interface SynthParameters {
     // and how much of each step is spent crossfading into the next, 0 (none) to 1 (all of it)
     scan?: number;
     fade?: number;
+    // step through the sequence in time with the tempo instead of at `scan`; absent means off
+    sync?: RateSync;
   };
   // a second layer on every note: the same sound again, tuned, filtered, faded in and placed
   // differently. Absent or not enabled means one layer, as there always was. Two layers take

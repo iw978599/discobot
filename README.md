@@ -92,6 +92,8 @@ renders exports, so both sound the same. Each of its eight notes has:
 
 - two band-limited oscillators, a sub and noise, each with its own level; the
   second can be hard-synced to the first, and the two can be ring modulated;
+- rates that can follow the tempo: both LFOs, and in the effects the delay,
+  the phaser and the chorus;
 - up to seven detuned copies stacked on a note (unison), with a level for the
   copies either side of the middle one;
 - an optional second layer: the note played again on another voice, tuned,

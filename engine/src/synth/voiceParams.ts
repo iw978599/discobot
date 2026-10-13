@@ -1,4 +1,4 @@
-import type { SynthParameters } from '../types';
+import type { RateSync, SynthParameters } from '../types';
 
 // The flat parameter set a SynthCore runs on. Live playback posts it to the worklet;
 // offline export hands it to the same core directly.
@@ -118,6 +118,18 @@ export function syncedLfoHz(rate: number, bpm: number): number {
   return Math.max(20, Math.min(400, bpm)) * Math.max(1, Math.round(rate)) / 240;
 }
 
+const RATE_SYNC_BEATS: Record<Exclude<RateSync, 'off'>, number> = {
+  '8bar': 32, '4bar': 16, '2bar': 8, '1bar': 4, '1/2': 2, '1/4': 1, '1/8': 0.5, '1/16': 0.25,
+};
+
+// How many times a second something set to a note value comes round at this tempo, or null when it
+// is not set to one. Every rate that can follow the tempo, apart from the LFOs and the delay which
+// came first and have their own, goes through this, live and in an export.
+export function syncedRateHz(sync: unknown, bpm: number): number | null {
+  const beats = typeof sync === 'string' ? RATE_SYNC_BEATS[sync as Exclude<RateSync, 'off'>] : undefined;
+  return beats === undefined ? null : Math.max(20, Math.min(400, bpm)) / 60 / beats;
+}
+
 type FlatRoutes = Pick<VoiceParams,
   'mod1Source' | 'mod1Destination' | 'mod1Depth' | 'mod2Source' | 'mod2Destination' | 'mod2Depth' |
   'mod3Source' | 'mod3Destination' | 'mod3Depth' | 'mod4Source' | 'mod4Destination' | 'mod4Depth'>;
@@ -150,7 +162,7 @@ export function toVoiceParams(p: SynthParameters, bpm = 120): VoiceParams {
     oscLevel: mixer.osc ?? 1, subLevel: mixer.sub, noiseLevel: mixer.noise,
     unisonVoices: unison.voices, unisonDetune: unison.detune, unisonMix: unison.mix ?? 1,
     sampleRoot: p.sample?.root ?? 60, sampleLoop: p.sample?.loop ?? false,
-    sampleScan: p.sample?.scan ?? 2, sampleFade: p.sample?.fade ?? 1,
+    sampleScan: syncedRateHz(p.sample?.sync, bpm) ?? p.sample?.scan ?? 2, sampleFade: p.sample?.fade ?? 1,
     layerEnabled: layer.enabled, layerMix: layer.mix, layerDetune: layer.detune,
     layerBrightness: layer.brightness, layerAttack: layer.attack, layerWidth: layer.width,
     fmAlgorithm: fm.algorithm, fmRatio: fm.ratio, fmIndex: fm.index, fmDecay: fm.decay, fmFeedback: fm.feedback,

@@ -4,6 +4,7 @@ import { sceneDrumState } from './songPlayback';
 import { DRUM_INSTRUMENTS } from './drumKits';
 import { expandStepNotes } from './noteScheduling';
 import { delaySeconds } from './delayTime';
+import { rateHz } from './rateSync';
 import { expandDrumStep, seededRandom } from './drumScheduling';
 import { createZip } from '../utils/zip';
 import { MASTER_LEVEL, chorusSweep, configureLimiter, createChorus, createMasterEq, driveCurve, eqGains, reverbImpulse, safetyCurve, scheduleDuck } from '../hooks/browserAudio';
@@ -185,7 +186,7 @@ function connectEffects(ctx: OfflineAudioContext, input: AudioNode, master: Audi
     const filters = Array.from({ length: 4 }, () => ctx.createBiquadFilter());
     const source = send(sends.phaser), level = ctx.createGain(), feedback = ctx.createGain();
     const lfo = ctx.createOscillator(), depth = ctx.createGain();
-    lfo.frequency.value = state.phaser.rate; depth.gain.value = state.phaser.depth * 650;
+    lfo.frequency.value = rateHz(state.phaser, tempo); depth.gain.value = state.phaser.depth * 650;
     lfo.connect(depth); lfo.start();
     filters.forEach((filter, i) => { filter.type = 'allpass'; filter.frequency.value = 900 + i * 350; filter.Q.value = .7; depth.connect(filter.frequency); });
     source.connect(filters[0]); filters.slice(1).forEach((filter, i) => filters[i].connect(filter));
@@ -195,7 +196,7 @@ function connectEffects(ctx: OfflineAudioContext, input: AudioNode, master: Audi
   }
   if (state.chorus?.enabled && (sends.chorus ?? 0) > 0) {
     const chorus = createChorus(ctx), level = ctx.createGain();
-    chorus.lfo.frequency.value = state.chorus.rate; chorus.depth.gain.value = chorusSweep(state.chorus.depth);
+    chorus.lfo.frequency.value = rateHz(state.chorus, tempo); chorus.depth.gain.value = chorusSweep(state.chorus.depth);
     level.gain.value = state.chorus.mix;
     send(sends.chorus!).connect(chorus.input); chorus.output.connect(level).connect(wet);
   }
