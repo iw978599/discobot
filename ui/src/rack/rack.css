@@ -448,6 +448,7 @@
 .step-tools-swap > * { grid-area: 1 / 1; min-width: 0; }
 .step-tools-controls { display: flex; align-items: center; gap: 8px 18px; flex-wrap: wrap; }
 .step-tools-controls label { display: flex; align-items: center; gap: 6px; color: var(--text-label); }
+.randomize-tool { display: inline-flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; min-width: 0; }
 
 /* drums */
 .drum-grid { display: flex; flex-direction: column; gap: 3px; min-width: 0; }

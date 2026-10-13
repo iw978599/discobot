@@ -26,6 +26,7 @@ import type { PresetKind } from '../services/presetKinds';
 import { createBuiltInPresets } from '../services/builtInPresets';
 import { expandStep, expandStepNotes, stepNotes, withStepLength, withStepNotes } from '../services/noteScheduling';
 import { transposeSteps } from '../services/transpose';
+import { randomLine, type RandomChoice } from '../services/randomize';
 import { STARTERS, projectIsEmpty, starterDrums, starterPattern } from '../services/starters';
 import { buildSampleSong } from '../services/sampleSong';
 import { DEFAULT_QUANTIZE, asQuantize, recordPosition } from '../services/recordTiming';
@@ -1380,6 +1381,15 @@ export function useStudio() {
     localService.writePattern(synthId, synth.pattern.id, { ...synth.pattern, steps });
   }, [pushHistorySnapshot]);
 
+  // Replaces a lane's notes, in the open scene, with a new random line in a key and scale. The
+  // line starts in the lowest octave the lane's piano roll shows.
+  const handleRandomizeLane = useCallback((synthId: number, choice: RandomChoice) => {
+    const synth = synthsRef.current.find(s => s.id === synthId);
+    if (!synth?.pattern) return;
+    pushHistorySnapshot(synthId, synth.pattern.id);
+    localService.writePattern(synthId, synth.pattern.id, randomLine(synth.pattern, choice, 3 + synth.octaveShift, Math.random));
+  }, [pushHistorySnapshot]);
+
   // Writes a note to a step. `add` joins it to the chord already there instead of replacing it.
   const upsertStepNote = useCallback(async (synthId: number, stepIndex: number, note: string, velocity: number, add = false, offset?: number, select = true) => {
     const synth = synthsRef.current.find(s => s.id === synthId);
@@ -2340,7 +2350,7 @@ export function useStudio() {
     handleUndo, handleRedo, midiImportData, setMidiImportData, midiImportAssignments, setMidiImportAssignments,
     handleMidiImportClick, handleMidiImportFile, handleMidiImportApplyAll, midiImportFileRef, handleRemoveSynth,
     ensureSynthExists, handleOctaveShift, handleTempoChange, handleGlobalPlayStop, handleStepChange, handleStepSelect, handleKeyboardModeChange,
-    handlePianoRollNoteAssign, handleClearPatternNotes, handleTransposeLane, handleNotePlay, handleNoteRelease, computerKeyNotes, midiState,
+    handlePianoRollNoteAssign, handleClearPatternNotes, handleTransposeLane, handleRandomizeLane, handleNotePlay, handleNoteRelease, computerKeyNotes, midiState,
     handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange, guests, handleAddGuest, handleRemoveGuest, handleGuestChange, guestRecording, handleExportWav, exportStatus, dismissExportStatus, missingDrumSamples, sampleStoreVersion, handleDrumSampleChange, handleLaneBarsChange, handleDrumBarsChange, sceneLength,
     handleSynthMixChange, handleSaveSynthPreset, handleLoadSynthPreset, handleDeleteSynthPreset,
     handleExportMidi, currentArrangement, reportExportError, handleExportProject, projectImportFileRef, handleImportProjectFile, handleImportProject,

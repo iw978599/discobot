@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { BAR_CHOICES, laneBars } from '../services/patternLength';
 import CopyToScene from './CopyToScene';
 import TransposeTool from './TransposeTool';
+import RandomizeTool from './RandomizeTool';
 import type { Studio } from '../studio/useStudio';
 import { SynthModelParams } from '../types';
 import { getSynthModelDefinition } from '../synthModels';
@@ -309,6 +310,7 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
                   onCopy={sceneId => studio.handleCopyPartToScene(sceneId, { synthId })}
                 />
                 <TransposeTool synthId={synthId} steps={synth.pattern.steps} onTranspose={semitones => studio.handleTransposeLane(synthId, semitones)} />
+                <RandomizeTool synthId={synthId} onRandomize={choice => studio.handleRandomizeLane(synthId, choice)} />
                 {/* The hint and the controls share one space, sized for whichever is taller. Selecting a
                     step then never changes the height of this row, which would move the piano roll
                     under a pointer that has just pressed a cell. */}
