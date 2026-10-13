@@ -54,7 +54,8 @@ class DrumProcessor extends AudioWorkletProcessor {
     const output = outputs[0];
     if (!output?.length) return true;
     this.core.frame = currentFrame;
-    this.core.process(output[0], output[1] || output[0]);
+    // The second and third outputs, when the node has them, are what the drums send to the delay and the reverb.
+    this.core.process(output[0], output[1] || output[0], outputs[1], outputs[2]);
     return true;
   }
 }

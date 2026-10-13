@@ -507,6 +507,9 @@
 .transpose-tool-name { color: var(--text-label); margin-right: 3px; }
 .transpose-tool .rack-btn { padding: 3px 8px; min-width: 0; }
 .drum-strip .rack-knobs, .drum-sends .rack-knobs { gap: 10px; flex: 1; justify-content: flex-start; }
+/* The selected drum's own two sends stand before the kit's. Their name has the plate's width whatever the drum is called, so choosing a drum never wraps the row another way. */
+.drum-sends .rack-knobs.drum-own-sends { flex: none; padding-right: 18px; border-right: 1px solid var(--edge-faint); }
+.drum-sends .drum-strip-name b { line-height: 1.15; }
 .drum-step-details input[type="range"] { width: 90px; }
 
 /* dialogs */
@@ -848,6 +851,8 @@
   .drum-step-btn { height: 30px; font-size: var(--type-caption); }
   .drum-step-indicator { font-size: var(--type-caption); }
   .drum-sound select { max-width: 60vw; }
+  .drum-sends .drum-strip-name { width: 100%; }
+  .drum-sends .rack-knobs.drum-own-sends { border-right: 0; padding-right: 0; flex: 1 1 100%; }
 
   /* effects: one to a row */
   .effects-unit .effects-panel { grid-template-columns: minmax(0, 1fr); }

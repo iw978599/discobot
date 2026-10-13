@@ -312,6 +312,10 @@ export interface DrumSettings {
   humanize?: number;
   pan?: number;
   cymbalType?: CymbalType;
+  // How much of this drum reaches the shared delay and the shared reverb, as a share from 0 to 1 of
+  // what the kit's own send lets through. Absent means 1: all of it, as before a drum had its own.
+  delaySend?: number;
+  reverbSend?: number;
 }
 
 export type DrumInstrumentDefaults = Record<DrumInstrument, DrumSettings>;

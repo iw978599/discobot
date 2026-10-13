@@ -5,6 +5,8 @@ import type { DrumWorkletMessage } from '@discobot/engine';
 import { createAudioLane, getAudioContext, ensureAudioReady, loadAudioWorklet, setEffectsLoop } from './browserAudio';
 
 const send = (node: AudioWorkletNode | null, message: DrumWorkletMessage) => node?.port.postMessage(message);
+// The effects each drum has a send of its own to, in the order the drum processor's extra outputs are in.
+const DRUM_SEND_MIXES = ['delay', 'reverb'] as const;
 
 export function useDrumAudio() {
   const laneRef = useRef<ReturnType<typeof createAudioLane> | null>(null);
@@ -23,11 +25,14 @@ export function useDrumAudio() {
     function getNode(): Promise<AudioWorkletNode> {
       if (nodeRef.current) return Promise.resolve(nodeRef.current);
       loadingRef.current ??= loadAudioWorklet().then(() => {
-        const node = new AudioWorkletNode(getAudioContext(), 'drum-processor', { numberOfOutputs: 1, outputChannelCount: [2] });
-        const lane = createAudioLane('drums');
+        // Three outputs: the kit, then what each drum sends to the delay and to the reverb. The lane
+        // takes its delay and reverb sends from those two and its other sends from the kit.
+        const node = new AudioWorkletNode(getAudioContext(), 'drum-processor', { numberOfOutputs: 3, outputChannelCount: [2, 2, 2] });
+        const lane = createAudioLane('drums', DRUM_SEND_MIXES);
         lane.setVolume(volumeRef.current);
         lane.setSends(sendsRef.current, returnRef.current);
-        node.connect(lane.input);
+        node.connect(lane.input, 0);
+        DRUM_SEND_MIXES.forEach((name, index) => node.connect(lane.taps[name]!, index + 1));
         send(node, { type: 'cymbals', cymbals: cymbalsRef.current });
         // Samples chosen before the node existed.
         for (const [instrument, sample] of Object.entries(samplesRef.current)) send(node, { type: 'sample', instrument: instrument as DrumInstrument, sample });
