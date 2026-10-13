@@ -270,6 +270,10 @@ export interface SequencerStep {
   notes?: string[];
   // how many steps the notes last; absent means one
   length?: number;
+  // how many steps each note lasts, lowest note first, where the notes of a chord differ. Absent
+  // means every note lasts `length`, as they all did before a note could have its own. `length`
+  // is then the longest of them, so anything that only knows `length` still gets the step's extent.
+  lengths?: number[];
   // how often the step plays, 0 to 1; absent means always
   probability?: number;
   // hits packed evenly into the step's length; absent means one

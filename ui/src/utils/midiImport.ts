@@ -1,5 +1,5 @@
 import { Midi } from '@tonejs/midi';
-import { stepNotes, withStepNotes } from '../services/noteScheduling';
+import { stepNotes, withStepLength, withStepNotes } from '../services/noteScheduling';
 import { Pattern, SequencerStep, DrumInstrument } from '../types';
 import { DRUM_INSTRUMENTS } from '../services/drumKits';
 import { BAR_CHOICES, MAX_BARS } from '../services/patternLength';
@@ -95,12 +95,13 @@ function parseSynthTrack(notes: { midi: number; ticks: number; velocity: number;
     if (stepIndex < 0 || stepIndex >= stepCount) continue;
     const offset = between ? Math.round((position - stepIndex) * 12) / 12 : 0;
     const existing = steps[stepIndex];
-    // Notes that start together are a chord; the step takes the first one's velocity and length.
+    const length = Math.max(1, Math.min(stepCount - stepIndex, Math.round((note.durationTicks ?? 0) / ticksPerStep)));
+    // Notes that start together are a chord; the step takes the first one's velocity, and each note keeps its own length.
     if (existing.active) {
-      steps[stepIndex] = withStepNotes(existing, [...stepNotes(existing), midiNoteToName(note.midi)]);
+      const name = midiNoteToName(note.midi), joined = withStepNotes(existing, [...stepNotes(existing), name]);
+      steps[stepIndex] = stepNotes(joined).includes(name) ? withStepLength(joined, length, name) : joined;
       continue;
     }
-    const length = Math.max(1, Math.min(stepCount - stepIndex, Math.round((note.durationTicks ?? 0) / ticksPerStep)));
     steps[stepIndex] = {
       active: true,
       note: midiNoteToName(note.midi),

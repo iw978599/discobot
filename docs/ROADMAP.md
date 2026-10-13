@@ -65,11 +65,13 @@ slow down every later change.
    not to the effects. Still open: the transport bar and the song strip
    still render on every edit.
 
-4. **Give the audio layer a single owner.** (M)
-   `browserAudio.ts` keeps the context, buses and effects in module-level
-   variables, which makes it awkward to test and impossible to tear down
-   cleanly. Wrap them in an `AudioEngine` class created once and passed to the
-   hooks.
+4. **Give the audio layer a single owner.** First part done on 2026-10-13,
+   with no change to any sound intended; not verified by ear. The context,
+   the master chain, the effect buses and what is sounding belong to one
+   `AudioEngine` in `browserAudio.ts`, which can be disposed of and made
+   again, and tests make their own. Still open: every caller still goes
+   through the module's functions, which call the app's one engine. Passing
+   the engine to the hooks explicitly is the next step.
 
 5. **Accessibility pass on custom controls.** (M)
    Steps are labelled and dialogs trap focus. The phone's bar of units is a
@@ -582,6 +584,13 @@ may redistribute.
     itself. Still open: a length for each note, so one note of a chord can
     be made longer than the others, and the toggle between one note and
     the whole step; inversions.
+    Second part done on 2026-10-13: each note of a chord has a length of
+    its own. Dragging a note's end in the piano roll changes that note
+    alone; a Whole step switch beside the Chord menu makes every note of
+    the step go together, as before. Playback, WAV and MIDI export and MIDI
+    import all carry it. The switch is the "perhaps a toggle" the owner
+    spoke of, and is theirs to keep or drop. Inversions are in
+    `docs/ROADMAP_V2.md`.
 
 16. **One row for a project and its copies.** Done: asked for by the owner on
     2026-10-12 and built. In Projects, a project and the ones the app named

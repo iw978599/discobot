@@ -24,7 +24,7 @@ import type { ProjectInfo } from '../services/projectLibrary';
 import { sanitizeSynthParams } from '../services/projectSanitization';
 import type { PresetKind } from '../services/presetKinds';
 import { createBuiltInPresets } from '../services/builtInPresets';
-import { expandStep, expandStepNotes, stepNotes, withStepNotes } from '../services/noteScheduling';
+import { expandStep, expandStepNotes, stepNotes, withStepLength, withStepNotes } from '../services/noteScheduling';
 import { STARTERS, projectIsEmpty, starterDrums, starterPattern } from '../services/starters';
 import { buildSampleSong } from '../services/sampleSong';
 import { COUNT_IN_BARS, clickAt, countInBeats, countInSeconds, storeMetronome, storedMetronome, type MetronomeSettings } from '../services/metronome';
@@ -1543,19 +1543,18 @@ export function useStudio() {
     localService.writePattern(synthId, synth.pattern.id, nextPattern);
   }, [pushHistorySnapshot]);
 
-  const handleStepLengthChange = useCallback(async (synthId: number, stepIndex: number, length: number) => {
+  // How long a step's notes last: all of them, or with `note` given, that one note of its chord.
+  const handleStepLengthChange = useCallback(async (synthId: number, stepIndex: number, length: number, note?: string) => {
     const synth = synthsRef.current.find((entry) => entry.id === synthId);
-    if (!synth?.pattern || !synth.pattern.steps[stepIndex]) return;
-    pushHistorySnapshot(synthId, synth.pattern.id);
+    const current = synth?.pattern?.steps[stepIndex];
+    if (!synth?.pattern || !current) return;
     const bounded = Math.max(1, Math.min(synth.pattern.steps.length - stepIndex, Math.round(length)));
-    if (bounded === (synth.pattern.steps[stepIndex].length ?? 1)) return;
+    const changed = withStepLength(current, bounded, note);
+    if ((changed.length ?? 1) === (current.length ?? 1) && JSON.stringify(changed.lengths ?? null) === JSON.stringify(current.lengths ?? null)) return;
+    pushHistorySnapshot(synthId, synth.pattern.id);
     const nextPattern = {
       ...synth.pattern,
-      steps: synth.pattern.steps.map((step, index) => {
-        if (index !== stepIndex) return step;
-        const { length: _length, ...rest } = step;
-        return bounded > 1 ? { ...rest, length: bounded } : rest;
-      }),
+      steps: synth.pattern.steps.map((step, index) => (index === stepIndex ? changed : step)),
     };
     localService.writePattern(synthId, synth.pattern.id, nextPattern);
   }, [pushHistorySnapshot]);

@@ -15,12 +15,44 @@ export const MAX_STEP_OFFSET = 0.95;
 // How far into its step a step's notes start, as a fraction of a step.
 export const stepOffset = (step: SequencerStep | undefined) => Math.max(0, Math.min(MAX_STEP_OFFSET, step?.offset ?? 0));
 
-// The step with exactly these notes. No notes leaves an empty step.
+// How many steps each of a step's notes lasts, in the order of `stepNotes`. A note with no length
+// of its own lasts as long as the step does.
+export function noteLengths(step: SequencerStep | undefined): number[] {
+  const whole = Math.max(1, step?.length ?? 1);
+  return stepNotes(step).map((_, index) => {
+    const own = step!.lengths?.[index];
+    return own !== undefined && Number.isInteger(own) && own >= 1 ? Math.min(own, whole) : whole;
+  });
+}
+
+// The step's length fields for these lengths, one for each note: the longest as `length`, and
+// each note's own only where they differ.
+function lengthFields(lengths: number[]): Pick<SequencerStep, 'length' | 'lengths'> {
+  const longest = Math.max(1, ...lengths);
+  return {
+    ...(longest > 1 ? { length: longest } : {}),
+    ...(lengths.some(length => length !== longest) ? { lengths } : {}),
+  };
+}
+
+// The step with exactly these notes. No notes leaves an empty step. A note that stays keeps its
+// length; one that is new lasts as long as the step did.
 export function withStepNotes(step: SequencerStep, notes: string[]): SequencerStep {
   const sorted = [...new Set(notes)].sort((a, b) => (noteNameToMidi(a) ?? 0) - (noteNameToMidi(b) ?? 0)).slice(0, MAX_STEP_NOTES);
-  const { note: _note, notes: _notes, length, probability, ratchet, offset, ...rest } = step;
+  const { note: _note, notes: _notes, length, lengths: _lengths, probability, ratchet, offset, ...rest } = step;
   if (sorted.length === 0) return { ...rest, active: false };
-  return { ...rest, ...(offset && offset > 0 ? { offset } : {}), ...(probability !== undefined && probability < 1 ? { probability } : {}), ...(ratchet && ratchet > 1 ? { ratchet } : {}), active: true, note: sorted[0], ...(sorted.length > 1 ? { notes: sorted.slice(1) } : {}), ...(length && length > 1 ? { length } : {}) };
+  const before = new Map(stepNotes(step).map((note, index) => [note, noteLengths(step)[index]]));
+  const whole = Math.max(1, length ?? 1);
+  return { ...rest, ...(offset && offset > 0 ? { offset } : {}), ...(probability !== undefined && probability < 1 ? { probability } : {}), ...(ratchet && ratchet > 1 ? { ratchet } : {}), active: true, note: sorted[0], ...(sorted.length > 1 ? { notes: sorted.slice(1) } : {}), ...lengthFields(sorted.map(note => before.get(note) ?? whole)) };
+}
+
+// The step with every note lasting this many steps, or with one note doing so and the rest as they were.
+export function withStepLength(step: SequencerStep, length: number, note?: string): SequencerStep {
+  const notes = stepNotes(step), wanted = Math.max(1, Math.round(length));
+  const { length: _length, lengths: _lengths, ...rest } = step;
+  if (notes.length === 0) return rest;
+  const current = noteLengths(step);
+  return { ...rest, ...lengthFields(notes.map((entry, index) => (note === undefined || entry === note ? wanted : current[index]))) };
 }
 
 export interface ScheduledNote {
@@ -115,7 +147,8 @@ export function expandStepNotes(
   function onTheStep(): ScheduledNote[] {
   if (params.arpeggiator?.enabled) return expandStep(notes[0], params, windowSeconds, tempo, step.slide, step.length, notes);
   const repeats = Math.max(1, Math.min(MAX_RATCHET, Math.round(step.ratchet ?? 1)));
-  if (repeats === 1) return notes.flatMap(note => expandStep(note, params, windowSeconds, tempo, step.slide, step.length));
+  const lengths = noteLengths(step);
+  if (repeats === 1) return notes.flatMap((note, index) => expandStep(note, params, windowSeconds, tempo, step.slide, lengths[index]));
   // Repeats split the step's whole length evenly; only the last one can slide on.
   const span = windowSeconds * Math.max(1, step.length ?? 1) / repeats;
   return Array.from({ length: repeats }, (_, index) => index).flatMap(index => notes.map(note => ({

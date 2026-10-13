@@ -164,11 +164,17 @@ export function sanitizeSteps(value: unknown, bars: unknown = 1): Pattern['steps
     const extras = note && Array.isArray(step.notes)
       ? [...new Set((step.notes as unknown[]).filter((entry): entry is string => typeof entry === 'string' && noteNameToMidi(entry) !== null && entry !== note))].slice(0, MAX_STEP_NOTES - 1)
       : [];
-    const length = note && Number.isInteger(step.length) ? Math.max(1, Math.min(32 * MAX_BARS, step.length)) : 1;
+    const whole = note && Number.isInteger(step.length) ? Math.max(1, Math.min(32 * MAX_BARS, step.length)) : 1;
+    // A length for each note, lowest first, each within the step's. The step's length is the longest of them.
+    const own = note && Array.isArray(step.lengths)
+      ? [note, ...extras].map((_, at) => (Number.isInteger(step.lengths[at]) ? Math.max(1, Math.min(whole, step.lengths[at])) : whole))
+      : null;
+    const length = own ? Math.max(...own) : whole;
+    const lengths = own?.some(entry => entry !== length) ? own : null;
     return {
       active: step.active === true && Boolean(note), ...(note ? { note } : {}), velocity: number(step.velocity, .7, 0, 1),
       ...(step.slide === true ? { slide: true } : {}),
-      ...(extras.length ? { notes: extras } : {}), ...(length > 1 ? { length } : {}),
+      ...(extras.length ? { notes: extras } : {}), ...(length > 1 ? { length } : {}), ...(lengths ? { lengths } : {}),
       ...(note && typeof step.probability === 'number' && step.probability >= 0 && step.probability < 1 ? { probability: step.probability } : {}),
       ...(note && Number.isInteger(step.ratchet) && step.ratchet > 1 ? { ratchet: Math.min(4, step.ratchet) } : {}),
       ...(note && typeof step.offset === 'number' && step.offset > 0 ? { offset: Math.min(MAX_STEP_OFFSET, step.offset) } : {}),

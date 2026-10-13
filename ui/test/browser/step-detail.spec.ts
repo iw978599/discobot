@@ -24,6 +24,8 @@ test('a note is stretched by dragging its end, and can start between steps', asy
 
   // Dragging is a mouse gesture here; touch has the Note length menu, checked below.
   if (testInfo.project.name === 'chromium') {
+    // By itself a note is stretched alone; with Whole step on, its whole chord goes with it.
+    await lane.getByRole('button', { name: 'Whole step', exact: true }).click();
     const from = (await handle.boundingBox())!, to = await centre('C3', 4);
     await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
     await page.mouse.down();
