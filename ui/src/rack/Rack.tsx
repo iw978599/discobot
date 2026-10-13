@@ -260,6 +260,10 @@ export default function Rack({ studio }: { studio: Studio }) {
             onModeChange={studio.setMidiMode}
             channel={studio.midiChannel}
             onChannelChange={studio.setMidiChannel}
+            ties={studio.midiTies}
+            learning={studio.midiLearn}
+            onLearn={studio.setMidiLearn}
+            onTieRemove={studio.handleMidiTieRemove}
             synthIds={studio.synths.map(synth => synth.id)}
             targetSynthId={studio.midiTargetSynthId}
             onTargetSynthChange={studio.setMidiTargetSynthId}
