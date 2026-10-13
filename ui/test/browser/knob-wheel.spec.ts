@@ -151,11 +151,10 @@ test('the middle button puts a knob back at its default, as one undo step', asyn
 
   // A drum knob: there is no swing to begin with.
   const swing = page.getByRole('slider', { name: 'Swing', exact: true });
-  await rest(page, swing);
-  await page.mouse.wheel(0, -100);
-  await expect.poll(async () => Number(await swing.getAttribute('aria-valuenow'))).toBeGreaterThan(Number(await swing.getAttribute('aria-valuemin')));
+  await edit(page.getByLabel('Swing value', { exact: true }), '30%');
+  await expect(swing).toHaveAttribute('aria-valuenow', '0.3');
   await swing.click({ button: 'middle' });
-  expect(await swing.getAttribute('aria-valuenow')).toBe(await swing.getAttribute('aria-valuemin'));
+  await expect(swing).toHaveAttribute('aria-valuenow', '0');
 });
 
 test('the drum knobs and the effects knobs turn with the wheel too', async ({ page }) => {
