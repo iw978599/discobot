@@ -575,6 +575,13 @@ may redistribute.
     older projects play as they did, and carried through playback, the
     arpeggiator, WAV and MIDI export and MIDI import (`expandStepNotes`).
     That makes this larger than the (S) above: (M).
+    First part done on 2026-10-13: the piano roll has a Chord menu (major,
+    minor, seventh, major and minor 7th, sus 2, sus 4, diminished, fifth).
+    With a shape chosen, a note put in is the root and the rest of the
+    chord comes with it, as one edit. Each note can be taken out by
+    itself. Still open: a length for each note, so one note of a chord can
+    be made longer than the others, and the toggle between one note and
+    the whole step; inversions.
 
 16. **One row for a project and its copies.** Done: asked for by the owner on
     2026-10-12 and built. In Projects, a project and the ones the app named

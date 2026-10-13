@@ -226,6 +226,9 @@ Behaviour:
    note; each note of a chord can then be deleted or lengthened by itself,
    perhaps with a toggle between one note and the whole step. The roadmap
    item has it in full, and says why it needs a length for each note.
+   First part built on `feat/design-review-chord-buttons` (check its pull
+   request's state): a shape, then the root, and each note taken out by
+   itself. A length for each note, and the toggle, are still to do.
 
 ### Step 5. MIDI work (roadmap features 6)
 

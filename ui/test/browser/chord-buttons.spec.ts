@@ -1,0 +1,57 @@
+import { expect, test, type Page } from '@playwright/test';
+
+const stored = (page: Page) => page.evaluate(() => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem('discobot_browser_project_v1') || '{}')));
+const notesAt = async (page: Page, step: number) => {
+  const found = (await stored(page)).synths[0].pattern.steps[step];
+  return found.active ? [found.note, ...(found.notes ?? [])] : [];
+};
+
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'requestMIDIAccess', { configurable: true, value: undefined });
+    localStorage.setItem('discobot_walkthrough_v1', 'seen');
+  });
+  await page.goto('./');
+  await expect(page.getByRole('heading', { name: 'Discobot', exact: true })).toBeVisible();
+});
+
+test('with a chord shape chosen, a note put in the piano roll is the root of a whole chord, and each note can still be taken out', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const lane = page.getByRole('region', { name: 'Synth 1 module', exact: true });
+  await lane.getByRole('button', { name: 'Piano Roll', exact: true }).click();
+  const shape = lane.getByLabel('Chord shape', { exact: true });
+  const cell = (note: string, step: number) => lane.getByRole('button', { name: `${note} step ${step}`, exact: true });
+
+  // Off to begin with: one press, one note.
+  await expect(shape).toHaveValue('off');
+  await cell('C3', 1).click();
+  await expect.poll(() => notesAt(page, 0)).toEqual(['C3']);
+
+  // A shape, then the root.
+  await shape.selectOption({ label: 'Minor' });
+  await cell('A3', 5).click();
+  await expect.poll(() => notesAt(page, 4)).toEqual(['A3', 'C4', 'E4']);
+  for (const note of ['A3', 'C4', 'E4']) await expect(cell(note, 5)).toHaveAttribute('aria-pressed', 'true');
+
+  // One note of it is taken out by itself, and the others stay.
+  await cell('C4', 5).click();
+  await expect.poll(() => notesAt(page, 4)).toEqual(['A3', 'E4']);
+
+  // The chord went in as one edit: one Undo puts the note back, a second takes the whole chord out.
+  const undo = page.getByRole('button', { name: 'Undo', exact: true });
+  await undo.click();
+  await expect.poll(() => notesAt(page, 4)).toEqual(['A3', 'C4', 'E4']);
+  await undo.click();
+  await expect.poll(() => notesAt(page, 4)).toEqual([]);
+  await expect.poll(() => notesAt(page, 0), 'the note from before is untouched').toEqual(['C3']);
+
+  // A four-note shape, and Off again.
+  await shape.selectOption({ label: 'Seventh' });
+  await cell('G3', 9).click();
+  await expect.poll(() => notesAt(page, 8)).toEqual(['G3', 'B3', 'D4', 'F4']);
+  await shape.selectOption({ label: 'Off' });
+  await cell('D3', 13).click();
+  await expect.poll(() => notesAt(page, 12)).toEqual(['D3']);
+  expect(errors).toEqual([]);
+});
