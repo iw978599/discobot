@@ -286,6 +286,7 @@
 .save-state.full { margin-left: 12px; align-self: center; width: auto; font-family: var(--sentence-font); font-weight: 400; font-size: var(--type-label); text-transform: none; letter-spacing: 0; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .tempo-display-group { display: flex; align-items: center; gap: 6px; }
+.metronome-switches { display: flex; align-items: center; gap: 4px; }
 .tempo-led {
   display: flex; align-items: baseline; gap: 8px; cursor: text;
   background: var(--surface-display); border: 1px solid #000; border-radius: var(--corner-panel); padding: 3px 10px;

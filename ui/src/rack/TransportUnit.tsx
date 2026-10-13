@@ -56,6 +56,29 @@ export default function TransportUnit({ studio, onOpenSettings, onOpenProjects, 
     measure();
     return () => observer.disconnect();
   }, []);
+  // Beside Tap on a wide screen. On a narrow one the line with the tempo and Play has no room, so
+  // they go with the buttons above it.
+  const metronome = (
+    <div className="metronome-switches" role="group" aria-label="Metronome">
+      <button
+        className={`rack-btn ${studio.metronome.click ? 'on' : ''}`}
+        aria-pressed={studio.metronome.click}
+        title="Metronome: a click on every beat while playing. It is not in an export"
+        onClick={() => studio.handleMetronomeChange({ click: !studio.metronome.click })}
+      >
+        Click
+      </button>
+      <button
+        className={`rack-btn ${studio.metronome.countIn ? 'on' : ''}`}
+        aria-pressed={studio.metronome.countIn}
+        title="Count-in: one bar of clicks before playing starts"
+        onClick={() => studio.handleMetronomeChange({ countIn: !studio.metronome.countIn })}
+      >
+        Count
+      </button>
+    </div>
+  );
+
   return (
     <header ref={barRef} className="rack-unit transport">
       <div className="rack-row">
@@ -69,10 +92,12 @@ export default function TransportUnit({ studio, onOpenSettings, onOpenProjects, 
           </div>
         </div>
         <TempoDisplay tempo={studio.globalTempo} onChange={(bpm) => { void studio.handleTempoChange(bpm); }} />
+        {!narrow && metronome}
         <button className={`rack-btn go play-all-button ${studio.isAnyPlaying ? 'playing' : ''}`} onClick={() => { void studio.handleGlobalPlayStop(); }} title={`${studio.isAnyPlaying ? 'Stop' : 'Start'} every lane and the drums (Space)`}>
           {studio.isAnyPlaying ? '⏹ Stop All' : '▶ Play All'}
         </button>
         <div className="rack-grow" />
+        {narrow && metronome}
         <button className="rack-btn" onClick={() => { void studio.handleUndo(); }} title="Undo (Ctrl/Cmd+Z)">Undo</button>
         <button className="rack-btn" onClick={() => { void studio.handleRedo(); }} title="Redo (Ctrl/Cmd+Shift+Z)">Redo</button>
         <Menu

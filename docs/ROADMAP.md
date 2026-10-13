@@ -354,6 +354,10 @@ may redistribute.
    MIDI record mode writes to the step under the playhead. Add a metronome, a
    count-in and quantize strength so playing in a part is practical, from the
    on-screen keyboard as well as MIDI.
+   Done on 2026-10-13, not verified by ear: the metronome (Click) and a
+   one-bar count-in (Count), beside Tap, kept per browser and in no export.
+   Still open: quantize strength, recording from the on-screen keyboard,
+   a level for the click, and a count-in of more than one bar.
 
 4. **More ways to edit patterns.** (M)
    Lengths that are not a whole number of bars (a 12-step lane against 16);
