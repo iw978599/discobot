@@ -834,6 +834,7 @@ on the owner's laptop.
 | `states-step-row`, `states-step-row-2` | One row of steps with the states beside each other: a mute that is on, a step selected, a step focused and (desktop) a step under the pointer; in `-2` the selected step is the focused one |
 | `focus-step-empty`, `states-drum-grid` | The focus ring on an empty step two along from an empty selected one, and on a drum step beside a picked one |
 | `states-song` | The song unit with the open scene lit and focus on the other scene |
+| `unit-song-playlist` | The song unit with the song shown as a playlist: a row for each entry, focus on a move button |
 | `focus-menu-row`, `focus-dialog-field` | The focus ring on a row of the Project menu and on a field in a dialog |
 | `state-disabled-step-tools` | The step controls with an empty step selected: three of them disabled |
 | `state-tempo-edit` | The tempo being typed |

@@ -554,6 +554,18 @@ may redistribute.
     or repeats, are still design choices. This is the project's song
     arrangement, not a playlist of published songs, a discovery page or a new
     cloud service.
+    **Done on 2026-10-13**, as a second way of showing the song beside the
+    blocks: a Blocks/Playlist switch in the song unit, remembered per browser,
+    with the blocks still the default. The playlist is a row for each entry in
+    playing order with its place, the scene's colour and name, its repeats, the
+    bars of one pass and of the whole row, when it starts and how long it lasts
+    at the project's tempo, a lamp on the row that is playing, and a total at
+    the foot. Each row has buttons to move it earlier or later, change its
+    repeats, remove it, add a chosen scene after it and open its scene; a
+    scene can also be added at the end. A row's duration is shown both ways,
+    in bars and in repeats. Still open: dragging a row to reorder it was not
+    built; times assume four beats to a bar, as the rest of the app does; the
+    playlist has not been seen on a real screen or tried with a screen reader.
 
 15. **Chord buttons in the piano roll.** (S) Asked for by the owner on
     2026-10-12. Offer buttons to insert editable chord notes at the selected
