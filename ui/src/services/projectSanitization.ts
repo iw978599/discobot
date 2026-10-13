@@ -1,6 +1,7 @@
 import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, Scene, SceneMutes, Song, SynthParameters, SynthModelParams } from '../types';
 import { MAX_MOD_ROUTES, MOD_DESTINATIONS, MOD_SOURCES, type ModRoute } from '@discobot/engine';
 import { DELAY_SYNCS } from './delayTime';
+import { storedRateSync } from './rateSync';
 import { CHORUS_DEFAULT, EQ_RANGE_DB, MAX_PRE_DELAY } from './effectSettings';
 import { MAX_STEP_NOTES, MAX_STEP_OFFSET } from './noteScheduling';
 import { BAR_CHOICES, DRUM_STEPS_PER_BAR, MAX_BARS, clampLengths, laneBars } from './patternLength';
@@ -94,7 +95,7 @@ export function sanitizeSynthParams(value: unknown, defaults: SynthParameters): 
     ...(typeof sample.id === 'string' && /^[0-9a-f-]{36}$/.test(sample.id) ? { id: sample.id } : {}),
     root: Math.round(number(sample.root, 60, 0, 127)), loop: sample.loop === true,
     ...(typeof sample.wave === 'string' && /^[a-z0-9-]{1,32}$/.test(sample.wave)
-      ? { wave: sample.wave, scan: number(sample.scan, 2, 0, 40), fade: number(sample.fade, 1, 0, 1) } : {}),
+      ? { wave: sample.wave, scan: number(sample.scan, 2, 0, 40), fade: number(sample.fade, 1, 0, 1), ...(storedRateSync(sample.sync) ? { sync: storedRateSync(sample.sync) } : {}) } : {}),
   };
   params.voiceMode = input.voiceMode === 'mono' ? 'mono' : 'poly';
   params.oscillator.pulseWidth = number(params.oscillator.pulseWidth, .5, .05, .95);
@@ -286,6 +287,9 @@ export function sanitizeEffects(value: unknown, defaults: EffectsLoopState): Eff
   state.drive.amount = number(state.drive.amount, defaults.drive.amount, 0, 1);
   state.drive.tone = number(state.drive.tone, defaults.drive.tone, 0, 1);
   state.phaser.rate = number(state.phaser.rate, defaults.phaser.rate, .05, 8);
+  const phaserSync = storedRateSync(record(record(value).phaser).sync);
+  if (phaserSync) state.phaser.sync = phaserSync;
+  else delete state.phaser.sync;
   state.phaser.depth = number(state.phaser.depth, defaults.phaser.depth, 0, 1);
   state.phaser.feedback = number(state.phaser.feedback, defaults.phaser.feedback, 0, .75);
   state.phaser.mix = number(state.phaser.mix, defaults.phaser.mix, 0, 1);
@@ -307,6 +311,7 @@ export function sanitizeEffects(value: unknown, defaults: EffectsLoopState): Eff
     state.chorus = {
       enabled: chorus.enabled === true, rate: number(chorus.rate, CHORUS_DEFAULT.rate, .05, 8),
       depth: number(chorus.depth, CHORUS_DEFAULT.depth, 0, 1), mix: number(chorus.mix, CHORUS_DEFAULT.mix, 0, 1),
+      ...(storedRateSync(chorus.sync) ? { sync: storedRateSync(chorus.sync) } : {}),
     };
   }
   if (raw.eq !== null && typeof raw.eq === 'object') {

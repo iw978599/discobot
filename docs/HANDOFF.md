@@ -162,9 +162,10 @@ app's own waves). The owner has heard little of the sound work: see section 5.
 
 Asked for on 2026-10-12 and put first by the owner: "everything with a
 rate knob should have a sync button that syncs to tempo ... bump it to the
-top". The LFOs and the delay have one. The phaser, the chorus and the
-speed of a sequence of waves do not. The roadmap item lists them and what
-is to settle.
+top". Built on `feat/design-review-tempo-sync` for the phaser, the chorus
+and the speed of a sequence of waves (check its pull request's state).
+The roadmap item says what is still open, and the owner has not said
+whether that is enough.
 
 ### Step 2. The drum cymbals (roadmap sound 8)
 

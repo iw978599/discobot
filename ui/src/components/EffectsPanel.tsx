@@ -1,5 +1,6 @@
 import { memo } from 'react';
-import { DelaySync, EffectsLoopState } from '../types';
+import { DelaySync, EffectsLoopState, RateSync } from '../types';
+import { RATE_SYNCS, RATE_SYNC_LABELS } from '../services/rateSync';
 import { DELAY_SYNCS, DELAY_SYNC_LABELS } from '../services/delayTime';
 import { CHORUS_DEFAULT, EQ_DEFAULT, EQ_RANGE_DB, MAX_PRE_DELAY } from '../services/effectSettings';
 import Knob from './Knob';
@@ -28,6 +29,8 @@ const parseMs = (input: string): number | null => {
 
 function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProps) {
   const synced = Boolean(effectsLoop.delay.sync && effectsLoop.delay.sync !== 'off');
+  const chorusSynced = Boolean(effectsLoop.chorus?.sync && effectsLoop.chorus.sync !== 'off');
+  const phaserSynced = Boolean(effectsLoop.phaser.sync && effectsLoop.phaser.sync !== 'off');
   const chorus = effectsLoop.chorus ?? CHORUS_DEFAULT, eq = effectsLoop.eq ?? EQ_DEFAULT;
   const decibels = (value: number) => `${value > 0 ? '+' : ''}${value.toFixed(1)}dB`;
   return (
@@ -112,16 +115,28 @@ function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProps) {
               />
               <span>On</span>
             </label>
+            <label className="effects-toggle" title="Set the sweep to a note value so it stays in time when the tempo changes">
+              <span>Sync</span>
+              <select
+                aria-label="Phaser sync"
+                value={effectsLoop.phaser.sync ?? 'off'}
+                onChange={(e) => onChange({ phaser: { ...effectsLoop.phaser, sync: e.target.value as RateSync } })}
+              >
+                {RATE_SYNCS.map(value => <option key={value} value={value}>{RATE_SYNC_LABELS[value]}</option>)}
+              </select>
+            </label>
           </div>
           <div className="effects-knobs">
             <Knob
               label="Rate"
+              ariaLabel="Phaser rate"
               value={effectsLoop.phaser.rate}
               min={0.05}
               max={8}
               step={0.01}
-              displayValue={`${effectsLoop.phaser.rate.toFixed(2)}Hz`}
-              onChange={(value) => onChange({ phaser: { ...effectsLoop.phaser, rate: value } })}
+              displayValue={phaserSynced ? RATE_SYNC_LABELS[effectsLoop.phaser.sync!] : `${effectsLoop.phaser.rate.toFixed(2)}Hz`}
+              tooltip={phaserSynced ? 'Following the tempo. Turn the knob to set a free rate instead' : 'How fast the phaser sweeps'}
+              onChange={(value) => onChange({ phaser: { ...effectsLoop.phaser, rate: value, sync: 'off' } })}
               color="#3b82f6"
             />
             <Knob
@@ -228,6 +243,16 @@ function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProps) {
               />
               <span>On</span>
             </label>
+            <label className="effects-toggle" title="Set the sweep to a note value so it stays in time when the tempo changes">
+              <span>Sync</span>
+              <select
+                aria-label="Chorus sync"
+                value={chorus.sync ?? 'off'}
+                onChange={(e) => onChange({ chorus: { ...chorus, sync: e.target.value as RateSync } })}
+              >
+                {RATE_SYNCS.map(value => <option key={value} value={value}>{RATE_SYNC_LABELS[value]}</option>)}
+              </select>
+            </label>
           </div>
           <div className="effects-knobs">
             <Knob
@@ -237,9 +262,9 @@ function EffectsPanel({ effectsLoop, onChange }: EffectsPanelProps) {
               min={0.05}
               max={8}
               step={0.01}
-              displayValue={`${chorus.rate.toFixed(2)}Hz`}
-              onChange={(value) => onChange({ chorus: { ...chorus, rate: value } })}
-              tooltip="How fast the chorus sweeps"
+              displayValue={chorusSynced ? RATE_SYNC_LABELS[chorus.sync!] : `${chorus.rate.toFixed(2)}Hz`}
+              onChange={(value) => onChange({ chorus: { ...chorus, rate: value, sync: 'off' } })}
+              tooltip={chorusSynced ? 'Following the tempo. Turn the knob to set a free rate instead' : 'How fast the chorus sweeps'}
               color="#14b8a6"
             />
             <Knob

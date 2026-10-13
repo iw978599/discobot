@@ -593,6 +593,15 @@ for new accounts.
     box and the delay a menu), and whether dotted and triplet values are
     offered. A control added later that has a rate should come with its
     sync.
+    Built on 2026-10-12, not verified by ear: the phaser, the chorus and
+    the speed of a sequence of waves each have a Sync menu, from once every
+    eight bars to once a sixteenth. The knob shows the note value while
+    synced, and turning it sets a free rate again. Still open: the three
+    looks are still three (a tick box on the LFOs, the delay's own menu
+    with dotted and triplet values, and this menu without them); the
+    Wavestation model's Speed knob does nothing while its sequence is
+    synced; and the rates a model sets without showing them are LFOs, which
+    can be synced on the LFO tab but are not when the model is chosen.
 
 19. **Transpose.** (S to M) Asked for by the owner on 2026-10-12. Nothing
     moves notes up or down today except a lane's octave setting, which
