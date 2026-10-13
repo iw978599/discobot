@@ -1,7 +1,11 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
 const DRUMS = ['Kick', 'Snare', 'Clap', 'Closed Hat', 'Open Hat', 'Low Tom', 'High Tom', 'Cymbal'];
-const tab = (page: Page, name: string) => page.getByRole('tab', { name, exact: true }).click();
+// The editor has two levels, Notes and Sound; the pages of the sound (Osc, Filter and the rest) are under Sound.
+const tab = async (page: Page, name: string) => {
+  if (name !== 'Notes' && name !== 'Sound') await page.getByRole('tab', { name: 'Sound', exact: true }).click();
+  await page.getByRole('tab', { name, exact: true }).click();
+};
 
 // Whether a piece of text is cut off or spills out of its box.
 const clipped = (locator: Locator) => locator.evaluate(element => element.scrollWidth > element.clientWidth + 1 || element.scrollHeight > element.clientHeight + 1);
@@ -69,5 +73,6 @@ test('a knob has one name wherever it appears', async ({ page }) => {
 test('a lane says the same model name under its name as in its Model menu', async ({ page }) => {
   const under = page.getByRole('button', { name: 'Synth 1', exact: true }).locator('span');
   await expect(under).toHaveText('Generic');
+  await tab(page, 'Sound');
   await expect(page.getByLabel('Synth model', { exact: true }).first().locator('option:checked')).toHaveText('Generic');
 });

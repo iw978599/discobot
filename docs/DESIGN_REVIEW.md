@@ -276,7 +276,7 @@ stays when scrolled, which is right; the trouble is the first screen.
 Fix: see redesign A. As a small first step: put the volume knob inside the
 Mute button's line at button height, and drop the gaps.
 
-### 9. On a phone the way to a lane's notes is long. Fault, medium.
+### 9. On a phone the way to a lane's notes is long. Fault, medium. **The first cause is done as redesign B**: the model and the preset tools are inside Sound, so Notes is the two levels, Length and Bars, and then the keyboard or piano roll. The second cause, the tall band the hint and the step controls share, is as it was.
 
 Opening a lane on a phone shows: name, sixteen steps, five knobs, then a
 block of Hold, Model, Preset, a name box, Save, Delete, Import and Export
@@ -484,6 +484,18 @@ sheet; it would have to open the sheet for those stops. Undo is used often
 and must not end up two taps away.
 
 ### B. A lane's editor in two levels
+
+**Done.** The open lane's editor has two tabs, Notes and Sound. Notes holds the step controls
+and the keyboard or piano roll and nothing else. Sound holds the model, the presets with their
+tools, and under them the six pages as a row of tabs of their own; it opens again on the page it
+was left on. Both rows work with the arrow keys. What was built differently from the proposal
+below: Hold and Remove are on the line of the two levels and show on both, since Hold is about
+playing and Remove about the lane; Save, Delete, Import and Export are still four buttons, not a
+"more" menu; a lane opens on Notes every visit, and which level is open is not remembered between
+visits. Two parts of the proposal are not built: the pages side by side on a wide screen (every
+browser test of the sound finds its controls a page at a time), and the preset's name on the
+lane's top line (which preset a lane was last given is not stored, so there is nothing to show
+after a reload). Seen only in the pictures the checks take, not on a real screen.
 
 **Now.** One open lane shows: steps and five knobs; then Hold, Model and
 six preset controls; then seven tabs of equal weight (Notes, Osc, Filter,
@@ -891,7 +903,8 @@ on the owner's laptop.
 | `unit-synth-piano-roll` | An open lane with the piano roll |
 | `unit-keyboard` | The on-screen keyboard |
 | `step-tools-selected` | The step controls with a step that holds a note |
-| `synth-tab-osc`, `-filter`, `-lfo`, `-sends` | Four pages of the sound editor |
+| `lane-editor-notes`, `lane-editor-sound` | The open lane's editor on each of its two levels: Notes with the keyboard, and Sound with the model, the presets and the first page |
+| `synth-tab-osc`, `-filter`, `-lfo`, `-sends` | Four pages of the sound editor, under Sound |
 | `unit-drums-more-sends` | The drums with More and Sends open |
 | `hover-button`, `hover-step` | A button and a step under the pointer |
 
@@ -902,7 +915,8 @@ on the owner's laptop.
 | `phone-unit-song`, `phone-unit-drums`, `phone-unit-drums-2`, `phone-unit-effects`, `phone-unit-effects-2` | One unit at a time; `-2` is the same unit scrolled down |
 | `phone-unit-synth`, `phone-unit-synth-2`, `phone-unit-synth-3` | Lane 1 at the top and scrolled; lane 3, empty |
 | `phone-piano-roll`, `phone-keyboard` | The piano roll and the keyboard |
-| `phone-synth-tab-osc`, `-filter`, `-sends` | Three pages of the sound editor |
+| `phone-lane-editor-notes`, `phone-lane-editor-sound` | The open lane's editor on each of its two levels, from its top |
+| `phone-synth-tab-osc`, `-filter`, `-sends` | Three pages of the sound editor, under Sound |
 | `phone-knob-sheet` | The large slider a tapped knob opens |
 | `phone-unit-all` | "All": the whole rack on one page |
 | `phone-landscape-synth`, `phone-landscape-keyboard`, `phone-landscape-drums` | A phone on its side, 740 by 360 |

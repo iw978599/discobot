@@ -3,7 +3,7 @@
  * Organized like a classic analog synthesizer panel
  */
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { MAX_MOD_ROUTES, MOD_DESTINATIONS, MOD_SOURCES, createDefaultSynthParameters, type ModDestination, type ModRoute, type ModSource } from '@discobot/engine';
 import { SynthParameters, OscillatorType, RateSync, SynthModelId } from '../types';
 import { SYNTH_MODELS, SYNTH_MODEL_GROUPS } from '../synthModels';
@@ -29,7 +29,7 @@ interface SynthControlsProps {
   onModelChange: (modelId: SynthModelId) => void;
   tab: SynthTab;
   onTabChange: (tab: SynthTab) => void;
-  // shown on the Notes tab: step tools and the keyboard
+  // shown on the Notes level: step tools and the keyboard
   notes: ReactNode;
   onRemove?: () => void;
   // Goes up when samples arrive from somewhere else (an imported project file), so the list is read again.
@@ -38,10 +38,28 @@ interface SynthControlsProps {
 }
 
 export type SynthTab = 'notes' | 'osc' | 'filter' | 'amp' | 'lfo' | 'arp' | 'sends';
-const TABS: Array<{ id: SynthTab; label: string }> = [
-  { id: 'notes', label: 'Notes' }, { id: 'osc', label: 'Osc' }, { id: 'filter', label: 'Filter' }, { id: 'amp', label: 'Amp' },
+// The editor has two levels: what the lane plays, and what it sounds like. Sound has a page for
+// each of the rest of `SynthTab`; a lane on any of them is on the Sound level.
+type SynthLevel = 'notes' | 'sound';
+const LEVELS: Array<{ id: SynthLevel; label: string }> = [{ id: 'notes', label: 'Notes' }, { id: 'sound', label: 'Sound' }];
+const SOUND_TABS: Array<{ id: SynthTab; label: string }> = [
+  { id: 'osc', label: 'Osc' }, { id: 'filter', label: 'Filter' }, { id: 'amp', label: 'Amp' },
   { id: 'lfo', label: 'LFO' }, { id: 'arp', label: 'Arp' }, { id: 'sends', label: 'Sends' },
 ];
+
+// In a row of tabs the arrow keys, Home and End move to a tab and open it; Tab leaves the row.
+const tabKeys = (event: KeyboardEvent<HTMLDivElement>) => {
+  const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]'));
+  const at = tabs.indexOf(event.target as HTMLElement);
+  const to = event.key === 'ArrowRight' ? (at + 1) % tabs.length
+    : event.key === 'ArrowLeft' ? (at + tabs.length - 1) % tabs.length
+      : event.key === 'Home' ? 0
+        : event.key === 'End' ? tabs.length - 1 : -1;
+  if (at < 0 || to < 0 || event.ctrlKey || event.metaKey || event.altKey) return;
+  event.preventDefault();
+  tabs[to].focus();
+  tabs[to].click();
+};
 const COLUMN_TABS: Record<string, SynthTab> = {
   OSC: 'osc', FM: 'osc', 'OSC 2': 'osc', MIX: 'osc', VOICE: 'osc',
   FILTER: 'filter', 'FILTER MOD': 'filter', 'FILTER ENV': 'filter',
@@ -163,6 +181,13 @@ export default function SynthControls({
   const [presetName, setPresetName] = useState('');
   const [selectedPresetId, setSelectedPresetId] = useState('');
   const selectedPreset = presets.find((preset) => preset.id === selectedPresetId);
+  const level: SynthLevel = tab === 'notes' ? 'notes' : 'sound';
+  // The page Sound was last on, which is where it opens again after a look at the notes.
+  const [soundTab, setSoundTab] = useState<SynthTab>(tab === 'notes' ? 'osc' : tab);
+  const open = (next: SynthTab) => {
+    if (next !== 'notes') setSoundTab(next);
+    onTabChange(next);
+  };
   const updateOscillator = (updates: Partial<SynthParameters['oscillator']>) => {
     onParameterChange({
       oscillator: { ...parameters.oscillator, ...updates },
@@ -263,8 +288,22 @@ export default function SynthControls({
 
   return (
     <div className="synth-controls-panel">
-      <div className="synth-header">
-        <div className="synth-octave-controls">
+      <div className="synth-level-row">
+        <div className="synth-tabs synth-levels" role="tablist" aria-label="Synth editor" onKeyDown={tabKeys}>
+          {LEVELS.map((entry) => (
+            <button
+              key={entry.id}
+              role="tab"
+              aria-selected={level === entry.id}
+              tabIndex={level === entry.id ? 0 : -1}
+              className={level === entry.id ? 'active' : ''}
+              onClick={() => open(entry.id === 'notes' ? 'notes' : soundTab)}
+            >
+              {entry.label}
+            </button>
+          ))}
+        </div>
+        <div className="synth-header-tools">
           <label className="synth-toggle" title={TOOLTIPS.hold}>
             <input
               type="checkbox"
@@ -275,128 +314,133 @@ export default function SynthControls({
             <span className="synth-toggle-slider" />
           </label>
           <span className="octave-shift-value">HOLD</span>
-          <div className="model-selector-wrap">
-            <label>MODEL</label>
-            <select
-              className="synth-select model-select"
-              aria-label="Synth model"
-              value={synthModelId}
-              onChange={(e) => onModelChange(e.target.value as SynthModelId)}
-              title="Synth model - changes the character and behavior of the synthesizer"
-            >
-              {SYNTH_MODELS.filter(entry => !entry.group).map((entry) => (
-                <option key={entry.id} value={entry.id}>{entry.name}</option>
-              ))}
-              {SYNTH_MODEL_GROUPS.map(group => (
-                <optgroup key={group} label={group}>
-                  {SYNTH_MODELS.filter(entry => entry.group === group).map((entry) => (
-                    <option key={entry.id} value={entry.id}>{entry.name}</option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-          </div>
-        </div>
-        <div className="synth-header-tools">
           {onRemove && (
             <button className="rack-btn" onClick={onRemove} title="Remove this synth lane">Remove</button>
           )}
-          <div className="preset-controls">
-            <NestedMenu
-              label="Synth preset"
-              text={selectedPreset?.name ?? 'Preset…'}
-              mark={selectedPreset?.builtIn ? BUILT_IN_MARK : undefined}
-              title={selectedPreset ? `${selectedPreset.name} (${selectedPreset.builtIn ? 'built in' : 'one of your own'})` : 'Choose a preset for this lane'}
-              groups={groupPresets(presets).map((group) => ({
-                label: group.label,
-                items: group.presets.map((preset) => ({
-                  id: preset.id,
-                  label: preset.name,
-                  mark: preset.builtIn ? BUILT_IN_MARK : undefined,
-                  title: preset.builtIn ? BUILT_IN_HINT : undefined,
-                })),
-              }))}
-              onSelect={(id) => {
-                setSelectedPresetId(id);
-                onLoadPreset(id);
-              }}
-            />
-            <input
-              className="preset-name-input"
-              placeholder="Save preset"
-              aria-label="Preset name"
-              value={presetName}
-              onChange={(e) => setPresetName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  if (!presetName.trim()) return;
-                  onSavePreset(presetName.trim());
-                  setPresetName('');
-                }
-              }}
-            />
-            <button
-              className="rack-btn"
-              disabled={!presetName.trim()}
-              onClick={() => {
-                onSavePreset(presetName.trim());
-                setPresetName('');
-              }}
-            >
-              Save
-            </button>
-            <button
-              className="rack-btn"
-              disabled={!selectedPresetId || Boolean(presets.find((preset) => preset.id === selectedPresetId)?.builtIn)}
-              onClick={() => {
-                const selected = presets.find((preset) => preset.id === selectedPresetId);
-                if (selected && !selected.builtIn) {
-                  onDeletePreset(selected.id);
-                  setSelectedPresetId('');
-                }
-              }}
-              title="Delete selected user preset"
-            >
-              Delete
-            </button>
-            <label className="rack-btn preset-import" title="Load a preset file: one saved from Discobot, or one from another synth that Discobot knows how to translate">
-              Import
-              <input
-                type="file"
-                accept=".json,application/json"
-                aria-label="Import synth preset"
-                hidden
-                onChange={(event) => {
-                  const file = event.currentTarget.files?.[0];
-                  event.currentTarget.value = '';
-                  if (file) onImportPreset(file);
-                }}
-              />
-            </label>
-            <button
-              className="rack-btn"
-              title="Save this lane's sound as a file"
-              onClick={() => onExportPreset(presetName.trim() || presets.find(preset => preset.id === selectedPresetId)?.name || '')}
-            >
-              Export
-            </button>
-          </div>
         </div>
       </div>
 
-      <div className="synth-tabs" role="tablist" aria-label="Synth editor">
-        {TABS.map((entry) => (
-          <button
-            key={entry.id}
-            role="tab"
-            aria-selected={tab === entry.id}
-            className={tab === entry.id ? 'active' : ''}
-            onClick={() => onTabChange(entry.id)}
-          >
-            {entry.label}
-          </button>
-        ))}
-      </div>
+      {level === 'sound' && (
+        <>
+          <div className="synth-header">
+            <div className="model-selector-wrap">
+              <label>MODEL</label>
+              <select
+                className="synth-select model-select"
+                aria-label="Synth model"
+                value={synthModelId}
+                onChange={(e) => onModelChange(e.target.value as SynthModelId)}
+                title="Synth model - changes the character and behavior of the synthesizer"
+              >
+                {SYNTH_MODELS.filter(entry => !entry.group).map((entry) => (
+                  <option key={entry.id} value={entry.id}>{entry.name}</option>
+                ))}
+                {SYNTH_MODEL_GROUPS.map(group => (
+                  <optgroup key={group} label={group}>
+                    {SYNTH_MODELS.filter(entry => entry.group === group).map((entry) => (
+                      <option key={entry.id} value={entry.id}>{entry.name}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+            <div className="preset-controls">
+              <NestedMenu
+                label="Synth preset"
+                text={selectedPreset?.name ?? 'Preset…'}
+                mark={selectedPreset?.builtIn ? BUILT_IN_MARK : undefined}
+                title={selectedPreset ? `${selectedPreset.name} (${selectedPreset.builtIn ? 'built in' : 'one of your own'})` : 'Choose a preset for this lane'}
+                groups={groupPresets(presets).map((group) => ({
+                  label: group.label,
+                  items: group.presets.map((preset) => ({
+                    id: preset.id,
+                    label: preset.name,
+                    mark: preset.builtIn ? BUILT_IN_MARK : undefined,
+                    title: preset.builtIn ? BUILT_IN_HINT : undefined,
+                  })),
+                }))}
+                onSelect={(id) => {
+                  setSelectedPresetId(id);
+                  onLoadPreset(id);
+                }}
+              />
+              <input
+                className="preset-name-input"
+                placeholder="Save preset"
+                aria-label="Preset name"
+                value={presetName}
+                onChange={(e) => setPresetName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    if (!presetName.trim()) return;
+                    onSavePreset(presetName.trim());
+                    setPresetName('');
+                  }
+                }}
+              />
+              <button
+                className="rack-btn"
+                disabled={!presetName.trim()}
+                onClick={() => {
+                  onSavePreset(presetName.trim());
+                  setPresetName('');
+                }}
+              >
+                Save
+              </button>
+              <button
+                className="rack-btn"
+                disabled={!selectedPresetId || Boolean(presets.find((preset) => preset.id === selectedPresetId)?.builtIn)}
+                onClick={() => {
+                  const selected = presets.find((preset) => preset.id === selectedPresetId);
+                  if (selected && !selected.builtIn) {
+                    onDeletePreset(selected.id);
+                    setSelectedPresetId('');
+                  }
+                }}
+                title="Delete selected user preset"
+              >
+                Delete
+              </button>
+              <label className="rack-btn preset-import" title="Load a preset file: one saved from Discobot, or one from another synth that Discobot knows how to translate">
+                Import
+                <input
+                  type="file"
+                  accept=".json,application/json"
+                  aria-label="Import synth preset"
+                  hidden
+                  onChange={(event) => {
+                    const file = event.currentTarget.files?.[0];
+                    event.currentTarget.value = '';
+                    if (file) onImportPreset(file);
+                  }}
+                />
+              </label>
+              <button
+                className="rack-btn"
+                title="Save this lane's sound as a file"
+                onClick={() => onExportPreset(presetName.trim() || presets.find(preset => preset.id === selectedPresetId)?.name || '')}
+              >
+                Export
+              </button>
+            </div>
+          </div>
+          <div className="synth-tabs synth-pages" role="tablist" aria-label="Sound pages" onKeyDown={tabKeys}>
+            {SOUND_TABS.map((entry) => (
+              <button
+                key={entry.id}
+                role="tab"
+                aria-selected={tab === entry.id}
+                tabIndex={tab === entry.id ? 0 : -1}
+                className={tab === entry.id ? 'active' : ''}
+                onClick={() => open(entry.id)}
+              >
+                {entry.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       {tab === 'notes' && notes}
       {tab === 'arp' && (

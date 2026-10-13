@@ -745,6 +745,8 @@
   /* the sound editor */
   .rack .synth-controls-panel { padding: 8px; }
   .rack .synth-header { flex-wrap: wrap; gap: 8px; }
+  .rack .synth-levels { flex-wrap: nowrap; }
+  .rack .synth-controls-panel .synth-levels button { min-width: 0; padding: 9px 16px; }
   .rack .preset-name-input { width: 110px; }
   .step-tools-swap { flex-basis: 100%; }
   /* The keyboard is made for a thumb: one octave across, each white key a finger wide and as

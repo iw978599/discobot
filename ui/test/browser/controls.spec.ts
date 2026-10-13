@@ -44,7 +44,9 @@ async function edit(control: Locator, text: string) {
 // The preset menu: a button, a list of groups, and a list of the chosen group's presets.
 const presetButton = (scope: Page | Locator) => scope.getByRole('button', { name: /^Synth preset/ });
 const presetRow = (scope: Page | Locator, group: string, name: string) => scope.getByRole('menu', { name: group, exact: true }).getByRole('menuitem', { name, exact: true });
+// The presets are on the editor's Sound level.
 async function openPresetGroup(scope: Page | Locator, group: string) {
+  await scope.getByRole('tab', { name: 'Sound', exact: true }).click();
   await presetButton(scope).click();
   await scope.locator(`[role="menuitem"][data-group="${group}"]`).click();
 }
@@ -59,7 +61,11 @@ async function closePresetMenu(page: Page, scope: Page | Locator = page) {
   await page.keyboard.press('Escape');
   await expect(presetButton(scope)).toHaveAttribute('aria-expanded', 'false');
 }
-const tab = (page: Page, name: string) => page.getByRole('tab', { name, exact: true }).click();
+// The editor has two levels, Notes and Sound; the pages of the sound (Osc, Filter and the rest) are under Sound.
+const tab = async (page: Page, name: string) => {
+  if (name !== 'Notes' && name !== 'Sound') await page.getByRole('tab', { name: 'Sound', exact: true }).click();
+  await page.getByRole('tab', { name, exact: true }).click();
+};
 async function menu(page: Page, name: 'Project' | 'Export', item: string) {
   if (name === 'Export') return exportAs(page, item);
   await more(page);

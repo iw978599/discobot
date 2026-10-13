@@ -12,12 +12,46 @@
   height: auto;
 }
 
+/* The editor's two levels, Notes and Sound, on one line with the lane's Hold and Remove at its
+   end. The line is the same on both levels, so going from one to the other moves nothing above
+   what is opened. */
+.synth-level-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 4px 10px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--edge-faint);
+}
+
+.synth-controls-panel .synth-levels {
+  border-bottom: 0;
+}
+
+.synth-controls-panel .synth-levels button {
+  min-width: 88px;
+  padding: 7px 18px;
+  font-weight: 700;
+}
+
+.synth-level-row .synth-header-tools {
+  flex-wrap: nowrap;
+  padding-bottom: 4px;
+  margin-left: auto;
+}
+
+/* Sound's own line: the model, then the presets and their tools. */
 .synth-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.synth-header .model-selector-wrap {
+  flex-direction: row;
+  margin-left: 0;
 }
 
 .synth-columns {
@@ -107,7 +141,6 @@
   transform: scale(0.8);
 }
 
-.synth-octave-controls,
 .synth-header-tools,
 .preset-controls {
   display: flex;

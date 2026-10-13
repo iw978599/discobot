@@ -131,6 +131,12 @@ slow down every later change.
    five redesign suggestions and eleven suggested features. Still open:
    the owner choosing from it, and everything it lists as not looked at.
 
+   Redesign B (a lane's editor in two levels, Notes and Sound) is built,
+   with the presets and their tools inside Sound. Not built from its
+   proposal: the pages of the sound side by side on a wide screen, the
+   preset's name on the lane's top line, and the preset tools folded into
+   a "more" menu. The review says what was left and why.
+
 Done: the rack rebuild that emptied `App.tsx`; the two-tab guard; debounced
 saving; projects as IndexedDB records with version history; the Vibrato LFO
 target; removal of the AI review workflow.
@@ -747,6 +753,15 @@ for new accounts.
     shown, and needs the audio layer's single owner (improvements 4) first.
 
 ## Questions waiting on the owner
+
+- **A lane's editor in two levels** (redesign B). Four choices were made in
+  building it that the owner may want changed. Hold and Remove are beside
+  the two levels and show on both, not inside Sound. A lane opens on Notes
+  every visit; the level is not remembered between visits. Save, Delete,
+  Import and Export are still four buttons, not one "more" menu. And the
+  proposal's two further parts were left out: the pages of the sound side
+  by side on a wide screen, and the loaded preset's name on the lane's top
+  line (the app does not store which preset a lane was last given).
 
 - **Did the Firefox guest fixes work?** PRs #76 and #77 changed how a guest
   instrument's audio is timed for Firefox. Nobody has said whether a guest
