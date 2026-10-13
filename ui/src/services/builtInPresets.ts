@@ -109,7 +109,8 @@ const BASS: BuiltInPreset[] = [
   }),
   generic('bass-fm', 'FM Bass', 'bass', {
     gain: 2,
-    engine: 'fm', voiceMode: 'mono', fm: { algorithm: 1, ratio: 1, index: 0.55, decay: 0.18, feedback: 0.2 },
+    engine: 'fm', voiceMode: 'mono', fm: { algorithm: 1, ratio: 1, index: 0.35, decay: 0.18, feedback: 0.2 },
+    modMatrix: [{ source: 'velocity', destination: 'fmIndex', depth: 0.3 }],
     filter: { frequency: 4000, q: 0.7, keyTracking: 0.5 },
     envelope: { attack: 0.002, decay: 0.3, sustain: 0.35, release: 0.12 },
     velocity: { amp: 1, filter: 0.3 },
@@ -132,6 +133,17 @@ const BASS: BuiltInPreset[] = [
     envelope: { attack: 0.005, decay: 0.2, sustain: 0.9, release: 0.15 },
     lfo1: { enabled: true, target: 'filter', waveform: 'sine', rate: 8, depth: 0.7, sync: true, retrigger: false },
     fxSends: { reverb: 0.05, delay: 0, drive: 0.3, phaser: 0, chorus: 0 },
+  }),
+  generic('bass-sync', 'Sync Bass', 'bass', {
+    gain: 2,
+    voiceMode: 'mono', oscillator: { type: 'sawtooth' }, mixer: { sub: 0.45, noise: 0 },
+    oscillator2: { enabled: true, type: 'sawtooth', semitones: 12, detune: 0, level: 0.8, sync: true },
+    filter: { frequency: 900, q: 1.2, envAmount: 0.35, keyTracking: 0.4, drive: 0.2, slope: 24, model: 'ladder' },
+    filterEnvelope: { attack: 0.002, decay: 0.25, sustain: 0.1, release: 0.15 },
+    envelope: { attack: 0.003, decay: 0.3, sustain: 0.7, release: 0.14 },
+    velocity: { amp: 1, filter: 0.3 },
+    modMatrix: [{ source: 'filterEnv', destination: 'osc2Pitch', depth: 0.3 }],
+    fxSends: { reverb: 0.04, delay: 0, drive: 0.2, phaser: 0, chorus: 0 },
   }),
 ];
 
@@ -158,6 +170,7 @@ const LEAD: BuiltInPreset[] = [
   model('lead-monopoly', 'Mono/Poly Lead', 'lead', 'mono-poly', [0.5, 0.3, 0.7, 0.5], {
     gain: 1.6,
     fxReturn: 0.7, fxSends: { reverb: 0.2, delay: 0.3, drive: 0.15, phaser: 0, chorus: 0 },
+    lfo2: { enabled: true, target: 'vibrato', waveform: 'sine', rate: 5.5, depth: 0.2, sync: false, retrigger: true },
   }),
   model('lead-ms', 'MS Scream', 'lead', 'ms-20', [0.3, 0.7, 0.85, 0.5], {
     gain: 1.15,
@@ -171,6 +184,7 @@ const LEAD: BuiltInPreset[] = [
   model('lead-odyssey', 'Odyssey Sync', 'lead', 'odyssey', [0.6, 0, 0.6, 0], {
     gain: 1.3,
     fxReturn: 0.7, fxSends: { reverb: 0.2, delay: 0.3, drive: 0.15, phaser: 0, chorus: 0 },
+    lfo2: { enabled: true, target: 'vibrato', waveform: 'sine', rate: 5.8, depth: 0.2, sync: false, retrigger: true },
   }),
   model('lead-cs80', 'CS-80 Brass', 'lead', 'cs-80', [0.5, 0.35, 0.65, 0.2], {
     gain: 1,
@@ -209,12 +223,13 @@ const LEAD: BuiltInPreset[] = [
     fxSends: { reverb: 0.3, delay: 0.25, drive: 0.05, phaser: 0, chorus: 0.2 },
   }),
   generic('lead-soft', 'Soft Lead', 'lead', {
-    gain: 1.2,
+    gain: 1,
     oscillator: { type: 'triangle' },
     oscillator2: { enabled: true, type: 'sine', semitones: 12, detune: 0, level: 0.3 },
     filter: { frequency: 2600, q: 0.9, keyTracking: 0.6 },
     envelope: { attack: 0.03, decay: 0.25, sustain: 0.8, release: 0.35 },
     lfo2: { enabled: true, target: 'vibrato', waveform: 'sine', rate: 4.8, depth: 0.22, sync: false, retrigger: true },
+    layer: { enabled: true, mix: 0.5, detune: 7, brightness: 0.5, attack: 0.12, width: 0.5 },
     fxSends: { reverb: 0.3, delay: 0.2, drive: 0, phaser: 0, chorus: 0.15 },
   }),
   model('lead-squelch', 'Squelch Lead', 'lead', 'tb-303', [0.9, 0.8, 0.75, 0.55], {
@@ -223,11 +238,24 @@ const LEAD: BuiltInPreset[] = [
   }),
   generic('lead-glass', 'Glass Lead', 'lead', {
     gain: 0.95,
-    engine: 'fm', fm: { algorithm: 0, ratio: 2, index: 0.5, decay: 1.2, feedback: 0.15 },
+    engine: 'fm', fm: { algorithm: 0, ratio: 2, index: 0.3, decay: 1.2, feedback: 0.15 },
+    modMatrix: [{ source: 'velocity', destination: 'fmIndex', depth: 0.3 }],
     filter: { frequency: 9000, q: 0.7, keyTracking: 0.5 },
     envelope: { attack: 0.005, decay: 0.4, sustain: 0.7, release: 0.4 },
     lfo2: { enabled: true, target: 'vibrato', waveform: 'sine', rate: 5, depth: 0.15, sync: false, retrigger: true },
     fxSends: { reverb: 0.3, delay: 0.3, drive: 0, phaser: 0, chorus: 0.1 },
+  }),
+  generic('lead-stereo', 'Stereo Lead', 'lead', {
+    gain: 1.15,
+    oscillator: { type: 'sawtooth' },
+    oscillator2: { enabled: true, type: 'square', semitones: 0, detune: 8, level: 0.6 },
+    filter: { frequency: 2600, q: 1.5, envAmount: 0.3, keyTracking: 0.5, slope: 24, model: 'ladder' },
+    filterEnvelope: { attack: 0.005, decay: 0.35, sustain: 0.4, release: 0.3 },
+    envelope: { attack: 0.008, decay: 0.25, sustain: 0.8, release: 0.3 },
+    velocity: { amp: 1, filter: 0.3 },
+    layer: { enabled: true, mix: 0.5, detune: 9, brightness: 0.4, attack: 0, width: 0.8 },
+    lfo2: { enabled: true, target: 'vibrato', waveform: 'sine', rate: 5.2, depth: 0.18, sync: false, retrigger: true },
+    fxSends: { reverb: 0.22, delay: 0.28, drive: 0.05, phaser: 0, chorus: 0 },
   }),
 ];
 
@@ -255,7 +283,8 @@ const PAD: BuiltInPreset[] = [
   }),
   model('pad-m1-voices', 'M1 Voices', 'pad', 'm1', [0.9, 0.6, 0.5, 0.6], {
     gain: 1.05,
-    fxReturn: 0.9, fxSends: { reverb: 0.55, delay: 0.15, drive: 0, phaser: 0, chorus: 0.25 },
+    spread: 0.6, fxReturn: 0.9, fxSends: { reverb: 0.55, delay: 0.15, drive: 0, phaser: 0, chorus: 0.25 },
+    lfo2: { enabled: true, target: 'vibrato', waveform: 'sine', rate: 4.6, depth: 0.1, sync: false, retrigger: true },
   }),
   model('pad-d50-breath', 'D-50 Breath Pad', 'pad', 'd-50', [0.7, 0.1, 0.5, 0.6], {
     gain: 1.3,
@@ -300,6 +329,9 @@ const PAD: BuiltInPreset[] = [
   generic('pad-glass', 'Glass Pad', 'pad', {
     gain: 0.7,
     engine: 'fm', fm: { algorithm: 2, ratio: 3, index: 0.25, decay: 2.5, feedback: 0 }, spread: 0.5,
+    lfo1: { enabled: false, target: 'filter', waveform: 'triangle', rate: 0.13, depth: 0, sync: false, retrigger: false },
+    lfo2: { enabled: false, target: 'filter', waveform: 'sine', rate: 0.21, depth: 0, sync: false, retrigger: false },
+    modMatrix: [{ source: 'lfo1', destination: 'fmIndex', depth: 0.2 }, { source: 'lfo2', destination: 'pan', depth: 0.35 }],
     filter: { frequency: 9000, q: 0.7, keyTracking: 0.4 },
     envelope: { attack: 0.4, decay: 1, sustain: 0.8, release: 1.8 },
     fxReturn: 0.95, fxSends: { reverb: 0.55, delay: 0.25, drive: 0, phaser: 0, chorus: 0.3 },
@@ -325,12 +357,34 @@ const PAD: BuiltInPreset[] = [
     fxReturn: 0.95, fxSends: { reverb: 0.6, delay: 0.15, drive: 0, phaser: 0.1, chorus: 0.2 },
   }),
   generic('pad-breath', 'Breath Pad', 'pad', {
-    gain: 0.95,
+    gain: 1.1,
     oscillator: { type: 'triangle' }, mixer: { sub: 0, noise: 0.5, osc: 1 }, spread: 0.5,
     filter: { frequency: 2200, q: 0.8, keyTracking: 0.5 },
     envelope: { attack: 0.6, decay: 1, sustain: 0.85, release: 1.6 },
     lfo1: { enabled: true, target: 'filter', waveform: 'sine', rate: 0.18, depth: 0.25, sync: false, retrigger: false },
+    lfo2: { enabled: true, target: 'amp', waveform: 'sine', rate: 0.11, depth: 0.45, sync: false, retrigger: false },
+    modMatrix: [{ source: 'lfo1', destination: 'pan', depth: 0.3 }],
     fxReturn: 0.95, fxSends: { reverb: 0.6, delay: 0.2, drive: 0, phaser: 0, chorus: 0.3 },
+  }),
+  generic('pad-voices-time', 'Voices in Time', 'pad', {
+    gain: 1.45,
+    engine: 'sample', sample: { root: 60, loop: false, wave: 'seq-voices', scan: 2, fade: 1, sync: '1/2' }, spread: 0.4,
+    filter: { frequency: 3200, q: 0.8, keyTracking: 0.4 },
+    envelope: { attack: 0.5, decay: 0.8, sustain: 0.9, release: 1.6 },
+    velocity: { amp: 0.8, filter: 0.2 },
+    layer: { enabled: true, mix: 0.5, detune: 8, brightness: 0.5, attack: 0.6, width: 0.7 },
+    fxReturn: 0.9, fxSends: { reverb: 0.55, delay: 0.25, drive: 0, phaser: 0, chorus: 0.25 },
+  }),
+  generic('pad-gate', 'Gate Pad', 'pad', {
+    gain: 1,
+    oscillator: { type: 'sawtooth' },
+    oscillator2: { enabled: true, type: 'sawtooth', semitones: 0, detune: 10, level: 0.9 },
+    unison: { voices: 3, detune: 0.3, mix: 0.7 }, spread: 0.5,
+    filter: { frequency: 2800, q: 1.2, keyTracking: 0.4, slope: 24 },
+    envelope: { attack: 0.05, decay: 0.6, sustain: 0.9, release: 0.8 },
+    lfo1: { enabled: true, target: 'amp', waveform: 'square', rate: 8, depth: 0.9, sync: true, retrigger: false },
+    lfo2: { enabled: true, target: 'filter', waveform: 'triangle', rate: 1, depth: 0.3, sync: true, retrigger: false },
+    fxReturn: 0.9, fxSends: { reverb: 0.4, delay: 0.35, drive: 0, phaser: 0.1, chorus: 0.2 },
   }),
 ];
 
@@ -340,8 +394,9 @@ const KEYS: BuiltInPreset[] = [
     fxReturn: 0.8, fxSends: { reverb: 0.3, delay: 0.05, drive: 0, phaser: 0, chorus: 0 },
   }),
   model('keys-m1-organ', 'M1 Organ', 'keys', 'm1', [0.6, 0.65, 0, 0.1], {
-    gain: 0.8,
+    gain: 0.85,
     fxReturn: 0.8, fxSends: { reverb: 0.2, delay: 0, drive: 0.1, phaser: 0, chorus: 0.2 },
+    lfo2: { enabled: true, target: 'amp', waveform: 'sine', rate: 6, depth: 0.2, sync: false, retrigger: false },
   }),
   model('keys-d50-bell', 'D-50 Bell Keys', 'keys', 'd-50', [0.8, 0.9, 0.55, 0.4], {
     gain: 1,
@@ -353,7 +408,8 @@ const KEYS: BuiltInPreset[] = [
   }),
   generic('keys-digital', 'Digital Piano', 'keys', {
     gain: 1.05,
-    engine: 'fm', fm: { algorithm: 1, ratio: 1, index: 0.35, decay: 0.5, feedback: 0.1 },
+    engine: 'fm', fm: { algorithm: 1, ratio: 1, index: 0.2, decay: 0.5, feedback: 0.1 },
+    modMatrix: [{ source: 'velocity', destination: 'fmIndex', depth: 0.22 }],
     filter: { frequency: 7000, q: 0.7, keyTracking: 0.6 },
     envelope: { attack: 0.002, decay: 1.4, sustain: 0.1, release: 0.5 },
     velocity: { amp: 1, filter: 0.4 },
@@ -396,6 +452,26 @@ const KEYS: BuiltInPreset[] = [
   model('keys-brass', 'Poly Brass', 'keys', 'prophet-5', [0.4, 0.3, 0.55, 0.7], {
     gain: 0.9,
     spread: 0.3, fxReturn: 0.8, fxSends: { reverb: 0.3, delay: 0.12, drive: 0.1, phaser: 0, chorus: 0.15 },
+  }),
+  generic('keys-felt', 'Felt Piano', 'keys', {
+    gain: 1,
+    engine: 'sample', sample: { root: 60, loop: false, wave: 'piano', scan: 2, fade: 1 },
+    filter: { frequency: 1500, q: 0.7, envAmount: 0.2, keyTracking: 0.6 },
+    filterEnvelope: { attack: 0.005, decay: 0.5, sustain: 0.2, release: 0.4 },
+    envelope: { attack: 0.004, decay: 0.3, sustain: 1, release: 0.5 },
+    velocity: { amp: 0.8, filter: 0.45 },
+    layer: { enabled: true, mix: 0.5, detune: 5, brightness: -0.5, attack: 0, width: 0.5 },
+    fxReturn: 0.85, fxSends: { reverb: 0.4, delay: 0.05, drive: 0, phaser: 0, chorus: 0 },
+  }),
+  generic('keys-suitcase', 'Suitcase Keys', 'keys', {
+    gain: 1.1,
+    engine: 'fm', fm: { algorithm: 1, ratio: 1, index: 0.12, decay: 0.6, feedback: 0.05 },
+    filter: { frequency: 6000, q: 0.7, keyTracking: 0.6 },
+    envelope: { attack: 0.002, decay: 1.8, sustain: 0.15, release: 0.5 },
+    velocity: { amp: 1, filter: 0.3 },
+    lfo2: { enabled: false, target: 'filter', waveform: 'sine', rate: 8, depth: 0, sync: true, retrigger: false },
+    modMatrix: [{ source: 'velocity', destination: 'fmIndex', depth: 0.25 }, { source: 'lfo2', destination: 'pan', depth: 0.55 }],
+    fxReturn: 0.82, fxSends: { reverb: 0.3, delay: 0.05, drive: 0, phaser: 0.1, chorus: 0.2 },
   }),
 ];
 
@@ -451,6 +527,7 @@ const PLUCK: BuiltInPreset[] = [
     filter: { frequency: 1800, q: 1.4, envAmount: 0.5, keyTracking: 0.4, slope: 24 },
     filterEnvelope: { attack: 0.001, decay: 0.2, sustain: 0, release: 0.15 },
     envelope: { attack: 0.002, decay: 0.28, sustain: 0, release: 0.2 },
+    velocity: { amp: 1, filter: 0.3 },
     fxSends: { reverb: 0.3, delay: 0.3, drive: 0.05, phaser: 0, chorus: 0.2 },
   }),
   model('pluck-pro', 'Pro Zap', 'pluck', 'pro-one', [0.2, 0.6, 0.25, 0.3], {
@@ -458,11 +535,34 @@ const PLUCK: BuiltInPreset[] = [
     fxReturn: 0.7, fxSends: { reverb: 0.2, delay: 0.3, drive: 0.25, phaser: 0, chorus: 0 },
   }),
   generic('pluck-blip', 'Blip', 'pluck', {
-    gain: 1.7,
+    gain: 2,
     oscillator: { type: 'square', pulseWidth: 0.35 },
     filter: { frequency: 5000, q: 1, keyTracking: 0.5 },
     envelope: { attack: 0.001, decay: 0.08, sustain: 0, release: 0.06 },
+    velocity: { amp: 1, filter: 0.3 },
     fxSends: { reverb: 0.15, delay: 0.3, drive: 0, phaser: 0, chorus: 0 },
+  }),
+  generic('pluck-harp', 'Harp', 'pluck', {
+    gain: 1.55,
+    engine: 'sample', sample: { root: 60, loop: false, wave: 'attack-pluck', scan: 2, fade: 1 },
+    oscillator2: { enabled: true, type: 'triangle', semitones: 0, detune: 0, level: 0.35 },
+    filter: { frequency: 3000, q: 0.8, envAmount: 0.3, keyTracking: 0.6 },
+    filterEnvelope: { attack: 0.001, decay: 0.5, sustain: 0, release: 0.4 },
+    envelope: { attack: 0.001, decay: 1.3, sustain: 0, release: 0.9 },
+    velocity: { amp: 0.9, filter: 0.35 },
+    modMatrix: [{ source: 'key', destination: 'pan', depth: 0.5 }],
+    fxReturn: 0.9, fxSends: { reverb: 0.4, delay: 0.15, drive: 0, phaser: 0, chorus: 0 },
+  }),
+  generic('pluck-arp', 'Octave Arp', 'pluck', {
+    gain: 2,
+    arpeggiator: { enabled: true, mode: 'updown', rate: '1/16', gate: 0.5, octaves: 2 },
+    oscillator: { type: 'sawtooth' },
+    oscillator2: { enabled: true, type: 'square', semitones: 0, detune: 6, level: 0.5 },
+    filter: { frequency: 1100, q: 1.2, envAmount: 0.5, keyTracking: 0.5, slope: 24, model: 'ladder' },
+    filterEnvelope: { attack: 0.001, decay: 0.22, sustain: 0, release: 0.15 },
+    envelope: { attack: 0.001, decay: 0.45, sustain: 0, release: 0.25 },
+    velocity: { amp: 1, filter: 0.35 },
+    fxSends: { reverb: 0.2, delay: 0.35, drive: 0.05, phaser: 0, chorus: 0.1 },
   }),
 ];
 
@@ -502,6 +602,7 @@ const EFFECTS: BuiltInPreset[] = [
     envelope: { attack: 1, decay: 1, sustain: 1, release: 2 },
     lfo1: { enabled: true, target: 'filter', waveform: 'triangle', rate: 0.15, depth: 0.9, sync: false, retrigger: false },
     lfo2: { enabled: true, target: 'amp', waveform: 'sine', rate: 0.23, depth: 0.5, sync: false, retrigger: false },
+    modMatrix: [{ source: 'lfo1', destination: 'pan', depth: 0.6 }],
     fxReturn: 0.9, fxSends: { reverb: 0.5, delay: 0.1, drive: 0, phaser: 0, chorus: 0 },
   }),
   generic('fx-siren', 'Siren', 'effects', {
@@ -526,7 +627,28 @@ const EFFECTS: BuiltInPreset[] = [
     filter: { frequency: 400, q: 1.5, slope: 24 },
     envelope: { attack: 0.3, decay: 0.5, sustain: 1, release: 0.8 },
     lfo1: { enabled: true, target: 'amp', waveform: 'sawtooth', rate: 12, depth: 1, sync: false, retrigger: false },
+    lfo2: { enabled: false, target: 'filter', waveform: 'sine', rate: 0.12, depth: 0, sync: false, retrigger: false },
+    modMatrix: [{ source: 'lfo2', destination: 'pan', depth: 0.6 }],
     fxSends: { reverb: 0.3, delay: 0.1, drive: 0.1, phaser: 0.2, chorus: 0 },
+  }),
+  generic('fx-computer', 'Computer', 'effects', {
+    gain: 0.48,
+    oscillator: { type: 'square', pulseWidth: 0.5 },
+    filter: { frequency: 4000, q: 1.5, keyTracking: 0.3 },
+    envelope: { attack: 0.002, decay: 0.1, sustain: 1, release: 0.1 },
+    lfo1: { enabled: false, target: 'pitch', waveform: 'sawtooth', rate: 16, depth: 0, sync: true, retrigger: false },
+    modMatrix: [{ source: 'random', destination: 'pitch', depth: 0.8 }, { source: 'random', destination: 'pan', depth: 0.6 }],
+    fxSends: { reverb: 0.25, delay: 0.35, drive: 0, phaser: 0, chorus: 0 },
+  }),
+  generic('fx-dive', 'Dive', 'effects', {
+    gain: 0.95,
+    oscillator: { type: 'sawtooth' },
+    oscillator2: { enabled: true, type: 'square', semitones: -12, detune: 8, level: 0.6 },
+    filter: { frequency: 500, q: 2, envAmount: 0.6, keyTracking: 0.3, slope: 24, model: 'ladder' },
+    filterEnvelope: { attack: 0.001, decay: 1.2, sustain: 0, release: 0.5 },
+    envelope: { attack: 0.002, decay: 1.6, sustain: 0, release: 0.5 },
+    modMatrix: [{ source: 'filterEnv', destination: 'pitch', depth: 1 }],
+    fxSends: { reverb: 0.35, delay: 0.4, drive: 0.15, phaser: 0, chorus: 0 },
   }),
 ];
 

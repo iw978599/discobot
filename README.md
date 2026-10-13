@@ -28,7 +28,7 @@ libraries, VSCO 2 Community Edition (Versilian Studios, with an upright piano
 sampled by Simon Dalzell of Ivy Audio) and Adventure Kid Waveforms (Kristoffer
 Ekstrand), both in the public domain; `docs/BUNDLED_AUDIO.md` has the details.
 
-**Seventy-six presets** in six kinds: bass, lead, pad, keys, pluck and effects.
+**Eighty-six presets** in six kinds: bass, lead, pad, keys, pluck and effects.
 They are level-matched, so choosing another does not mean reaching for the
 volume. You can save, export and import your own, including presets from some
 other synths.

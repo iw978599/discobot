@@ -72,6 +72,39 @@ function spectrumCentroid(samples: Float32Array, at: number): number {
   return total > 0 ? weighted / total : 0;
 }
 
+export interface PresetMotion {
+  // how far the level moves while the key is held, once the note has spoken: its loudest tenth
+  // of a second over its quietest, in dB
+  swing: number;
+  // how much of the sound is the difference between the two sides, against what they share:
+  // 0 is the same on both, and it rises as the sound is spread or moves from side to side
+  width: number;
+}
+
+// What a held sound does over eight seconds, long enough for a slow LFO to come round once.
+export function measureMotion(params: SynthParameters, kind: PresetKind, notes = AUDIT_NOTES[kind]): PresetMotion {
+  const core = new SynthCore(AUDIT_RATE);
+  core.setParams(toVoiceParams(params));
+  if (params.sample?.wave) core.setSample(BUNDLED_WAVES.get(params.sample.wave) ?? null);
+  for (const note of notes) core.noteOn({ note, velocity: 0.9 });
+  const total = 8 * AUDIT_RATE, from = 1.5 * AUDIT_RATE;
+  const left = new Float32Array(128), right = new Float32Array(128);
+  const levels: number[] = [];
+  let shared = 0, apart = 0, sum = 0, count = 0;
+  for (let at = 0; at + 128 <= total; at += 128) {
+    core.process(left, right);
+    for (let i = 0; i < 128; i++) {
+      const mid = (left[i] + right[i]) / 2, side = (left[i] - right[i]) / 2;
+      shared += mid * mid; apart += side * side;
+      if (at < from) continue;
+      sum += mid * mid;
+      if (++count === WINDOW) { levels.push(Math.sqrt(sum / WINDOW)); sum = 0; count = 0; }
+    }
+  }
+  const loudest = Math.max(...levels), quietest = Math.max(1e-9, Math.min(...levels));
+  return { swing: loudest > 1e-6 ? 20 * Math.log10(loudest / quietest) : 0, width: shared > 0 ? Math.sqrt(apart / shared) : 0 };
+}
+
 export function measurePreset(params: SynthParameters, kind: PresetKind, notes = AUDIT_NOTES[kind]): PresetMeasure {
   const core = new SynthCore(AUDIT_RATE);
   core.setParams(toVoiceParams(params));

@@ -68,7 +68,7 @@ verified by a test.
     lane, and on the master, so a person can see what a knob does as well
     as hear it. It must be drawn outside React's rendering, as the playhead
     is.
-13. **Search across presets.** (S) Seventy-six presets in six groups is
+13. **Search across presets.** (S) Eighty-six presets in six groups is
     past what a menu shows well. Typing a few letters to find one.
 14. **Drag to reorder lanes and scenes.** (M) With a keyboard way to do the
     same, as the rest of the app has.
