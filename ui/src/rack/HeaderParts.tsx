@@ -2,26 +2,11 @@ import { useState, useCallback, useRef, useEffect, useLayoutEffect, type Keyboar
 import Dialog from './Dialog';
 import { helpCount, helpWords, matchHelp, type HelpSection } from '../services/helpSearch';
 
-export function TempoDisplay({ tempo, onChange }: { tempo: number; onChange: (bpm: number) => void }) {
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(String(tempo));
-  const inputRef = useRef<HTMLInputElement>(null);
+// Tap tempo: the taps, the Shift+T key, and the flash the display gives each one. It is apart
+// from the display because a narrow screen puts the Tap button somewhere else.
+export function useTapTempo(onChange: (bpm: number) => void) {
   const tapTimesRef = useRef<number[]>([]);
   const [tapFlash, setTapFlash] = useState(false);
-
-  useEffect(() => {
-    if (!editing) setValue(String(tempo));
-  }, [tempo, editing]);
-
-  useEffect(() => {
-    if (editing && inputRef.current) inputRef.current.select();
-  }, [editing]);
-
-  const commit = () => {
-    const bpm = parseInt(value, 10);
-    if (!isNaN(bpm) && bpm >= 20 && bpm <= 400) onChange(bpm);
-    setEditing(false);
-  };
 
   const handleTap = useCallback(() => {
     const now = performance.now();
@@ -72,6 +57,37 @@ export function TempoDisplay({ tempo, onChange }: { tempo: number; onChange: (bp
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [handleTap]);
 
+  return { tap: handleTap, flash: tapFlash };
+}
+
+export function TapButton({ onTap }: { onTap: () => void }) {
+  return (
+    <button className="rack-btn tap-tempo-btn" onClick={onTap} title="Tap Tempo (Shift+T)">
+      TAP
+    </button>
+  );
+}
+
+// `onTap` puts the Tap button beside the display; without it the display stands alone.
+export function TempoDisplay({ tempo, onChange, flash, onTap }: { tempo: number; onChange: (bpm: number) => void; flash: boolean; onTap?: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(String(tempo));
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!editing) setValue(String(tempo));
+  }, [tempo, editing]);
+
+  useEffect(() => {
+    if (editing && inputRef.current) inputRef.current.select();
+  }, [editing]);
+
+  const commit = () => {
+    const bpm = parseInt(value, 10);
+    if (!isNaN(bpm) && bpm >= 20 && bpm <= 400) onChange(bpm);
+    setEditing(false);
+  };
+
   if (editing) {
     return (
       <input
@@ -89,13 +105,11 @@ export function TempoDisplay({ tempo, onChange }: { tempo: number; onChange: (bp
 
   return (
     <div className="tempo-display-group">
-      <div className={`tempo-led ${tapFlash ? 'tap-flash' : ''}`} onClick={() => setEditing(true)}>
+      <div className={`tempo-led ${flash ? 'tap-flash' : ''}`} onClick={() => setEditing(true)}>
         <span className="tempo-led-label">BPM</span>
         <span className="tempo-led-value">{String(tempo).padStart(3, ' ')}</span>
       </div>
-      <button className="rack-btn tap-tempo-btn" onClick={handleTap} title="Tap Tempo (Shift+T)">
-        TAP
-      </button>
+      {onTap && <TapButton onTap={onTap} />}
     </div>
   );
 }
@@ -188,6 +202,7 @@ function HelpContent({ onClose, onWalkthrough }: { onClose: () => void; onWalkth
             <li><strong>Share Link:</strong> makes a link with the whole song inside it. Whoever opens it can listen and keep their own copy. Nothing is uploaded, and no account is needed.</li>
             <li><strong>Export:</strong> choose the open scene or the whole song, and audio, a seamless loop, stems or MIDI; it says how long the file will be and shows it being made. The kinds are Scene WAV (one bar with its effect tail), Loop WAV (exactly one bar that repeats seamlessly), Stems (a zip with one WAV per synth lane and one for the drums) and Scene MIDI are of the open scene. Song WAV and Song MIDI are the whole song. A WAV export can take a while for a long song: a message at the top says it is being made and when it is done, and the other WAV exports wait until it is.</li>
             <li><strong>MIDI:</strong> choose a controller, channel, target lane and live/record/step mode. Imported samples are kept there too.</li>
+            <li><strong>On a phone:</strong> the top row is one line: the tempo, Play, and Undo and Redo where they fit. The button with three lines at its end opens the rest of this row. On the bar along the bottom, a tap shows a unit; a lane's lamp, and the drums', lights as it plays. Hold a lane's switch or the drums' to mute it without going to it: its name is then struck through.</li>
           </ul>
         </section>
         <section id="help-scenes" hidden={off('help-scenes')}>
