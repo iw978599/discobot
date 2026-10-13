@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Studio } from '../studio/useStudio';
 import { playSample } from '../hooks/browserAudio';
 import EffectsPanel from '../components/EffectsPanel';
@@ -41,6 +41,18 @@ export default function Rack({ studio }: { studio: Studio }) {
   const [guestOpen, setGuestOpen] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
+  // The section Help opens at when it was asked for from a unit's own "?". It is how Help was
+  // reached, so it is kept here; whether Help is open is the studio's, and when that says it has
+  // closed (by its button, Escape or the walkthrough) the section is forgotten.
+  const [helpAt, setHelpAt] = useState<string | null>(null);
+  const { helpOpen, setHelpOpen } = studio;
+  const openHelpAt = useCallback((section: string) => {
+    setHelpAt(section);
+    setHelpOpen(true);
+  }, [setHelpOpen]);
+  useEffect(() => {
+    if (!helpOpen) setHelpAt(null);
+  }, [helpOpen]);
   // Where the walkthrough started from, to be put back when it ends: on a narrow screen it
   // turns to other units and opens other lanes as it goes.
   const tourFrom = useRef<{ unit: RackUnit; lane: number } | null>(null);
@@ -191,17 +203,17 @@ export default function Rack({ studio }: { studio: Studio }) {
           </div>
         )}
         <StarterUnit studio={studio} />
-        <SongModule studio={studio} />
-        {[1, 2, 3].map(id => <SynthModule key={id} studio={studio} synthId={id} synth={studio.synths.find(entry => entry.id === id)} />)}
-        {studio.guests.map(guest => <GuestModule key={guest.id} studio={studio} guest={guest} />)}
-        <DrumModule studio={studio} />
+        <SongModule studio={studio} onHelp={openHelpAt} />
+        {[1, 2, 3].map(id => <SynthModule key={id} studio={studio} synthId={id} synth={studio.synths.find(entry => entry.id === id)} onHelp={openHelpAt} />)}
+        {studio.guests.map(guest => <GuestModule key={guest.id} studio={studio} guest={guest} onHelp={openHelpAt} />)}
+        <DrumModule studio={studio} onHelp={openHelpAt} />
         <div className="rack-unit effects-unit" data-unit="effects">
-          <EffectsPanel effectsLoop={studio.effectsLoop} onChange={studio.handleEffectsLoopChange} />
+          <EffectsPanel effectsLoop={studio.effectsLoop} onChange={studio.handleEffectsLoopChange} onHelp={openHelpAt} />
         </div>
       </div>
       {narrow && <UnitBar shown={shown} lanes={studio.synths.map(synth => synth.id)} guests={hasGuests} onShow={show} />}
 
-      <HelpModal open={studio.helpOpen} onClose={() => studio.setHelpOpen(false)} onWalkthrough={startTour} />
+      <HelpModal open={studio.helpOpen} at={helpAt} onClose={() => studio.setHelpOpen(false)} onWalkthrough={startTour} />
       <MidiImportDialog studio={studio} />
       {projectsOpen && <ProjectsDialog studio={studio} onClose={() => setProjectsOpen(false)} />}
       {shareOpen && <ShareDialog onClose={() => setShareOpen(false)} />}
