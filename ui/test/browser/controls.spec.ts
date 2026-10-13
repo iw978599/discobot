@@ -257,8 +257,22 @@ test('rotary keyboard bounds, typed units, cancellation and pointer cleanup', as
   await expect(synth.getByRole('slider', { name: 'Glide', exact: true })).toHaveAttribute('aria-valuenow', '0.12');
   await tab(page, 'LFO');
   await synth.getByLabel('LFO 1 enabled', { exact: true }).check();
-  await synth.getByLabel('LFO 1 tempo sync', { exact: true }).check();
+  // An LFO follows the tempo from the same kind of Sync menu the effects have.
+  const lfoSync = synth.getByLabel('LFO 1 sync', { exact: true });
+  await expect(lfoSync).toHaveValue('0');
+  await expect(lfoSync.locator('option')).toHaveText(['Free', '1 bar', '1/2', '1/4', '1/8', '1/16', '1/32']);
+  await lfoSync.selectOption({ label: '1/8' });
+  await expect(synth.getByRole('slider', { name: 'Rate', exact: true }).first()).toHaveAttribute('aria-valuenow', '8');
   await edit(synth.getByLabel('Rate value', { exact: true }).first(), '1/16');
+  await expect(synth.getByRole('slider', { name: 'Rate', exact: true }).first()).toHaveAttribute('aria-valuenow', '16');
+  await expect(lfoSync, 'the menu follows the knob').toHaveValue('16');
+  // A note value the menu does not list is shown in it while the sound has it.
+  await edit(synth.getByLabel('Rate value', { exact: true }).first(), '1/12');
+  await expect(lfoSync).toHaveValue('12');
+  await expect(lfoSync.locator('option')).toHaveCount(8);
+  await lfoSync.selectOption({ label: 'Free' });
+  await expect(synth.getByRole('slider', { name: 'Rate', exact: true }).first()).toHaveAttribute('aria-valuetext', /Hz$/);
+  await lfoSync.selectOption({ label: '1/16' });
   await expect(synth.getByRole('slider', { name: 'Rate', exact: true }).first()).toHaveAttribute('aria-valuenow', '16');
   await tab(page, 'Amp');
   if (!isMobile) {

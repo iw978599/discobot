@@ -687,9 +687,12 @@ for new accounts.
     Built on 2026-10-12, not verified by ear: the phaser, the chorus and
     the speed of a sequence of waves each have a Sync menu, from once every
     eight bars to once a sixteenth. The knob shows the note value while
-    synced, and turning it sets a free rate again. Still open: the three
-    looks are still three (a tick box on the LFOs, the delay's own menu
-    with dotted and triplet values, and this menu without them); the
+    synced, and turning it sets a free rate again. On 2026-10-13 the
+    LFOs' tick box became a Sync menu like the effects' (Free, then a bar
+    down to 1/32; an LFO cannot go slower than a bar), with the knob still
+    stepping through note values while synced. Still open: the delay's
+    own menu has dotted and triplet values and the others do not; an
+    LFO's knob steps note values where an effect's goes back to free; the
     Wavestation model's Speed knob does nothing while its sequence is
     synced; and the rates a model sets without showing them are LFOs, which
     can be synced on the LFO tab but are not when the model is chosen.
