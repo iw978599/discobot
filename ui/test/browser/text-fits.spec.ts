@@ -1,5 +1,16 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
+// At phone width the top bar is one line, and the rest of it is in the sheet its last button
+// raises. `more` raises the sheet before something in it is used, and does nothing on a wide screen.
+const onPhone = (page: Page) => {
+  const size = page.viewportSize();
+  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+};
+const more = async (page: Page) => {
+  if (!onPhone(page) || await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) return;
+  await page.getByRole('button', { name: 'More controls', exact: true }).click();
+};
+
 // Words must be whole where a person reads them. Each check measures what is on the screen: a box at
 // least as wide as its content, a code on one line, a name that is not squeezed to a word.
 
@@ -50,6 +61,7 @@ test('the delay\'s On box and its Sync menu have a gap between their labels', as
 });
 
 async function createAccount(page: Page) {
+  await more(page);
   await page.getByRole('button', { name: /^(Sign in|Account: .+)$/ }).click();
   const dialog = page.getByRole('dialog', { name: 'Account', exact: true });
   await dialog.getByRole('tab', { name: 'Create Account', exact: true }).click();
@@ -80,6 +92,7 @@ test('in the signed-in Projects list a name is not squeezed, and the words under
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
 
+  await more(page);
   await page.getByRole('button', { name: /^Project: / }).click();
   const projects = page.getByRole('dialog', { name: 'Projects', exact: true });
   await projects.locator('.rack-list-row.current').getByRole('button', { name: 'Rename', exact: true }).click();

@@ -1,9 +1,25 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
+// At phone width the top bar is one line, and the rest of it is in the sheet its last button
+// raises. `more` raises the sheet before something in it is used, and does nothing on a wide
+// screen; `less` puts it away again after something that leaves it up.
+const onPhone = (page: Page) => {
+  const size = page.viewportSize();
+  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+};
+const more = async (page: Page) => {
+  if (!onPhone(page) || await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) return;
+  await page.getByRole('button', { name: 'More controls', exact: true }).click();
+};
+const less = async (page: Page) => {
+  if (await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) await page.getByRole('button', { name: 'Close more controls', exact: true }).click();
+};
+
 // Export is a dialog: what (the scene or the song), as what, then Export. It is closed at once and
 // the file goes on being made, so the caller waits for the download as it did with the menu.
 async function exportAs(page: Page, item: string) {
+  await more(page);
   await page.locator('.transport').getByRole('button', { name: 'Export', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Export', exact: true });
   await dialog.getByRole('radio', { name: item.startsWith('Song') ? 'The whole song' : 'This scene', exact: true }).check();
@@ -77,6 +93,7 @@ test('a drum lane plays an imported sample, in playback and export, and falls ba
   await expect(page.getByLabel('Snare sound', { exact: true }).locator('option:checked')).toHaveText('beep.wav');
 
   // The sample is deleted from this browser: the lane says so and plays its own sound.
+  await more(page);
   await page.getByRole('button', { name: 'MIDI and samples', exact: true }).click();
   await page.getByRole('button', { name: 'Delete sample beep.wav', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Delete sample beep.wav', exact: true })).toHaveCount(0);
@@ -107,6 +124,7 @@ test('a saved project file carries its samples to a browser that has never had t
   const sampleId = (await stored(page)).drumState.snare.sampleId;
 
   const download = page.waitForEvent('download');
+  await more(page);
   await page.getByRole('button', { name: 'Project ▾', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Export Project', exact: true }).click();
   const saved = await download;
@@ -144,7 +162,9 @@ test('a saved project file carries its samples to a browser that has never had t
 
   // Then the saved file. The lane that was missing its sample now has it, under the same id.
   await importFile.setInputFiles(path);
+  await more(other);
   await expect(other.getByRole('button', { name: /^Project: .* 3$/ })).toBeVisible();
+  await less(other);
   await expect(other.locator('.app-alert')).toHaveCount(0);
   await other.getByRole('button', { name: 'Select Snare', exact: true }).click();
   await expect(other.getByLabel('Snare sound', { exact: true }).locator('option:checked')).toHaveText('beep.wav');
@@ -158,12 +178,16 @@ test('a saved project file carries its samples to a browser that has never had t
 
   // Importing it again adds a project, not a second copy of the sample.
   await importFile.setInputFiles(path);
+  await more(other);
   await expect(other.getByRole('button', { name: /^Project: .* 4$/ })).toBeVisible();
+  await less(other);
+  await more(other);
   await other.getByRole('button', { name: 'MIDI and samples', exact: true }).click();
   await expect(other.getByRole('button', { name: 'Delete sample beep.wav', exact: true })).toHaveCount(1);
   await other.keyboard.press('Escape');
 
   // A file whose audio is not audio still opens, says so, and the lane plays its own sound.
+  await more(other);
   await other.getByRole('button', { name: 'MIDI and samples', exact: true }).click();
   await other.getByRole('button', { name: 'Delete sample beep.wav', exact: true }).click();
   await expect(other.getByRole('button', { name: 'Delete sample beep.wav', exact: true })).toHaveCount(0);
@@ -172,7 +196,9 @@ test('a saved project file carries its samples to a browser that has never had t
   await other.reload();
   await expect(other.getByRole('heading', { name: 'Discobot', exact: true })).toBeVisible();
   await importFile.setInputFiles({ name: 'broken.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ ...file, samples: [{ ...file.samples[0], data: 'not audio at all!' }] })) });
+  await more(other);
   await expect(other.getByRole('button', { name: /^Project: .* 5$/ })).toBeVisible();
+  await less(other);
   await expect(other.locator('.app-alert').filter({ hasText: 'one of its samples could not be read' })).toBeVisible();
   await other.getByRole('button', { name: 'Select Snare', exact: true }).click();
   await expect(other.getByRole('button', { name: 'Snare step 5', exact: true })).toHaveAttribute('aria-pressed', 'true');

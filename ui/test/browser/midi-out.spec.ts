@@ -1,9 +1,21 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
+// At phone width the top bar is one line, and the rest of it is in the sheet its last button
+// raises. `more` raises the sheet before something in it is used, and does nothing on a wide screen.
+const onPhone = (page: Page) => {
+  const size = page.viewportSize();
+  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+};
+const more = async (page: Page) => {
+  if (!onPhone(page) || await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) return;
+  await page.getByRole('button', { name: 'More controls', exact: true }).click();
+};
+
 // Export is a dialog: what (the scene or the song), as what, then Export. It is closed at once and
 // the file goes on being made, so the caller waits for the download as it did with the menu.
 async function exportAs(page: Page, item: string) {
+  await more(page);
   await page.locator('.transport').getByRole('button', { name: 'Export', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Export', exact: true });
   await dialog.getByRole('radio', { name: item.startsWith('Song') ? 'The whole song' : 'This scene', exact: true }).check();
@@ -16,7 +28,10 @@ async function exportAs(page: Page, item: string) {
 const PROJECT_KEY = 'discobot_browser_project_v1';
 const stored = (page: Page) => page.evaluate(key => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem(key) || '{}')), PROJECT_KEY);
 const sent = (page: Page) => page.evaluate(() => (window as unknown as { midiSent: Array<{ data: number[]; at?: number }> }).midiSent);
-const openMidi = (page: Page) => page.getByRole('button', { name: 'MIDI and samples', exact: true }).click();
+const openMidi = async (page: Page) => {
+  await more(page);
+  await page.getByRole('button', { name: 'MIDI and samples', exact: true }).click();
+};
 const closeMidi = (page: Page) => page.getByRole('button', { name: 'Close MIDI and samples', exact: true }).click();
 
 test('the sequencer plays a MIDI output: notes on a channel per lane, drums on ten, and clock', async ({ page }) => {

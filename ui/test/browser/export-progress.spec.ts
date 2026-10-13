@@ -1,5 +1,16 @@
 import { expect, test, type Page } from '@playwright/test';
 
+// At phone width the top bar is one line, and the rest of it is in the sheet its last button
+// raises. `more` raises the sheet before something in it is used, and does nothing on a wide screen.
+const onPhone = (page: Page) => {
+  const size = page.viewportSize();
+  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+};
+const more = async (page: Page) => {
+  if (!onPhone(page) || await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) return;
+  await page.getByRole('button', { name: 'More controls', exact: true }).click();
+};
+
 declare global {
   interface Window { releaseExport: () => void }
 }
@@ -8,6 +19,7 @@ const exportDialog = (page: Page) => page.getByRole('dialog', { name: 'Export', 
 const radio = (page: Page, name: string) => exportDialog(page).getByRole('radio', { name, exact: true });
 const go = (page: Page) => exportDialog(page).getByRole('button', { name: 'Export', exact: true });
 async function openExport(page: Page) {
+  await more(page);
   await page.locator('.transport').getByRole('button', { name: 'Export', exact: true }).click();
   await expect(exportDialog(page)).toBeVisible();
 }

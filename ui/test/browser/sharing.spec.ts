@@ -1,5 +1,20 @@
 import { expect, test, type Page } from '@playwright/test';
 
+// At phone width the top bar is one line, and the rest of it is in the sheet its last button
+// raises. `more` raises the sheet before something in it is used, and does nothing on a wide
+// screen; `less` puts it away again after something that leaves it up.
+const onPhone = (page: Page) => {
+  const size = page.viewportSize();
+  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+};
+const more = async (page: Page) => {
+  if (!onPhone(page) || await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) return;
+  await page.getByRole('button', { name: 'More controls', exact: true }).click();
+};
+const less = async (page: Page) => {
+  if (await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) await page.getByRole('button', { name: 'Close more controls', exact: true }).click();
+};
+
 const PASSWORD = 'correct horse battery';
 const apiUrl = (baseURL: string) => `http://127.0.0.1:${Number(new URL(baseURL).port) + 1000}`;
 const ready = (page: Page) => expect(page.getByRole('heading', { name: 'Discobot', exact: true })).toBeVisible();
@@ -9,6 +24,7 @@ const seen = () => {
 };
 
 async function openAccount(page: Page) {
+  await more(page);
   await page.getByRole('button', { name: /^(Sign in|Account: .+)$/ }).click();
   return page.getByRole('dialog', { name: 'Account', exact: true });
 }
@@ -31,6 +47,7 @@ async function syncNow(page: Page) {
   await page.keyboard.press('Escape');
 }
 async function projects(page: Page) {
+  await more(page);
   await page.getByRole('button', { name: /^Project: / }).click();
   return page.getByRole('dialog', { name: 'Projects', exact: true });
 }
@@ -66,6 +83,7 @@ test('two people work on one project in turns, and it ends when the owner says s
   await dana.keyboard.press('Escape');
 
   // Ian makes a song and shares it. A username nobody has is refused, and says so.
+  await more(page);
   await page.getByRole('button', { name: 'Project ▾', exact: true }).click();
   await page.getByRole('menuitem', { name: 'New Project', exact: true }).click();
   let list = await projects(page);
@@ -97,7 +115,9 @@ test('two people work on one project in turns, and it ends when the owner says s
   const offer = hers.getByRole('group', { name: 'Shared project Night Drive', exact: true });
   await expect(offer).toContainText('From Ian');
   await offer.getByRole('button', { name: 'Open', exact: true }).click();
+  await more(dana);
   await expect(dana.getByRole('button', { name: 'Project: Night Drive', exact: true })).toBeVisible();
+  await less(dana);
   await expect(dana.locator('.tempo-led-value')).toHaveText('133');
   hers = await projects(dana);
   await expect(hers.getByRole('group', { name: 'Project Night Drive', exact: true })).toContainText('Shared by Ian');

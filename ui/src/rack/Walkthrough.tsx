@@ -9,20 +9,38 @@ interface Stop {
   text: string;
 }
 
+// On a narrow screen the top bar is one line, and the rest of it is in the sheet its last button
+// raises. A stop about something in there lights that button and says the thing is under it:
+// the sheet is a dialog of its own, and the tour does not open one over itself.
+const MORE = '.transport .more-button';
+
 // In the order the rack is read, top to bottom, then back up to the menus. The account stop
 // says what is true for whoever is looking, and is left out of a build that has no accounts.
-const stopsFor = (signedIn: boolean): Stop[] => [
-  { target: '.tempo-display-group, .play-all-button', title: 'Play and tempo', text: 'Play All starts every lane and the drums together. Click the BPM display to type a tempo, or tap one in with Tap.' },
+const stopsFor = (signedIn: boolean, narrow: boolean): Stop[] => [
+  {
+    target: '.tempo-display-group, .play-all-button', title: 'Play and tempo',
+    text: narrow
+      ? 'Play All starts every lane and the drums together. Tap the BPM display to type a tempo. Tap, for tapping one in, is under the last button on this line.'
+      : 'Play All starts every lane and the drums together. Click the BPM display to type a tempo, or tap one in with Tap.',
+  },
   { target: '.song-module', title: 'Scenes and song', text: 'A scene is one pattern of everything: every lane and the drum grid. Add more scenes, then put them in order as a song with + Add.' },
   { target: '.synth-module[aria-label="Synth 1 module"] .step-row', title: 'A lane\'s steps', text: 'Each synth lane is a row of steps. Select a step, then play a key to put a note on it. Click the lane\'s name to open it for editing.' },
   { target: '.synth-controls-panel', title: 'The sound editor', text: 'This is the open lane\'s editor. Notes has the keyboard and the piano roll. The other tabs shape the sound, and a sound you like can be saved as a preset.' },
   { target: '.drum-grid', title: 'The drum grid', text: 'Click cells to add hits. The strip under the grid edits the drum and the step you last touched.' },
   { target: '.effects-unit', title: 'Effects', text: 'The effects are shared by the whole rack. Each lane and the drums have sends that set how much of them goes through.' },
-  { target: '.transport .rack-menu', title: 'Project and Export', text: 'Project has all your projects, earlier versions, share links and imports. Export downloads the open scene or the whole song as audio or MIDI.' },
-  ...(!accountsEnabled ? [] : [signedIn
-    ? { target: '.account-button', title: 'Your account', text: 'Projects you make while signed in are kept in your account and follow you to any browser you sign in on. This walkthrough can be shown again from here.' }
-    : { target: '.account-button', title: 'An account, if you want one', text: 'Everything works without an account. With one, the projects you make are kept in it and follow you to any browser you sign in on.' }]),
-  { target: '.transport [aria-label="Help"]', title: 'Help', text: 'The ? button explains every control, lists the keyboard shortcuts, and can show this walkthrough again. That is all you need to start.' },
+  ...(narrow ? [
+    { target: MORE, title: 'Project and Export', text: 'This button opens everything that is not on this line. Project has all your projects, earlier versions, share links and imports. Export downloads the open scene or the whole song as audio or MIDI.' },
+    ...(!accountsEnabled ? [] : [signedIn
+      ? { target: MORE, title: 'Your account', text: 'Your account is under the same button. Projects you make while signed in are kept in it and follow you to any browser you sign in on. This walkthrough can be shown again from there.' }
+      : { target: MORE, title: 'An account, if you want one', text: 'Sign In is under the same button. Everything works without an account. With one, the projects you make are kept in it and follow you to any browser you sign in on.' }]),
+    { target: MORE, title: 'Help', text: 'The ? button, under the same button, explains every control, lists the keyboard shortcuts, and can show this walkthrough again. That is all you need to start.' },
+  ] : [
+    { target: '.transport .rack-menu', title: 'Project and Export', text: 'Project has all your projects, earlier versions, share links and imports. Export downloads the open scene or the whole song as audio or MIDI.' },
+    ...(!accountsEnabled ? [] : [signedIn
+      ? { target: '.account-button', title: 'Your account', text: 'Projects you make while signed in are kept in your account and follow you to any browser you sign in on. This walkthrough can be shown again from here.' }
+      : { target: '.account-button', title: 'An account, if you want one', text: 'Everything works without an account. With one, the projects you make are kept in it and follow you to any browser you sign in on.' }]),
+    { target: '.transport [aria-label="Help"]', title: 'Help', text: 'The ? button explains every control, lists the keyboard shortcuts, and can show this walkthrough again. That is all you need to start.' },
+  ]),
 ];
 
 const GAP = 12;
@@ -34,6 +52,8 @@ interface Placement { spot: CSSProperties | null; card: CSSProperties }
 interface WalkthroughProps {
   onClose: () => void;
   signedIn: boolean;
+  // Whether the top bar is the one line a narrow screen has.
+  narrow: boolean;
   // On a screen that shows one unit of the rack at a time: the unit on show, and how to show
   // another. The tour turns to the unit each stop is in, so no stop is about something out of sight.
   unit?: RackUnit;
@@ -41,7 +61,7 @@ interface WalkthroughProps {
 }
 
 // A tour of the rack: one part is lit at a time and a card explains it. Escape or Skip ends it.
-export default function Walkthrough({ onClose, signedIn, unit, onUnit }: WalkthroughProps) {
+export default function Walkthrough({ onClose, signedIn, narrow, unit, onUnit }: WalkthroughProps) {
   const [index, setIndex] = useState(0);
   const [placement, setPlacement] = useState<Placement>({ spot: null, card: {} });
   const cardRef = useRef<HTMLDivElement>(null);
@@ -51,7 +71,7 @@ export default function Walkthrough({ onClose, signedIn, unit, onUnit }: Walkthr
   const unitRef = useRef(onUnit);
   unitRef.current = onUnit;
   // Settled when the tour starts, so signing in or out part-way does not change how many stops there are.
-  const stops = useRef(stopsFor(signedIn)).current;
+  const stops = useRef(stopsFor(signedIn, narrow)).current;
   const stop = stops[index], last = index === stops.length - 1;
 
   const place = useCallback((scroll: boolean) => {
@@ -76,8 +96,6 @@ export default function Walkthrough({ onClose, signedIn, unit, onUnit }: Walkthr
     const bar = inBar ? 0 : page?.querySelector('.rack-unit.transport')?.getBoundingClientRect().bottom ?? 0;
     let area = measure();
     if (scroll && page) {
-      // On a narrow screen most of the bar scrolls away with the page, so a stop on it means going back to the top.
-      if (inBar && area.top < 0) page.scrollTop = 0;
       if (!inBar && (area.top < bar + GAP || area.bottom > height - cardHeight - GAP * 2)) page.scrollTop += area.top - bar - GAP;
       if (area.left < GAP || area.right > width - GAP) page.scrollLeft += area.left - GAP;
       area = measure();
