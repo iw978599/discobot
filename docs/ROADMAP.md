@@ -365,6 +365,10 @@ may redistribute.
    part between scenes (`docs/SONG_MODE_PLAN.md`). A step holds one start
    time, so an on-the-step note and a late one cannot share a step; a 32-step
    lane is the way to get both.
+   Done on 2026-10-13: a Copy to menu on each lane and on the drum strip
+   puts that lane's notes, or the selected drum's row, into another scene.
+   It asks first when the other scene has something there, because it is
+   not in the undo history. Still open: the rest of this item.
 
 5. **Parameter automation.** (L, after the typed store)
    Record knob movements per step or per bar and play them back. Filter sweeps

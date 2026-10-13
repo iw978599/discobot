@@ -468,6 +468,9 @@
 .drum-sound { display: flex; align-items: center; gap: 6px; }
 .drum-sound select { max-width: 16ch; }
 .drum-tools, .drum-strip-toggles { display: flex; gap: 4px; }
+/* Copy to sits at the left of a lane and of the drum strip, so its list opens to the right of it. */
+.copy-to { display: inline-flex; }
+.copy-to .rack-menu-list { left: 0; right: auto; }
 .drum-strip .rack-knobs, .drum-sends .rack-knobs { gap: 10px; flex: 1; justify-content: flex-start; }
 .drum-step-details input[type="range"] { width: 90px; }
 
@@ -662,7 +665,7 @@
     max-height: 70dvh; overflow-y: auto; box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.55), var(--shadow-float);
   }
   /* A menu inside a unit is not in the top bar's layer, and has to be lifted over the bar of units itself. */
-  .rack-menu.nested > .rack-menu-list { left: 8px; right: 8px; z-index: 45; }
+  .rack-menu.nested > .rack-menu-list, .copy-to .rack-menu-list { left: 8px; right: 8px; z-index: 45; }
   .rack-menu-list button { padding: 13px 12px; font-size: var(--type-body); }
   .rack-menu-list button[data-hint]::after {
     content: attr(data-hint); display: block; margin-top: 3px; font-size: var(--type-label); line-height: 1.3;

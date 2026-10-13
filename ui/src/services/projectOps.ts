@@ -47,6 +47,8 @@ export type Operation =
   | { type: 'scene.create'; sceneId: string; name?: string; empty?: boolean }
   | { type: 'scene.rename'; sceneId: string; name: string }
   | { type: 'scene.color'; sceneId: string; color?: string }
+  // One part of the open scene, a lane's notes or one drum's row, put into another scene.
+  | { type: 'scene.copyPart'; toSceneId: string; synthId?: number; drum?: DrumInstrument }
   | { type: 'scene.replace'; scenes?: unknown; currentSceneId?: string; song?: unknown }
   | { type: 'song.set'; entries?: unknown; loop?: boolean }
   | { type: 'guest.add'; guestId: string; url: string; name?: string }
@@ -94,6 +96,7 @@ type OpResults = Total<{
   'scene.create': SceneAnswer;
   'scene.rename': SceneAnswer;
   'scene.color': SceneAnswer;
+  'scene.copyPart': SceneAnswer;
   'scene.replace': SceneAnswer;
   'song.set': SceneAnswer;
   'guest.add': GuestAnswer;
@@ -144,6 +147,7 @@ export const OP_META: Record<OpType, { save: boolean; undoable: boolean; share: 
   'scene.create': { save: true, undoable: false, share: true },
   'scene.rename': { save: true, undoable: false, share: true },
   'scene.color': { save: true, undoable: false, share: true },
+  'scene.copyPart': { save: true, undoable: false, share: true },
   'scene.replace': { save: true, undoable: false, share: true },
   'song.set': { save: true, undoable: false, share: true },
   'guest.add': { save: true, undoable: false, share: true },

@@ -418,6 +418,32 @@ export const reducers: Reducers = {
     if (color) target.color = color; else delete target.color;
     return sceneChanged(state);
   },
+  // The open scene's part goes into the other scene, in place of what that scene had for it. A
+  // lane brings its own length. A drum row is laid along the other scene's grid, which may be
+  // longer or shorter, going round again or stopping short.
+  'scene.copyPart': ({ state }, op) => {
+    commitScene(state);
+    const from = state.scenes.find(scene => scene.id === state.currentSceneId);
+    const to = state.scenes.find(scene => scene.id === op.toSceneId);
+    if (!from || !to || from === to) return refuse(400, 'Choose another scene to copy to.');
+    if (typeof op.synthId === 'number') {
+      const steps = from.lanes[op.synthId];
+      if (!steps) return refuse(404, NO_SYNTH);
+      to.lanes[op.synthId] = structuredClone(steps);
+      const bars = from.laneBars?.[op.synthId];
+      if (bars && bars > 1) to.laneBars = { ...to.laneBars, [op.synthId]: bars };
+      else if (to.laneBars) delete to.laneBars[op.synthId];
+    } else if (typeof op.drum === 'string' && from.drums[op.drum] && to.drums[op.drum]) {
+      const row = from.drums[op.drum], length = to.drums[op.drum].steps.length;
+      const along = <T,>(values: T[] | undefined) => (values?.length ? Array.from({ length }, (_, step) => values[step % values.length]) : undefined);
+      const velocities = along(row.stepVelocities), probabilities = along(row.stepProbabilities), ratchets = along(row.stepRatchets);
+      to.drums[op.drum] = {
+        steps: along(row.steps) ?? Array(length).fill(false),
+        ...(velocities ? { stepVelocities: velocities } : {}), ...(probabilities ? { stepProbabilities: probabilities } : {}), ...(ratchets ? { stepRatchets: ratchets } : {}),
+      };
+    } else return refuse(400, 'Choose a lane or a drum to copy.');
+    return sceneChanged(state);
+  },
   'scene.delete': ({ state }, op) => {
     const index = state.scenes.findIndex(scene => scene.id === op.sceneId);
     if (index < 0) return refuse(404, 'Scene not found');

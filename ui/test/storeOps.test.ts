@@ -597,6 +597,8 @@ const rename = sceneChange('scene.rename', (service, body) => service.renameScen
 const renameRefused = sceneRefused('scene.rename', (service, body) => service.renameScene(body.sceneId, body.name));
 const colour = sceneChange('scene.color', (service, body) => service.setSceneColor(body.sceneId, body.color));
 const colourRefused = sceneRefused('scene.color', (service, body) => service.setSceneColor(body.sceneId, body.color));
+const copyPart = sceneChange('scene.copyPart', (service, body) => service.copyPartToScene(body.toSceneId, body.part));
+const copyPartRefused = sceneRefused('scene.copyPart', (service, body) => service.copyPartToScene(body.toSceneId, body.part));
 const remove = sceneChange('scene.delete', (service, body) => service.deleteScene(body.sceneId));
 const removeRefused = sceneRefused('scene.delete', (service, body) => service.deleteScene(body.sceneId));
 const replace = sceneChange('scene.replace', (service, body) => service.replaceScenes(body));
@@ -681,6 +683,17 @@ const sceneCases: Case[] = [
     assert.equal('color' in project.scenes[1], false);
   }),
   colourRefused('a scene that does not exist cannot be coloured', { sceneId: 'nope', color: 'blue' }, 400, 'That scene is not in the project.'),
+
+  // The open scene is the second, which is empty: copying its kick row empties the first scene's.
+  copyPart('one drum row of the open scene goes into another scene', (ids: Ids) => ({ toSceneId: ids.first, part: { drum: 'kick' } }), twoScenes, project => {
+    assert.equal(project.scenes[0].drums.kick.steps.some(Boolean), false);
+    assert.equal(project.scenes[0].drums.kick.steps.length, 16);
+  }),
+  copyPart('a lane of the open scene goes into another scene', (ids: Ids) => ({ toSceneId: ids.first, part: { synthId: 1 } }), twoScenes, project => {
+    assert.deepEqual(project.scenes[0].lanes[1], project.scenes[1].lanes[1]);
+  }),
+  copyPartRefused('a part is not copied into the scene it is in', (ids: Ids) => ({ toSceneId: ids.second, part: { synthId: 1 } }), 400, 'Choose another scene to copy to.', twoScenes),
+  copyPartRefused('nor without saying which part', (ids: Ids) => ({ toSceneId: ids.first, part: {} }), 400, 'Choose a lane or a drum to copy.', twoScenes),
 
   removeRefused('a scene that does not exist, even when only one is left', { sceneId: 'nope' }, 404, 'Scene not found'),
   removeRefused('the last scene cannot be deleted', (id: string) => ({ sceneId: id }), 400, 'A project needs at least one scene', openScene),
@@ -1459,7 +1472,7 @@ test('the store keeps nothing of a scene or song operation\'s own objects', () =
 });
 
 test('scene operations are saved, not undoable, and shared', () => {
-  for (const type of ['scene.select', 'scene.create', 'scene.rename', 'scene.color', 'scene.delete', 'scene.replace', 'song.set'] as const) {
+  for (const type of ['scene.select', 'scene.create', 'scene.rename', 'scene.color', 'scene.copyPart', 'scene.delete', 'scene.replace', 'song.set'] as const) {
     assert.deepEqual(OP_META[type], { save: true, undoable: false, share: true }, type);
   }
 });
