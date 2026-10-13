@@ -3,11 +3,12 @@ import { sanitizeGuests, type Guest } from './guests';
 import { createIndexedDbLibrary, createMemoryLibrary, hasIndexedDb, type ProjectInfo, type ProjectLibrary, type ProjectRecord, type VersionInfo, type VersionReason } from './projectLibrary';
 import { COPY_SUFFIX, EARLIER_SUFFIX } from './projectFamilies';
 import { DRUM_KITS } from './drumKits';
+import { barSteps } from './patternLength';
 import { normalizeSynthModelId } from '../synthModels';
 import { NEW_PROJECT_REVERB } from './effectSettings';
 import { record, number, clone, matchesShape, sanitizePattern, sanitizeSynthParams, sanitizeDrums, sanitizeEffects, sanitizeSends, sanitizeSaved, sanitizeModelParams, sanitizeKit, sanitizeScenes, sanitizeSong } from './projectSanitization';
 import type { Applied, DeepPartial, DrumFxState, GuestPatch, OpNotice, OpResult, Operation, Origin, Outcome } from './projectOps';
-import { commitScene, ensureScenes, newLane, reducers, sceneMessage, type ReducerContext } from './projectReducers';
+import { commitScene, ensureScenes, newLane, openSignature, reducers, sceneMessage, type ReducerContext } from './projectReducers';
 
 type Message = { type: string; data: any };
 type Listener = (message: Message) => void;
@@ -48,7 +49,7 @@ const ownOrigin = () => (typeof window !== 'undefined' && window.location ? wind
 const STORAGE_KEY = 'discobot_browser_project_v1';
 // Bumped when synth parameters gain fields. An older project is upgraded with defaults,
 // which is a migration and not damage worth warning about.
-const SCHEMA = 19;
+const SCHEMA = 20;
 // Edits are written this long after the last one, so dragging a knob is one write, not hundreds.
 const SAVE_DELAY_MS = 300;
 // A version is kept when a project is opened, before anything replaces it, and this often while it is edited.
@@ -129,9 +130,17 @@ export class LocalProjectService {
     }
     const tempo = number(parsed.tempo, 120, 20, 400);
     const seen = new Set<number>();
-    let damaged = !matchesShape(parsed.drumState, defaults.drumState) || !matchesShape(parsed.effectsLoop, defaults.effectsLoop);
+    // Projects from before scenes existed have none: ensureScenes makes one from the live pattern.
+    // The scenes are read first: the open one's time signature says how long a bar of the live
+    // lanes and drums is.
+    const scenes = sanitizeScenes(parsed.scenes, defaults.drumState);
+    const currentSceneId = scenes ? (scenes.some(scene => scene.id === parsed.currentSceneId) ? parsed.currentSceneId as string : scenes[0].id) : '';
+    const signature = scenes?.find(scene => scene.id === currentSceneId)?.signature;
+    // A bar shorter than one of 4/4 has fewer steps than the defaults' sixteen, which is not damage.
+    const drumShape = Object.fromEntries(Object.entries(defaults.drumState).map(([instrument, track]) => [instrument, { ...track, steps: track.steps.slice(0, barSteps(signature)) }]));
+    let damaged = !matchesShape(parsed.drumState, drumShape) || !matchesShape(parsed.effectsLoop, defaults.effectsLoop);
     const synths: LocalSynth[] = parsed.synths.flatMap((value: unknown) => {
-      const input = record(value), pattern = sanitizePattern(input.pattern, tempo);
+      const input = record(value), pattern = sanitizePattern(input.pattern, tempo, signature);
       if (!Number.isInteger(input.synthId) || input.synthId < 1 || input.synthId > 3 || seen.has(input.synthId) || !pattern) {
         damaged = true;
         return [];
@@ -140,7 +149,7 @@ export class LocalProjectService {
       if ((parsed.schema === SCHEMA && !matchesShape(input.synthParams, defaults.synthParams))
         || !input.pattern.steps.every((step: unknown) => matchesShape(step, { active: false, velocity: .7 }))) damaged = true;
       const patterns: Pattern[] = Array.isArray(input.patterns)
-        ? input.patterns.map((value: unknown) => sanitizePattern(value, tempo)).filter((value: Pattern | null): value is Pattern => value !== null)
+        ? input.patterns.map((value: unknown) => sanitizePattern(value, tempo, signature)).filter((value: Pattern | null): value is Pattern => value !== null)
         : [];
       const unique = new Map(patterns.map(p => [p.id, p]));
       unique.set(pattern.id, pattern);
@@ -157,7 +166,7 @@ export class LocalProjectService {
     if (savedPatterns.length !== parsed.savedPatterns.length) damaged = true;
     const state: State = {
       ...clone(defaults), version: 1, schema: SCHEMA, synths, savedPatterns, tempo,
-      drumState: sanitizeDrums(parsed.drumState, defaults.drumState),
+      drumState: sanitizeDrums(parsed.drumState, defaults.drumState, signature),
       effectsLoop: sanitizeEffects(parsed.effectsLoop, defaults.effectsLoop),
       drumFx: {
         sends: sanitizeSends(record(parsed.drumFx).sends, defaults.drumFx.sends),
@@ -171,11 +180,9 @@ export class LocalProjectService {
       createdAt: number(parsed.createdAt, Date.now(), 0, 1e15), updatedAt: number(parsed.updatedAt, Date.now(), 0, 1e15),
       guests: sanitizeGuests(parsed.guests, ownOrigin()),
     };
-    // Projects from before scenes existed have none: ensureScenes makes one from the live pattern.
-    const scenes = sanitizeScenes(parsed.scenes, defaults.drumState);
     if (scenes) {
       state.scenes = scenes;
-      state.currentSceneId = scenes.some(scene => scene.id === parsed.currentSceneId) ? parsed.currentSceneId : scenes[0].id;
+      state.currentSceneId = currentSceneId;
       state.song = sanitizeSong(parsed.song, scenes);
     }
     return { state, damaged };
@@ -593,7 +600,7 @@ export class LocalProjectService {
   }
 
   private createSynth(synthId: number): LocalSynth {
-    return newLane(synthId, this.state!.tempo, this.defaults!);
+    return newLane(synthId, this.state!.tempo, this.defaults!, openSignature(this.state!));
   }
 
   subscribe(listener: Listener) {
@@ -761,6 +768,7 @@ export class LocalProjectService {
   createScene(options: { name?: string; empty?: boolean } = {}) { return this.apply({ type: 'scene.create', sceneId: crypto.randomUUID(), name: options.name, empty: options.empty }); }
   renameScene(sceneId: string, name: string) { return this.apply({ type: 'scene.rename', sceneId, name }); }
   setSceneColor(sceneId: string, color?: string) { return this.apply({ type: 'scene.color', sceneId, color }); }
+  setSceneSignature(signature: string) { return this.apply({ type: 'scene.signature', signature }); }
   copyPartToScene(toSceneId: string, part: { synthId?: number; drum?: DrumInstrument }) { return this.apply({ type: 'scene.copyPart', toSceneId, ...part }); }
   deleteScene(sceneId: string) { return this.apply({ type: 'scene.delete', sceneId }); }
   replaceScenes(replacement: { scenes?: unknown; currentSceneId?: string; song?: unknown } = {}) { return this.apply({ type: 'scene.replace', scenes: replacement.scenes, currentSceneId: replacement.currentSceneId, song: replacement.song }); }

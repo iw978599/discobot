@@ -3,6 +3,8 @@ import { Pattern } from '../types';
 import { stepNotes } from '../services/noteScheduling';
 import { usePlayheadMark } from '../hooks/usePlayhead';
 import { gridKeyTarget } from './gridKeys';
+import { barSteps, onBeat, stepsAcross } from '../services/patternLength';
+import type { CSSProperties } from 'react';
 
 interface StepRowProps {
   pattern: Pattern;
@@ -17,10 +19,12 @@ interface StepRowProps {
   // Left and right are already walking the selected step along this row (SynthModule), with
   // the keyboard following it, so the row leaves the arrow keys alone.
   arrowsWalk?: boolean;
+  // The scene's time signature: where the beats are marked, and where a narrow screen breaks the row.
+  signature?: unknown;
 }
 
 // One synth lane's pattern as a row of lit cells, lined up with the drum grid below it.
-export default function StepRow({ pattern, isPlaying, lane, selectedStep, onStepClick, firstStep = 0, visibleSteps, arrowsWalk = false }: StepRowProps) {
+export default function StepRow({ pattern, isPlaying, lane, selectedStep, onStepClick, firstStep = 0, visibleSteps, arrowsWalk = false, signature }: StepRowProps) {
   const rowRef = useRef<HTMLDivElement>(null);
   // The row is one stop for the Tab key: the selected step, or the step the keyboard was last on.
   const [focused, setFocused] = useState<number | null>(null);
@@ -38,10 +42,10 @@ export default function StepRow({ pattern, isPlaying, lane, selectedStep, onStep
   return (
     <div
       ref={rowRef}
-      className={`step-row steps-${shown}`}
+      className={`step-row steps-${shown}${shown > barSteps(signature) ? ' fine' : ''}`}
       role="group"
       aria-label={`Synth ${lane} steps`}
-      style={{ gridTemplateColumns: `repeat(${shown}, minmax(0, 1fr))` }}
+      style={{ gridTemplateColumns: `repeat(${shown}, minmax(0, 1fr))`, '--bar': barSteps(signature), '--across': stepsAcross(signature) } as CSSProperties}
       onKeyDown={(event) => {
         if (arrowsWalk || event.ctrlKey || event.metaKey || event.altKey) return;
         const cell = (event.target as HTMLElement).closest<HTMLElement>('.step-cell');
@@ -58,7 +62,7 @@ export default function StepRow({ pattern, isPlaying, lane, selectedStep, onStep
         return (
           <button
             key={index}
-            className={`step-cell ${step.note ? 'has-note' : ''} ${step.slide ? 'has-slide' : ''} ${step.note && (step.probability ?? 1) < 1 ? 'chance' : ''} ${!step.note && held.has(index) ? 'held' : ''} ${selectedStep === index ? 'selected' : ''} ${column % (shown / 4) === 0 ? 'beat' : ''}`}
+            className={`step-cell ${step.note ? 'has-note' : ''} ${step.slide ? 'has-slide' : ''} ${step.note && (step.probability ?? 1) < 1 ? 'chance' : ''} ${!step.note && held.has(index) ? 'held' : ''} ${selectedStep === index ? 'selected' : ''} ${onBeat(signature, column, shown) ? 'beat' : ''}`}
             onClick={() => onStepClick(index)}
             aria-label={`Select step ${index + 1}${notes.length ? ` ${notes.join(' ')}` : ''}`}
             aria-pressed={selectedStep === index}

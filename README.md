@@ -41,7 +41,9 @@ whole kit can be imported at once.
 
 **Scenes and a song.** A scene is every lane's pattern plus the drum grid,
 one, two, four or eight bars long; Copy bar lays one bar of a longer pattern over another.
-A song is scenes in order, each repeated as many times as
+Each scene has a time signature of its own (4/4, 3/4, 6/8, 5/4, 7/8 or 12/8),
+which sets how long its bars are and where the beats fall, so a song can
+change from one to the next. A song is scenes in order, each repeated as many times as
 you like. Scenes can be given a colour so a song's shape reads at a glance.
 
 **Effects** shared by the whole rack: drive, phaser, delay (free or in time

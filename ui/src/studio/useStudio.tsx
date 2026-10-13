@@ -3,8 +3,8 @@ import { useSynthAudio } from '../hooks/useSynthAudio';
 import { useDrumAudio } from '../hooks/useDrumAudio';
 import { MidiMode, MidiMessage, MidiSource, useMidiInput } from '../hooks/useMidiInput';
 import { MIDI_DRUM_CHANNEL, midiOut } from '../services/midiOutput';
-import { Pattern, SequencerStep, SynthParameters, DrumState, DrumInstrument, DrumSettings, DrumKitDefinition, DrumKitId, EffectsLoopState, FxSendLevels, Scene, Song, SynthModelId, SynthModelParams } from '../types';
-import { SongPosition, applySceneMutes, audibleLanes, entryStartBar, guestBarGains, sceneAtBar, sceneDrumState, songBars } from '../services/songPlayback';
+import { Pattern, SequencerStep, SynthParameters, DrumState, DrumInstrument, DrumSettings, DrumKitDefinition, DrumKitId, EffectsLoopState, FxSendLevels, Scene, Song, SynthModelId, SynthModelParams, TimeSignature } from '../types';
+import { SongPosition, applySceneMutes, audibleLanes, entryStartTick, guestBarGains, sceneAtTick, sceneDrumState, songBars } from '../services/songPlayback';
 import { createDefaultSynthParameters } from '@discobot/engine';
 import { localService } from '../services/localService';
 import type { GuestPatch } from '../services/projectOps';
@@ -13,7 +13,7 @@ import { loadDrumSample } from '../services/drumSamples';
 import { loadCymbals, loadLaneSample } from '../services/builtInWaves';
 import { MAX_EMBEDDED_TOTAL_BYTES, MAX_PROJECT_FILE_BYTES, adoptSamples, embedSamples } from '../services/projectSamples';
 import { exportPreset, importPreset, type ImportedPreset } from '../services/presetImport';
-import { BAR_CHOICES, DRUM_STEPS_PER_BAR, barTargets, clampLengths, copyBar, drumBars, laneBars, resizeBars, sceneAsBars, sceneBars, stepsPerBar } from '../services/patternLength';
+import { BAR_CHOICES, barSteps, barTargets, barTicks, clampLengths, copyBar, drumBars, laneBars, relayBars, resizeBars, sceneAsBars, sceneBars, stepsPerBar, storedSignature, timeSignature } from '../services/patternLength';
 import { DRUM_INSTRUMENTS, DRUM_SETTINGS_DEFAULT } from '../services/drumKits';
 import { DRUM_FX_DEFAULT, EFFECTS_DEFAULT } from '../services/effectSettings';
 import type { DrumSample } from '../../../engine/src/drums/DrumCore';
@@ -38,7 +38,7 @@ import { storeMidiTies, storedMidiTies, tieFor, withTie, withoutTie, type MidiTi
 import { COUNT_IN_BARS, clickAt, countInBeats, countInSeconds, storeMetronome, storedMetronome, type MetronomeSettings } from '../services/metronome';
 import { startsUndoStep } from './undoSteps';
 import { BrowserTransport, TransportTick } from '../services/browserTransport';
-import { downloadFile, ExportArrangement } from '../services/wavExport';
+import { arrangementWholes, downloadFile, ExportArrangement, loopPass } from '../services/wavExport';
 import { expandDrumStep } from '../services/drumScheduling';
 import { useComputerKeyboard } from '../hooks/useComputerKeyboard';
 import { getAudioContext, scheduleClick, setMasterVolume, setMasterMuted, setEffectsTempo } from '../hooks/browserAudio';
@@ -82,6 +82,10 @@ interface PatternSnapshot {
   muted?: boolean;
   solo?: boolean;
   octaveShift?: number;
+  // The scene's time signature when the entry was made. Putting an entry back puts this back first.
+  signature?: TimeSignature;
+  // Every other lane's pattern, kept only by an edit that changes them all: a new time signature.
+  lanes?: Array<{ synthId: number; pattern: Pattern }>;
 }
 
 interface HistoryEntry {
@@ -328,7 +332,11 @@ export function useStudio() {
   const [metronome, setMetronome] = useState<MetronomeSettings>(storedMetronome);
   const metronomeRef = useRef(metronome);
   metronomeRef.current = metronome;
-  const countInBarsRef = useRef(0);
+  // The count-in of the run that is playing: how many ticks it lasts, and whose bar it counts.
+  const countInRef = useRef<{ ticks: number; signature: unknown }>({ ticks: 0, signature: undefined });
+  // In scene mode, where the bars are counted from: a bar's length changes when another scene is
+  // opened or this one's time signature is changed, and a new bar starts there.
+  const barAnchorRef = useRef({ tick: 0, bar: 0, perBar: 0 });
   const handleMetronomeChange = useCallback((patch: Partial<MetronomeSettings>) => {
     setMetronome((current) => {
       const next = { ...current, ...patch };
@@ -467,7 +475,8 @@ export function useStudio() {
   const songStartEntryRef = useRef(songStartEntry);
   songStartEntryRef.current = songStartEntry;
   const currentArrangementRef = useRef<() => ExportArrangement>(() => { throw new Error('not ready'); });
-  const songStartBarRef = useRef(0);
+  const songStartTickRef = useRef(0);
+  const signatureOfRef = useRef<(sceneId: string) => TimeSignature | undefined>(() => undefined);
   const songEndingRef = useRef(false);
   const stopPlaybackRef = useRef<() => void>(() => {});
   const handleGlobalPlayStopRef = useRef<() => Promise<void>>(async () => {});
@@ -550,7 +559,8 @@ export function useStudio() {
     lanesBeforeEditRef.current.set(synthId, { lane: held && held.left === before.pattern ? held.lane : before, left: pattern });
   }, [commitLanes]);
 
-  const getSnapshot = useCallback((synthId: number, patternId: string): PatternSnapshot | null => {
+  // `whole` keeps every other lane's pattern as well, for an edit that changes them all.
+  const getSnapshot = useCallback((synthId: number, patternId: string, whole = false): PatternSnapshot | null => {
     const live = synthsRef.current.find((entry) => entry.id === synthId);
     const held = lanesBeforeEditRef.current.get(synthId);
     // Only while the lane still has the pattern that edit left: a scene change replaces it.
@@ -572,12 +582,14 @@ export function useStudio() {
       muted: synth.muted,
       solo: synth.solo,
       octaveShift: synth.octaveShift ?? 0,
+      signature: timeSignature(signatureOfRef.current(currentSceneIdRef.current)),
+      ...(whole ? { lanes: synthsRef.current.filter(entry => entry.id !== synthId && entry.pattern).map(entry => ({ synthId: entry.id, pattern: clonePattern(entry.pattern!) })) } : {}),
     };
   }, [globalTempo, drumMasterVolume, drumSwing]);
 
-  const pushHistorySnapshot = useCallback((synthId: number, patternId: string) => {
+  const pushHistorySnapshot = useCallback((synthId: number, patternId: string, whole = false) => {
     if (isRestoringRef.current) return;
-    const snapshot = getSnapshot(synthId, patternId);
+    const snapshot = getSnapshot(synthId, patternId, whole);
     if (!snapshot) return;
     const history = historyRef.current;
     history.undo.push({ synthId, sceneId: currentSceneIdRef.current, snapshot });
@@ -611,7 +623,11 @@ export function useStudio() {
         }
         : entry
     )));
+    // The time signature goes back first: it says how long a bar of everything after it is.
+    const resigned = snapshot.signature !== undefined && snapshot.signature !== timeSignature(signatureOfRef.current(currentSceneIdRef.current));
     localService.applyAll([
+      ...(resigned ? [{ type: 'scene.signature' as const, signature: snapshot.signature! }] : []),
+      ...(snapshot.lanes ?? []).map(lane => ({ type: 'pattern.write' as const, synthId: lane.synthId, patternId: lane.pattern.id, patch: lane.pattern })),
       { type: 'drum.masterVolume', volume: snapshot.drumMasterVolume },
       { type: 'drum.swing', swing: snapshot.drumSwing },
       { type: 'drum.kit', kitId: snapshot.drumKitId, applyDefaults: false },
@@ -646,7 +662,7 @@ export function useStudio() {
       await Promise.resolve();
     }
     const currentPattern = synthsRef.current.find((synth) => synth.id === entry!.synthId)?.pattern;
-    const current = currentPattern ? getSnapshot(entry.synthId, currentPattern.id) : null;
+    const current = currentPattern ? getSnapshot(entry.synthId, currentPattern.id, Boolean(entry.snapshot.lanes)) : null;
     if (current) to.push({ synthId: entry.synthId, sceneId: entry.sceneId, snapshot: current });
     isRestoringRef.current = true;
     try {
@@ -755,13 +771,19 @@ export function useStudio() {
 
   useEffect(() => { setEffectsTempo(globalTempo); }, [globalTempo]);
 
+  // A scene's time signature. The open scene's is read from its slot in `scenes` like any
+  // other's: it is the one thing about the open scene the live lanes cannot say.
+  const signatureOf = (sceneId: string) => scenesRef.current.find(scene => scene.id === sceneId)?.signature;
+  signatureOfRef.current = signatureOf;
   // The open scene as it stands now: its stored copy can be behind the live lanes.
   const liveScene = (): Scene => {
     const lanes = synthsRef.current.filter(synth => synth.pattern);
+    const signature = storedSignature(signatureOf(currentSceneIdRef.current));
     return {
       id: currentSceneIdRef.current, name: scenesRef.current.find(scene => scene.id === currentSceneIdRef.current)?.name ?? 'Scene',
+      ...(signature ? { signature } : {}),
       lanes: Object.fromEntries(lanes.map(synth => [synth.id, synth.pattern!.steps])),
-      laneBars: Object.fromEntries(lanes.map(synth => [synth.id, laneBars(synth.pattern!.steps.length, synth.pattern!.bars)])),
+      laneBars: Object.fromEntries(lanes.map(synth => [synth.id, laneBars(synth.pattern!.steps.length, synth.pattern!.bars, signature)])),
       drums: drumStateRef.current,
     };
   };
@@ -773,30 +795,31 @@ export function useStudio() {
     return stored ? sceneBars(stored) : 1;
   };
   sceneLengthRef.current = sceneLength;
+  const sceneSignature = useCallback((sceneId: string) => signatureOfRef.current(sceneId), []);
 
-  scheduleTickRef.current = ({ step, bar: counted, time, duration }) => {
+  scheduleTickRef.current = ({ tick: counted, time, duration }) => {
     // The count-in: its bars are clicked and nothing else happens in them. Everything after counts
-    // its bars from where the count-in ends.
-    const countIn = countInBarsRef.current;
-    if (counted < countIn) {
-      const kind = clickAt(step);
+    // from where the count-in ends.
+    const countIn = countInRef.current;
+    if (counted < countIn.ticks) {
+      const kind = clickAt(counted % barTicks(countIn.signature), countIn.signature);
       if (kind) scheduleClick(time, kind === 'bar');
       return;
     }
-    const bar = counted - countIn;
-    if (metronomeRef.current.click && !exportingRef.current) {
-      const kind = clickAt(step);
-      if (kind) scheduleClick(time, kind === 'bar');
-    }
-    if (midiOut.active) midiOut.tick(midiTime(time), duration * 1000, bar === 0 && step === 0);
-    // Where in its pattern each lane is. In song mode that is counted from the start of the
-    // scene's pass; otherwise the bars just keep counting and lanes of different lengths drift.
-    let passBar = bar;
-    // In song mode the bar number picks the scene. A scene other than the one open for
+    const tick = counted - countIn.ticks;
+    if (midiOut.active) midiOut.tick(midiTime(time), duration * 1000, tick === 0);
+    // The transport only counts ticks. How long a bar is comes from the time signature of the
+    // scene that is playing, so which bar this is and where in it (`step`, in ticks) are worked
+    // out here. `passBar` is where in its pattern each lane is: in song mode that is counted from
+    // the start of the scene's pass; otherwise the bars just keep counting and lanes of different
+    // lengths drift.
+    let passBar = 0, step = 0;
+    let signature: TimeSignature | undefined;
+    // In song mode the tick picks the scene. A scene other than the one open for
     // editing is played from its stored copy; the open one is played from the live pattern.
     let scene: Scene | null = null;
     if (playModeRef.current === 'song') {
-      const position = sceneAtBar(songRef.current, songStartBarRef.current + bar, sceneLength);
+      const position = sceneAtTick(songRef.current, songStartTickRef.current + tick, sceneLength, signatureOf);
       if (!position) {
         if (!songEndingRef.current) {
           songEndingRef.current = true;
@@ -806,6 +829,8 @@ export function useStudio() {
         return;
       }
       passBar = position.bar;
+      step = position.tick;
+      signature = signatureOf(position.sceneId);
       if (step === 0) {
         setSongPosition(position);
         // Open the playing scene in the editor. This updates the live pattern at once: selectScene
@@ -817,7 +842,22 @@ export function useStudio() {
       if (position.sceneId !== currentSceneIdRef.current) {
         scene = scenesRef.current.find(entry => entry.id === position.sceneId) ?? null;
       }
+    } else {
+      signature = signatureOf(currentSceneIdRef.current);
+      const perBar = barTicks(signature), anchor = barAnchorRef.current;
+      // A bar of another length starts a new bar here, on a whole step of the bar before.
+      if (anchor.perBar !== perBar && (anchor.perBar === 0 || (tick - anchor.tick) % 2 === 0)) {
+        barAnchorRef.current = { tick, bar: anchor.perBar ? anchor.bar + Math.ceil((tick - anchor.tick) / anchor.perBar) : 0, perBar };
+      }
+      const from = barAnchorRef.current;
+      passBar = from.bar + Math.floor((tick - from.tick) / from.perBar);
+      step = (tick - from.tick) % from.perBar;
     }
+    if (metronomeRef.current.click && !exportingRef.current) {
+      const kind = clickAt(step, signature);
+      if (kind) scheduleClick(time, kind === 'bar');
+    }
+    const ticksPerBar = barTicks(signature);
     const lanes = synthsRef.current;
     // A scene played from its stored copy brings its own mutes; the open one's are on the lanes.
     const heard = audibleLanes(scene, lanes);
@@ -825,9 +865,10 @@ export function useStudio() {
       if (!synth.isPlaying || !synth.pattern || !synth.synthParams) continue;
       const steps = scene ? scene.lanes[synth.id] ?? [] : synth.pattern.steps;
       if (steps.length === 0) continue;
-      const bars = laneBars(steps.length, scene ? scene.laneBars?.[synth.id] : synth.pattern.bars);
+      const bars = laneBars(steps.length, scene ? scene.laneBars?.[synth.id] : synth.pattern.bars, signature);
       const perBar = steps.length / bars;
-      const divisor = perBar === 32 ? 1 : 2;
+      // A lane of finer steps has one to a tick; any other uses every second tick.
+      const divisor = perBar === ticksPerBar ? 1 : 2;
       if (step % divisor !== 0) continue;
       const index = (passBar % bars) * perBar + Math.floor(step / divisor) % perBar;
       const note = steps[index];
@@ -840,7 +881,7 @@ export function useStudio() {
     if (step % 2 !== 0) return;
     const state = scene ? sceneDrumState(scene, drumStateRef.current) : drumStateRef.current;
     const stepInBar = Math.floor(step / 2);
-    const drumStep = (passBar % drumBars(state)) * DRUM_STEPS_PER_BAR + stepInBar;
+    const drumStep = (passBar % drumBars(state, signature)) * barSteps(signature) + stepInBar;
     playhead.set('drums', drumStep);
     const drumSolo = (Object.keys(state) as DrumInstrument[]).some(i => state[i].solo);
     const swingOffset = stepInBar % 2 ? drumSwingRef.current * duration * 2 : 0;
@@ -873,18 +914,22 @@ export function useStudio() {
       // Guests are told where the beats fall on the computer's clock, which they share with this page.
       // A count-in is for a person about to play, never for an export that is recording the guests.
       const countIn = metronomeRef.current.countIn && !exportingRef.current ? COUNT_IN_BARS : 0;
-      countInBarsRef.current = countIn;
+      // The count-in is a bar of the scene that plays first.
+      const firstScene = playModeRef.current === 'song' ? songRef.current.entries[songStartEntryRef.current]?.sceneId : undefined;
+      const counted = signatureOfRef.current(firstScene ?? currentSceneIdRef.current);
+      countInRef.current = { ticks: countIn * barTicks(counted), signature: counted };
+      barAnchorRef.current = { tick: 0, bar: 0, perBar: 0 };
       // Nothing is playing during the count-in, so no step is lit: the playhead is put before the first.
       if (countIn > 0) for (const lane of ['drums' as const, ...synthsRef.current.map(synth => synth.id)]) playhead.set(lane, -1);
       // Guests count their beats from where the music starts, which is after the count-in.
       transport.onTempo = (bpm, time, beat) => {
-        if (beat >= countInBeats(countIn)) guestLink.announce({ playing: true, bpm, anchorWall: wallAtContextTime(context, time), anchorBeat: beat - countInBeats(countIn) });
+        if (beat >= countInBeats(countIn, counted)) guestLink.announce({ playing: true, bpm, anchorWall: wallAtContextTime(context, time), anchorBeat: beat - countInBeats(countIn, counted) });
       };
       // With guests connected the first beat is placed far enough ahead for all of them to make it.
       transport.start(guestLink.startLead() || undefined);
       guestLink.announce({
         playing: true, bpm: globalTempoRef.current, anchorBeat: 0,
-        anchorWall: wallAtContextTime(context, transport.startTime + countInSeconds(countIn, globalTempoRef.current)),
+        anchorWall: wallAtContextTime(context, transport.startTime + countInSeconds(countIn, globalTempoRef.current, counted)),
       });
     } else {
       if (guestLink.transport().playing) guestLink.announce({ playing: false });
@@ -970,7 +1015,9 @@ export function useStudio() {
         // A scene brings its lanes' mutes and solos with it.
         const withScene = (s: SynthState): SynthState => {
           const lane = lanePatterns.find((entry: { synthId: number }) => entry.synthId === s.id);
-          return lane?.pattern ? { ...s, pattern: lane.pattern, muted: Boolean(lane.muted), solo: Boolean(lane.solo), selectedStep: switched ? null : s.selectedStep } : s;
+          // A step that is no longer there (the scene's bars were made shorter) is not selected.
+          const kept = switched || (s.selectedStep !== null && s.selectedStep >= (lane?.pattern?.steps.length ?? 0)) ? null : s.selectedStep;
+          return lane?.pattern ? { ...s, pattern: lane.pattern, muted: Boolean(lane.muted), solo: Boolean(lane.solo), selectedStep: kept } : s;
         };
         const nextLanes = synthsRef.current.map(withScene);
         const stillHeard = audibleLanes(null, nextLanes);
@@ -1217,7 +1264,7 @@ export function useStudio() {
 
     if (!isAnyPlaying) {
       songEndingRef.current = false;
-      songStartBarRef.current = playModeRef.current === 'song' ? entryStartBar(songRef.current, songStartEntryRef.current, sceneLengthRef.current) : 0;
+      songStartTickRef.current = playModeRef.current === 'song' ? entryStartTick(songRef.current, songStartEntryRef.current, sceneLengthRef.current, signatureOfRef.current) : 0;
       const readiness = await Promise.all([
         synthAudio.ensureAudioReady(),
         drumAudio.ensureAudioReady(),
@@ -1267,6 +1314,15 @@ export function useStudio() {
   const handleSceneAdd = useCallback((empty: boolean) => sceneChange(() => localService.createScene({ empty })), [sceneChange]);
   const handleSceneRename = useCallback((sceneId: string, name: string) => sceneChange(() => localService.renameScene(sceneId, name), false), [sceneChange]);
   const handleSceneColor = useCallback((sceneId: string, color: string) => sceneChange(() => localService.setSceneColor(sceneId, color || undefined), false), [sceneChange]);
+  // The open scene's time signature. Every lane and the drum grid change length with it, so the
+  // undo entry keeps all of them: one undo brings back the steps a shorter bar cut off.
+  const handleSceneSignature = useCallback((signature: string) => {
+    if (timeSignature(signature) === timeSignature(signatureOfRef.current(currentSceneIdRef.current))) return;
+    const synth = synthsRef.current[0];
+    if (synth?.pattern) pushHistorySnapshot(synth.id, synth.pattern.id, true);
+    const result = localService.setSceneSignature(signature);
+    if (!result.ok) setStorageError(result.error);
+  }, [pushHistorySnapshot]);
   const handleSceneDelete = useCallback((sceneId: string) => sceneChange(() => localService.deleteScene(sceneId)), [sceneChange]);
   // The sceneChanged event sets the song, as the store kept it.
   const handleSongChange = useCallback((next: Partial<Song>) => {
@@ -1393,7 +1449,7 @@ export function useStudio() {
     const synth = synthsRef.current.find(s => s.id === synthId);
     if (!synth?.pattern) return;
     pushHistorySnapshot(synthId, synth.pattern.id);
-    localService.writePattern(synthId, synth.pattern.id, randomLine(synth.pattern, choice, 3 + synth.octaveShift, Math.random));
+    localService.writePattern(synthId, synth.pattern.id, randomLine(synth.pattern, choice, 3 + synth.octaveShift, Math.random, signatureOfRef.current(currentSceneIdRef.current)));
   }, [pushHistorySnapshot]);
 
   // Writes a note to a step. `add` joins it to the chord already there instead of replacing it.
@@ -1433,12 +1489,13 @@ export function useStudio() {
     const pattern = synthsRef.current.find(s => s.id === synthId)?.pattern;
     if (!transport?.running || !pattern || pattern.steps.length === 0 || playhead.get(synthId) < 0) return null;
     const context = getAudioContext();
-    const perBar = pattern.steps.length / laneBars(pattern.steps.length, pattern.bars);
+    const signature = signatureOfRef.current(currentSceneIdRef.current);
+    const perBar = stepsPerBar(pattern.steps.length, pattern.bars, signature);
     return recordPosition({
       // What is heard now left the clock a moment ago.
       heardTicks: transport.ticksAt(context.currentTime - (context.outputLatency || 0)),
       scheduledTicks: transport.scheduledTicks, playheadStep: playhead.get(synthId),
-      ticksPerStep: 32 / perBar, steps: pattern.steps.length, strength: quantizeRef.current,
+      ticksPerStep: barTicks(signature) / perBar, steps: pattern.steps.length, strength: quantizeRef.current,
     });
   }, []);
 
@@ -1655,10 +1712,13 @@ export function useStudio() {
     if (Object.keys(mapped).length > 0) localService.setSynthParams(synthId, mapped);
   }, [pushHistorySnapshot]);
 
-  const handleStepCountChange = useCallback(async (synthId: number, stepCount: 16 | 32) => {
+  // How many steps a bar of the lane has: the bar's sixteenths, or twice that for finer steps.
+  const handleStepCountChange = useCallback(async (synthId: number, stepCount: number) => {
     const synth = synthsRef.current.find(s => s.id === synthId);
     if (!synth?.pattern) return;
-    const bars = laneBars(synth.pattern.steps.length, synth.pattern.bars), perBar = synth.pattern.steps.length / bars;
+    const signature = signatureOfRef.current(currentSceneIdRef.current);
+    if (stepCount !== barSteps(signature) && stepCount !== barSteps(signature) * 2) return;
+    const bars = laneBars(synth.pattern.steps.length, synth.pattern.bars, signature), perBar = synth.pattern.steps.length / bars;
     if (perBar === stepCount) return;
     pushHistorySnapshot(synthId, synth.pattern.id);
 
@@ -1668,7 +1728,7 @@ export function useStudio() {
       return source ? { ...source } : { active: false, velocity: 0.7 as const };
     }));
     const nextPattern = { ...synth.pattern, steps: nextSteps };
-    stepCount = nextSteps.length as 16 | 32;
+    stepCount = nextSteps.length;
 
     playhead.set(synthId, playhead.get(synthId) % stepCount);
     setSynths(prev => prev.map(s => {
@@ -1748,7 +1808,7 @@ export function useStudio() {
   const handleLaneBarsChange = useCallback(async (synthId: number, bars: number) => {
     const synth = synthsRef.current.find(s => s.id === synthId);
     if (!synth?.pattern || !BAR_CHOICES.some(choice => choice === bars)) return;
-    const current = laneBars(synth.pattern.steps.length, synth.pattern.bars);
+    const current = laneBars(synth.pattern.steps.length, synth.pattern.bars, signatureOfRef.current(currentSceneIdRef.current));
     if (current === bars) return;
     pushHistorySnapshot(synthId, synth.pattern.id);
     const perBar = synth.pattern.steps.length / current;
@@ -1771,7 +1831,7 @@ export function useStudio() {
 
   // Lays one bar of the drum grid over others, as one undo step.
   const handleCopyDrumBar = useCallback((from: number, to: number[]) => {
-    if (!barTargets(drumBars(drumStateRef.current), from, to)) return;
+    if (!barTargets(drumBars(drumStateRef.current, signatureOfRef.current(currentSceneIdRef.current)), from, to)) return;
     const synth = synthsRef.current[0];
     if (synth?.pattern) pushHistorySnapshot(synth.id, synth.pattern.id);
     localService.copyDrumBar(from, to);
@@ -1783,10 +1843,11 @@ export function useStudio() {
     const synth = synthsRef.current.find(s => s.id === synthId);
     if (!synth?.pattern) return;
     const { steps } = synth.pattern;
-    const targets = barTargets(laneBars(steps.length, synth.pattern.bars), from, to);
+    const signature = signatureOfRef.current(currentSceneIdRef.current);
+    const targets = barTargets(laneBars(steps.length, synth.pattern.bars, signature), from, to);
     if (!targets) return;
     pushHistorySnapshot(synthId, synth.pattern.id);
-    localService.writePattern(synthId, synth.pattern.id, { ...synth.pattern, steps: clampLengths(copyBar(steps, stepsPerBar(steps.length, synth.pattern.bars), from, targets)) });
+    localService.writePattern(synthId, synth.pattern.id, { ...synth.pattern, steps: clampLengths(copyBar(steps, stepsPerBar(steps.length, synth.pattern.bars, signature), from, targets)) });
   }, [pushHistorySnapshot]);
 
   const handleSynthMixChange = useCallback(async (synthId: number, mix: { muted?: boolean; solo?: boolean }) => {
@@ -1862,8 +1923,9 @@ export function useStudio() {
         drumState: cloneDrumState(drumStateRef.current),
         drumSwing,
         drumMasterVolume,
+        signature: liveSceneRef.current().signature,
         ...(sceneBars(liveSceneRef.current()) > 1 ? {
-          bars: sceneAsBars(liveSceneRef.current()).map(scene => ({ name: scene.name, lanes: scene.lanes, drumState: sceneDrumState(scene, drumStateRef.current) })),
+          bars: sceneAsBars(liveSceneRef.current()).map(scene => ({ name: scene.name, signature: scene.signature, lanes: scene.lanes, drumState: sceneDrumState(scene, drumStateRef.current) })),
         } : {}),
       },
       `discobot-${Date.now()}.mid`
@@ -1875,6 +1937,7 @@ export function useStudio() {
     drumKitId: selectedDrumKitIdRef.current, drumMasterVolume, drumSwing,
     drumFx: drumFxRef.current, effectsLoop: effectsLoopRef.current, drumSamples: { ...drumSamplesRef.current },
     synthSamples: { ...synthSamplesRef.current }, drumCymbals: cymbalsRef.current,
+    ...(liveSceneRef.current().signature ? { signature: liveSceneRef.current().signature } : {}),
     // A scene longer than one bar is rendered a bar at a time, each lane looping at its own length.
     ...(sceneBars(liveSceneRef.current()) > 1 ? { bars: sceneAsBars(liveSceneRef.current()) } : {}),
   }), [drumMasterVolume, drumSwing]);
@@ -1887,7 +1950,7 @@ export function useStudio() {
       {
         tempo: globalTempoRef.current, drumSwing, drumMasterVolume, drumState: kit,
         synthLanes: synthsRef.current.filter((entry) => entry.pattern).map((entry) => ({ id: entry.id, pattern: clonePattern(entry.pattern!), muted: false, solo: false })),
-        bars: bars.map(scene => ({ name: scene.name, lanes: scene.lanes, drumState: sceneDrumState(scene, kit) })),
+        bars: bars.map(scene => ({ name: scene.name, signature: scene.signature, lanes: scene.lanes, drumState: sceneDrumState(scene, kit) })),
       },
       `discobot-song-${Date.now()}.mid`
     );
@@ -1973,8 +2036,10 @@ export function useStudio() {
     const songGains = wholeSong && arrangement.bars ? new Map(guestsRef.current.map(guest => [guest.id, guestBarGains(arrangement.bars!, guest)])) : null;
     const audible = guestsRef.current.filter(guest => songGains ? songGains.get(guest.id)!.some(gain => gain > 0) : !guest.muted && guest.volume > 0);
     if (audible.length > 0 && !guestCapture.active()) {
-      const passFrames = (arrangement.bars?.length ?? 1) * Math.round(240 / globalTempoRef.current * 44100);
-      const seconds = (loop ? 2 : 1) * (arrangement.bars?.length ?? 1) * 240 / globalTempoRef.current;
+      // How long what is exported lasts: its bars, each as long as its scene's time signature makes it.
+      const wholes = arrangementWholes(arrangement);
+      const passFrames = loopPass(globalTempoRef.current, 44100, wholes).frames;
+      const seconds = (loop ? 2 : 1) * wholes * 240 / globalTempoRef.current;
       const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
       const mode = playModeRef.current, startEntry = songStartEntryRef.current;
       try {
@@ -2166,6 +2231,10 @@ export function useStudio() {
     const tempo = midiImportData.detectedTempo;
     const importedDrums = midiImportData.tracks.filter((track, i) => track.drums && midiImportAssignments[i] === 'drums');
     let snapshotTaken = false;
+    // A MIDI file is read as 4/4. In a scene of another time signature its steps are laid from the
+    // start along that scene's bars, as many as hold them, and what is past the eighth is left out.
+    const bar = barSteps(signatureOfRef.current(currentSceneIdRef.current)), plain = bar === barSteps();
+    const blankStep = (): SequencerStep => ({ active: false, velocity: 0.7 });
 
     for (const [i, track] of midiImportData.tracks.entries()) {
       const synthId = midiImportAssignments[i];
@@ -2177,7 +2246,10 @@ export function useStudio() {
       snapshotTaken = true;
       // Replace the lane's steps in place so repeated imports do not pile up stored patterns.
       const { bars: _bars, ...rest } = current;
-      const pattern: Pattern = { ...rest, steps: track.pattern.steps, tempo, ...(track.pattern.bars ? { bars: track.pattern.bars } : {}) };
+      const fine = track.pattern.steps.length / (track.pattern.bars ?? 1) > barSteps() ? 2 : 1;
+      const laid = plain ? { items: track.pattern.steps, bars: track.pattern.bars ?? 1 } : relayBars(track.pattern.steps, bar * fine, blankStep);
+      // The store keeps the bar count it has when none is sent, so one bar is sent as 1.
+      const pattern: Pattern = { ...rest, steps: plain ? laid.items : clampLengths(laid.items), tempo, bars: laid.bars };
       setSynths(prev => prev.map(s =>
         s.id === synthId ? { ...s, selectedStep: null } : s
       ));
@@ -2191,10 +2263,10 @@ export function useStudio() {
       for (const instrument of Object.keys(next) as DrumInstrument[]) {
         const lanes = importedDrums.map(track => track.drums![instrument]);
         // The grid takes the file's length. Chance and repeats belonged to the steps being replaced.
-        next[instrument].steps = lanes[0].steps.map((_, step) => lanes.some(lane => lane.steps[step]));
-        next[instrument].stepVelocities = next[instrument].steps.map((_, step) => (
-          lanes.find(lane => lane.steps[step])?.stepVelocities[step] ?? 1
-        ));
+        const steps = lanes[0].steps.map((_, step) => lanes.some(lane => lane.steps[step]));
+        const velocities = steps.map((_, step) => lanes.find(lane => lane.steps[step])?.stepVelocities[step] ?? 1);
+        next[instrument].steps = plain ? steps : relayBars(steps, bar, () => false).items;
+        next[instrument].stepVelocities = plain ? velocities : relayBars(velocities, bar, () => 1).items;
         delete next[instrument].stepProbabilities;
         delete next[instrument].stepRatchets;
       }
@@ -2267,8 +2339,8 @@ export function useStudio() {
     pushHistorySnapshot(synth.id, synth.pattern.id);
     localService.applyAll([
       { type: 'tempo.set', tempo: starter.tempo },
-      { type: 'drum.state', state: starterDrums(starter, drumsForUndoRef.current) },
-      { type: 'pattern.write', synthId: synth.id, patternId: synth.pattern.id, patch: { steps: starterPattern(starter, synth.pattern).steps } },
+      { type: 'drum.state', state: starterDrums(starter, drumsForUndoRef.current, signatureOfRef.current(currentSceneIdRef.current)) },
+      { type: 'pattern.write', synthId: synth.id, patternId: synth.pattern.id, patch: { steps: starterPattern(starter, synth.pattern, signatureOfRef.current(currentSceneIdRef.current)).steps } },
     ]);
   }, [pushHistorySnapshot]);
 
@@ -2444,7 +2516,9 @@ export function useStudio() {
     handleDrumSettingsChange, handleDrumMixChange, handleDrumReset, handleDrumMasterVolumeChange, handleDrumSwingChange,
     handleDrumFxChange, handleEffectsLoopChange, handleDrumMuteAll, handleDrumSoloAll, handleReset,
     scenes, currentSceneId, song, playMode, setPlayMode, songStartEntry, setSongStartEntry, songPosition,
-    handleSceneSelect, handleSceneAdd, handleSceneRename, handleSceneColor, handleSceneDelete, handleSongChange, songArrangement, handleExportSongMidi,
+    handleSceneSelect, handleSceneAdd, handleSceneRename, handleSceneColor, handleSceneSignature, handleSceneDelete, handleSongChange, songArrangement, handleExportSongMidi,
+    // The open scene's time signature, and any scene's by its id.
+    signature: timeSignature(scenes.find(scene => scene.id === currentSceneId)?.signature), sceneSignature,
     isAnyPlaying,
   };
 }

@@ -601,6 +601,8 @@ const rename = sceneChange('scene.rename', (service, body) => service.renameScen
 const renameRefused = sceneRefused('scene.rename', (service, body) => service.renameScene(body.sceneId, body.name));
 const colour = sceneChange('scene.color', (service, body) => service.setSceneColor(body.sceneId, body.color));
 const colourRefused = sceneRefused('scene.color', (service, body) => service.setSceneColor(body.sceneId, body.color));
+const signature = sceneChange('scene.signature', (service, body) => service.setSceneSignature(body.signature));
+const signatureRefused = sceneRefused('scene.signature', (service, body) => service.setSceneSignature(body.signature));
 const copyPart = sceneChange('scene.copyPart', (service, body) => service.copyPartToScene(body.toSceneId, body.part));
 const copyPartRefused = sceneRefused('scene.copyPart', (service, body) => service.copyPartToScene(body.toSceneId, body.part));
 const remove = sceneChange('scene.delete', (service, body) => service.deleteScene(body.sceneId));
@@ -687,6 +689,20 @@ const sceneCases: Case[] = [
     assert.equal('color' in project.scenes[1], false);
   }),
   colourRefused('a scene that does not exist cannot be coloured', { sceneId: 'nope', color: 'blue' }, 400, 'That scene is not in the project.'),
+
+  signature('the open scene takes a time signature and its lanes and drums become bars of it', { signature: '6/8' }, twoScenes, project => {
+    assert.deepEqual(project.scenes.map((scene: any) => scene.signature), [undefined, '6/8']);
+    assert.deepEqual(project.scenes.map((scene: any) => scene.drums.kick.steps.length), [16, 12]);
+    assert.equal(project.drumState.kick.steps.length, 12);
+    assert.equal(project.synths[0].pattern.steps.length, 12);
+    assert.equal(project.scenes[0].drums.kick.steps[3], true, 'the other scene keeps what it had');
+  }),
+  signature('the same signature again changes nothing but is still answered', { signature: '4/4' }, twoScenes, project => {
+    assert.equal('signature' in project.scenes[1], false);
+    assert.equal(project.drumState.kick.steps.length, 16);
+  }),
+  signatureRefused('a signature that is not one of the six', { signature: '2/2' }, 400, 'A scene is in 4/4, 3/4, 6/8, 5/4, 7/8, 12/8'),
+  signatureRefused('no signature at all', {}, 400, 'A scene is in 4/4, 3/4, 6/8, 5/4, 7/8, 12/8'),
 
   // The open scene is the second, which is empty: copying its kick row empties the first scene's.
   copyPart('one drum row of the open scene goes into another scene', (ids: Ids) => ({ toSceneId: ids.first, part: { drum: 'kick' } }), twoScenes, project => {
@@ -1475,6 +1491,10 @@ test('the store keeps nothing of a scene or song operation\'s own objects', () =
   service.flush();
 });
 
+test('a time signature is saved, shared and, alone among the scene operations, undone', () => {
+  assert.deepEqual(OP_META['scene.signature'], { save: true, undoable: true, share: true });
+});
+
 test('scene operations are saved, not undoable, and shared', () => {
   for (const type of ['scene.select', 'scene.create', 'scene.rename', 'scene.color', 'scene.copyPart', 'scene.delete', 'scene.replace', 'song.set'] as const) {
     assert.deepEqual(OP_META[type], { save: true, undoable: false, share: true }, type);
@@ -1499,7 +1519,9 @@ test('the scheduler opens a scene with a plain call, and a scene change waits fo
 });
 
 // Undo puts a snapshot back with one applyAll, in the order its twelve calls were made in, with
-// nothing awaited between them. The studio is not run here, so this reads its source.
+// nothing awaited between them. Before them come the two that only an entry made by a change of
+// time signature brings: the signature itself, which says how long a bar of everything after it
+// is, and the other lanes' patterns. The studio is not run here, so this reads its source.
 test('undo puts a snapshot back with one applyAll, and nothing in it waits', () => {
   const source = readFileSync(new URL('../src/studio/useStudio.tsx', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
   const from = source.indexOf('const applySnapshot = useCallback(');
@@ -1509,5 +1531,5 @@ test('undo puts a snapshot back with one applyAll, and nothing in it waits', () 
   assert.equal(body.includes('Promise'), false);
   assert.equal((body.match(/localService\.applyAll\(\[/g) ?? []).length, 1);
   const order = [...body.matchAll(/\{ type: '([\w.]+)'/g)].map(match => match[1]);
-  assert.deepEqual(order, ['drum.masterVolume', 'drum.swing', 'drum.kit', 'drum.fx', 'effects.set', 'pattern.write', 'synth.params', 'synth.model', 'drum.state', 'tempo.set', 'synth.mix', 'synth.prefs']);
+  assert.deepEqual(order, ['scene.signature', 'pattern.write', 'drum.masterVolume', 'drum.swing', 'drum.kit', 'drum.fx', 'effects.set', 'pattern.write', 'synth.params', 'synth.model', 'drum.state', 'tempo.set', 'synth.mix', 'synth.prefs']);
 });

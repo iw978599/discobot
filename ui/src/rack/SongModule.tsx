@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import type { Studio } from '../studio/useStudio';
 import type { Song } from '../types';
-import { MAX_REPEATS, MAX_SONG_ENTRIES, songClock, songLengthBars } from '../services/songPlayback';
+import { MAX_REPEATS, MAX_SONG_ENTRIES, songClock, songLengthBars, songSeconds } from '../services/songPlayback';
+import { TIME_SIGNATURES } from '../services/patternLength';
 import { storeSongView, storedSongView, type SongView } from '../services/songView';
 import ConfirmDialog from './ConfirmDialog';
 import SongPlaylist from './SongPlaylist';
@@ -90,6 +91,17 @@ export default function SongModule({ studio, onHelp }: { studio: Studio; onHelp?
             {SCENE_COLORS.map(color => <option key={color} value={color}>{SCENE_COLOR_NAMES[color]}</option>)}
           </select>
         </label>
+        <label className="scene-color scene-time" title="The open scene's time signature: how long a bar is and where its beats fall. Every lane and the drums change with it. A shorter bar cuts off the steps at its end; Undo brings them back">
+          Time
+          <select
+            aria-label="Time signature of the open scene"
+            disabled={!current}
+            value={studio.signature}
+            onChange={(event) => studio.handleSceneSignature(event.target.value)}
+          >
+            {TIME_SIGNATURES.map(signature => <option key={signature} value={signature}>{signature}</option>)}
+          </select>
+        </label>
         <button
           className="rack-btn danger"
           disabled={!current || scenes.length < 2}
@@ -103,7 +115,7 @@ export default function SongModule({ studio, onHelp }: { studio: Studio; onHelp?
       <div className="rack-row song-row">
         <div className="rack-plate static">
           <b>Song</b>
-          <span>{bars} {bars === 1 ? 'bar' : 'bars'} · {songClock(bars * 240 / studio.globalTempo)}</span>
+          <span>{bars} {bars === 1 ? 'bar' : 'bars'} · {songClock(songSeconds(song, studio.sceneLength, studio.globalTempo, studio.sceneSignature))}</span>
         </div>
         <div className="rack-ms mode-toggle" role="group" aria-label="Play mode">
           <button

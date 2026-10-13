@@ -4,6 +4,7 @@ import { MAX_STEP_NOTES, noteLengths, stepNotes, stepOffset } from '../services/
 import { CHORD_SHAPES, chordNotes, type ChordShapeId } from '../services/chords';
 import { usePlayheadMark } from '../hooks/usePlayhead';
 import { useNarrow } from '../hooks/useNarrow';
+import { beatLength, onBeat } from '../services/patternLength';
 import { TAP_HOLD_MS, TAP_SLOP } from './useKnobInteraction';
 import './PianoRoll.css';
 
@@ -25,14 +26,15 @@ interface PianoRollProps {
   // The bar on show, for a pattern longer than one bar. Defaults to the whole pattern.
   firstStep?: number;
   visibleSteps?: number;
+  // The scene's time signature: which steps start a beat, and how far the phone's buttons move.
+  signature?: unknown;
 }
 
 const NOTE_ORDER = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-// On a phone: the narrowest a cell may be, how many steps may be across at once, and how far
-// the two buttons move along the bar.
+// On a phone: the narrowest a cell may be and how many steps may be across at once. The two
+// buttons move along the bar a beat at a time: four steps, or six where the beat is six (6/8, 12/8).
 const MIN_CELL = 44;
 const ACROSS = [32, 16, 12, 8, 6, 4];
-const TURN = 4;
 
 export default function PianoRoll({
   pattern,
@@ -46,7 +48,9 @@ export default function PianoRoll({
   onClear,
   firstStep = 0,
   visibleSteps,
+  signature,
 }: PianoRollProps) {
+  const TURN = beatLength(signature);
   // What a pressed pointer is doing as it moves over cells, if anything.
   const painting = useRef<'assign' | 'erase' | null>(null);
   // Whether a pointer is down on the grid. Nothing may move the grid while one is.
@@ -180,6 +184,8 @@ export default function PianoRoll({
   };
   const firstRef = useRef(first);
   firstRef.current = first;
+  const countRef = useRef(count);
+  countRef.current = count;
 
   // How many steps fit across, measured whenever the grid changes size: first shown, the phone
   // turned, its unit brought back by the bar. The grid also starts at its lowest notes, the
@@ -199,7 +205,8 @@ export default function PianoRoll({
       if (now === 0) return;
       const label = grid.querySelector('.piano-roll-corner')?.getBoundingClientRect().width ?? 0;
       const room = Math.floor((now - label) / (MIN_CELL + 1));
-      setAcross(ACROSS.find(steps => steps <= room) ?? ACROSS[ACROSS.length - 1]);
+      // A whole bar when it fits (a bar can be 12, 14, 20 or 24 steps), else the most that do.
+      setAcross(countRef.current > 0 && countRef.current <= room ? countRef.current : ACROSS.find(steps => steps <= room) ?? ACROSS[ACROSS.length - 1]);
       if (shown) grid.scrollTop = grid.scrollHeight;
       place(firstRef.current);
     };
@@ -218,7 +225,7 @@ export default function PianoRoll({
       observer.disconnect();
       grid.removeEventListener('scroll', read);
     };
-  }, [narrow, Boolean(pattern)]);
+  }, [narrow, Boolean(pattern), count]);
   // Once the number across is known the columns have their width, and the grid can be lined up.
   useLayoutEffect(() => {
     if (narrow) place(Math.min(firstRef.current, Math.max(0, count - fit)));
@@ -341,7 +348,7 @@ export default function PianoRoll({
           {columns.map((stepIndex) => (
             <div
               key={`step-header-${stepIndex}`}
-              className={`piano-roll-step-header ${selectedStep === stepIndex ? 'selected' : ''}`}
+              className={`piano-roll-step-header ${selectedStep === stepIndex ? 'selected' : ''} ${onBeat(signature, stepIndex - firstStep, shown) ? 'beat' : ''}`}
               role="columnheader"
               aria-label={`Step ${stepIndex + 1}`}
               data-step={stepIndex}

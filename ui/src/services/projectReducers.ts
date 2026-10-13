@@ -4,11 +4,11 @@
 import { MAX_SCENES, clone, merge, number, sanitizeDrums, sanitizeEffects, sanitizeModelParams, sanitizePattern, sanitizeScenes, sanitizeSends, sanitizeSong, sanitizeSynthParams } from './projectSanitization';
 import { MAX_GUESTS, guestUrl, patchGuest, sanitizeGuests } from './guests';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
-import { BAR_CHOICES, DRUM_STEPS_PER_BAR, barTargets, copyBar, drumBars, laneBars, resizeBars } from './patternLength';
+import { BAR_CHOICES, TIME_SIGNATURES, barSteps, barTargets, clampLengths, copyBar, drumBars, laneBars, layAlong, resizeBars, resizeEachBar, stepsPerBar, storedSignature } from './patternLength';
 import { emptySteps } from './songPlayback';
 import { nextSceneColor, sceneColor } from './sceneColors';
 import { normalizeSynthModelId } from '../synthModels';
-import type { DrumState, Pattern, Scene } from '../types';
+import type { DrumState, Pattern, Scene, TimeSignature } from '../types';
 import type { ProjectDefaults, ProjectLane, ProjectState } from './localService';
 import type { Operation, OpResult, OpType, Outcome, Rejected } from './projectOps';
 
@@ -38,6 +38,11 @@ const sent = (value: unknown): Record<string, any> | null => {
 // what JSON cannot carry is undefined.
 const sentValue = (value: unknown): unknown => sent({ value })?.value;
 
+// The open scene's time signature, which says how long a bar of the live lanes and drums is.
+// It is the one thing about the open scene read from its slot in `scenes`: the lanes cannot say it.
+export const openSignature = (state: ProjectState): TimeSignature | undefined => state.scenes.find(scene => scene.id === state.currentSceneId)?.signature;
+const DRUM_DETAILS = [['stepVelocities', 1], ['stepProbabilities', 1], ['stepRatchets', 1]] as const;
+
 // Only a lane's own number finds it; an operation can name anything.
 const laneOf = (state: ProjectState, synthId: unknown) => state.synths.find(s => s.synthId === synthId);
 
@@ -51,18 +56,18 @@ const drumLaneEdit = ({ state, defaults }: ReducerContext, instrument: unknown, 
   if (!track) return refuse(404, 'Unknown local operation');
   const refused = edit(track);
   if (refused) return refused;
-  state.drumState = sanitizeDrums(state.drumState, defaults.drumState);
+  state.drumState = sanitizeDrums(state.drumState, defaults.drumState, openSignature(state));
   return update('drumFullState', { drumState: state.drumState });
 };
 const badDrumStep = (track: DrumLane, step: number) =>
   (!Number.isInteger(step) || step < 0 || step >= track.steps.length ? refuse(400, 'Invalid drum step') : undefined);
 
-// A lane as the store first makes it: one blank pattern of sixteen steps, the default sound, and
-// the project's tempo. The pattern's id is made here, not carried by the operation.
-export const newLane = (synthId: number, tempo: number, defaults: ProjectDefaults): ProjectLane => {
+// A lane as the store first makes it: one blank pattern of one bar (sixteen steps in 4/4), the
+// default sound, and the project's tempo. The pattern's id is made here, not carried by the operation.
+export const newLane = (synthId: number, tempo: number, defaults: ProjectDefaults, signature?: unknown): ProjectLane => {
   const pattern: Pattern = {
     id: crypto.randomUUID(), name: `Synth ${synthId}`, tempo,
-    steps: Array.from({ length: 16 }, () => ({ active: false, velocity: .7 })),
+    steps: emptySteps(barSteps(signature)),
   };
   return {
     synthId, pattern, patterns: [pattern], synthParams: clone(defaults.synthParams),
@@ -92,9 +97,10 @@ const transport = (playing: boolean) => ({ state }: ReducerContext, op: { synthI
 // the service on its open project.
 
 // The live lanes and drum grid as a scene.
-export const captureScene = (state: ProjectState, id: string, name: string, color?: string): Scene => ({
+export const captureScene = (state: ProjectState, id: string, name: string, color?: string, signature?: TimeSignature): Scene => ({
   id, name,
   ...(color ? { color } : {}),
+  ...(storedSignature(signature) ? { signature: storedSignature(signature) } : {}),
   lanes: Object.fromEntries(state.synths.map(synth => [synth.synthId, clone(synth.pattern.steps)])),
   ...(state.synths.some(synth => (synth.pattern.bars ?? 1) > 1)
     ? { laneBars: Object.fromEntries(state.synths.filter(synth => (synth.pattern.bars ?? 1) > 1).map(synth => [synth.synthId, synth.pattern.bars!])) } : {}),
@@ -128,15 +134,15 @@ export const ensureScenes = (state: ProjectState) => {
 // drums, so this runs before anything reads `scenes`: saving, switching, exporting.
 export const commitScene = (state: ProjectState) => {
   const index = state.scenes.findIndex(scene => scene.id === state.currentSceneId);
-  if (index >= 0) state.scenes[index] = captureScene(state, state.currentSceneId, state.scenes[index].name, state.scenes[index].color);
+  if (index >= 0) state.scenes[index] = captureScene(state, state.currentSceneId, state.scenes[index].name, state.scenes[index].color, state.scenes[index].signature);
 };
 
 // Makes a scene the live pattern.
 const applyScene = (state: ProjectState, scene: Scene) => {
   state.currentSceneId = scene.id;
   for (const synth of state.synths) {
-    synth.pattern.steps = clone(scene.lanes[synth.synthId] ?? emptySteps());
-    const bars = laneBars(synth.pattern.steps.length, scene.laneBars?.[synth.synthId]);
+    synth.pattern.steps = clone(scene.lanes[synth.synthId] ?? emptySteps(barSteps(scene.signature)));
+    const bars = laneBars(synth.pattern.steps.length, scene.laneBars?.[synth.synthId], scene.signature);
     if (bars > 1) synth.pattern.bars = bars; else delete synth.pattern.bars;
     // Mutes and solos are the scene's. A scene from before they were kept holds none, and
     // the lanes carry on as they are.
@@ -182,28 +188,26 @@ export const reducers: Reducers = {
   'drum.bars': ({ state, defaults }, op) => {
     const bars = BAR_CHOICES.find(choice => choice === op.bars);
     if (!bars) return refuse(400, 'A drum pattern is 1, 2, 4 or 8 bars long');
+    const signature = openSignature(state), perBar = barSteps(signature);
     for (const instrument of DRUM_INSTRUMENTS) {
       const lane = state.drumState[instrument];
-      lane.steps = resizeBars(lane.steps, DRUM_STEPS_PER_BAR, bars, () => false);
-      if (lane.stepVelocities) lane.stepVelocities = resizeBars(lane.stepVelocities, DRUM_STEPS_PER_BAR, bars, () => 1);
-      if (lane.stepProbabilities) lane.stepProbabilities = resizeBars(lane.stepProbabilities, DRUM_STEPS_PER_BAR, bars, () => 1);
-      if (lane.stepRatchets) lane.stepRatchets = resizeBars(lane.stepRatchets, DRUM_STEPS_PER_BAR, bars, () => 1);
+      lane.steps = resizeBars(lane.steps, perBar, bars, () => false);
+      for (const [key, blank] of DRUM_DETAILS) if (lane[key]) lane[key] = resizeBars(lane[key]!, perBar, bars, () => blank);
     }
-    state.drumState = sanitizeDrums(state.drumState, defaults.drumState);
+    state.drumState = sanitizeDrums(state.drumState, defaults.drumState, signature);
     return update('drumFullState', { drumState: state.drumState });
   },
   // One bar of the whole grid laid over others: every drum's steps, with each step's details.
   'drum.copyBar': ({ state, defaults }, op) => {
-    const to = barTargets(drumBars(state.drumState), op.from, op.to);
+    const signature = openSignature(state), perBar = barSteps(signature);
+    const to = barTargets(drumBars(state.drumState, signature), op.from, op.to);
     if (!to) return refuse(400, 'There is no such bar to copy');
     for (const instrument of DRUM_INSTRUMENTS) {
       const lane = state.drumState[instrument];
-      lane.steps = copyBar(lane.steps, DRUM_STEPS_PER_BAR, op.from, to);
-      if (lane.stepVelocities) lane.stepVelocities = copyBar(lane.stepVelocities, DRUM_STEPS_PER_BAR, op.from, to);
-      if (lane.stepProbabilities) lane.stepProbabilities = copyBar(lane.stepProbabilities, DRUM_STEPS_PER_BAR, op.from, to);
-      if (lane.stepRatchets) lane.stepRatchets = copyBar(lane.stepRatchets, DRUM_STEPS_PER_BAR, op.from, to);
+      lane.steps = copyBar(lane.steps, perBar, op.from, to);
+      for (const [key] of DRUM_DETAILS) if (lane[key]) lane[key] = copyBar(lane[key]!, perBar, op.from, to);
     }
-    state.drumState = sanitizeDrums(state.drumState, defaults.drumState);
+    state.drumState = sanitizeDrums(state.drumState, defaults.drumState, signature);
     return update('drumFullState', { drumState: state.drumState });
   },
   // `merge` takes a key that is undefined as a value to set, so the patch is read as sent.
@@ -231,8 +235,10 @@ export const reducers: Reducers = {
     if (typeof op.muted === 'boolean') track.muted = op.muted;
     if (typeof op.solo === 'boolean') track.solo = op.solo;
   }),
+  // The grid goes back to one empty bar, of the open scene's length.
   'drum.reset': ({ state, defaults }) => {
     state.drumState = clone(defaults.drumState);
+    for (const instrument of DRUM_INSTRUMENTS) state.drumState[instrument].steps = resizeEachBar(state.drumState[instrument].steps, barSteps(), barSteps(openSignature(state)), () => false);
     return update('drumFullState', { drumState: state.drumState });
   },
   'drum.sample': (ctx, op) => drumLaneEdit(ctx, op.instrument, track => {
@@ -244,7 +250,7 @@ export const reducers: Reducers = {
   }),
   // The checks build every lane anew from what they are handed, so nothing of the caller's is kept.
   'drum.state': ({ state, defaults }, op) => {
-    state.drumState = sanitizeDrums(op.state, defaults.drumState);
+    state.drumState = sanitizeDrums(op.state, defaults.drumState, openSignature(state));
     return update('drumFullState', { drumState: state.drumState });
   },
   'drum.step': (ctx, op) => drumLaneEdit(ctx, op.instrument, track => {
@@ -327,7 +333,7 @@ export const reducers: Reducers = {
     if (!synth) return refuse(404, NO_SYNTH);
     const id = op.patternId;
     const previous = synth.patterns.find(p => p.id === id);
-    const pattern = sanitizePattern({ ...previous, ...patch, id, steps: patch.steps || previous?.steps || synth.pattern.steps }, state.tempo);
+    const pattern = sanitizePattern({ ...previous, ...patch, id, steps: patch.steps || previous?.steps || synth.pattern.steps }, state.tempo, openSignature(state));
     if (!pattern) return refuse(400, 'Invalid sequence pattern');
     synth.patterns = [...synth.patterns.filter(p => p.id !== id), pattern];
     synth.pattern = pattern;
@@ -373,7 +379,7 @@ export const reducers: Reducers = {
     const id = sentValue(op.synthId) || [1, 2, 3].find(id => !state.synths.some(s => s.synthId === id));
     if (!Number.isInteger(id) || (id as number) < 1 || (id as number) > 3) return refuse(400, 'Three synths maximum');
     let synth = state.synths.find(s => s.synthId === id);
-    if (!synth) { synth = newLane(id as number, state.tempo, defaults); state.synths.push(synth); }
+    if (!synth) { synth = newLane(id as number, state.tempo, defaults, openSignature(state)); state.synths.push(synth); }
     return update('synthCreated', synth);
   },
   // The lane is looked for first, so a lane that is not there is a 404 even for lane 1.
@@ -405,7 +411,8 @@ export const reducers: Reducers = {
     if (state.scenes.some(scene => scene.id === op.sceneId)) return refuse(409, 'That scene is already in the project.');
     commitScene(state);
     const name = (typeof op.name === 'string' && op.name.trim() ? op.name.trim() : `Scene ${state.scenes.length + 1}`).slice(0, 40);
-    const scene = captureScene(state, op.sceneId, name, nextSceneColor(state.scenes));
+    // A new scene is in the time signature of the one it was made from.
+    const scene = captureScene(state, op.sceneId, name, nextSceneColor(state.scenes), openSignature(state));
     if (op.empty === true) {
       for (const id of Object.keys(scene.lanes)) scene.lanes[Number(id)] = emptySteps(scene.lanes[Number(id)].length);
       // An empty scene keeps the lengths of the one it was made from.
@@ -434,7 +441,8 @@ export const reducers: Reducers = {
   },
   // The open scene's part goes into the other scene, in place of what that scene had for it. A
   // lane brings its own length. A drum row is laid along the other scene's grid, which may be
-  // longer or shorter, going round again or stopping short.
+  // longer or shorter, going round again or stopping short. Where the two scenes' bars are of
+  // different lengths a lane keeps how many bars it has and is laid along them the same way.
   'scene.copyPart': ({ state }, op) => {
     commitScene(state);
     const from = state.scenes.find(scene => scene.id === state.currentSceneId);
@@ -443,7 +451,10 @@ export const reducers: Reducers = {
     if (typeof op.synthId === 'number') {
       const steps = from.lanes[op.synthId];
       if (!steps) return refuse(404, NO_SYNTH);
-      to.lanes[op.synthId] = structuredClone(steps);
+      const fromBar = barSteps(from.signature), toBar = barSteps(to.signature);
+      const laneLength = laneBars(steps.length, from.laneBars?.[op.synthId], from.signature);
+      const fine = steps.length / laneLength === fromBar * 2 ? 2 : 1;
+      to.lanes[op.synthId] = fromBar === toBar ? structuredClone(steps) : clampLengths(layAlong(structuredClone(steps), laneLength * toBar * fine));
       const bars = from.laneBars?.[op.synthId];
       if (bars && bars > 1) to.laneBars = { ...to.laneBars, [op.synthId]: bars };
       else if (to.laneBars) delete to.laneBars[op.synthId];
@@ -480,6 +491,34 @@ export const reducers: Reducers = {
     state.currentSceneId = scenes?.some(scene => scene.id === body.currentSceneId) ? body.currentSceneId : scenes?.[0].id ?? '';
     state.song = scenes ? sanitizeSong(body.song, scenes) : { entries: [], loop: false };
     ensureScenes(state);
+    // The live lanes and drums are held to the bar length of the scene they now are.
+    const signature = openSignature(state);
+    if (signature) {
+      for (const synth of state.synths) synth.pattern = sanitizePattern(synth.pattern, state.tempo, signature) ?? synth.pattern;
+      state.drumState = sanitizeDrums(state.drumState, defaults.drumState, signature);
+    }
+    return sceneChanged(state);
+  },
+  // The open scene's time signature. Every lane and the drum grid keep how many bars they have
+  // and each bar becomes the new length: a shorter bar loses the steps at its end, a longer one
+  // gains empty steps there. Nothing is repeated.
+  'scene.signature': ({ state, defaults }, op) => {
+    const scene = state.scenes.find(entry => entry.id === state.currentSceneId);
+    if (!scene) return refuse(404, 'Scene not found');
+    const signature = TIME_SIGNATURES.find(choice => choice === op.signature);
+    if (!signature) return refuse(400, `A scene is in ${TIME_SIGNATURES.join(', ')}`);
+    const from = barSteps(scene.signature), to = barSteps(signature);
+    for (const synth of state.synths) {
+      const perBar = stepsPerBar(synth.pattern.steps.length, synth.pattern.bars, scene.signature);
+      synth.pattern.steps = clampLengths(resizeEachBar(synth.pattern.steps, perBar, perBar > from ? to * 2 : to, () => ({ active: false, velocity: .7 })));
+    }
+    for (const instrument of DRUM_INSTRUMENTS) {
+      const lane = state.drumState[instrument];
+      lane.steps = resizeEachBar(lane.steps, from, to, () => false);
+      for (const [key, blank] of DRUM_DETAILS) if (lane[key]) lane[key] = resizeEachBar(lane[key]!, from, to, () => blank);
+    }
+    if (storedSignature(signature)) scene.signature = signature; else delete scene.signature;
+    state.drumState = sanitizeDrums(state.drumState, defaults.drumState, signature);
     return sceneChanged(state);
   },
   // Each of entries and loop is kept when it is not sent (undefined and null alike).

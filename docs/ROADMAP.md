@@ -240,10 +240,12 @@ target; removal of the AI review workflow.
    its oscillator. On 2026-10-13, not verified by ear: Start says where
    in the recording a note begins, and Loop From and Loop To say which
    part goes round, with the end of a chosen loop faded into what comes
-   before its start so the join does not click. Open: several recordings
-   across the keyboard for an imported sample;
-   smoothing for a recording played far above its root, which at present
-   aliases.
+   before its start so the join does not click; and a recording played
+   two or more times faster than it was made no longer folds its top back
+   as false tones (measured: from 27 dB under the note to inaudible).
+   Open: several recordings across the keyboard for an imported sample;
+   the last octave of folding, for a recording played between one and two
+   times its speed, which is read as it is.
 
 4. **A modulation matrix.** (M) First part done on 2026-10-12, not verified
    by ear: up to four routes a sound, on the LFO tab under Routing. Sources
@@ -611,6 +613,22 @@ may redistribute.
     counting in song mode and every export have to take each scene's own bar
     length, where today one length serves the whole song. Keep these agreed
     metre options and the backward-compatible four-four default.
+    **Built on 2026-10-13, not verified by ear and not tried by a person:** a
+    Time menu in the song unit sets the open scene's signature, one of the
+    six, and no custom number of steps. Every lane and the drum grid of
+    that scene become bars of it (16, 12, 12, 20, 14 or 24 sixteenth steps;
+    twice that on a lane of finer steps), keeping how many bars they have:
+    a shorter bar loses the steps at its end and one Undo brings them back,
+    a longer one gains empty steps. The beat marks, the metronome and the
+    count-in, the phone's rows, the playhead, song mode, the playlist's
+    times, and WAV, loop, stem and MIDI export all take each scene's own
+    bar length; a MIDI file carries the signature and each change of it.
+    A project in 4/4 stores nothing new and renders as it did. Still open:
+    7/8 is counted two, two, three and nothing else; the delay's tempo sync
+    is in note values and so was left alone; MIDI import still reads a file
+    as 4/4 and lays it along the scene's bars; a guest is told beats, never
+    the signature; a browser still running the version before this reads a
+    bar of fewer than sixteen steps as damage and pads it.
 
 12. **Turn a knob with the scroll wheel.** (S) Asked for by the owner on
     2026-10-11: with the pointer over a knob, the wheel turns it, with no

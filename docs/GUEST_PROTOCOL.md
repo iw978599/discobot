@@ -77,8 +77,13 @@ time of beat b = anchorWall + (b - anchorBeat) * 60000 / bpm
   mapping. The beat count carries on; it does not restart.
 - **Tempo range.** 20 to 400 BPM. Follow it exactly: a guest that limits the
   tempo to its own range will drift.
-- Beats are quarter notes. Discobot's bar is four beats, and a bar line is
-  every beat that divides by four.
+- Beats are quarter notes, and beats are all a guest is told. A bar of
+  Discobot is four of them unless the scene that is playing has another time
+  signature (3/4, 6/8, 5/4, 7/8 or 12/8), and a song can change it from one
+  scene to the next. The host does not say which, so do not work out bar
+  lines from the beat count: only in a project that is all in 4/4 is a bar
+  line every beat that divides by four. In 7/8 a bar is three and a half
+  beats, so a bar line can fall between two of them.
 
 To turn a time on the shared clock into a time on the guest's own audio
 clock, and back, use the context's output timestamp, which accounts for the

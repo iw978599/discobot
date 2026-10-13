@@ -34,6 +34,7 @@ export type {
   DrumState,
   DrumLanePattern,
   Scene,
+  TimeSignature,
   Song,
   FxSendLevels,
   EffectsLoopState,

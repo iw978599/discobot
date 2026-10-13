@@ -199,3 +199,22 @@ test('a chosen loop is faded into what comes before it, so going round does not 
   const whole = play({ ...open, ...sampled({ loop: true }) }, climb, 'A4', 3).subarray(SR);
   assert.ok(jump(whole) > jump(round) * 10, `the whole of it still jumps where it always did: ${jump(whole)} against ${jump(round)}`);
 });
+
+test('a recording played far above its own pitch does not fold its top back as false tones', () => {
+  const open: Partial<SynthParameters> = { filter: { ...createDefaultSynthParameters().filter, frequency: 20000 } };
+  // 15 kHz recorded at A4, played two octaves up, would be 60 kHz: more than the output can hold.
+  // Read as it is, it comes back as a tone near 12 kHz that was never in the recording.
+  const high = play({ ...open, ...sampled() }, recording(2, 15000), 'A6').subarray(SR * 0.1, SR * 0.4);
+  assert.ok(loudness(high) < -60, `what cannot be played is left out: ${loudness(high)}`);
+  // What can be played still is: 1 kHz two octaves up is 4 kHz, as loud as it was.
+  const low = recording(2, 1000);
+  const up = play({ ...open, ...sampled() }, low, 'A6').subarray(SR * 0.1, SR * 0.4), home = play({ ...open, ...sampled() }, low).subarray(SR * 0.1, SR * 0.4);
+  assert.ok(level(up, 4000) > -30);
+  assert.ok(Math.abs(level(up, 4000) - level(home, 1000)) < 1, `${level(up, 4000)} against ${level(home, 1000)}`);
+  // Within an octave of its pitch nothing is taken out: 15 kHz a fifth down is 10 kHz, still there.
+  assert.ok(level(play({ ...open, ...sampled() }, recording(2, 15000), 'D4').subarray(SR * 0.1, SR * 0.4), 15000 * 2 ** (-7 / 12)) > -40);
+  // A start and a loop mean the same places in the recording when a copy of it is read.
+  const two = halves(tone(1000), () => 0);
+  const looped = play({ ...open, ...sampled({ loop: true, loopEnd: 0.5 }) }, two, 'A6', 2).subarray(SR);
+  assert.ok(level(looped, 4000) > -30, 'the half with the tone goes round, and the silent half is never reached');
+});

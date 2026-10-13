@@ -56,6 +56,11 @@
   background: var(--surface-control);
 }
 
+/* A step that starts a beat has its number in the brighter of the two label colours. */
+.piano-roll-step-header.beat {
+  color: var(--text);
+}
+
 .piano-roll-note-label {
   justify-content: flex-start;
   padding-left: 5px;
