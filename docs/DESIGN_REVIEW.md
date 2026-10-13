@@ -907,6 +907,7 @@ on the owner's laptop.
 | `step-tools-selected` | The step controls with a step that holds a note |
 | `lane-editor-notes`, `lane-editor-sound` | The open lane's editor on each of its two levels: Notes with the keyboard, and Sound with the model, the presets and the first page |
 | `synth-tab-osc`, `-filter`, `-lfo`, `-sends` | Four pages of the sound editor, under Sound |
+| `synth-engine-sample` | The Osc page with the sample engine playing the built-in piano, Loop on |
 | `unit-drums-more-sends` | The drums with More and Sends open |
 | `hover-button`, `hover-step` | A button and a step under the pointer |
 
@@ -919,6 +920,7 @@ on the owner's laptop.
 | `phone-piano-roll`, `phone-keyboard` | The piano roll and the keyboard |
 | `phone-lane-editor-notes`, `phone-lane-editor-sound` | The open lane's editor on each of its two levels, from its top |
 | `phone-synth-tab-osc`, `-filter`, `-sends` | Three pages of the sound editor, under Sound |
+| `phone-synth-engine-sample` | The sample engine's box on the Osc page, Loop on |
 | `phone-knob-sheet` | The large slider a tapped knob opens |
 | `phone-unit-all` | "All": the whole rack on one page |
 | `phone-landscape-synth`, `phone-landscape-keyboard`, `phone-landscape-drums` | A phone on its side, 740 by 360 |

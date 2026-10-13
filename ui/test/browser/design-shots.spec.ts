@@ -193,6 +193,16 @@ test('design shots: the rack, its units and the states of its controls', async (
         await near(walk, page.locator('.synth-controls-panel'), `synth-tab-${name.toLowerCase()}`, 12);
       });
     }
+    await attempt(walk, 'synth-engine-sample', async () => {
+        await level(page, 'Sound');
+        await lane(page, 1).getByRole('tab', { name: 'Osc', exact: true }).click();
+        const panel = lane(page, 1).locator('.synth-controls-panel');
+        await panel.getByLabel('Synth engine', { exact: true }).selectOption('sample');
+        await panel.getByLabel('Synth sample', { exact: true }).selectOption('wave:piano');
+        await panel.getByLabel('Loop the sample', { exact: true }).check();
+        await near(walk, page.locator('.synth-controls-panel'), 'synth-engine-sample', 12);
+        await panel.getByLabel('Synth engine', { exact: true }).selectOption('subtractive');
+      });
     await attempt(walk, 'back to the notes tab', () => lane(page, 1).getByRole('tab', { name: 'Notes', exact: true }).click());
     await attempt(walk, 'unit-drums-more-sends', async () => {
       const unit = page.locator('[data-unit="drums"]');
@@ -528,6 +538,17 @@ test('design shots: a phone showing one unit at a time, the knob sheet, and a ph
       await shot(walk, `phone-synth-tab-${name.toLowerCase()}`);
     });
   }
+  await attempt(walk, 'phone-synth-engine-sample', async () => {
+      await level(page, 'Sound');
+      await lane(page, 1).getByRole('tab', { name: 'Osc', exact: true }).click();
+      const panel = lane(page, 1).locator('.synth-controls-panel');
+      await panel.getByLabel('Synth engine', { exact: true }).selectOption('sample');
+      await panel.getByLabel('Synth sample', { exact: true }).selectOption('wave:piano');
+      await panel.getByLabel('Loop the sample', { exact: true }).check();
+    await toTop(walk, panel.getByLabel('Synth sample', { exact: true }));
+    await shot(walk, 'phone-synth-engine-sample');
+      await panel.getByLabel('Synth engine', { exact: true }).selectOption('subtractive');
+  });
   await attempt(walk, 'back to the notes tab', () => lane(page, 1).getByRole('tab', { name: 'Notes', exact: true }).click());
   await attempt(walk, 'phone-knob-sheet', async () => {
     await page.locator('.rack-page').first().evaluate((element) => { element.scrollTop = 0; });
