@@ -323,6 +323,25 @@ function updateEffects(bus: Effects, group: 'synth' | 'drums', state: EffectsLoo
   smooth(bus.wet.chorus.gain, state.chorus?.enabled ? limit(state.chorus.mix, 0, 1) : 0, ctx);
 }
 
+// One click of the metronome, at a time on the audio clock: a short high tone, higher and louder on
+// the first beat of the bar. It goes to the master level, past the lanes and the effects, so it
+// follows the volume and Mute and is in no export.
+export function scheduleClick(time: number, accent: boolean): void {
+  const ctx = getAudioContext();
+  if (!master) return;
+  const tone = ctx.createOscillator(), level = ctx.createGain();
+  const at = Math.max(time, ctx.currentTime);
+  tone.type = 'square';
+  tone.frequency.value = accent ? 1760 : 1175;
+  level.gain.setValueAtTime(0, at);
+  level.gain.linearRampToValueAtTime(accent ? 0.22 : 0.14, at + 0.001);
+  level.gain.exponentialRampToValueAtTime(0.0001, at + 0.04);
+  tone.connect(level).connect(master);
+  tone.start(at);
+  tone.stop(at + 0.05);
+  tone.onended = () => { tone.disconnect(); level.disconnect(); };
+}
+
 // A tempo-synced delay, phaser and chorus follow this.
 let effectsTempo = 120;
 export function setEffectsTempo(tempo: number): void {

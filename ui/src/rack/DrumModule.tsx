@@ -71,7 +71,7 @@ function DrumModule({ studio }: { studio: Studio }) {
   const bars = drumBars(drumState);
   const [viewBar, setViewBar] = useState(0);
   const [follow, setFollow] = useState(true);
-  const barAtPlayhead = usePlayhead('drums', step => Math.floor(step / 16));
+  const barAtPlayhead = usePlayhead('drums', step => Math.max(0, Math.floor(step / 16)));
   const playingBar = studio.isAnyPlaying ? barAtPlayhead : null;
   const gridRef = useRef<HTMLDivElement>(null);
   usePlayheadMark(gridRef, 'drums', studio.isAnyPlaying, '.drum-step-indicator', 'active');

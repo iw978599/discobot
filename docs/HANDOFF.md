@@ -215,8 +215,9 @@ Behaviour:
 5. **Feature 11:** Help with a list of headings and a search box. Merged
    (#153). "Help for this unit" on each unit's name plate, the other half
    of that feature in the review, is not built.
-6. **Feature 8:** a metronome and a count-in, with the switch beside Tap.
-   The metronome does not exist yet.
+6. **Feature 8:** a metronome and a count-in, with the switches beside
+   Tap. Built on `feat/design-review-metronome` (check its pull request's
+   state). Not heard by the owner.
 7. **Chord buttons in the piano roll** (roadmap features 15). The owner
    said on 2026-10-12 how it should work: choose a shape, then the root
    note; each note of a chord can then be deleted or lengthened by itself,

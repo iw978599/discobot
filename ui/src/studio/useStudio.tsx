@@ -27,12 +27,13 @@ import { createBuiltInPresets } from '../services/builtInPresets';
 import { expandStep, expandStepNotes, stepNotes, withStepNotes } from '../services/noteScheduling';
 import { STARTERS, projectIsEmpty, starterDrums, starterPattern } from '../services/starters';
 import { buildSampleSong } from '../services/sampleSong';
+import { COUNT_IN_BARS, clickAt, countInBeats, countInSeconds, storeMetronome, storedMetronome, type MetronomeSettings } from '../services/metronome';
 import { startsUndoStep } from './undoSteps';
 import { BrowserTransport, TransportTick } from '../services/browserTransport';
 import { downloadFile, ExportArrangement } from '../services/wavExport';
 import { expandDrumStep } from '../services/drumScheduling';
 import { useComputerKeyboard } from '../hooks/useComputerKeyboard';
-import { getAudioContext, setMasterVolume, setMasterMuted, setEffectsTempo } from '../hooks/browserAudio';
+import { getAudioContext, scheduleClick, setMasterVolume, setMasterMuted, setEffectsTempo } from '../hooks/browserAudio';
 import { DRUM_NOTE_MAP, downloadMidiFile, noteNameToMidi } from '../utils/midiExport';
 import { importMidiFile, readFileAsArrayBuffer, MidiImportResult } from '../utils/midiImport';
 import { DEFAULT_SYNTH_MODEL_ID, createDefaultSynthModelParams, enterSynthModel, mapSynthModelToEngineParams, normalizeSynthModelId, normalizeSynthModelParams } from '../synthModels';
@@ -329,6 +330,18 @@ export function useStudio() {
   // An audio export in progress, or just finished. handleExportWav refuses a second while one is working.
   const [exportStatus, setExportStatus] = useState<{ phase: 'working' | 'done'; what: string; part?: string } | null>(null);
   const exportingRef = useRef(false);
+  // The metronome is this browser's, not the project's. The scheduler reads the ref.
+  const [metronome, setMetronome] = useState<MetronomeSettings>(storedMetronome);
+  const metronomeRef = useRef(metronome);
+  metronomeRef.current = metronome;
+  const countInBarsRef = useRef(0);
+  const handleMetronomeChange = useCallback((patch: Partial<MetronomeSettings>) => {
+    setMetronome((current) => {
+      const next = { ...current, ...patch };
+      storeMetronome(next);
+      return next;
+    });
+  }, []);
   const doneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const guestsRef = useRef<Guest[]>([]);
   guestsRef.current = guests;
@@ -725,7 +738,20 @@ export function useStudio() {
   };
   sceneLengthRef.current = sceneLength;
 
-  scheduleTickRef.current = ({ step, bar, time, duration }) => {
+  scheduleTickRef.current = ({ step, bar: counted, time, duration }) => {
+    // The count-in: its bars are clicked and nothing else happens in them. Everything after counts
+    // its bars from where the count-in ends.
+    const countIn = countInBarsRef.current;
+    if (counted < countIn) {
+      const kind = clickAt(step);
+      if (kind) scheduleClick(time, kind === 'bar');
+      return;
+    }
+    const bar = counted - countIn;
+    if (metronomeRef.current.click && !exportingRef.current) {
+      const kind = clickAt(step);
+      if (kind) scheduleClick(time, kind === 'bar');
+    }
     if (midiOut.active) midiOut.tick(midiTime(time), duration * 1000, bar === 0 && step === 0);
     // Where in its pattern each lane is. In song mode that is counted from the start of the
     // scene's pass; otherwise the bars just keep counting and lanes of different lengths drift.
@@ -809,10 +835,21 @@ export function useStudio() {
       );
       const transport = transportRef.current, context = getAudioContext();
       // Guests are told where the beats fall on the computer's clock, which they share with this page.
-      transport.onTempo = (bpm, time, beat) => guestLink.announce({ playing: true, bpm, anchorWall: wallAtContextTime(context, time), anchorBeat: beat });
+      // A count-in is for a person about to play, never for an export that is recording the guests.
+      const countIn = metronomeRef.current.countIn && !exportingRef.current ? COUNT_IN_BARS : 0;
+      countInBarsRef.current = countIn;
+      // Nothing is playing during the count-in, so no step is lit: the playhead is put before the first.
+      if (countIn > 0) for (const lane of ['drums' as const, ...synthsRef.current.map(synth => synth.id)]) playhead.set(lane, -1);
+      // Guests count their beats from where the music starts, which is after the count-in.
+      transport.onTempo = (bpm, time, beat) => {
+        if (beat >= countInBeats(countIn)) guestLink.announce({ playing: true, bpm, anchorWall: wallAtContextTime(context, time), anchorBeat: beat - countInBeats(countIn) });
+      };
       // With guests connected the first beat is placed far enough ahead for all of them to make it.
       transport.start(guestLink.startLead() || undefined);
-      guestLink.announce({ playing: true, bpm: globalTempoRef.current, anchorWall: wallAtContextTime(context, transport.startTime), anchorBeat: 0 });
+      guestLink.announce({
+        playing: true, bpm: globalTempoRef.current, anchorBeat: 0,
+        anchorWall: wallAtContextTime(context, transport.startTime + countInSeconds(countIn, globalTempoRef.current)),
+      });
     } else {
       if (guestLink.transport().playing) guestLink.announce({ playing: false });
       transportRef.current?.stop();
@@ -2171,7 +2208,7 @@ export function useStudio() {
   const isAnyPlaying = synths.some(s => s.isPlaying);
 
   return {
-    handleStarter, handleSampleSong, dismissStarters, showStarters,
+    handleStarter, handleSampleSong, dismissStarters, showStarters, metronome, handleMetronomeChange,
     synths, selectedSynthId, setSelectedSynthId, drumState: memoizedDrumState, drumKits,
     selectedDrumKitId, drumMasterVolume, drumSwing, drumFx, effectsLoop, browserMuted, setBrowserMuted,
     browserVolume, setBrowserVolume, globalTempo, storageError, setStorageError, changedElsewhere, loadOtherTabVersion, keepThisTabVersion, helpOpen, setHelpOpen, midiMode, setMidiMode,
