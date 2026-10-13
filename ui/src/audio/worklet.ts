@@ -45,6 +45,7 @@ class DrumProcessor extends AudioWorkletProcessor {
     this.port.onmessage = ({ data }: MessageEvent<DrumWorkletMessage>) => {
       if (data.type === 'hit') this.core.trigger(data);
       else if (data.type === 'sample') this.core.setSample(data.instrument, data.sample);
+      else if (data.type === 'cymbals') this.core.setCymbals(data.cymbals);
       else if (data.type === 'stopAll') this.core.stopAll();
     };
   }

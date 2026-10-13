@@ -1,5 +1,5 @@
 import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, Scene, SceneMutes, Song, SynthParameters, SynthModelParams } from '../types';
-import { MAX_MOD_ROUTES, MOD_DESTINATIONS, MOD_SOURCES, type ModRoute } from '@discobot/engine';
+import { CYMBAL_TYPES, MAX_MOD_ROUTES, MOD_DESTINATIONS, MOD_SOURCES, type ModRoute } from '@discobot/engine';
 import { DELAY_SYNCS } from './delayTime';
 import { storedRateSync } from './rateSync';
 import { CHORUS_DEFAULT, EQ_RANGE_DB, MAX_PRE_DELAY } from './effectSettings';
@@ -201,7 +201,7 @@ export function sanitizeDrums(value: unknown, defaults: DrumState): DrumState {
         tune: number(settings.tune, base.settings.tune ?? 0, -1, 1),
         humanize: number(settings.humanize, base.settings.humanize ?? .35, 0, 1),
         pan: number(settings.pan, base.settings.pan ?? 0, -1, 1),
-        ...(settings.cymbalType === 'ride' || settings.cymbalType === 'crash' ? { cymbalType: settings.cymbalType } : {}),
+        ...(CYMBAL_TYPES.includes(settings.cymbalType) ? { cymbalType: settings.cymbalType } : {}),
       },
       ...(Array.isArray(track.stepVelocities) ? {
         stepVelocities: Array.from({ length: total }, (_, i) => number(track.stepVelocities[i], 1, 0, 1)),

@@ -1,8 +1,9 @@
 # Audio that ships with the app
 
-One file of audio is part of the app: `ui/public/waves.bin`, about 430 KB. It
+One file of audio is part of the app: `ui/public/waves.bin`, about 860 KB. It
 holds the sounds the sample engine offers under "Built in", which the M1, D-50
-and Wavestation models play. Nothing else in the app is a recording.
+and Wavestation models play, and the drum machine's four cymbals. Nothing
+else in the app is a recording.
 
 The owner chose on 2026-10-12 to take these from two free libraries, after the
 licences below were read at their sources. Both are CC0: their authors gave up
@@ -23,6 +24,10 @@ without credit. Credit is given here anyway.
 | Sequence: voices | Adventure Kid Waveforms | `AKWF_hvoice_` 0001, 0014, 0027, 0040, 0053, 0066, 0079, 0092 |
 | Sequence: overtones | Adventure Kid Waveforms | `AKWF_overtone_` 0001, 0006, 0011, 0016, 0021, 0026, 0031, 0036 |
 | Sequence: FM | Adventure Kid Waveforms | `AKWF_fmsynth_` 0001, 0016, 0031, 0046, 0061, 0076, 0091, 0106 |
+| The drums' Crash | VSCO 2 Community Edition | `Percussion/cymbal-crash1_ff_rr1` |
+| The drums' Ride | VSCO 2 Community Edition | `Percussion/susCymb1-hitstick_f_rr1` (a suspended cymbal struck with a stick) |
+| The drums' Bell | VSCO 2 Community Edition | `Percussion/susCymb1-hit-bell_mf` |
+| The drums' Splash | VSCO 2 Community Edition | `Percussion/cymbal-crashshort_v1` |
 | Sequence: harmonics | Adventure Kid Waveforms | `AKWF_sinharm_` 0001, 0003, 0005, 0007, 0009, 0011, 0013, 0015 |
 
 `scripts/build-waves.mjs` holds the full address of every file and is what
@@ -53,6 +58,9 @@ Both were read on 2026-10-12.
 - Mixed to one channel, cut short (the piano's lowest note is two seconds, an
   attack a fifth of a second), faded out over the last fifth, brought to one
   level, resampled to 22,050 Hz and stored as 16-bit.
+- The cymbals are kept at 32,000 Hz, because most of a cymbal lies above
+  what the lower rate can hold, and are cut to between one and two and a
+  half seconds. They are half the file.
 - The single cycles are stored as they are, 600 samples each, with any
   constant offset taken out.
 - Each recording's root note is where it was measured to sound, not what its

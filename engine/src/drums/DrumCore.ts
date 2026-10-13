@@ -1,5 +1,5 @@
 import { Noise, Svf, finiteClamp as clamp, oscillator, svfCoefficient } from '../dsp';
-import type { DrumInstrument, DrumSettings } from '../types';
+import type { CymbalType, DrumInstrument, DrumSettings } from '../types';
 
 export interface DrumHitMessage {
   instrument: DrumInstrument;
@@ -83,6 +83,12 @@ interface DrumVoice {
   sample: DrumSample | null;
   position: number;
   advance: number;
+  // For one of the app's cymbal recordings: the Decay knob as a fade laid over it, where that has
+  // got to, and whether the Tone knob has a low-pass on it.
+  shaped: boolean;
+  fade: number;
+  fadeLevel: number;
+  toned: boolean;
 }
 
 // Streaming drum voices. One voice per instrument, mixed linearly: no per-hit or bus
@@ -93,6 +99,7 @@ export class DrumCore {
   private pending: Array<DrumHitMessage & { frame: number }> = [];
   private humanizer = new Noise(0x51ed270b);
   private samples: Partial<Record<DrumInstrument, DrumSample>> = {};
+  private cymbals: Partial<Record<CymbalType, DrumSample>> = {};
   private readonly fadeLength: number;
   private readonly attackLength: number;
 
@@ -109,8 +116,17 @@ export class DrumCore {
       choke: 1, chokeRate: 1, last: 0, tail: 0, tailSamples: 0,
       // Each drum has its own noise source, so one hit never changes how another sounds.
       noise: new Noise(0x1f123bb5 + index * 0x9e3779b1),
-      sample: null, position: 0, advance: 1,
+      sample: null, position: 0, advance: 1, shaped: false, fade: 1, fadeLevel: 1, toned: false,
     }])) as Record<DrumInstrument, DrumVoice>;
+  }
+
+  // The recordings the cymbal lane plays, one for each kind of cymbal. Until they are given, and
+  // for a kind that is missing, the lane plays its synthesized cymbal.
+  setCymbals(cymbals: Partial<Record<CymbalType, DrumSample>> | null | undefined): void {
+    this.cymbals = {};
+    for (const [kind, sample] of Object.entries(cymbals ?? {})) {
+      if (sample && sample.data.length > 1 && sample.rate > 0) this.cymbals[kind as CymbalType] = sample;
+    }
   }
 
   // Gives a lane a sample to play, or with null hands it back to its synthesized voice.
@@ -202,7 +218,21 @@ export class DrumCore {
     voice.noiseLevel = 0;
     voice.burstLength = 0;
 
-    voice.sample = this.samples[message.instrument] ?? null;
+    // An imported sample comes first; then, on the cymbal lane, the app's recording of the cymbal chosen.
+    const imported = this.samples[message.instrument] ?? null;
+    const cymbal = !imported && message.instrument === 'crash' ? this.cymbals[settings.cymbalType ?? 'crash'] ?? null : null;
+    voice.sample = imported ?? cymbal;
+    voice.shaped = cymbal !== null;
+    voice.fadeLevel = 1;
+    voice.fade = 1;
+    voice.toned = false;
+    if (cymbal) {
+      // Decay: untouched from the top of the knob, down to a short choke. Tone: open from the middle
+      // up, darker below it. A cymbal is the same in every kit: it is a recording, not the kit's voice.
+      if (extra < 0.98) voice.fade = this.decayRate(0.06 * 400 ** extra);
+      const cutoff = 2000 * 10 ** Math.min(1, tone * 2);
+      if (cutoff < Math.min(16000, sr * 0.4)) { this.setFilter(voice, 0, cutoff, 0.7); voice.toned = true; }
+    }
     if (voice.sample) {
       // The recording is the sound: no voice trim and none of the kit's colouring. Volume,
       // velocity, pan and tune still apply, and tune changes its speed.
@@ -290,8 +320,14 @@ export class DrumCore {
     if (v.sample) {
       const data = v.sample.data, index = Math.floor(v.position), last = data.length - 1;
       if (index >= last) { v.level = 0; return 0; }
-      const out = data[index] + (data[index + 1] - data[index]) * (v.position - index);
+      let out = data[index] + (data[index + 1] - data[index]) * (v.position - index);
       v.position += v.advance;
+      if (v.shaped) {
+        v.fadeLevel *= v.fade;
+        out *= v.fadeLevel;
+        if (v.toned) { v.filters[0].tick(out, v.g[0], v.k[0]); out = v.filters[0].lp; }
+        if (v.fadeLevel < 0.0005) { v.level = 0; return 0; }
+      }
       // Fade the last few milliseconds so a recording that ends abruptly does not click.
       const left = (last - v.position) / v.advance;
       v.level = 1;

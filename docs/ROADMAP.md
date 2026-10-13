@@ -269,6 +269,16 @@ may redistribute.
      from a library the project may ship (`docs/BUNDLED_AUDIO.md`), which
      needs the owner's say-so, or all synthesized.
    A saved project must go on playing the cymbal it chose.
+   Done on 2026-10-12, not verified by ear. The owner said it was both
+   cymbals in every kit ("sound nothing like cymbals really", "the hats are
+   fine") and agreed to recordings. The Cymbal lane now plays a recording
+   of a real cymbal, the same in every kit, and offers four: Crash, Ride,
+   Bell and Splash, chosen from a menu in the drum strip. They are from
+   the free library the piano came from (`docs/BUNDLED_AUDIO.md`) and add
+   about 430 KB to the first visit. A project that chose Crash or Ride
+   keeps that choice and now hears the recording. Open: a china and a
+   sizzle, which the library does not have; a second cymbal lane; kids
+   mode, which still plays the synthesized cymbal.
 
 ## Features
 

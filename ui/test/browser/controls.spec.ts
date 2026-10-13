@@ -499,8 +499,12 @@ test('drum instrument settings, mute/solo and pattern tools retain velocity acce
   expect(state.drumState.kick.steps[14]).toBe(true);
   expect(state.drumState.kick.stepVelocities[14]).toBeCloseTo(0.35);
   await page.getByRole('button', { name: 'Select Cymbal', exact: true }).click();
-  await page.getByRole('button', { name: 'Switch cymbal type', exact: true }).click();
-  expect((await project(page)).drumState.crash.settings.cymbalType).toBe('ride');
+  await expect(page.getByLabel('Cymbal type', { exact: true }).locator('option')).toHaveText(['Crash', 'Ride', 'Bell', 'Splash']);
+  await page.getByLabel('Cymbal type', { exact: true }).selectOption('ride');
+  await expect.poll(async () => (await project(page)).drumState.crash.settings.cymbalType).toBe('ride');
+  await page.getByLabel('Cymbal type', { exact: true }).selectOption('splash');
+  await expect.poll(async () => (await project(page)).drumState.crash.settings.cymbalType).toBe('splash');
+  await expect(page.locator('.drum-strip-name b')).toHaveText('Splash');
 });
 
 test('sample import, playback, persistence and deletion use device-local storage', async ({ page }) => {
