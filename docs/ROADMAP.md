@@ -267,8 +267,12 @@ target; removal of the AI review workflow.
    level stops at 200%.
 
 6. **An algorithmic reverb, and insert effects per lane.** (M each)
-   The reverb is a convolver with a shaped impulse. Insert effects are easier
-   once the audio layer has a single owner (improvements item 4).
+   The reverb half is done (2026-10-13): the reverb's Kind menu chooses Room,
+   the convolver with a shaped impulse it always was, or Hall, a feedback
+   delay network built from native nodes by one function for live playback
+   and export, whose decay and damping change without rebuilding anything.
+   The names Room and Hall are the builder's and the owner may change them.
+   Not verified by ear. Insert effects per lane remain.
 
 7. **More presets, grouped by kind, and more synth models.** (L in all)
    Asked for by the owner on 2026-10-11. The plan is

@@ -5,6 +5,8 @@ import { createHallReverb, hallDampDb, hallDampHz, hallFeedback, hallLevel, HALL
 import { seededRandom } from '../src/services/drumScheduling.ts';
 import { DRUM_INSTRUMENTS } from '../src/services/drumKits.ts';
 import { sanitizeEffects } from '../src/services/projectSanitization.ts';
+import { LocalProjectService } from '../src/services/localService.ts';
+import { createDefaultSynthParameters } from '../../engine/src/synth/voiceParams.ts';
 import { type ExportArrangement, renderArrangement } from '../src/services/wavExport.ts';
 import { GraphContext } from './helpers/audioGraph.ts';
 import type { DrumState, EffectsLoopState } from '../src/types.ts';
@@ -137,6 +139,41 @@ test('the reverb kind is kept only when it is the Hall', () => {
   for (const kind of ['room', 'cathedral', 7, null, { hall: true }]) {
     assert.equal('kind' in sanitizeEffects({ ...loop, reverb: { ...loop.reverb, kind } }, loop).reverb, false, `${JSON.stringify(kind)} is stored as nothing`);
   }
+});
+
+test('the store keeps the Hall, a project file carries it, and choosing the Room again takes it away', async () => {
+  const storage = new Map<string, string>();
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => { storage.set(key, value); },
+  } });
+  const loop: EffectsLoopState = {
+    enabled: true, returns: { synth: .8, drums: .7 }, drive: { enabled: true, amount: .2, tone: .6 },
+    phaser: { enabled: false, rate: .5, depth: .4, feedback: .2, mix: .2 },
+    delay: { enabled: true, time: .2, feedback: .3, mix: .3 }, reverb: { enabled: true, decay: 2, mix: .3 },
+  };
+  const service = new LocalProjectService();
+  service.initialize({
+    synthParams: createDefaultSynthParameters(),
+    drumState: Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => [instrument, {
+      steps: Array(16).fill(false), settings: { volume: .5, tone: .5, extra: .5 }, muted: false, solo: false,
+    }])) as DrumState,
+    drumFx: { sends: { reverb: .2, delay: .1, drive: .1, phaser: 0, chorus: 0 }, returnLevel: .7 },
+    effectsLoop: loop,
+  });
+  assert.equal('kind' in service.snapshot().effectsLoop.reverb, false, 'a new project starts with the Room');
+  service.setEffectsLoop({ reverb: { ...service.snapshot().effectsLoop.reverb, kind: 'hall' } });
+  assert.equal(service.snapshot().effectsLoop.reverb.kind, 'hall');
+  const file = JSON.parse(JSON.stringify(service.exportProject()));
+  assert.equal(file.project.effectsLoop.reverb.kind, 'hall');
+  service.setEffectsLoop({ reverb: { ...service.snapshot().effectsLoop.reverb, kind: 'room' } });
+  assert.equal('kind' in service.snapshot().effectsLoop.reverb, false, 'the Room is stored as nothing');
+  assert.equal((await service.importProject(file)).ok, true);
+  assert.equal(service.snapshot().effectsLoop.reverb.kind, 'hall', 'a file with the Hall opens with it');
+  delete file.project.effectsLoop.reverb.kind;
+  const older = await service.importProject(file);
+  assert.equal(older.ok, true, 'a file from before there was a choice opens, and is not reported damaged');
+  assert.equal('kind' in service.snapshot().effectsLoop.reverb, false);
 });
 
 // Enough of an offline context to see what an export connects to what.
