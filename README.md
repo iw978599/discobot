@@ -86,6 +86,13 @@ up, so you can see how the parts sit against each other.
    Arp and Sends. Turn
    a knob by dragging, with the scroll wheel, or by typing its value. A click
    of the middle mouse button puts a knob back at its default.
+   - **Automation.** Under the open lane's steps is a row that shows how one
+     of its knobs (cutoff, resonance, level, pan, the envelope and more, up to
+     eight per lane) moves through the pattern: draw it across the steps, or
+     switch Auto on and turn the knob while the song plays. Each step's value
+     holds until the next step; a step without one plays the knob's own
+     setting. It is kept per scene, and is in audio exports and shared songs
+     but not in MIDI files.
 4. **Add drums.** Click cells in the drum grid and choose a kit. The strip
    under the grid edits the drum and step you last touched: velocity, chance,
    and up to four hits packed into one step.

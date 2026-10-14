@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 import type { Pattern, SynthParameters } from '../types';
 import { AUTOMATABLE, MAX_AUTOMATED, automatedKeys, describeValue, toUnit } from '../services/automation';
 import { LANE_PARAMS, fromUnit } from '../services/paramTargets';
@@ -40,6 +40,8 @@ export default function AutomationRow({ synthId, pattern, params, isPlaying, fir
   const automated = automatedKeys(pattern.automation);
   // A parameter that was chosen stays on show; with none chosen, the first that has automation is.
   const key = AUTOMATABLE.includes(chosen) ? chosen : automated[0] ?? '';
+  // Once one is on show it stays, so clearing it does not take its strip away under the pointer.
+  useEffect(() => { if (key && key !== chosen) setChosen(key); }, [key, chosen]);
   const range = key ? LANE_PARAMS[key] : null;
   const values = key ? pattern.automation?.[key] : undefined;
   const own = range ? range.path!.reduce<unknown>((inner, name) => (inner as Record<string, unknown> | undefined)?.[name], params) : undefined;

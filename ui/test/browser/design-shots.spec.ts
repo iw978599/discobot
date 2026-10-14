@@ -808,3 +808,32 @@ test('design shots: kids mode, both screens', async ({ page }, info) => {
   }
   finish(walk);
 });
+
+test('design shots: automation under a lane\'s steps', async ({ page }, info) => {
+  const walk = begin(page, info);
+  await open(page);
+  await ready(page);
+  const row = lane(page, 1).locator('.auto-row');
+  await attempt(walk, 'automation-empty', () => near(walk, row, 'automation-empty', 40));
+  await attempt(walk, 'automation-sweep', async () => {
+    await page.getByRole('button', { name: 'Piano Roll', exact: true }).click();
+    for (const step of [1, 5, 9, 13]) await lane(page, 1).getByRole('button', { name: `C3 step ${step}`, exact: true }).click();
+    await lane(page, 1).getByLabel('Synth 1 automation parameter', { exact: true }).selectOption('cutoff');
+    const cell = (step: number) => lane(page, 1).getByRole('slider', { name: `Cutoff automation, step ${step}`, exact: true });
+    await cell(1).scrollIntoViewIfNeeded();
+    const start = (await cell(1).boundingBox())!, end = (await cell(12).boundingBox())!;
+    await page.mouse.move(start.x + start.width / 2, start.y + start.height * 0.85);
+    await page.mouse.down();
+    await page.mouse.move(end.x + end.width / 2, end.y + end.height * 0.1, { steps: 16 });
+    await page.mouse.up();
+    await cell(6).focus();
+    await near(walk, lane(page, 1).locator('.rack-row').first(), 'automation-sweep', 20);
+    if (!walk.phone) await tall(walk, () => lane(page, 1).screenshot({ path: info.outputPath('automation-lane.png') }).then(() => {}));
+  });
+  await attempt(walk, 'automation-auto-on', async () => {
+    await lane(page, 1).getByRole('button', { name: 'Record automation', exact: true }).click();
+    await lane(page, 1).getByRole('button', { name: 'Erase automation steps', exact: true }).focus();
+    await near(walk, row, 'automation-auto-on', 40);
+  });
+  finish(walk);
+});

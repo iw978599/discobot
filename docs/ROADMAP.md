@@ -473,6 +473,21 @@ may redistribute.
    parameter by the same store operation the knob on screen sends. Recording
    is then the same for both. A hardware knob sends 128 positions, so a
    recorded sweep needs smoothing between them on playback.
+   First version built on 2026-10-13 and waiting as a draft for the owner:
+   a synth lane's own numbers (cutoff, resonance, level, pan, the envelope,
+   the LFOs' rates and depths, detune, pulse width, sub, noise, glide, the
+   filter's envelope amount and drive; up to eight per lane) get a value per
+   step, kept with the pattern and so with the scene. Drawn in a row under
+   the open lane's steps, or recorded with Auto from a knob on screen or a
+   tied controller knob while the song plays. Played live at each step's own
+   time and in audio exports, stems, loops and shared songs. Each value is
+   held for its step (the voice's own hundredth of a second of smoothing is
+   all there is between steps); a step with none plays the knob's setting.
+   Still open: the drums, the effects, the tempo, a model's macro knobs and
+   the lane's sends and duck (all outside the synth voice); ramps between
+   steps, which a recorded hardware sweep wants; automation recorded against
+   the song rather than a scene's pattern; automation in MIDI files; and the
+   knob on screen turning with the automation while the song plays.
 
 6. **More MIDI.** (L in all)
    Following an external clock, sending notes played by hand, and choosing
