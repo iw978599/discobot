@@ -65,6 +65,8 @@ test('the Hall is eight lines behind two all-passes, every loop longer than a re
   assert.equal(new Set(hall.lines.map(line => line.seconds)).size, 8, 'every line is its own length');
   assert.ok([...ctx.nodes].every(node => node.kind === 'merger' || (node.channelCount === 1 && node.channelCountMode === 'explicit')), 'everything inside is one channel');
   assert.deepEqual(hall.sides.map(side => side.level.gain.value), [hallLevel(2, 0), hallLevel(2, 0)]);
+  // A browser adds three or more inputs in an order that changes between runs; two add the same either way.
+  assert.ok(ctx.nodes.every(node => node.sources.every(inputs => inputs.length <= 2)), 'no node adds more than two signals');
   // At 48 kHz every line is a whole number of frames too: the renderer refuses anything else.
   assert.ok(decayTime(hallResponse(hallOf(1), 1.2, 48000), 48000) > 0.9);
 });

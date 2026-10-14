@@ -133,6 +133,10 @@ type Chorus = ReturnType<typeof createChorus>;
 // stretch it still has an all-pass. Lengths are in frames at 44.1 kHz and are rounded to whole
 // frames of the context's own rate, because a delay between frames is interpolated, which takes
 // highs away on every pass and would make live playback duller than an export.
+// No node in it is given more than two signals to add: a browser adds a node's inputs in an order
+// of its own, which changes from one run to the next, and with three or more the order changes
+// the rounding, which the loops then carry through the whole tail. Two signals add the same
+// either way round, so the larger sums are trees of pairs and an export is the same every time.
 const HALL_LINES = [1013, 1151, 1279, 1433, 1571, 1709, 1877, 2039];
 const HALL_DIFFUSERS = [225, 341];
 const HALL_DIFFUSION = 0.6;
@@ -173,23 +177,35 @@ export function createHallReverb(ctx: BaseAudioContext) {
     nodes.push(sum, delay, back, forward, out);
     diffused = out;
   }
-  const mix = gain(-2 / HALL_LINES.length), output = ctx.createChannelMerger(2);
-  const sides = [0, 1].map(side => {
-    const level = gain(HALL_LEVEL), inverted = gain(-1);
-    inverted.connect(level).connect(output, 0, side);
-    return { level, inverted };
-  });
-  const lines = HALL_LINES.map((frames, index) => {
+  const sum = (a: AudioNode, b: AudioNode, value = 1) => {
+    const node = gain(value);
+    a.connect(node);
+    b.connect(node);
+    nodes.push(node);
+    return node;
+  };
+  const tree = (signals: AudioNode[], value: number): AudioNode => signals.length === 2
+    ? sum(signals[0], signals[1], value)
+    : tree(signals.filter((_, i) => i % 2 === 0).map((signal, i) => sum(signal, signals[2 * i + 1])), value);
+  const lines = HALL_LINES.map(frames => {
     const seconds = whole(frames), delay = delayOf(seconds), shelf = mono(ctx.createBiquadFilter()), back = gain(0);
     shelf.type = 'highshelf';
-    diffused.connect(delay).connect(shelf).connect(back).connect(delay);
-    back.connect(mix);
-    const side = sides[index % 2];
-    delay.connect(index % 4 < 2 ? side.level : side.inverted);
+    delay.connect(shelf).connect(back).connect(delay);
+    nodes.push(delay, shelf, back);
     return { seconds, delay, shelf, back };
   });
-  lines.forEach(line => mix.connect(line.delay));
-  nodes.push(mix, output, ...sides.flatMap(side => [side.level, side.inverted]), ...lines.flatMap(line => [line.delay, line.shelf, line.back]));
+  // What goes back into every line: the mix of all eight, and the diffused input.
+  const feed = sum(tree(lines.map(line => line.back), -2 / HALL_LINES.length), diffused);
+  lines.forEach(line => feed.connect(line.delay));
+  // Each side takes four lines, two of them upside down, so the sides are different signals.
+  const output = ctx.createChannelMerger(2);
+  nodes.push(output);
+  const sides = [0, 1].map(side => {
+    const own = lines.filter((_, i) => i % 2 === side).map(line => line.delay);
+    const level = sum(sum(own[0], own[2]), sum(own[1], own[3], -1), HALL_LEVEL);
+    level.connect(output, 0, side);
+    return { level };
+  });
   // With a time the settings glide there, for live playback; without one they are simply set.
   const set = (reverb: EffectsLoopState['reverb'], at?: number) => {
     const put = (param: AudioParam, value: number, glide = 0.015) => {

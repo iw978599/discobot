@@ -258,7 +258,7 @@ test('choosing the Hall crossfades to it, its decay and damping are settings, an
   assert.equal(roomFade.gain.value, 0, 'as the Room fades down');
   assert.equal(hallFade.connections[0], roomFade.connections[0], 'into the reverb\'s own return');
   const made = ctx.nodes.length;
-  const backs = hall.filter(node => node.kind === 'gain' && node.connections.length === 2 && node.connections.some(next => next.kind === 'delay') && node.connections.some(next => next.gain.value === -0.25));
+  const backs = hall.filter(node => node.kind === 'gain' && node.connections.length === 2 && node.connections.some(next => next.kind === 'delay') && node.connections.some(next => next.kind === 'gain' && next.gain.value === 1));
   assert.equal(backs.length, 8);
   const before = backs.map(node => node.gain.value);
   engine.setEffectsLoop({ ...LOOP, reverb: { ...LOOP.reverb, kind: 'hall', decay: 4, damping: 0.1 } });
