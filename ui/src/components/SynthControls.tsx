@@ -773,6 +773,16 @@ export default function SynthControls({
                   />
                 </>
               )}
+              <label className="synth-sync" title="Go round again while the note is held, instead of playing once">
+                <input
+                  type="checkbox"
+                  aria-label="Loop the sample"
+                  disabled={Boolean(builtIn?.steps)}
+                  checked={sample.loop}
+                  onChange={(e) => updateSample({ loop: e.target.checked })}
+                />
+                Loop
+              </label>
               {!builtIn?.steps && (
                 <>
                 <Knob
@@ -819,16 +829,6 @@ export default function SynthControls({
                 />
                   </>
               )}
-              <label className="synth-sync" title="Go round again while the note is held, instead of playing once">
-                <input
-                  type="checkbox"
-                  aria-label="Loop the sample"
-                  disabled={Boolean(builtIn?.steps)}
-                  checked={sample.loop}
-                  onChange={(e) => updateSample({ loop: e.target.checked })}
-                />
-                Loop
-              </label>
               {!sample.wave && (!sample.id || sampleMissing) && (
                 <p className="synth-sample-note" role="status">
                   {sampleMissing ? 'This sample is not on this device, so the lane plays its oscillator.' : 'Choose a sample. Until then the lane plays its oscillator.'}
