@@ -171,35 +171,60 @@ export function drumHits(arrangement: DrumArrangement, bars = 1, barDuration = 2
   return hits;
 }
 
-export function renderDrums(
+// The effects each drum has a send of its own to, and the setting that holds it.
+const DRUM_SENDS = { delay: 'delaySend', reverb: 'reverbSend' } as const;
+type OwnMix = keyof typeof DRUM_SENDS;
+
+// The drums as the core mixes them: the kit, and beside it what the kit sends to the delay and to
+// the reverb, each drum by its own share. A mix is only made when some drum that plays has a share
+// other than the whole; without one it would be the kit sample for sample, and the kit is used.
+export function renderDrumMixes(
   arrangement: DrumArrangement, frames: number, sampleRate: number, bars = 1, barDuration = 240 / arrangement.tempo,
-): Stereo {
+): { kit: Stereo } & Partial<Record<OwnMix, Stereo>> {
   const core = new DrumCore(sampleRate);
   core.setCymbals(arrangement.drumCymbals);
   for (const [instrument, sample] of Object.entries(arrangement.drumSamples ?? {})) core.setSample(instrument as DrumInstrument, sample);
-  for (const hit of drumHits(arrangement, bars, barDuration)) core.trigger({ ...hit, kitId: arrangement.drumKitId });
-  return renderCore(core, frames);
+  const hits = drumHits(arrangement, bars, barDuration);
+  for (const hit of hits) core.trigger({ ...hit, kitId: arrangement.drumKitId });
+  const own = (name: OwnMix): Stereo | undefined =>
+    (hits.some(hit => (hit.settings[DRUM_SENDS[name]] ?? 1) !== 1) ? [new Float32Array(frames), new Float32Array(frames)] : undefined);
+  const delay = own('delay'), reverb = own('reverb');
+  if (!delay && !reverb) return { kit: renderCore(core, frames) };
+  const kit: Stereo = [new Float32Array(frames), new Float32Array(frames)];
+  for (let offset = 0; offset < frames; offset += 128) {
+    const end = Math.min(frames, offset + 128), block = (mix?: Stereo) => mix?.map(channel => channel.subarray(offset, end));
+    core.process(kit[0].subarray(offset, end), kit[1].subarray(offset, end), block(delay), block(reverb));
+  }
+  return { kit, ...(delay ? { delay } : {}), ...(reverb ? { reverb } : {}) };
 }
 
-function connectEffects(ctx: OfflineAudioContext, input: AudioNode, master: AudioNode, sends: FxSendLevels, fxReturn: number, state: EffectsLoopState, group: 'synth' | 'drums', tempo: number) {
+export function renderDrums(
+  arrangement: DrumArrangement, frames: number, sampleRate: number, bars = 1, barDuration = 240 / arrangement.tempo,
+): Stereo {
+  return renderDrumMixes(arrangement, frames, sampleRate, bars, barDuration).kit;
+}
+
+// `own` gives the delay or the reverb a signal of its own to take in place of `input`, still at the
+// level `sends` says. It is only asked for when that effect is on and sent to.
+function connectEffects(ctx: OfflineAudioContext, input: AudioNode, master: AudioNode, sends: FxSendLevels, fxReturn: number, state: EffectsLoopState, group: 'synth' | 'drums', tempo: number, own: Partial<Record<OwnMix, () => AudioNode>> = {}) {
   input.connect(master);
   if (!state.enabled) return;
   const wet = ctx.createGain();
   wet.gain.value = fxReturn * state.returns[group];
   wet.connect(master);
-  const send = (level: number) => {
-    const gain = ctx.createGain(); gain.gain.value = level; input.connect(gain); return gain;
+  const send = (level: number, from: AudioNode = input) => {
+    const gain = ctx.createGain(); gain.gain.value = level; from.connect(gain); return gain;
   };
   if (state.delay.enabled && sends.delay > 0) {
     const delay = ctx.createDelay(2), feedback = ctx.createGain(), level = ctx.createGain();
     delay.delayTime.value = delaySeconds(state.delay, tempo); feedback.gain.value = Math.min(.85, state.delay.feedback);
     level.gain.value = state.delay.mix;
-    send(sends.delay).connect(delay); delay.connect(feedback).connect(delay); delay.connect(level).connect(wet);
+    send(sends.delay, own.delay?.()).connect(delay); delay.connect(feedback).connect(delay); delay.connect(level).connect(wet);
   }
   if (state.reverb.enabled && sends.reverb > 0) {
     const reverb = ctx.createConvolver(), level = ctx.createGain();
     reverb.buffer = reverbImpulse(ctx, state.reverb.decay, seededRandom(3), state.reverb.preDelay, state.reverb.damping); level.gain.value = state.reverb.mix;
-    send(sends.reverb).connect(reverb).connect(level).connect(wet);
+    send(sends.reverb, own.reverb?.()).connect(reverb).connect(level).connect(wet);
   }
   if (state.drive.enabled && sends.drive > 0) {
     const drive = ctx.createWaveShaper(), tone = ctx.createBiquadFilter(), level = ctx.createGain();
@@ -292,7 +317,7 @@ export async function renderArrangement(arrangement: ExportArrangement, options:
   } else master.connect(limiter);
   limiter.connect(safety).connect(ctx.destination);
   const kickTimes = drumHits(arrangement, bars, barDuration).filter(hit => hit.instrument === 'kick').map(hit => hit.time);
-  const play = ([left, right]: Stereo, sends: FxSendLevels, returnLevel: number, group: 'synth' | 'drums', duck = 0) => {
+  const ducked = ([left, right]: Stereo, duck: number) => {
     const buffer = ctx.createBuffer(2, frames, sampleRate);
     buffer.getChannelData(0).set(left); buffer.getChannelData(1).set(right);
     const source = ctx.createBufferSource();
@@ -300,7 +325,12 @@ export async function renderArrangement(arrangement: ExportArrangement, options:
     const ducker = ctx.createGain();
     for (const time of kickTimes) scheduleDuck(ducker.gain, time, duck);
     source.connect(ducker);
-    connectEffects(ctx, ducker, master, sends, returnLevel, arrangement.effectsLoop, group, arrangement.tempo); source.start(0);
+    source.start(0);
+    return ducker;
+  };
+  const play = (stereo: Stereo, sends: FxSendLevels, returnLevel: number, group: 'synth' | 'drums', duck = 0, mixes: Partial<Record<OwnMix, Stereo>> = {}) => {
+    const own = Object.fromEntries(Object.entries(mixes).map(([name, mix]) => [name, () => ducked(mix, duck)]));
+    connectEffects(ctx, ducked(stereo, duck), master, sends, returnLevel, arrangement.effectsLoop, group, arrangement.tempo, own);
   };
   const { only } = options;
   const synthSolo = arrangement.synths.some(s => s.solo);
@@ -313,7 +343,10 @@ export async function renderArrangement(arrangement: ExportArrangement, options:
       lane.synthParams.fxSends, lane.synthParams.fxReturn, 'synth', lane.synthParams.duck ?? 0);
   }
   if (only === undefined || only === 'drums') {
-    play(renderDrums(arrangement, frames, sampleRate, bars, barDuration), arrangement.drumFx.sends, arrangement.drumFx.returnLevel, 'drums');
+    // The kit's own sends are a master over each drum's: the delay and the reverb take the mix the
+    // core made for them, at the kit's level. A stem of the drums has its effects, as it always had.
+    const { kit, ...mixes } = renderDrumMixes(arrangement, frames, sampleRate, bars, barDuration);
+    play(kit, arrangement.drumFx.sends, arrangement.drumFx.returnLevel, 'drums', 0, mixes);
   }
   // Guests are finished audio: their level and their effect sends, no ducking. In a loop the
   // take is one pass of the pattern and is laid end to end like everything else, so what it

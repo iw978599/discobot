@@ -43,6 +43,8 @@ const HIT_LEVEL = 0.7;
 
 // A recording a lane plays instead of its synthesized voice: one channel, at its own rate.
 export interface DrumSample { data: Float32Array; rate: number }
+// Somewhere to write one of the two send mixes: a left and a right channel.
+export type DrumSendMix = ArrayLike<Float32Array>;
 
 interface DrumVoice {
   instrument: DrumInstrument;
@@ -55,6 +57,9 @@ interface DrumVoice {
   gain: number;
   panL: number;
   panR: number;
+  // The share of this hit that goes into the delay's and the reverb's mix.
+  delaySend: number;
+  reverbSend: number;
   driveGain: number;
   driveNorm: number;
   quantize: number;
@@ -108,7 +113,7 @@ export class DrumCore {
     this.attackLength = Math.max(1, Math.ceil(sampleRate * 0.0006));
     this.voices = Object.fromEntries(INSTRUMENTS.map((instrument, index) => [instrument, {
       instrument, active: false, startFrame: 0, age: 0, machine: '808', ride: false,
-      trim: 1, gain: 0, panL: 0.7071, panR: 0.7071, driveGain: 1, driveNorm: 1,
+      trim: 1, gain: 0, panL: 0.7071, panR: 0.7071, delaySend: 1, reverbSend: 1, driveGain: 1, driveNorm: 1,
       quantize: 0, holdLength: 1, holdCount: 0, holdValue: 0,
       phase: new Float64Array(7), step: new Float64Array(7), env: new Float64Array(4), rate: new Float64Array(4),
       sweep: 0, level: 1, noiseLevel: 0, burstLength: 0, tailRate: 1,
@@ -204,6 +209,8 @@ export class DrumCore {
     const angle = (clamp(settings.pan ?? 0, -1, 1) + 1) * Math.PI / 4;
     voice.panL = Math.cos(angle);
     voice.panR = Math.sin(angle);
+    voice.delaySend = clamp(settings.delaySend ?? 1, 0, 1, 1);
+    voice.reverbSend = clamp(settings.reverbSend ?? 1, 0, 1, 1);
     voice.driveGain = 1 + character.drive * 3;
     voice.driveNorm = character.drive > 0 ? 1 / Math.tanh(voice.driveGain) : 1;
     voice.quantize = character.bits > 0 ? 2 ** (character.bits - 1) : 0;
@@ -402,13 +409,18 @@ export class DrumCore {
     }
   }
 
-  process(left: Float32Array, right: Float32Array): void {
+  // `delay` and `reverb`, when given, are filled with a second and a third mix of the same voices:
+  // what the kit sends to the delay and to the reverb, each drum by its own share. A voice goes
+  // into them where it goes into the main mix, so its pan, level and choke are the same in all
+  // three, and with every share at 1 they are the main mix sample for sample.
+  process(left: Float32Array, right: Float32Array, delay?: DrumSendMix, reverb?: DrumSendMix): void {
+    const dL = delay?.[0], dR = delay?.[1] ?? dL, vL = reverb?.[0], vR = reverb?.[1] ?? vL;
     for (let i = 0; i < left.length; i++) {
       while (this.pending.length && this.pending[0].frame <= this.frame + i) {
         const hit = this.pending.shift()!;
         this.start(hit, hit.frame);
       }
-      let l = 0, r = 0;
+      let l = 0, r = 0, dl = 0, dr = 0, vl = 0, vr = 0;
       for (let n = 0; n < INSTRUMENTS.length; n++) {
         const v = this.voices[INSTRUMENTS[n]];
         if (!v.active) continue;
@@ -430,11 +442,18 @@ export class DrumCore {
         }
         v.last = value;
         if (v.level * v.choke < 0.0005 && v.tailSamples === 0) { v.active = false; v.last = 0; continue; }
-        l += value * v.panL;
-        r += value * v.panR;
+        const a = value * v.panL, b = value * v.panR;
+        l += a;
+        r += b;
+        dl += a * v.delaySend;
+        dr += b * v.delaySend;
+        vl += a * v.reverbSend;
+        vr += b * v.reverbSend;
       }
       left[i] = l;
       right[i] = r;
+      if (dL) { dL[i] = dl; if (dR !== dL) dR![i] = dr; }
+      if (vL) { vL[i] = vl; if (vR !== vL) vR![i] = vr; }
     }
     this.frame += left.length;
   }

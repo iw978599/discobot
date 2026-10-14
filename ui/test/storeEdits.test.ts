@@ -985,6 +985,17 @@ const cases: Case[] = [
       assert.deepEqual(drumState.kick, before.drumState.kick);
     },
   }),
+  drumChange('a drum\'s own sends are kept below the whole, held to their range, and stored as nothing at the whole', {
+    type: 'drum.settings', body: { instrument: 'kick', settings: { delaySend: 1, reverbSend: .4 } },
+    arrange: service => { ok(service.setDrumSettings('kick', { delaySend: .2 })); ok(service.setDrumSettings('snare', { delaySend: -3, reverbSend: 8 })); },
+    check: (result, _service, _ctx, before) => {
+      const { drumState } = result.events[0].data;
+      assert.equal(before.drumState.kick.settings.delaySend, .2);
+      assert.deepEqual(drumState.kick.settings, { volume: .5, tone: .5, extra: .5, tune: 0, humanize: .35, pan: 0, reverbSend: .4 });
+      assert.deepEqual(drumState.snare.settings, { ...before.drumState.clap.settings, delaySend: 0 });
+      assert.equal('reverbSend' in drumState.snare.settings, false);
+    },
+  }),
   drumChange('a settings request with no settings changes nothing but still emits and saves', {
     type: 'drum.settings', body: { instrument: 'kick', settings: 'loud' },
     arrange: service => ok(service.setDrumSettings('kick', { pan: .5 })), check: unchanged,

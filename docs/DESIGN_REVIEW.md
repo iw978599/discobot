@@ -909,6 +909,7 @@ on the owner's laptop.
 | `synth-tab-osc`, `-filter`, `-lfo`, `-sends` | Four pages of the sound editor, under Sound |
 | `synth-engine-sample` | The Osc page with the sample engine playing the built-in piano, Loop on |
 | `unit-drums-more-sends` | The drums with More and Sends open |
+| `unit-drums-own-sends` | The Sends row close up: the selected drum's own Delay and Reverb, its share of the reverb at nothing, then the kit's sends |
 | `hover-button`, `hover-step` | A button and a step under the pointer |
 | `time-6-8`, `time-7-8` | The whole rack with the open scene in 6/8 (twelve steps, beats of six) and in 7/8 (fourteen, counted two, two, three); at phone width the rows break where a beat ends |
 
@@ -917,6 +918,7 @@ on the owner's laptop.
 | Name | What it shows |
 |---|---|
 | `phone-unit-song`, `phone-unit-drums`, `phone-unit-drums-2`, `phone-unit-effects`, `phone-unit-effects-2` | One unit at a time; `-2` is the same unit scrolled down |
+| `phone-unit-drums-sends` | The drums' Sends row: the selected drum's own Delay and Reverb above the kit's sends |
 | `phone-unit-mixer`, `phone-unit-mixer-2` | The mixer by itself, from its first strip and slid to its last |
 | `phone-unit-synth`, `phone-unit-synth-2`, `phone-unit-synth-3` | Lane 1 at the top and scrolled; lane 3, empty |
 | `phone-piano-roll`, `phone-keyboard` | The piano roll and the keyboard |

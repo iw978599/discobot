@@ -201,6 +201,13 @@ export function sanitizePattern(value: unknown, tempo: number, signature?: unkno
   };
 }
 
+// A drum's own send to the delay or the reverb. All of it, which is what a drum sent before it had
+// one, is stored as nothing, so a project that never set one is the project it was.
+const drumSend = (key: 'delaySend' | 'reverbSend', value: unknown) => {
+  const share = number(value, 1, 0, 1);
+  return share < 1 ? { [key]: share } : {};
+};
+
 export function sanitizeDrums(value: unknown, defaults: DrumState, signature?: unknown): DrumState {
   const input = record(value);
   // Every drum lane is as long as the kick's.
@@ -220,6 +227,7 @@ export function sanitizeDrums(value: unknown, defaults: DrumState, signature?: u
         humanize: number(settings.humanize, base.settings.humanize ?? .35, 0, 1),
         pan: number(settings.pan, base.settings.pan ?? 0, -1, 1),
         ...(CYMBAL_TYPES.includes(settings.cymbalType) ? { cymbalType: settings.cymbalType } : {}),
+        ...drumSend('delaySend', settings.delaySend), ...drumSend('reverbSend', settings.reverbSend),
       },
       ...(Array.isArray(track.stepVelocities) ? {
         stepVelocities: Array.from({ length: total }, (_, i) => number(track.stepVelocities[i], 1, 0, 1)),
