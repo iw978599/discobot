@@ -82,9 +82,10 @@ const SECOND_STAGE_DAMPING = Math.SQRT2;
 // the instrument's feedback does: with the peak down it is the clean two-pole, and pushed, the peak stops
 // growing and flattens, which is the distortion it is known for. This is how fast the holding back comes on.
 const MS20_HOLD = 0.1;
-const MOD_SOURCES = ['lfo1', 'lfo2', 'ampEnv', 'filterEnv', 'velocity', 'key', 'random'];
+const MOD_SOURCES = ['lfo1', 'lfo2', 'ampEnv', 'filterEnv', 'velocity', 'key', 'random', 'modWheel'];
 const MOD_DESTINATIONS = ['pitch', 'osc2Pitch', 'filter', 'amp', 'pulseWidth', 'pan', 'fmIndex'];
 const MOD_ROUTES = 4;
+const BEND_SEMITONES = 2;
 
 // The one synth voice implementation. The AudioWorklet runs it block by block for live
 // playback and the WAV exporter runs it offline, so both produce the same audio.
@@ -111,6 +112,11 @@ export class SynthCore {
   private routeDestination = new Int8Array(MOD_ROUTES);
   private routeDepth = new Float64Array(MOD_ROUTES);
   private routeCount = 0;
+  // Live playing gestures from a controller, not part of the sound: the wheel (0 to 1) and the bend (-1 to 1, a BEND_SEMITONES range each way). Each moves to its target over a few milliseconds.
+  private bendTarget = 0;
+  private bend = 0;
+  private wheelTarget = 0;
+  private wheel = 0;
   private sample: SynthSample | null = null;
   // Each recording's copies at half, a quarter and an eighth of its rate, for notes played two,
   // four and eight times faster than it was recorded: read as it is, a recording played that
@@ -250,6 +256,14 @@ export class SynthCore {
     const drive = clamp(p.filterDrive, 0, 1);
     d.driveGain = 1 + drive * 5;
     d.driveMakeup = 1 / (1 + drive * 1.6);
+  }
+
+  setBend(value: number): void {
+    this.bendTarget = clamp(value, -1, 1, 0);
+  }
+
+  setWheel(value: number): void {
+    this.wheelTarget = clamp(value, 0, 1, 0);
   }
 
   noteOn(message: NoteOnMessage): void {
@@ -457,6 +471,9 @@ export class SynthCore {
       s.filterFreq += (clamp(p.filterFreq, 20, maxCutoff, s.filterFreq) - s.filterFreq) * k;
       s.filterQ += (clamp(p.filterQ, 0.1, 20, s.filterQ) - s.filterQ) * k;
       s.pulseWidth += (clamp(p.pulseWidth, 0.05, 0.95, s.pulseWidth) - s.pulseWidth) * k;
+      if (this.bend !== this.bendTarget) this.bend = Math.abs(this.bendTarget - this.bend) < 1e-5 ? this.bendTarget : this.bend + (this.bendTarget - this.bend) * k;
+      if (this.wheel !== this.wheelTarget) this.wheel = Math.abs(this.wheelTarget - this.wheel) < 1e-5 ? this.wheelTarget : this.wheel + (this.wheelTarget - this.wheel) * k;
+      const bendOctaves = this.bend * BEND_SEMITONES / 12;
       this.globalLfoPhase[0] = (this.globalLfoPhase[0] + lfoRates[0]) % 1;
       this.globalLfoPhase[1] = (this.globalLfoPhase[1] + lfoRates[1]) % 1;
 
@@ -498,6 +515,7 @@ export class SynthCore {
             else if (source === 3) { amount = filterEnv; swing = filterEnv; }
             else if (source === 4) { amount = v.velocity; swing = v.velocity; }
             else if (source === 5) { swing = clamp(v.keyOctaves * 0.5, -1, 1); amount = (swing + 1) * 0.5; }
+            else if (source === 7) { swing = this.wheel; amount = this.wheel; }
             else {
               // Random: a new value each time the first LFO comes round, held until the next.
               const phase = lfoRetrigger[0] ? v.lfoPhase[0] : this.globalLfoPhase[0];
@@ -518,7 +536,7 @@ export class SynthCore {
           if (osc2Octaves !== 0) osc2Mod = 2 ** osc2Octaves;
         }
 
-        const step = clamp((second ? v.frequency * d.layerRatio : v.frequency) * 2 ** (s.detune / 1200 + pitchMod) / sr, 0.000001, 0.45);
+        const step = clamp((second ? v.frequency * d.layerRatio : v.frequency) * 2 ** (s.detune / 1200 + pitchMod + bendOctaves) / sr, 0.000001, 0.45);
         let source: number;
         if (fm) {
           v.fmEnv += (0.2 - v.fmEnv) * d.fmDecay;

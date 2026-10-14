@@ -15,6 +15,8 @@ interface SynthLane {
   automated?: Partial<VoiceParams> | null;
   // The recording the lane's sample engine plays, kept for a node that does not exist yet.
   sample?: SynthSample | null;
+  // The controller's bend and wheel as last sent, for a node that does not exist yet.
+  live?: { bend: number; wheel: number };
   bpm: number;
   generation: number;
   // Note-ons still waiting on audio resume or worklet loading, keyed by note name.
@@ -93,6 +95,7 @@ export function useSynthAudio() {
           audio.setSends(lane.parameters.fxSends, lane.parameters.fxReturn);
         }
         if (lane.sample) send(node, { type: 'sample', sample: lane.sample });
+        if (lane.live) send(node, { type: 'live', ...lane.live });
         return node;
       }).finally(() => { lane.loading = undefined; });
     }
@@ -148,9 +151,19 @@ export function useSynthAudio() {
   const duck = useCallback((synthId: number, time: number, amount: number) => {
     lanesRef.current.get(synthId)?.audio?.duck(time, amount);
   }, []);
+  // A controller's bend (-1 to 1) and mod wheel (0 to 1) for a lane; either left out stays where it was.
+  const setLive = useCallback((synthId: number, live: { bend?: number; wheel?: number }) => {
+    const lane = laneFor(synthId);
+    lane.live = { bend: 0, wheel: 0, ...lane.live, ...live };
+    send(lane.node, { type: 'live', ...live });
+  }, []);
+  // Stopping lets go of the bend, as the wheel springs back; the mod wheel stays where the hand left it.
   const stopAllNotes = useCallback((release = 0.03) => {
-    lanesRef.current.forEach((_lane, id) => stopSynth(id, release));
-  }, [stopSynth]);
+    lanesRef.current.forEach((lane, id) => {
+      stopSynth(id, release);
+      if (lane.live?.bend) setLive(id, { bend: 0 });
+    });
+  }, [stopSynth, setLive]);
   const setVolume = useCallback((volume: number) => {
     volumeRef.current = Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : 0;
     lanesRef.current.forEach(lane => lane.audio?.setVolume(volumeRef.current));
@@ -167,6 +180,6 @@ export function useSynthAudio() {
   // The same object on every render, so effects and callbacks that depend on it do not re-run.
   return useMemo(() => ({
     ensureAudioReady, tryResume: () => { void ensureAudioReady(); },
-    playNote, stopNote, stopSynth, stopAllNotes, updateParameters, automate, endAutomation, setEffectsLoop, setVolume, setSample, duck, dispose,
-  }), [playNote, stopNote, stopSynth, stopAllNotes, updateParameters, automate, endAutomation, setVolume, setSample, duck, dispose]);
+    playNote, stopNote, stopSynth, stopAllNotes, updateParameters, automate, endAutomation, setEffectsLoop, setVolume, setSample, setLive, duck, dispose,
+  }), [playNote, stopNote, stopSynth, stopAllNotes, updateParameters, automate, endAutomation, setVolume, setSample, setLive, duck, dispose]);
 }

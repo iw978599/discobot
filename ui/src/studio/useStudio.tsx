@@ -1595,7 +1595,17 @@ export function useStudio() {
 
   // A device is given somewhere else to go. What a lane holds for it is let go first: the keys'
   // note-offs would otherwise arrive for a lane that no longer hears the device.
+  // The lane a device's bend and wheel last reached, by the device's name: let go when the device
+  // goes or is sent elsewhere. They are live gestures: nothing here is saved, undone or recorded.
+  const liveLanesRef = useRef(new Map<string, number>());
+  const releaseLiveGestures = useCallback((device: string) => {
+    const synthId = liveLanesRef.current.get(device);
+    if (synthId === undefined) return;
+    liveLanesRef.current.delete(device);
+    synthAudio.setLive(synthId, { bend: 0, wheel: 0 });
+  }, [synthAudio]);
   const handleMidiDestinationChange = useCallback((device: string, place: MidiDestination) => {
+    releaseLiveGestures(device);
     midiHeldRef.current.forEach((held, key) => {
       if (held.device !== device) return;
       midiHeldRef.current.delete(key);
@@ -1605,7 +1615,7 @@ export function useStudio() {
     midiDestinationsRef.current = next;
     storeMidiDestinations(next);
     setMidiDestinations(next);
-  }, [handleNoteRelease]);
+  }, [handleNoteRelease, releaseLiveGestures]);
 
   const handleMidiMessage = useCallback((message: MidiMessage, source: MidiSource) => {
     if (message.type === 'noteOff') {
@@ -1618,8 +1628,27 @@ export function useStudio() {
       void handleNoteRelease(held.synthId, held.note);
       return;
     }
+    if (message.type === 'deviceGone') { releaseLiveGestures(source.name); return; }
     const place = destinationFor(midiDestinationsRef.current, source.name);
     if (place === 'off') return;
+    // The lane a device's notes would go to, for its pitch bend and mod wheel; the drums and a lane the project lacks have none.
+    const liveLane = (): number | null => {
+      if (place === 'drums') return null;
+      if (place === 'default') {
+        if (message.channel !== midiChannelRef.current) return null;
+        return (synthsRef.current.find(s => s.id === midiTargetSynthIdRef.current) ?? synthsRef.current[0])?.id ?? null;
+      }
+      return synthsRef.current.find(s => s.id === (place === 'open' ? selectedSynthIdRef.current : destinationLane(place)))?.id ?? null;
+    };
+    const gesture = (live: { bend?: number; wheel?: number }) => {
+      const synthId = liveLane();
+      if (synthId === null) return;
+      const before = liveLanesRef.current.get(source.name);
+      if (before !== undefined && before !== synthId) synthAudio.setLive(before, { bend: 0, wheel: 0 });
+      liveLanesRef.current.set(source.name, synthId);
+      synthAudio.setLive(synthId, live);
+    };
+    if (message.type === 'pitchBend') { gesture({ bend: message.value }); return; }
     if (message.type === 'controlChange') {
       // A knob on the controller. While a parameter is waiting to be learned, the first knob turned
       // is tied to it; otherwise a knob that is tied moves its parameter.
@@ -1631,6 +1660,7 @@ export function useStudio() {
       }
       const tie = tieFor(midiTiesRef.current, message.channel, message.controller);
       if (tie) applyParamTargetRef.current(tie.target, message.value / 127);
+      else if (message.controller === 1) gesture({ wheel: message.value / 127 });
       return;
     }
     // While a drum is waiting to be learned, the first note played is its pad's from then on.
@@ -1711,7 +1741,7 @@ export function useStudio() {
     const stepIndex = joins ? chord.stepIndex : targetSynth.stepRecordPointer % pattern.steps.length;
     midiChordRef.current = { synthId: targetSynth.id, stepIndex, at: now };
     void upsertStepNote(targetSynth.id, stepIndex, noteName, velocity, joins);
-  }, [handleNoteRelease, upsertStepNote, triggerSynthNote, globalTempo, synthAudio, recordNote, drumAudio, pushHistorySnapshot]);
+  }, [handleNoteRelease, releaseLiveGestures, upsertStepNote, triggerSynthNote, globalTempo, synthAudio, recordNote, drumAudio, pushHistorySnapshot]);
 
   const midiState = useMidiInput({ onMessage: handleMidiMessage });
 
