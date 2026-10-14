@@ -208,6 +208,9 @@ turns. Imported samples are not synced. The accounts service is in `server/`
   knob is tied to a parameter the same way. With more than one controller
   connected, each can be sent to a lane of its own, to the drums, or nowhere.
   These are kept in the browser, not in the project.
+- **Pitch bend and mod wheel.** A controller's pitch bend bends its lane by two
+  semitones; its mod wheel (CC 1) is a source in a sound's modulation routes.
+  Both are live gestures: not saved, recorded or exported.
 - **MIDI out.** The sequencer can play a hardware synth and send it clock:
   lanes on channels 1 to 3, drums on channel 10.
 - **Import MIDI.** Bring notes and tempo in from a `.mid` file.

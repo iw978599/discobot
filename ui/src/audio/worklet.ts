@@ -23,6 +23,7 @@ class SynthProcessor extends AudioWorkletProcessor {
       if (data.type === 'params') this.core.setParams(data.params, data.time);
       else if (data.type === 'unschedule') this.core.clearScheduledParams();
       else if (data.type === 'sample') this.core.setSample(data.sample);
+      else if (data.type === 'live') { if (data.bend !== undefined) this.core.setBend(data.bend); if (data.wheel !== undefined) this.core.setWheel(data.wheel); }
       else if (data.type === 'noteOn') this.core.noteOn(data);
       else if (data.type === 'noteOff') this.core.noteOff(data.note, data.id);
       else if (data.type === 'allNotesOff') this.core.allNotesOff(data.release);

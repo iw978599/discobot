@@ -69,7 +69,7 @@ const COLUMN_TABS: Record<string, SynthTab> = {
 };
 
 const MOD_SOURCE_NAMES: Record<ModSource, string> = {
-  lfo1: 'LFO 1', lfo2: 'LFO 2', ampEnv: 'Level envelope', filterEnv: 'Filter envelope', velocity: 'Velocity', key: 'Key', random: 'Random',
+  lfo1: 'LFO 1', lfo2: 'LFO 2', ampEnv: 'Level envelope', filterEnv: 'Filter envelope', velocity: 'Velocity', key: 'Key', random: 'Random', modWheel: 'Mod wheel',
 };
 const MOD_DESTINATION_NAMES: Record<ModDestination, string> = {
   pitch: 'Pitch', osc2Pitch: 'Osc 2 pitch', filter: 'Filter', amp: 'Level', pulseWidth: 'Pulse width', pan: 'Pan', fmIndex: 'FM amount',
@@ -1590,7 +1590,7 @@ export default function SynthControls({
                     aria-label={`Route ${index + 1} source`}
                     value={route?.source ?? ''}
                     disabled={!usable}
-                    title="What moves. Random is a new value each time LFO 1 comes round. Choose the dash to take the route away"
+                    title="What moves. Random is a new value each time LFO 1 comes round. Mod wheel is a controller's wheel (MIDI CC 1), played live and not saved: an export plays it at 0. A wheel tied to a knob under Controller knobs moves that knob instead. Choose the dash to take the route away"
                     onChange={(e) => setRoute(e.target.value ? { source: e.target.value as ModSource, destination: route?.destination ?? 'filter', depth: route?.depth ?? 0.5 } : null)}
                   >
                     <option value="">—</option>

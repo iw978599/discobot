@@ -251,9 +251,7 @@ target; removal of the AI review workflow.
    by ear: up to four routes a sound, on the LFO tab under Routing. Sources
    are the two LFOs, both envelopes, velocity, key and a stepped random;
    destinations are pitch, the second oscillator's pitch, the filter, the
-   level, pulse width, pan and FM amount. Open: the mod wheel as a source
-   (the app does not read a controller's wheel yet, which belongs with the
-   MIDI work, features 6); more than four routes; and the LFO tab's own
+   level, pulse width, pan and FM amount. The mod wheel is now a source (features 6); open: more than four routes; and the LFO tab's own
    target menus are still there beside the routes, not replaced by them.
 
 5. **A true ladder filter.** (M) Done on 2026-10-12, not verified by ear.
@@ -535,8 +533,7 @@ may redistribute.
    note; Reset pads puts the General MIDI notes back), and with more than
    one controller connected each has a place of its own (as before, the
    open lane, Synth 1 to 3, the drums, or off). Both are kept in the
-   browser, not the project. Still open from this item: the mod wheel and
-   pitch bend, aftertouch, following an external clock, sending notes
+   browser, not the project. Pitch bend (two semitones) and the mod wheel (CC 1, a route source) are done, as live gestures that are not saved or exported, not verified by ear or on hardware. Still open from this item: aftertouch, following an external clock, sending notes
    played by hand, and choosing the output channels. Choices made in
    building it that the owner has not confirmed: a device's place is kept
    by its name; a device sent to a lane plays it on every channel; Off
