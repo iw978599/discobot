@@ -466,6 +466,8 @@ may redistribute.
    that are not a whole number of bars, and sharing a part between scenes.
 
 5. **Parameter automation.** (L, after the typed store)
+   Built on 2026-10-14 and merged as built at the owner's word: every choice
+   listed on its pull request (#187) is accepted.
    Record knob movements per step or per bar and play them back. Filter sweeps
    over a section are a large part of electronic arrangement. The owner asked
    on 2026-10-12 whether a hardware knob could record it: yes, if the knob
