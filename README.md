@@ -47,7 +47,8 @@ change from one to the next. A song is scenes in order, each repeated as many ti
 you like. Scenes can be given a colour so a song's shape reads at a glance.
 
 **Effects** shared by the whole rack: drive, phaser, delay (free or in time
-with the tempo), chorus, reverb and a three-band master EQ. Each lane and the
+with the tempo), chorus, reverb (a close Room or a smoother Hall) and a
+three-band master EQ. Each lane and the
 drums have their own sends, and each drum has a share of its own of the kit's
 delay and reverb sends, so a kick can stay dry under a snare with reverb on it.
 

@@ -23,7 +23,9 @@ type Effects = {
   output: GainNode;
   delay: DelayNode;
   feedback: GainNode;
-  reverb: ConvolverNode;
+  // The reverb that is sounding: the Room's convolver or the Hall, and never both.
+  reverb: ConvolverNode | null;
+  hall: Hall | null;
   reverbFade: GainNode;
   decay: number;
   drive: WaveShaperNode;
@@ -119,6 +121,102 @@ export function createChorus(ctx: BaseAudioContext) {
 }
 type Chorus = ReturnType<typeof createChorus>;
 
+// The second kind of reverb, Hall, in the manner of Freeverb (Jezar's public-domain design, whose
+// lengths these are): on each side six damped feedback combs of unrelated lengths in parallel,
+// then three all-passes in series that thicken their echoes into a smooth tail. The right side's
+// lengths are the left's and 23 frames, so the two sides are different signals. Nothing in it is
+// random, so an export is repeatable, and the decay, damping and level are gains and filter
+// settings: nothing is rebuilt to change them.
+// A loop of native nodes is one render quantum (128 frames) longer than its delay: Chrome renders
+// a block at a time and a loop reads the block before. `HALL_QUANTUM` is counted into every
+// loop's length, and the decay follows it there; a browser that gives a loop no extra block (none
+// on the check machines did) would ring about a tenth longer. Chrome was also seen to render a
+// loop that has two ways out, or two loops that feed each other, differently from one run to the
+// next, as the order it pulls a node's inputs in changes. So every loop here has one way out (its
+// delay) and none feeds another, the all-passes take the form in which only their delay leaves
+// the loop, and no node adds more than two signals, three or more being added in an order that
+// changes the rounding. Lengths are in frames at 44.1 kHz and rounded to whole frames of the
+// context's rate, because a delay between frames is interpolated, which takes highs away on every
+// pass and would make live playback at 48 kHz duller than an export.
+export const HALL_QUANTUM = 128;
+const HALL_COMBS = [1116, 1188, 1277, 1356, 1491, 1617];
+const HALL_DIFFUSERS = [556, 341, 225];
+const HALL_SPREAD = 23;
+const HALL_DIFFUSION = 0.5;
+// Sets the Hall about as loud as the Room at the same mix; measured, see `hallReverb.test.ts`.
+// The Room's convolver scales a damped impulse back up to the same power, while the Hall's damping
+// takes energy out of its tail: `hallLevel` gives back about what the shelf takes from white
+// noise, less for a short tail, whose early echoes the shelf has hardly touched. A short Hall is
+// also brought down by its early echoes, which a Room of the same length spreads more thinly.
+export const HALL_LEVEL = 0.02;
+export function hallLevel(decay: number, damping: number | undefined) {
+  const damp = limit(damping, 0, 1), above = 1 - hallDampHz(damp) / 22050, seconds = limit(decay, 0.1, 8);
+  const kept = 1 - above + above / (1 + 5 * damp);
+  return HALL_LEVEL * Math.pow(kept, -seconds * seconds / (seconds * seconds + 0.5) / 2) * Math.pow(10, -0.04 / seconds);
+}
+// What a comb whose loop lasts `seconds` gives back, so that its echoes have fallen 60 dB after `decay`.
+export const hallFeedback = (decay: number, seconds: number) => Math.pow(10, -3 * seconds / limit(decay, 0.1, 8));
+// Damping is a high shelf in each comb: above `hallDampHz` the tail dies up to six times as fast,
+// which is a cut in decibels in proportion to the loop's length. No damping is a flat shelf.
+export const hallDampHz = (damping: number | undefined) => 8000 * Math.pow(4, -limit(damping, 0, 1));
+export const hallDampDb = (decay: number, damping: number | undefined, seconds: number) =>
+  -60 * seconds / limit(decay, 0.1, 8) * 5 * limit(damping, 0, 1);
+export function createHallReverb(ctx: BaseAudioContext) {
+  const mono = <T extends AudioNode>(node: T) => { node.channelCount = 1; node.channelCountMode = 'explicit'; return node; };
+  const nodes: AudioNode[] = [];
+  const gain = (value: number) => { const node = mono(ctx.createGain()); node.gain.value = value; nodes.push(node); return node; };
+  const whole = (frames: number) => Math.round(frames / 44100 * ctx.sampleRate) / ctx.sampleRate;
+  const delayOf = (seconds: number) => { const node = mono(ctx.createDelay(0.25)); node.delayTime.value = seconds; nodes.push(node); return node; };
+  const sum = (a: AudioNode, b: AudioNode, value = 1) => { const node = gain(value); a.connect(node); b.connect(node); return node; };
+  const tree = (signals: AudioNode[]): AudioNode => signals.length === 1 ? signals[0]
+    : tree(Array.from({ length: Math.ceil(signals.length / 2) }, (_, i) => signals[2 * i + 1] ? sum(signals[2 * i], signals[2 * i + 1]) : signals[2 * i]));
+  // The sends are stereo and the combs are not: the two sides come from combs of their own.
+  const input = gain(1), pre = mono(ctx.createDelay(MAX_PRE_DELAY + 0.05));
+  nodes.push(pre);
+  pre.delayTime.value = 0;
+  input.connect(pre);
+  const output = ctx.createChannelMerger(2);
+  nodes.push(output);
+  const lines: { seconds: number; delay: DelayNode; shelf: BiquadFilterNode; back: GainNode }[] = [];
+  const sides = [0, HALL_SPREAD].map((spread, side) => {
+    const combs = HALL_COMBS.map(frames => {
+      const tap = whole(frames + spread), delay = delayOf(tap), shelf = mono(ctx.createBiquadFilter()), back = gain(0);
+      shelf.type = 'highshelf';
+      nodes.push(shelf);
+      pre.connect(delay).connect(shelf).connect(back).connect(delay);
+      lines.push({ seconds: tap + HALL_QUANTUM / ctx.sampleRate, delay, shelf, back });
+      return delay;
+    });
+    let diffused = tree(combs);
+    for (const frames of HALL_DIFFUSERS) {
+      // v = x + g v (a loop later), and out = v (a delay later) - x: only the delay leaves the loop.
+      const into = gain(1), delay = delayOf(whole(frames + spread)), back = gain(HALL_DIFFUSION), inverted = gain(-1);
+      diffused.connect(into).connect(delay).connect(back).connect(into);
+      diffused.connect(inverted);
+      diffused = sum(delay, inverted);
+    }
+    const level = gain(HALL_LEVEL);
+    diffused.connect(level).connect(output, 0, side);
+    return { level };
+  });
+  // With a time the settings glide there, for live playback; without one they are simply set.
+  const set = (reverb: EffectsLoopState['reverb'], at?: number) => {
+    const put = (param: AudioParam, value: number, glide = 0.015) => {
+      if (at === undefined) param.value = value;
+      else param.setTargetAtTime(value, at, glide);
+    };
+    put(pre.delayTime, limit(reverb.preDelay, 0, MAX_PRE_DELAY), 0.05);
+    for (const side of sides) put(side.level.gain, hallLevel(reverb.decay, reverb.damping));
+    for (const line of lines) {
+      put(line.back.gain, hallFeedback(reverb.decay, line.seconds));
+      put(line.shelf.frequency, hallDampHz(reverb.damping));
+      put(line.shelf.gain, hallDampDb(reverb.decay, reverb.damping, line.seconds));
+    }
+  };
+  return { input, output, pre, lines, sides, nodes, set };
+}
+type Hall = ReturnType<typeof createHallReverb>;
+
 // The master EQ: a low shelf, a wide mid bell and a high shelf, in that order.
 export function createMasterEq(ctx: BaseAudioContext): BiquadFilterNode[] {
   const bands = [['lowshelf', 120], ['peaking', 1000], ['highshelf', 6000]] as const;
@@ -150,7 +248,7 @@ function releaseEffects(bus: Effects) {
   halt(bus.chorus.lfo);
   const nodes: AudioNode[] = [
     ...Object.values(bus.inputs), ...Object.values(bus.wet), bus.output, bus.delay, bus.feedback,
-    bus.reverb, bus.reverbFade, bus.drive, bus.driveFade, bus.tone, ...bus.phaser, bus.phaserFeedback,
+    ...(bus.reverb ? [bus.reverb] : []), ...(bus.hall?.nodes ?? []), bus.reverbFade, bus.drive, bus.driveFade, bus.tone, ...bus.phaser, bus.phaserFeedback,
     bus.lfo, bus.depth, bus.chorus.input, bus.chorus.output, bus.chorus.lfo, bus.chorus.depth,
   ];
   nodes.forEach(node => node.disconnect());
@@ -299,7 +397,7 @@ export class AudioEngine {
     const chorus = createChorus(ctx);
     inputs.chorus.connect(chorus.input);
     chorus.output.connect(wet.chorus);
-    const bus = { inputs, wet, output, delay, feedback, reverb, reverbFade, decay: 0, drive, driveFade, driveAmount: -1, tone, phaser, phaserFeedback, lfo, depth, chorus, reverbShape: '' };
+    const bus: Effects = { inputs, wet, output, delay, feedback, reverb, hall: null, reverbFade, decay: 0, drive, driveFade, driveAmount: -1, tone, phaser, phaserFeedback, lfo, depth, chorus, reverbShape: '' };
     this.effects.set(group, bus);
     if (this.loop) this.update(bus, group, this.loop, ctx);
     return bus;
@@ -311,6 +409,22 @@ export class AudioEngine {
     this.retiring.set(timer, release);
   }
 
+  // Puts another reverb in the place of the one that is sounding: the new one fades up as the old
+  // fades down, and the old one, with every node inside it, is cut loose once it is silent.
+  private replaceReverb(bus: Effects, ctx: AudioContext, next: { reverb: ConvolverNode } | { hall: Hall }) {
+    const previous = bus.reverb ?? bus.hall!.input, previousNodes = bus.reverb ? [bus.reverb] : bus.hall!.nodes, previousFade = bus.reverbFade;
+    const fade = ctx.createGain();
+    fade.gain.value = 0;
+    bus.reverb = 'reverb' in next ? next.reverb : null;
+    bus.hall = 'hall' in next ? next.hall : null;
+    bus.inputs.reverb.connect(bus.reverb ?? bus.hall!.input);
+    (bus.reverb ?? bus.hall!.output).connect(fade).connect(bus.wet.reverb);
+    smooth(previousFade.gain, 0, ctx);
+    smooth(fade.gain, 1, ctx);
+    this.retire(() => { bus.inputs.reverb.disconnect(previous); previousNodes.forEach(node => node.disconnect()); previousFade.disconnect(); });
+    bus.reverbFade = fade;
+  }
+
   private update(bus: Effects, group: Group, state: EffectsLoopState, ctx: AudioContext) {
     const enabled = state.enabled, tempo = this.effectsTempo;
     smooth(bus.output.gain, enabled ? limit(state.returns[group], 0, 1) : 0, ctx);
@@ -320,21 +434,25 @@ export class AudioEngine {
     smooth(bus.wet.reverb.gain, state.reverb.enabled ? limit(state.reverb.mix, 0, 1) : 0, ctx);
     const decay = limit(state.reverb.decay, 0.1, 8);
     const shape = `${(state.reverb.preDelay ?? 0).toFixed(3)}/${(state.reverb.damping ?? 0).toFixed(2)}`;
-    if (Math.abs(decay - bus.decay) > 0.04 || shape !== bus.reverbShape) {
+    if (state.reverb.kind === 'hall') {
+      // The Hall's decay and damping are settings of the nodes it has: only choosing it builds one.
+      if (bus.hall) bus.hall.set(state.reverb, ctx.currentTime);
+      else {
+        const hall = createHallReverb(ctx);
+        hall.set(state.reverb);
+        this.replaceReverb(bus, ctx, { hall });
+        bus.decay = 0;
+        bus.reverbShape = '';
+      }
+    } else if (!bus.reverb || Math.abs(decay - bus.decay) > 0.04 || shape !== bus.reverbShape) {
       const buffer = reverbImpulse(ctx, decay, Math.random, state.reverb.preDelay, state.reverb.damping);
       bus.reverbShape = shape;
-      if (bus.reverb.buffer) {
-        const previous = bus.reverb, previousFade = bus.reverbFade;
-        const next = ctx.createConvolver(), fade = ctx.createGain();
-        next.buffer = buffer;
-        fade.gain.value = 0;
-        bus.inputs.reverb.connect(next).connect(fade).connect(bus.wet.reverb);
-        smooth(previousFade.gain, 0, ctx);
-        smooth(fade.gain, 1, ctx);
-        this.retire(() => { bus.inputs.reverb.disconnect(previous); previous.disconnect(); previousFade.disconnect(); });
-        bus.reverb = next;
-        bus.reverbFade = fade;
-      } else bus.reverb.buffer = buffer;
+      if (bus.reverb && !bus.reverb.buffer) bus.reverb.buffer = buffer;
+      else {
+        const reverb = ctx.createConvolver();
+        reverb.buffer = buffer;
+        this.replaceReverb(bus, ctx, { reverb });
+      }
       bus.decay = decay;
     }
     const driveAmount = limit(state.drive.amount, 0, 1);
