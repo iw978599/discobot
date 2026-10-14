@@ -49,7 +49,7 @@ const ownOrigin = () => (typeof window !== 'undefined' && window.location ? wind
 const STORAGE_KEY = 'discobot_browser_project_v1';
 // Bumped when synth parameters gain fields. An older project is upgraded with defaults,
 // which is a migration and not damage worth warning about.
-const SCHEMA = 21;
+const SCHEMA = 22;
 // Edits are written this long after the last one, so dragging a knob is one write, not hundreds.
 const SAVE_DELAY_MS = 300;
 // A version is kept when a project is opened, before anything replaces it, and this often while it is edited.

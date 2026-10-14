@@ -264,6 +264,7 @@ function normalizeEffectsLoop(loop: Partial<EffectsLoopState> | undefined): Effe
       // Always present here, like the delay's sync, so setting them back to zero reaches the store.
       preDelay: loop?.reverb?.preDelay ?? 0,
       damping: loop?.reverb?.damping ?? 0,
+      kind: loop?.reverb?.kind ?? 'room',
     },
     // Checked and clamped by the store; passed through as they are.
     ...(loop?.chorus ? { chorus: { ...loop.chorus } } : {}),
