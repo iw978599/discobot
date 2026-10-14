@@ -121,89 +121,82 @@ export function createChorus(ctx: BaseAudioContext) {
 }
 type Chorus = ReturnType<typeof createChorus>;
 
-// The second kind of reverb, Hall: a feedback delay network. Eight delay lines of unrelated
-// lengths, each fed back through a mix of all eight (a Householder matrix, which loses nothing,
-// so only `back` and `shelf` decide how the tail dies), behind two all-passes that smear a hit
-// before it reaches the lines. Chosen over combs into all-passes because every echo is spread
-// over all the lines on each pass, so the tail thickens quickly from fewer nodes, and because one
-// gain a line sets the decay exactly. Nothing in it is random, so an export is repeatable, and
-// the decay and damping are gains and filter settings: nothing is rebuilt to change them.
-// A loop of native nodes cannot be shorter than one render quantum (128 frames, 2.9 ms at 44.1
-// kHz): the shortest loop here is the first all-pass at 5.1 ms, and a context slow enough to
-// stretch it still has an all-pass. Lengths are in frames at 44.1 kHz and are rounded to whole
-// frames of the context's own rate, because a delay between frames is interpolated, which takes
-// highs away on every pass and would make live playback duller than an export.
-// No node in it is given more than two signals to add: a browser adds a node's inputs in an order
-// of its own, which changes from one run to the next, and with three or more the order changes
-// the rounding, which the loops then carry through the whole tail. Two signals add the same
-// either way round, so the larger sums are trees of pairs and an export is the same every time.
-const HALL_LINES = [1013, 1151, 1279, 1433, 1571, 1709, 1877, 2039];
-const HALL_DIFFUSERS = [225, 341];
-const HALL_DIFFUSION = 0.6;
+// The second kind of reverb, Hall, in the manner of Freeverb (Jezar's public-domain design, whose
+// lengths these are): on each side six damped feedback combs of unrelated lengths in parallel,
+// then three all-passes in series that thicken their echoes into a smooth tail. The right side's
+// lengths are the left's and 23 frames, so the two sides are different signals. Nothing in it is
+// random, so an export is repeatable, and the decay, damping and level are gains and filter
+// settings: nothing is rebuilt to change them.
+// A loop of native nodes is one render quantum (128 frames) longer than its delay: Chrome renders
+// a block at a time and a loop reads the block before. `HALL_QUANTUM` is counted into every
+// loop's length, and the decay follows it there; a browser that gives a loop no extra block (none
+// on the check machines did) would ring about a tenth longer. Chrome was also seen to render a
+// loop that has two ways out, or two loops that feed each other, differently from one run to the
+// next, as the order it pulls a node's inputs in changes. So every loop here has one way out (its
+// delay) and none feeds another, the all-passes take the form in which only their delay leaves
+// the loop, and no node adds more than two signals, three or more being added in an order that
+// changes the rounding. Lengths are in frames at 44.1 kHz and rounded to whole frames of the
+// context's rate, because a delay between frames is interpolated, which takes highs away on every
+// pass and would make live playback at 48 kHz duller than an export.
+export const HALL_QUANTUM = 128;
+const HALL_COMBS = [1116, 1188, 1277, 1356, 1491, 1617];
+const HALL_DIFFUSERS = [556, 341, 225];
+const HALL_SPREAD = 23;
+const HALL_DIFFUSION = 0.5;
 // Sets the Hall about as loud as the Room at the same mix; measured, see `hallReverb.test.ts`.
 // The Room's convolver scales a damped impulse back up to the same power, while the Hall's damping
 // takes energy out of its tail: `hallLevel` gives back about what the shelf takes from white
 // noise, less for a short tail, whose early echoes the shelf has hardly touched. A short Hall is
 // also brought down by its early echoes, which a Room of the same length spreads more thinly.
-export const HALL_LEVEL = 0.1;
+export const HALL_LEVEL = 0.02;
 export function hallLevel(decay: number, damping: number | undefined) {
   const damp = limit(damping, 0, 1), above = 1 - hallDampHz(damp) / 22050, seconds = limit(decay, 0.1, 8);
   const kept = 1 - above + above / (1 + 5 * damp);
-  return HALL_LEVEL * Math.pow(kept, -seconds / (seconds + 1) / 2) * Math.pow(10, -0.06 / seconds);
+  return HALL_LEVEL * Math.pow(kept, -seconds * seconds / (seconds * seconds + 0.5) / 2) * Math.pow(10, -0.04 / seconds);
 }
-// What a line gives back, so that its echoes have fallen 60 dB after `decay` seconds.
+// What a comb whose loop lasts `seconds` gives back, so that its echoes have fallen 60 dB after `decay`.
 export const hallFeedback = (decay: number, seconds: number) => Math.pow(10, -3 * seconds / limit(decay, 0.1, 8));
-// Damping is a high shelf in each line: above `hallDampHz` the tail dies up to six times as fast,
-// which is a cut in decibels in proportion to the line's length. No damping is a flat shelf.
+// Damping is a high shelf in each comb: above `hallDampHz` the tail dies up to six times as fast,
+// which is a cut in decibels in proportion to the loop's length. No damping is a flat shelf.
 export const hallDampHz = (damping: number | undefined) => 8000 * Math.pow(4, -limit(damping, 0, 1));
 export const hallDampDb = (decay: number, damping: number | undefined, seconds: number) =>
   -60 * seconds / limit(decay, 0.1, 8) * 5 * limit(damping, 0, 1);
 export function createHallReverb(ctx: BaseAudioContext) {
   const mono = <T extends AudioNode>(node: T) => { node.channelCount = 1; node.channelCountMode = 'explicit'; return node; };
-  const gain = (value: number) => { const node = mono(ctx.createGain()); node.gain.value = value; return node; };
+  const nodes: AudioNode[] = [];
+  const gain = (value: number) => { const node = mono(ctx.createGain()); node.gain.value = value; nodes.push(node); return node; };
   const whole = (frames: number) => Math.round(frames / 44100 * ctx.sampleRate) / ctx.sampleRate;
-  const delayOf = (seconds: number) => { const node = mono(ctx.createDelay(0.25)); node.delayTime.value = seconds; return node; };
-  // The sends are stereo and the lines are not: the two sides come from different lines.
+  const delayOf = (seconds: number) => { const node = mono(ctx.createDelay(0.25)); node.delayTime.value = seconds; nodes.push(node); return node; };
+  const sum = (a: AudioNode, b: AudioNode, value = 1) => { const node = gain(value); a.connect(node); b.connect(node); return node; };
+  const tree = (signals: AudioNode[]): AudioNode => signals.length === 1 ? signals[0]
+    : tree(Array.from({ length: Math.ceil(signals.length / 2) }, (_, i) => signals[2 * i + 1] ? sum(signals[2 * i], signals[2 * i + 1]) : signals[2 * i]));
+  // The sends are stereo and the combs are not: the two sides come from combs of their own.
   const input = gain(1), pre = mono(ctx.createDelay(MAX_PRE_DELAY + 0.05));
+  nodes.push(pre);
   pre.delayTime.value = 0;
   input.connect(pre);
-  const nodes: AudioNode[] = [input, pre];
-  let diffused: AudioNode = pre;
-  for (const frames of HALL_DIFFUSERS) {
-    const sum = gain(1), delay = delayOf(whole(frames)), back = gain(HALL_DIFFUSION), forward = gain(-HALL_DIFFUSION), out = gain(1);
-    diffused.connect(sum).connect(delay).connect(back).connect(sum);
-    sum.connect(forward).connect(out);
-    delay.connect(out);
-    nodes.push(sum, delay, back, forward, out);
-    diffused = out;
-  }
-  const sum = (a: AudioNode, b: AudioNode, value = 1) => {
-    const node = gain(value);
-    a.connect(node);
-    b.connect(node);
-    nodes.push(node);
-    return node;
-  };
-  const tree = (signals: AudioNode[], value: number): AudioNode => signals.length === 2
-    ? sum(signals[0], signals[1], value)
-    : tree(signals.filter((_, i) => i % 2 === 0).map((signal, i) => sum(signal, signals[2 * i + 1])), value);
-  const lines = HALL_LINES.map(frames => {
-    const seconds = whole(frames), delay = delayOf(seconds), shelf = mono(ctx.createBiquadFilter()), back = gain(0);
-    shelf.type = 'highshelf';
-    delay.connect(shelf).connect(back).connect(delay);
-    nodes.push(delay, shelf, back);
-    return { seconds, delay, shelf, back };
-  });
-  // What goes back into every line: the mix of all eight, and the diffused input.
-  const feed = sum(tree(lines.map(line => line.back), -2 / HALL_LINES.length), diffused);
-  lines.forEach(line => feed.connect(line.delay));
-  // Each side takes four lines, two of them upside down, so the sides are different signals.
   const output = ctx.createChannelMerger(2);
   nodes.push(output);
-  const sides = [0, 1].map(side => {
-    const own = lines.filter((_, i) => i % 2 === side).map(line => line.delay);
-    const level = sum(sum(own[0], own[2]), sum(own[1], own[3], -1), HALL_LEVEL);
-    level.connect(output, 0, side);
+  const lines: { seconds: number; delay: DelayNode; shelf: BiquadFilterNode; back: GainNode }[] = [];
+  const sides = [0, HALL_SPREAD].map((spread, side) => {
+    const combs = HALL_COMBS.map(frames => {
+      const tap = whole(frames + spread), delay = delayOf(tap), shelf = mono(ctx.createBiquadFilter()), back = gain(0);
+      shelf.type = 'highshelf';
+      nodes.push(shelf);
+      pre.connect(delay).connect(shelf).connect(back).connect(delay);
+      lines.push({ seconds: tap + HALL_QUANTUM / ctx.sampleRate, delay, shelf, back });
+      return delay;
+    });
+    let diffused = tree(combs);
+    for (const frames of HALL_DIFFUSERS) {
+      // v = x + g v (a loop later), and out = v (a delay later) - x: only the delay leaves the loop.
+      const into = gain(1), delay = delayOf(whole(frames + spread)), back = gain(HALL_DIFFUSION), inverted = gain(-1);
+      diffused.connect(into).connect(delay).connect(back).connect(into);
+      diffused.connect(inverted);
+      diffused = sum(delay, inverted);
+    }
+    const level = gain(HALL_LEVEL);
+    diffused.connect(level).connect(output, 0, side);
     return { level };
   });
   // With a time the settings glide there, for live playback; without one they are simply set.

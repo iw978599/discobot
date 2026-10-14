@@ -128,14 +128,7 @@ test('an export with the Hall differs from the Room, is about as loud, rings on 
   const hall = await take('hall');
   expect(hall.length, 'the file is as long either way').toBe(room.length);
   expect(same(hall, room), 'the Hall is not the Room').toBe(false);
-  const again = await take('hall-again');
-  let differing = 0, widest = 0, first = -1;
-  for (let i = 44; i + 1 < hall.length; i += 2) {
-    const gap = Math.abs(hall.readInt16LE(i) - again.readInt16LE(i));
-    if (gap > 0) { differing += 1; widest = Math.max(widest, gap); if (first < 0) first = (i - 44) / 4 / 44100; }
-  }
-  console.log('hall-reverb repeat', JSON.stringify({ differing, widest, first }));
-  expect(same(again, hall), 'and renders the same every time').toBe(true);
+  expect(same(await take('hall-again'), hall), 'and renders the same every time').toBe(true);
 
   // The kick is over well inside half a second; after that it is the reverb.
   const late = (wav: Buffer) => loudness(wav, 0.6, 2.4);

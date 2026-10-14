@@ -268,8 +268,9 @@ target; removal of the AI review workflow.
 
 6. **An algorithmic reverb, and insert effects per lane.** (M each)
    The reverb half is done (2026-10-13): the reverb's Kind menu chooses Room,
-   the convolver with a shaped impulse it always was, or Hall, a feedback
-   delay network built from native nodes by one function for live playback
+   the convolver with a shaped impulse it always was, or Hall, damped
+   feedback combs into all-passes (Freeverb's shape), built from native
+   nodes by one function for live playback
    and export, whose decay and damping change without rebuilding anything.
    The names Room and Hall are the builder's and the owner may change them.
    Not verified by ear. Insert effects per lane remain.

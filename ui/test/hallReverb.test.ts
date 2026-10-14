@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { DrumInstrument } from '@discobot/engine';
-import { createHallReverb, hallDampDb, hallDampHz, hallFeedback, hallLevel, HALL_LEVEL, reverbImpulse } from '../src/hooks/browserAudio.ts';
+import { createHallReverb, hallDampDb, hallDampHz, hallFeedback, hallLevel, HALL_LEVEL, HALL_QUANTUM, reverbImpulse } from '../src/hooks/browserAudio.ts';
 import { seededRandom } from '../src/services/drumScheduling.ts';
 import { DRUM_INSTRUMENTS } from '../src/services/drumKits.ts';
 import { sanitizeEffects } from '../src/services/projectSanitization.ts';
@@ -16,12 +16,12 @@ type Reverb = EffectsLoopState['reverb'];
 const hallOf = (decay: number, damping = 0, preDelay = 0): Reverb => ({ enabled: true, decay, mix: 1, kind: 'hall', damping, preDelay });
 
 // The Hall's answer to one click, played through the graph `createHallReverb` builds.
-function hallResponse(settings: Reverb, seconds: number, rate = RATE) {
+function hallResponse(settings: Reverb, seconds: number, rate = RATE, reversed = false) {
   const ctx = new GraphContext(rate);
   const hall = createHallReverb(ctx as unknown as BaseAudioContext);
   hall.set(settings);
   const click = new Float32Array(1); click[0] = 1;
-  return ctx.render(hall.input, hall.output, click, Math.round(seconds * rate));
+  return ctx.render(hall.input, hall.output, click, Math.round(seconds * rate), reversed);
 }
 const energy = (samples: Float32Array, from = 0, to = samples.length) => {
   let sum = 0;
@@ -53,16 +53,37 @@ const decibels = (channels: Float32Array[]) => 10 * Math.log10(energy(channels[0
 // Energy in the sample-to-sample change: large for hiss, small for a dull sound.
 const brightness = (samples: Float32Array) => samples.reduce((sum, value, index) => sum + (index ? (value - samples[index - 1]) ** 2 : 0), 0) / energy(samples);
 
-test('the Hall is eight lines behind two all-passes, every loop longer than a render quantum, and two sides', () => {
+test('the renderer the Hall is measured with does what Chrome was seen to do with loops', () => {
+  // The probe in pull request 188: a comb of 1000 frames rang at 1000, 2128, 3256; an all-pass
+  // whose loop has two ways out came out differently from run to run.
+  const comb = new GraphContext(RATE), delay = comb.createDelay(), back = comb.createGain(), out = comb.createChannelMerger();
+  delay.delayTime.value = 1000 / RATE; back.gain.value = 0.5;
+  delay.connect(back).connect(delay); delay.connect(out, 0, 0);
+  const click = new Float32Array(1); click[0] = 1;
+  const [rings] = comb.render(delay, out, click, 4000);
+  assert.deepEqual([...rings.keys()].filter(i => rings[i] !== 0), [1000, 2128, 3256]);
+  const twoWays = (reversed: boolean) => {
+    const ctx = new GraphContext(RATE), into = ctx.createGain(), line = ctx.createDelay(), loop = ctx.createGain(), forward = ctx.createGain(), sum = ctx.createGain(), merger = ctx.createChannelMerger();
+    line.delayTime.value = 1000 / RATE; loop.gain.value = 0.5; forward.gain.value = -0.5;
+    into.connect(line).connect(loop).connect(into); into.connect(forward).connect(sum); line.connect(sum); sum.connect(merger, 0, 0);
+    return ctx.render(into, merger, click, 4000, reversed)[0];
+  };
+  assert.notDeepEqual(twoWays(false), twoWays(true), 'the order inputs are pulled in changes it');
+});
+
+test('the Hall is six combs a side behind three all-passes, every loop with one way out, and two sides', () => {
   const ctx = new GraphContext(RATE);
   const hall = createHallReverb(ctx as unknown as BaseAudioContext);
   hall.set(hallOf(2));
-  assert.equal(hall.lines.length, 8);
+  assert.equal(hall.lines.length, 12);
   const delays = ctx.nodes.filter(node => node.kind === 'delay');
-  assert.equal(delays.length, 11, 'a pre-delay, two all-passes and eight lines');
-  assert.equal(ctx.nodes.filter(node => node.kind === 'filter').length, 8);
-  assert.ok(hall.lines.every(line => line.delay.delayTime.value * RATE >= 128), 'no line is shorter than a render quantum');
-  assert.equal(new Set(hall.lines.map(line => line.seconds)).size, 8, 'every line is its own length');
+  assert.equal(delays.length, 19, 'a pre-delay, and six combs and three all-passes a side');
+  assert.equal(ctx.nodes.filter(node => node.kind === 'filter').length, 12);
+  assert.ok(delays.every(node => node === hall.pre || node.delayTime.value * RATE >= 128), 'no loop is shorter than a render quantum');
+  assert.equal(new Set(hall.lines.map(line => line.seconds)).size, 12, 'every comb is its own length');
+  assert.ok(hall.lines.every(line => Math.abs((line.seconds - line.delay.delayTime.value) * RATE - HALL_QUANTUM) < 1e-6), 'a loop is a block longer than its delay');
+  const response = hallResponse(hallOf(1.5, 0.3), 1);
+  assert.deepEqual(hallResponse(hallOf(1.5, 0.3), 1, RATE, true), response, 'and the Hall is the same whatever order its inputs are pulled in');
   assert.ok([...ctx.nodes].every(node => node.kind === 'merger' || (node.channelCount === 1 && node.channelCountMode === 'explicit')), 'everything inside is one channel');
   assert.deepEqual(hall.sides.map(side => side.level.gain.value), [hallLevel(2, 0), hallLevel(2, 0)]);
   // A browser adds three or more inputs in an order that changes between runs; two add the same either way.
@@ -80,7 +101,7 @@ test('a line gives back what makes its echoes fall 60 dB in the decay, and dampi
   assert.ok(Math.abs(hallDampDb(2, 1, 0.04) - 5 * 20 * Math.log10(hallFeedback(2, 0.04))) < 1e-9, 'full damping: highs fall six times as fast');
   assert.equal(hallDampHz(0), 8000);
   assert.equal(hallDampHz(1), 2000);
-  assert.ok(hallLevel(8, 0) < HALL_LEVEL && hallLevel(8, 0) > HALL_LEVEL * 0.98 && hallLevel(0.2, 0) < HALL_LEVEL * 0.6, 'a short Hall is brought down');
+  assert.ok(hallLevel(8, 0) < HALL_LEVEL && hallLevel(8, 0) > HALL_LEVEL * 0.98 && hallLevel(0.2, 0) < HALL_LEVEL * 0.7, 'a short Hall is brought down');
   assert.ok(hallLevel(5, 1) / hallLevel(5, 0) > hallLevel(0.5, 1) / hallLevel(0.5, 0) && hallLevel(0.5, 1) > hallLevel(0.5, 0), 'damping is made up for, more for a long tail');
 
   const ctx = new GraphContext(RATE);
@@ -249,7 +270,7 @@ test('an export of a project that never chose a kind is the graph it always was,
     assert.equal(level.gain.value, .3, 'it comes back at the reverb\'s mix');
     const send = hall.ctx.nodes.find(node => node.kind === 'gain' && node.gain.value === .3 && node.to.some(next => next.channelCount === 1))!;
     assert.ok(send, 'and is fed the drums\' send to the reverb');
-    assert.equal(hall.ctx.nodes.filter(node => node.kind === 'filter' && node.type === 'highshelf').length, 8);
+    assert.equal(hall.ctx.nodes.filter(node => node.kind === 'filter' && node.type === 'highshelf').length, 12);
 
     // A drum held back from the reverb feeds the Hall from the drums' own mix, as it feeds the Room.
     const own = await graph({ ...loop, reverb: { ...loop.reverb, kind: 'hall' } }, 0);

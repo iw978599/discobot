@@ -252,14 +252,14 @@ test('choosing the Hall crossfades to it, its decay and damping are settings, an
   engine.setEffectsLoop({ ...LOOP, reverb: { ...LOOP.reverb, kind: 'hall', damping: 0.5 } });
   const hall = ctx.nodes.slice(start);
   const shelves = hall.filter(node => node.type === 'highshelf');
-  assert.equal(shelves.length, 8, 'one Hall for the bus');
+  assert.equal(shelves.length, 12, 'one Hall for the bus');
   const merger = hall.find(node => node.kind === 'merger')!, hallFade = merger.connections[0];
   assert.equal(hallFade.gain.value, 1, 'the Hall fades up');
   assert.equal(roomFade.gain.value, 0, 'as the Room fades down');
   assert.equal(hallFade.connections[0], roomFade.connections[0], 'into the reverb\'s own return');
   const made = ctx.nodes.length;
-  const backs = hall.filter(node => node.kind === 'gain' && node.connections.length === 2 && node.connections.some(next => next.kind === 'delay') && node.connections.some(next => next.kind === 'gain' && next.gain.value === 1));
-  assert.equal(backs.length, 8);
+  const backs = hall.filter(node => node.kind === 'gain' && node.gain.value < 1 && node.connections.length === 1 && node.connections[0].kind === 'delay');
+  assert.equal(backs.length, 12);
   const before = backs.map(node => node.gain.value);
   engine.setEffectsLoop({ ...LOOP, reverb: { ...LOOP.reverb, kind: 'hall', decay: 4, damping: 0.1 } });
   assert.equal(ctx.nodes.length, made, 'a new decay and damping build nothing');
@@ -276,8 +276,8 @@ test('choosing the Hall crossfades to it, its decay and damping are settings, an
   assert.ok(hall.every(node => node.cut > 0), 'and every node of the Hall is cut loose');
 
   engine.setEffectsLoop({ ...LOOP, reverb: { ...LOOP.reverb, kind: 'hall' } });
-  const second = ctx.nodes.filter(node => node.type === 'highshelf').slice(9);
-  assert.equal(second.length, 8);
+  const second = ctx.nodes.filter(node => node.type === 'highshelf').slice(13);
+  assert.equal(second.length, 12);
   await engine.dispose();
   assert.ok(second.every(node => node.connections.length === 0), 'a Hall sounding when the engine goes goes with it');
 });
