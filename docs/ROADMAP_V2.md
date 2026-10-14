@@ -62,6 +62,20 @@ verified by a test.
     arpeggiated for one beat and stops, where a hardware arpeggiator runs for
     as long as the key is down, and latches with Hold.
 
+11b. **More from portamento.** (S to M) Asked for by the owner on
+    2026-10-13. What exists: a switch and a Glide time on a lane's Amp
+    page, which glides every note from the last note played, taking the
+    same time whatever the distance, and a Slide on a step that holds a
+    note into the next. What it could gain: a legato mode that glides only
+    when a key is still held as the next is pressed, as most monophonic
+    synths do (fingered portamento); a choice between the same time for
+    any distance and the same speed, so a wide leap takes longer; a glide
+    time that follows the tempo (a 1/16 or 1/8 glide); in a lane playing
+    chords, each voice gliding from the note it last played rather than
+    all from one; and Glide on the lane's face as one of its knobs where a
+    model has none. Each is a choice on the sound, absent meaning what
+    happens now, so stored sounds are unchanged.
+
 ## The interface
 
 12. **A picture of the sound.** (M) A small oscilloscope or spectrum on a
