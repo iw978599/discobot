@@ -3,9 +3,10 @@
  * Based on DrumKnob but more generic and flexible
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useKnobInteraction } from './useKnobInteraction';
 import KnobSheet from './KnobSheet';
+import { AUTOMATED_HINT, AutomatedParams } from './automatedParams';
 import './Knob.css';
 
 interface KnobProps {
@@ -24,6 +25,8 @@ interface KnobProps {
   tooltip?: string;
   parseInputValue?: (input: string) => number | null;
   ariaLabel?: string;
+  // Which of a lane's parameters this is, by its name in `LANE_PARAMS`, where it is one that can be automated.
+  param?: string;
 }
 
 export default function Knob({
@@ -41,7 +44,9 @@ export default function Knob({
   tooltip,
   parseInputValue,
   ariaLabel = label,
+  param,
 }: KnobProps) {
+  const automated = useContext(AutomatedParams).has(param ?? '');
   const [localVal, setLocalVal] = useState(value);
   const [isEditing, setIsEditing] = useState(false);
   const [inputValue, setInputValue] = useState('');
@@ -94,7 +99,8 @@ export default function Knob({
   }, [disabled, isEditing, inputValue, parseInputValue, min, max, step, onChange]);
 
   return (
-    <div ref={rootRef} className={`knob knob-${size} ${disabled ? 'knob-disabled' : ''}`}>
+    <div ref={rootRef} className={`knob knob-${size} ${disabled ? 'knob-disabled' : ''}${automated ? ' knob-automated' : ''}`}>
+      {automated && <span className="knob-auto-mark" title={AUTOMATED_HINT} aria-hidden="true" />}
       <div
         className="knob-rotary"
         {...interaction}
@@ -105,7 +111,7 @@ export default function Knob({
         aria-valuemin={min}
         aria-valuemax={max}
         aria-valuenow={localVal}
-        aria-valuetext={computedDisplay}
+        aria-valuetext={automated ? `${computedDisplay}, automated in the pattern` : computedDisplay}
         aria-disabled={disabled}
         style={{ touchAction: 'none' }}
       >
@@ -168,7 +174,7 @@ export default function Knob({
         <KnobSheet
           host={sheetHost}
           name={ariaLabel}
-          hint={tooltip}
+          hint={automated ? [tooltip, AUTOMATED_HINT].filter(Boolean).join(' ') : tooltip}
           value={localVal}
           min={min}
           max={max}

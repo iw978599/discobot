@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { BAR_CHOICES, barSteps, laneBars } from '../services/patternLength';
 import CopyToScene from './CopyToScene';
 import CopyBar from './CopyBar';
@@ -12,6 +12,9 @@ import Knob from '../components/Knob';
 import SynthControls, { type SynthTab } from '../components/SynthControls';
 import KeyboardPanel from '../components/KeyboardPanel';
 import StepRow from './StepRow';
+import AutomationRow from './AutomationRow';
+import { AutomatedParams } from '../components/automatedParams';
+import { automatedKeys } from '../services/automation';
 import { usePlayhead } from '../hooks/usePlayhead';
 import { tracked } from '../studio/tracked';
 import UnitHelp, { UNIT_HELP } from './UnitHelp';
@@ -79,6 +82,9 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
   const firstStep = shownBar * perBar;
   // The step the step controls act on. With nothing selected they are hidden, but still laid out.
   const toolStep = Math.min(selectedStep ?? 0, Math.max(0, stepCount - 1));
+  // The lane's automated parameters, for its knobs to mark themselves by.
+  const automation = synth?.pattern?.automation;
+  const automated = useMemo(() => new Set(automatedKeys(automation)), [automation]);
 
   // With a step selected on the open lane, the left and right arrow keys walk along the row.
   useEffect(() => {
@@ -121,6 +127,7 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
 
   return (
     <section ref={sectionRef} className={`rack-unit synth-module ${selected ? 'selected' : ''}`} aria-label={`Synth ${synthId} module`} data-unit={`synth-${synthId}`}>
+      <AutomatedParams.Provider value={automated}>
       <div className="rack-row">
         <div className="rack-plate-box">
           <button
@@ -194,6 +201,7 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
                 <Knob
                   size="small"
                   label="Cutoff"
+                  param="cutoff"
                   ariaLabel={`Synth ${synthId} cutoff`}
                   value={params.filter.frequency}
                   defaultValue={SOUND_DEFAULTS.filter.frequency}
@@ -209,6 +217,7 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
                   size="small"
                   label="Reso"
                   tooltip="Resonance"
+                  param="resonance"
                   ariaLabel={`Synth ${synthId} resonance`}
                   value={params.filter.q}
                   defaultValue={SOUND_DEFAULTS.filter.q}
@@ -221,6 +230,7 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
                 <Knob
                   size="small"
                   label="Env"
+                  param="filterEnv"
                   ariaLabel={`Synth ${synthId} filter envelope`}
                   value={params.filter.envAmount ?? 0}
                   defaultValue={SOUND_DEFAULTS.filter.envAmount ?? 0}
@@ -234,6 +244,7 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
                 <Knob
                   size="small"
                   label="Decay"
+                  param="decay"
                   ariaLabel={`Synth ${synthId} decay`}
                   value={params.envelope.decay}
                   defaultValue={SOUND_DEFAULTS.envelope.decay}
@@ -249,6 +260,7 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
             <Knob
               size="small"
               label="Level"
+              param="level"
               ariaLabel={`Synth ${synthId} level`}
               value={params.gain}
               defaultValue={SOUND_DEFAULTS.gain}
@@ -262,6 +274,22 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
           </div>
         )}
       </div>
+
+      {selected && params && synth.pattern && (
+        <AutomationRow
+          synthId={synthId}
+          pattern={synth.pattern}
+          params={params}
+          isPlaying={synth.isPlaying}
+          firstStep={firstStep}
+          visibleSteps={perBar}
+          signature={signature}
+          recording={studio.autoRecording}
+          onRecordingChange={studio.setAutoRecording}
+          onDraw={(key, steps, value) => studio.handleAutomationDraw(synthId, key, steps, value)}
+          onClear={(key) => studio.handleAutomationClear(synthId, key)}
+        />
+      )}
 
       {selected && params && (
         <SynthControls
@@ -439,6 +467,7 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
           )}
         />
       )}
+      </AutomatedParams.Provider>
     </section>
   );
 }

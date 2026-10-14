@@ -557,6 +557,7 @@ export default function SynthControls({
             </div>
             <Knob
               label="Detune"
+              param="detune"
               value={parameters.oscillator.detune}
               defaultValue={DEFAULTS.oscillator.detune}
               min={-100}
@@ -569,6 +570,7 @@ export default function SynthControls({
             />
             <Knob
               label="Pulse W"
+              param="pulseWidth"
               value={parameters.oscillator.pulseWidth ?? 0.5}
               defaultValue={DEFAULTS.oscillator.pulseWidth ?? 0.5}
               min={0.05}
@@ -937,6 +939,7 @@ export default function SynthControls({
                 />
                 <Knob
                   label="Sub"
+                  param="sub"
                   value={mixer.sub}
                   defaultValue={DEFAULTS.mixer!.sub}
                   min={0}
@@ -950,6 +953,7 @@ export default function SynthControls({
                 />
                 <Knob
                   label="Noise"
+                  param="noise"
                   value={mixer.noise}
                   defaultValue={DEFAULTS.mixer!.noise}
                   min={0}
@@ -1160,6 +1164,7 @@ export default function SynthControls({
             />
             <Knob
               label="Cutoff"
+              param="cutoff"
               value={parameters.filter.frequency}
               defaultValue={DEFAULTS.filter.frequency}
               min={20}
@@ -1173,6 +1178,7 @@ export default function SynthControls({
             />
             <Knob
               label="Resonance"
+              param="resonance"
               value={parameters.filter.q}
               defaultValue={DEFAULTS.filter.q}
               min={0.1}
@@ -1190,6 +1196,7 @@ export default function SynthControls({
           <div className="synth-column-controls">
             <Knob
               label="Env Amt"
+              param="filterEnv"
               value={parameters.filter.envAmount ?? 0}
               defaultValue={DEFAULTS.filter.envAmount ?? 0}
               min={-1}
@@ -1216,6 +1223,7 @@ export default function SynthControls({
             />
             <Knob
               label="Drive"
+              param="drive"
               ariaLabel="Filter drive"
               value={parameters.filter.drive ?? 0}
               defaultValue={DEFAULTS.filter.drive ?? 0}
@@ -1415,6 +1423,7 @@ export default function SynthControls({
               </div>
               <Knob
                 label="Rate"
+                param="lfo1Rate"
                 value={parameters.lfo1.sync ? (parameters.lfo1.rate || 4) : parameters.lfo1.rate}
                 defaultValue={parameters.lfo1.sync ? 4 : DEFAULTS.lfo1.rate}
                 min={parameters.lfo1.sync ? 1 : 0.1}
@@ -1432,6 +1441,7 @@ export default function SynthControls({
             </div>
             <Knob
               label="Depth"
+              param="lfo1Depth"
               value={parameters.lfo1.depth}
               defaultValue={DEFAULTS.lfo1.depth}
               min={0}
@@ -1528,6 +1538,7 @@ export default function SynthControls({
               </div>
               <Knob
                 label="Rate"
+                param="lfo2Rate"
                 value={parameters.lfo2.sync ? (parameters.lfo2.rate || 4) : parameters.lfo2.rate}
                 defaultValue={parameters.lfo2.sync ? 4 : DEFAULTS.lfo2.rate}
                 min={parameters.lfo2.sync ? 1 : 0.1}
@@ -1545,6 +1556,7 @@ export default function SynthControls({
             </div>
             <Knob
               label="Depth"
+              param="lfo2Depth"
               value={parameters.lfo2.depth}
               defaultValue={DEFAULTS.lfo2.depth}
               min={0}
@@ -1622,6 +1634,7 @@ export default function SynthControls({
           <div className="synth-column-controls">
             <Knob
               label="Attack"
+              param="attack"
               value={parameters.envelope.attack}
               defaultValue={DEFAULTS.envelope.attack}
               min={0.001}
@@ -1635,6 +1648,7 @@ export default function SynthControls({
             />
             <Knob
               label="Decay"
+              param="decay"
               value={parameters.envelope.decay}
               defaultValue={DEFAULTS.envelope.decay}
               min={0.001}
@@ -1673,6 +1687,7 @@ export default function SynthControls({
           <div className="synth-column-controls">
             <Knob
               label="Sustain"
+              param="sustain"
               value={parameters.envelope.sustain}
               defaultValue={DEFAULTS.envelope.sustain}
               min={0}
@@ -1686,6 +1701,7 @@ export default function SynthControls({
             />
             <Knob
               label="Release"
+              param="release"
               value={parameters.envelope.release}
               defaultValue={DEFAULTS.envelope.release}
               min={0.001}
@@ -1800,6 +1816,7 @@ export default function SynthControls({
           <div className="synth-column-controls">
             <Knob
               label="Gain"
+              param="level"
               value={parameters.gain}
               defaultValue={DEFAULTS.gain}
               min={0}
@@ -1832,6 +1849,7 @@ export default function SynthControls({
           <div className="synth-column-controls">
             <Knob
               label="Pan"
+              param="pan"
               value={parameters.pan}
               defaultValue={DEFAULTS.pan}
               min={-1}
@@ -1869,6 +1887,7 @@ export default function SynthControls({
             </div>
             <Knob
               label="Glide"
+              param="glide"
               value={parameters.portamento.glide}
               defaultValue={DEFAULTS.portamento.glide}
               min={0.001}

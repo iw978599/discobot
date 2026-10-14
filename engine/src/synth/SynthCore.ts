@@ -1,6 +1,8 @@
 import { Adsr, Ladder, Noise, Svf, approachCoefficient, finiteClamp as clamp, halve, ladderFeedback, lfoShape, noteFrequency, oscillator, svfCoefficient } from '../dsp';
 import { VoiceParams, createDefaultSynthParameters, toVoiceParams } from './voiceParams';
 
+type ParamUpdate = Partial<Record<keyof VoiceParams, unknown>>;
+
 export interface NoteOnMessage {
   note: string;
   velocity?: number;
@@ -99,6 +101,8 @@ export class SynthCore {
     unisonCount: 1, unisonRatios: new Float64Array(MAX_UNISON).fill(1), unisonLevels: new Float64Array(MAX_UNISON).fill(1), twoStage: false,
   };
   private pending: Array<NoteOnMessage & { frame: number }> = [];
+  // Parameter changes that have a time of their own, soonest first: a pattern's automation.
+  private scheduled: Array<{ frame: number; update: ParamUpdate }> = [];
   private globalLfoPhase: [number, number] = [0, 0];
   private noise = new Noise();
   // The random source has a sequence of its own, so routing it never changes what the noise oscillator plays.
@@ -155,8 +159,17 @@ export class SynthCore {
     }
   }
 
-  setParams(update: Partial<Record<keyof VoiceParams, unknown>> | null | undefined): void {
+  // With a time (seconds on the core's clock) that has not come yet, the change waits for it and
+  // is made on that sample; without one, or with one that has passed, it is made now.
+  setParams(update: ParamUpdate | null | undefined, time?: number): void {
     if (!update) return;
+    if (Number.isFinite(time) && time! * this.sampleRate > this.frame) {
+      const frame = Math.round(time! * this.sampleRate);
+      let at = this.scheduled.length;
+      while (at > 0 && this.scheduled[at - 1].frame > frame) at--;
+      this.scheduled.splice(at, 0, { frame, update });
+      return;
+    }
     const p = this.params as unknown as Record<string, unknown>;
     const signature = () => `${p.oscType}|${p.filterType}|${p.engine}|${p.osc2Type}|${p.filterSlope}|${p.unisonVoices}|${p.filterModel}|${p.layerEnabled}`;
     const before = signature();
@@ -371,11 +384,29 @@ export class SynthCore {
     voice.filterEnv.gateOff();
   }
 
+  // Forgets the parameter changes still waiting for their time: the transport has stopped.
+  clearScheduledParams(): void {
+    this.scheduled = [];
+  }
+
   get idle(): boolean {
     return this.pending.length === 0 && this.voices.every(voice => !voice.active);
   }
 
+  // With no parameter change waiting this is one call to `render`, as it always was. A change
+  // due inside the block cuts it there: what is before is rendered, the change is made, and the
+  // rest follows.
   process(left: Float32Array, right: Float32Array): void {
+    if (this.scheduled.length === 0) { this.render(left, right); return; }
+    for (let at = 0; at < left.length;) {
+      while (this.scheduled.length && this.scheduled[0].frame <= this.frame) this.setParams(this.scheduled.shift()!.update);
+      const end = this.scheduled.length ? Math.min(left.length, at + this.scheduled[0].frame - this.frame) : left.length;
+      this.render(left.subarray(at, end), right.subarray(at, end));
+      at = end;
+    }
+  }
+
+  private render(left: Float32Array, right: Float32Array): void {
     const p = this.params, s = this.smoothed, d = this.derived, sr = this.sampleRate, k = this.smoothing;
     const maxCutoff = Math.min(20000, sr * 0.45);
     const fm = p.engine === 'fm';

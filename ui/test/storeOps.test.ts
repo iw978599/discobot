@@ -468,6 +468,12 @@ const patternCases: Case[] = [
   patternCase('steps sent with bars are that many bars long', { steps: BLANK(32), bars: 2 }, { answer: kept1({ steps: BLANK(32), bars: 2 }) }),
   patternCase('bars that are infinity are none', { steps: BLANK(32), bars: Number.POSITIVE_INFINITY }, { answer: kept1({ steps: BLANK(32) }) }),
   patternCase('bars that are text are none', { steps: BLANK(32), bars: '2' }, { answer: kept1({ steps: BLANK(32) }) }),
+  patternCase('automation is kept as checked, each list as long as the steps', { automation: { cutoff: [250, -4], pan: [null, 9], tempo: [1] } }, { answer: kept1({ automation: { pan: [null, 1, ...Array(14).fill(null)], cutoff: [250, 20, ...Array(14).fill(null)] } }) }),
+  patternCase('automation that is undefined is not sent, and the pattern\'s own stays', { name: 'Again', automation: undefined }, { answer: kept1({ name: 'Again', automation: { level: [1.5, ...Array(15).fill(null)] } }) }, 'existing',
+    service => { assert.ok(service.writePattern(1, service.snapshot().synths[0].pattern.id, { automation: { level: [1.5] } }).ok); }),
+  patternCase('automation sent as none takes the pattern\'s away', { automation: {} }, { answer: kept1() }, 'existing',
+    service => { assert.ok(service.writePattern(1, service.snapshot().synths[0].pattern.id, { automation: { level: [1.5] } }).ok); }),
+  patternCase('automation that is not a list of parameters is none', { automation: [[1, 2]] }, { answer: kept1() }),
   patternCase('a pattern\'s own tempo is not taken: the project\'s is written', { tempo: 200, steps: [noted] }, { answer: kept1({ tempo: 150, steps: stepsWith({ 0: noted }) }) }, 'existing',
     service => { assert.ok(service.setTempo(150).ok); }),
 

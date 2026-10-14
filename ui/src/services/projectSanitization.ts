@@ -8,6 +8,7 @@ import { BAR_CHOICES, MAX_BARS, barSteps, clampLengths, laneBars, storedSignatur
 import { sanitizeGuestMix, sanitizeSceneGuests } from './guests';
 import { MAX_REPEATS, MAX_SONG_ENTRIES } from './songPlayback';
 import { sceneColor } from './sceneColors';
+import { sanitizeAutomation } from './automation';
 import { normalizeSynthModelId } from '../synthModels';
 import { noteNameToMidi } from '../utils/midiExport';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
@@ -190,10 +191,13 @@ export function sanitizeSteps(value: unknown, bars: unknown = 1, signature?: unk
 export function sanitizePattern(value: unknown, tempo: number, signature?: unknown): Pattern | null {
   const input = record(value);
   if (typeof input.id !== 'string' || !input.id || !Array.isArray(input.steps)) return null;
+  const steps = sanitizeSteps(input.steps, input.bars, signature), automation = sanitizeAutomation(input.automation, steps.length);
   return {
     id: input.id.slice(0, 200), name: typeof input.name === 'string' ? input.name.slice(0, 200) : 'Recovered pattern',
-    tempo, steps: sanitizeSteps(input.steps, input.bars, signature),
+    tempo, steps,
     ...(laneBars(input.steps.length, input.bars, signature) > 1 ? { bars: laneBars(input.steps.length, input.bars, signature) } : {}),
+    // Held to the pattern's length; a pattern with none has no such key, as before there was any.
+    ...(automation ? { automation } : {}),
   };
 }
 
@@ -262,12 +266,15 @@ export function sanitizeScenes(value: unknown, defaults: DrumState): Scene[] | n
     const signature = storedSignature(input.signature);
     const lanes: Scene['lanes'] = {};
     const lengths: Record<number, number> = {};
+    const automated: NonNullable<Scene['laneAutomation']> = {};
     for (const id of [1, 2, 3]) {
       const steps = record(input.lanes)[id];
       if (!Array.isArray(steps)) continue;
       const bars = laneBars(steps.length, record(input.laneBars)[id], signature);
       lanes[id] = sanitizeSteps(steps, bars, signature);
       if (bars > 1) lengths[id] = bars;
+      const automation = sanitizeAutomation(record(input.laneAutomation)[id], lanes[id].length);
+      if (automation) automated[id] = automation;
     }
     const drums = sanitizeDrums(input.drums, defaults, signature);
     return [{
@@ -277,6 +284,7 @@ export function sanitizeScenes(value: unknown, defaults: DrumState): Scene[] | n
       ...(signature ? { signature } : {}),
       lanes,
       ...(Object.keys(lengths).length ? { laneBars: lengths } : {}),
+      ...(Object.keys(automated).length ? { laneAutomation: automated } : {}),
       ...(sanitizeSceneGuests(input.guests) ? { guests: sanitizeSceneGuests(input.guests) } : {}),
       ...(sanitizeGuestMix(input.guestMix) ? { guestMix: sanitizeGuestMix(input.guestMix) } : {}),
       ...(sanitizeSceneMutes(input.mutes) ? { mutes: sanitizeSceneMutes(input.mutes) } : {}),
