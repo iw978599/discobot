@@ -8,7 +8,7 @@ import { MAX_MOD_ROUTES, MOD_DESTINATIONS, MOD_SOURCES, createDefaultSynthParame
 import { SynthParameters, OscillatorType, RateSync, SynthModelId } from '../types';
 import { SYNTH_MODELS, SYNTH_MODEL_GROUPS } from '../synthModels';
 import { groupPresets, type PresetKind } from '../services/presetKinds';
-import NestedMenu from '../rack/NestedMenu';
+import NestedMenu, { type NestedMenuItem } from '../rack/NestedMenu';
 import { listSamples, saveSample } from '../services/sampleStore';
 import { BUILT_IN_WAVES } from '../services/builtInWaves';
 import { RATE_SYNCS, RATE_SYNC_LABELS } from '../services/rateSync';
@@ -162,6 +162,8 @@ const parseCutoff = (input: string): number | null => {
 // a person's own has none, and is under "My presets".
 const BUILT_IN_MARK = ' *';
 const BUILT_IN_HINT = 'Built in';
+// A row of the model menu, with what the model is as its hint.
+const modelItem = (entry: typeof SYNTH_MODELS[number]): NestedMenuItem => ({ id: entry.id, label: entry.name, title: entry.subtitle });
 
 export default function SynthControls({
   parameters,
@@ -358,24 +360,14 @@ export default function SynthControls({
           <div className="synth-header">
             <div className="model-selector-wrap">
               <label>MODEL</label>
-              <select
-                className="synth-select model-select"
-                aria-label="Synth model"
-                value={synthModelId}
-                onChange={(e) => onModelChange(e.target.value as SynthModelId)}
-                title="Synth model - changes the character and behavior of the synthesizer"
-              >
-                {SYNTH_MODELS.filter(entry => !entry.group).map((entry) => (
-                  <option key={entry.id} value={entry.id}>{entry.name}</option>
-                ))}
-                {SYNTH_MODEL_GROUPS.map(group => (
-                  <optgroup key={group} label={group}>
-                    {SYNTH_MODELS.filter(entry => entry.group === group).map((entry) => (
-                      <option key={entry.id} value={entry.id}>{entry.name}</option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
+              <NestedMenu
+                label="Synth model"
+                text={SYNTH_MODELS.find(entry => entry.id === synthModelId)?.name ?? 'Generic'}
+                title="Synth model: changes the character and behaviour of the synthesizer"
+                top={SYNTH_MODELS.filter(entry => !entry.group).map(modelItem)}
+                groups={SYNTH_MODEL_GROUPS.map(group => ({ label: group, items: SYNTH_MODELS.filter(entry => entry.group === group).map(modelItem) }))}
+                onSelect={(id) => onModelChange(id as SynthModelId)}
+              />
             </div>
             <div className="preset-controls">
               <NestedMenu

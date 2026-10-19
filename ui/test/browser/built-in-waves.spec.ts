@@ -1,4 +1,15 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Locator } from '@playwright/test';
+import { SYNTH_MODELS } from '../../src/synthModels';
+
+// The lane's Model menu, and a model chosen from it by id: from its group's list, or from the
+// first list for one that is in no group.
+const modelMenu = (scope: Page | Locator) => scope.getByRole('button', { name: /^Synth model: / });
+async function chooseModel(scope: Page | Locator, id: string) {
+  await modelMenu(scope).click();
+  const group = SYNTH_MODELS.find(model => model.id === id)?.group;
+  if (group) await scope.locator(`[role="menuitem"][data-group="${group}"]`).click();
+  await scope.locator(`[role="menuitem"][data-item="${id}"]`).click();
+}
 
 const PROJECT_KEY = 'discobot_browser_project_v1';
 const stored = (page: Page) => page.evaluate(key => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem(key) || '{}')), PROJECT_KEY);
@@ -54,19 +65,18 @@ test('the sample engine offers the app\'s own sounds, fetched from this site, an
   await page.getByRole('button', { name: /Stop All/ }).click();
 
   // Each of the three models puts the lane on the sample engine with one of the app's sounds.
-  const model = synth.getByLabel('Synth model', { exact: true });
   for (const [id, wave] of [['m1', /^(piano|mallet|organ|choir)$/], ['d-50', /^attack-/], ['wavestation', /^seq-/]] as const) {
-    await model.selectOption(id);
+    await chooseModel(synth, id);
     await expect.poll(async () => (await sound(page)).engine, { message: id }).toBe('sample');
     await expect.poll(async () => (await sound(page)).sample.wave, { message: id }).toMatch(wave);
     await expect(sample.locator('option:checked')).not.toHaveText('Not in this version');
   }
   // And another model takes it back to its oscillators.
-  await model.selectOption('juno-106');
+  await chooseModel(synth, 'juno-106');
   await expect.poll(async () => (await sound(page)).engine).toBe('subtractive');
 
   // None gives the built-in sound up.
-  await model.selectOption('generic');
+  await chooseModel(synth, 'generic');
   await synth.getByLabel('Synth engine', { exact: true }).selectOption('sample');
   await sample.selectOption({ label: 'None' });
   await expect.poll(async () => 'wave' in (await sound(page)).sample).toBe(false);

@@ -1,4 +1,15 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Locator } from '@playwright/test';
+import { SYNTH_MODELS } from '../../src/synthModels';
+
+// The lane's Model menu, and a model chosen from it by id: from its group's list, or from the
+// first list for one that is in no group.
+const modelMenu = (scope: Page | Locator) => scope.getByRole('button', { name: /^Synth model: / });
+async function chooseModel(scope: Page | Locator, id: string) {
+  await modelMenu(scope).click();
+  const group = SYNTH_MODELS.find(model => model.id === id)?.group;
+  if (group) await scope.locator(`[role="menuitem"][data-group="${group}"]`).click();
+  await scope.locator(`[role="menuitem"][data-item="${id}"]`).click();
+}
 
 const PROJECT_KEY = 'discobot_browser_project_v1';
 const stored = (page: Page) => page.evaluate(key => JSON.parse(localStorage.getItem(key) || '{}'), PROJECT_KEY);
@@ -46,9 +57,9 @@ test('a second layer is switched on and set on the Osc tab, is saved, and the CS
   await expect(page.locator('.synth-controls-panel').first().getByLabel('Second layer enabled', { exact: true })).toBeChecked();
 
   // The CS-80 is two layers; any other model is one again.
-  const model = page.locator('.synth-controls-panel').first().getByLabel('Synth model', { exact: true });
-  await model.selectOption('juno-106');
+  const panel = page.locator('.synth-controls-panel').first();
+  await chooseModel(panel, 'juno-106');
   await expect.poll(async () => (await layer(page)).enabled).toBe(false);
-  await model.selectOption('cs-80');
+  await chooseModel(panel, 'cs-80');
   await expect.poll(async () => (await layer(page)).enabled).toBe(true);
 });

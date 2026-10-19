@@ -24,13 +24,15 @@ const ROOM = 420;
 // list. The button shows what was last picked. Its list holds the groups, and a group's own list
 // opens beside it; on a narrow screen, where a menu is a sheet along the bottom, the group's list
 // takes the sheet over under a Back row. Rows are reached with the arrow keys, not Tab, so Tab
-// leaves the menu, which closes behind it.
-export default function NestedMenu({ label, text, mark, title, groups, onSelect }: {
+// leaves the menu, which closes behind it. `top` are choices that belong to no group, listed above
+// the groups and chosen from the first list.
+export default function NestedMenu({ label, text, mark, title, top = [], groups, onSelect }: {
   // What the menu chooses. The button's spoken name is this and then `text`.
   label: string;
   text: string;
   mark?: string;
   title?: string;
+  top?: NestedMenuItem[];
   groups: NestedMenuGroup[];
   onSelect: (id: string) => void;
 }) {
@@ -144,12 +146,13 @@ export default function NestedMenu({ label, text, mark, title, groups, onSelect 
 
   const current = groups.find(entry => entry.label === group) ?? null;
   const drilled = narrow && current !== null;
-  const choices = (entry: NestedMenuGroup) => entry.items.map(item => (
+  const choices = (items: NestedMenuItem[], level: 0 | 1) => items.map(item => (
     <button
       key={item.id}
       role="menuitem"
       tabIndex={-1}
-      data-level={1}
+      data-level={level}
+      data-item={item.id}
       aria-label={item.label}
       title={item.title}
       onClick={() => {
@@ -186,6 +189,7 @@ export default function NestedMenu({ label, text, mark, title, groups, onSelect 
       </button>
       {open && !drilled && (
         <div className="rack-menu-list" role="menu" aria-label={label}>
+          {choices(top, 0)}
           {groups.map(entry => (
             <div className="rack-menu-group" role="none" key={entry.label}>
               <button
@@ -209,7 +213,7 @@ export default function NestedMenu({ label, text, mark, title, groups, onSelect 
               </button>
               {entry === current && (
                 <div className="rack-menu-list" role="menu" aria-label={entry.label}>
-                  {choices(entry)}
+                  {choices(entry.items, 1)}
                 </div>
               )}
             </div>
@@ -222,7 +226,7 @@ export default function NestedMenu({ label, text, mark, title, groups, onSelect 
             <span aria-hidden="true">‹ </span>Back
           </button>
           <div className="rack-menu-head" role="presentation">{current.label}</div>
-          {choices(current)}
+          {choices(current.items, 1)}
         </div>
       )}
     </div>

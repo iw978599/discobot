@@ -1,5 +1,16 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page, type Locator } from '@playwright/test';
 import { encodeWav } from '../../src/services/wavExport';
+import { SYNTH_MODELS } from '../../src/synthModels';
+
+// The lane's Model menu, and a model chosen from it by id: from its group's list, or from the
+// first list for one that is in no group.
+const modelMenu = (scope: Page | Locator) => scope.getByRole('button', { name: /^Synth model: / });
+async function chooseModel(scope: Page | Locator, id: string) {
+  await modelMenu(scope).click();
+  const group = SYNTH_MODELS.find(model => model.id === id)?.group;
+  if (group) await scope.locator(`[role="menuitem"][data-group="${group}"]`).click();
+  await scope.locator(`[role="menuitem"][data-item="${id}"]`).click();
+}
 
 // At phone width the top bar is one line, and the rest of it is in the sheet its last button
 // raises. `more` raises the sheet before something in it is used, and does nothing on a wide
@@ -296,7 +307,7 @@ test('the new voice controls, FM engine and step slide are saved with the projec
   await expect(page.getByLabel('FM algorithm')).toBeVisible();
   await page.getByLabel('FM algorithm').selectOption('0');
   await expect.poll(async () => { const params = (await lane()).synthParams; return [params.engine, params.fm.algorithm]; }).toEqual(['fm', 0]);
-  await page.getByLabel('Synth model').selectOption('tb-303');
+  await chooseModel(page, 'tb-303');
   await expect.poll(async () => { const params = (await lane()).synthParams; return [params.engine, params.voiceMode, params.velocity.filter > 0.5]; }).toEqual(['subtractive', 'mono', true]);
 
   await tab(page, 'Notes');
