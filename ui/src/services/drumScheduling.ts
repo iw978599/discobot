@@ -24,3 +24,9 @@ export function expandDrumStep(track: DrumTrack, step: number, random: () => num
   const repeats = Math.max(1, Math.min(MAX_RATCHET, Math.round(track.stepRatchets?.[step] ?? 1)));
   return Array.from({ length: repeats }, (_, index) => index / repeats);
 }
+
+// How late a lane that swings plays what falls `into` its bar, in the unit `sixteenth` is in:
+// every second sixteenth of the bar by the drums' swing, as the drums themselves are swung.
+export function swingLate(into: number, sixteenth: number, swing: number): number {
+  return swing > 0 && Math.floor(into / sixteenth + 1e-6) % 2 === 1 ? swing * sixteenth : 0;
+}

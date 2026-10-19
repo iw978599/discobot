@@ -8,14 +8,14 @@ import { automationChange, stepVoiceParams } from './automation';
 import { delaySeconds } from './delayTime';
 import { auxBuses, auxSeconds } from './auxSettings';
 import { rateHz } from './rateSync';
-import { expandDrumStep, seededRandom } from './drumScheduling';
+import { expandDrumStep, seededRandom, swingLate } from './drumScheduling';
 import { createZip } from '../utils/zip';
 import { MASTER_LEVEL, chorusSweep, configureLimiter, createAuxEffect, createChorus, createHallReverb, createMasterEq, driveCurve, eqGains, reverbImpulse, safetyCurve, scheduleDuck } from '../hooks/browserAudio';
 import type { DrumInstrument, DrumSettings } from '../types';
 
 export interface ExportArrangement {
   tempo: number;
-  synths: { id: number; pattern: Pattern | null; synthParams: SynthParameters | null; muted: boolean; solo: boolean }[];
+  synths: { id: number; pattern: Pattern | null; synthParams: SynthParameters | null; muted: boolean; solo: boolean; swing?: boolean }[];
   drumState: DrumState;
   drumKitId: string;
   drumMasterVolume: number;
@@ -110,7 +110,7 @@ const evenBars = (count: number, barDuration: number): BarTime[] => Array.from({
 export function renderSynthBars(
   bars: SequencerStep[][], params: SynthParameters, tempo: number, frames: number, sampleRate: number,
   barDuration = 240 / tempo, sample?: SynthSample | null, times: BarTime[] = evenBars(bars.length, barDuration),
-  automation: Array<Automation | undefined> = [],
+  automation: Array<Automation | undefined> = [], swing = 0,
 ): Stereo {
   const core = new SynthCore(sampleRate), sound = toVoiceParams(params, tempo);
   core.setParams(sound);
@@ -124,10 +124,11 @@ export function renderSynthBars(
       const now = stepVoiceParams(params, automation[bar], index, tempo), moved = automationChange(automated, now, sound);
       if (moved) core.setParams(moved, start + index * stepDuration);
       automated = now;
+      const late = swingLate(index * stepDuration, 15 / tempo, swing);
       for (const scheduled of expandStepNotes(step, params, stepDuration, tempo, random)) {
         core.noteOn({
           note: scheduled.note, velocity: step.velocity, duration: scheduled.duration,
-          time: start + index * stepDuration + scheduled.offset,
+          time: start + index * stepDuration + late + scheduled.offset,
         });
       }
     });
@@ -369,7 +370,7 @@ export async function renderArrangement(arrangement: ExportArrangement, options:
     if (only !== undefined ? only !== lane.id : lane.muted || (synthSolo && !lane.solo)) continue;
     const laneBars = song ? song.map(scene => scene.lanes[lane.id] ?? []) : Array.from({ length: bars }, () => lane.pattern!.steps);
     const laneAutomation = song ? song.map(scene => scene.laneAutomation?.[lane.id]) : Array.from({ length: bars }, () => lane.pattern!.automation);
-    play(renderSynthBars(laneBars, lane.synthParams, arrangement.tempo, frames, sampleRate, barDuration, arrangement.synthSamples?.[lane.id], times, laneAutomation),
+    play(renderSynthBars(laneBars, lane.synthParams, arrangement.tempo, frames, sampleRate, barDuration, arrangement.synthSamples?.[lane.id], times, laneAutomation, lane.swing ? arrangement.drumSwing : 0),
       lane.synthParams.fxSends, lane.synthParams.fxReturn, 'synth', lane.synthParams.duck ?? 0);
   }
   if (only === undefined || only === 'drums') {

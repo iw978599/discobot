@@ -97,7 +97,7 @@ const cases: Case[] = [
   ]),
   // --- A lane that does not exist
   ...([
-    ['synth.remove', {}], ['synth.params', { patch: {} }], ['synth.model', {}], ['synth.mix', {}], ['synth.prefs', {}],
+    ['synth.remove', {}], ['synth.params', { patch: {} }], ['synth.model', {}], ['synth.mix', {}], ['synth.swing', { swing: true }], ['synth.prefs', {}],
     ['pattern.write', { patternId: fresh(), patch: {} }], ['pattern.write', { patternId: 'x', patch: {} }],
   ] as const).map(([type, rest]): Case => (
     { type, title: `a lane that does not exist: ${type}`, body: { synthId: 2, ...rest }, status: 404, error: 'Synth not found' }
@@ -528,6 +528,20 @@ const cases: Case[] = [
     arrange: service => ok(service.setSynthModel(1, { modelId: 'juno-106' })),
     check: result => assert.equal(result.events[0].data.modelId, 'generic'),
   }, ['synthModelUpdate']),
+  changed('swing is stored on the lane only while it is on', {
+    type: 'synth.swing', body: { synthId: 1, swing: true },
+    check: (result, service) => {
+      assert.deepEqual(result.events[0].data, { synthId: 1, swing: true });
+      assert.equal(service.snapshot().synths[0].swing, true);
+    },
+  }, ['synthSwing']),
+  changed('swing turned off takes the key away, and anything but true is off', {
+    type: 'synth.swing', body: { synthId: 1, swing: 'yes' }, arrange: service => ok(service.setSynthSwing(1, true)),
+    check: (result, service) => {
+      assert.deepEqual(result.events[0].data, { synthId: 1, swing: false });
+      assert.equal('swing' in service.snapshot().synths[0], false);
+    },
+  }, ['synthSwing']),
   changed('mute and solo are set when they are true or false, and left otherwise', {
     type: 'synth.mix', body: { synthId: 1, muted: true, solo: 'yes' },
     check: (result, service) => {

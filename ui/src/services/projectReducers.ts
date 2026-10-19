@@ -355,6 +355,14 @@ export const reducers: Reducers = {
     if (typeof op.solo === 'boolean') synth.solo = op.solo;
     return update('synthMix', { synthId: synth.synthId, muted: synth.muted, solo: synth.solo });
   },
+  // Kept only while on, so a lane that never swung is stored as it was.
+  'synth.swing': ({ state }, op) => {
+    const synth = laneOf(state, op.synthId);
+    if (!synth) return refuse(404, NO_SYNTH);
+    if (op.swing === true) synth.swing = true;
+    else delete synth.swing;
+    return update('synthSwing', { synthId: synth.synthId, swing: synth.swing === true });
+  },
   // The model's name is taken when it counts as true, and infinity does where the null JSON made
   // of it does not; `merge` takes a macro that is undefined as a value to set.
   'synth.model': ({ state }, op) => {

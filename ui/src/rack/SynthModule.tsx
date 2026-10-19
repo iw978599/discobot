@@ -332,6 +332,15 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
                     {BAR_CHOICES.map(choice => <option key={choice} value={choice}>{choice}</option>)}
                   </select>
                 </label>
+                <button
+                  className={`rack-btn ${synth.swing ? 'on' : ''}`}
+                  aria-label={`Synth ${synthId} swing`}
+                  aria-pressed={Boolean(synth.swing)}
+                  title="Swing this lane by the drums' Swing amount: every second sixteenth plays late"
+                  onClick={() => studio.handleSynthSwingChange(synthId, !synth.swing)}
+                >
+                  Swing
+                </button>
                 {bars > 1 && (
                   <span className="bar-tabs" role="group" aria-label={`Synth ${synthId} bar on show`}>
                     {Array.from({ length: bars }, (_, bar) => (

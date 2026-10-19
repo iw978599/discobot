@@ -21,6 +21,8 @@ type LocalSynth = {
   synthId: number; pattern: Pattern; patterns: Pattern[]; synthParams: SynthParameters;
   synthModelId: SynthModelId; synthModelParams: SynthModelParams; muted: boolean; solo: boolean; isPlaying: boolean;
   octaveShift?: number; keyboardMode?: 'keyboard' | 'piano-roll';
+  // Swung by the drums' swing. Stored only when true, so a lane that never swung is as it was.
+  swing?: boolean;
 };
 type State = Defaults & {
   version: 1; schema: typeof SCHEMA; synths: LocalSynth[]; tempo: number; selectedDrumKitId: string;
@@ -160,6 +162,7 @@ export class LocalProjectService {
         synthParams: sanitizeSynthParams(input.synthParams, defaults.synthParams),
         synthModelId: normalizeSynthModelId(input.synthModelId), synthModelParams: sanitizeModelParams(input.synthModelParams),
         isPlaying: false, muted: input.muted === true, solo: input.solo === true,
+        ...(input.swing === true ? { swing: true } : {}),
         octaveShift: Math.round(number(input.octaveShift, 0, -2, 2)), keyboardMode: input.keyboardMode === 'piano-roll' ? 'piano-roll' : 'keyboard',
       }];
     });
@@ -825,6 +828,7 @@ export class LocalProjectService {
   setSynthParams(synthId: number, patch: DeepPartial<SynthParameters>) { return this.apply({ type: 'synth.params', synthId, patch }); }
   setSynthModel(synthId: number, model: { modelId?: SynthModelId; modelParams?: Partial<SynthModelParams> }) { return this.apply({ type: 'synth.model', synthId, modelId: model.modelId, modelParams: model.modelParams }); }
   setSynthMix(synthId: number, mix: { muted?: boolean; solo?: boolean }) { return this.apply({ type: 'synth.mix', synthId, muted: mix.muted, solo: mix.solo }); }
+  setSynthSwing(synthId: number, swing: boolean) { return this.apply({ type: 'synth.swing', synthId, swing }); }
   setSynthPrefs(synthId: number, prefs: { octaveShift?: number; keyboardMode?: 'keyboard' | 'piano-roll' }) { return this.apply({ type: 'synth.prefs', synthId, octaveShift: prefs.octaveShift, keyboardMode: prefs.keyboardMode }); }
   writePattern(synthId: number, patternId: string, patch: Partial<Pattern>) { return this.apply({ type: 'pattern.write', synthId, patternId, patch }); }
   createLane(synthId?: number) { return this.apply({ type: 'synth.create', synthId }); }

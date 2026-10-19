@@ -39,7 +39,7 @@ import { storeMidiTies, storedMidiTies, tieFor, withTie, withoutTie, type MidiTi
 import { COUNT_IN_BARS, clickAt, countInBeats, countInSeconds, storeMetronome, storedMetronome, type MetronomeSettings } from '../services/metronome';
 import { BrowserTransport, TransportTick } from '../services/browserTransport';
 import { arrangementWholes, downloadFile, ExportArrangement, loopPass } from '../services/wavExport';
-import { expandDrumStep } from '../services/drumScheduling';
+import { expandDrumStep, swingLate } from '../services/drumScheduling';
 import { useComputerKeyboard } from '../hooks/useComputerKeyboard';
 import { getAudioContext, scheduleClick, setMasterVolume, setMasterMuted, setEffectsTempo } from '../hooks/browserAudio';
 import { DRUM_NOTE_MAP, downloadMidiFile, noteNameToMidi } from '../utils/midiExport';
@@ -85,6 +85,7 @@ interface SynthState {
   octaveShift: number;
   muted: boolean;
   solo: boolean;
+  swing?: boolean;
   forceReleaseSignal: boolean;
 }
 
@@ -765,11 +766,13 @@ export function useStudio() {
         synth.synthParams, scene ? scene.laneAutomation?.[synth.id] : synth.pattern.automation, index, globalTempoRef.current,
         scene ? undefined : autoPassRef.current.get(synth.id)?.held,
       ), time - early);
+      // A lane that swings plays every second sixteenth late by the drums' swing. Its automation stays on the step.
+      const late = synth.swing ? swingLate(step * duration, duration * 2, drumSwingRef.current) : 0;
       if (heard.has(synth.id) && note?.active && note.note) {
-        triggerStep(synth.synthParams, note, duration * divisor, synth.id, time - early);
+        triggerStep(synth.synthParams, note, duration * divisor, synth.id, time + late - early);
       }
       // The step lights read this themselves. Setting state here would render the whole rack on every step.
-      showStep(synth.id, index, time);
+      showStep(synth.id, index, time + late);
     }
     if (step % 2 !== 0) return;
     const state = scene ? sceneDrumState(scene, drumStateRef.current) : drumStateRef.current;
@@ -866,7 +869,7 @@ export function useStudio() {
             stepRecordPointer: 0,
             octaveShift: s.octaveShift || 0,
             muted: Boolean(s.muted),
-            solo: Boolean(s.solo),
+            solo: Boolean(s.solo), swing: s.swing === true,
             forceReleaseSignal: false,
           })));
         } else if (message.data.synthParameters) {
@@ -932,7 +935,7 @@ export function useStudio() {
             stepRecordPointer: was?.stepRecordPointer ?? 0,
             octaveShift: s.octaveShift || 0,
             muted: Boolean(s.muted),
-            solo: Boolean(s.solo),
+            solo: Boolean(s.solo), swing: s.swing === true,
             forceReleaseSignal: was?.forceReleaseSignal ?? false,
           };
         });
@@ -1029,7 +1032,7 @@ export function useStudio() {
             stepRecordPointer: 0,
             octaveShift: 0,
             muted: Boolean(message.data.muted),
-            solo: Boolean(message.data.solo),
+            solo: Boolean(message.data.solo), swing: message.data.swing === true,
             forceReleaseSignal: false,
           }];
         });
@@ -1056,6 +1059,13 @@ export function useStudio() {
         setSynths(prev => prev.map(s =>
           s.id === synthId ? { ...s, muted: Boolean(muted), solo: Boolean(solo) } : s
         ));
+        break;
+      }
+      case 'synthSwing': {
+        const { synthId, swing } = message.data;
+        // The scheduler reads the ref; it is moved here so the next step already swings.
+        synthsRef.current = synthsRef.current.map(s => s.id === synthId ? { ...s, swing: Boolean(swing) } : s);
+        setSynths(prev => prev.map(s => s.id === synthId ? { ...s, swing: Boolean(swing) } : s));
         break;
       }
       case 'synthRemoved': {
@@ -1179,7 +1189,7 @@ export function useStudio() {
         isPlaying: Boolean(data.isPlaying), selectedStep: null,
         keyboardMode: data.keyboardMode || 'keyboard', stepRecordPointer: 0,
         octaveShift: data.octaveShift || 0, muted: Boolean(data.muted),
-        solo: Boolean(data.solo), forceReleaseSignal: false,
+        solo: Boolean(data.solo), swing: data.swing === true, forceReleaseSignal: false,
       };
       if (!synthsRef.current.some(s => s.id === synthId)) synthsRef.current = [...synthsRef.current, created];
       return true;
@@ -1893,6 +1903,10 @@ export function useStudio() {
     localService.setSynthMix(synthId, mix);
   }, []);
 
+  const handleSynthSwingChange = useCallback((synthId: number, swing: boolean) => {
+    localService.setSynthSwing(synthId, swing);
+  }, []);
+
   const handleSaveSynthPreset = useCallback((synthId: number, name: string) => {
     const synth = synthsRef.current.find((entry) => entry.id === synthId);
     if (!synth?.synthParams) return;
@@ -1954,7 +1968,7 @@ export function useStudio() {
   const handleExportMidi = useCallback(() => {
     const synthLanes = synthsRef.current
       .filter((entry) => entry.pattern)
-      .map((entry) => ({ id: entry.id, pattern: clonePattern(entry.pattern!), muted: entry.muted, solo: entry.solo }));
+      .map((entry) => ({ id: entry.id, pattern: clonePattern(entry.pattern!), muted: entry.muted, solo: entry.solo, swing: entry.swing }));
     downloadMidiFile(
       {
         tempo: globalTempo,
@@ -1988,7 +2002,7 @@ export function useStudio() {
     downloadMidiFile(
       {
         tempo: globalTempoRef.current, drumSwing, drumMasterVolume, drumState: kit,
-        synthLanes: synthsRef.current.filter((entry) => entry.pattern).map((entry) => ({ id: entry.id, pattern: clonePattern(entry.pattern!), muted: false, solo: false })),
+        synthLanes: synthsRef.current.filter((entry) => entry.pattern).map((entry) => ({ id: entry.id, pattern: clonePattern(entry.pattern!), muted: false, solo: false, swing: entry.swing })),
         bars: bars.map(scene => ({ name: scene.name, signature: scene.signature, lanes: scene.lanes, drumState: sceneDrumState(scene, kit) })),
       },
       `discobot-song-${Date.now()}.mid`
@@ -2539,7 +2553,7 @@ export function useStudio() {
     ensureSynthExists, handleOctaveShift, handleTempoChange, handleGlobalPlayStop, handleStepChange, handleStepSelect, handleKeyboardModeChange,
     handlePianoRollNoteAssign, handleClearPatternNotes, handleCopyLaneBar, handleCopyDrumBar, handleTransposeLane, handleRandomizeLane, handleNotePlay, handleNoteRelease, computerKeyNotes, midiState,
     handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange, guests, handleAddGuest, handleRemoveGuest, handleGuestChange, guestRecording, handleExportWav, exportStatus, dismissExportStatus, missingDrumSamples, sampleStoreVersion, handleDrumSampleChange, handleLaneBarsChange, handleDrumBarsChange, sceneLength,
-    handleSynthMixChange, handleSaveSynthPreset, handleLoadSynthPreset, handleDeleteSynthPreset,
+    handleSynthMixChange, handleSynthSwingChange, handleSaveSynthPreset, handleLoadSynthPreset, handleDeleteSynthPreset,
     handleExportMidi, currentArrangement, reportExportError, handleExportProject, projectImportFileRef, handleImportProjectFile, handleImportProject,
     handleNewProject, handleOpenProject, handleCopyProject, handleRenameProject, handleDeleteProject, handleRestoreVersion, handleCopyVersion, handleImportSynthPreset, handleExportSynthPreset, presetImportReport, setPresetImportReport, handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail,
     handleDrumSettingsChange, handleDrumMixChange, handleDrumReset, handleDrumMasterVolumeChange, handleDrumSwingChange,
