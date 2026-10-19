@@ -50,7 +50,13 @@ test('synth and drums share one protected destination and independent parallel F
     const ctx = getAudioContext() as unknown as Context;
     assert.equal(Context.instances, 1);
     const master = (synth.output as unknown as Node).connections[0];
-    assert.deepEqual((synth.input as unknown as Node).connections, [synth.output], 'lane volume feeds the ducker and nothing else');
+    // The lane's volume feeds the ducker through the switch that hands a lane to a guest, and the
+    // guest's own copy of the ducking, which passes nothing until the lane is handed over.
+    const [gate, guestDucker] = (synth.input as unknown as Node).connections;
+    assert.equal((synth.input as unknown as Node).connections.length, 2);
+    assert.deepEqual(gate.connections, [synth.output], 'lane volume feeds the ducker');
+    assert.equal(gate.gain.value, 1);
+    assert.equal(guestDucker.connections[0].gain.value, 0, 'and nothing reaches a guest');
     assert.equal((drums.output as unknown as Node).connections[0], master);
     assert.equal(master.gain.value, MASTER_LEVEL * 0.8);
     const destinationInputs = ctx.nodes.filter(node => node.connections.includes(ctx.destination));

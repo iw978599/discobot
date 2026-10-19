@@ -38,7 +38,7 @@ with `discobotGuest: 1` and a `type`. Ignore anything else.
 
 | `type` | Fields | When |
 |---|---|---|
-| `ready` | `name` (string), `features` (array of `'transport'`, `'state'`, `'audio'`) | Once, when the page has loaded. |
+| `ready` | `name` (string), `features` (array of `'transport'`, `'state'`, `'audio'`, and optionally `'input'`) | Once, when the page has loaded. |
 | `state` | `id` (echoed), `state` (any JSON, up to 100,000 characters) | In answer to `getState`. |
 | `stateChanged` | none | Optional. After the user changes a setting, so the host asks sooner. Do not send it for every step of a drag. |
 | `audio` | `wall` (number), `sampleRate` (number), `left`, `right` (`Float32Array`, same length, at most 16,384 frames) | Continuously, while audio is on. Pass both buffers in the transfer list. |
@@ -138,6 +138,54 @@ so tails and reverb come through.
 
 `audio` with `on: false` undoes all of this.
 
+## Input (optional): one of Discobot's voices, handed to the guest
+
+A guest that lists `'input'` in `ready.features` can take one of Discobot's own voices (a synth
+lane, the whole drum kit or one drum) and play it back through its own processing. Discobot then
+takes that voice out of its mix, streams it into the guest, and hears it again in the guest's
+ordinary `audio`. A guest that does not list `input` sees none of this.
+
+**Host to guest**
+
+| `type` | Fields | When |
+|---|---|---|
+| `sources` | `sources`: array of `{ id, name, kind }` | After `hello`, and again whenever the list changes (a lane added or removed, its model changed). |
+| `inputSelected` | `source`: an id or `null` | In answer to every `selectInput`, and unasked whenever the guest no longer has its voice (the voice was deleted, the guest reloaded). |
+| `input` | `source`, `wall`, `sampleRate`, `left`, `right` (`Float32Array`, same length, at most 16,384 frames, transferred) | Continuously while the guest has a voice, silence included. |
+
+**Guest to host**
+
+| `type` | Fields | Meaning |
+|---|---|---|
+| `selectInput` | `source`: an id from the latest `sources`, or `null` | Hand this voice over, or give it back. Anything not in the list is `null`. |
+| `inputLate` | `ms` (number) | `input` blocks are arriving too late to play on time, by about this much. |
+
+**Ids** stay the same across reloads and devices, so a guest can keep its choice in its own
+`state` (which is per scene) and ask for it again when it is given that state:
+`synth:<lane>` (`kind: 'synth'`, named like `Synth 2 · Juno-60`), `drums` for the whole kit
+(`kind: 'drums'`), and `drum:<instrument>` for each drum (`kind: 'drum'`, named as the drum grid
+names it): `drum:kick`, `drum:snare`, `drum:clap`, `drum:closedHH`, `drum:openHH`, `drum:snare2`
+(Low Tom), `drum:ride` (High Tom), `drum:crash` (Cymbal). Other guests and the whole mix are
+never offered. A voice goes to one guest at a time: a guest that asks for one another guest has
+is answered with the voice it had before, or `null`.
+
+**Routing.** A handed voice is taken after its level, mute and solo, so muting it in Discobot
+still silences it, and before its sends: it leaves the mix and every effect send, and what comes
+back through the guest (with the guest's level and sends) takes its place. Each switch is a
+10 ms crossfade. Discobot marks the voice's unit and mixer strip with "→ <guest>".
+
+**Timing.** The guest plays everything `latencyMs` early, the input included: place each block
+at `ctxAtWall(wall - latencyMs)`, and stamp what you send back as usual. **`wall` on an `input`
+block is when that audio would have been heard in Discobot's mix.** Discobot plays the voice
+early enough for that: by a lead that starts at `latencyMs + 120` ms, grows by `ms + 20` each
+time the guest sends `inputLate` (up to 1,000), and grows with `latencyMs`. Notes played live
+on Discobot (a keyboard, a MIDI controller) cannot be early, so they come back late by about
+the lead.
+
+**Export.** An audio export plays the music through and records the guest, voice included, and
+leaves the handed voice out of Discobot's own render, so it is heard once. In a song, a voice is
+left out in the bars it was handed over.
+
 ## Settings
 
 `state` is whatever the guest needs to put itself back exactly: every
@@ -196,7 +244,7 @@ browser may still slow a page it judges to be out of sight.
   its settings but not that audio.
 - **Key and scale.** Discobot has no key setting to send.
 - **Notes.** The host does not send notes to a guest; a guest makes its own
-  music in time with the host.
+  music in time with the host. (A voice handed over with `input` is audio, not notes.)
 
 ## Trying it
 

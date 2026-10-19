@@ -45,7 +45,7 @@ import { getAudioContext, scheduleClick, setMasterVolume, setMasterMuted, setEff
 import { DRUM_NOTE_MAP, downloadMidiFile, noteNameToMidi } from '../utils/midiExport';
 import { importMidiFile, readFileAsArrayBuffer, MidiImportResult } from '../utils/midiImport';
 import { DEFAULT_SYNTH_MODEL_ID, createDefaultSynthModelParams, enterSynthModel, getSynthModelDefinition, mapSynthModelToEngineParams, normalizeSynthModelId, normalizeSynthModelParams } from '../synthModels';
-import { guestInputs, inputSources } from '../services/guestInput';
+import { guestInputs, inputSources, leaveOutHanded } from '../services/guestInput';
 
 const DEFAULT_PARAMS: SynthParameters = createDefaultSynthParameters();
 
@@ -672,6 +672,7 @@ export function useStudio() {
 
   // Lights a step when it is heard. The scheduler is a moment ahead of the sound, and further ahead
   // while a voice is handed to a guest; a light that early would be seen to lead the beat.
+  const handedByBarRef = useRef<string[][]>([]);
   const showStep = (lane: number | 'drums', step: number, time: number) => {
     const ahead = time - getAudioContext().currentTime;
     if (ahead <= STEP_LIGHT_AHEAD) { playhead.set(lane, step); return; }
@@ -734,6 +735,8 @@ export function useStudio() {
       passBar = from.bar + Math.floor((tick - from.tick) / from.perBar);
       step = (tick - from.tick) % from.perBar;
     }
+    // An export's play-through notes which voices are with a guest in each bar, to leave them out of its render.
+    if (exportingRef.current && step === 0) handedByBarRef.current.push(guestInputs.all().map(entry => entry.source));
     if (metronomeRef.current.click && !exportingRef.current) {
       const kind = clickAt(step, signature);
       if (kind) scheduleClick(time, kind === 'bar');
@@ -2071,6 +2074,9 @@ export function useStudio() {
     // if any scene of the song plays it, whatever the open scene says.
     const songGains = wholeSong && arrangement.bars ? new Map(guestsRef.current.map(guest => [guest.id, guestBarGains(arrangement.bars!, guest)])) : null;
     const audible = guestsRef.current.filter(guest => songGains ? songGains.get(guest.id)!.some(gain => gain > 0) : !guest.muted && guest.volume > 0);
+    // A voice with a guest is heard through the guest, in the take, and left out of the render.
+    // Without a play-through it is with a guest that is silent, as it is when playing.
+    handedByBarRef.current = [guestInputs.all().map(entry => entry.source)];
     if (audible.length > 0 && !guestCapture.active()) {
       // How long what is exported lasts: its bars, each as long as its scene's time signature makes it.
       const wholes = arrangementWholes(arrangement);
@@ -2081,6 +2087,8 @@ export function useStudio() {
       try {
         if (synthsRef.current.some(synth => synth.isPlaying)) { await handleGlobalPlayStopRef.current(); await sleep(150); }
         setGuestRecording(seconds);
+        // Each bar the play-through schedules says which voices are with a guest, from the first.
+        handedByBarRef.current = [];
         // Play exactly what is being exported: the song from its start, or the open scene.
         playModeRef.current = wholeSong ? 'song' : 'pattern';
         songStartEntryRef.current = 0;
@@ -2113,6 +2121,7 @@ export function useStudio() {
         setSongStartEntry(startEntry);
       }
     }
+    arrangement = leaveOutHanded(arrangement, handedByBarRef.current);
     if (kind === 'stems') await downloadStemsZip(arrangement, (done, total) => onPart(`file ${done + 1} of ${total}`));
     else await downloadArrangementWav(arrangement, loop ? { loop: true } : {});
   }, [songArrangement]);

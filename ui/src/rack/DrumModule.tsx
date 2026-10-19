@@ -3,6 +3,7 @@ import { isAudioFile, listSamples, saveSample } from '../services/sampleStore';
 import { MAX_KIT_FILES } from '../services/kitImport';
 import KitImportDialog from './KitImportDialog';
 import { usePlayhead, usePlayheadMark } from '../hooks/usePlayhead';
+import { useHandOvers } from '../hooks/useHandedTo';
 import { tracked } from '../studio/tracked';
 import UnitHelp, { UNIT_HELP } from './UnitHelp';
 import { gridKeyTarget } from './gridKeys';
@@ -65,6 +66,8 @@ const OWN_SENDS = [
 // The whole drum kit as one grid: eight instruments down, sixteen steps across, lined up
 // with the synth lanes above. The strip underneath edits the instrument and step you last touched.
 function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: string) => void }) {
+  // The kit or a drum handed to a guest says so: it is heard through the guest, not the mix.
+  const handed = useHandOvers();
   const {
     drumState, drumAudio, drumKits, selectedDrumKitId, drumFx, drumMasterVolume, drumSwing,
     handleDrumStepToggle: onStepToggle, handleDrumStepVelocity: onStepVelocity, handleDrumStepDetail: onStepDetail,
@@ -162,6 +165,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
       <div className="rack-row drum-top">
         <div className={onHelp ? 'rack-plate static helped' : 'rack-plate static'}>
           <b>Drums</b>
+          {handed.drums && <span className="handed-to" title={`The kit is sent to the guest ${handed.drums}, and heard through it`}>→ {handed.drums}</span>}
           {onHelp && <UnitHelp about="the drums" section={UNIT_HELP.drums} onHelp={onHelp} />}
           <select
             className="drum-kit-select"
@@ -223,7 +227,8 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
                   className="drum-name"
                   aria-label={`Select ${LABELS[instrument]}`}
                   aria-pressed={selected === instrument}
-                  title={`${LABELS[instrument]}: click to hear it and edit its sound`}
+                  title={handed[`drum:${instrument}`] ? `${LABELS[instrument]}: sent to the guest ${handed[`drum:${instrument}`]}, and heard through it. Click to hear it and edit its sound` : `${LABELS[instrument]}: click to hear it and edit its sound`}
+                  data-handed={handed[`drum:${instrument}`] ? 'true' : undefined}
                   onClick={() => { setSelected(instrument); preview(instrument); }}
                 >
                   {shown}

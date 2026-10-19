@@ -337,8 +337,8 @@ test('live, the drums\' delay and reverb sends are fed from mixes of their own, 
     assert.equal(ducker.to.length, 6, 'the kit goes to the master and to drive, phaser, chorus and the two aux buses');
     lane.setSends({ reverb: 0.8, delay: 0.6, drive: 0.5, phaser: 0.4, chorus: 0.3 }, 0.5);
     assert.deepEqual(ducker.to.slice(1).map(node => node.gain.value), [0.25, 0.2, 0.15, 0, 0]);
-    // Each mix: the lane's volume, then its ducking, then the kit's send to that effect.
-    const sendOf = (tap: LiveNode) => { assert.equal(tap.to.length, 1); assert.equal(tap.to[0].to.length, 1); return tap.to[0].to[0]; };
+    // Each mix: the lane's volume, the switch that hands the kit to a guest, its ducking, then the kit's send to that effect.
+    const sendOf = (tap: LiveNode) => { assert.equal(tap.to.length, 1); assert.equal(tap.to[0].to.length, 1); assert.equal(tap.to[0].to[0].to.length, 1); return tap.to[0].to[0].to[0]; };
     assert.equal(sendOf(delay).gain.value, 0.3, 'the kit\'s delay send is the level of the delay mix');
     assert.equal(sendOf(reverb).gain.value, 0.4);
     assert.equal(sendOf(delay).to.length, 1, 'and goes on into the effect');
@@ -346,7 +346,7 @@ test('live, the drums\' delay and reverb sends are fed from mixes of their own, 
     lane.setVolume(0.7);
     assert.deepEqual([(lane.input as unknown as LiveNode).gain.value, delay.gain.value, reverb.gain.value], [0.7, 0.7, 0.7], 'the drums\' level is on all three');
     lane.duck(0, 1);
-    assert.deepEqual([ducker, delay.to[0], reverb.to[0]].map(node => node.gain.value), [1, 1, 1], 'a duck dips all three and comes back');
+    assert.deepEqual([ducker, delay.to[0].to[0], reverb.to[0].to[0]].map(node => node.gain.value), [1, 1, 1], 'a duck dips all three and comes back');
     lane.dispose();
     assert.deepEqual([delay.to.length, reverb.to.length], [0, 0]);
   } finally { await engine.dispose(); }
