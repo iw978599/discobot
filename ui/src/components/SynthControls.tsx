@@ -372,6 +372,7 @@ export default function SynthControls({
             <div className="preset-controls">
               <NestedMenu
                 label="Synth preset"
+                search="Search presets"
                 text={selectedPreset?.name ?? 'Preset…'}
                 mark={selectedPreset?.builtIn ? BUILT_IN_MARK : undefined}
                 title={selectedPreset ? `${selectedPreset.name} (${selectedPreset.builtIn ? 'built in' : 'one of your own'})` : 'Choose a preset for this lane'}
