@@ -160,9 +160,10 @@ test('the preset menu works from the keyboard alone', async ({ page }) => {
   await expect(picker(page)).toBeFocused();
   await expect.poll(() => sound(page)).not.toBe(before);
 
-  // Tab is not held in the menu: it goes on to the next control and the menu closes behind it.
+  // Tab is not held in the menu: from the search field it goes on to the next control and the
+  // menu closes behind it.
   await page.keyboard.press('Enter');
-  await expect(groupRow(page, 'Bass')).toBeFocused();
+  await expect(search(page)).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(lane(page).getByLabel('Preset name', { exact: true })).toBeFocused();
   await expect(picker(page)).toHaveAttribute('aria-expanded', 'false');
