@@ -472,7 +472,7 @@ npm run migrate --workspace=server  # Apply new database migrations to the live 
 ## Potential Next Steps
 - Split `useStudio.tsx` into hooks per concern (the typed store makes it possible), then undo in the store
 - See `docs/ROADMAP.md` and `docs/STORAGE_AND_ACCOUNTS_PLAN.md`
-- `docs/ROADMAP_V2.md` holds ideas for after the current roadmap is finished. Add to it; do not start it without the owner's word
+- `docs/ROADMAP.md` begins with "The plan from here": every open item, roadmap v2's ideas included (folded in on 2026-10-19), in order by time and cost. Work from it in that order. A new idea goes under "Ideas folded in from roadmap v2" at the end of that file and is placed in the plan only when the owner agrees to it.
 - Sync samples (project files already carry them)
 - The sample engine plays one imported recording across the whole keyboard
 
