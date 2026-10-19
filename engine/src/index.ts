@@ -2,6 +2,8 @@ export { SynthCore } from './synth/SynthCore';
 export type { NoteOnMessage, SynthSample } from './synth/SynthCore';
 export { createDefaultSynthParameters, syncedLfoHz, syncedRateHz, toVoiceParams } from './synth/voiceParams';
 export type { VoiceParams } from './synth/voiceParams';
+export { InsertChain, insertsActive } from './synth/inserts';
+export type { InsertSettings } from './synth/inserts';
 export { DrumCore } from './drums/DrumCore';
 export type { DrumHitMessage, DrumSample } from './drums/DrumCore';
 export type { DrumWorkletMessage, GuestPlayerMessage, SynthWorkletMessage } from './workletMessages';

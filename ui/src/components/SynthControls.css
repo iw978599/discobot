@@ -63,6 +63,7 @@
 /* One page of the editor at a time: only the boxes of the open tab are shown. */
 .synth-columns[data-tab="notes"], .synth-columns[data-tab="arp"] { display: none; }
 .synth-columns[data-tab="osc"] .synth-column:not([data-tab="osc"]),
+.synth-columns[data-tab="inserts"] .synth-column:not([data-tab="inserts"]),
 .synth-columns[data-tab="filter"] .synth-column:not([data-tab="filter"]),
 .synth-columns[data-tab="amp"] .synth-column:not([data-tab="amp"]),
 .synth-columns[data-tab="lfo"] .synth-column:not([data-tab="lfo"]),

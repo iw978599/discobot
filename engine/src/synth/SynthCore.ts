@@ -1,4 +1,5 @@
 import { Adsr, Ladder, Noise, Svf, approachCoefficient, finiteClamp as clamp, halve, ladderFeedback, lfoShape, noteFrequency, oscillator, svfCoefficient } from '../dsp';
+import { InsertChain } from './inserts';
 import { VoiceParams, createDefaultSynthParameters, toVoiceParams } from './voiceParams';
 
 type ParamUpdate = Partial<Record<keyof VoiceParams, unknown>>;
@@ -105,6 +106,7 @@ export class SynthCore {
   // Parameter changes that have a time of their own, soonest first: a pattern's automation.
   private scheduled: Array<{ frame: number; update: ParamUpdate }> = [];
   private globalLfoPhase: [number, number] = [0, 0];
+  private inserts: InsertChain;
   private noise = new Noise();
   // The random source has a sequence of its own, so routing it never changes what the noise oscillator plays.
   private chance = new Noise(0x9e3779b9);
@@ -129,6 +131,7 @@ export class SynthCore {
 
   constructor(readonly sampleRate: number, voiceCount = 8) {
     this.smoothing = approachCoefficient(0.01, sampleRate, 1);
+    this.inserts = new InsertChain(sampleRate);
     this.transitionLength = Math.ceil(sampleRate * 0.005);
     this.voices = Array.from({ length: voiceCount }, () => ({
       active: false, note: '', id: undefined, frequency: 440, targetFrequency: 440, velocity: 0, keyOctaves: 0,
@@ -706,6 +709,8 @@ export class SynthCore {
       left[i] = Math.tanh(l);
       right[i] = Math.tanh(r);
     }
+    // The lane's own effects. With none switched on this is one comparison and the block is as it was.
+    this.inserts.process(left, right, p);
     this.frame += left.length;
   }
 }

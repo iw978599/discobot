@@ -2,7 +2,7 @@ import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFu
 import { CYMBAL_TYPES, MAX_MOD_ROUTES, MOD_DESTINATIONS, MOD_SOURCES, type ModRoute } from '@discobot/engine';
 import { DELAY_SYNCS } from './delayTime';
 import { storedRateSync } from './rateSync';
-import { CHORUS_DEFAULT, EQ_RANGE_DB, MAX_PRE_DELAY } from './effectSettings';
+import { CHORUS_DEFAULT, EQ_RANGE_DB, INSERT_DEFAULT, MAX_INSERT_DELAY_TIME, MAX_PRE_DELAY } from './effectSettings';
 import { MAX_STEP_NOTES, MAX_STEP_OFFSET } from './noteScheduling';
 import { BAR_CHOICES, MAX_BARS, barSteps, clampLengths, laneBars, storedSignature } from './patternLength';
 import { sanitizeGuestMix, sanitizeSceneGuests } from './guests';
@@ -56,6 +56,23 @@ export function matchesShape(value: unknown, defaults: unknown): boolean {
 export function sanitizeSends(value: unknown, defaults: FxSendLevels): FxSendLevels {
   const input = record(value);
   return Object.fromEntries(Object.entries(defaults).map(([key, fallback]) => [key, number(input[key], fallback, 0, 1)])) as unknown as FxSendLevels;
+}
+
+// A lane's insert effects. Each is kept only where it differs from the control's starting
+// point, and none at all is no key, so a sound that never used them is stored as it was.
+export function sanitizeInserts(value: unknown): SynthParameters['inserts'] | undefined {
+  const input = record(value), D = INSERT_DEFAULT;
+  const result: NonNullable<SynthParameters['inserts']> = {};
+  const drive = number(input.drive, 0, 0, 1), tone = number(input.tone, 0, -1, 1);
+  if (drive > 0) result.drive = drive;
+  if (tone !== 0) result.tone = tone;
+  const chorus = record(input.chorus), sweep = storedRateSync(chorus.sync);
+  const chorusOut = { mix: number(chorus.mix, 0, 0, 1), depth: number(chorus.depth, D.chorus.depth, 0, 1), rate: number(chorus.rate, D.chorus.rate, 0.02, 20) };
+  if (chorusOut.mix > 0 || chorusOut.depth !== D.chorus.depth || chorusOut.rate !== D.chorus.rate || sweep) result.chorus = { ...chorusOut, ...(sweep ? { sync: sweep } : {}) };
+  const delay = record(input.delay), echo = storedRateSync(delay.sync);
+  const delayOut = { mix: number(delay.mix, 0, 0, 1), time: number(delay.time, D.delay.time, 0.01, MAX_INSERT_DELAY_TIME), feedback: number(delay.feedback, D.delay.feedback, 0, 0.85) };
+  if (delayOut.mix > 0 || delayOut.time !== D.delay.time || delayOut.feedback !== D.delay.feedback || echo) result.delay = { ...delayOut, ...(echo ? { sync: echo } : {}) };
+  return Object.keys(result).length ? result : undefined;
 }
 
 // Routes are kept only if both ends are ones this version knows, and no more than the voice has places for.
@@ -121,6 +138,8 @@ export function sanitizeSynthParams(value: unknown, defaults: SynthParameters): 
     brightness: number(layer.brightness, 0, -3, 3), attack: number(layer.attack, 0, 0, 5), width: number(layer.width, 0, 0, 1),
   };
   params.duck = number(input.duck, 0, 0, 1);
+  const inserts = sanitizeInserts(input.inserts);
+  if (inserts) params.inserts = inserts; else delete params.inserts;
   params.velocity = { amp: number(params.velocity!.amp, 1, 0, 1), filter: number(params.velocity!.filter, 0, 0, 1) };
   const fm = params.fm!, fmDefaults = defaults.fm!;
   params.fm = {
