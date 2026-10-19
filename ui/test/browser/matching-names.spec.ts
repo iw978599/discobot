@@ -74,5 +74,5 @@ test('a lane says the same model name under its name as in its Model menu', asyn
   const under = page.getByRole('button', { name: 'Synth 1', exact: true }).locator('span');
   await expect(under).toHaveText('Generic');
   await tab(page, 'Sound');
-  await expect(page.getByLabel('Synth model', { exact: true }).first().locator('option:checked')).toHaveText('Generic');
+  await expect(page.getByRole('button', { name: /^Synth model: / }).first()).toHaveAccessibleName('Synth model: Generic');
 });

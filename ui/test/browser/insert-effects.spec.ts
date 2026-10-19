@@ -1,4 +1,15 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Locator } from '@playwright/test';
+import { SYNTH_MODELS } from '../../src/synthModels';
+
+// The lane's Model menu, and a model chosen from it by id: from its group's list, or from the
+// first list for one that is in no group.
+const modelMenu = (scope: Page | Locator) => scope.getByRole('button', { name: /^Synth model: / });
+async function chooseModel(scope: Page | Locator, id: string) {
+  await modelMenu(scope).click();
+  const group = SYNTH_MODELS.find(model => model.id === id)?.group;
+  if (group) await scope.locator(`[role="menuitem"][data-group="${group}"]`).click();
+  await scope.locator(`[role="menuitem"][data-item="${id}"]`).click();
+}
 
 // Each synth lane has effects of its own on the Inserts page of Sound: drive and tone, a chorus
 // and a delay. A lane that never used them stores nothing for them, and the Polysix's Ensemble
@@ -62,7 +73,7 @@ test('the chorus and the delay can follow the tempo, and a free rate or time tur
 test('the Polysix Ensemble is the mix of the lane chorus, and leaving the Polysix takes it away', async ({ page }) => {
   const first = lane(page);
   await first.getByRole('tab', { name: 'Sound', exact: true }).click();
-  await first.getByLabel('Synth model', { exact: true }).selectOption('polysix');
+  await chooseModel(first, 'polysix');
   const macros = page.locator('.synth-module.selected .synth-model-macro-grid [role="slider"]');
   await expect(macros).toHaveCount(4);
   await macros.nth(3).focus();
@@ -71,7 +82,7 @@ test('the Polysix Ensemble is the mix of the lane chorus, and leaving the Polysi
   expect((await params(page)).fxSends.chorus, 'and not the shared chorus send').toBe(0);
 
   await setKnob(await openInserts(page), 'Insert drive', '25%');
-  await first.getByLabel('Synth model', { exact: true }).selectOption('minimoog-model-d');
+  await chooseModel(first, 'minimoog-model-d');
   await expect.poll(async () => (await params(page)).inserts?.chorus?.mix ?? 0, 'the chorus goes with the Polysix').toBe(0);
   expect((await params(page)).inserts?.drive, 'the lane\'s other inserts stay').toBeCloseTo(0.25, 2);
 });

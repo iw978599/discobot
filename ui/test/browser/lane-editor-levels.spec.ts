@@ -37,7 +37,7 @@ test('a lane opens on Notes, and Sound holds the model, the presets and the page
   await expect(first.locator('.keyboard-panel')).toBeVisible();
   await expect(first.getByLabel('Sequence length', { exact: true })).toBeVisible();
   await expect(picker(first), 'the presets are not on Notes').toHaveCount(0);
-  await expect(first.getByLabel('Synth model', { exact: true })).toHaveCount(0);
+  await expect(first.getByRole('button', { name: /^Synth model: / })).toHaveCount(0);
   await expect(pages(first)).toHaveCount(0);
   for (const name of PAGES) await expect(tab(first, name), `${name} is under Sound`).toHaveCount(0);
 
@@ -47,7 +47,7 @@ test('a lane opens on Notes, and Sound holds the model, the presets and the page
   await expect(tab(first, 'Notes')).toHaveAttribute('aria-selected', 'false');
 
   // Sound: the model and the presets with their tools first, then the pages.
-  await expect(first.getByLabel('Synth model', { exact: true })).toBeVisible();
+  await expect(first.getByRole('button', { name: /^Synth model: / })).toBeVisible();
   await expect(picker(first)).toBeVisible();
   await expect(first.getByLabel('Preset name', { exact: true })).toBeVisible();
   for (const name of ['Save', 'Delete', 'Export']) await expect(first.locator('.preset-controls').getByRole('button', { name, exact: true }), name).toBeVisible();

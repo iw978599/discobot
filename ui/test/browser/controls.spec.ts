@@ -1,5 +1,16 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
+import { SYNTH_MODELS } from '../../src/synthModels';
+
+// The lane's Model menu, and a model chosen from it by id: from its group's list, or from the
+// first list for one that is in no group.
+const modelMenu = (scope: Page | Locator) => scope.getByRole('button', { name: /^Synth model: / });
+async function chooseModel(scope: Page | Locator, id: string) {
+  await modelMenu(scope).click();
+  const group = SYNTH_MODELS.find(model => model.id === id)?.group;
+  if (group) await scope.locator(`[role="menuitem"][data-group="${group}"]`).click();
+  await scope.locator(`[role="menuitem"][data-item="${id}"]`).click();
+}
 
 // At phone width the top bar is one line, and the rest of it is in the sheet its last button
 // raises. `more` raises the sheet before something in it is used, and does nothing on a wide
@@ -373,7 +384,7 @@ test('all named presets and model macros are selectable; user presets survive re
   expect(builtIn, 'the app comes with a good many sounds').toBeGreaterThanOrEqual(30);
   const macros = page.locator('.synth-module.selected .synth-model-macro-grid [role="slider"]');
   for (const model of ['minimoog-model-d', 'juno-106', 'dx7', 'tb-303', 'sh-101', 'pro-one', 'jupiter-8', 'ob-xa', 'jp-8000', 'mono-poly', 'polysix', 'ms-20', 'odyssey', 'virus', 'cs-80', 'm1', 'd-50', 'wavestation', 'prophet-5']) {
-    await synth.getByLabel('Synth model', { exact: true }).selectOption(model);
+    await chooseModel(synth, model);
     await expect(macros).toHaveCount(4);
     await macros.first().press('ArrowUp');
   }
@@ -381,7 +392,7 @@ test('all named presets and model macros are selectable; user presets survive re
   await synth.getByRole('button', { name: 'Save', exact: true }).click();
   await page.reload();
   await choosePreset(page, 'My presets', 'My keys');
-  await expect(page.getByLabel('Synth model', { exact: true })).toHaveValue('prophet-5');
+  await expect(modelMenu(page)).toHaveAccessibleName('Synth model: Prophet-5');
   await page.locator('.preset-controls').getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(presetButton(page)).toHaveAccessibleName('Synth preset: Preset…');
   await presetButton(page).click();
