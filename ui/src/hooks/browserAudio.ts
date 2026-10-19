@@ -1,4 +1,5 @@
-import type { EffectsLoopState, FxSendLevels } from '../types';
+import type { AuxBus, AuxKind, EffectsLoopState, FxSendLevels } from '../types';
+import { auxBuses, auxRate, auxSeconds } from '../services/auxSettings';
 import { delaySeconds } from '../services/delayTime';
 import { rateHz } from '../services/rateSync';
 import { EQ_RANGE_DB, MAX_PRE_DELAY } from '../services/effectSettings';
@@ -38,6 +39,8 @@ type Effects = {
   depth: GainNode;
   chorus: Chorus;
   reverbShape: string;
+  // What each aux bus is pointed at, built the first time something is sent to it.
+  aux: Array<{ kind: AuxKind; effect: AuxEffect } | null>;
 };
 
 export const MASTER_LEVEL = 0.7;
@@ -217,6 +220,41 @@ export function createHallReverb(ctx: BaseAudioContext) {
 }
 type Hall = ReturnType<typeof createHallReverb>;
 
+// The effect behind an aux bus: an echo, the Hall or a chorus. It returns only the wet signal, which
+// the caller scales by the bus's level. Live playback and export build it with this, and `set`
+// gives it a bus's settings (gliding there at the time `at` for live playback, or at once).
+export interface AuxEffect {
+  input: AudioNode;
+  output: AudioNode;
+  nodes: AudioNode[];
+  lfo?: OscillatorNode;
+  set(bus: AuxBus, tempo: number, at?: number): void;
+}
+export function createAuxEffect(ctx: BaseAudioContext, kind: AuxKind): AuxEffect {
+  const put = (param: AudioParam, value: number, at?: number) => {
+    if (at === undefined) param.value = value;
+    else param.setTargetAtTime(value, at, 0.015);
+  };
+  if (kind === 'hall') {
+    const hall = createHallReverb(ctx);
+    return { input: hall.input, output: hall.output, nodes: hall.nodes, set: (bus, _tempo, at) => hall.set({ enabled: true, mix: 1, decay: bus.main, damping: bus.shape }, at) };
+  }
+  if (kind === 'chorus') {
+    const chorus = createChorus(ctx);
+    return {
+      input: chorus.input, output: chorus.output, nodes: [chorus.input, chorus.output, chorus.depth], lfo: chorus.lfo,
+      set: (bus, tempo, at) => { put(chorus.lfo.frequency, limit(auxRate(bus, tempo), 0.02, 20, 0.6), at); put(chorus.depth.gain, chorusSweep(bus.shape), at); },
+    };
+  }
+  const delay = ctx.createDelay(2), feedback = ctx.createGain();
+  delay.connect(feedback).connect(delay);
+  return {
+    input: delay, output: delay, nodes: [delay, feedback],
+    set: (bus, tempo, at) => { put(delay.delayTime, auxSeconds(bus, tempo), at); put(feedback.gain, limit(bus.shape, 0, 0.85), at); },
+  };
+}
+const AUX_SENDS = ['auxA', 'auxB'] as const;
+
 // The master EQ: a low shelf, a wide mid bell and a high shelf, in that order.
 export function createMasterEq(ctx: BaseAudioContext): BiquadFilterNode[] {
   const bands = [['lowshelf', 120], ['peaking', 1000], ['highshelf', 6000]] as const;
@@ -234,7 +272,7 @@ export function eqGains(eq: EffectsLoopState['eq']): [number, number, number] {
   const band = (level: number) => limit(level, -EQ_RANGE_DB, EQ_RANGE_DB, 0);
   return eq?.enabled ? [band(eq.low), band(eq.mid), band(eq.high)] : [0, 0, 0];
 }
-const EFFECT_NAMES: EffectName[] = ['reverb', 'delay', 'drive', 'phaser', 'chorus'];
+const EFFECT_NAMES: EffectName[] = ['reverb', 'delay', 'drive', 'phaser', 'chorus', 'auxA', 'auxB'];
 type Group = 'synth' | 'drums';
 type Live = { context: AudioContext; master: GainNode; eq: BiquadFilterNode[]; limiter: DynamicsCompressorNode; safety: WaveShaperNode };
 
@@ -251,6 +289,11 @@ function releaseEffects(bus: Effects) {
     ...(bus.reverb ? [bus.reverb] : []), ...(bus.hall?.nodes ?? []), bus.reverbFade, bus.drive, bus.driveFade, bus.tone, ...bus.phaser, bus.phaserFeedback,
     bus.lfo, bus.depth, bus.chorus.input, bus.chorus.output, bus.chorus.lfo, bus.chorus.depth,
   ];
+  for (const held of bus.aux) {
+    if (!held) continue;
+    if (held.effect.lfo) halt(held.effect.lfo);
+    nodes.push(held.effect.input, held.effect.output, ...held.effect.nodes);
+  }
   nodes.forEach(node => node.disconnect());
 }
 
@@ -397,10 +440,33 @@ export class AudioEngine {
     const chorus = createChorus(ctx);
     inputs.chorus.connect(chorus.input);
     chorus.output.connect(wet.chorus);
-    const bus: Effects = { inputs, wet, output, delay, feedback, reverb, hall: null, reverbFade, decay: 0, drive, driveFade, driveAmount: -1, tone, phaser, phaserFeedback, lfo, depth, chorus, reverbShape: '' };
+    const bus: Effects = { inputs, wet, output, delay, feedback, reverb, hall: null, reverbFade, decay: 0, drive, driveFade, driveAmount: -1, tone, phaser, phaserFeedback, lfo, depth, chorus, reverbShape: '', aux: [null, null] };
     this.effects.set(group, bus);
     if (this.loop) this.update(bus, group, this.loop, ctx);
     return bus;
+  }
+
+  // Points an aux bus at the effect the project says, building it if `create` and it is not there yet,
+  // and gives it the bus's settings. A bus nothing has been sent to has no effect built.
+  private syncAux(bus: Effects, slot: number, create: boolean) {
+    const { context: ctx } = this.open(), config = auxBuses(this.loop?.aux)[slot], name = AUX_SENDS[slot];
+    let held = bus.aux[slot];
+    if (!held && !create) return;
+    if (held && held.kind !== config.kind) {
+      const old = held.effect;
+      bus.inputs[name].disconnect(old.input);
+      this.retire(() => { if (old.lfo) halt(old.lfo); old.output.disconnect(); old.nodes.forEach(node => node.disconnect()); });
+      held = bus.aux[slot] = null;
+    }
+    if (!held) {
+      const effect = createAuxEffect(ctx, config.kind);
+      effect.set(config, this.effectsTempo);
+      bus.inputs[name].connect(effect.input);
+      effect.output.connect(bus.wet[name]);
+      bus.aux[slot] = { kind: config.kind, effect };
+      return;
+    }
+    held.effect.set(config, this.effectsTempo, ctx.currentTime);
   }
 
   // A replaced reverb or drive is let go once its fade is over, or at once if the engine goes first.
@@ -480,6 +546,10 @@ export class AudioEngine {
     smooth(bus.chorus.lfo.frequency, limit(rateHz(state.chorus, tempo, 0.6), 0.02, 20, 0.6), ctx);
     smooth(bus.chorus.depth.gain, chorusSweep(state.chorus?.depth ?? 0), ctx);
     smooth(bus.wet.chorus.gain, state.chorus?.enabled ? limit(state.chorus.mix, 0, 1) : 0, ctx);
+    auxBuses(state.aux).forEach((config, slot) => {
+      smooth(bus.wet[AUX_SENDS[slot]].gain, limit(config.level, 0, 1), ctx);
+      this.syncAux(bus, slot, false);
+    });
   }
 
   // One click of the metronome, at a time on the audio clock: a short high tone, higher and louder on
@@ -522,7 +592,7 @@ export class AudioEngine {
   // input in `taps` with the lane's volume and ducking, and the lane's send to that effect is fed
   // from it alone. A mix that is the same as the signal at `input` sounds exactly as if there were none.
   createLane(group: Group, ownMix: readonly EffectName[] = []) {
-    const { context: ctx, master } = this.open(), bus = this.bus(group);
+    const { context: ctx, master } = this.open(), bus = this.bus(group), engine = this;
     // input carries the lane volume; ducker sits after it so the dry signal and the sends pump together.
     const input = ctx.createGain(), ducker = ctx.createGain();
     input.connect(ducker);
@@ -553,6 +623,7 @@ export class AudioEngine {
       duck(time: number, amount: number) { for (const node of [ducker, ...tapDuckers]) scheduleDuck(node.gain, time, amount); },
       setVolume(value: number) { for (const node of [input, ...Object.values(taps)]) smooth(node.gain, limit(value, 0, 1), ctx); },
       setSends(values: FxSendLevels, returnLevel = 1) {
+        AUX_SENDS.forEach((name, slot) => { if (limit(values[name], 0, 1) > 0) engine.syncAux(bus, slot, true); });
         for (const name of Object.keys(sends) as EffectName[]) smooth(sends[name].gain, limit(values[name], 0, 1) * limit(returnLevel, 0, 1), ctx);
       },
       dispose,

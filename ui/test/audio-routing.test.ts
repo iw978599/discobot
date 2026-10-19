@@ -64,7 +64,7 @@ test('synth and drums share one protected destination and independent parallel F
     assert.ok(limiter.threshold.value >= -3, 'the limiter only catches peaks, so drums do not duck each other');
     assert.equal(master.connections.length, 1, 'no dry bypass around limiter');
     assert.deepEqual(eq.map(node => node.connections.length), [1, 1, 1]);
-    assert.equal((synth.output as unknown as Node).connections.length, 6, 'dry plus five parallel sends');
+    assert.equal((synth.output as unknown as Node).connections.length, 8, 'dry plus seven parallel sends');
     synth.duck(0, 0.5);
     assert.equal((synth.output as unknown as Node).gain.value, 1, 'a duck dips and then returns to full level');
     assert.equal((drums.output as unknown as Node).gain.value, 1);
@@ -74,8 +74,8 @@ test('synth and drums share one protected destination and independent parallel F
     drums.setSends({ reverb: 0.8, delay: 0.7, drive: 0.6, phaser: 0.5 }, 1);
     const synthSends = (synth.output as unknown as Node).connections.slice(1);
     const drumSends = (drums.output as unknown as Node).connections.slice(1);
-    assert.deepEqual(synthSends.map(node => node.gain.value), [0.05, 0.1, 0.15, 0.2, 0.3]);
-    assert.deepEqual(drumSends.map(node => node.gain.value), [0.8, 0.7, 0.6, 0.5, 0]);
+    assert.deepEqual(synthSends.map(node => node.gain.value), [0.05, 0.1, 0.15, 0.2, 0.3, 0, 0]);
+    assert.deepEqual(drumSends.map(node => node.gain.value), [0.8, 0.7, 0.6, 0.5, 0, 0, 0]);
     const loop: EffectsLoopState = {
       enabled: true, returns: { synth: 0.7, drums: 0.6 },
       drive: { enabled: true, amount: 0.5, tone: 0.25 },

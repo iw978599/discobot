@@ -194,6 +194,9 @@ function normalizeFxSends(sends: Partial<FxSendLevels> | undefined): FxSendLevel
     drive: Math.max(0, Math.min(1, sends?.drive ?? DEFAULT_DRUM_FX.sends.drive)),
     phaser: Math.max(0, Math.min(1, sends?.phaser ?? DEFAULT_DRUM_FX.sends.phaser)),
     chorus: Math.max(0, Math.min(1, sends?.chorus ?? 0)),
+    // Always present here, so a send brought back to nothing reaches the store, which keeps no key for it.
+    auxA: Math.max(0, Math.min(1, sends?.auxA ?? 0)),
+    auxB: Math.max(0, Math.min(1, sends?.auxB ?? 0)),
   };
 }
 
@@ -269,6 +272,7 @@ function normalizeEffectsLoop(loop: Partial<EffectsLoopState> | undefined): Effe
     },
     // Checked and clamped by the store; passed through as they are.
     ...(loop?.chorus ? { chorus: { ...loop.chorus } } : {}),
+    ...(loop?.aux ? { aux: loop.aux.map(bus => ({ ...bus })) } : {}),
     ...(loop?.eq ? { eq: { ...loop.eq } } : {}),
   };
 }

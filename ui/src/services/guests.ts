@@ -18,7 +18,7 @@ export interface Guest {
   sends?: FxSendLevels;
 }
 
-export const GUEST_SEND_NAMES = ['reverb', 'delay', 'drive', 'phaser', 'chorus'] as const;
+export const GUEST_SEND_NAMES = ['reverb', 'delay', 'drive', 'phaser', 'chorus', 'auxA', 'auxB'] as const;
 export const NO_SENDS: FxSendLevels = { reverb: 0, delay: 0, drive: 0, phaser: 0, chorus: 0 };
 
 export const MAX_GUESTS = 4;
@@ -82,8 +82,10 @@ const label = (value: unknown, fallback: string) => (typeof value === 'string' &
 // A guest's effect sends, each from 0 to 1. Undefined when it sends nothing anywhere.
 export function guestSends(value: unknown, current: FxSendLevels = NO_SENDS): FxSendLevels | undefined {
   const input = value && typeof value === 'object' ? value as Record<string, unknown> : {};
-  const sends = Object.fromEntries(GUEST_SEND_NAMES.map(name => [name, unit(input[name], current[name] ?? 0)])) as unknown as FxSendLevels;
-  return GUEST_SEND_NAMES.some(name => sends[name]! > 0) ? sends : undefined;
+  // The aux sends are stored only where they are above nothing, so a guest saved before them is unchanged.
+  const levels = GUEST_SEND_NAMES.map(name => [name, unit(input[name], current[name] ?? 0)] as const);
+  const sends = Object.fromEntries(levels.filter(([name, level]) => level > 0 || !name.startsWith('aux'))) as unknown as FxSendLevels;
+  return GUEST_SEND_NAMES.some(name => (sends[name] ?? 0) > 0) ? sends : undefined;
 }
 
 // Guests read from storage, a file, a link or the account are untrusted like the rest of a project.

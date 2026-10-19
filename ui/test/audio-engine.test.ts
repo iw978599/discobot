@@ -172,7 +172,7 @@ test('two engines at once keep their own buses, effects and samples', async () =
   assert.equal(sourceB.stopped, false);
   await a.engine.dispose();
   assert.equal(b.contexts[0].state, 'running');
-  assert.equal(fake(laneB.output).connections.length, 6, 'the other engine is untouched');
+  assert.equal(fake(laneB.output).connections.length, 8, 'the other engine is untouched');
   assert.equal(fake(laneA.output).connections.length, 0);
   await b.engine.dispose();
 });

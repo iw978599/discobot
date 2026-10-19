@@ -9,6 +9,8 @@
 
 export type {
   RateSync,
+  AuxBus,
+  AuxKind,
   // Audio synthesis types
   OscillatorType,
   SynthParameters,
