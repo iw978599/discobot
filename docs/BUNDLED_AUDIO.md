@@ -72,6 +72,57 @@ added 113,652 bytes (about 111 KB): `waves.bin` is now 1,205,498 bytes.
 | Conga (Low Tom) | M `Conga/Conga_HitN_v2_rr1_Sum` |
 | Bongo (High Tom) | M `Bongos/BongoH_Hit1_v2_rr1_Mid` |
 
+### Instruments fetched on demand (added 2026-10-19)
+
+The owner asked on 2026-10-19 for these seven VCSL instruments as built-in
+sounds for the sample engine. Together they are too big for `waves.bin`, so
+each is a file of its own, `ui/public/sounds/<id>.bin`, in the same format,
+fetched the first time a lane, an export or the share page needs it and kept in
+memory (`loadBuiltInWave`). They are left out of the service worker's list of
+files cached at install; once fetched, the worker keeps them for offline use.
+Each is mono, 22,050 Hz, 16-bit, a recording every octave (C), cut shorter the
+higher it is and faded at the end. Each recording's pitch was checked by the
+build script against its note (all within 10 cents except the top C of three,
+where the script's check is too coarse to tell).
+
+| Menu name | File | Size | From VCSL (folder / file) | Recordings |
+|---|---|---|---|---|
+| Grand Piano (Kawai) | `sounds/kawai-piano.bin` | 503,176 bytes | `Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_C<1..7>_v3_rr1_Player` | C1 to C7 |
+| Grand Piano (Steinway B) | `sounds/steinway-piano.bin` | 503,180 bytes | `Chordophones/Zithers/Grand Piano, Steinway B/Sus/JHPiano_Sus_Close_C<1..7>_vl3_rr1` | C1 to C7 |
+| Pipe Organ | `sounds/pipe-organ.bin` | 459,022 bytes | `Aerophones/Edge-blown Aerophones/Pipe Organ/Loud/Rode_Man3Open_C<1..6>` | C1 to C6 |
+| Tenor Sax | `sounds/tenor-sax.bin` | 282,510 bytes | `Aerophones/Reed Aerophones/Tenor Saxophone/Non-Vibrato/BrettTenor_NV_Main_C<2..5>_vl3_rr1` | C2 to C5 |
+| FM Piano | `sounds/fm-piano.bin` | 392,926 bytes | `Electrophones/TX81Z/FM Piano/FMPiano_C<1..7>_vl2` | C1 to C7 |
+| FM Piano 1 | `sounds/fm-piano-1.bin` | 392,928 bytes | `Electrophones/TX81Z/Piano 1/Piano 1_C<1..7>_vl2` | C1 to C7 |
+| FM Clavisynth | `sounds/fm-clavisynth.bin` | 277,288 bytes | `Electrophones/TX81Z/Clavisynth/Clavisynth_C<1..6>_vl2` | C1 to C6 |
+
+In all, 2,811,030 bytes (about 2.7 MB), none of it downloaded until used.
+`waves.bin` is unchanged.
+
+Notes read in the folders on 2026-10-19:
+
+- Pipe Organ, `Info.txt`: "Organ sampled by Simon Dalzell of Ivy Audio,
+  Winter 2015-16. Bearer is granted right to redistribute this sample set by
+  Versilian Studios LLC. Credit to both original author and Versilian Studios
+  is encouraged." This is the same note the upright piano already carries
+  (above). Credit: Simon Dalzell of Ivy Audio, and Versilian Studios.
+- Grand Piano, Kawai: `Legacy.txt` reads "LEGACY!" (the folder has been
+  superseded in the library; the files are still in it and under the same
+  licence). Grand Piano, Steinway B: `NORMALIZED.txt` says the layers are
+  normalized, so a velocity curve is needed to get the dynamics back. Neither
+  note changes the licence. Here one velocity layer is used, and the sample
+  engine's own level and velocity handling apply.
+- TX81Z, `Origin.txt`: "These patches are user-created using the TX81Z
+  Programmer application and sampled from the original FM hardware using
+  Samplit." The patches are the library authors' own, not Yamaha's factory
+  voices; the repository licence (CC0) covers the recordings. Clavisynth's
+  `A Note.txt` says the instrument is at "8va normal pitch standard", and its
+  pitch was measured to be at the note its file name says. The three names in
+  the menu do not use any maker's name.
+- Tenor Saxophone has no notes file.
+
+Nothing in these folders carried terms other than CC0 and the above note, so
+nothing was left out.
+
 ## The licences
 
 **Versilian Community Sample Library (VCSL)**, Versilian Studios LLC.

@@ -52,9 +52,9 @@ test('the wave file holds every sound the menu offers, is small, and a damaged o
   assert.ok(file.byteLength < 1300 * 1024, `${Math.round(file.byteLength / 1024)} KB`);
   // Beside the sample engine's sounds it holds the drum machine's cymbals, one for each kind, and the recorded kit's drums.
   const cymbals = CYMBAL_TYPES.map(kind => `cymbal-${kind}`);
-  assert.deepEqual([...BUNDLED_WAVES.keys()].sort(), [...BUILT_IN_WAVES.map(entry => entry.id), ...cymbals, ...KIT_RECORDINGS.map(drum => `kit-${drum}`), ...PERC_TYPES.map(kind => `perc-${kind}`)].sort());
+  assert.deepEqual([...BUNDLED_WAVES.keys()].sort(), [...BUILT_IN_WAVES.filter(entry => !entry.file).map(entry => entry.id), ...cymbals, ...KIT_RECORDINGS.map(drum => `kit-${drum}`), ...PERC_TYPES.map(kind => `perc-${kind}`)].sort());
   for (const id of cymbals) assert.ok(wave(id).data.length > wave(id).rate / 2 && wave(id).rate >= 32000, id);
-  for (const entry of BUILT_IN_WAVES) {
+  for (const entry of BUILT_IN_WAVES.filter(entry => !entry.file)) {
     const found = wave(entry.id);
     for (const part of [found, ...(found.zones ?? [])]) {
       assert.ok(part.data.length > 1 && part.data.every(value => Number.isFinite(value) && Math.abs(value) <= 1), entry.id);

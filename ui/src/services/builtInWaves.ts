@@ -5,7 +5,8 @@ import { loadDrumSample } from './drumSamples';
 // cycles of waves, in `public/waves.bin`. `scripts/build-waves.mjs` makes that file, and
 // `docs/BUNDLED_AUDIO.md` says where each sound is from and why the project may ship it.
 // `steps` is how many waves a sequence has; a sound with more than one can be stepped through.
-export const BUILT_IN_WAVES: Array<{ id: string; name: string; steps?: number }> = [
+// `file` is set for an instrument too big for waves.bin: its own file under public/, fetched on demand.
+export const BUILT_IN_WAVES: Array<{ id: string; name: string; steps?: number; file?: string }> = [
   { id: 'piano', name: 'Piano' },
   { id: 'mallet', name: 'Marimba' },
   { id: 'organ', name: 'Organ', steps: 1 },
@@ -18,6 +19,13 @@ export const BUILT_IN_WAVES: Array<{ id: string; name: string; steps?: number }>
   { id: 'seq-overtones', name: 'Sequence: overtones', steps: 8 },
   { id: 'seq-fm', name: 'Sequence: FM', steps: 8 },
   { id: 'seq-harmonics', name: 'Sequence: harmonics', steps: 8 },
+  { id: 'kawai-piano', name: 'Grand Piano (Kawai)', file: 'sounds/kawai-piano.bin' },
+  { id: 'steinway-piano', name: 'Grand Piano (Steinway B)', file: 'sounds/steinway-piano.bin' },
+  { id: 'pipe-organ', name: 'Pipe Organ', file: 'sounds/pipe-organ.bin' },
+  { id: 'tenor-sax', name: 'Tenor Sax', file: 'sounds/tenor-sax.bin' },
+  { id: 'fm-piano', name: 'FM Piano', file: 'sounds/fm-piano.bin' },
+  { id: 'fm-piano-1', name: 'FM Piano 1', file: 'sounds/fm-piano-1.bin' },
+  { id: 'fm-clavisynth', name: 'FM Clavisynth', file: 'sounds/fm-clavisynth.bin' },
 ];
 
 // Reads the file the build script writes: a short header, a list of what is in it, then 16-bit audio.
@@ -49,19 +57,29 @@ export function parseWaveBundle(buffer: ArrayBuffer): Map<string, SynthSample> {
   return waves;
 }
 
-let loading: Promise<Map<string, SynthSample>> | undefined;
-
-// One of the app's own sounds, fetched with the rest of them the first time one is wanted. The
-// file is part of the build, on this site, and the service worker keeps it for use offline.
-export function loadBuiltInWave(id: string): Promise<SynthSample | null> {
-  if (!loading) {
+// Each file is fetched once, the first time a sound in it is wanted, and kept in memory. One that
+// could not be fetched (offline, and not seen before) is tried again at the next ask.
+const loading = new Map<string, Promise<Map<string, SynthSample>>>();
+function loadBundle(path: string): Promise<Map<string, SynthSample>> {
+  let found = loading.get(path);
+  if (!found) {
     const base = (import.meta as ImportMeta & { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
-    loading = fetch(`${base}waves.bin`)
+    found = fetch(`${base}${path}`)
       .then(response => { if (!response.ok) throw new Error('not found'); return response.arrayBuffer(); })
       .then(parseWaveBundle)
-      .catch(() => { loading = undefined; return new Map<string, SynthSample>(); });
+      .catch(() => { loading.delete(path); return new Map<string, SynthSample>(); });
+    loading.set(path, found);
   }
-  return loading.then(waves => waves.get(id) ?? null);
+  return found;
+}
+
+// One of the app's own sounds, fetched with the rest of them the first time one is wanted. The
+// small ones are all in `waves.bin`; a big instrument has a file of its own (`file` in the list
+// above), fetched when a lane, an export or the share page first asks for it. The files are part
+// of the build, on this site; the service worker keeps what has been fetched for use offline.
+export function loadBuiltInWave(id: string): Promise<SynthSample | null> {
+  const file = BUILT_IN_WAVES.find(wave => wave.id === id)?.file ?? 'waves.bin';
+  return loadBundle(file).then(waves => waves.get(id) ?? null);
 }
 
 // The drum machine's recordings: the cymbals by kind (`crash`), and the drums of the recorded kit
