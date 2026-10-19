@@ -86,3 +86,29 @@ test('with the count-in on, a bar goes by before anything plays', async ({ page 
   await expect(playing(page).first(), 'and after the bar it starts').toBeVisible({ timeout: 6000 });
   await page.getByRole('button', { name: /Stop All/ }).click();
 });
+
+test('the count-in can last two or four bars, and the click has a level, both kept for the next visit', async ({ page }) => {
+  // At 120 a bar is two seconds, so two bars are four.
+  await setTempo(page, 120);
+  await more(page);
+  await count(page).click();
+  await group(page).getByLabel('Count-in length', { exact: true }).selectOption('2');
+  const level = group(page).getByRole('slider', { name: 'Click level', exact: true });
+  await expect(level).toHaveAttribute('aria-valuenow', '0.5');
+  await level.focus();
+  for (let n = 0; n < 3; n++) await level.press('ArrowDown');
+  await expect.poll(async () => (await stored(page))?.bars).toBe(2);
+  expect((await stored(page)).level).toBeLessThan(0.5);
+  await less(page);
+
+  await page.getByRole('button', { name: /Play All/ }).click();
+  await page.waitForTimeout(3000);
+  await expect(playing(page), 'three seconds into a two-bar count-in nothing is playing yet').toHaveCount(0);
+  await expect(playing(page).first(), 'and after the second bar it starts').toBeVisible({ timeout: 4000 });
+  await page.getByRole('button', { name: /Stop All/ }).click();
+
+  await page.reload();
+  await more(page);
+  await expect(group(page).getByLabel('Count-in length', { exact: true })).toHaveValue('2');
+  await expect(group(page).getByRole('slider', { name: 'Click level', exact: true })).not.toHaveAttribute('aria-valuenow', '0.5');
+});

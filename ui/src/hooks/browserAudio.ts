@@ -557,14 +557,16 @@ export class AudioEngine {
   // One click of the metronome, at a time on the audio clock: a short high tone, higher and louder on
   // the first beat of the bar. It goes to the master level, past the lanes and the effects, so it
   // follows the volume and Mute and is in no export.
-  scheduleClick(time: number, accent: boolean): void {
+  // `loudness` is 1 for the level the click has always had.
+  scheduleClick(time: number, accent: boolean, loudness = 1): void {
+    if (loudness <= 0) return;
     const { context: ctx, master } = this.open();
     const tone = ctx.createOscillator(), level = ctx.createGain();
     const at = Math.max(time, ctx.currentTime);
     tone.type = 'square';
     tone.frequency.value = accent ? 1760 : 1175;
     level.gain.setValueAtTime(0, at);
-    level.gain.linearRampToValueAtTime(accent ? 0.22 : 0.14, at + 0.001);
+    level.gain.linearRampToValueAtTime((accent ? 0.22 : 0.14) * loudness, at + 0.001);
     level.gain.exponentialRampToValueAtTime(0.0001, at + 0.04);
     tone.connect(level).connect(master);
     tone.start(at);
@@ -706,8 +708,8 @@ export function loadAudioWorklet(): Promise<void> {
   return audioEngine.loadWorklet();
 }
 
-export function scheduleClick(time: number, accent: boolean): void {
-  audioEngine.scheduleClick(time, accent);
+export function scheduleClick(time: number, accent: boolean, loudness = 1): void {
+  audioEngine.scheduleClick(time, accent, loudness);
 }
 
 export function setEffectsTempo(tempo: number): void {
