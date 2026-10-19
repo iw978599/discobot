@@ -70,7 +70,7 @@ test('the mixer has a strip for every lane, every drum and every guest, and a re
   const drums = mixer(page).locator('.mixer-strip[data-drum]');
   expect(await drums.evaluateAll(found => found.map(element => element.getAttribute('data-drum')))).toEqual(['kick', 'snare', 'clap', 'closedHH', 'openHH', 'snare2', 'ride', 'crash']);
   expect(new Set(await drums.evaluateAll(found => found.map(element => getComputedStyle(element).borderTopColor))).size).toBe(8);
-  for (const name of ['Mixer Drums master volume', 'Mixer Synth return', 'Mixer Drum return', 'Mixer main volume']) await expect(fader(page, name), name).toHaveCount(1);
+  for (const name of ['Mixer Drums master volume', 'Mixer Synth return', 'Mixer Drum return', 'Mixer Aux A return', 'Mixer Aux B return', 'Mixer main volume']) await expect(fader(page, name), name).toHaveCount(1);
   await expect(mixer(page).getByRole('group', { name: 'Mixer Guests', exact: true }), 'no guests, no strips for them').toHaveCount(0);
 
   // A lane that is removed has no strip.
@@ -167,6 +167,14 @@ test('a control on the mixer and the knob it mirrors show the same value, and ch
   await set(page, 'Drum return', '20%');
   await expect(figure(page, 'Mixer Drum return')).toHaveValue('20%');
   await expect(figure(page, 'Mixer Synth return')).toHaveValue('40%');
+
+  // The aux buses' returns are their Level knobs in the effects, each bus without disturbing the other.
+  await set(page, 'Mixer Aux A return', '30%');
+  await expect(figure(page, 'Aux A level')).toHaveValue('30%');
+  await expect.poll(async () => (await stored(page)).effectsLoop.aux?.map((bus: { level: number }) => bus.level)).toEqual([0.3, 0.8]);
+  await set(page, 'Aux B level', '55%');
+  await expect(figure(page, 'Mixer Aux B return')).toHaveValue('55%');
+  await expect(figure(page, 'Mixer Aux A return')).toHaveValue('30%');
 
   // Pan, read as each knob reads its own: a lane's to 100 either side, a drum's to 50.
   await set(page, 'Mixer Synth 1 pan', 'R40');

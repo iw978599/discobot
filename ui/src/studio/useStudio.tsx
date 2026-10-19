@@ -41,6 +41,7 @@ import { BrowserTransport, TransportTick } from '../services/browserTransport';
 import { arrangementWholes, downloadFile, ExportArrangement, loopPass } from '../services/wavExport';
 import { expandDrumStep, swingLate } from '../services/drumScheduling';
 import { LiveArp, type LiveArpLane } from '../services/liveArp';
+import { auxBuses } from '../services/auxSettings';
 import { useComputerKeyboard } from '../hooks/useComputerKeyboard';
 import { getAudioContext, scheduleClick, setMasterVolume, setMasterMuted, setEffectsTempo } from '../hooks/browserAudio';
 import { DRUM_NOTE_MAP, downloadMidiFile, noteNameToMidi } from '../utils/midiExport';
@@ -2539,7 +2540,11 @@ export function useStudio() {
     else if (parsed.kind === 'drumsMaster') handleDrumMasterVolumeChange(value);
     else if (parsed.kind === 'drumsSwing') handleDrumSwingChange(value);
     else if (parsed.kind === 'drum') handleDrumSettingsChange(parsed.instrument, { [parsed.key]: value });
-    else if (parsed.kind === 'fx') {
+    else if (parsed.kind === 'fx' && (parsed.effect === 'auxA' || parsed.effect === 'auxB')) {
+      // The buses are a list, A then B; each is changed whole, as its own knobs do.
+      const slot = parsed.effect === 'auxA' ? 0 : 1;
+      handleEffectsLoopChange({ aux: auxBuses(effectsLoopRef.current.aux).map((bus, index) => (index === slot ? { ...bus, [parsed.field]: value } : bus)) });
+    } else if (parsed.kind === 'fx') {
       const loop = effectsLoopRef.current as unknown as Record<string, Record<string, unknown>>;
       handleEffectsLoopChange({ [parsed.effect]: { ...loop[parsed.effect], [parsed.field]: value } } as Partial<EffectsLoopState>);
     } else if (parsed.kind === 'lane') {
