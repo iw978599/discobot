@@ -466,7 +466,9 @@
 .synth-notes { display: flex; flex-direction: column; gap: 10px; }
 .step-tools, .drum-step-details { display: flex; align-items: center; gap: 8px 18px; flex-wrap: wrap; }
 .step-tools label, .drum-step-details label { display: flex; align-items: center; gap: 6px; color: var(--text-label); }
-.step-tools-name { color: var(--text); font-size: var(--type-label); }
+/* Wide enough for "Step 256" and "100%", so moving the selection never changes how the row wraps. */
+.step-tools-name { color: var(--text); font-size: var(--type-label); min-width: 8ch; font-variant-numeric: tabular-nums; }
+.step-tools-controls .rack-readout { min-width: 4ch; text-align: right; }
 .step-tools-swap { flex: 1 1 520px; min-width: 0; display: grid; align-items: center; }
 .step-tools-swap > * { grid-area: 1 / 1; min-width: 0; }
 .step-tools-controls { display: flex; align-items: center; gap: 8px 18px; flex-wrap: wrap; }
