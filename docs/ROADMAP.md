@@ -36,8 +36,7 @@ directly, with no builder.
 
 1. **Swing for the synth lanes** (V11). Done: a Swing switch on each lane follows the drums' Swing. Whether a lane should have an amount of its own is the owner's to say.
 2. **A longer count-in and a level for the click** (V9).
-3. **Search across presets** (V13). Eighty-six presets is past what a menu
-   shows well.
+3. **Search across presets** (V13). Done: a search field at the top of the preset menu.
 4. **The arpeggiator held under a key** (V11a): runs while the key is down,
    as hardware does.
 5. **Inversions and a strum for chords** (V8).

@@ -13,6 +13,7 @@ const choices = (page: Page, group: string) => groupList(page, group).locator('[
 const spoken = (rows: Locator) => rows.evaluateAll(found => found.map(row => row.getAttribute('aria-label')));
 const groupNames = (page: Page) => spoken(lane(page).locator('[role="menuitem"][data-group]'));
 const phone = (page: Page) => page.viewportSize()!.width <= 720;
+const search = (page: Page) => lane(page).getByRole('searchbox', { name: 'Search presets', exact: true });
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -108,7 +109,9 @@ test('the preset menu works from the keyboard alone', async ({ page }) => {
 
   await picker(page).focus();
   await page.keyboard.press('Enter');
-  await expect(groupRow(page, 'Bass'), 'opening puts the keyboard on the first group').toBeFocused();
+  await expect(search(page), 'opening puts the keyboard in the search field').toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(groupRow(page, 'Bass'), 'and down from there is the first group').toBeFocused();
   await page.keyboard.press('ArrowDown');
   await expect(groupRow(page, 'Lead')).toBeFocused();
   await page.keyboard.press('ArrowUp');
@@ -194,4 +197,33 @@ test('on a phone the sheet shows the groups, then one group\'s presets under a B
   await choices(page, 'Bass').first().click();
   await expect(picker(page)).toHaveAccessibleName(`Synth preset: ${name}`);
   await expect(lane(page).getByRole('menuitem')).toHaveCount(0);
+});
+
+test('typing in the preset menu finds presets in every group at once, and Enter loads the first', async ({ page }) => {
+  await expect.poll(() => sound(page)).not.toBe('null');
+  await picker(page).click();
+  if (phone(page)) await expect(search(page), 'a phone does not raise its keyboard by itself').not.toBeFocused();
+  await search(page).fill('grand piano');
+  const found = lane(page).getByRole('menu', { name: 'Synth preset', exact: true }).locator('[role="menuitem"]');
+  await expect.poll(() => spoken(found)).toEqual(['Kawai Grand Piano', 'Steinway Grand Piano']);
+  await expect(lane(page).locator('[role="menuitem"][data-group]'), 'the groups give way to what was found').toHaveCount(0);
+  await expect(found.first(), 'a row found says which group it is from').toHaveAttribute('title', 'Keys');
+
+  // A word may be in the group's name: every bass is found by "bass".
+  await search(page).fill('bass');
+  expect((await spoken(found)).length).toBeGreaterThan(5);
+  await search(page).fill('zzzz');
+  await expect(found).toHaveCount(0);
+  await expect(lane(page).getByText('Nothing matches', { exact: true })).toBeVisible();
+
+  await search(page).fill('steinway');
+  await search(page).press('Enter');
+  await expect(picker(page)).toHaveAccessibleName('Synth preset: Steinway Grand Piano');
+  await expect(picker(page)).toHaveAttribute('aria-expanded', 'false');
+  await expect.poll(async () => JSON.parse(await sound(page)).sample?.wave).toBe('steinway-piano');
+
+  // Opened again, the menu has forgotten the search.
+  await picker(page).click();
+  await expect(search(page)).toHaveValue('');
+  await expect(lane(page).locator('[role="menuitem"][data-group]')).toHaveCount(6);
 });
