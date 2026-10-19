@@ -168,6 +168,11 @@ slow down every later change.
    automatically and group patches made during one drag. A whole-project undo
    entry also fixes the current limit that an entry restores only one synth
    lane.
+   Done (2026-10-19): the store records every undoable operation as it is
+   applied and a step puts back the whole project (`undoHistory.ts`). A step
+   is one turn's edits, a run of changes to one control, or a group held
+   open; it is kept as the whole project, not as patches, which was simpler
+   and is small enough. Scene, song, kit and mute edits are now undone too.
 
 3. **Stop re-rendering the whole app on every step.** Done: the playhead is
    a small store outside React and the step lights follow it without a
