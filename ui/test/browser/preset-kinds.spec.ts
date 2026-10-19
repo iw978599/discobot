@@ -147,7 +147,7 @@ test('the preset menu works from the keyboard alone', async ({ page }) => {
   await expect(picker(page), 'the keyboard is back on the button').toBeFocused();
   await expect(picker(page), 'nothing was loaded on the way').toHaveAccessibleName('Synth preset: Preset…');
 
-  // Down on the button opens it as well, and Enter on a preset loads it.
+  // Down on the button opens it as well, on the first group and past the search field, and Enter on a preset loads it.
   await page.keyboard.press('ArrowDown');
   await expect(groupRow(page, 'Bass')).toBeFocused();
   await page.keyboard.press('ArrowRight');

@@ -72,14 +72,15 @@ export default function NestedMenu({ label, text, mark, title, top = [], groups,
     setQuery('');
     if (refocus) buttonRef.current?.focus();
   };
-  const show = (last = false) => {
+  // `rowsFirst` opens it on a row, past the search field: what the arrows on the button do.
+  const show = (last = false, rowsFirst = false) => {
     const box = buttonRef.current?.getBoundingClientRect();
     setFlip(Boolean(box && box.left + ROOM > window.innerWidth));
     setGroup(null);
     setOpen(true);
     then(() => {
       // A desktop starts in the search field. A phone does not, or its keyboard would cover the list.
-      if (search && !narrow && !last) { searchRef.current?.focus(); return; }
+      if (search && !narrow && !last && !rowsFirst) { searchRef.current?.focus(); return; }
       const list = rows(0);
       list[last ? list.length - 1 : 0]?.focus();
     });
@@ -129,7 +130,7 @@ export default function NestedMenu({ label, text, mark, title, top = [], groups,
     if (target === buttonRef.current) {
       if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
       event.preventDefault();
-      show(event.key === 'ArrowUp');
+      show(event.key === 'ArrowUp', true);
       return;
     }
     if (target.getAttribute('role') !== 'menuitem') return;
