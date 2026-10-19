@@ -56,6 +56,8 @@ interface SynthModuleProps {
 // you reach for most. The selected lane also opens its full editor underneath.
 // How late a step can start, as a fraction of a step.
 const TIMINGS: Array<[number, string]> = [[0, 'On the step'], [0.25, '¼ step late'], [1 / 3, '⅓ step late'], [0.5, '½ step late'], [2 / 3, '⅔ step late'], [0.75, '¾ step late']];
+// How far apart a chord's notes start, as a share of a step.
+const STRUMS: Array<[number, string]> = [[0, 'Off'], [1 / 16, '1/16 step'], [1 / 8, '1/8 step'], [1 / 4, '1/4 step'], [1 / 2, '1/2 step']];
 
 function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
   const [tab, setTab] = useState<SynthTab>('notes');
@@ -430,6 +432,17 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
                         onChange={(event) => { void studio.handleStepDetailChange(synthId, toolStep, { offset: Number(event.target.value) }); }}
                       >
                         {TIMINGS.map(([value, label]) => <option key={label} value={String(value)}>{label}</option>)}
+                      </select>
+                    </label>
+                    <label title="Start each note of this step's chord a little after the one below it, like a strummed guitar">
+                      Strum
+                      <select
+                        aria-label={`Step ${toolStep + 1} strum`}
+                        disabled={!synth.pattern.steps[toolStep]?.notes?.length}
+                        value={String(STRUMS.find(([value]) => value === (synth.pattern!.steps[toolStep]?.strum ?? 0))?.[0] ?? 0)}
+                        onChange={(event) => { void studio.handleStepDetailChange(synthId, toolStep, { strum: Number(event.target.value) }); }}
+                      >
+                        {STRUMS.map(([value, label]) => <option key={label} value={String(value)}>{label}</option>)}
                       </select>
                     </label>
                     <label title="How many steps this step's notes last">

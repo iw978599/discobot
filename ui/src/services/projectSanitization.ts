@@ -3,7 +3,7 @@ import { CYMBAL_TYPES, PERC_CHOICES, MAX_MOD_ROUTES, MOD_DESTINATIONS, MOD_SOURC
 import { DELAY_SYNCS } from './delayTime';
 import { storedRateSync } from './rateSync';
 import { CHORUS_DEFAULT, EQ_RANGE_DB, INSERT_DEFAULT, MAX_INSERT_DELAY_TIME, MAX_PRE_DELAY } from './effectSettings';
-import { MAX_STEP_NOTES, MAX_STEP_OFFSET } from './noteScheduling';
+import { MAX_STEP_NOTES, MAX_STEP_OFFSET, MAX_STRUM } from './noteScheduling';
 import { BAR_CHOICES, MAX_BARS, barSteps, clampLengths, laneBars, storedSignature } from './patternLength';
 import { sanitizeGuestMix, sanitizeSceneGuests } from './guests';
 import { MAX_REPEATS, MAX_SONG_ENTRIES } from './songPlayback';
@@ -207,6 +207,7 @@ export function sanitizeSteps(value: unknown, bars: unknown = 1, signature?: unk
       ...(note && typeof step.probability === 'number' && step.probability >= 0 && step.probability < 1 ? { probability: step.probability } : {}),
       ...(note && Number.isInteger(step.ratchet) && step.ratchet > 1 ? { ratchet: Math.min(4, step.ratchet) } : {}),
       ...(note && typeof step.offset === 'number' && step.offset > 0 ? { offset: Math.min(MAX_STEP_OFFSET, step.offset) } : {}),
+      ...(note && typeof step.strum === 'number' && step.strum > 0 ? { strum: Math.min(MAX_STRUM, step.strum) } : {}),
     };
   }));
 }

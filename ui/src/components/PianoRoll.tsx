@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Pattern } from '../types';
 import { MAX_STEP_NOTES, noteLengths, stepNotes, stepOffset } from '../services/noteScheduling';
-import { CHORD_SHAPES, chordNotes, type ChordShapeId } from '../services/chords';
+import { CHORD_SHAPES, INVERSIONS, chordNotes, type ChordShapeId } from '../services/chords';
 import { usePlayheadMark } from '../hooks/usePlayhead';
 import { useNarrow } from '../hooks/useNarrow';
 import { beatLength, onBeat } from '../services/patternLength';
@@ -69,6 +69,7 @@ export default function PianoRoll({
   wholeStepRef.current = wholeStep;
   // Which chord a note put in brings with it. It is how the roll is being used, not part of the song.
   const [chord, setChord] = useState<ChordShapeId | 'off'>('off');
+  const [inversion, setInversion] = useState(0);
   const onNoteAssignRef = useRef(onNoteAssign);
   onNoteAssignRef.current = onNoteAssign;
 
@@ -254,7 +255,7 @@ export default function PianoRoll({
   const full = (stepIndex: number) => stepNotes(pattern.steps[stepIndex]).length >= MAX_STEP_NOTES;
   // With a chord shape chosen, a note put in is the root and brings the rest of the chord with it,
   // as far as the roll has rows for them. Taking a note out is always that note alone.
-  const adding = (note: string) => (chord === 'off' ? note : chordNotes(note, chord).filter(entry => notes.includes(entry)));
+  const adding = (note: string) => (chord === 'off' ? note : chordNotes(note, chord, inversion).filter(entry => notes.includes(entry)));
 
   const handleCellDown = (stepIndex: number, note: string, x: number, y: number, late = false) => {
     pressedAt.current = { x, y };
@@ -320,6 +321,12 @@ export default function PianoRoll({
           <select aria-label="Chord shape" value={chord} onChange={(event) => setChord(event.target.value as ChordShapeId | 'off')}>
             <option value="off">Off</option>
             {CHORD_SHAPES.map(shape => <option key={shape.id} value={shape.id}>{shape.name}</option>)}
+          </select>
+        </label>
+        <label className="piano-roll-chord" title="Which note of the chord is lowest. The note you put in stays where it is, and the notes above it go down an octave">
+          Inversion
+          <select aria-label="Chord inversion" value={inversion} disabled={chord === 'off'} onChange={(event) => setInversion(Number(event.target.value))}>
+            {INVERSIONS.map((name, index) => <option key={name} value={index}>{name}</option>)}
           </select>
         </label>
         <button className="rack-btn danger piano-roll-action" onClick={onClear}>Clear</button>
