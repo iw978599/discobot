@@ -4,6 +4,121 @@ First written 2026-10-08; tidied 2026-10-10 against the code as it stood then.
 Each section lists what is still open, then what is done. Sizes are rough:
 **S** is a day or less, **M** is a few days, **L** is a week or more.
 
+## The plan from here
+
+Written 2026-10-19 at the owner's request: what was left of this roadmap and
+everything in roadmap v2, in one list, put in order by time and cost. Roadmap
+v2's entries are now at the end of this file (**V1** to **V17**, under
+"Ideas folded in from roadmap v2"), with their detail as it was.
+
+**Time** is the size used everywhere here: **S** a day or less, **M** a few
+days, **L** a week or more. **Cost** is how much of the owner's usage limit
+the work takes, which is the only cost there is (the project pays for
+nothing). Roughly: an **S** done directly is a small share of a day's limit;
+an **M** is about one builder's run, which has been 250,000 to 475,000 tokens;
+an **L** is several of those. Within each group the order is by what a person
+using the app gains for the cost, highest first. Nothing below needs paying
+for.
+
+### 0. Finishing what is built
+
+Undo in the store (#192), insert effects for each lane (#191) and two aux
+sends (#194): built, waiting on their checks, merged as each is green.
+
+### 1. Quick and cheap (S each)
+
+The most for the least. Each is one short piece of work, mostly by the agent
+directly, with no builder.
+
+1. **Swing for the synth lanes** (V11). A swung beat has straight bass today.
+2. **A longer count-in and a level for the click** (V9).
+3. **Search across presets** (V13). Eighty-six presets is past what a menu
+   shows well.
+4. **The arpeggiator held under a key** (V11a): runs while the key is down,
+   as hardware does.
+5. **Inversions and a strum for chords** (V8).
+6. **Effects presets, the plain ones** (the first half of V5): a small room,
+   a long hall, a slapback, a dub delay, in a menu on each effect.
+7. **The aux buses on the mixer, by MIDI Learn and in automation**: the parts
+   the aux sends were built without.
+8. **A first-run choice** (V15): start from a beat, the sample song, or
+   empty.
+9. **A kind chosen when a preset is imported** (sound 7), so it does not
+   always land in "My presets".
+10. **How long a recorded note is held** (features 3): every recorded note is
+    one step long today.
+11. **Small tidying, low gain:** the delay's Sync menu has dotted and
+    triplet values and the others do not (features 18); the transport bar
+    and song strip still render on every edit (improvements 3); two
+    "Untitled" projects share a row in Projects (features 16).
+
+### 2. The architecture work the owner asked for (M to L, the agent)
+
+12. **Split `useStudio.tsx` into hooks per concern** (improvements 1), now
+    that undo is in the store. Starts once #191, #192 and #194 are merged,
+    since all three change that file. Nothing changes for a person using
+    the app; everything after it gets cheaper.
+13. **The audio engine handed to the hooks** (V17, improvements 4): the step
+    after it, which makes the audio testable without a browser.
+
+### 3. Medium (M each, about one builder's run)
+
+14. **The Hall's Decay in Chrome** (Known Issues in `AGENTS.md`). Comes
+    before the clones, which lean on it, and is also what the Hall aux bus
+    plays.
+15. **Clones of well-known effects** (the second half of V5): the list the
+    owner agreed on 2026-10-19, with knobs added to an effect where a clone
+    needs them.
+16. **A scale lock** (V7): the keyboard, roll, chord menu and randomizer all
+    use one key and scale.
+17. **A tempo for each scene** (V10).
+18. **More from portamento** (V11b): fingered glide, same speed for any
+    distance, a synced glide time.
+19. **A true progress bar for exports** (features 13), by rendering in
+    pieces.
+20. **Drag to reorder lanes, scenes and the playlist's rows** (V14,
+    features 14), with a keyboard way as well.
+21. **A picture of the sound** (V12): a small scope or spectrum on a lane
+    and on the master.
+22. **Several recordings across the keyboard for an imported sample** (V1).
+23. **A listener's page that shows the song moving** (V16).
+24. **More MIDI** (features 6): following an external clock, sending notes
+    played by hand, choosing the output channels, aftertouch. Each part is
+    tested by the owner on their controller.
+25. **More than four modulation routes**, with the LFO tab's own menus
+    folded into them (sound 4).
+26. **The design review's screens not looked at** (improvements 9).
+27. **Published songs** (features 9): a description or picture, the list's
+    order, playing from the list.
+
+### 4. Large (L, several runs)
+
+28. **Automation for the rest of the project** (features 5): the drums, the
+    effects, the tempo, macro knobs, ramps between steps, and automation
+    against the song.
+29. **Pattern lengths that are not whole bars, and a part shared between
+    scenes** (features 4).
+
+### 5. Waiting on the owner
+
+Cheap for the agent but blocked until the owner does or says something.
+
+- **Listening** (sound 1): the Hall, the inserts and aux buses, the
+  randomizer, the sample engine and the newer models are not heard yet.
+- **More sounds, a recorded drum kit, a china and a sizzle** (V2, V3, V4):
+  each needs the owner's say-so and a licence read at its source.
+- **A second sample song and more starting beats** (V6): made, then heard.
+- **The ladder filter's level** (sound 5): an ear decision.
+- **MIDI hardware**: nothing MIDI has been tried with a real controller.
+- **A screen reader trial** (improvements 5).
+- **Firefox and guest instruments**: what the owner sees there.
+- **Live collaboration** (features 7): needs the rule against a held-open
+  connection changed on purpose. L.
+- **Samples that sync** (sound 2): not planned; the storage asks for a card.
+
+New ideas go under "Ideas folded in from roadmap v2" at the end of this file,
+and are placed in this plan when the owner agrees to them.
+
 ## Design and implementation improvements
 
 These do not add features. They remove the things most likely to cause bugs or
@@ -454,7 +569,7 @@ may redistribute.
    to land on the step the scheduler had reached, up to a step early.
    Still open: how long a recorded note is held (every one is a step
    long); the click's level and a longer count-in are in
-   `docs/ROADMAP_V2.md`.
+   the ideas at the end of this file.
 
 4. **More ways to edit patterns.** (M)
    Lengths that are not a whole number of bars (a 12-step lane against 16);
@@ -751,7 +866,7 @@ may redistribute.
     the step go together, as before. Playback, WAV and MIDI export and MIDI
     import all carry it. The switch is the "perhaps a toggle" the owner
     spoke of, and is theirs to keep or drop. Inversions are in
-    `docs/ROADMAP_V2.md`.
+    the ideas at the end of this file.
 
 16. **One row for a project and its copies.** Done: asked for by the owner on
     2026-10-12 and built. In Projects, a project and the ones the app named
@@ -988,44 +1103,118 @@ again.
 
 ## Suggested order
 
-The order the owner is working in, with every open item on this page in it,
-is the queue in `docs/HANDOFF.md` (section 4) while that file exists. The
-list below is the older reasoning behind it. Since it was written the owner
-put sound first, and on 2026-10-12 asked for the drum cymbals (sound 8),
-which goes to the front.
+Replaced on 2026-10-19 by "The plan from here" at the top of this file.
 
-1. **Listen and tune** (sound 1). It needs the owner's ears, not an agent, so
-   it can go on alongside everything else.
-2. Done: the four small ones (CI housekeeping, typed worklet messages, synth
-   presets to IndexedDB, and the walkthrough from Help).
-3. Done: **the typed store** (improvements 1). Next, **undo in the store**
-   (improvements 2). Large and with nothing to show for it, but automation,
-   collaborative sessions and most new features get cheaper and safer after.
-4. Done: the playhead out of React state (improvements 3).
-5. **The rest of the phone layout** (features 1): one unit on screen at a
-   time, knobs as sliders and a piano roll made for a thumb. Do the
-   **accessibility pass** (improvements 5) on the new controls as they are
-   made, and move **kids mode** (features 2) onto the same large controls.
-   The fuller kids mode (features 10) is done. Then the **design review of
-   the whole interface, with its redesign suggestions** (improvements 9), once the phone layout it has to
-   look at is in place.
-6. **Record live playing** and **more ways to edit patterns** (features 3
-   and 4): the two that most change what making a song feels like. **Time
-   signatures and changing bar length** (feature 11) go with pattern editing,
-   after the typed store; **piano-roll chord buttons** (feature 15) fit with
-   note entry. A **playlist-style scene layout** (feature 14) belongs with
-   song arrangement and should account for scenes of different lengths.
-   **The scroll wheel on knobs** (features 12) and **showing that an export
-   is being made** (features 13) are small and can go in at any time.
-7. Done: samples in project files (sound 2). Sync for them waits on storage.
-8. **Parameter automation** (features 5).
-9. **The audio layer's single owner** (improvements 4), then the sound work
-   that builds on it: **insert effects, the reverb, the ladder filter, the
-   modulation matrix and the sample oscillator** (sound 3 to 6). **More
-   presets and synth models** (sound 7) follow `docs/SYNTH_MODELS_PLAN.md`:
-   the grouped presets menu and the seven models that need nothing new can
-   be done at any time; the other seven come after the sound work each
-   leans on.
-10. **More MIDI** (features 6), when there is hardware to test with.
-11. **Live collaborative sessions** (the rest of features 7), after the
-    typed store. The published-songs page (features 9) is done.
+## Ideas folded in from roadmap v2
+
+These were the ideas at the end of this file until 2026-10-19, when the owner asked for the two
+roadmaps to be one. Each is placed in "The plan from here" by its number (V1 to
+V17). The same rules hold: the project pays for nothing, nothing is bundled
+without a licence read at its source, and sound cannot be verified by a test.
+A new idea is added here and placed in the plan when the owner agrees to it.
+
+### Sound
+
+V1. **Several recordings across the keyboard for an imported sample.** (M)
+   The sample engine plays one imported recording at every pitch, which
+   sounds wrong far from the note it was recorded at. The app's own piano
+   already uses five recordings, each for its part of the keyboard. Let a
+   person do the same: import several files, say which note each is, and
+   the lane plays the nearest. Leans on the sample engine's zones, which
+   exist.
+V2. **More sounds that come with the app.** (S each) The same two free
+   libraries have strings, brass, woodwinds, a harp, timpani, a
+   glockenspiel and thousands of single-cycle waves. Each addition is
+   download size for everyone, so a few at a time, chosen by the owner's
+   ear.
+V3. **Drum kits made of recordings.** (M) The cymbals are recordings now and
+   the owner said the synthesized ones sounded nothing like cymbals. The
+   same free library has a snare, bass drums, toms and hand percussion. A
+   "Recorded" kit beside the synthesized ones would let the two be
+   compared. Needs the owner's say-so for more bundled audio.
+V4. **A china, a sizzle and a second cymbal lane.** (S to M) Left over from
+   the cymbal work: the free library has neither a china nor a sizzle, and
+   one lane can only be one cymbal at a time.
+V5. **Effects presets, among them clones of well-known units.** (M) The
+   effects have no presets. A preset menu on each effect's box (and on a
+   lane's own insert effects, once they exist) would hold plain starting
+   points (a small room, a long hall, a slapback, a tempo-synced dub delay)
+   and, asked for by the owner on 2026-10-19, presets set up to sound like
+   popular effects: a tape echo in the manner of the Space Echo, an
+   analogue delay like the Memory Man, a plate and a spring reverb, the
+   Juno's two chorus modes and a Dimension-style chorus, the Small Stone
+   and Phase 90 phasers, and an overdrive, a distortion and a fuzz after
+   the Tube Screamer, the RAT and the Big Muff. A clone is the app's own
+   effect set to behave like the unit it is named for, as a synth model
+   is; it is not that unit's circuit. The owner agreed this list as a start
+   (2026-10-19), and said an effect may gain knobs of its own where a clone
+   needs them (wow and flutter on the delay, a spring's drip, a drive's tone
+   stack); they belong in the shared builders so live and export agree, and
+   are optional settings like any other. What each preset is called is
+   still for the owner. Leans on the insert effects and the Hall reverb, whose Decay in
+   Chrome is a known issue to settle first.
+V6. **A second sample song, and more starting beats.** (S each) One song in
+   one style shows one side of the app. Each is made, heard by the owner,
+   and changed.
+
+### Playing and writing
+
+V7. **A scale lock.** (M) Choose a key and scale once; the keyboard and the
+   piano roll mark or only offer the notes in it, the chord menu builds
+   chords that fit it, and the randomizer (current roadmap) uses it.
+V8. **Inversions and a strum for chords.** (S) The chord menu puts a chord
+   in root position with every note starting together. An inversion choice,
+   and a strum that starts each note a little after the one below, would
+   use the per-note timing the steps already have.
+V9. **A count-in of more than one bar, and a level for the click.** (S) The
+   metronome's count-in is one bar and its level is fixed.
+V10. **A tempo for each scene.** (M) Tempo is project-wide. A song that
+    slows for its break needs a tempo that a scene can set, carried through
+    the transport, the exports and guest instruments.
+V11. **Swing for the synth lanes.** (S) The drums have swing; the lanes do
+    not, so a swung beat has straight bass.
+
+V11a. **The arpeggiator held under a key.** (S) A key held on the keyboard is
+    arpeggiated for one beat and stops, where a hardware arpeggiator runs for
+    as long as the key is down, and latches with Hold.
+
+V11b. **More from portamento.** (S to M) Asked for by the owner on
+    2026-10-13. What exists: a switch and a Glide time on a lane's Amp
+    page, which glides every note from the last note played, taking the
+    same time whatever the distance, and a Slide on a step that holds a
+    note into the next. What it could gain: a legato mode that glides only
+    when a key is still held as the next is pressed, as most monophonic
+    synths do (fingered portamento); a choice between the same time for
+    any distance and the same speed, so a wide leap takes longer; a glide
+    time that follows the tempo (a 1/16 or 1/8 glide); in a lane playing
+    chords, each voice gliding from the note it last played rather than
+    all from one; and Glide on the lane's face as one of its knobs where a
+    model has none. Each is a choice on the sound, absent meaning what
+    happens now, so stored sounds are unchanged.
+
+### The interface
+
+V12. **A picture of the sound.** (M) A small oscilloscope or spectrum on a
+    lane, and on the master, so a person can see what a knob does as well
+    as hear it. It must be drawn outside React's rendering, as the playhead
+    is.
+V13. **Search across presets.** (S) Eighty-six presets in six groups is
+    past what a menu shows well. Typing a few letters to find one.
+V14. **Drag to reorder lanes and scenes.** (M) With a keyboard way to do the
+    same, as the rest of the app has.
+V15. **A first-run choice.** (S) An empty project offers beats and a song in
+    a strip. A new visitor might be better served by one plain question:
+    start from a beat, open the sample song, or start empty.
+
+### Sharing
+
+V16. **A listener's page that shows the song moving.** (M) The page a share
+    link opens plays the song and offers a copy. Showing the scenes going
+    by, in their colours, would make it more than a play button.
+
+### Under the surface
+
+V17. **The audio engine handed to the hooks.** (M) The current roadmap gives
+    the audio layer one owner. The step after is for the hooks and the
+    studio to be given that owner instead of reaching for it, which is what
+    makes the audio testable without a browser.
