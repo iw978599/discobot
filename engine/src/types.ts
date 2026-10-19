@@ -6,6 +6,24 @@ export interface FxSendLevels {
   drive: number;
   phaser: number;
   chorus?: number;
+  // sends to the two aux buses (EffectsLoopState.aux). Absent means 0, as before they existed.
+  auxA?: number;
+  auxB?: number;
+}
+
+// What an aux bus is pointed at: an echo (delay with feedback), the Hall reverb, or a chorus.
+export type AuxKind = 'echo' | 'hall' | 'chorus';
+export const AUX_KINDS: AuxKind[] = ['echo', 'hall', 'chorus'];
+export interface AuxBus {
+  kind: AuxKind;
+  // how loud the bus comes back, 0 to 1; at 0 it is silent whatever is sent to it
+  level: number;
+  // The bus's first and second setting, by kind. Echo: its time in seconds and its feedback.
+  // Hall: its decay in seconds and its damping. Chorus: its rate in Hz and its depth.
+  main: number;
+  shape: number;
+  // follow the tempo with the echo's time or the chorus's rate; absent means off
+  sync?: RateSync;
 }
 
 // A rate that follows the tempo: once every so many bars, or once every note of this length.
@@ -63,6 +81,9 @@ export interface EffectsLoopState {
     depth: number;
     mix: number;
   };
+  // The two aux buses, A then B. Absent means the two a project starts with (an echo and a Hall,
+  // see auxSettings.ts), which nothing is sent to until a send is raised.
+  aux?: AuxBus[];
   // Three bands on the whole mix, in decibels.
   eq?: {
     enabled: boolean;

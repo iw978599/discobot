@@ -329,14 +329,14 @@ test('live, the drums\' delay and reverb sends are fed from mixes of their own, 
   try {
     const plain = engine.createLane('drums');
     assert.deepEqual(plain.taps, {}, 'a lane that asks for none has none');
-    assert.equal((plain.output as unknown as LiveNode).to.length, 6, 'and sends its own signal to all five effects');
+    assert.equal((plain.output as unknown as LiveNode).to.length, 8, 'and sends its own signal to all seven effects');
 
     const lane = engine.createLane('drums', ['delay', 'reverb']);
     const ducker = lane.output as unknown as LiveNode, delay = lane.taps.delay as unknown as LiveNode, reverb = lane.taps.reverb as unknown as LiveNode;
     assert.ok(delay && reverb && delay !== reverb);
-    assert.equal(ducker.to.length, 4, 'the kit goes to the master and to drive, phaser and chorus');
+    assert.equal(ducker.to.length, 6, 'the kit goes to the master and to drive, phaser, chorus and the two aux buses');
     lane.setSends({ reverb: 0.8, delay: 0.6, drive: 0.5, phaser: 0.4, chorus: 0.3 }, 0.5);
-    assert.deepEqual(ducker.to.slice(1).map(node => node.gain.value), [0.25, 0.2, 0.15]);
+    assert.deepEqual(ducker.to.slice(1).map(node => node.gain.value), [0.25, 0.2, 0.15, 0, 0]);
     // Each mix: the lane's volume, then its ducking, then the kit's send to that effect.
     const sendOf = (tap: LiveNode) => { assert.equal(tap.to.length, 1); assert.equal(tap.to[0].to.length, 1); return tap.to[0].to[0]; };
     assert.equal(sendOf(delay).gain.value, 0.3, 'the kit\'s delay send is the level of the delay mix');

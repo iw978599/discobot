@@ -237,14 +237,14 @@ function GuestModule({ studio, guest, onHelp }: { studio: Studio; guest: Guest; 
                 <Knob
                   key={send}
                   size="small"
-                  label={{ reverb: 'Reverb', delay: 'Delay', drive: 'Drive', phaser: 'Phaser', chorus: 'Chorus' }[send]}
+                  label={{ reverb: 'Reverb', delay: 'Delay', drive: 'Drive', phaser: 'Phaser', chorus: 'Chorus', auxA: 'Aux A', auxB: 'Aux B' }[send]}
                   ariaLabel={`Guest ${name} ${send} send`}
                   value={value}
                   defaultValue={0}
                   displayValue={`${Math.round(value * 100)}%`}
                   parseInputValue={(input) => { const parsed = Number.parseFloat(input); return Number.isFinite(parsed) ? parsed / 100 : null; }}
                   onChange={(next) => { void studio.handleGuestChange(guest.id, { sends: { ...NO_SENDS, ...guest.sends, [send]: next } }); }}
-                  tooltip={`How much of this guest goes to the shared ${send}`}
+                  tooltip={send.startsWith('aux') ? `How much of this guest goes to aux bus ${send.slice(3)}` : `How much of this guest goes to the shared ${send}`}
                   color="#f1f1ee"
                 />
               );

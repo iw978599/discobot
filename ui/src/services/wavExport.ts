@@ -6,10 +6,11 @@ import { DRUM_INSTRUMENTS } from './drumKits';
 import { expandStepNotes } from './noteScheduling';
 import { automationChange, stepVoiceParams } from './automation';
 import { delaySeconds } from './delayTime';
+import { auxBuses, auxSeconds } from './auxSettings';
 import { rateHz } from './rateSync';
 import { expandDrumStep, seededRandom } from './drumScheduling';
 import { createZip } from '../utils/zip';
-import { MASTER_LEVEL, chorusSweep, configureLimiter, createChorus, createHallReverb, createMasterEq, driveCurve, eqGains, reverbImpulse, safetyCurve, scheduleDuck } from '../hooks/browserAudio';
+import { MASTER_LEVEL, chorusSweep, configureLimiter, createAuxEffect, createChorus, createHallReverb, createMasterEq, driveCurve, eqGains, reverbImpulse, safetyCurve, scheduleDuck } from '../hooks/browserAudio';
 import type { DrumInstrument, DrumSettings } from '../types';
 
 export interface ExportArrangement {
@@ -248,12 +249,37 @@ function connectEffects(ctx: OfflineAudioContext, input: AudioNode, master: Audi
     filters[3].connect(feedback).connect(filters[0]); filters[3].connect(level); source.connect(level);
     level.gain.value = state.phaser.mix * .5; level.connect(wet);
   }
+  auxBuses(state.aux).forEach((bus, slot) => {
+    const amount = sends[AUX_SENDS[slot]] ?? 0;
+    if (bus.level <= 0 || amount <= 0) return;
+    const effect = createAuxEffect(ctx, bus.kind), level = ctx.createGain();
+    effect.set(bus, tempo); level.gain.value = bus.level;
+    send(amount).connect(effect.input); effect.output.connect(level).connect(wet);
+  });
   if (state.chorus?.enabled && (sends.chorus ?? 0) > 0) {
     const chorus = createChorus(ctx), level = ctx.createGain();
     chorus.lfo.frequency.value = rateHz(state.chorus, tempo); chorus.depth.gain.value = chorusSweep(state.chorus.depth);
     level.gain.value = state.chorus.mix;
     send(sends.chorus!).connect(chorus.input); chorus.output.connect(level).connect(wet);
   }
+}
+
+const AUX_SENDS = ['auxA', 'auxB'] as const;
+
+// How long the effects that something is sent to, and the delays on the lanes, go on ringing after
+// the last note: an aux bus counts only when a lane, the drums or a guest sends to it.
+export function effectsTail(arrangement: ExportArrangement): number {
+  const sent = (name: typeof AUX_SENDS[number]) => arrangement.synths.some(synth => (synth.synthParams?.fxSends?.[name] ?? 0) > 0)
+    || (arrangement.drumFx.sends[name] ?? 0) > 0 || (arrangement.guestTakes ?? []).some(take => (take.sends?.[name] ?? 0) > 0);
+  const aux = auxBuses(arrangement.effectsLoop.aux).map((bus, slot) => {
+    if (bus.level <= 0 || !sent(AUX_SENDS[slot])) return 0;
+    return bus.kind === 'hall' ? bus.main + 0.5 : bus.kind === 'echo' ? Math.min(4, auxSeconds(bus, arrangement.tempo) * 6) : 0.2;
+  });
+  const inserts = arrangement.synths.map(synth => {
+    const delay = synth.synthParams?.inserts?.delay;
+    return synth.synthParams && delay && delay.mix > 0 ? Math.min(4, toVoiceParams(synth.synthParams, arrangement.tempo).insDelayTime * 6) : 0;
+  });
+  return Math.max(0, ...aux, ...inserts);
 }
 
 // One pass of a looped pattern, in samples, and how long a bar of 4/4 then lasts: a whole number
@@ -289,7 +315,7 @@ export const arrangementWholes = (arrangement: Pick<ExportArrangement, 'bars' | 
 export async function renderArrangement(arrangement: ExportArrangement, options: RenderOptions = {}): Promise<{ channels: Stereo; sampleRate: number }> {
   const sampleRate = 44100;
   const reverb = arrangement.effectsLoop.reverb;
-  const tail = Math.min(8.25, Math.max(1, reverb.enabled ? reverb.decay + (reverb.preDelay ?? 0) : 0,
+  const tail = Math.min(8.25, Math.max(1, reverb.enabled ? reverb.decay + (reverb.preDelay ?? 0) : 0, effectsTail(arrangement),
     ...arrangement.synths.map(s => s.synthParams?.envelope.release || 0)));
   // With `loop`, the bars are one pattern to be looped, not a song with an ending.
   const looping = options.loop === true;

@@ -1039,7 +1039,11 @@ for new accounts.
     effects, as it had. A controller's knob can be tied to either. The
     Mixer shows levels and pans only and has no knob for these.
 
-24. **Aux sends that can be routed to effects.** (L) Asked for by the owner
+24. **Aux sends that can be routed to effects.** (L) Done (2026-10-19) as the owner
+    decided: two buses, each an echo, the Hall or a chorus, with a send to each from every
+    lane, the drums and each guest, added to the five fixed sends. Still open: a chain of effects
+    on a bus, one bus feeding another, and the mixer unit showing the sends. The original
+    request follows. Asked for by the owner
     on 2026-10-12. Today the sends are fixed: every lane has one send to
     each of the five shared effects (drive, phaser, delay, reverb, chorus),
     and each effect is always there. Routable aux sends would mean a small

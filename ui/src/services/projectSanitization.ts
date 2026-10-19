@@ -9,6 +9,7 @@ import { sanitizeGuestMix, sanitizeSceneGuests } from './guests';
 import { MAX_REPEATS, MAX_SONG_ENTRIES } from './songPlayback';
 import { sceneColor } from './sceneColors';
 import { sanitizeAutomation } from './automation';
+import { sanitizeAux } from './auxSettings';
 import { normalizeSynthModelId } from '../synthModels';
 import { noteNameToMidi } from '../utils/midiExport';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
@@ -55,7 +56,10 @@ export function matchesShape(value: unknown, defaults: unknown): boolean {
 
 export function sanitizeSends(value: unknown, defaults: FxSendLevels): FxSendLevels {
   const input = record(value);
-  return Object.fromEntries(Object.entries(defaults).map(([key, fallback]) => [key, number(input[key], fallback, 0, 1)])) as unknown as FxSendLevels;
+  const sends = Object.fromEntries(Object.entries(defaults).map(([key, fallback]) => [key, number(input[key], fallback, 0, 1)])) as unknown as FxSendLevels;
+  // The aux sends are stored only where they are above nothing, so a send never raised is no key at all.
+  for (const key of ['auxA', 'auxB'] as const) if (number(input[key], 0, 0, 1) > 0) sends[key] = number(input[key], 0, 0, 1);
+  return sends;
 }
 
 // A lane's insert effects. Each is kept only where it differs from the control's starting
@@ -367,6 +371,8 @@ export function sanitizeEffects(value: unknown, defaults: EffectsLoopState): Eff
       ...(storedRateSync(chorus.sync) ? { sync: storedRateSync(chorus.sync) } : {}),
     };
   }
+  const aux = sanitizeAux(raw.aux);
+  if (aux) state.aux = aux;
   if (raw.eq !== null && typeof raw.eq === 'object') {
     const eq = record(raw.eq), band = (level: unknown) => number(level, 0, -EQ_RANGE_DB, EQ_RANGE_DB);
     state.eq = { enabled: eq.enabled === true, low: band(eq.low), mid: band(eq.mid), high: band(eq.high) };
