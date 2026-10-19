@@ -276,6 +276,8 @@
 .rack-menu-group > .rack-menu-list { left: calc(100% + 6px); right: auto; top: -5px; max-height: 60vh; overflow-y: auto; }
 .rack-menu.flip .rack-menu-group > .rack-menu-list { left: auto; right: calc(100% + 6px); }
 .rack-menu-head { padding: 6px 12px 4px; font-size: var(--type-caption); letter-spacing: 0.12em; color: var(--text-faint); border-top: 1px solid var(--edge); margin-top: 4px; }
+.rack-menu-search { padding: 4px 6px 6px; }
+.rack-menu-search input { width: 100%; box-sizing: border-box; background: var(--surface-field); border: 1px solid var(--edge-control); border-radius: var(--corner-control); color: var(--text); font: inherit; font-family: var(--sentence-font); font-size: var(--type-label); padding: 5px 8px; text-transform: none; }
 .owner-tools h4 { margin: 10px 0 0; font-family: var(--panel-font); font-size: var(--type-label); letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-label); }
 .account-danger { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--edge); }
 .account-danger .rack-btn.danger:not(.on) { border-color: var(--danger); color: var(--danger); }

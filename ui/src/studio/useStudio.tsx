@@ -25,7 +25,7 @@ import type { ProjectInfo } from '../services/projectLibrary';
 import { sanitizeSynthParams } from '../services/projectSanitization';
 import type { PresetKind } from '../services/presetKinds';
 import { createBuiltInPresets } from '../services/builtInPresets';
-import { expandStep, expandStepNotes, stepNotes, withStepLength, withStepNotes } from '../services/noteScheduling';
+import { expandStepNotes, stepNotes, withStepLength, withStepNotes } from '../services/noteScheduling';
 import { transposeSteps } from '../services/transpose';
 import { randomLine, type RandomChoice } from '../services/randomize';
 import { STARTERS, projectIsEmpty, starterDrums, starterPattern } from '../services/starters';
@@ -40,6 +40,7 @@ import { CLICK_LEVEL, clickAt, clickLevel, countInBars, countInBeats, countInSec
 import { BrowserTransport, TransportTick } from '../services/browserTransport';
 import { arrangementWholes, downloadFile, ExportArrangement, loopPass } from '../services/wavExport';
 import { expandDrumStep, swingLate } from '../services/drumScheduling';
+import { LiveArp, type LiveArpLane } from '../services/liveArp';
 import { useComputerKeyboard } from '../hooks/useComputerKeyboard';
 import { getAudioContext, scheduleClick, setMasterVolume, setMasterMuted, setEffectsTempo } from '../hooks/browserAudio';
 import { DRUM_NOTE_MAP, downloadMidiFile, noteNameToMidi } from '../utils/midiExport';
@@ -617,16 +618,23 @@ export function useStudio() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [helpOpen, midiImportOpen, handleUndo, handleRedo]);
 
-  const triggerSynthNote = useCallback((synthParams: SynthParameters, note: string, windowSeconds: number, velocity: number = 1, synthId = 1, scheduledTime?: number, slide = false) => {
-    const normalizedVelocity = Math.max(0, Math.min(1, velocity));
-    for (const scheduled of expandStep(note, synthParams, windowSeconds, globalTempoRef.current, slide)) {
-      // Only later pulses need a start time; an unscheduled first pulse plays immediately.
-      const time = scheduledTime !== undefined ? scheduledTime + scheduled.offset
-        : scheduled.offset > 0 ? getAudioContext().currentTime + scheduled.offset : undefined;
-      void synthAudio.playNote(scheduled.note, synthParams, scheduled.duration, normalizedVelocity,
-        browserMutedRef.current, effectsLoopRef.current, globalTempoRef.current, synthId, time);
-    }
-  }, [synthAudio]);
+  // Keys held under a lane's arpeggiator: it runs while they are down, read from the lane each beat.
+  const liveArpRef = useRef<LiveArp | null>(null);
+  liveArpRef.current ??= new LiveArp(() => getAudioContext().currentTime);
+  useEffect(() => () => liveArpRef.current?.stop(), []);
+  const arpLane = (synthId: number): LiveArpLane => ({
+    beat: () => 60 / Math.max(20, globalTempoRef.current),
+    pulses: (notes, beat) => {
+      const params = synthsRef.current.find(s => s.id === synthId)?.synthParams;
+      if (!params?.arpeggiator.enabled) return [];
+      return expandStepNotes(withStepNotes({ active: true, velocity: 1 }, notes), params, beat, globalTempoRef.current);
+    },
+    play: (note, time, duration, velocity) => {
+      const lanes = synthsRef.current, synth = lanes.find(s => s.id === synthId);
+      if (!synth?.synthParams || synth.muted || (lanes.some(s => s.solo) && !synth.solo)) return;
+      void synthAudio.playNote(note, synth.synthParams, duration, velocity, browserMutedRef.current, effectsLoopRef.current, globalTempoRef.current, synthId, time);
+    },
+  });
 
   // One step of a pattern: its whole chord, for its whole length.
   const triggerStep = useCallback((synthParams: SynthParameters, step: SequencerStep, windowSeconds: number, synthId: number, scheduledTime: number) => {
@@ -1146,7 +1154,7 @@ export function useStudio() {
         break;
       }
     }
-  }, [synthAudio, drumAudio, triggerSynthNote, globalTempo, commitPattern]);
+  }, [synthAudio, drumAudio, globalTempo, commitPattern]);
 
   const messageHandlerRef = useRef(handleMessage);
   messageHandlerRef.current = handleMessage;
@@ -1477,7 +1485,7 @@ export function useStudio() {
 
     await synthAudio.ensureAudioReady();
     if (synth.synthParams.arpeggiator.enabled) {
-      triggerSynthNote(synth.synthParams, note, 60 / globalTempo, 1, synthId);
+      liveArpRef.current!.press(synthId, note, 1, arpLane(synthId));
     } else {
       await synthAudio.playNote(note, synth.synthParams, undefined, 1, browserMutedRef.current, effectsLoopRef.current, globalTempo, synthId);
     }
@@ -1494,11 +1502,12 @@ export function useStudio() {
     };
 
     localService.writePattern(synthId, pattern.id, updated);
-  }, [synthAudio, triggerSynthNote, globalTempo, recordNote]);
+  }, [synthAudio, globalTempo, recordNote]);
 
   const handleNoteRelease = useCallback(async (synthId: number, note: string) => {
     const synthParams = synthsRef.current.find(s => s.id === synthId)?.synthParams;
     if (!synthParams) return;
+    liveArpRef.current!.release(synthId, note);
     synthAudio.stopNote(note, synthParams, synthId);
   }, [synthAudio]);
 
@@ -1638,10 +1647,12 @@ export function useStudio() {
     const mode = midiModeRef.current;
 
     if (mode === 'live') {
-      if (targetSynth.synthParams?.arpeggiator.enabled) {
-        triggerSynthNote(targetSynth.synthParams, noteName, 60 / globalTempo, velocity, targetSynth.id);
-      } else if (targetSynth.synthParams) {
-        midiHeldRef.current.set(`${source.id}\n${message.channel}:${message.note}`, { synthId: targetSynth.id, note: noteName, device: source.name });
+      if (!targetSynth.synthParams) return;
+      // Held under the device's key whether or not it is arpeggiated, so its note-off finds the lane.
+      midiHeldRef.current.set(`${source.id}\n${message.channel}:${message.note}`, { synthId: targetSynth.id, note: noteName, device: source.name });
+      if (targetSynth.synthParams.arpeggiator.enabled) {
+        liveArpRef.current!.press(targetSynth.id, noteName, velocity, arpLane(targetSynth.id));
+      } else {
         void synthAudio.playNote(noteName, targetSynth.synthParams, undefined, velocity, browserMutedRef.current, effectsLoopRef.current, globalTempo, targetSynth.id);
       }
       return;
@@ -1661,7 +1672,7 @@ export function useStudio() {
     const stepIndex = joins ? chord.stepIndex : targetSynth.stepRecordPointer % pattern.steps.length;
     midiChordRef.current = { synthId: targetSynth.id, stepIndex, at: now };
     void upsertStepNote(targetSynth.id, stepIndex, noteName, velocity, joins);
-  }, [handleNoteRelease, releaseLiveGestures, upsertStepNote, triggerSynthNote, globalTempo, synthAudio, recordNote, drumAudio]);
+  }, [handleNoteRelease, releaseLiveGestures, upsertStepNote, globalTempo, synthAudio, recordNote, drumAudio]);
 
   const midiState = useMidiInput({ onMessage: handleMidiMessage });
 
