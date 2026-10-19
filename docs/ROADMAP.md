@@ -499,8 +499,12 @@ may redistribute.
    2026-10-19, not verified by ear: a Voice menu on four lanes, in any kit:
    Clap is a tambourine, shaker or cowbell, Snare a cross-stick, Low Tom a
    conga and High Tom a bongo (about 111 KB more). Open: more choices, a
-   second hit each. Part 3 (VCSL instruments for the sample engine, loaded
-   on demand) follows.
+   second hit each. Part 3, done on 2026-10-19, not verified by ear: seven
+   VCSL instruments as built-in sounds for the sample engine (two grand
+   pianos, a pipe organ, a tenor sax, three FM keyboards), about 2.7 MB in
+   all, each its own file fetched the first time it is used. Open: a
+   preset or two made from them; more notes or a second velocity layer;
+   a way to fetch them ahead of time for use offline.
 
 ## Features
 
