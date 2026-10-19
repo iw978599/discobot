@@ -5,6 +5,8 @@ import { RATE_SYNCS, RATE_SYNC_LABELS } from '../services/rateSync';
 import { DELAY_SYNCS, DELAY_SYNC_LABELS } from '../services/delayTime';
 import { CHORUS_DEFAULT, EFFECTS_DEFAULT, EQ_DEFAULT, EQ_RANGE_DB, MAX_PRE_DELAY, REVERB_KINDS, REVERB_KIND_LABELS, type ReverbKind } from '../services/effectSettings';
 import Knob from './Knob';
+import Menu from '../rack/Menu';
+import { DELAY_PRESETS, REVERB_PRESETS } from '../services/effectPresets';
 import UnitHelp, { UNIT_HELP } from '../rack/UnitHelp';
 import './EffectsPanel.css';
 
@@ -209,6 +211,10 @@ function EffectsPanel({ effectsLoop, onChange, onHelp }: EffectsPanelProps) {
                 {DELAY_SYNCS.map(value => <option key={value} value={value}>{DELAY_SYNC_LABELS[value]}</option>)}
               </select>
             </label>
+            <Menu label="Presets" name="Delay presets" groups={[DELAY_PRESETS.map(preset => ({
+              label: preset.name, title: preset.title,
+              onSelect: () => onChange({ delay: { ...effectsLoop.delay, ...preset.settings, enabled: true } }),
+            }))]} />
           </div>
           <div className="effects-knobs">
             <Knob
@@ -336,6 +342,10 @@ function EffectsPanel({ effectsLoop, onChange, onHelp }: EffectsPanelProps) {
                 {REVERB_KINDS.map(value => <option key={value} value={value}>{REVERB_KIND_LABELS[value]}</option>)}
               </select>
             </label>
+            <Menu label="Presets" name="Reverb presets" groups={[REVERB_PRESETS.map(preset => ({
+              label: preset.name, title: preset.title,
+              onSelect: () => onChange({ reverb: { ...effectsLoop.reverb, ...preset.settings, enabled: true } }),
+            }))]} />
           </div>
           <div className="effects-knobs">
             <Knob

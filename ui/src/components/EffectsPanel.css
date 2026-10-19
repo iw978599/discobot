@@ -88,3 +88,6 @@
   width: 18px;
   height: 18px;
 }
+
+/* The Presets menu opens under its button, along the box's right edge. */
+.effects-block .rack-menu-list { left: auto; right: 0; }

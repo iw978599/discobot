@@ -40,7 +40,7 @@ directly, with no builder.
 4. **The arpeggiator held under a key** (V11a). Done: it runs while the key is down,
    as hardware does.
 5. **Inversions and a strum for chords** (V8). Done: an Inversion menu beside Chord, and Strum in the step controls.
-6. **Effects presets, the plain ones** (the first half of V5): a small room,
+6. **Effects presets, the plain ones** (the first half of V5). Done: Presets menus on the delay and the reverb. Was: a small room,
    a long hall, a slapback, a dub delay, in a menu on each effect.
 7. **The aux buses on the mixer, by MIDI Learn and in automation**: the parts
    the aux sends were built without.

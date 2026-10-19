@@ -144,3 +144,34 @@ test('chorus, the reverb shape and the master EQ change the sound, in the export
   await expect.poll(async () => (await stored(page)).synths[0].synthParams.lfo1.target).toBe('vibrato');
   expect(errors).toEqual([]);
 });
+
+test('the delay and the reverb each have presets that set the whole effect at once, as one undo', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const effects = page.locator('.effects-unit');
+  const choose = async (menu: string, name: string) => {
+    await effects.getByRole('button', { name: menu, exact: true }).click();
+    await effects.getByRole('menu', { name: menu, exact: true }).getByRole('menuitem', { name, exact: true }).click();
+  };
+
+  await choose('Delay presets', 'Dub delay');
+  await expect.poll(async () => (await stored(page)).effectsLoop.delay).toMatchObject({ enabled: true, sync: '1/8d', feedback: 0.62, mix: 0.35 });
+  await expect(effects.getByLabel('Delay sync', { exact: true })).toHaveValue('1/8d');
+
+  // A free one after a synced one: the sync goes, not only the time changes.
+  await choose('Delay presets', 'Slapback');
+  await expect.poll(async () => (await stored(page)).effectsLoop.delay).toMatchObject({ time: 0.11, feedback: 0.05 });
+  expect((await stored(page)).effectsLoop.delay.sync ?? 'off').toBe('off');
+
+  await choose('Reverb presets', 'Long hall');
+  await expect.poll(async () => (await stored(page)).effectsLoop.reverb).toMatchObject({ enabled: true, kind: 'hall', decay: 4 });
+  // Changes to the effects within 300 ms of each other are one undo step; this one stands apart.
+  await page.waitForTimeout(400);
+  await choose('Reverb presets', 'Small room');
+  await expect.poll(async () => (await stored(page)).effectsLoop.reverb.decay).toBe(0.8);
+  expect((await stored(page)).effectsLoop.reverb.kind ?? 'room').toBe('room');
+
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect.poll(async () => (await stored(page)).effectsLoop.reverb.kind, 'one undo takes back the whole of the last preset').toBe('hall');
+  expect(errors).toEqual([]);
+});
