@@ -13,6 +13,7 @@ import SynthControls, { type SynthTab } from '../components/SynthControls';
 import KeyboardPanel from '../components/KeyboardPanel';
 import StepRow from './StepRow';
 import AutomationRow from './AutomationRow';
+import { useHandedTo } from '../hooks/useHandedTo';
 import { AutomatedParams } from '../components/automatedParams';
 import { automatedKeys } from '../services/automation';
 import { usePlayhead } from '../hooks/usePlayhead';
@@ -85,6 +86,8 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
   // The lane's automated parameters, for its knobs to mark themselves by.
   const automation = synth?.pattern?.automation;
   const automated = useMemo(() => new Set(automatedKeys(automation)), [automation]);
+  // A lane handed to a guest says so where its model's name is: it is heard through the guest.
+  const handedTo = useHandedTo(`synth:${synthId}`);
 
   // With a step selected on the open lane, the left and right arrow keys walk along the row.
   useEffect(() => {
@@ -138,7 +141,7 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
             title={selected ? 'This lane is open for editing' : 'Open this lane for editing'}
           >
             <b>Synth {synthId}</b>
-            <span>{model.name}</span>
+            <span data-handed={handedTo ? 'true' : undefined} title={handedTo ? `Sent to the guest ${handedTo}, and heard through it` : undefined}>{handedTo ? `→ ${handedTo}` : model.name}</span>
           </button>
           {onHelp && <UnitHelp about={`Synth ${synthId}`} section={UNIT_HELP.synth} onHelp={onHelp} />}
         </div>

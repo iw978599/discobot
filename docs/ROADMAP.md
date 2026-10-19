@@ -25,6 +25,10 @@ for.
 Undo in the store (#192), insert effects for each lane (#191) and two aux
 sends (#194): built, waiting on their checks, merged as each is green.
 
+Also asked for on 2026-10-19 and in progress: handing a voice of Discobot's to a guest
+instrument (the protocol's optional `input`), for Axis Stack; and recorded drums and seven
+more instruments from the VCSL library (a builder).
+
 ### 1. Quick and cheap (S each)
 
 The most for the least. Each is one short piece of work, mostly by the agent

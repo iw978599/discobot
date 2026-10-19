@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Studio } from '../studio/useStudio';
 import { tracked } from '../studio/tracked';
-import { createGuestPlayer, type GuestPlayer } from '../hooks/guestAudio';
+import { createGuestPlayer, createGuestTap, type GuestPlayer } from '../hooks/guestAudio';
+import { getAudioContext } from '../hooks/browserAudio';
+import { guestInputs } from '../services/guestInput';
 import {
-  GUEST_LATENCY_MS, GUEST_PROTOCOL, guestCapture, guestLink, guestOrigin, isTrustedOrigin, trustOrigin,
+  GUEST_LATENCY_MS, GUEST_PROTOCOL, guestCapture, guestLink, guestOrigin, isTrustedOrigin, trustOrigin, wallAtContextTime,
   type Guest, type GuestTransport,
   GUEST_SEND_NAMES, NO_SENDS,
 } from '../services/guests';
@@ -79,12 +81,39 @@ function GuestModule({ studio, guest, onHelp }: { studio: Studio; guest: Guest; 
     // "hello" may be sent again: it is how the guest learns it must play earlier.
     const hello = () => { send({ type: 'hello', host: 'discobot', latencyMs }); guestLink.connect(id, latencyMs); };
 
+    // A guest that lists 'input' may take one of Discobot's voices (services/guestInput). It is
+    // told which there are, and told whenever the voice it has is no longer its own.
+    let takesInput = false, toldSources = '', toldSelection: string | null = null;
+    let tap: ReturnType<typeof createGuestTap> | null = null;
+    const tellInput = () => {
+      if (!ready || !takesInput) return;
+      const sources = guestInputs.sources(), text = JSON.stringify(sources);
+      if (text !== toldSources) { toldSources = text; send({ type: 'sources', sources }); }
+      const now = guestInputs.current(id);
+      if (now !== toldSelection) { toldSelection = now; send({ type: 'inputSelected', source: now }); }
+    };
+    // The voice in blocks, each stamped with when it would have been heard in the mix: it is
+    // played that much early, so the guest has it in time to send it back on the beat.
+    const sendInput = (frame: number, left: Float32Array, right: Float32Array) => {
+      const source = guestInputs.current(id), entry = source ? guestInputs.get(source) : undefined;
+      const target = frameRef.current?.contentWindow;
+      if (!entry || !target) return;
+      const context = getAudioContext();
+      const wall = wallAtContextTime(context, frame / context.sampleRate) + entry.leadMs;
+      target.postMessage({ discobotGuest: GUEST_PROTOCOL, type: 'input', source, wall, sampleRate: context.sampleRate, left, right }, origin, [left.buffer, right.buffer]);
+    };
+    const stopInput = guestInputs.subscribe(tellInput);
+
     const onMessage = (event: MessageEvent) => {
       // Only this guest's own frame, at the address it was loaded from, is listened to.
       if (event.source !== frameRef.current?.contentWindow || event.origin !== origin) return;
       const data = event.data as Record<string, unknown> | null;
       if (!data || typeof data !== 'object' || data.discobotGuest !== GUEST_PROTOCOL) return;
       if (data.type === 'ready') {
+        // A guest that loads again starts with none of Discobot's voices.
+        guestInputs.release(id);
+        toldSources = ''; toldSelection = null;
+        takesInput = Array.isArray(data.features) && data.features.includes('input');
         ready = true;
         link.current = { ready: true, send };
         setStatus('ready');
@@ -96,6 +125,20 @@ function GuestModule({ studio, guest, onHelp }: { studio: Studio; guest: Guest; 
         if (guestRef.current.state !== undefined) send({ type: 'setState', state: guestRef.current.state });
         send({ type: 'audio', on: true });
         sendTransport(guestLink.transport());
+        tellInput();
+      } else if (data.type === 'selectInput') {
+        if (!takesInput) return;
+        const name = guestRef.current.name || guestOrigin(guestRef.current.url) || 'Guest';
+        const now = guestInputs.select(id, name, data.source, latencyMs);
+        if (now && !tap) {
+          tap = createGuestTap(sendInput);
+          void tap.ready.then(node => { if (node) guestInputs.setTap(id, node); }, () => {});
+        }
+        // Answered every time, even when nothing changed.
+        toldSelection = now;
+        send({ type: 'inputSelected', source: now });
+      } else if (data.type === 'inputLate') {
+        guestInputs.late(id, data.ms);
       } else if (data.type === 'state') {
         // An answer to a question asked before the guest was last given settings describes the old ones.
         const asked = String(data.id);
@@ -111,7 +154,8 @@ function GuestModule({ studio, guest, onHelp }: { studio: Studio; guest: Guest; 
         send({ type: 'getState', id: `ask:${epoch.current}` });
       } else if (data.type === 'audio') {
         if (!playerRef.current) {
-          playerRef.current = createGuestPlayer((next) => { latencyMs = next; hello(); }, latencyMs);
+          // A voice handed to this guest is played earlier by as much as the guest is told to be.
+          playerRef.current = createGuestPlayer((next) => { guestInputs.latencyRaised(id, next - latencyMs); latencyMs = next; hello(); }, latencyMs);
           playerRef.current.setVolume(guestRef.current.muted ? 0 : guestRef.current.volume);
           playerRef.current.setSends(guestRef.current.sends);
         }
@@ -159,6 +203,11 @@ function GuestModule({ studio, guest, onHelp }: { studio: Studio; guest: Guest; 
     }, READOUT_MS);
     return () => {
       window.removeEventListener('message', onMessage);
+      // A guest removed or reloaded gives back the voice it had, at once.
+      stopInput();
+      guestInputs.release(id);
+      guestInputs.setTap(id, null);
+      tap?.dispose();
       stopTransport();
       clearInterval(poll);
       clearInterval(show);

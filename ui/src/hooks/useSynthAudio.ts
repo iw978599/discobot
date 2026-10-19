@@ -17,6 +17,8 @@ interface SynthLane {
   sample?: SynthSample | null;
   // The controller's bend and wheel as last sent, for a node that does not exist yet.
   live?: { bend: number; wheel: number };
+  // Where the lane is handed to a guest (services/guestInput), for audio that does not exist yet.
+  handedTo?: AudioNode | null;
   bpm: number;
   generation: number;
   // Note-ons still waiting on audio resume or worklet loading, keyed by note name.
@@ -96,6 +98,7 @@ export function useSynthAudio() {
         }
         if (lane.sample) send(node, { type: 'sample', sample: lane.sample });
         if (lane.live) send(node, { type: 'live', ...lane.live });
+        if (lane.handedTo) audio.handOver(lane.handedTo);
         return node;
       }).finally(() => { lane.loading = undefined; });
     }
@@ -148,6 +151,12 @@ export function useSynthAudio() {
     lane.sample = sample;
     send(lane.node, { type: 'sample', sample });
   }, []);
+  // Hands the lane to a guest's tap, or with null gives it back to the mix.
+  const handOver = useCallback((synthId: number, tap: AudioNode | null) => {
+    const lane = laneFor(synthId);
+    lane.handedTo = tap;
+    lane.audio?.handOver(tap);
+  }, []);
   const duck = useCallback((synthId: number, time: number, amount: number) => {
     lanesRef.current.get(synthId)?.audio?.duck(time, amount);
   }, []);
@@ -180,6 +189,6 @@ export function useSynthAudio() {
   // The same object on every render, so effects and callbacks that depend on it do not re-run.
   return useMemo(() => ({
     ensureAudioReady, tryResume: () => { void ensureAudioReady(); },
-    playNote, stopNote, stopSynth, stopAllNotes, updateParameters, automate, endAutomation, setEffectsLoop, setVolume, setSample, setLive, duck, dispose,
-  }), [playNote, stopNote, stopSynth, stopAllNotes, updateParameters, automate, endAutomation, setVolume, setSample, setLive, duck, dispose]);
+    playNote, stopNote, stopSynth, stopAllNotes, updateParameters, automate, endAutomation, setEffectsLoop, setVolume, setSample, setLive, duck, handOver, dispose,
+  }), [playNote, stopNote, stopSynth, stopAllNotes, updateParameters, automate, endAutomation, setVolume, setSample, setLive, duck, handOver, dispose]);
 }

@@ -484,6 +484,9 @@
   color: var(--text-label); font: inherit; font-size: var(--type-caption); cursor: pointer; text-transform: uppercase; white-space: nowrap;
 }
 .drum-name:hover { border-color: var(--hover); color: var(--text); }
+/* A drum handed to a guest is heard through the guest, not the mix: its name plate is dashed. */
+.drum-name[data-handed] { border-style: dashed; }
+.rack-plate .handed-to { font-size: var(--type-caption); color: var(--text-faint); white-space: nowrap; }
 .drum-grid-row.selected .drum-name { background: var(--drum-color); border-color: var(--drum-color); color: var(--text-on); }
 /* --bar is how many steps the scene's time signature puts in a bar; DrumModule sets it. */
 .drum-cells { display: grid; grid-template-columns: repeat(var(--bar, 16), minmax(0, 1fr)); gap: 3px; min-width: 0; }

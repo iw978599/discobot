@@ -1,7 +1,7 @@
 import { createAudioLane, getAudioContext, loadAudioWorklet } from './browserAudio';
 import { GUEST_LATENCY_MS, NO_SENDS, contextTimeAtWall, latencyAfterLateBlocks, placeBlock, resample } from '../services/guests';
 import type { FxSendLevels } from '../types';
-import type { GuestPlayerMessage } from '@discobot/engine';
+import type { GuestPlayerMessage, GuestTapMessage } from '@discobot/engine';
 
 const MAX_BLOCK_FRAMES = 16384;
 // Audio that would start sooner than this from now is too late to place where it belongs.
@@ -79,3 +79,28 @@ export function createGuestPlayer(onLatency: (latencyMs: number) => void, initia
 }
 
 export type GuestPlayer = ReturnType<typeof createGuestPlayer>;
+
+// Where a voice handed to a guest is taken (services/guestInput): the `guest-tap` processor, whose
+// blocks are handed to `onBlock` with the frame each starts on. Its own output is silence, sent
+// to the speakers only so that the browser keeps running it.
+export function createGuestTap(onBlock: (frame: number, left: Float32Array, right: Float32Array) => void) {
+  const context = getAudioContext();
+  let node: AudioWorkletNode | null = null, keepAlive: GainNode | null = null, disposed = false;
+  const ready = loadAudioWorklet().then(() => {
+    if (disposed) return null;
+    node = new AudioWorkletNode(context, 'guest-tap', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2], channelCount: 2, channelCountMode: 'explicit' });
+    node.port.onmessage = ({ data }: MessageEvent<GuestTapMessage>) => { if (data?.type === 'block') onBlock(data.frame, data.left, data.right); };
+    keepAlive = context.createGain();
+    keepAlive.gain.value = 0;
+    node.connect(keepAlive).connect(context.destination);
+    return node;
+  });
+  return {
+    ready,
+    dispose() {
+      disposed = true;
+      if (node) { node.port.onmessage = null; node.disconnect(); }
+      keepAlive?.disconnect();
+    },
+  };
+}

@@ -17,6 +17,7 @@
 <p>Rings a note on every beat. A complete, minimal example of a Discobot guest instrument: see <code>GUEST_PROTOCOL.md</code>.</p>
 <label>Note <select id="note" aria-label="Note"></select></label>
 <label>Sound <select id="wave" aria-label="Sound"><option>triangle</option><option>sine</option><option>square</option></select></label>
+<label id="voice-control" hidden>Voice <select id="voice" aria-label="Voice"><option value="">None</option></select></label>
 <button id="start">Start</button>
 <div id="status" role="status"></div>
 
@@ -25,10 +26,14 @@
   'use strict';
   var PROTOCOL = 1;
   var SEND_DELAY_MS = Math.max(0, Math.min(2000, Number(new URLSearchParams(location.search).get('delay')) || 0));
+  // ?input=1 makes this a guest that takes one of the host's voices (the optional "input" feature)
+  // and plays it back, as an effect would after doing something to it. It then rings no bell.
+  var TAKES_INPUT = new URLSearchParams(location.search).get('input') === '1';
   var NOTES = ['C4', 'D4', 'E4', 'G4', 'A4', 'C5'], MIDI = [60, 62, 64, 67, 69, 72];
 
   // ---- the instrument itself: a note on every beat
   var state = { note: 'C4', wave: 'triangle' };
+  if (TAKES_INPUT) state.input = null;
   var ctx = null, output = null, monitor = null;
   var transport = { playing: false };   // { playing, bpm, anchorWall, anchorBeat }
   var nextBeat = 0, scheduled = 0, timer = null;
@@ -82,7 +87,7 @@
     var horizon = wallNow() + 150;
     while (wallOfBeat(nextBeat) - latencyMs < horizon) {
       var time = ctxAtWall(wallOfBeat(nextBeat) - latencyMs);
-      if (time > ctx.currentTime) ring(time);
+      if (time > ctx.currentTime && !TAKES_INPUT) ring(time);
       nextBeat += 1;
     }
     show();
@@ -138,6 +143,35 @@
     if (tap) { try { output.disconnect(tap); tap.disconnect(); } catch (e) {} tap = null; }
   }
 
+  // ---- a voice of the host's, played back: each block where it falls, `latencyMs` early like
+  // everything else, so that the host, holding this page's sound back by as much, hears it on time.
+  var sources = [], selected = null, inputBlocks = 0, lateRun = 0, worstLate = 0;
+  function playInput(m) {
+    if (!ctx || !(m.left instanceof Float32Array) || !(m.right instanceof Float32Array) || m.left.length !== m.right.length || !m.left.length) return;
+    var rate = Number(m.sampleRate);
+    if (!(rate >= 8000 && rate <= 192000)) return;
+    var buffer = ctx.createBuffer(2, m.left.length, rate);
+    buffer.copyToChannel(m.left, 0); buffer.copyToChannel(m.right, 1);
+    var when = ctxAtWall(Number(m.wall) - latencyMs), late = ctx.currentTime + 0.005 - when;
+    if (late > 0) {
+      // Too late to play where it belongs: play it now, and after a few say how late.
+      lateRun += 1; worstLate = Math.max(worstLate, late * 1000);
+      if (lateRun >= 4) { send({ type: 'inputLate', ms: Math.round(worstLate) }); lateRun = 0; worstLate = 0; }
+    } else { lateRun = 0; worstLate = 0; }
+    var source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(output);
+    source.start(Math.max(when, ctx.currentTime));
+    inputBlocks += 1;
+  }
+  var voiceSelect = document.getElementById('voice');
+  function showSources() {
+    voiceSelect.innerHTML = '<option value="">None</option>';
+    sources.forEach(function (source) { var option = document.createElement('option'); option.value = source.id; option.textContent = source.name; voiceSelect.appendChild(option); });
+    voiceSelect.value = state.input || '';
+  }
+  voiceSelect.addEventListener('change', function () { state.input = voiceSelect.value || null; send({ type: 'selectInput', source: state.input }); send({ type: 'stateChanged' }); });
+
   // ---- messages
   function send(message, transfer) {
     if (!hosted) return;
@@ -155,6 +189,14 @@
     else if (m.type === 'getState') send({ type: 'state', id: m.id, state: state });
     else if (m.type === 'setState') applyState(m.state);
     else if (m.type === 'audio') { if (m.on) startStreaming(); else stopStreaming(); }
+    else if (TAKES_INPUT && m.type === 'sources' && Array.isArray(m.sources)) {
+      sources = m.sources.filter(function (s) { return s && typeof s.id === 'string' && typeof s.name === 'string'; });
+      showSources();
+      // The voice these settings name is asked for again: after a reload, or a scene that wants it.
+      if (state.input !== selected) send({ type: 'selectInput', source: state.input });
+    }
+    else if (TAKES_INPUT && m.type === 'inputSelected') selected = typeof m.source === 'string' ? m.source : null;
+    else if (TAKES_INPUT && m.type === 'input') { ensureAudio(); playInput(m); }
     show();
   });
 
@@ -164,6 +206,10 @@
     if (NOTES.indexOf(next.note) >= 0) state.note = next.note;
     if (['triangle', 'sine', 'square'].indexOf(next.wave) >= 0) state.wave = next.wave;
     noteSelect.value = state.note; waveSelect.value = state.wave;
+    if (TAKES_INPUT) {
+      var wanted = typeof next.input === 'string' ? next.input : null;
+      if (wanted !== state.input) { state.input = wanted; showSources(); if (sources.length) send({ type: 'selectInput', source: wanted }); }
+    }
   }
   var noteSelect = document.getElementById('note'), waveSelect = document.getElementById('wave');
   NOTES.forEach(function (name) { var option = document.createElement('option'); option.textContent = name; noteSelect.appendChild(option); });
@@ -183,10 +229,12 @@
       '\n' + (transport.playing ? 'Playing at ' + transport.bpm + ' BPM' : 'Stopped') +
       '\nBeats played: ' + scheduled +
       '\nAudio blocks sent: ' + blocksSent +
+      (TAKES_INPUT ? '\nVoice: ' + (selected || 'none') + ', blocks received: ' + inputBlocks : '') +
       (ctx && ctx.state !== 'running' ? '\nAudio is waiting for a click on this page' : '');
   }
   show();
-  send({ type: 'ready', name: 'Beat Bell', features: ['transport', 'state', 'audio'] });
+  document.getElementById('voice-control').hidden = !TAKES_INPUT;
+  send({ type: 'ready', name: 'Beat Bell', features: TAKES_INPUT ? ['transport', 'state', 'audio', 'input'] : ['transport', 'state', 'audio'] });
 })();
 </script>
 </body>

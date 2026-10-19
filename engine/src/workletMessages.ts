@@ -32,3 +32,8 @@ export type GuestPlayerMessage =
   // `frame` is where the block starts on the audio context's clock
   | { type: 'block'; frame: number; left: Float32Array; right: Float32Array }
   | { type: 'clear' };
+
+// What the guest tap sends the page: a block of a voice handed to a guest, starting at `frame` on
+// the audio context's clock. It runs the other way from the rest, from the worklet to the page.
+export type GuestTapMessage = { type: 'block'; frame: number; left: Float32Array; right: Float32Array };
+export const GUEST_TAP_FRAMES = 1024;

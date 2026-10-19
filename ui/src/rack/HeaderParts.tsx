@@ -274,6 +274,7 @@ function HelpContent({ at, onClose, onWalkthrough }: { at: string | null; onClos
             <li><strong>Its controls:</strong> M mutes it and Level sets how loud it is. <strong>Sends</strong> shows its sends to the shared effects, <strong>Hide</strong> folds its page away, <strong>Reload</strong> loads the page again and <strong>Remove</strong> takes it out of the project.</li>
             <li><strong>Per scene:</strong> its settings, its level and its mute are kept with each scene, like a lane's notes.</li>
             <li><strong>Exports:</strong> a guest cannot be made into a file directly, so an audio export first plays the music through to record it. Guests are not in a MIDI export.</li>
+            <li><strong>Giving a guest one of your voices:</strong> some guests, effects pads among them, can take a synth lane, the whole drum kit or one drum and play it through themselves. You choose which inside the guest. The voice then leaves the mix and its sends and is heard through the guest, and its strip on the mixer, its name plate and, for a drum, its name in the grid say where it has gone (→ and the guest's name). Muting it here still silences it. To keep it on the beat Discobot plays it a little early, so notes you play live on that voice come back a little late, and an edit near the playhead is heard a moment later than usual. An export records it through the guest and leaves it out of Discobot's own sound, so it is heard once.</li>
           </ul>
         </section>
         <section id="help-keys" hidden={off('help-keys')}>

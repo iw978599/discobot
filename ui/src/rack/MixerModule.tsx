@@ -7,6 +7,7 @@ import { EFFECTS_DEFAULT } from '../services/effectSettings';
 import { panText, parsePan, parsePercent, percentText, type MixerChannels } from '../services/mixerChannels';
 import { storeMixerHidden, storedMixerHidden } from '../services/rackView';
 import Fader from '../components/Fader';
+import { useHandOvers } from '../hooks/useHandedTo';
 import Knob from '../components/Knob';
 import UnitHelp, { UNIT_HELP } from './UnitHelp';
 import type { DrumInstrument } from '../types';
@@ -21,6 +22,8 @@ interface StripProps {
   name: string;
   under?: string;
   drum?: DrumInstrument;
+  // The guest this channel's voice is handed to, if any: it is not in the mix but heard through the guest.
+  handedTo?: string;
   // `word` is what the fader sets, where the strip's name does not already say: "level", "volume".
   level: { word?: string; value: number; max?: number; home: number; hint: string; onChange: (value: number) => void };
   pan?: { value: number; kind: 'lane' | 'drum'; onChange: (value: number) => void };
@@ -32,12 +35,13 @@ interface StripProps {
 
 // One channel: its name, a pan knob if it has a pan, the fader, and mute and solo if it has them.
 // A part a channel does not have keeps its room, so the faders stand in one line across the desk.
-function Strip({ about, name, under, drum, level, pan, muted, solo, onMute, onSolo }: StripProps) {
+function Strip({ about, name, under, drum, handedTo, level, pan, muted, solo, onMute, onSolo }: StripProps) {
+  const caption = handedTo ? `→ ${handedTo}` : under;
   return (
-    <div className="mixer-strip" role="group" aria-label={`Mixer ${about}`} data-drum={drum} data-muted={muted ? 'true' : undefined}>
+    <div className="mixer-strip" role="group" aria-label={`Mixer ${about}`} data-drum={drum} data-muted={muted ? 'true' : undefined} data-handed={handedTo ? 'true' : undefined}>
       <div className="mixer-name">
         <b>{name}</b>
-        {under && <span title={under}>{under}</span>}
+        {caption && <span title={handedTo ? `Sent to the guest ${handedTo}, and heard through it` : caption}>{caption}</span>}
       </div>
       <div className="mixer-pan">
         {pan && (
@@ -90,6 +94,7 @@ function Group({ name, note, children }: { name: string; note?: string; children
 // those levels change, so the mixer is not drawn again for a note or a step.
 function MixerModule({ studio, channels, onHelp }: { studio: Studio; channels: MixerChannels; onHelp?: (section: string) => void }) {
   const [hidden, setHidden] = useState(storedMixerHidden);
+  const handed = useHandOvers();
   const toggle = () => {
     storeMixerHidden(!hidden);
     setHidden(!hidden);
@@ -117,6 +122,7 @@ function MixerModule({ studio, channels, onHelp }: { studio: Studio; channels: M
                 about={`Synth ${lane.id}`}
                 name={`Synth ${lane.id}`}
                 under={lane.model}
+                handedTo={handed[`synth:${lane.id}`]}
                 level={{ word: 'level', value: lane.level, max: 2, home: SOUND_DEFAULTS.gain, hint: 'How loud this lane is. The same as its Level knob', onChange: (value) => { void studio.handleParameterChange(lane.id, { gain: value }); } }}
                 pan={{ value: lane.pan, kind: 'lane', onChange: (value) => { void studio.handleParameterChange(lane.id, { pan: value }); } }}
                 muted={lane.muted}
@@ -148,6 +154,7 @@ function MixerModule({ studio, channels, onHelp }: { studio: Studio; channels: M
                 about={DRUM_NAMES[drum.id]}
                 name={DRUM_NAMES[drum.id]}
                 drum={drum.id}
+                handedTo={handed[`drum:${drum.id}`]}
                 level={{ word: 'volume', value: drum.volume, home: DRUM_SETTINGS_DEFAULT[drum.id].volume, hint: 'How loud this drum is. The same as its Volume knob', onChange: value => studio.handleDrumSettingsChange(drum.id, { volume: value }) }}
                 pan={{ value: drum.pan, kind: 'drum', onChange: value => studio.handleDrumSettingsChange(drum.id, { pan: value }) }}
                 muted={drum.muted}
@@ -160,6 +167,7 @@ function MixerModule({ studio, channels, onHelp }: { studio: Studio; channels: M
               about="Drums master"
               name="All"
               under="Drums"
+              handedTo={handed.drums}
               level={{ word: 'volume', value: channels.drumMaster, home: 1, hint: 'Level of the whole drum kit. The same as the Master knob on the drums', onChange: studio.handleDrumMasterVolumeChange }}
             />
           </Group>
