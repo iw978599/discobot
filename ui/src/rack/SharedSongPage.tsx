@@ -58,7 +58,7 @@ export default function SharedSongPage({ file, author, error: fetchError, onOpen
       const wav = await renderArrangementWav({
         tempo: project.tempo, drumState: project.drumState, drumKitId: project.selectedDrumKitId,
         drumMasterVolume: project.drumMasterVolume, drumSwing: project.drumSwing, drumFx: project.drumFx, effectsLoop: project.effectsLoop,
-        synths: project.synths.map(synth => ({ id: synth.synthId, pattern: synth.pattern, synthParams: synth.synthParams, muted: false, solo: false })),
+        synths: project.synths.map(synth => ({ id: synth.synthId, pattern: synth.pattern, synthParams: synth.synthParams, muted: false, solo: false, swing: synth.swing })),
         bars: applySceneMutes(songBars(project.song, project.scenes), project.synths.map(synth => ({ id: synth.synthId, muted: synth.muted, solo: synth.solo }))),
         // The app's own waves come with it, so a lane that plays one sounds here as it did when shared.
         drumCymbals: await loadCymbals(),

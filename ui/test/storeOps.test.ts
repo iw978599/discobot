@@ -352,6 +352,7 @@ const juno = (service: LocalProjectService) => { assert.ok(service.setSynthModel
 const mix = laneCase('synth.mix', 'synthMix', (service, synthId, body) => service.setSynthMix(synthId, { muted: body.muted, solo: body.solo }));
 const mixed = (muted: boolean, solo: boolean) => ({ answer: { synthId: 1, muted, solo } });
 const soloed = (service: LocalProjectService) => { assert.ok(service.setSynthMix(1, { solo: true }).ok); };
+const swung = laneCase('synth.swing', 'synthSwing', (service, synthId, body) => service.setSynthSwing(synthId, body.swing));
 const prefs = laneCase('synth.prefs', '', (service, synthId, body) => service.setSynthPrefs(synthId, { octaveShift: body.octaveShift, keyboardMode: body.keyboardMode }));
 // A lane as the store answers it: the whole of it, with its pattern's id as its place among the ids.
 const lane = (rest: object = {}) => {
@@ -410,6 +411,9 @@ const laneCases: Case[] = [
   mix('what is not a number at all, infinity, null and a number are not a mute or a solo', { muted: Number.NaN, solo: Number.POSITIVE_INFINITY }, mixed(false, true), soloed),
   mix('null and a number are not either', { muted: 1, solo: null }, mixed(false, true), soloed),
   mix('a mix for a lane that does not exist is refused', { muted: true }, { status: 404, error: NO_SYNTH }, soloed, 3),
+  swung('a lane is swung', { swing: true }, { answer: { synthId: 1, swing: true } }),
+  swung('and is swung no more', { swing: false }, { answer: { synthId: 1, swing: false } }, service => { assert.ok(service.setSynthSwing(1, true).ok); }),
+  swung('swing for a lane that does not exist is refused', { swing: true }, { status: 404, error: NO_SYNTH }, undefined, 3),
 
   prefs('the octave and the keyboard are saved without an event; the answer is the whole lane', { octaveShift: 1.6, keyboardMode: 'piano-roll' }, lane({ octaveShift: 2, keyboardMode: 'piano-roll' })),
   prefs('the octave is held to two either way', { octaveShift: 9, keyboardMode: 'keyboard' }, lane({ octaveShift: 2, keyboardMode: 'keyboard' }), lowPiano),

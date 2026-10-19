@@ -34,7 +34,7 @@ more instruments from the VCSL library (a builder).
 The most for the least. Each is one short piece of work, mostly by the agent
 directly, with no builder.
 
-1. **Swing for the synth lanes** (V11). A swung beat has straight bass today.
+1. **Swing for the synth lanes** (V11). Done: a Swing switch on each lane follows the drums' Swing. Whether a lane should have an amount of its own is the owner's to say.
 2. **A longer count-in and a level for the click** (V9).
 3. **Search across presets** (V13). Eighty-six presets is past what a menu
    shows well.

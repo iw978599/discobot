@@ -1,5 +1,5 @@
 import { DrumInstrument, DrumState, Pattern, SequencerStep } from '../types';
-import { expandDrumStep, seededRandom } from '../services/drumScheduling';
+import { expandDrumStep, seededRandom, swingLate } from '../services/drumScheduling';
 import { barSteps, beatStarts, signatureFraction, timeSignature } from '../services/patternLength';
 
 interface MidiSynthLane {
@@ -7,6 +7,8 @@ interface MidiSynthLane {
   pattern: Pattern;
   muted?: boolean;
   solo?: boolean;
+  // swung by the drums' swing
+  swing?: boolean;
 }
 
 interface MidiExportPayload {
@@ -164,7 +166,7 @@ function buildTempoTrack(tempo: number, markers: MidiEvent[] = [], signatures: M
 }
 
 // `bars` is the lane's steps for each bar in turn.
-function buildSynthTrack(id: number, bars: SequencerStep[][], channel: number, times: BarTicks): number[] {
+function buildSynthTrack(id: number, bars: SequencerStep[][], channel: number, times: BarTicks, swing = 0): number[] {
   const events: MidiEvent[] = [textMetaEvent(0, `Synth ${id}`)];
   const random = seededRandom(2);
   bars.forEach((steps, bar) => {
@@ -183,7 +185,8 @@ function buildSynthTrack(id: number, bars: SequencerStep[][], channel: number, t
       // A note of a chord can have a length of its own. Repeats share out the step's whole length.
       const own = step.lengths?.[at];
       const noteTicks = repeats === 1 && own !== undefined && own >= 1 ? ticksPerStep * Math.min(own, step.length ?? 1) : spanTicks;
-      const tick = times[bar].start + Math.round((stepIndex + Math.max(0, Math.min(0.95, step.offset ?? 0))) * ticksPerStep + repeat * spanTicks);
+      const late = swingLate(stepIndex * ticksPerStep, TICKS_PER_STEP, swing);
+      const tick = times[bar].start + Math.round((stepIndex + Math.max(0, Math.min(0.95, step.offset ?? 0))) * ticksPerStep + repeat * spanTicks + late);
       const velocity = clampVelocity(step.velocity * 127, DEFAULT_SYNTH_VELOCITY);
       const noteOnStatus = 0x90 | (channel & 0x0f);
       const noteOffStatus = 0x80 | (channel & 0x0f);
@@ -238,7 +241,7 @@ export function createMidiFile(payload: MidiExportPayload): Uint8Array {
   const nonDrumChannels = [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15];
   activeSynths.forEach((lane, index) => {
     const channel = nonDrumChannels[index % nonDrumChannels.length];
-    trackChunks.push(buildSynthTrack(lane.id, laneBars(lane), channel, times));
+    trackChunks.push(buildSynthTrack(lane.id, laneBars(lane), channel, times, lane.swing ? payload.drumSwing ?? 0 : 0));
   });
 
   trackChunks.push(buildDrumTrack(payload.bars ? payload.bars.map(bar => bar.drumState) : [payload.drumState], payload.drumSwing, payload.drumMasterVolume, times));
