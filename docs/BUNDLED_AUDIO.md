@@ -1,8 +1,8 @@
 # Audio that ships with the app
 
-One file of audio is part of the app: `ui/public/waves.bin`, about 1.04 MB. It
+One file of audio is part of the app: `ui/public/waves.bin`, about 1.18 MB. It
 holds the sounds the sample engine offers under "Built in", which the M1, D-50
-and Wavestation models play, the drum machine's four cymbals and the Recorded drum kit. Nothing
+and Wavestation models play, the drum machine's four cymbals, the Recorded drum kit and the extra percussion. Nothing
 else in the app is a recording.
 
 The owner chose on 2026-10-12 to take these from two free libraries, after the
@@ -55,6 +55,22 @@ plays the cymbal recordings above.
 They are kept at 22,050 Hz, except the two hats, which are at 32,000 Hz, and
 cut to between a quarter of a second and a second. Together they added
 212,892 bytes (about 208 KB) to `waves.bin`, which is now 1,091,846 bytes.
+
+### Other percussion on a drum lane (added 2026-10-19)
+
+Six more VCSL hits (same folders and licence as the kit), ids `perc-<name>` in
+`waves.bin`, chosen from the Voice menu of the lane that has them, in any kit.
+Kept at 22,050 Hz and cut to between a quarter and half a second. Together they
+added 113,652 bytes (about 111 KB): `waves.bin` is now 1,205,498 bytes.
+
+| Choice (lane) | VCSL file |
+|---|---|
+| Tambourine (Clap) | I `Tambourine 1/Tamb1_Hit_v2_rr1_Mid` |
+| Shaker (Clap) | I `Shaker, Small/Mid_ShakerDouble_Down_rr1` |
+| Cowbell (Clap) | I `Cowbells/Cowbell1_Normal_v3_rr1_Mid` |
+| Cross-stick (Snare) | M `Snare Drum, Modern 1/Snare2_stick_v1_rr1_Mid` |
+| Conga (Low Tom) | M `Conga/Conga_HitN_v2_rr1_Sum` |
+| Bongo (High Tom) | M `Bongos/BongoH_Hit1_v2_rr1_Mid` |
 
 ## The licences
 

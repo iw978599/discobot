@@ -495,10 +495,12 @@ may redistribute.
    recording (one hit each), about 208 KB added to `waves.bin`. Tune,
    Decay and Tone act on a recording as they do on the cymbal. Open: a
    second, harder hit for velocity; the name "Recorded", which the owner
-   may change; the kit's default levels, set by reasoning. Part 2 (more
-   percussion as choices on a lane, such as a tambourine on the clap lane)
-   and part 3 (VCSL instruments for the sample engine, loaded on demand)
-   follow.
+   may change; the kit's default levels, set by reasoning. Part 2, done on
+   2026-10-19, not verified by ear: a Voice menu on four lanes, in any kit:
+   Clap is a tambourine, shaker or cowbell, Snare a cross-stick, Low Tom a
+   conga and High Tom a bongo (about 111 KB more). Open: more choices, a
+   second hit each. Part 3 (VCSL instruments for the sample engine, loaded
+   on demand) follows.
 
 ## Features
 

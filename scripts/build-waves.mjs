@@ -48,6 +48,15 @@ export const SOURCES = [
     ['snare2', `${MEMBRANE}Tom%202/Stick/TomL_HitS_v3_rr1_Mid.wav`, 0.7],
     ['ride', `${MEMBRANE}Tom%201/Stick/TomH_HitS_v3_rr1_Mid.wav`, 0.6],
   ].map(([name, from, seconds, rate]) => ({ id: `kit-${name}`, zones: [{ file: `vcsl/kit_${name}.wav`, from, root: 60, seconds, rate: rate ?? RATE, unpitched: true }] })),
+  // Other percussion a drum lane can be instead of its own drum, in any kit (VCSL).
+  ...[
+    ['tambourine', `${IDIOPHONE}Tambourine%201/Tamb1_Hit_v2_rr1_Mid.wav`, 0.5],
+    ['shaker', `${IDIOPHONE}Shaker,%20Small/Mid_ShakerDouble_Down_rr1.wav`, 0.35],
+    ['cowbell', `${IDIOPHONE}Cowbells/Cowbell1_Normal_v3_rr1_Mid.wav`, 0.5],
+    ['sidestick', `${MEMBRANE}Snare%20Drum,%20Modern%201/Snare2_stick_v1_rr1_Mid.wav`, 0.3],
+    ['conga', `${MEMBRANE}Conga/Conga_HitN_v2_rr1_Sum.wav`, 0.6],
+    ['bongo', `${MEMBRANE}Bongos/BongoH_Hit1_v2_rr1_Mid.wav`, 0.4],
+  ].map(([name, from, seconds]) => ({ id: `perc-${name}`, zones: [{ file: `vcsl/perc_${name}.wav`, from, root: 60, seconds, rate: RATE, unpitched: true }] })),
   { id: 'organ', frames: cycles('eorgan', [1]) },
   { id: 'choir', frames: cycles('hvoice', [1]) },
   { id: 'seq-voices', frames: cycles('hvoice', [1, 14, 27, 40, 53, 66, 79, 92]) },
