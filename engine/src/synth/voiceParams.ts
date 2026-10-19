@@ -1,8 +1,9 @@
 import type { RateSync, SynthParameters } from '../types';
+import type { InsertSettings } from './inserts';
 
 // The flat parameter set a SynthCore runs on. Live playback posts it to the worklet;
 // offline export hands it to the same core directly.
-export interface VoiceParams {
+export interface VoiceParams extends InsertSettings {
   engine: string;
   voiceMode: string;
   oscType: string;
@@ -147,6 +148,16 @@ function flatRoutes(routes: SynthParameters['modMatrix']): FlatRoutes {
   };
 }
 
+function flatInserts(inserts: SynthParameters['inserts'], bpm: number): InsertSettings {
+  const chorus = inserts?.chorus, delay = inserts?.delay;
+  const beat = syncedRateHz(delay?.sync, bpm);
+  return {
+    insDrive: inserts?.drive ?? 0, insTone: inserts?.tone ?? 0,
+    insChorusMix: chorus?.mix ?? 0, insChorusDepth: chorus?.depth ?? 0, insChorusRate: syncedRateHz(chorus?.sync, bpm) ?? chorus?.rate ?? 0.6,
+    insDelayMix: delay?.mix ?? 0, insDelayTime: beat ? 1 / beat : delay?.time ?? 0.25, insDelayFeedback: delay?.feedback ?? 0.3,
+  };
+}
+
 export function toVoiceParams(p: SynthParameters, bpm = 120): VoiceParams {
   const d = createDefaultSynthParameters();
   const osc2 = p.oscillator2 ?? d.oscillator2!;
@@ -184,5 +195,6 @@ export function toVoiceParams(p: SynthParameters, bpm = 120): VoiceParams {
     lfo2Enabled: p.lfo2.enabled, lfo2Target: p.lfo2.target, lfo2Waveform: p.lfo2.waveform,
     lfo2Rate: lfoRate(p.lfo2), lfo2Depth: p.lfo2.depth, lfo2Retrigger: p.lfo2.retrigger ?? true,
     ...flatRoutes(p.modMatrix),
+    ...flatInserts(p.inserts, bpm),
   };
 }

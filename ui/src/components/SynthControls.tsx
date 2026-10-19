@@ -12,6 +12,7 @@ import NestedMenu from '../rack/NestedMenu';
 import { listSamples, saveSample } from '../services/sampleStore';
 import { BUILT_IN_WAVES } from '../services/builtInWaves';
 import { RATE_SYNCS, RATE_SYNC_LABELS } from '../services/rateSync';
+import { INSERT_DEFAULT } from '../services/effectSettings';
 import Knob from './Knob';
 import './SynthControls.css';
 
@@ -37,15 +38,16 @@ interface SynthControlsProps {
   onSampleError?: (message: string) => void;
 }
 
-export type SynthTab = 'notes' | 'osc' | 'filter' | 'amp' | 'lfo' | 'arp' | 'sends';
+export type SynthTab = 'notes' | 'osc' | 'filter' | 'amp' | 'lfo' | 'arp' | 'sends' | 'inserts';
 // The editor has two levels: what the lane plays, and what it sounds like. Sound has a page for
 // each of the rest of `SynthTab`; a lane on any of them is on the Sound level.
 type SynthLevel = 'notes' | 'sound';
 const LEVELS: Array<{ id: SynthLevel; label: string }> = [{ id: 'notes', label: 'Notes' }, { id: 'sound', label: 'Sound' }];
 const SOUND_TABS: Array<{ id: SynthTab; label: string }> = [
   { id: 'osc', label: 'Osc' }, { id: 'filter', label: 'Filter' }, { id: 'amp', label: 'Amp' },
-  { id: 'lfo', label: 'LFO' }, { id: 'arp', label: 'Arp' }, { id: 'sends', label: 'Sends' },
+  { id: 'lfo', label: 'LFO' }, { id: 'arp', label: 'Arp' }, { id: 'inserts', label: 'Inserts' }, { id: 'sends', label: 'Sends' },
 ];
+const INSERT_DELAY_SYNCS: RateSync[] = ['off', '1/2', '1/4', '1/8', '1/16'];
 
 // In a row of tabs the arrow keys, Home and End move to a tab and open it; Tab leaves the row.
 const tabKeys = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -284,6 +286,23 @@ export default function SynthControls({
       },
     });
   };
+
+  // A lane's insert effects. Every change sends the whole of them, with 'off' for a sync that is not
+  // set: the store's merge would keep a value that was merely left out.
+  const inserts = parameters.inserts ?? {};
+  const insertChorus = { ...INSERT_DEFAULT.chorus, sync: undefined as RateSync | undefined, ...inserts.chorus };
+  const insertDelay = { ...INSERT_DEFAULT.delay, sync: undefined as RateSync | undefined, ...inserts.delay };
+  const updateInserts = (updates: Partial<NonNullable<SynthParameters['inserts']>>) => {
+    onParameterChange({
+      inserts: {
+        drive: inserts.drive ?? 0, tone: inserts.tone ?? 0,
+        chorus: { ...insertChorus, sync: insertChorus.sync ?? 'off' }, delay: { ...insertDelay, sync: insertDelay.sync ?? 'off' },
+        ...updates,
+      },
+    });
+  };
+  const updateInsertChorus = (updates: Partial<typeof insertChorus>) => updateInserts({ chorus: { ...insertChorus, sync: insertChorus.sync ?? 'off', ...updates } });
+  const updateInsertDelay = (updates: Partial<typeof insertDelay>) => updateInserts({ delay: { ...insertDelay, sync: insertDelay.sync ?? 'off', ...updates } });
 
   const updatePortamento = (updates: Partial<SynthParameters['portamento']>) => {
     onParameterChange({
@@ -1713,6 +1732,150 @@ export default function SynthControls({
               color="#f59e0b"
               tooltip={TOOLTIPS.release}
             />
+          </div>
+        </div>
+
+        <div className="synth-column" data-tab="inserts">
+          <h3>INSERT TONE</h3>
+          <div className="synth-column-controls">
+            <Knob
+              label="Drive"
+              ariaLabel="Insert drive"
+              value={inserts.drive ?? 0}
+              defaultValue={0}
+              min={0}
+              max={1}
+              step={0.01}
+              displayValue={`${Math.round((inserts.drive ?? 0) * 100)}%`}
+              onChange={(v) => updateInserts({ drive: v })}
+              parseInputValue={parsePercent(0, 1)}
+              tooltip="Warms and thickens this lane's sound before anything else. Only this lane hears it"
+            />
+            <Knob
+              label="Tone"
+              ariaLabel="Insert tone"
+              value={inserts.tone ?? 0}
+              defaultValue={0}
+              min={-1}
+              max={1}
+              step={0.01}
+              displayValue={(inserts.tone ?? 0) === 0 ? 'Flat' : `${(inserts.tone ?? 0) < 0 ? 'Dark' : 'Thin'} ${Math.round(Math.abs(inserts.tone ?? 0) * 100)}%`}
+              onChange={(v) => updateInserts({ tone: v })}
+              parseInputValue={parsePercent(0, 1)}
+              tooltip="Left of the middle takes the top off, right of it takes the bottom off. Only this lane hears it"
+            />
+          </div>
+        </div>
+        <div className="synth-column" data-tab="inserts">
+          <h3>INSERT CHORUS</h3>
+          <div className="synth-column-controls">
+            <Knob
+              label="Mix"
+              ariaLabel="Insert chorus mix"
+              value={insertChorus.mix}
+              defaultValue={0}
+              min={0}
+              max={1}
+              step={0.01}
+              displayValue={`${Math.round(insertChorus.mix * 100)}%`}
+              onChange={(v) => updateInsertChorus({ mix: v })}
+              parseInputValue={parsePercent(0, 1)}
+              tooltip="How much of this lane's own chorus is heard. At 0 there is none"
+            />
+            <Knob
+              label="Depth"
+              ariaLabel="Insert chorus depth"
+              value={insertChorus.depth}
+              defaultValue={0.5}
+              min={0}
+              max={1}
+              step={0.01}
+              displayValue={`${Math.round(insertChorus.depth * 100)}%`}
+              onChange={(v) => updateInsertChorus({ depth: v })}
+              parseInputValue={parsePercent(0, 1)}
+              tooltip="How far the chorus sways the sound"
+            />
+            <Knob
+              label="Rate"
+              ariaLabel="Insert chorus rate"
+              value={insertChorus.rate}
+              defaultValue={0.6}
+              min={0.02}
+              max={8}
+              step={0.01}
+              displayValue={insertChorus.sync && insertChorus.sync !== 'off' ? RATE_SYNC_LABELS[insertChorus.sync] : `${insertChorus.rate.toFixed(2)} Hz`}
+              onChange={(v) => updateInsertChorus({ rate: v, sync: 'off' })}
+              parseInputValue={parseNumber}
+              tooltip="How fast the chorus sways. Turn the knob to set a free speed instead of the tempo"
+            />
+            <div className="synth-waveform-selector">
+              <label>SYNC</label>
+              <select
+                className="synth-select"
+                aria-label="Insert chorus sync"
+                title="Sway in time with the tempo: one sway each note value"
+                value={insertChorus.sync ?? 'off'}
+                onChange={(e) => updateInsertChorus({ sync: e.target.value as RateSync })}
+              >
+                {RATE_SYNCS.map(value => <option key={value} value={value}>{RATE_SYNC_LABELS[value]}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+        <div className="synth-column" data-tab="inserts">
+          <h3>INSERT DELAY</h3>
+          <div className="synth-column-controls">
+            <Knob
+              label="Mix"
+              ariaLabel="Insert delay mix"
+              value={insertDelay.mix}
+              defaultValue={0}
+              min={0}
+              max={1}
+              step={0.01}
+              displayValue={`${Math.round(insertDelay.mix * 100)}%`}
+              onChange={(v) => updateInsertDelay({ mix: v })}
+              parseInputValue={parsePercent(0, 1)}
+              tooltip="How much of this lane's own echo is heard. At 0 there is none"
+            />
+            <Knob
+              label="Time"
+              ariaLabel="Insert delay time"
+              value={insertDelay.time}
+              defaultValue={0.25}
+              min={0.01}
+              max={1.5}
+              step={0.01}
+              displayValue={insertDelay.sync && insertDelay.sync !== 'off' ? RATE_SYNC_LABELS[insertDelay.sync] : `${Math.round(insertDelay.time * 1000)}ms`}
+              onChange={(v) => updateInsertDelay({ time: v, sync: 'off' })}
+              parseInputValue={parseMilliseconds}
+              tooltip="Time between echoes. Turn the knob to set a free time instead of the tempo"
+            />
+            <Knob
+              label="Feedback"
+              ariaLabel="Insert delay feedback"
+              value={insertDelay.feedback}
+              defaultValue={0.3}
+              min={0}
+              max={0.85}
+              step={0.01}
+              displayValue={`${Math.round(insertDelay.feedback * 100)}%`}
+              onChange={(v) => updateInsertDelay({ feedback: v })}
+              parseInputValue={parsePercent(0, 1)}
+              tooltip="How many echoes follow the first"
+            />
+            <div className="synth-waveform-selector">
+              <label>SYNC</label>
+              <select
+                className="synth-select"
+                aria-label="Insert delay sync"
+                title="Echo in time with the tempo: one echo each note value"
+                value={insertDelay.sync ?? 'off'}
+                onChange={(e) => updateInsertDelay({ sync: e.target.value as RateSync })}
+              >
+                {INSERT_DELAY_SYNCS.map(value => <option key={value} value={value}>{RATE_SYNC_LABELS[value]}</option>)}
+              </select>
+            </div>
           </div>
         </div>
 

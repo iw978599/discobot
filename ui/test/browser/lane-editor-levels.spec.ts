@@ -4,7 +4,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 // like. Sound holds the model, the presets and their tools, and under them a page for each part
 // of the sound.
 const PROJECT_KEY = 'discobot_browser_project_v1';
-const PAGES = ['Osc', 'Filter', 'Amp', 'LFO', 'Arp', 'Sends'];
+const PAGES = ['Osc', 'Filter', 'Amp', 'LFO', 'Arp', 'Inserts', 'Sends'];
 const sound = (page: Page) => page.evaluate(key => (window.dispatchEvent(new Event('pagehide')), JSON.stringify(JSON.parse(localStorage.getItem(key) || '{}').synths?.[0]?.synthParams ?? null)), PROJECT_KEY);
 const phone = (page: Page) => page.viewportSize()!.width <= 720;
 

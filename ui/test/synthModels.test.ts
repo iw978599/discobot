@@ -140,7 +140,7 @@ test('the Mono/Poly is four oscillators stacked on one note, pulled apart by Det
   assert.ok(voice('mono-poly', { ...MIDDLE, macro4: 1 }).filterEnvAmount > voice('mono-poly', { ...MIDDLE, macro4: 0 }).filterEnvAmount, 'Env');
 });
 
-test('the Polysix is one oscillator with a moving pulse and a sub, one envelope, and its ensemble on the chorus send', () => {
+test('the Polysix is one oscillator with a moving pulse and a sub, one envelope, and its ensemble on the lane\'s chorus', () => {
   const middle = voice('polysix');
   assert.deepEqual([middle.voiceMode, middle.oscType, middle.osc2Enabled, middle.filterSlope], ['poly', 'square', false, 24]);
   assert.ok(middle.subLevel > 0, 'a sub under the one oscillator');
@@ -152,16 +152,20 @@ test('the Polysix is one oscillator with a moving pulse and a sub, one envelope,
   assert.ok(moving.lfo1Enabled && moving.lfo1Target === 'pulseWidth' && moving.lfo1Depth > 0.7, 'PWM');
   assert.ok(voice('polysix', { ...MIDDLE, macro2: 1 }).filterQ > voice('polysix', { ...MIDDLE, macro2: 0 }).filterQ, 'Resonance');
   assert.ok(voice('polysix', { ...MIDDLE, macro3: 1 }).filterFreq > voice('polysix', { ...MIDDLE, macro3: 0 }).filterFreq, 'Brightness');
-  // Ensemble is the lane's chorus send, and nothing else about the sends.
-  assert.deepEqual(mapSynthModelToEngineParams('polysix', { ...MIDDLE, macro4: 0 }).fxSends, { chorus: 0 });
-  assert.equal(sound('polysix', { ...MIDDLE, macro4: 1 }).fxSends.chorus, 0.8);
-  assert.equal(sound('polysix', { ...MIDDLE, macro4: 1 }).fxSends.reverb, createDefaultSynthParameters().fxSends.reverb, 'the other sends are left alone');
+  // Ensemble is the mix of the lane's own chorus, and says nothing about the sends.
+  assert.equal(mapSynthModelToEngineParams('polysix', { ...MIDDLE, macro4: 0 }).inserts?.chorus?.mix, 0);
+  assert.equal(sound('polysix', { ...MIDDLE, macro4: 1 }).inserts?.chorus?.mix, 0.7);
+  assert.equal(mapSynthModelToEngineParams('polysix', MIDDLE).fxSends, undefined);
+  assert.deepEqual(sound('polysix', { ...MIDDLE, macro4: 1 }).fxSends, createDefaultSynthParameters().fxSends, 'the sends are left alone');
 });
 
-test('the ensemble goes when a lane leaves the Polysix, and no other lane\'s chorus send is touched', () => {
+test('the ensemble goes when a lane leaves the Polysix, and no lane\'s chorus send is touched', () => {
   const polysix = sound('polysix', { ...MIDDLE, macro4: 1 });
-  assert.equal(onLane(polysix, enterSynthModel('juno-106', MIDDLE, 'polysix')).fxSends.chorus, 0);
-  assert.equal(onLane(polysix, enterSynthModel('juno-106', MIDDLE, 'polysix')).fxSends.reverb, polysix.fxSends.reverb);
+  assert.equal(onLane(polysix, enterSynthModel('juno-106', MIDDLE, 'polysix')).inserts?.chorus?.mix, 0);
+  assert.deepEqual(onLane(polysix, enterSynthModel('juno-106', MIDDLE, 'polysix')).fxSends, polysix.fxSends);
+  // A Polysix lane saved with the ensemble as a chorus send keeps that send on leaving.
+  const older = onLane(polysix, { fxSends: { ...polysix.fxSends, chorus: 0.64 } });
+  assert.equal(onLane(older, enterSynthModel('juno-106', MIDDLE, 'polysix')).fxSends.chorus, 0.64);
   // Someone's own chorus on another model stays when that lane changes model.
   const own = onLane(sound('juno-106'), { fxSends: { ...sound('juno-106').fxSends, chorus: 0.6 } });
   assert.equal(onLane(own, enterSynthModel('prophet-5', MIDDLE, 'juno-106')).fxSends.chorus, 0.6);

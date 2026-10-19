@@ -187,7 +187,7 @@ test('design shots: the rack, its units and the states of its controls', async (
       await level(page, 'Sound');
       await near(walk, page.locator('.synth-controls-panel'), 'lane-editor-sound', 12);
     });
-    for (const name of ['Osc', 'Filter', 'LFO', 'Sends']) {
+    for (const name of ['Osc', 'Filter', 'LFO', 'Inserts', 'Sends']) {
       await attempt(walk, `synth-tab-${name.toLowerCase()}`, async () => {
         await level(page, 'Sound');
         await lane(page, 1).getByRole('tab', { name, exact: true }).click();
@@ -562,7 +562,7 @@ test('design shots: a phone showing one unit at a time, the knob sheet, and a ph
     await toTop(walk, page.locator('.synth-controls-panel'));
     await shot(walk, 'phone-lane-editor-sound');
   });
-  for (const name of ['Osc', 'Filter', 'Sends']) {
+  for (const name of ['Osc', 'Filter', 'Inserts', 'Sends']) {
     await attempt(walk, `phone-synth-tab-${name.toLowerCase()}`, async () => {
       await level(page, 'Sound');
       await lane(page, 1).getByRole('tab', { name, exact: true }).click();

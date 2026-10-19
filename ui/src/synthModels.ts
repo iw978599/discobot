@@ -488,9 +488,9 @@ function mapJp8000(params: SynthModelParams): Partial<SynthParameters> {
 
 // One oscillator a note, a pulse whose width an LFO keeps moving, a sub under it, a four-pole
 // filter and one envelope for filter and level. What made the instrument sound bigger than one
-// oscillator was the ensemble it had built in. This synth's chorus is one shared effect with a
-// send from each lane, so the fourth macro is the lane's chorus send: the one model that
-// changes a mix setting, which the owner agreed to for this model alone.
+// oscillator was the ensemble it had built in. The fourth macro is the mix of the chorus insert
+// on the lane (`inserts.chorus`), an effect of the lane's own, as the owner asked once lanes
+// could have them. A lane saved when the macro was its send on the shared chorus keeps that send.
 function mapPolysix(params: SynthModelParams): Partial<SynthParameters> {
   const shared = { attack: 0.02, decay: 0.5, sustain: 0.7, release: 0.5 };
   const movement = Number(range(0, 0.8, params.macro1).toFixed(2));
@@ -514,7 +514,7 @@ function mapPolysix(params: SynthModelParams): Partial<SynthParameters> {
     velocity: { amp: 1, filter: 0.15 },
     portamento: { enabled: false, glide: 0.05 },
     lfo1: { sync: false, retrigger: false, enabled: movement > 0, target: 'pulseWidth', waveform: 'triangle', rate: 0.6, depth: movement },
-    fxSends: { chorus: Number(range(0, 0.8, params.macro4).toFixed(2)) } as SynthParameters['fxSends'],
+    inserts: { chorus: { mix: Number(range(0, 0.7, params.macro4).toFixed(2)), depth: 0.6, rate: 0.8 } },
   };
 }
 
@@ -740,9 +740,9 @@ export function enterSynthModel(modelId: SynthModelId, modelParams: SynthModelPa
     mixer: { ...mapped.mixer, ring: mapped.mixer?.ring ?? 0 } as SynthParameters['mixer'],
     // No high-pass and the clean filter, unless the model is one that sets them for itself.
     filter: { slope: ladder ? 24 : 12, highpass: 0, ...mapped.filter, model: mapped.filter?.model ?? (ladder ? 'ladder' : 'svf') } as SynthParameters['filter'],
-    // The Polysix's ensemble is the lane's chorus send. It goes when the lane leaves the Polysix;
-    // a chorus send on any other lane is the person's own and is not touched.
-    ...(leaving === 'polysix' && modelId !== 'polysix' ? { fxSends: { chorus: 0 } as SynthParameters['fxSends'] } : {}),
+    // The Polysix's ensemble is the lane's chorus insert. It goes when the lane leaves the Polysix;
+    // the other inserts and every send, a chorus send included, are the person's own and are not touched.
+    ...(leaving === 'polysix' && modelId !== 'polysix' ? { inserts: { chorus: { mix: 0, depth: 0.5, rate: 0.6, sync: 'off' } } as SynthParameters['inserts'] } : {}),
   };
 }
 

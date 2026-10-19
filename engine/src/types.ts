@@ -194,6 +194,17 @@ export interface SynthParameters {
   };
   // how far a kick drum pulls this lane's level down, 0 to 1
   duck?: number;
+  // the lane's own effects, after its voices and before its level reaches the mixer, in the order
+  // drive, tone, chorus, delay. Absent means none, as it was before they existed; a value at its
+  // neutral setting (0) leaves that effect out. Tempo-synced rates are note values, as elsewhere.
+  inserts?: {
+    // saturation, 0 to 1
+    drive?: number;
+    // -1 to 1: below 0 a low-pass sweeping down, above 0 a high-pass sweeping up
+    tone?: number;
+    chorus?: { mix: number; depth: number; rate: number; sync?: RateSync };
+    delay?: { mix: number; time: number; feedback: number; sync?: RateSync };
+  };
   fm?: {
     algorithm: number;
     ratio: number;
