@@ -77,14 +77,19 @@ export class UndoHistory {
     } else this.groups.delete(name);
   }
 
-  // The project to put back, with `current` kept for the other direction; null when there is none.
-  // A step that would put back what is already there is passed over.
-  step(direction: 'undo' | 'redo', current: string): string | null {
+  // The project to put back, with the project as it is now kept for the other direction; null when
+  // there is none. `current` is handed the step about to be put back and answers the project now:
+  // the store opens that step's scene first, so what is kept for the other direction is in the
+  // scene the step was made in. A step that would put back what is already there is passed over.
+  step(direction: 'undo' | 'redo', current: (target: string) => string): string | null {
     const from = direction === 'undo' ? this.undo : this.redo, to = direction === 'undo' ? this.redo : this.undo;
-    let target = from.pop();
-    while (target !== undefined && target === current) target = from.pop();
+    let target = from.pop(), now = target === undefined ? '' : current(target);
+    while (target !== undefined && target === now) {
+      target = from.pop();
+      if (target !== undefined) now = current(target);
+    }
     if (target === undefined) return null;
-    to.push(current);
+    to.push(now);
     this.trim();
     // The next edit begins a step of its own, whatever it is.
     this.run = null;

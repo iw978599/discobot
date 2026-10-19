@@ -769,7 +769,15 @@ export class LocalProjectService {
 
   private stepHistory(direction: 'undo' | 'redo'): boolean {
     if (!this.state) return false;
-    const target = this.history.step(direction, this.undoContent());
+    // The project now is kept for the other direction as it looks in the step's own scene, so a
+    // redo after undoing an edit in another scene goes back to the scene of that edit.
+    const target = this.history.step(direction, step => {
+      const sceneId = (JSON.parse(step) as { currentSceneId?: string }).currentSceneId;
+      if (sceneId && sceneId !== this.ready().currentSceneId && this.ready().scenes.some(scene => scene.id === sceneId)) {
+        this.apply({ type: 'scene.select', sceneId }, 'history');
+      }
+      return this.undoContent();
+    });
     if (target === null) return false;
     this.restoreContent(target);
     return true;

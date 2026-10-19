@@ -83,17 +83,17 @@ test('edits that undo cannot take back begin no step', () => {
 test('undo and redo trade the project, pass over steps that change nothing, and a new edit forgets redo', () => {
   const { h, endTurn, edit, current } = history();
   edit(note, 0); endTurn(); edit(note, 1); endTurn();
-  assert.equal(h.step('undo', current()), 'p1');
-  assert.equal(h.step('undo', 'p1'), 'p0');
-  assert.equal(h.step('undo', 'p0'), null, 'nothing further back');
-  assert.equal(h.step('redo', 'p0'), 'p1');
+  assert.equal(h.step('undo', current), 'p1');
+  assert.equal(h.step('undo', () => 'p1'), 'p0');
+  assert.equal(h.step('undo', () => 'p0'), null, 'nothing further back');
+  assert.equal(h.step('redo', () => 'p0'), 'p1');
   assert.equal(h.size.redo, 1);
   edit(cell, 2);
   assert.equal(h.size.redo, 0);
   // A step whose project is the one already there is passed over.
   const same = new UndoHistory(() => {});
   same.record(note, 0, 'x');
-  assert.equal(same.step('undo', 'x'), null);
+  assert.equal(same.step('undo', () => 'x'), null);
 });
 
 test('only the newest steps are kept', () => {
@@ -128,6 +128,34 @@ test('the store records each edit, and undo puts the whole project back, one ste
   assert.equal(service.snapshot().drumState.kick.steps[0], true);
   assert.equal(service.redo(), true);
   assert.equal(service.getTempo().tempo, tempo + 20);
+});
+
+test('undo, undo, redo: the redo goes back to the scene of the edit it puts back', async () => {
+  const service = setup();
+  ok(service.setDrumStep('kick', 0, true));
+  await turn();
+  ok(service.createScene({ empty: true }));
+  await turn();
+  const second = service.snapshot().currentSceneId;
+  ok(service.setDrumStep('snare', 4, true));
+  await turn();
+  const first = service.getScenes().scenes[0].id;
+  ok(service.selectScene(first));
+  ok(service.setDrumStep('kick', 8, true));
+  await turn();
+  ok(service.selectScene(second));
+  assert.equal(service.undo(), true);
+  assert.equal(service.snapshot().currentSceneId, first, 'the last edit was in the first scene');
+  assert.equal(service.snapshot().drumState.kick.steps[8], false);
+  assert.equal(service.undo(), true);
+  assert.equal(service.snapshot().currentSceneId, second);
+  assert.equal(service.snapshot().drumState.snare.steps[4], false);
+  assert.equal(service.redo(), true);
+  assert.equal(service.snapshot().currentSceneId, second, 'the snare was put in the second scene');
+  assert.equal(service.snapshot().drumState.snare.steps[4], true);
+  assert.equal(service.redo(), true);
+  assert.equal(service.snapshot().currentSceneId, first);
+  assert.equal(service.snapshot().drumState.kick.steps[8], true);
 });
 
 test('undo goes back to the scene the edit was made in, and takes back a scene that was made', async () => {
