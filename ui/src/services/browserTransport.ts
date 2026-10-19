@@ -21,6 +21,9 @@ export class BrowserTransport {
     private clock: () => number,
     private tempo: () => number,
     private schedule: (tick: TransportTick) => void,
+    // How much further ahead than usual to schedule, in seconds: a voice handed to a guest is
+    // played that much early (services/guestInput), so its ticks must be known that soon.
+    private reach: () => number = () => 0,
   ) {}
 
   // `lead` is how far ahead the first tick is placed. Guests in a frame need longer than the
@@ -44,7 +47,7 @@ export class BrowserTransport {
     if (tempo !== this.lastTempo) { this.lastTempo = tempo; this.onTempo?.(tempo, this.nextTime, this.ticks / 8); }
     // Skip missed beats after a suspended tab instead of playing a burst of stale notes.
     while (this.nextTime < now - duration) this.advance(duration);
-    while (this.nextTime < now + .08) {
+    while (this.nextTime < now + .08 + this.reach()) {
       this.schedule({ tick: this.ticks, time: this.nextTime, duration });
       this.advance(duration);
     }

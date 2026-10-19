@@ -44,6 +44,8 @@ type Effects = {
 };
 
 export const MASTER_LEVEL = 0.7;
+// How long a voice handed to a guest, or given back, takes to cross from one place to the other.
+export const HAND_OVER_FADE = 0.01;
 
 // Shared with the offline WAV renderer so an export is shaped like live playback.
 // Transparent below the knee, then a soft ceiling: the mix is only touched when it would clip.
@@ -595,25 +597,33 @@ export class AudioEngine {
     const { context: ctx, master } = this.open(), bus = this.bus(group), engine = this;
     // input carries the lane volume; ducker sits after it so the dry signal and the sends pump together.
     const input = ctx.createGain(), ducker = ctx.createGain();
+    // A lane handed to a guest (`handOver`) leaves the mix and every send, and goes to `toGuest`
+    // alone. At rest `direct` and the gates pass everything and `toGuest` nothing.
+    const direct = ctx.createGain(), toGuest = ctx.createGain(), gates = [ctx.createGain()];
+    toGuest.gain.value = 0;
     input.connect(ducker);
-    ducker.connect(master);
+    ducker.connect(direct).connect(master);
+    ducker.connect(toGuest);
+    ducker.connect(gates[0]);
     const sends = {} as Record<EffectName, GainNode>;
     const taps: Partial<Record<EffectName, GainNode>> = {}, tapDuckers: GainNode[] = [];
     for (const name of EFFECT_NAMES) {
       sends[name] = ctx.createGain();
       sends[name].gain.value = 0;
       if (ownMix.includes(name)) {
-        const tap = ctx.createGain(), tapDucker = ctx.createGain();
-        tap.connect(tapDucker).connect(sends[name]).connect(bus.inputs[name]);
+        const tap = ctx.createGain(), tapDucker = ctx.createGain(), gate = ctx.createGain();
+        tap.connect(tapDucker).connect(gate).connect(sends[name]).connect(bus.inputs[name]);
         taps[name] = tap;
         tapDuckers.push(tapDucker);
-      } else ducker.connect(sends[name]).connect(bus.inputs[name]);
+        gates.push(gate);
+      } else gates[0].connect(sends[name]).connect(bus.inputs[name]);
     }
+    let handed: AudioNode | null = null;
     const dispose = () => {
       this.lanes.delete(dispose);
       input.disconnect();
       ducker.disconnect();
-      [...Object.values(taps), ...tapDuckers, ...Object.values(sends)].forEach(node => node.disconnect());
+      [direct, toGuest, ...gates, ...Object.values(taps), ...tapDuckers, ...Object.values(sends)].forEach(node => node.disconnect());
     };
     this.lanes.add(dispose);
     return {
@@ -621,6 +631,23 @@ export class AudioEngine {
       output: ducker,
       taps,
       duck(time: number, amount: number) { for (const node of [ducker, ...tapDuckers]) scheduleDuck(node.gain, time, amount); },
+      // Hands the lane to `tap`, after its level and before its sends, or with null gives it back
+      // to the mix. Each switch is a crossfade of HAND_OVER_FADE seconds, so it does not click.
+      handOver(tap: AudioNode | null) {
+        if (tap === handed) return;
+        const at = ctx.currentTime, previous = handed;
+        const fade = (param: AudioParam, to: number) => {
+          param.cancelScheduledValues(at);
+          param.setValueAtTime(param.value, at);
+          param.linearRampToValueAtTime(to, at + HAND_OVER_FADE);
+        };
+        if (previous) setTimeout(() => { try { toGuest.disconnect(previous); } catch { /* already gone */ } }, HAND_OVER_FADE * 4000);
+        if (tap) toGuest.connect(tap);
+        fade(toGuest.gain, tap ? 1 : 0);
+        fade(direct.gain, tap ? 0 : 1);
+        for (const gate of gates) fade(gate.gain, tap ? 0 : 1);
+        handed = tap;
+      },
       setVolume(value: number) { for (const node of [input, ...Object.values(taps)]) smooth(node.gain, limit(value, 0, 1), ctx); },
       setSends(values: FxSendLevels, returnLevel = 1) {
         AUX_SENDS.forEach((name, slot) => { if (limit(values[name], 0, 1) > 0) engine.syncAux(bus, slot, true); });

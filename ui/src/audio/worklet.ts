@@ -2,7 +2,7 @@
 // the DSP itself lives in the engine so offline export runs exactly the same code.
 import { SynthCore } from '../../../engine/src/synth/SynthCore';
 import { DrumCore } from '../../../engine/src/drums/DrumCore';
-import type { DrumWorkletMessage, GuestPlayerMessage, SynthWorkletMessage } from '../../../engine/src/workletMessages';
+import { GUEST_TAP_FRAMES, type DrumWorkletMessage, type GuestPlayerMessage, type GuestTapMessage, type SynthWorkletMessage } from '../../../engine/src/workletMessages';
 
 declare const sampleRate: number;
 declare const currentFrame: number;
@@ -105,6 +105,32 @@ class GuestPlayer extends AudioWorkletProcessor {
   }
 }
 
+// Takes a voice handed to a guest: what reaches it is gathered into blocks and posted to the page,
+// silence included, each with the frame it starts on. What it puts out is silence.
+class GuestTap extends AudioWorkletProcessor {
+  private left = new Float32Array(GUEST_TAP_FRAMES);
+  private right = new Float32Array(GUEST_TAP_FRAMES);
+  private filled = 0;
+  private start = 0;
+
+  process(inputs: Float32Array[][]): boolean {
+    const input = inputs[0] ?? [], left = input[0], right = input[1] ?? left, length = left?.length ?? 128;
+    for (let index = 0; index < length; index++) {
+      if (this.filled === 0) this.start = currentFrame + index;
+      this.left[this.filled] = left ? left[index] : 0;
+      this.right[this.filled] = right ? right[index] : 0;
+      if (++this.filled < GUEST_TAP_FRAMES) continue;
+      const message: GuestTapMessage = { type: 'block', frame: this.start, left: this.left, right: this.right };
+      this.port.postMessage(message, [this.left.buffer, this.right.buffer]);
+      this.left = new Float32Array(GUEST_TAP_FRAMES);
+      this.right = new Float32Array(GUEST_TAP_FRAMES);
+      this.filled = 0;
+    }
+    return true;
+  }
+}
+
 registerProcessor('guest-player', GuestPlayer);
+registerProcessor('guest-tap', GuestTap);
 registerProcessor('synth-processor', SynthProcessor);
 registerProcessor('drum-processor', DrumProcessor);

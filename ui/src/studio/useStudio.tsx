@@ -45,7 +45,8 @@ import { useComputerKeyboard } from '../hooks/useComputerKeyboard';
 import { getAudioContext, scheduleClick, setMasterVolume, setMasterMuted, setEffectsTempo } from '../hooks/browserAudio';
 import { DRUM_NOTE_MAP, downloadMidiFile, noteNameToMidi } from '../utils/midiExport';
 import { importMidiFile, readFileAsArrayBuffer, MidiImportResult } from '../utils/midiImport';
-import { DEFAULT_SYNTH_MODEL_ID, createDefaultSynthModelParams, enterSynthModel, mapSynthModelToEngineParams, normalizeSynthModelId, normalizeSynthModelParams } from '../synthModels';
+import { DEFAULT_SYNTH_MODEL_ID, createDefaultSynthModelParams, enterSynthModel, getSynthModelDefinition, mapSynthModelToEngineParams, normalizeSynthModelId, normalizeSynthModelParams } from '../synthModels';
+import { guestInputs, inputSources } from '../services/guestInput';
 
 const DEFAULT_PARAMS: SynthParameters = createDefaultSynthParameters();
 
@@ -54,6 +55,8 @@ const DEFAULT_EFFECTS_LOOP = EFFECTS_DEFAULT;
 
 const DEFAULT_DRUM_KIT_ID: DrumKitId = 'clean-analog';
 const MAX_HISTORY = 80;
+// How far ahead of its sound a step light may be lit. The scheduler always works this far ahead.
+const STEP_LIGHT_AHEAD = 0.1;
 // MIDI keys pressed within this long of each other are one chord.
 const CHORD_WINDOW_MS = 60;
 
@@ -517,6 +520,26 @@ export function useStudio() {
   }, [browserVolume, synthAudio, drumAudio]);
 
   useEffect(() => { setMasterMuted(browserMuted); }, [browserMuted]);
+
+  // The voices a guest may be handed (services/guestInput): each lane by its model's name, the kit
+  // and each drum. A guest whose voice has gone is told by its own unit.
+  const inputKey = synths.map(synth => `${synth.id}:${synth.synthModelId}`).join(',');
+  useEffect(() => {
+    guestInputs.setSources(inputSources(synthsRef.current.map(synth => ({ id: synth.id, model: getSynthModelDefinition(synth.synthModelId).name }))));
+  }, [inputKey]);
+  // Each voice goes where the guests have it: to a guest's tap, or to the mix.
+  useEffect(() => {
+    const route = () => {
+      for (const source of guestInputs.sources()) {
+        const tap = (guestInputs.tapFor(source.id) ?? null) as AudioNode | null;
+        if (source.kind === 'synth') synthAudio.handOver(Number(source.id.slice('synth:'.length)), tap);
+        else if (source.kind === 'drums') drumAudio.handOver('drums', tap);
+        else drumAudio.handOver(source.id.slice('drum:'.length) as DrumInstrument, tap);
+      }
+    };
+    route();
+    return guestInputs.subscribe(route);
+  }, [synthAudio, drumAudio]);
   useEffect(() => {
     drumAudio.setVolume(drumMasterVolume);
     drumAudio.setKit(selectedDrumKitId);
@@ -819,6 +842,14 @@ export function useStudio() {
   sceneLengthRef.current = sceneLength;
   const sceneSignature = useCallback((sceneId: string) => signatureOfRef.current(sceneId), []);
 
+  // Lights a step when it is heard. The scheduler is a moment ahead of the sound, and further ahead
+  // while a voice is handed to a guest; a light that early would be seen to lead the beat.
+  const showStep = (lane: number | 'drums', step: number, time: number) => {
+    const ahead = time - getAudioContext().currentTime;
+    if (ahead <= STEP_LIGHT_AHEAD) { playhead.set(lane, step); return; }
+    setTimeout(() => { if (transportRef.current?.running) playhead.set(lane, step); }, (ahead - STEP_LIGHT_AHEAD) * 1000);
+  };
+
   scheduleTickRef.current = ({ tick: counted, time, duration }) => {
     // The count-in: its bars are clicked and nothing else happens in them. Everything after counts
     // from where the count-in ends.
@@ -897,21 +928,23 @@ export function useStudio() {
       // The step's automation, sent to sound when the step does. The lane's own sound is not
       // changed: this goes to the voice and nowhere else. A scene played from its stored copy
       // brings its own. A knob being recorded plays where it is, whatever the pattern holds.
+      // A lane handed to a guest is played early by its lead (services/guestInput), so the guest has it in time.
+      const early = guestInputs.leadSeconds(`synth:${synth.id}`);
       synthAudio.automate(synth.id, synth.synthParams, globalTempoRef.current, stepVoiceParams(
         synth.synthParams, scene ? scene.laneAutomation?.[synth.id] : synth.pattern.automation, index, globalTempoRef.current,
         scene ? undefined : autoPassRef.current.get(synth.id)?.held,
-      ), time);
+      ), time - early);
       if (heard.has(synth.id) && note?.active && note.note) {
-        triggerStep(synth.synthParams, note, duration * divisor, synth.id, time);
+        triggerStep(synth.synthParams, note, duration * divisor, synth.id, time - early);
       }
       // The step lights read this themselves. Setting state here would render the whole rack on every step.
-      playhead.set(synth.id, index);
+      showStep(synth.id, index, time);
     }
     if (step % 2 !== 0) return;
     const state = scene ? sceneDrumState(scene, drumStateRef.current) : drumStateRef.current;
     const stepInBar = Math.floor(step / 2);
     const drumStep = (passBar % drumBars(state, signature)) * barSteps(signature) + stepInBar;
-    playhead.set('drums', drumStep);
+    showStep('drums', drumStep, time);
     const drumSolo = (Object.keys(state) as DrumInstrument[]).some(i => state[i].solo);
     const swingOffset = stepInBar % 2 ? drumSwingRef.current * duration * 2 : 0;
     for (const instrument of Object.keys(state) as DrumInstrument[]) {
@@ -920,12 +953,13 @@ export function useStudio() {
       const velocity = track.stepVelocities?.[drumStep] ?? 1;
       for (const offset of expandDrumStep(track, drumStep)) {
         const hitTime = time + swingOffset + offset * duration * 2;
-        void drumAudio.playDrumHit(instrument, track.settings, velocity, hitTime);
+        const early = guestInputs.leadSeconds('drums') || guestInputs.leadSeconds(`drum:${instrument}`);
+        void drumAudio.playDrumHit(instrument, track.settings, velocity, hitTime - early);
         if (midiOut.active) midiOut.note(MIDI_DRUM_CHANNEL, DRUM_NOTE_MAP[instrument], velocity, midiTime(hitTime), midiTime(hitTime + 0.06));
         if (instrument !== 'kick') continue;
         for (const synth of lanes) {
           const amount = synth.synthParams?.duck ?? 0;
-          if (amount > 0) synthAudio.duck(synth.id, hitTime, amount);
+          if (amount > 0) synthAudio.duck(synth.id, hitTime - guestInputs.leadSeconds(`synth:${synth.id}`), amount);
         }
       }
     }
@@ -938,6 +972,7 @@ export function useStudio() {
         () => getAudioContext().currentTime,
         () => globalTempoRef.current,
         tick => scheduleTickRef.current(tick),
+        () => guestInputs.reachSeconds(),
       );
       const transport = transportRef.current, context = getAudioContext();
       // Guests are told where the beats fall on the computer's clock, which they share with this page.
