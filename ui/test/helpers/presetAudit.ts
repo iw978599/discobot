@@ -3,7 +3,7 @@
 // preset through the same SynthCore the app plays, on notes of the kind it is meant for.
 import { readFileSync } from 'node:fs';
 import { SynthCore, toVoiceParams } from '@discobot/engine';
-import { parseWaveBundle } from '../../src/services/builtInWaves.ts';
+import { BUILT_IN_WAVES, parseWaveBundle } from '../../src/services/builtInWaves.ts';
 import type { SynthParameters } from '../../src/types.ts';
 import type { PresetKind } from '../../src/services/presetKinds.ts';
 
@@ -34,9 +34,14 @@ export interface PresetMeasure {
   finite: boolean;
 }
 
-// The app's own waves, read from the file the build ships, so a preset made of one is measured with it.
-const bundle = readFileSync(new URL('../../public/waves.bin', import.meta.url));
-export const BUNDLED_WAVES = parseWaveBundle(bundle.buffer.slice(bundle.byteOffset, bundle.byteOffset + bundle.byteLength) as ArrayBuffer);
+// The app's own waves, read from the files the build ships, so a preset made of one is measured
+// with it: what is in waves.bin, and with it the instruments that have a file of their own.
+const readBundle = (path: string) => {
+  const bundle = readFileSync(new URL(`../../public/${path}`, import.meta.url));
+  return parseWaveBundle(bundle.buffer.slice(bundle.byteOffset, bundle.byteOffset + bundle.byteLength) as ArrayBuffer);
+};
+export const BUNDLED_WAVES = readBundle('waves.bin');
+const ALL_WAVES = new Map([...BUNDLED_WAVES, ...BUILT_IN_WAVES.flatMap(wave => wave.file ? [...readBundle(wave.file)] : [])]);
 
 const HOLD = 1.5;
 export const RING_LIMIT = 12;
@@ -85,7 +90,7 @@ export interface PresetMotion {
 export function measureMotion(params: SynthParameters, kind: PresetKind, notes = AUDIT_NOTES[kind]): PresetMotion {
   const core = new SynthCore(AUDIT_RATE);
   core.setParams(toVoiceParams(params));
-  if (params.sample?.wave) core.setSample(BUNDLED_WAVES.get(params.sample.wave) ?? null);
+  if (params.sample?.wave) core.setSample(ALL_WAVES.get(params.sample.wave) ?? null);
   for (const note of notes) core.noteOn({ note, velocity: 0.9 });
   const total = 8 * AUDIT_RATE, from = 1.5 * AUDIT_RATE;
   const left = new Float32Array(128), right = new Float32Array(128);
@@ -108,7 +113,7 @@ export function measureMotion(params: SynthParameters, kind: PresetKind, notes =
 export function measurePreset(params: SynthParameters, kind: PresetKind, notes = AUDIT_NOTES[kind]): PresetMeasure {
   const core = new SynthCore(AUDIT_RATE);
   core.setParams(toVoiceParams(params));
-  if (params.sample?.wave) core.setSample(BUNDLED_WAVES.get(params.sample.wave) ?? null);
+  if (params.sample?.wave) core.setSample(ALL_WAVES.get(params.sample.wave) ?? null);
   for (const note of notes) core.noteOn({ note, velocity: 0.9 });
   const held = Math.round(HOLD * AUDIT_RATE), total = held + RING_LIMIT * AUDIT_RATE;
   const mono = new Float32Array(total);

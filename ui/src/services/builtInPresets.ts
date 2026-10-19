@@ -40,6 +40,16 @@ const generic = (id: string, name: string, kind: PresetKind, patch: Patch): Buil
   modelId: DEFAULT_SYNTH_MODEL_ID, modelParams: createDefaultSynthModelParams(), params: sound(patch),
 });
 
+// Keys that are one of the app's recorded instruments, played much as it was recorded.
+const recorded = (id: string, name: string, wave: string, gain: number, held = false): BuiltInPreset => generic(id, name, 'keys', {
+  gain,
+  engine: 'sample', sample: { root: 60, loop: held, wave, scan: 2, fade: 1, ...(held ? { loopStart: 0.4, loopEnd: 0.9 } : {}) },
+  filter: { frequency: 16000, q: 0.7, keyTracking: 0 },
+  envelope: { attack: 0.002, decay: 0.3, sustain: 1, release: held ? 0.12 : 0.35 },
+  velocity: { amp: held ? 0.3 : 0.75, filter: 0 },
+  fxReturn: 0.85, fxSends: { reverb: 0.25, delay: 0, drive: 0, phaser: 0, chorus: 0 },
+});
+
 const model = (id: string, name: string, kind: PresetKind, modelId: SynthModelId, macros: [number, number, number, number], extras: Extras): BuiltInPreset => {
   const modelParams = { macro1: macros[0], macro2: macros[1], macro3: macros[2], macro4: macros[3] };
   return {
@@ -257,6 +267,15 @@ const LEAD: BuiltInPreset[] = [
     lfo2: { enabled: true, target: 'vibrato', waveform: 'sine', rate: 5.2, depth: 0.18, sync: false, retrigger: true },
     fxSends: { reverb: 0.22, delay: 0.28, drive: 0.05, phaser: 0, chorus: 0 },
   }),
+  // A recording held under the key: the middle of each note goes round, so the note lasts.
+  generic('lead-tenor-sax', 'Tenor Sax', 'lead', {
+    gain: 1.54,
+    engine: 'sample', sample: { root: 60, loop: true, wave: 'tenor-sax', scan: 2, fade: 1, loopStart: 0.4, loopEnd: 0.9 },
+    filter: { frequency: 9000, q: 0.7, keyTracking: 0.3 },
+    envelope: { attack: 0.01, decay: 0.2, sustain: 1, release: 0.15 },
+    velocity: { amp: 0.7, filter: 0 },
+    fxReturn: 0.8, fxSends: { reverb: 0.25, delay: 0.08, drive: 0, phaser: 0, chorus: 0 },
+  }),
 ];
 
 const PAD: BuiltInPreset[] = [
@@ -463,6 +482,14 @@ const KEYS: BuiltInPreset[] = [
     layer: { enabled: true, mix: 0.5, detune: 5, brightness: -0.5, attack: 0, width: 0.5 },
     fxReturn: 0.85, fxSends: { reverb: 0.4, delay: 0.05, drive: 0, phaser: 0, chorus: 0 },
   }),
+  // The recorded instruments, played as they were recorded: the filter wide open and each note
+  // dying away as the instrument's did. The organ's held notes go round the middle of the recording.
+  recorded('keys-kawai-grand', 'Kawai Grand Piano', 'kawai-piano', 1.35),
+  recorded('keys-steinway-grand', 'Steinway Grand Piano', 'steinway-piano', 1.4),
+  recorded('keys-pipe-organ', 'Pipe Organ', 'pipe-organ', 1.35, true),
+  recorded('keys-fm-piano', 'FM Piano', 'fm-piano', 1.28),
+  recorded('keys-fm-piano-2', 'FM Piano 2', 'fm-piano-1', 1.02),
+  recorded('keys-fm-clavisynth', 'FM Clavisynth', 'fm-clavisynth', 1.62),
   generic('keys-suitcase', 'Suitcase Keys', 'keys', {
     gain: 1.1,
     engine: 'fm', fm: { algorithm: 1, ratio: 1, index: 0.12, decay: 0.6, feedback: 0.05 },
