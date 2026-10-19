@@ -12,7 +12,9 @@ export interface MenuItem {
 // A panel button that drops a short list of actions, like a function key with a legend. The
 // actions are in groups, with a line between them. A row's `title` is its hover hint, and on a
 // phone, which has no hover, the stylesheet shows it as a second line under the row.
-export default function Menu({ label, groups }: { label: string; groups: MenuItem[][] }) {
+// `name`, when given, is what the button and its list are called to a screen reader, for a label
+// that says less than that on its own (two menus called Presets).
+export default function Menu({ label, name, groups }: { label: string; name?: string; groups: MenuItem[][] }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -42,12 +44,13 @@ export default function Menu({ label, groups }: { label: string; groups: MenuIte
         className="rack-btn"
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-label={name}
         onClick={() => setOpen(value => !value)}
       >
         {label} ▾
       </button>
       {open && (
-        <div className="rack-menu-list" role="menu" aria-label={label}>
+        <div className="rack-menu-list" role="menu" aria-label={name ?? label}>
           {groups.map((items, group) => (
             <Fragment key={group}>
               {group > 0 && <div className="rack-menu-sep" role="separator" />}
