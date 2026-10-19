@@ -1839,16 +1839,17 @@ export function useStudio() {
   }, []);
 
   // Chance and repeats for one step.
-  const handleStepDetailChange = useCallback(async (synthId: number, stepIndex: number, detail: { probability?: number; ratchet?: number; offset?: number }) => {
+  const handleStepDetailChange = useCallback(async (synthId: number, stepIndex: number, detail: { probability?: number; ratchet?: number; offset?: number; strum?: number }) => {
     const synth = synthsRef.current.find((entry) => entry.id === synthId);
     if (!synth?.pattern || !synth.pattern.steps[stepIndex]) return;
     const nextPattern = {
       ...synth.pattern,
       steps: synth.pattern.steps.map((step, index) => {
         if (index !== stepIndex) return step;
-        const { probability, ratchet, offset, ...rest } = { ...step, ...detail };
+        const { probability, ratchet, offset, strum, ...rest } = { ...step, ...detail };
         return {
           ...rest,
+          ...(strum !== undefined && strum > 0 ? { strum: Math.min(0.5, strum) } : {}),
           ...(offset !== undefined && offset > 0 ? { offset: Math.min(0.95, offset) } : {}),
           ...(probability !== undefined && probability < 1 ? { probability: Math.max(0, probability) } : {}),
           ...(ratchet !== undefined && ratchet > 1 ? { ratchet: Math.min(4, Math.round(ratchet)) } : {}),

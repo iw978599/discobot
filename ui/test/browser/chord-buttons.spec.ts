@@ -82,3 +82,25 @@ test('with a chord shape chosen, a note put in the piano roll is the root of a w
   }
   expect(errors).toEqual([]);
 });
+
+test('an inversion puts the notes above the root an octave down, and a chord can be strummed', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const lane = page.getByRole('region', { name: 'Synth 1 module', exact: true });
+  await lane.getByRole('button', { name: 'Piano Roll', exact: true }).click();
+  const inversion = lane.getByLabel('Chord inversion', { exact: true });
+  const cell = (note: string, step: number) => lane.getByRole('button', { name: `${note} step ${step}`, exact: true });
+
+  await expect(inversion, 'an inversion needs a chord').toBeDisabled();
+  await lane.getByLabel('Chord shape', { exact: true }).selectOption({ label: 'Major' });
+  await inversion.selectOption({ label: '1st' });
+  await cell('C4', 3).click();
+  await expect.poll(() => notesAt(page, 2)).toEqual(['E3', 'G3', 'C4']);
+
+  // The step is selected; its notes can be strummed from the step controls.
+  const strum = lane.getByLabel('Step 3 strum', { exact: true });
+  await expect(strum).toHaveValue('0');
+  await strum.selectOption({ label: '1/8 step' });
+  await expect.poll(async () => (await stored(page)).synths[0].pattern.steps[2].strum).toBe(0.125);
+  expect(errors).toEqual([]);
+});

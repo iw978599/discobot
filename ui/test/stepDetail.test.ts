@@ -102,3 +102,37 @@ test('a synced delay follows the tempo; a free one does not', () => {
   assert.equal('sync' in sanitizeEffects(effects, effects).delay, false);
   assert.equal(matchesShape(effects, effects), true, 'a project saved before sync existed is not reported as damaged');
 });
+
+test('a strummed chord starts each note after the one below it and ends them together, in audio and in MIDI', () => {
+  const chord: SequencerStep = { active: true, note: 'C3', notes: ['E3', 'G3'], velocity: 0.8, strum: 0.25 };
+  const window = 0.125, played = expandStepNotes(chord, params, window, 120);
+  assert.deepEqual(played.map(note => [note.note, note.offset]), [['C3', 0], ['E3', 0.03125], ['G3', 0.0625]]);
+  const ends = played.map(note => note.offset + note.duration);
+  assert.ok(ends.every(end => Math.abs(end - ends[0]) < 1e-9), 'they all end together');
+  assert.deepEqual(expandStepNotes({ ...chord, strum: 9 }, params, window, 120).map(note => note.offset), [0, 0.0625, 0.125], 'never more than half a step apart');
+  assert.deepEqual(expandStepNotes({ ...chord, offset: 0.5 }, params, window, 120).map(note => note.offset), [0.0625, 0.09375, 0.125], 'a late step is strummed from its late start');
+  const arp = { ...params, arpeggiator: { ...params.arpeggiator, enabled: true } };
+  assert.deepEqual(expandStepNotes(chord, arp, window, 120).map(note => note.offset), expandStepNotes({ ...chord, strum: undefined }, arp, window, 120).map(note => note.offset), 'the arpeggiator keeps its own time');
+
+  const drums = Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => [instrument, {
+    steps: Array(16).fill(false), muted: false, solo: false, settings: { volume: 1, tone: .5, extra: .5 },
+  }])) as DrumState;
+  const { Midi } = createRequire(import.meta.url)('@tonejs/midi') as typeof import('@tonejs/midi');
+  const bytes = createMidiFile({ tempo: 120, drumState: drums, drumSwing: 0, drumMasterVolume: 1, synthLanes: [{ id: 1, pattern: lane({ 0: chord }) }] });
+  const notes = new Midi(bytes).tracks.flatMap(track => track.notes).sort((a, b) => a.midi - b.midi);
+  assert.deepEqual(notes.map(note => note.ticks), [0, 30, 60], 'a quarter of a 120-tick sixteenth apart');
+  assert.ok(new Set(notes.map(note => note.ticks + note.durationTicks)).size === 1, 'ending together');
+});
+
+test('a strum read from storage is checked, kept when the chord changes and cleared with the step', () => {
+  const [kept, capped, junk] = sanitizeSteps([
+    { active: true, note: 'C3', notes: ['E3'], velocity: 0.5, strum: 0.125 },
+    { active: true, note: 'C3', velocity: 0.5, strum: 3 },
+    { active: true, note: 'C3', velocity: 0.5, strum: 'wide' },
+  ]);
+  assert.equal(kept.strum, 0.125);
+  assert.equal(capped.strum, 0.5);
+  assert.equal('strum' in junk, false);
+  assert.equal(withStepNotes(kept, ['C3', 'G3']).strum, 0.125);
+  assert.equal('strum' in withStepNotes(kept, []), false);
+});

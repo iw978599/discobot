@@ -186,12 +186,14 @@ function buildSynthTrack(id: number, bars: SequencerStep[][], channel: number, t
       const own = step.lengths?.[at];
       const noteTicks = repeats === 1 && own !== undefined && own >= 1 ? ticksPerStep * Math.min(own, step.length ?? 1) : spanTicks;
       const late = swingLate(stepIndex * ticksPerStep, TICKS_PER_STEP, swing);
-      const tick = times[bar].start + Math.round((stepIndex + Math.max(0, Math.min(0.95, step.offset ?? 0))) * ticksPerStep + repeat * spanTicks + late);
+      // A strummed chord: each note that much after the one below it, all ending together.
+      const strum = Math.max(0, Math.min(0.5, step.strum ?? 0)) * ticksPerStep * at;
+      const tick = times[bar].start + Math.round((stepIndex + Math.max(0, Math.min(0.95, step.offset ?? 0))) * ticksPerStep + repeat * spanTicks + late + strum);
       const velocity = clampVelocity(step.velocity * 127, DEFAULT_SYNTH_VELOCITY);
       const noteOnStatus = 0x90 | (channel & 0x0f);
       const noteOffStatus = 0x80 | (channel & 0x0f);
       events.push({ tick, data: [noteOnStatus, midiNote, velocity] });
-      events.push({ tick: tick + Math.max(1, Math.round(noteTicks - ticksPerStep * 0.08 / repeats)), data: [noteOffStatus, midiNote, 0] });
+      events.push({ tick: tick + Math.max(1, Math.round(noteTicks - strum - ticksPerStep * 0.08 / repeats)), data: [noteOffStatus, midiNote, 0] });
       }
     }
   });

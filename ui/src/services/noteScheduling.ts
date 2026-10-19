@@ -12,6 +12,8 @@ export function stepNotes(step: SequencerStep | undefined): string[] {
 }
 
 export const MAX_STEP_OFFSET = 0.95;
+// The most a chord's notes can be strummed apart: half a step between one and the next.
+export const MAX_STRUM = 0.5;
 // How far into its step a step's notes start, as a fraction of a step.
 export const stepOffset = (step: SequencerStep | undefined) => Math.max(0, Math.min(MAX_STEP_OFFSET, step?.offset ?? 0));
 
@@ -39,11 +41,11 @@ function lengthFields(lengths: number[]): Pick<SequencerStep, 'length' | 'length
 // length; one that is new lasts as long as the step did.
 export function withStepNotes(step: SequencerStep, notes: string[]): SequencerStep {
   const sorted = [...new Set(notes)].sort((a, b) => (noteNameToMidi(a) ?? 0) - (noteNameToMidi(b) ?? 0)).slice(0, MAX_STEP_NOTES);
-  const { note: _note, notes: _notes, length, lengths: _lengths, probability, ratchet, offset, ...rest } = step;
+  const { note: _note, notes: _notes, length, lengths: _lengths, probability, ratchet, offset, strum, ...rest } = step;
   if (sorted.length === 0) return { ...rest, active: false };
   const before = new Map(stepNotes(step).map((note, index) => [note, noteLengths(step)[index]]));
   const whole = Math.max(1, length ?? 1);
-  return { ...rest, ...(offset && offset > 0 ? { offset } : {}), ...(probability !== undefined && probability < 1 ? { probability } : {}), ...(ratchet && ratchet > 1 ? { ratchet } : {}), active: true, note: sorted[0], ...(sorted.length > 1 ? { notes: sorted.slice(1) } : {}), ...lengthFields(sorted.map(note => before.get(note) ?? whole)) };
+  return { ...rest, ...(offset && offset > 0 ? { offset } : {}), ...(strum && strum > 0 ? { strum } : {}), ...(probability !== undefined && probability < 1 ? { probability } : {}), ...(ratchet && ratchet > 1 ? { ratchet } : {}), active: true, note: sorted[0], ...(sorted.length > 1 ? { notes: sorted.slice(1) } : {}), ...lengthFields(sorted.map(note => before.get(note) ?? whole)) };
 }
 
 // The step with every note lasting this many steps, or with one note doing so and the rest as they were.
@@ -142,7 +144,11 @@ export function expandStepNotes(
   const probability = step.probability ?? 1;
   if (probability < 1 && random() >= probability) return [];
   const late = stepOffset(step) * windowSeconds;
-  return late > 0 ? onTheStep().map(note => ({ ...note, offset: note.offset + late })) : onTheStep();
+  // A strummed chord: each note starts that much after the one below it, and they still end together.
+  const strum = params.arpeggiator?.enabled ? 0 : Math.max(0, Math.min(MAX_STRUM, step.strum ?? 0)) * windowSeconds;
+  const delay = (note: string) => strum * notes.indexOf(note);
+  const placed = strum > 0 ? onTheStep().map(scheduled => ({ ...scheduled, offset: scheduled.offset + delay(scheduled.note), duration: Math.max(0.03, scheduled.duration - delay(scheduled.note)) })) : onTheStep();
+  return late > 0 ? placed.map(note => ({ ...note, offset: note.offset + late })) : placed;
 
   function onTheStep(): ScheduledNote[] {
   if (params.arpeggiator?.enabled) return expandStep(notes[0], params, windowSeconds, tempo, step.slide, step.length, notes);

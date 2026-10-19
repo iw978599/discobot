@@ -321,6 +321,9 @@ export interface SequencerStep {
   ratchet?: number;
   // how late the step starts, as a fraction of a step (0 to under 1); absent means on the step
   offset?: number;
+  // how long after the note below each note of a chord starts, as a fraction of a step (up to
+  // a half); absent means all together
+  strum?: number;
 }
 
 export interface Pattern {
