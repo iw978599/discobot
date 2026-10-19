@@ -44,11 +44,12 @@ verified by a test.
    and Phase 90 phasers, and an overdrive, a distortion and a fuzz after
    the Tube Screamer, the RAT and the Big Muff. A clone is the app's own
    effect set to behave like the unit it is named for, as a synth model
-   is; it is not that unit's circuit. Some would need a little more of the
-   effect than there is (wow and flutter on the delay, a spring's drip, a
-   drive's tone stack), which belongs in the shared builders so live and
-   export agree. Which units, and what each preset's name says, is for the
-   owner. Leans on the insert effects and the Hall reverb, whose Decay in
+   is; it is not that unit's circuit. The owner agreed this list as a start
+   (2026-10-19), and said an effect may gain knobs of its own where a clone
+   needs them (wow and flutter on the delay, a spring's drip, a drive's tone
+   stack); they belong in the shared builders so live and export agree, and
+   are optional settings like any other. What each preset is called is
+   still for the owner. Leans on the insert effects and the Hall reverb, whose Decay in
    Chrome is a known issue to settle first.
 6. **A second sample song, and more starting beats.** (S each) One song in
    one style shows one side of the app. Each is made, heard by the owner,
