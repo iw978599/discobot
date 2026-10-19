@@ -14,10 +14,17 @@ export const CHORD_SHAPES = [
 ] as const;
 export type ChordShapeId = typeof CHORD_SHAPES[number]['id'];
 
-// The notes of a shape built on a root, lowest first. A note off the top of what MIDI can name
-// is left out; an unknown shape, or no shape, is the root alone.
-export function chordNotes(root: string, shape: string | null | undefined): string[] {
+// The inversions the roll offers: which note of the chord is lowest.
+export const INVERSIONS = ['Root', '1st', '2nd', '3rd'];
+
+// The notes of a shape built on a root. A note off either end of what MIDI can name is left out;
+// an unknown shape, or no shape, is the root alone. An inversion keeps the root where it is and
+// takes the notes above it down an octave, so the one picked out is lowest: the first inversion
+// has the third in the bass, the second the fifth. One past the shape's last note is its last.
+export function chordNotes(root: string, shape: string | null | undefined, inversion = 0): string[] {
   const found = CHORD_SHAPES.find(entry => entry.id === shape);
   if (!found) return [root];
-  return found.semitones.map(semitones => transposeNote(root, semitones)).filter((note): note is string => note !== null);
+  const turn = Math.max(0, Math.min(found.semitones.length - 1, Math.round(inversion) || 0));
+  return found.semitones.map((semitones, index) => transposeNote(root, turn > 0 && index >= turn ? semitones - 12 : semitones))
+    .filter((note): note is string => note !== null);
 }

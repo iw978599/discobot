@@ -31,3 +31,14 @@ test('every shape has a name of its own, starts on its root, fits in a step, and
   assert.deepEqual(chordNotes('G9', 'major'), ['G9']);
   assert.deepEqual(chordNotes('nonsense', 'major'), []);
 });
+
+test('an inversion keeps the root where it was put and takes the notes above it down an octave', () => {
+  assert.deepEqual(chordNotes('C4', 'major', 0), ['C4', 'E4', 'G4']);
+  assert.deepEqual(chordNotes('C4', 'major', 1), ['C4', 'E3', 'G3'], 'the third is lowest');
+  assert.deepEqual(chordNotes('C4', 'major', 2), ['C4', 'E4', 'G3'], 'the fifth is lowest');
+  assert.deepEqual(chordNotes('C4', 'seventh', 3), ['C4', 'E4', 'G4', 'A#3'], 'the seventh is lowest');
+  assert.deepEqual(chordNotes('C4', 'major', 3), chordNotes('C4', 'major', 2), 'a triad has no third inversion: it is its second');
+  assert.deepEqual(chordNotes('C4', 'major', -1), chordNotes('C4', 'major'));
+  assert.deepEqual(chordNotes('C4', null, 2), ['C4'], 'no shape is the root alone, whatever the inversion');
+  assert.deepEqual(chordNotes('C-1', 'major', 1), ['C-1'], 'a note below what MIDI can name is left out');
+});
