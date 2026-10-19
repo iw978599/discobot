@@ -237,3 +237,47 @@ test('the functions the app calls all reach the one engine', async () => {
     assert.equal(fake(lane.input).connections.length, 0);
   } finally { globalThis.AudioContext = original; }
 });
+
+test('choosing the Hall crossfades to it, its decay and damping are settings, and whatever is let go is cut loose', async () => {
+  const { engine, contexts } = make();
+  engine.setEffectsLoop(LOOP);
+  engine.createLane('synth');
+  const ctx = contexts[0];
+  const convolver = ctx.nodes.find(node => node.kind === 'convolver')!;
+  const roomFade = convolver.connections[0];
+  assert.ok(convolver.buffer, 'a project that never chose a kind plays the Room');
+  assert.equal(ctx.nodes.filter(node => node.type === 'highshelf').length, 1, 'and has no Hall built: the one shelf is the master EQ');
+
+  const start = ctx.nodes.length;
+  engine.setEffectsLoop({ ...LOOP, reverb: { ...LOOP.reverb, kind: 'hall', damping: 0.5 } });
+  const hall = ctx.nodes.slice(start);
+  const shelves = hall.filter(node => node.type === 'highshelf');
+  assert.equal(shelves.length, 12, 'one Hall for the bus');
+  const merger = hall.find(node => node.kind === 'merger')!, hallFade = merger.connections[0];
+  assert.equal(hallFade.gain.value, 1, 'the Hall fades up');
+  assert.equal(roomFade.gain.value, 0, 'as the Room fades down');
+  assert.equal(hallFade.connections[0], roomFade.connections[0], 'into the reverb\'s own return');
+  const made = ctx.nodes.length;
+  const backs = hall.filter(node => node.kind === 'gain' && node.gain.value < 1 && node.connections.length === 1 && node.connections[0].kind === 'delay');
+  assert.equal(backs.length, 12);
+  const before = backs.map(node => node.gain.value);
+  engine.setEffectsLoop({ ...LOOP, reverb: { ...LOOP.reverb, kind: 'hall', decay: 4, damping: 0.1 } });
+  assert.equal(ctx.nodes.length, made, 'a new decay and damping build nothing');
+  assert.ok(backs.every((node, index) => node.gain.value > before[index]), 'a longer decay gives more back');
+  assert.ok(shelves.every(node => node.frequency.value > 5000), 'less damping lifts the shelf');
+  await new Promise(resolve => setTimeout(resolve, 150));
+  assert.ok(convolver.cut > 0 && roomFade.cut > 0, 'the Room is let go once it is silent');
+
+  engine.setEffectsLoop(LOOP);
+  const room = ctx.nodes.slice(made).find(node => node.kind === 'convolver')!;
+  assert.ok(room.buffer, 'back to the Room');
+  assert.equal(hallFade.gain.value, 0);
+  await new Promise(resolve => setTimeout(resolve, 150));
+  assert.ok(hall.every(node => node.cut > 0), 'and every node of the Hall is cut loose');
+
+  engine.setEffectsLoop({ ...LOOP, reverb: { ...LOOP.reverb, kind: 'hall' } });
+  const second = ctx.nodes.filter(node => node.type === 'highshelf').slice(13);
+  assert.equal(second.length, 12);
+  await engine.dispose();
+  assert.ok(second.every(node => node.connections.length === 0), 'a Hall sounding when the engine goes goes with it');
+});

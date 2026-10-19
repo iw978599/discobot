@@ -34,7 +34,8 @@ export class UndoHistory {
   private named: string | null = null;
   private groups = new Set<string>();
   private grouped = false;
-  constructor(private later: (task: () => void) => void = queueMicrotask) {}
+  // Called through a function of its own: a browser refuses `queueMicrotask` called as a method.
+  constructor(private later: (task: () => void) => void = task => queueMicrotask(task)) {}
 
   private key(op: Operation) { return undoRun(op) ?? this.named; }
 

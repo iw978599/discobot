@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { DelaySync, EffectsLoopState, RateSync } from '../types';
 import { RATE_SYNCS, RATE_SYNC_LABELS } from '../services/rateSync';
 import { DELAY_SYNCS, DELAY_SYNC_LABELS } from '../services/delayTime';
-import { CHORUS_DEFAULT, EFFECTS_DEFAULT, EQ_DEFAULT, EQ_RANGE_DB, MAX_PRE_DELAY } from '../services/effectSettings';
+import { CHORUS_DEFAULT, EFFECTS_DEFAULT, EQ_DEFAULT, EQ_RANGE_DB, MAX_PRE_DELAY, REVERB_KINDS, REVERB_KIND_LABELS, type ReverbKind } from '../services/effectSettings';
 import Knob from './Knob';
 import UnitHelp, { UNIT_HELP } from '../rack/UnitHelp';
 import './EffectsPanel.css';
@@ -322,6 +322,16 @@ function EffectsPanel({ effectsLoop, onChange, onHelp }: EffectsPanelProps) {
                 onChange={(e) => onChange({ reverb: { ...effectsLoop.reverb, enabled: e.target.checked } })}
               />
               <span>On</span>
+            </label>
+            <label className="effects-toggle" title="Room is close and grainy; Hall is a smoother, denser tail">
+              <span>Kind</span>
+              <select
+                aria-label="Reverb kind"
+                value={effectsLoop.reverb.kind ?? 'room'}
+                onChange={(e) => onChange({ reverb: { ...effectsLoop.reverb, kind: e.target.value as ReverbKind } })}
+              >
+                {REVERB_KINDS.map(value => <option key={value} value={value}>{REVERB_KIND_LABELS[value]}</option>)}
+              </select>
             </label>
           </div>
           <div className="effects-knobs">

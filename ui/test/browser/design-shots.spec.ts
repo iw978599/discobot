@@ -225,6 +225,12 @@ test('design shots: the rack, its units and the states of its controls', async (
       await share.press('Enter');
       await unit.getByRole('button', { name: 'Sends', exact: true }).click();
     });
+    await attempt(walk, 'unit-effects-hall', async () => {
+      const kind = page.locator('.effects-unit').getByLabel('Reverb kind', { exact: true });
+      await kind.selectOption('hall');
+      await near(walk, page.locator('.effects-unit .effects-grid'), 'unit-effects-hall', 12);
+      await kind.selectOption('room');
+    });
   }
 
   // Focus rings: the first Tab makes the browser show them, and they stay shown for focus moved after.
@@ -613,6 +619,14 @@ test('design shots: a phone showing one unit at a time, the knob sheet, and a ph
     await shot(walk, 'phone-unit-effects');
     await scrollBy(walk, 0.7);
     await shot(walk, 'phone-unit-effects-2');
+  });
+  await attempt(walk, 'phone-unit-effects-hall', async () => {
+    await show('Show Effects');
+    const kind = page.locator('.effects-unit').getByLabel('Reverb kind', { exact: true });
+    await kind.selectOption('hall');
+    await toTop(walk, page.locator('.effects-unit .effects-block').filter({ has: kind }));
+    await shot(walk, 'phone-unit-effects-hall');
+    await kind.selectOption('room');
   });
   // The sheet the top bar's last button raises, and the Project menu from inside it.
   await attempt(walk, 'phone-more-sheet', async () => {

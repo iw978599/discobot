@@ -338,6 +338,8 @@ export function sanitizeEffects(value: unknown, defaults: EffectsLoopState): Eff
   const preDelay = number(reverb.preDelay, 0, 0, MAX_PRE_DELAY), damping = number(reverb.damping, 0, 0, 1);
   if (preDelay > 0) state.reverb.preDelay = preDelay;
   if (damping > 0) state.reverb.damping = damping;
+  if (reverb.kind === 'hall') state.reverb.kind = 'hall';
+  else delete state.reverb.kind;
   if (raw.chorus !== null && typeof raw.chorus === 'object') {
     const chorus = record(raw.chorus);
     state.chorus = {

@@ -158,3 +158,18 @@ test('undo leaves a lane\'s octave and keyboard as they are now', async () => {
   assert.equal(lane.octaveShift, 2);
   assert.equal(lane.keyboardMode, 'piano-roll');
 });
+
+test('the turn is ended the way a browser allows: queueMicrotask is not called as a method', () => {
+  const real = globalThis.queueMicrotask;
+  // A browser throws "Illegal invocation" when it is called with anything but the window as `this`.
+  globalThis.queueMicrotask = function (this: unknown, task: () => void) {
+    if (this !== undefined && this !== globalThis) throw new TypeError('Illegal invocation');
+    real(task);
+  };
+  try {
+    const h = new UndoHistory();
+    h.record(note, 0, 'p0');
+    h.runAs('x');
+    assert.equal(h.size.undo, 1);
+  } finally { globalThis.queueMicrotask = real; }
+});

@@ -9,7 +9,7 @@ import { delaySeconds } from './delayTime';
 import { rateHz } from './rateSync';
 import { expandDrumStep, seededRandom } from './drumScheduling';
 import { createZip } from '../utils/zip';
-import { MASTER_LEVEL, chorusSweep, configureLimiter, createChorus, createMasterEq, driveCurve, eqGains, reverbImpulse, safetyCurve, scheduleDuck } from '../hooks/browserAudio';
+import { MASTER_LEVEL, chorusSweep, configureLimiter, createChorus, createHallReverb, createMasterEq, driveCurve, eqGains, reverbImpulse, safetyCurve, scheduleDuck } from '../hooks/browserAudio';
 import type { DrumInstrument, DrumSettings } from '../types';
 
 export interface ExportArrangement {
@@ -221,7 +221,11 @@ function connectEffects(ctx: OfflineAudioContext, input: AudioNode, master: Audi
     level.gain.value = state.delay.mix;
     send(sends.delay, own.delay?.()).connect(delay); delay.connect(feedback).connect(delay); delay.connect(level).connect(wet);
   }
-  if (state.reverb.enabled && sends.reverb > 0) {
+  if (state.reverb.enabled && sends.reverb > 0 && state.reverb.kind === 'hall') {
+    const hall = createHallReverb(ctx), level = ctx.createGain();
+    hall.set(state.reverb); level.gain.value = state.reverb.mix;
+    send(sends.reverb, own.reverb?.()).connect(hall.input); hall.output.connect(level).connect(wet);
+  } else if (state.reverb.enabled && sends.reverb > 0) {
     const reverb = ctx.createConvolver(), level = ctx.createGain();
     reverb.buffer = reverbImpulse(ctx, state.reverb.decay, seededRandom(3), state.reverb.preDelay, state.reverb.damping); level.gain.value = state.reverb.mix;
     send(sends.reverb, own.reverb?.()).connect(reverb).connect(level).connect(wet);
