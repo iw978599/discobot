@@ -23,6 +23,8 @@ const update = <V>(type: string, data: V): Outcome<V> => ({ ok: true, value: dat
 const refuse = (status: Rejected['status'], error: string): Rejected => ({ ok: false, status, error });
 const BAD_DATA = 'Invalid local operation data';
 const NO_SYNTH = 'Synth not found';
+// The parts a patch carries only when it is a whole sound and not one knob's change.
+const WHOLE_SOUND = ['oscillator', 'filter', 'envelope', 'lfo1', 'lfo2', 'fxSends', 'gain'];
 const BAD_ADDRESS = 'That is not an address a guest instrument can be loaded from. It must start with https:// and be on another site.';
 
 // An object in an operation, as a route's body used to arrive: after a trip through JSON, which
@@ -368,7 +370,10 @@ export const reducers: Reducers = {
     if (!patch) return refuse(400, BAD_DATA);
     const synth = laneOf(state, op.synthId);
     if (!synth) return refuse(404, NO_SYNTH);
-    synth.synthParams = sanitizeSynthParams(merge(synth.synthParams, patch), defaults.synthParams);
+    // A whole sound (a preset, Reset, undo) with no inserts means none: they are absent from the
+    // defaults, so the merge alone would keep the lane's old ones.
+    const whole = WHOLE_SOUND.every(key => key in patch) && !('inserts' in patch);
+    synth.synthParams = sanitizeSynthParams(merge(whole ? { ...synth.synthParams, inserts: undefined } : synth.synthParams, patch), defaults.synthParams);
     return { ok: true, value: synth.synthParams, save: true, event: { type: 'synthUpdate', data: { synthId: synth.synthId, parameters: synth.synthParams } } };
   },
   // Saved, and sent to nobody: the octave and the keyboard are this person's view of the lane.

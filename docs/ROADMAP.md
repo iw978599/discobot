@@ -271,7 +271,9 @@ target; removal of the AI review workflow.
    nodes by one function for live playback
    and export, whose decay and damping change without rebuilding anything.
    The names Room and Hall are the builder's and the owner may change them.
-   Not verified by ear. Insert effects per lane remain.
+   Insert effects per lane are done (2026-10-19): drive, tone, a chorus and a delay on a
+   lane's own Inserts page, run inside the synth core so live and export match; the Polysix's
+   Ensemble is the mix of its chorus. The set of four is the builder's choice. Not verified by ear.
 
 7. **More presets, grouped by kind, and more synth models.** (L in all)
    Asked for by the owner on 2026-10-11. The plan is

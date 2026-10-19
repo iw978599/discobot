@@ -19,6 +19,16 @@ export const DRUM_FX_DEFAULT: { sends: FxSendLevels; returnLevel: number } = {
 export const CHORUS_DEFAULT: NonNullable<EffectsLoopState['chorus']> = { enabled: false, rate: 0.6, depth: 0.5, mix: 0.6 };
 export const EQ_DEFAULT: NonNullable<EffectsLoopState['eq']> = { enabled: false, low: 0, mid: 0, high: 0 };
 export const EQ_RANGE_DB = 12;
+
+// A lane's insert effects (SynthParameters.inserts): what the controls show until they are set.
+// An effect whose settings are all these is not stored, and a mix of 0 is the effect left out.
+export const INSERT_DEFAULT = {
+  drive: 0,
+  tone: 0,
+  chorus: { mix: 0, depth: 0.5, rate: 0.6 },
+  delay: { mix: 0, time: 0.25, feedback: 0.3 },
+};
+export const MAX_INSERT_DELAY_TIME = 1.5;
 export const MAX_PRE_DELAY = 0.25;
 
 // The two reverbs, by what is heard. Room is the one every project had before there was a choice
