@@ -50,13 +50,14 @@ test('the Recorded kit is a choice in the kit menu, plays recordings, and its kn
   const synthesized = await exportScene(page, info.outputPath('synthesized.wav'));
   await kits.selectOption('recorded');
   await expect(kits).toHaveValue('recorded');
-  await expect(page.getByLabel('Kick Decay', { exact: true }).first()).toBeAttached();
+  await page.getByRole('button', { name: 'Select Kick', exact: true }).click();
+  await expect(page.getByRole('slider', { name: 'Kick Decay', exact: true })).toBeVisible();
   const recorded = await exportScene(page, info.outputPath('recorded.wav'));
   expect(recorded.equals(synthesized)).toBe(false);
   expect(loudness(recorded, 0, 0.3)).toBeGreaterThan(200);
   expect(loudness(recorded, 0.45, 0.75)).toBeGreaterThan(100);
   await kits.selectOption('clean-analog');
-  await expect(page.getByLabel('Kick Punch', { exact: true }).first()).toBeAttached();
+  await expect(page.getByRole('slider', { name: 'Kick Punch', exact: true })).toBeVisible();
 });
 
 test('a lane can be another percussion instrument in any kit, and the choice is stored only when made', async ({ page }, info) => {
