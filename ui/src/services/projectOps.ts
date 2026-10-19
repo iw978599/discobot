@@ -119,14 +119,16 @@ export type Outcome<V> = Applied<V> & { save?: boolean; event?: { type: string; 
 export interface OpNotice { op: Operation; origin: Origin; saved: boolean }
 
 // What kind of state each operation changes. `save`: an accepted one schedules a save.
-// `undoable`: it belongs on the undo stack. `share`: it would be sent to someone editing the
-// same project. Playing is not project state, and a lane's octave and keyboard are this
-// person's view of it.
+// `undoable`: it begins or joins an undo step (`undoHistory.ts`); an undo puts back the whole
+// project apart from what `restoreContent` in `localService.ts` keeps. `share`: it would be sent
+// to someone editing the same project. Playing is not project state, and a lane's octave and
+// keyboard are this person's view of it. Opening a scene is moving about, not an edit; a lane is
+// made when a project is opened as well as by hand; a guest's settings come from the guest.
 export const OP_META: Record<OpType, { save: boolean; undoable: boolean; share: boolean }> = {
   'tempo.set': { save: true, undoable: true, share: true },
   'drum.swing': { save: true, undoable: true, share: true },
   'drum.masterVolume': { save: true, undoable: true, share: true },
-  'drum.kit': { save: true, undoable: false, share: true },
+  'drum.kit': { save: true, undoable: true, share: true },
   'drum.state': { save: true, undoable: true, share: true },
   'drum.reset': { save: true, undoable: true, share: true },
   'drum.bars': { save: true, undoable: true, share: true },
@@ -135,28 +137,28 @@ export const OP_META: Record<OpType, { save: boolean; undoable: boolean; share: 
   'drum.stepVelocity': { save: true, undoable: true, share: true },
   'drum.stepDetail': { save: true, undoable: true, share: true },
   'drum.settings': { save: true, undoable: true, share: true },
-  'drum.sample': { save: true, undoable: false, share: true },
+  'drum.sample': { save: true, undoable: true, share: true },
   'drum.mix': { save: true, undoable: true, share: true },
   'drum.fx': { save: true, undoable: true, share: true },
   'effects.set': { save: true, undoable: true, share: true },
   'synth.create': { save: true, undoable: false, share: true },
-  'synth.remove': { save: true, undoable: false, share: true },
+  'synth.remove': { save: true, undoable: true, share: true },
   'synth.params': { save: true, undoable: true, share: true },
   'synth.model': { save: true, undoable: true, share: true },
-  'synth.mix': { save: true, undoable: false, share: true },
+  'synth.mix': { save: true, undoable: true, share: true },
   'synth.prefs': { save: true, undoable: false, share: false },
   'pattern.write': { save: true, undoable: true, share: true },
   'transport.play': { save: false, undoable: false, share: false },
   'transport.stop': { save: false, undoable: false, share: false },
   'scene.select': { save: true, undoable: false, share: true },
-  'scene.delete': { save: true, undoable: false, share: true },
-  'scene.create': { save: true, undoable: false, share: true },
-  'scene.rename': { save: true, undoable: false, share: true },
-  'scene.color': { save: true, undoable: false, share: true },
+  'scene.delete': { save: true, undoable: true, share: true },
+  'scene.create': { save: true, undoable: true, share: true },
+  'scene.rename': { save: true, undoable: true, share: true },
+  'scene.color': { save: true, undoable: true, share: true },
   'scene.signature': { save: true, undoable: true, share: true },
-  'scene.copyPart': { save: true, undoable: false, share: true },
-  'scene.replace': { save: true, undoable: false, share: true },
-  'song.set': { save: true, undoable: false, share: true },
+  'scene.copyPart': { save: true, undoable: true, share: true },
+  'scene.replace': { save: true, undoable: true, share: true },
+  'song.set': { save: true, undoable: true, share: true },
   'guest.add': { save: true, undoable: false, share: true },
   'guest.patch': { save: true, undoable: false, share: true },
   'guest.remove': { save: true, undoable: false, share: true },

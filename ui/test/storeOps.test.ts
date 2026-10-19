@@ -1501,14 +1501,13 @@ test('the store keeps nothing of a scene or song operation\'s own objects', () =
   service.flush();
 });
 
-test('a time signature is saved, shared and, alone among the scene operations, undone', () => {
-  assert.deepEqual(OP_META['scene.signature'], { save: true, undoable: true, share: true });
-});
-
-test('scene operations are saved, not undoable, and shared', () => {
-  for (const type of ['scene.select', 'scene.create', 'scene.rename', 'scene.color', 'scene.copyPart', 'scene.delete', 'scene.replace', 'song.set'] as const) {
-    assert.deepEqual(OP_META[type], { save: true, undoable: false, share: true }, type);
+// Undo puts back the whole project, so every edit to the scenes and the song is undone. Opening a
+// scene is moving about in the project, not an edit.
+test('scene operations are saved, undone and shared, and opening a scene is not undone', () => {
+  for (const type of ['scene.signature', 'scene.create', 'scene.rename', 'scene.color', 'scene.copyPart', 'scene.delete', 'scene.replace', 'song.set'] as const) {
+    assert.deepEqual(OP_META[type], { save: true, undoable: true, share: true }, type);
   }
+  assert.deepEqual(OP_META['scene.select'], { save: true, undoable: false, share: true });
 });
 
 // The studio is not run by these tests, so the two things the plan asks of it are read from its
@@ -1528,18 +1527,10 @@ test('the scheduler opens a scene with a plain call, and a scene change waits fo
   for (const handler of ['handleSceneRename', 'handleSongChange']) assert.match(source, new RegExp(`${handler}[\\s\\S]*?, false\\)`), handler);
 });
 
-// Undo puts a snapshot back with one applyAll, in the order its twelve calls were made in, with
-// nothing awaited between them. Before them come the two that only an entry made by a change of
-// time signature brings: the signature itself, which says how long a bar of everything after it
-// is, and the other lanes' patterns. The studio is not run here, so this reads its source.
-test('undo puts a snapshot back with one applyAll, and nothing in it waits', () => {
-  const source = readFileSync(new URL('../src/studio/useStudio.tsx', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
-  const from = source.indexOf('const applySnapshot = useCallback(');
-  const body = source.slice(from, source.indexOf('const stepHistory = useCallback(', from));
-  assert.equal(body.includes('async'), false, 'applySnapshot is not async');
-  assert.equal(body.includes('await'), false);
-  assert.equal(body.includes('Promise'), false);
-  assert.equal((body.match(/localService\.applyAll\(\[/g) ?? []).length, 1);
-  const order = [...body.matchAll(/\{ type: '([\w.]+)'/g)].map(match => match[1]);
-  assert.deepEqual(order, ['scene.signature', 'pattern.write', 'drum.masterVolume', 'drum.swing', 'drum.kit', 'drum.fx', 'effects.set', 'pattern.write', 'synth.params', 'synth.model', 'drum.state', 'tempo.set', 'synth.mix', 'synth.prefs']);
+// Undo is the store's: the studio records nothing by hand and only asks for a step.
+test('the studio leaves undo to the store', () => {
+  const source = readFileSync(new URL('../src/studio/useStudio.tsx', import.meta.url), 'utf8');
+  for (const gone of ['pushHistorySnapshot', 'historyRef', 'applySnapshot', 'getSnapshot']) assert.equal(source.includes(gone), false, gone);
+  assert.ok(source.includes('const handleUndo = useCallback(() => { localService.undo(); }, []);'));
+  assert.ok(source.includes('const handleRedo = useCallback(() => { localService.redo(); }, []);'));
 });

@@ -8,6 +8,7 @@ import { normalizeSynthModelId } from '../synthModels';
 import { NEW_PROJECT_REVERB } from './effectSettings';
 import { record, number, clone, matchesShape, sanitizePattern, sanitizeSynthParams, sanitizeDrums, sanitizeEffects, sanitizeSends, sanitizeSaved, sanitizeModelParams, sanitizeKit, sanitizeScenes, sanitizeSong } from './projectSanitization';
 import type { Applied, DeepPartial, DrumFxState, GuestPatch, OpNotice, OpResult, Operation, Origin, Outcome } from './projectOps';
+import { UndoHistory } from './undoHistory';
 import { commitScene, ensureScenes, newLane, openSignature, reducers, sceneMessage, type ReducerContext } from './projectReducers';
 
 type Message = { type: string; data: any };
@@ -76,6 +77,7 @@ export class LocalProjectService {
   private writeListeners = new Set<() => void>();
   // When each project last had a version kept, and what that version looked like.
   private versionTimes = new Map<string, number>();
+  private history = new UndoHistory();
   private versionContents = new Map<string, string>();
   // How long edits go on before another version is kept. Public so tests need not wait.
   versionIntervalMs = VERSION_INTERVAL_MS;
@@ -281,6 +283,8 @@ export class LocalProjectService {
     // Opening a project keeps a version of it as it was found, once the library has stored it.
     queueMicrotask(() => { if (this.state === state && !this.versionTimes.has(state.projectId)) this.keepVersion(this.currentRecord(), 'opened').catch(() => {}); });
     this.state = state;
+    // Undo steps belong to the project they were made in, and to its copy before a download replaced it.
+    this.history.clear();
     if (identity) { state.projectId = identity.id; state.name = projectName(identity.name); }
     if (!state.synths.some(s => s.synthId === 1)) state.synths.unshift(this.createSynth(1));
     state.synths.sort((a, b) => a.synthId - b.synthId);
@@ -709,16 +713,77 @@ export class LocalProjectService {
   apply<T extends Operation>(op: T, origin: Origin = 'local'): Applied<OpResult<T['type']>> {
     const ctx = this.ctx();
     const reduce = reducers[op.type] as (ctx: ReducerContext, op: Operation) => Outcome<unknown>;
+    // Undo records the person's own edits, not undo's, nor another's arriving.
+    const now = Date.now(), recorded = origin === 'local';
+    const before = recorded && this.history.opens(op, now) ? this.undoContent() : null;
     const out = reduce(ctx, op);
     if (!out.ok) return { ok: false, status: out.status, error: out.error };
     // Every route answered with something, and the copy below cannot be made of nothing.
     if (out.value === undefined) throw new Error(`The reducer for ${op.type} answered with nothing`);
+    if (recorded) this.history.record(op, now, before);
     if (out.save) this.persist();
     if (out.event) this.emit(out.event.type, out.event.data);
     const notice: OpNotice = { op, origin, saved: !!out.save };
     this.opListeners.forEach(listener => listener(notice));
     return { ok: true, value: clone(out.value) as OpResult<T['type']> };
   }
+
+  // --- Undo. The store keeps it: every edit `OP_META` calls undoable is recorded as it is
+  // applied, and a step puts the whole project back (`undoHistory.ts` says what a step is).
+
+  // What an undo step holds: the project without what every save changes, which project it is,
+  // and what undo leaves as it is now (see `restoreContent`).
+  private undoContent(): string {
+    this.commitScene();
+    const { revision: _r, updatedAt: _u, createdAt: _c, projectId: _p, name: _n, savedPatterns: _s, guests: _g, ...content } = this.ready();
+    return JSON.stringify({ ...content, synths: content.synths.map(({ isPlaying: _i, octaveShift: _o, keyboardMode: _k, ...lane }) => lane) });
+  }
+
+  // Puts back a project `undoContent` wrote, as one `restored` event. What is kept as it is now:
+  // whether each lane is playing, its octave and keyboard, and the guests, which hold settings
+  // of their own that undo cannot ask them for. A step made in another scene opens that scene
+  // first, the way choosing it does, so the guests take on its settings.
+  private restoreContent(text: string) {
+    const content = JSON.parse(text) as Omit<State, 'revision' | 'updatedAt' | 'createdAt' | 'projectId' | 'name' | 'savedPatterns' | 'guests'>;
+    if (content.currentSceneId !== this.ready().currentSceneId && this.ready().scenes.some(scene => scene.id === content.currentSceneId)) {
+      this.apply({ type: 'scene.select', sceneId: content.currentSceneId }, 'history');
+    }
+    const state = this.ready();
+    const lanes = new Map(state.synths.map(lane => [lane.synthId, lane]));
+    const scenes = new Map(state.scenes.map(scene => [scene.id, scene]));
+    Object.assign(state, content, {
+      synths: content.synths.map(lane => {
+        const now = lanes.get(lane.synthId);
+        return { ...lane, isPlaying: now?.isPlaying ?? false, ...(now?.octaveShift !== undefined ? { octaveShift: now.octaveShift } : {}), ...(now?.keyboardMode ? { keyboardMode: now.keyboardMode } : {}) };
+      }),
+      scenes: content.scenes.map(scene => {
+        const now = scenes.get(scene.id);
+        if (!now) return scene;
+        const { guests: _g, guestMix: _m, ...rest } = scene;
+        return { ...rest, ...(now.guests ? { guests: now.guests } : {}), ...(now.guestMix ? { guestMix: now.guestMix } : {}) };
+      }),
+    });
+    this.persist();
+    this.emit('restored', this.snapshot());
+  }
+
+  private stepHistory(direction: 'undo' | 'redo'): boolean {
+    if (!this.state) return false;
+    const target = this.history.step(direction, this.undoContent());
+    if (target === null) return false;
+    this.restoreContent(target);
+    return true;
+  }
+
+  // Each answers whether there was a step to take.
+  undo(): boolean { return this.stepHistory('undo'); }
+  redo(): boolean { return this.stepHistory('redo'); }
+  undoSteps() { return this.history.size; }
+  // The edits made in this turn continue the run named `key`, for an edit that is a run only
+  // where it is made (a step's velocity dragged is a pattern written many times).
+  undoAs(key: string) { this.history.runAs(key); }
+  // While `name` is held open, every edit belongs to one undo step.
+  holdUndo(name: string, open: boolean) { this.history.hold(name, open); }
 
   // Several operations one after another, each delivered before the next begins. One that is
   // refused does not stop the rest.

@@ -14,8 +14,8 @@ interface CopyToSceneProps {
 }
 
 // "Copy to": puts one part of the open scene into another scene, which until this could only be
-// copied whole. The copy replaces what the other scene had for that part and cannot be undone, so
-// it asks first when there is something there to lose.
+// copied whole. The copy replaces what the other scene had for that part, out of sight, so it asks
+// first when there is something there to lose. Undo takes it back.
 export default function CopyToScene({ part, scenes, currentSceneId, filled, onCopy }: CopyToSceneProps) {
   const [asking, setAsking] = useState<Scene | null>(null);
   const others = scenes.filter(scene => scene.id !== currentSceneId);
@@ -35,7 +35,7 @@ export default function CopyToScene({ part, scenes, currentSceneId, filled, onCo
           onConfirm={() => { onCopy(asking.id); setAsking(null); }}
           onCancel={() => setAsking(null)}
         >
-          {asking.name} already has something there. Copying {part} into it replaces that, and Undo will not bring it back.
+          {asking.name} already has something there. Copying {part} into it replaces that. Undo brings it back.
         </ConfirmDialog>
       )}
     </span>
