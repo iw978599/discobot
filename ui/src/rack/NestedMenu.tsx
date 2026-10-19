@@ -25,8 +25,10 @@ const ROOM = 420;
 // opens beside it; on a narrow screen, where a menu is a sheet along the bottom, the group's list
 // takes the sheet over under a Back row. Rows are reached with the arrow keys, not Tab, so Tab
 // leaves the menu, which closes behind it. `top` are choices that belong to no group, listed above
-// the groups and chosen from the first list.
-export default function NestedMenu({ label, text, mark, title, top = [], groups, onSelect }: {
+// the groups and chosen from the first list. With `search` (the field's name) the first list
+// starts with a field: what is typed puts in place of the groups every choice that has each word
+// in its name or its group's, in one list.
+export default function NestedMenu({ label, text, mark, title, top = [], groups, search, onSelect }: {
   // What the menu chooses. The button's spoken name is this and then `text`.
   label: string;
   text: string;
@@ -34,12 +36,15 @@ export default function NestedMenu({ label, text, mark, title, top = [], groups,
   title?: string;
   top?: NestedMenuItem[];
   groups: NestedMenuGroup[];
+  search?: string;
   onSelect: (id: string) => void;
 }) {
   const narrow = useNarrow();
   const [open, setOpen] = useState(false);
   const [group, setGroup] = useState<string | null>(null);
   const [flip, setFlip] = useState(false);
+  const [query, setQuery] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
   const [, setTick] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -64,14 +69,18 @@ export default function NestedMenu({ label, text, mark, title, top = [], groups,
     window.clearTimeout(hoverTimer.current);
     setOpen(false);
     setGroup(null);
+    setQuery('');
     if (refocus) buttonRef.current?.focus();
   };
-  const show = (last = false) => {
+  // `rowsFirst` opens it on a row, past the search field: what the arrows on the button do.
+  const show = (last = false, rowsFirst = false) => {
     const box = buttonRef.current?.getBoundingClientRect();
     setFlip(Boolean(box && box.left + ROOM > window.innerWidth));
     setGroup(null);
     setOpen(true);
     then(() => {
+      // A desktop starts in the search field. A phone does not, or its keyboard would cover the list.
+      if (search && !narrow && !last && !rowsFirst) { searchRef.current?.focus(); return; }
       const list = rows(0);
       list[last ? list.length - 1 : 0]?.focus();
     });
@@ -121,7 +130,7 @@ export default function NestedMenu({ label, text, mark, title, top = [], groups,
     if (target === buttonRef.current) {
       if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
       event.preventDefault();
-      show(event.key === 'ArrowUp');
+      show(event.key === 'ArrowUp', true);
       return;
     }
     if (target.getAttribute('role') !== 'menuitem') return;
@@ -144,6 +153,16 @@ export default function NestedMenu({ label, text, mark, title, top = [], groups,
     }
   };
 
+  const words = query.toLowerCase().split(/s+/).filter(Boolean);
+  const matches = words.length === 0 ? null : [
+    ...top.map(item => ({ item, within: '' })),
+    ...groups.flatMap(entry => entry.items.map(item => ({ item, within: entry.label }))),
+  ].filter(({ item, within }) => words.every(word => `${item.label} ${within}`.toLowerCase().includes(word)))
+    .map(({ item, within }) => ({ ...item, title: within || item.title }));
+  const choose = (id: string) => {
+    close(true);
+    onSelect(id);
+  };
   const current = groups.find(entry => entry.label === group) ?? null;
   const drilled = narrow && current !== null;
   const choices = (items: NestedMenuItem[], level: 0 | 1) => items.map(item => (
@@ -155,10 +174,7 @@ export default function NestedMenu({ label, text, mark, title, top = [], groups,
       data-item={item.id}
       aria-label={item.label}
       title={item.title}
-      onClick={() => {
-        close(true);
-        onSelect(item.id);
-      }}
+      onClick={() => choose(item.id)}
     >
       {item.label}{item.mark && <span aria-hidden="true">{item.mark}</span>}
     </button>
@@ -189,8 +205,26 @@ export default function NestedMenu({ label, text, mark, title, top = [], groups,
       </button>
       {open && !drilled && (
         <div className="rack-menu-list" role="menu" aria-label={label}>
-          {choices(top, 0)}
-          {groups.map(entry => (
+          {search && (
+            <div className="rack-menu-search" role="none">
+              <input
+                ref={searchRef}
+                type="search"
+                aria-label={search}
+                placeholder="Search"
+                value={query}
+                onChange={(event) => { setQuery(event.target.value); setGroup(null); }}
+                onKeyDown={(event) => {
+                  if (event.key === 'ArrowDown') { event.preventDefault(); rows(0)[0]?.focus(); }
+                  else if (event.key === 'Enter' && matches?.length) { event.preventDefault(); choose(matches[0].id); }
+                }}
+              />
+            </div>
+          )}
+          {matches && choices(matches, 0)}
+          {matches?.length === 0 && <div className="rack-menu-head" role="presentation">Nothing matches</div>}
+          {!matches && choices(top, 0)}
+          {!matches && groups.map(entry => (
             <div className="rack-menu-group" role="none" key={entry.label}>
               <button
                 role="menuitem"
