@@ -166,7 +166,7 @@ test('a WAV export records the guest by playing through once, and the named inst
 
   await menu(page, 'Add Guest Instrument');
   const dialog = page.getByRole('dialog', { name: 'Add a guest instrument', exact: true });
-  for (const name of ['Choir', 'Logic Rhythm', 'Boolean Melody Machine', 'Pocket Mouse']) {
+  for (const name of ['Choir', 'Logic Rhythm', 'Boolean Melody Machine', 'Pocket Mouse', 'Axis Stack']) {
     await expect(dialog.getByRole('group', { name: `${name} by Aaron Van Dorn`, exact: true }).getByRole('button', { name: 'Add', exact: true })).toBeEnabled();
   }
   await dialog.getByLabel('Address of the instrument\'s page', { exact: true }).fill(address);
