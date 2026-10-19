@@ -1,4 +1,4 @@
-import { type CymbalType, DrumCore, type DrumSample, SynthCore, type SynthSample, toVoiceParams } from '@discobot/engine';
+import { DrumCore, type DrumRecordings, type DrumSample, SynthCore, type SynthSample, toVoiceParams } from '@discobot/engine';
 import type { Automation, DrumState, EffectsLoopState, FxSendLevels, Pattern, Scene, SequencerStep, SynthParameters, TimeSignature } from '../types';
 import { type BarTime, barSteps, barTimes, wholeNotes } from './patternLength';
 import { sceneDrumState } from './songPlayback';
@@ -31,7 +31,7 @@ export interface ExportArrangement {
   // Decoded samples for the drum lanes that use one. A lane without an entry is synthesized.
   drumSamples?: Partial<Record<DrumInstrument, DrumSample>>;
   // The app's cymbal recordings, by kind. Without them the cymbal lane is synthesized.
-  drumCymbals?: Partial<Record<CymbalType, DrumSample>>;
+  drumCymbals?: DrumRecordings;
   // Decoded recordings for the synth lanes set to the sample engine, by lane id. A lane without
   // one plays its oscillators, as it does live.
   synthSamples?: Record<number, SynthSample>;

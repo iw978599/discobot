@@ -56,7 +56,9 @@ function serviceWorker(): Plugin {
         hash.update(fileName).update(output.type === 'chunk' ? output.code : output.source);
       }
       for (const fileName of listFiles(publicDirectory)) {
-        files.add(fileName);
+        // The big instruments are fetched when a sound first needs one, not by everyone at install.
+        // Once fetched, the worker keeps them (fromNetwork) for use offline.
+        if (!fileName.replace(/\\/g, '/').startsWith('sounds/')) files.add(fileName);
         hash.update(fileName).update(readFileSync(path.join(publicDirectory, fileName)));
       }
       const source = readFileSync(path.resolve(__dirname, 'pwa/service-worker.js'), 'utf8')

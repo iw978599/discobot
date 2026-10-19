@@ -33,6 +33,7 @@ export type {
   DrumInstrumentDefaults,
   DrumSettings,
   CymbalType,
+  PercType,
   DrumTrack,
   DrumState,
   DrumLanePattern,

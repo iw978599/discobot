@@ -4,13 +4,16 @@
 //   node scripts/build-waves.mjs <folder holding the source files>
 //
 // The source folder has `vsco/` and `akwf/`, each file fetched from the address beside it in
-// SOURCES below and saved under the name given there. Both libraries are CC0 (docs/BUNDLED_AUDIO.md).
+// SOURCES below and saved under the name given there (VCSL's go in `vcsl/`). All three libraries are CC0 (docs/BUNDLED_AUDIO.md).
 // Everything is cut short, mixed to one channel and stored as 16-bit, so the whole set stays small.
-import { readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 const VSCO = 'https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/';
-const AKWF = 'https://raw.githubusercontent.com/KristofferKarlAxelEkstrand/AKWF-FREE/main/AKWF/';
+const VCSL = 'https://raw.githubusercontent.com/sgossner/VCSL/master/';
+const MEMBRANE = `${VCSL}Membranophones/Struck%20Membranophones/`;
+const IDIOPHONE = `${VCSL}Idiophones/Struck%20Idiophones/`;
+const AKWF ='https://raw.githubusercontent.com/KristofferKarlAxelEkstrand/AKWF-FREE/main/AKWF/';
 const RATE = 22050;
 const FRAME = 600;
 
@@ -34,12 +37,52 @@ export const SOURCES = [
   // most of a cymbal is above what 22,050 Hz can hold. A cymbal has no note; the root is not used.
   ...[['crash', 'cymbal-crash1_ff_rr1', 2.5], ['ride', 'susCymb1-hitstick_f_rr1', 1.8], ['bell', 'susCymb1-hit-bell_mf', 1.5], ['splash', 'cymbal-crashshort_v1', 1]]
     .map(([name, source, seconds]) => ({ id: `cymbal-${name}`, zones: [{ file: `vsco/cymbal_${name}.wav`, from: `${VSCO}Percussion/${source}.wav`, root: 60, seconds, rate: 32000, unpitched: true }] })),
+  // The recorded drum kit, one hit per lane (VCSL). Like the cymbals they have no note. The hats are
+  // kept at the higher rate for the same reason the cymbals are.
+  ...[
+    ['kick', `${MEMBRANE}Bass%20Drum%201/BDrumNew_hit_v5_rr1_Sum.wav`, 0.7],
+    ['snare', `${MEMBRANE}Snare%20Drum,%20Modern%201/Snare2_HitSN_v6_rr1_Mid.wav`, 0.5],
+    ['clap', `${IDIOPHONE}Claps/Clap_rr1.wav`, 0.5],
+    ['closedHH', `${IDIOPHONE}Hi-Hat%20Cymbal/HiHat_HitC_v3_rr1_Mid.wav`, 0.25, 32000],
+    ['openHH', `${IDIOPHONE}Hi-Hat%20Cymbal/HiHat_HitO_rr1_Mid.wav`, 1, 32000],
+    ['snare2', `${MEMBRANE}Tom%202/Stick/TomL_HitS_v3_rr1_Mid.wav`, 0.7],
+    ['ride', `${MEMBRANE}Tom%201/Stick/TomH_HitS_v3_rr1_Mid.wav`, 0.6],
+  ].map(([name, from, seconds, rate]) => ({ id: `kit-${name}`, zones: [{ file: `vcsl/kit_${name}.wav`, from, root: 60, seconds, rate: rate ?? RATE, unpitched: true }] })),
+  // Other percussion a drum lane can be instead of its own drum, in any kit (VCSL).
+  ...[
+    ['tambourine', `${IDIOPHONE}Tambourine%201/Tamb1_Hit_v2_rr1_Mid.wav`, 0.5],
+    ['shaker', `${IDIOPHONE}Shaker,%20Small/Mid_ShakerDouble_Down_rr1.wav`, 0.35],
+    ['cowbell', `${IDIOPHONE}Cowbells/Cowbell1_Normal_v3_rr1_Mid.wav`, 0.5],
+    ['sidestick', `${MEMBRANE}Snare%20Drum,%20Modern%201/Snare2_stick_v1_rr1_Mid.wav`, 0.3],
+    ['conga', `${MEMBRANE}Conga/Conga_HitN_v2_rr1_Sum.wav`, 0.6],
+    ['bongo', `${MEMBRANE}Bongos/BongoH_Hit1_v2_rr1_Mid.wav`, 0.4],
+  ].map(([name, from, seconds]) => ({ id: `perc-${name}`, zones: [{ file: `vcsl/perc_${name}.wav`, from, root: 60, seconds, rate: RATE, unpitched: true }] })),
   { id: 'organ', frames: cycles('eorgan', [1]) },
   { id: 'choir', frames: cycles('hvoice', [1]) },
   { id: 'seq-voices', frames: cycles('hvoice', [1, 14, 27, 40, 53, 66, 79, 92]) },
   { id: 'seq-overtones', frames: cycles('overtone', [1, 6, 11, 16, 21, 26, 31, 36]) },
   { id: 'seq-fm', frames: cycles('fmsynth', [1, 16, 31, 46, 61, 76, 91, 106]) },
   { id: 'seq-harmonics', frames: cycles('sinharm', [1, 3, 5, 7, 9, 11, 13, 15]) },
+];
+
+// Instruments too big for waves.bin, each a file of its own that the app fetches the first time a
+// sound needs it (`sounds/<id>.bin`, the same format). One recording a C or so across the range, at a
+// middle velocity, cut shorter the higher it is. A name is the MIDI note it was measured to sound at
+// (C4 is 60); the pitch printed for each is the check.
+const octaves = (folder, name, url, seconds, firstOctave, ...extra) => seconds.map((length, index) => {
+  const octave = firstOctave + index;
+  return { file: `vcsl/${name}_C${octave}.wav`, from: url(octave), root: 12 * (octave + 1), seconds: length, ...Object.assign({}, ...extra) };
+});
+const GRAND = `${VCSL}Chordophones/Zithers/`;
+const TX = `${VCSL}Electrophones/TX81Z/`;
+export const INSTRUMENTS = [
+  { id: 'kawai-piano', file: 'sounds/kawai-piano.bin', zones: octaves(null, 'kawai', n => `${GRAND}Grand%20Piano,%20Kawai/Sustains/GPiano_sus_C${n}_v3_rr1_Player.wav`, [2.4, 2.2, 2, 1.7, 1.4, 1, 0.7], 1) },
+  { id: 'steinway-piano', file: 'sounds/steinway-piano.bin', zones: octaves(null, 'steinway', n => `${GRAND}Grand%20Piano,%20Steinway%20B/Sus/JHPiano_Sus_Close_C${n}_vl3_rr1.wav`, [2.4, 2.2, 2, 1.7, 1.4, 1, 0.7], 1) },
+  { id: 'pipe-organ', file: 'sounds/pipe-organ.bin', zones: octaves(null, 'organ', n => `${VCSL}Aerophones/Edge-blown%20Aerophones/Pipe%20Organ/Loud/Rode_Man3Open_C${n}.wav`, [2, 2, 2, 1.6, 1.6, 1.2], 1) },
+  { id: 'tenor-sax', file: 'sounds/tenor-sax.bin', zones: octaves(null, 'sax', n => `${VCSL}Aerophones/Reed%20Aerophones/Tenor%20Saxophone/Non-Vibrato/BrettTenor_NV_Main_C${n}_vl3_rr1.wav`, [1.8, 1.8, 1.6, 1.2], 2) },
+  { id: 'fm-piano', file: 'sounds/fm-piano.bin', zones: octaves(null, 'fmpiano', n => `${TX}FM%20Piano/FMPiano_C${n}_vl2.wav`, [2, 1.8, 1.5, 1.2, 1, 0.8, 0.6], 1) },
+  { id: 'fm-piano-1', file: 'sounds/fm-piano-1.bin', zones: octaves(null, 'tx1', n => `${TX}Piano%201/Piano%201_C${n}_vl2.wav`, [2, 1.8, 1.5, 1.2, 1, 0.8, 0.6], 1) },
+  { id: 'fm-clavisynth', file: 'sounds/fm-clavisynth.bin', zones: octaves(null, 'clavi', n => `${TX}Clavisynth/Clavisynth_C${n}_vl2.wav`, [1.5, 1.4, 1.2, 1, 0.8, 0.6], 1) },
 ];
 
 function readWav(path) {
@@ -131,11 +174,11 @@ function frame(folder, { file }) {
   return level.map(value => value * scale);
 }
 
-function build(folder) {
+function bundle(folder, sources, path) {
   const waves = [], audio = [];
   let offset = 0;
   const keep = (samples) => { audio.push(samples); offset += samples.length; return { offset: offset - samples.length, length: samples.length }; };
-  for (const source of SOURCES) {
+  for (const source of sources) {
     console.log(source.id);
     if (source.frames) {
       const joined = new Float64Array(FRAME * source.frames.length);
@@ -154,9 +197,16 @@ function build(folder) {
   let at = 0;
   for (const samples of audio) for (const value of samples) { pcm.writeInt16LE(Math.round(Math.max(-1, Math.min(1, value)) * 32767), at); at += 2; }
   const file = Buffer.concat([header, Buffer.from(json, 'latin1'), pcm]);
-  writeFileSync('ui/public/waves.bin', file);
-  console.log(`ui/public/waves.bin: ${(file.length / 1024).toFixed(0)} KB`);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, file);
+  console.log(`${path}: ${file.length} bytes (${(file.length / 1024).toFixed(0)} KB)`);
+}
+
+function build(folder) {
+  bundle(folder, SOURCES, 'ui/public/waves.bin');
+  for (const instrument of INSTRUMENTS) bundle(folder, [{ id: instrument.id, zones: instrument.zones }], `ui/public/${instrument.file}`);
 }
 
 if (process.argv[2]) build(process.argv[2]);
-else console.log('Usage: node scripts/build-waves.mjs <folder holding vsco/ and akwf/>');
+else console.log('Usage: node scripts/build-waves.mjs <folder holding vsco/, vcsl/ and akwf/>');
+

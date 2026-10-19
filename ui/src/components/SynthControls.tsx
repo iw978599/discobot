@@ -848,6 +848,11 @@ export default function SynthControls({
                 />
                   </>
               )}
+              {builtIn?.file && (
+                <p className="synth-sample-note">
+                  This instrument is fetched the first time it is used. Until it arrives, or if this device is offline and has not had it yet, the lane plays its oscillator.
+                </p>
+              )}
               {!sample.wave && (!sample.id || sampleMissing) && (
                 <p className="synth-sample-note" role="status">
                   {sampleMissing ? 'This sample is not on this device, so the lane plays its oscillator.' : 'Choose a sample. Until then the lane plays its oscillator.'}

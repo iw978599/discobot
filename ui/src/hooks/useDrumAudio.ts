@@ -1,6 +1,6 @@
 import { useRef, useEffect, useMemo } from 'react';
-import type { CymbalType, DrumInstrument, DrumSettings, DrumKitId, FxSendLevels } from '../types';
-import type { DrumSample } from '../../../engine/src/drums/DrumCore';
+import type { DrumInstrument, DrumSettings, DrumKitId, FxSendLevels } from '../types';
+import type { DrumRecordings, DrumSample } from '../../../engine/src/drums/DrumCore';
 import type { DrumWorkletMessage } from '@discobot/engine';
 import { createAudioLane, getAudioContext, ensureAudioReady, loadAudioWorklet, setEffectsLoop } from './browserAudio';
 
@@ -27,7 +27,7 @@ export function useDrumAudio() {
   const kitRef = useRef<DrumKitId>('clean-analog');
   const generationRef = useRef(0);
   const samplesRef = useRef<Partial<Record<DrumInstrument, DrumSample>>>({});
-  const cymbalsRef = useRef<Partial<Record<CymbalType, DrumSample>>>({});
+  const cymbalsRef = useRef<DrumRecordings>({});
   // The drums handed to a guest on their own: their hits go to a player of their own.
   const ownPlayersRef = useRef(new Set<DrumInstrument>());
 
@@ -72,7 +72,7 @@ export function useDrumAudio() {
     }
     function setKit(kit: DrumKitId) { kitRef.current = kit; }
     // The recordings the cymbal lane plays. Each worklet gets its own copy.
-    function setCymbals(cymbals: Partial<Record<CymbalType, DrumSample>>) {
+    function setCymbals(cymbals: DrumRecordings) {
       cymbalsRef.current = cymbals;
       nodes().forEach(node => send(node, { type: 'cymbals', cymbals }));
     }
