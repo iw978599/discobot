@@ -36,7 +36,7 @@ import { DEFAULT_QUANTIZE, asQuantize, recordPosition } from '../services/record
 import { LANE_PARAMS, fromUnit, lanePatch, parseTarget } from '../services/paramTargets';
 import { canAutomate, copyAutomationBar, resizeAutomationBars, resizeAutomationEachBar, sentAutomation, splitAutomated, stepVoiceParams, stepsThrough, withAutomationValues, withoutAutomation } from '../services/automation';
 import { storeMidiTies, storedMidiTies, tieFor, withTie, withoutTie, type MidiTie } from '../services/midiTies';
-import { COUNT_IN_BARS, clickAt, countInBeats, countInSeconds, storeMetronome, storedMetronome, type MetronomeSettings } from '../services/metronome';
+import { CLICK_LEVEL, clickAt, clickLevel, countInBars, countInBeats, countInSeconds, storeMetronome, storedMetronome, type MetronomeSettings } from '../services/metronome';
 import { BrowserTransport, TransportTick } from '../services/browserTransport';
 import { arrangementWholes, downloadFile, ExportArrangement, loopPass } from '../services/wavExport';
 import { expandDrumStep, swingLate } from '../services/drumScheduling';
@@ -686,7 +686,7 @@ export function useStudio() {
     const countIn = countInRef.current;
     if (counted < countIn.ticks) {
       const kind = clickAt(counted % barTicks(countIn.signature), countIn.signature);
-      if (kind) scheduleClick(time, kind === 'bar');
+      if (kind) scheduleClick(time, kind === 'bar', clickLevel(metronomeRef.current) / CLICK_LEVEL);
       return;
     }
     const tick = counted - countIn.ticks;
@@ -740,7 +740,7 @@ export function useStudio() {
     if (exportingRef.current && step === 0) handedByBarRef.current.push(guestInputs.all().map(entry => entry.source));
     if (metronomeRef.current.click && !exportingRef.current) {
       const kind = clickAt(step, signature);
-      if (kind) scheduleClick(time, kind === 'bar');
+      if (kind) scheduleClick(time, kind === 'bar', clickLevel(metronomeRef.current) / CLICK_LEVEL);
     }
     const ticksPerBar = barTicks(signature);
     const lanes = synthsRef.current;
@@ -811,7 +811,7 @@ export function useStudio() {
       const transport = transportRef.current, context = getAudioContext();
       // Guests are told where the beats fall on the computer's clock, which they share with this page.
       // A count-in is for a person about to play, never for an export that is recording the guests.
-      const countIn = metronomeRef.current.countIn && !exportingRef.current ? COUNT_IN_BARS : 0;
+      const countIn = metronomeRef.current.countIn && !exportingRef.current ? countInBars(metronomeRef.current) : 0;
       // The count-in is a bar of the scene that plays first.
       const firstScene = playModeRef.current === 'song' ? songRef.current.entries[songStartEntryRef.current]?.sceneId : undefined;
       const counted = signatureOfRef.current(firstScene ?? currentSceneIdRef.current);
