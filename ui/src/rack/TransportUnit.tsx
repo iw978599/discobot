@@ -11,6 +11,7 @@ import { TapButton, TempoDisplay, useTapTempo } from './HeaderParts';
 import { accountsEnabled } from '../services/account';
 import { useAccountUser } from './AccountDialog';
 import { enterKidsMode } from '../services/kids';
+import { CLICK_LEVEL, COUNT_IN_CHOICES, clickLevel, countInBars } from '../services/metronome';
 
 interface TransportUnitProps {
   studio: Studio;
@@ -79,11 +80,31 @@ export default function TransportUnit({ studio, onOpenSettings, onOpenProjects, 
       <button
         className={`rack-btn ${studio.metronome.countIn ? 'on' : ''}`}
         aria-pressed={studio.metronome.countIn}
-        title="Count-in: one bar of clicks before playing starts"
+        title="Count-in: bars of clicks before playing starts"
         onClick={() => studio.handleMetronomeChange({ countIn: !studio.metronome.countIn })}
       >
         Count
       </button>
+      <select
+        className="count-in-bars"
+        aria-label="Count-in length"
+        title="How many bars the count-in lasts"
+        value={countInBars(studio.metronome)}
+        onChange={(event) => studio.handleMetronomeChange({ bars: Number(event.target.value) })}
+      >
+        {COUNT_IN_CHOICES.map(bars => <option key={bars} value={bars}>{bars} {bars === 1 ? 'bar' : 'bars'}</option>)}
+      </select>
+      <Knob
+        size="small"
+        label="Click level"
+        value={clickLevel(studio.metronome)}
+        defaultValue={CLICK_LEVEL}
+        displayValue={`${Math.round(clickLevel(studio.metronome) * 100)}%`}
+        parseInputValue={(input) => { const value = Number.parseFloat(input); return Number.isFinite(value) ? value / 100 : null; }}
+        onChange={(level) => studio.handleMetronomeChange({ level })}
+        color="#f1f1ee"
+        tooltip="How loud the click and the count-in are, in this browser"
+      />
     </div>
   );
   const play = (
