@@ -569,8 +569,8 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
           </div>
           <span className="step-tools-name">Kit sends</span>
           <div className="rack-knobs">
-            {(['reverb', 'delay', 'drive', 'phaser', 'chorus'] as const).map((send) => {
-              const label = { reverb: 'Rev Send', delay: 'Dly Send', drive: 'Drv Send', phaser: 'Phs Send', chorus: 'Cho Send' }[send];
+            {(['reverb', 'delay', 'drive', 'phaser', 'chorus', 'auxA', 'auxB'] as const).map((send) => {
+              const label = { reverb: 'Rev Send', delay: 'Dly Send', drive: 'Drv Send', phaser: 'Phs Send', chorus: 'Cho Send', auxA: 'Aux A', auxB: 'Aux B' }[send];
               const master = send === 'reverb' || send === 'delay' ? '. Each drum then sends its own share of this' : '';
               return (
                 <DrumKnob
@@ -581,7 +581,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
                   displayValue={percentText(drumFx.sends[send] ?? 0)}
                   parseInputValue={parsePercent}
                   onChange={(value) => onFx({ sends: { [send]: value } })}
-                  title={`Amount of the drum kit sent to the ${send}${master}`}
+                  title={send.startsWith('aux') ? `Amount of the drum kit sent to aux bus ${send.slice(3)}` : `Amount of the drum kit sent to the ${send}${master}`}
                 />
               );
             })}

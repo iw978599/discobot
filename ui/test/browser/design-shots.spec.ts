@@ -225,6 +225,12 @@ test('design shots: the rack, its units and the states of its controls', async (
       await share.press('Enter');
       await unit.getByRole('button', { name: 'Sends', exact: true }).click();
     });
+    await attempt(walk, 'unit-effects-aux', async () => {
+      const unit = page.locator('.effects-unit');
+      await unit.getByLabel('Aux A effect', { exact: true }).selectOption('chorus');
+      await near(walk, unit.locator('[data-aux="A"]'), 'unit-effects-aux', 12);
+      await unit.getByLabel('Aux A effect', { exact: true }).selectOption('echo');
+    });
     await attempt(walk, 'unit-effects-hall', async () => {
       const kind = page.locator('.effects-unit').getByLabel('Reverb kind', { exact: true });
       await kind.selectOption('hall');

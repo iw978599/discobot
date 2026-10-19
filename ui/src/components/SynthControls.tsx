@@ -1953,6 +1953,23 @@ export default function SynthControls({
               color="#14b8a6"
               tooltip={TOOLTIPS.fxSend}
             />
+            {(['auxA', 'auxB'] as const).map(aux => (
+              <Knob
+                key={aux}
+                label={`Aux ${aux.slice(3)}`}
+                ariaLabel={`Aux ${aux.slice(3)} send`}
+                value={parameters.fxSends[aux] ?? 0}
+                defaultValue={0}
+                min={0}
+                max={1}
+                step={0.01}
+                displayValue={`${Math.round((parameters.fxSends[aux] ?? 0) * 100)}%`}
+                onChange={(v) => updateFxSends({ [aux]: v })}
+                parseInputValue={parsePercent(0, 1)}
+                color="#8b5cf6"
+                tooltip={`How much of this lane goes to aux bus ${aux.slice(3)}, an effect set in the effects unit`}
+              />
+            ))}
           </div>
         </div>
 

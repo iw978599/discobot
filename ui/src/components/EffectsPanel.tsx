@@ -1,5 +1,6 @@
 import { memo } from 'react';
-import { DelaySync, EffectsLoopState, RateSync } from '../types';
+import { AuxBus, AuxKind, DelaySync, EffectsLoopState, RateSync } from '../types';
+import { AUX_KIND_DEFAULT, AUX_KIND_LABELS, AUX_LIMITS, AUX_NAMES, auxBuses } from '../services/auxSettings';
 import { RATE_SYNCS, RATE_SYNC_LABELS } from '../services/rateSync';
 import { DELAY_SYNCS, DELAY_SYNC_LABELS } from '../services/delayTime';
 import { CHORUS_DEFAULT, EFFECTS_DEFAULT, EQ_DEFAULT, EQ_RANGE_DB, MAX_PRE_DELAY, REVERB_KINDS, REVERB_KIND_LABELS, type ReverbKind } from '../services/effectSettings';
@@ -35,6 +36,8 @@ function EffectsPanel({ effectsLoop, onChange, onHelp }: EffectsPanelProps) {
   const chorusSynced = Boolean(effectsLoop.chorus?.sync && effectsLoop.chorus.sync !== 'off');
   const phaserSynced = Boolean(effectsLoop.phaser.sync && effectsLoop.phaser.sync !== 'off');
   const chorus = effectsLoop.chorus ?? CHORUS_DEFAULT, eq = effectsLoop.eq ?? EQ_DEFAULT;
+  const buses = auxBuses(effectsLoop.aux);
+  const setAux = (slot: number, next: AuxBus) => onChange({ aux: buses.map((bus, index) => (index === slot ? next : bus)) });
   const decibels = (value: number) => `${value > 0 ? '+' : ''}${value.toFixed(1)}dB`;
   return (
     <section className="effects-panel">
@@ -386,6 +389,83 @@ function EffectsPanel({ effectsLoop, onChange, onHelp }: EffectsPanelProps) {
             />
           </div>
         </div>
+
+        {buses.map((bus, slot) => {
+          const name = AUX_NAMES[slot], limits = AUX_LIMITS[bus.kind], start = AUX_KIND_DEFAULT[bus.kind];
+          const synced = Boolean(bus.sync && bus.sync !== 'off');
+          const mainText = synced ? RATE_SYNC_LABELS[bus.sync!] : bus.kind === 'echo' ? `${Math.round(bus.main * 1000)}ms` : bus.kind === 'hall' ? `${bus.main.toFixed(1)}s` : `${bus.main.toFixed(2)}Hz`;
+          return (
+            <div className="effects-block" key={name} data-aux={name}>
+              <h4>Aux {name}</h4>
+              <div className="effects-row-head">
+                <label className="effects-toggle" title="What this bus is pointed at. Lanes, the drums and guests each have a send to it">
+                  <span>Effect</span>
+                  <select
+                    aria-label={`Aux ${name} effect`}
+                    value={bus.kind}
+                    onChange={(e) => setAux(slot, { ...AUX_KIND_DEFAULT[e.target.value as AuxKind], level: bus.level })}
+                  >
+                    {(Object.keys(AUX_KIND_LABELS) as AuxKind[]).map(kind => <option key={kind} value={kind}>{AUX_KIND_LABELS[kind]}</option>)}
+                  </select>
+                </label>
+                {limits.syncs.length > 1 && (
+                  <label className="effects-toggle" title="Set it to a note value so it stays in time when the tempo changes">
+                    <span>Sync</span>
+                    <select
+                      aria-label={`Aux ${name} sync`}
+                      value={bus.sync ?? 'off'}
+                      onChange={(e) => setAux(slot, { ...bus, sync: e.target.value as RateSync })}
+                    >
+                      {limits.syncs.map(value => <option key={value} value={value}>{RATE_SYNC_LABELS[value]}</option>)}
+                    </select>
+                  </label>
+                )}
+              </div>
+              <div className="effects-knobs">
+                <Knob
+                  label={limits.mainName}
+                  ariaLabel={`Aux ${name} ${limits.mainName.toLowerCase()}`}
+                  value={bus.main}
+                  defaultValue={start.main}
+                  min={limits.main.min}
+                  max={limits.main.max}
+                  step={bus.kind === 'echo' ? 0.005 : 0.01}
+                  displayValue={mainText}
+                  parseInputValue={bus.kind === 'echo' ? parseMs : parseNumber}
+                  onChange={(value) => setAux(slot, { ...bus, main: value, ...(bus.kind === 'hall' ? {} : { sync: 'off' as RateSync }) })}
+                  tooltip={synced ? 'Following the tempo. Turn the knob to set a free value instead' : undefined}
+                  color="#8b5cf6"
+                />
+                <Knob
+                  label={limits.shapeName}
+                  ariaLabel={`Aux ${name} ${limits.shapeName.toLowerCase()}`}
+                  value={bus.shape}
+                  defaultValue={start.shape}
+                  min={limits.shape.min}
+                  max={limits.shape.max}
+                  step={0.01}
+                  displayValue={`${Math.round(bus.shape * 100)}%`}
+                  parseInputValue={parsePercent}
+                  onChange={(value) => setAux(slot, { ...bus, shape: value })}
+                  color="#8b5cf6"
+                />
+                <Knob
+                  label="Level"
+                  ariaLabel={`Aux ${name} level`}
+                  value={bus.level}
+                  defaultValue={start.level}
+                  min={0}
+                  max={1}
+                  displayValue={`${Math.round(bus.level * 100)}%`}
+                  parseInputValue={parsePercent}
+                  onChange={(value) => setAux(slot, { ...bus, level: value })}
+                  tooltip="How loud the bus comes back. At 0 it is silent whatever is sent to it"
+                  color="#8b5cf6"
+                />
+              </div>
+            </div>
+          );
+        })}
 
         <div className="effects-block">
           <h4>Master EQ</h4>
