@@ -32,7 +32,8 @@
   var NOTES = ['C4', 'D4', 'E4', 'G4', 'A4', 'C5'], MIDI = [60, 62, 64, 67, 69, 72];
 
   // ---- the instrument itself: a note on every beat
-  var state = { note: 'C4', wave: 'triangle', input: null };
+  var state = { note: 'C4', wave: 'triangle' };
+  if (TAKES_INPUT) state.input = null;
   var ctx = null, output = null, monitor = null;
   var transport = { playing: false };   // { playing, bpm, anchorWall, anchorBeat }
   var nextBeat = 0, scheduled = 0, timer = null;
