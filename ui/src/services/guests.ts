@@ -30,6 +30,7 @@ export const FEATURED_GUESTS: Array<{ name: string; by: string; about: string; u
   { name: 'Logic Rhythm', by: 'Aaron Van Dorn', about: 'A drum machine sequenced by logic gates', url: 'https://aaronvandorn.github.io/Logic-Rhythm/' },
   { name: 'Boolean Melody Machine', by: 'Aaron Van Dorn', about: 'Melody and harmony from Boolean logic and Euclidean clocks', url: 'https://aaronvandorn.github.io/Boolean-Melody-Machine/' },
   { name: 'Pocket Mouse', by: 'Aaron Van Dorn', about: 'An instrument played on a grid with one finger, after Music Mouse', url: 'https://aaronvandorn.github.io/Pocket-Mouse/' },
+  { name: 'Axis Stack', by: 'Aaron Van Dorn', about: 'An XY effects pad in the manner of a Kaoss Pad: each axis drives a stack of effects', url: 'https://aaronvandorn.github.io/Axis-Stack/' },
 ];
 export const MAX_GUEST_STATE_CHARS = 100_000;
 export const GUEST_PROTOCOL = 1;
