@@ -33,10 +33,23 @@ verified by a test.
 4. **A china, a sizzle and a second cymbal lane.** (S to M) Left over from
    the cymbal work: the free library has neither a china nor a sizzle, and
    one lane can only be one cymbal at a time.
-5. **Effects presets.** (S) The effects unit has no presets. A handful
-   (a small room, a long hall, a slapback, a tempo-synced dub delay) would
-   be a quick way in, now that the delay, phaser and chorus can follow the
-   tempo.
+5. **Effects presets, among them clones of well-known units.** (M) The
+   effects have no presets. A preset menu on each effect's box (and on a
+   lane's own insert effects, once they exist) would hold plain starting
+   points (a small room, a long hall, a slapback, a tempo-synced dub delay)
+   and, asked for by the owner on 2026-10-19, presets set up to sound like
+   popular effects: a tape echo in the manner of the Space Echo, an
+   analogue delay like the Memory Man, a plate and a spring reverb, the
+   Juno's two chorus modes and a Dimension-style chorus, the Small Stone
+   and Phase 90 phasers, and an overdrive, a distortion and a fuzz after
+   the Tube Screamer, the RAT and the Big Muff. A clone is the app's own
+   effect set to behave like the unit it is named for, as a synth model
+   is; it is not that unit's circuit. Some would need a little more of the
+   effect than there is (wow and flutter on the delay, a spring's drip, a
+   drive's tone stack), which belongs in the shared builders so live and
+   export agree. Which units, and what each preset's name says, is for the
+   owner. Leans on the insert effects and the Hall reverb, whose Decay in
+   Chrome is a known issue to settle first.
 6. **A second sample song, and more starting beats.** (S each) One song in
    one style shows one side of the app. Each is made, heard by the owner,
    and changed.
