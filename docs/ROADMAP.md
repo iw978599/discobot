@@ -38,7 +38,7 @@ directly, with no builder.
 2. **A longer count-in and a level for the click** (V9).
 3. **Search across presets** (V13). Eighty-six presets is past what a menu
    shows well.
-4. **The arpeggiator held under a key** (V11a): runs while the key is down,
+4. **The arpeggiator held under a key** (V11a). Done: it runs while the key is down,
    as hardware does.
 5. **Inversions and a strum for chords** (V8).
 6. **Effects presets, the plain ones** (the first half of V5): a small room,
