@@ -37,7 +37,6 @@ import { LANE_PARAMS, fromUnit, lanePatch, parseTarget } from '../services/param
 import { canAutomate, copyAutomationBar, resizeAutomationBars, resizeAutomationEachBar, sentAutomation, splitAutomated, stepVoiceParams, stepsThrough, withAutomationValues, withoutAutomation } from '../services/automation';
 import { storeMidiTies, storedMidiTies, tieFor, withTie, withoutTie, type MidiTie } from '../services/midiTies';
 import { COUNT_IN_BARS, clickAt, countInBeats, countInSeconds, storeMetronome, storedMetronome, type MetronomeSettings } from '../services/metronome';
-import { startsUndoStep } from './undoSteps';
 import { BrowserTransport, TransportTick } from '../services/browserTransport';
 import { arrangementWholes, downloadFile, ExportArrangement, loopPass } from '../services/wavExport';
 import { expandDrumStep } from '../services/drumScheduling';
@@ -54,7 +53,6 @@ const DEFAULT_DRUM_FX = DRUM_FX_DEFAULT;
 const DEFAULT_EFFECTS_LOOP = EFFECTS_DEFAULT;
 
 const DEFAULT_DRUM_KIT_ID: DrumKitId = 'clean-analog';
-const MAX_HISTORY = 80;
 // How far ahead of its sound a step light may be lit. The scheduler always works this far ahead.
 const STEP_LIGHT_AHEAD = 0.1;
 // MIDI keys pressed within this long of each other are one chord.
@@ -71,42 +69,7 @@ interface SynthPreset {
   builtIn?: boolean;
 }
 
-interface PatternSnapshot {
-  pattern: Pattern;
-  synthParams: SynthParameters | null;
-  synthModelId: SynthModelId;
-  synthModelParams: SynthModelParams;
-  drumState: DrumState;
-  tempo: number;
-  drumMasterVolume: number;
-  drumSwing: number;
-  drumKitId: DrumKitId;
-  drumFx: typeof DEFAULT_DRUM_FX;
-  effectsLoop: EffectsLoopState;
-  muted?: boolean;
-  solo?: boolean;
-  octaveShift?: number;
-  // The scene's time signature when the entry was made. Putting an entry back puts this back first.
-  signature?: TimeSignature;
-  // Every other lane's pattern, kept only by an edit that changes them all: a new time signature.
-  lanes?: Array<{ synthId: number; pattern: Pattern }>;
-}
-
-interface HistoryEntry {
-  synthId: number;
-  // the scene that was being edited, so undo can go back to it first
-  sceneId: string;
-  snapshot: PatternSnapshot;
-}
-
 export type PlayMode = 'pattern' | 'song';
-
-// One chronological stack for the whole project: every snapshot also carries the shared
-// drum, tempo and effects state, so per-lane stacks would undo each other's edits.
-interface ProjectHistory {
-  undo: HistoryEntry[];
-  redo: HistoryEntry[];
-}
 
 interface SynthState {
   id: number;
@@ -445,14 +408,6 @@ export function useStudio() {
   // React has rendered see the first.
   const synthsRef = useRef(synths);
   synthsRef.current = synths;
-  // The lanes an undo entry records as "before", where a pattern event has moved synthsRef on
-  // since the last render: each such lane as it was before the first of them, with the pattern
-  // the last of them left. Undo read synthsRef when only a render moved it, and an entry pushed
-  // after an edit that has not rendered yet (a MIDI import putting two tracks on one lane) still
-  // holds the lane from before that edit. Painting the piano roll forgets its lane here, since
-  // each painted cell is undone by itself.
-  const lanesBeforeEditRef = useRef(new Map<number, { lane: SynthState; left: Pattern }>());
-  if (lanesBeforeEditRef.current.size > 0) lanesBeforeEditRef.current.clear();
   const midiModeRef = useRef(midiMode);
   midiModeRef.current = midiMode;
   const midiChannelRef = useRef(midiChannel);
@@ -463,21 +418,12 @@ export function useStudio() {
   // and a handler making a second edit before React has rendered see the first.
   const drumStateRef = useRef(drumState);
   drumStateRef.current = drumState;
-  // The drums an undo entry records as "before": as they were last rendered, or as a scene
-  // change left them. A pattern tool makes many edits in one go and each pushes an entry; all
-  // of them must hold the drums as they were before the first, or one undo would take back
-  // only the last step moved. So this one is not written by the drum events.
-  const drumsForUndoRef = useRef(drumState);
-  drumsForUndoRef.current = drumState;
   const selectedDrumKitIdRef = useRef(selectedDrumKitId);
   selectedDrumKitIdRef.current = selectedDrumKitId;
   const drumFxRef = useRef(drumFx);
   drumFxRef.current = drumFx;
   const effectsLoopRef = useRef(effectsLoop);
   effectsLoopRef.current = effectsLoop;
-  const historyRef = useRef<ProjectHistory>({ undo: [], redo: [] });
-  const historyThrottleRef = useRef<Record<string, number>>({});
-  const isRestoringRef = useRef(false);
   // Notes a lane is holding for a MIDI device, by device, channel and note.
   const midiHeldRef = useRef(new Map<string, { synthId: number; note: string; device: string }>());
   const midiChordRef = useRef<{ synthId: number; stepIndex: number; at: number } | null>(null);
@@ -592,132 +538,14 @@ export function useStudio() {
     setSynths(prev => prev.map(change));
   }, []);
 
-  // A pattern the store has kept, put on its lane. What undo should read for the lane is kept
-  // beside it: see lanesBeforeEditRef.
-  const commitPattern = useCallback((synthId: number, pattern: Pattern, change: (lane: SynthState) => SynthState) => {
-    const before = synthsRef.current.find(s => s.id === synthId);
+  // A pattern the store has kept, put on its lane.
+  const commitPattern = useCallback((synthId: number, change: (lane: SynthState) => SynthState) => {
     commitLanes(s => (s.id === synthId ? change(s) : s));
-    if (!before) return;
-    const held = lanesBeforeEditRef.current.get(synthId);
-    lanesBeforeEditRef.current.set(synthId, { lane: held && held.left === before.pattern ? held.lane : before, left: pattern });
   }, [commitLanes]);
 
-  // `whole` keeps every other lane's pattern as well, for an edit that changes them all.
-  const getSnapshot = useCallback((synthId: number, patternId: string, whole = false): PatternSnapshot | null => {
-    const live = synthsRef.current.find((entry) => entry.id === synthId);
-    const held = lanesBeforeEditRef.current.get(synthId);
-    // Only while the lane still has the pattern that edit left: a scene change replaces it.
-    const before = live && held && held.left === live.pattern ? held.lane : undefined;
-    const synth = [before, live].find((entry) => entry?.pattern?.id === patternId);
-    if (!synth?.pattern) return null;
-    return {
-      pattern: clonePattern(synth.pattern),
-      synthParams: cloneSynthParams(synth.synthParams),
-      synthModelId: synth.synthModelId,
-      synthModelParams: cloneSynthModelParams(synth.synthModelParams),
-      drumState: cloneDrumState(drumsForUndoRef.current),
-      tempo: globalTempo,
-      drumMasterVolume,
-      drumSwing,
-      drumKitId: selectedDrumKitIdRef.current,
-      drumFx: structuredClone(drumFxRef.current),
-      effectsLoop: structuredClone(effectsLoopRef.current),
-      muted: synth.muted,
-      solo: synth.solo,
-      octaveShift: synth.octaveShift ?? 0,
-      signature: timeSignature(signatureOfRef.current(currentSceneIdRef.current)),
-      ...(whole ? { lanes: synthsRef.current.filter(entry => entry.id !== synthId && entry.pattern).map(entry => ({ synthId: entry.id, pattern: clonePattern(entry.pattern!) })) } : {}),
-    };
-  }, [globalTempo, drumMasterVolume, drumSwing]);
 
-  const pushHistorySnapshot = useCallback((synthId: number, patternId: string, whole = false) => {
-    if (isRestoringRef.current) return;
-    const snapshot = getSnapshot(synthId, patternId, whole);
-    if (!snapshot) return;
-    const history = historyRef.current;
-    history.undo.push({ synthId, sceneId: currentSceneIdRef.current, snapshot });
-    if (history.undo.length > MAX_HISTORY) history.undo.shift();
-    history.redo = [];
-  }, [getSnapshot]);
-
-  const pushHistorySnapshotThrottled = useCallback(
-    (synthId: number, patternId: string, keySuffix: string, minIntervalMs = 250) => {
-      const now = performance.now();
-      const key = `${synthId}:${patternId}:${keySuffix}`;
-      const lastTs = historyThrottleRef.current[key];
-      historyThrottleRef.current[key] = now;
-      // Compare against the last change, not the last snapshot, so one continuous drag is one undo step.
-      if (!startsUndoStep(lastTs, now, minIntervalMs)) return;
-      pushHistorySnapshot(synthId, patternId);
-    },
-    [pushHistorySnapshot]
-  );
-
-  // Puts a snapshot back in one go. The store is changed in this order, each edit delivered before
-  // the next, and nothing waits between them, so nothing else (a second undo, a render) can come
-  // between two of them.
-  const applySnapshot = useCallback((synthId: number, snapshot: PatternSnapshot) => {
-    setSynths((prev) => prev.map((entry) => (
-      entry.id === synthId
-        ? {
-          ...entry,
-          selectedStep: null,
-          octaveShift: snapshot.octaveShift ?? entry.octaveShift,
-        }
-        : entry
-    )));
-    // The time signature goes back first: it says how long a bar of everything after it is.
-    const resigned = snapshot.signature !== undefined && snapshot.signature !== timeSignature(signatureOfRef.current(currentSceneIdRef.current));
-    localService.applyAll([
-      ...(resigned ? [{ type: 'scene.signature' as const, signature: snapshot.signature! }] : []),
-      // A pattern with no automation says so: the store keeps what it has when none is sent.
-      ...(snapshot.lanes ?? []).map(lane => ({ type: 'pattern.write' as const, synthId: lane.synthId, patternId: lane.pattern.id, patch: { ...lane.pattern, automation: sentAutomation(lane.pattern.automation) } })),
-      { type: 'drum.masterVolume', volume: snapshot.drumMasterVolume },
-      { type: 'drum.swing', swing: snapshot.drumSwing },
-      { type: 'drum.kit', kitId: snapshot.drumKitId, applyDefaults: false },
-      { type: 'drum.fx', patch: snapshot.drumFx },
-      { type: 'effects.set', patch: snapshot.effectsLoop },
-      { type: 'pattern.write', synthId, patternId: snapshot.pattern.id, patch: { ...snapshot.pattern, automation: sentAutomation(snapshot.pattern.automation) } },
-      { type: 'synth.params', synthId, patch: snapshot.synthParams || DEFAULT_PARAMS },
-      { type: 'synth.model', synthId, modelId: snapshot.synthModelId, modelParams: snapshot.synthModelParams },
-      { type: 'drum.state', state: snapshot.drumState },
-      { type: 'tempo.set', tempo: snapshot.tempo },
-      { type: 'synth.mix', synthId, muted: snapshot.muted ?? false, solo: snapshot.solo ?? false },
-      // The octave is saved and sent to nobody, so it is set on the lane above as well.
-      { type: 'synth.prefs', synthId, octaveShift: snapshot.octaveShift ?? 0 },
-    ]);
-  }, []);
-
-  const stepHistory = useCallback(async (direction: 'undo' | 'redo') => {
-    if (isRestoringRef.current) return;
-    const history = historyRef.current;
-    const from = direction === 'undo' ? history.undo : history.redo;
-    const to = direction === 'undo' ? history.redo : history.undo;
-    let entry = from.pop();
-    // Entries for a lane or scene that has since been removed can no longer be applied.
-    const usable = (candidate: HistoryEntry) => synthsRef.current.some((synth) => synth.id === candidate.synthId)
-      && scenesRef.current.some((scene) => scene.id === candidate.sceneId);
-    while (entry && !usable(entry)) entry = from.pop();
-    if (!entry) return;
-    // The edit was made in another scene: go back to it, then undo there.
-    if (entry.sceneId !== currentSceneIdRef.current) {
-      localService.selectScene(entry.sceneId);
-      // The scene is already open, refs and all. This one turn is kept as the request's await was.
-      await Promise.resolve();
-    }
-    const currentPattern = synthsRef.current.find((synth) => synth.id === entry!.synthId)?.pattern;
-    const current = currentPattern ? getSnapshot(entry.synthId, currentPattern.id, Boolean(entry.snapshot.lanes)) : null;
-    if (current) to.push({ synthId: entry.synthId, sceneId: entry.sceneId, snapshot: current });
-    isRestoringRef.current = true;
-    try {
-      applySnapshot(entry.synthId, entry.snapshot);
-    } finally {
-      isRestoringRef.current = false;
-    }
-  }, [getSnapshot, applySnapshot]);
-
-  const handleUndo = useCallback(() => stepHistory('undo'), [stepHistory]);
-  const handleRedo = useCallback(() => stepHistory('redo'), [stepHistory]);
+  const handleUndo = useCallback(() => { localService.undo(); }, []);
+  const handleRedo = useCallback(() => { localService.redo(); }, []);
 
   const [midiImportData, setMidiImportData] = useState<MidiImportResult | null>(null);
   const midiImportOpen = midiImportData !== null;
@@ -1005,6 +833,7 @@ export function useStudio() {
       // Every lane is back at its own sound: automation only plays.
       synthAudio.endAutomation();
       autoPassRef.current.clear();
+      localService.holdUndo('auto', false);
       drumAudio.stopAllNotes();
     }
   }, [transportPlaying]);
@@ -1017,6 +846,7 @@ export function useStudio() {
       }
       case 'init': {
         autoPassRef.current.clear();
+        localService.holdUndo('auto', false);
         setGuests(message.data.guests ?? []);
         if (message.data.restored) initializedSynthLanesRef.current = true;
         if (message.data.synths) {
@@ -1075,6 +905,57 @@ export function useStudio() {
         }
         break;
       }
+      case 'restored': {
+        // Undo or redo put the project back. It is the same project, so nothing that opening one
+        // decides (the starting points) is decided again. The refs the scheduler and the next
+        // edit read are moved on at once, as a scene change moves them, and each lane's sound is
+        // sent to the audio as `synthUpdate` sends it.
+        const data = message.data;
+        autoPassRef.current.clear();
+        localService.holdUndo('auto', false);
+        const previous = synthsRef.current, loop = normalizeEffectsLoop(data.effectsLoop);
+        const nextLanes: SynthState[] = data.synths.map((s: any) => {
+          const was = previous.find(lane => lane.id === s.synthId);
+          return {
+            id: s.synthId,
+            pattern: s.pattern,
+            patterns: s.patterns || [],
+            synthParams: normalizeSynthParams(s.synthParams),
+            synthModelId: normalizeSynthModelId(s.synthModelId),
+            synthModelParams: normalizeSynthModelParams(s.synthModelParams),
+            isPlaying: was?.isPlaying ?? false,
+            selectedStep: null,
+            keyboardMode: s.keyboardMode || 'keyboard',
+            stepRecordPointer: was?.stepRecordPointer ?? 0,
+            octaveShift: s.octaveShift || 0,
+            muted: Boolean(s.muted),
+            solo: Boolean(s.solo),
+            forceReleaseSignal: was?.forceReleaseSignal ?? false,
+          };
+        });
+        const heard = audibleLanes(null, nextLanes);
+        previous.forEach(lane => { if (!heard.has(lane.id)) synthAudio.stopSynth(lane.id); });
+        nextLanes.forEach(lane => { if (lane.synthParams) synthAudio.updateParameters(lane.synthParams, data.tempo, loop, lane.id); });
+        synthsRef.current = nextLanes;
+        drumStateRef.current = data.drumState;
+        scenesRef.current = data.scenes;
+        currentSceneIdRef.current = data.currentSceneId;
+        songRef.current = data.song;
+        setSynths(nextLanes);
+        setGuests(data.guests ?? []);
+        setDrumState(data.drumState);
+        setSelectedDrumKitId(data.selectedDrumKitId as DrumKitId);
+        setDrumFx(normalizeDrumFx(data.drumFx));
+        setEffectsLoop(loop);
+        setGlobalTempo(data.tempo);
+        setDrumMasterVolume(data.drumMasterVolume);
+        setDrumSwing(data.drumSwing);
+        setScenes(data.scenes);
+        setCurrentSceneId(data.currentSceneId);
+        setSong(data.song);
+        setSongStartEntry(entry => Math.min(entry, data.song.entries.length - 1));
+        break;
+      }
       case 'sceneChanged': {
         const { scenes: nextScenes, song: nextSong, currentSceneId: nextSceneId, synths: lanePatterns, drumState: nextDrums } = message.data;
         // Each guest takes on the settings the scene holds for it.
@@ -1082,6 +963,7 @@ export function useStudio() {
         const switched = nextSceneId !== currentSceneIdRef.current;
         // A pass being recorded belongs to the scene it was started in.
         if (switched) autoPassRef.current.clear();
+        localService.holdUndo('auto', false);
         // A scene brings its lanes' mutes and solos with it.
         const withScene = (s: SynthState): SynthState => {
           const lane = lanePatterns.find((entry: { synthId: number }) => entry.synthId === s.id);
@@ -1095,7 +977,7 @@ export function useStudio() {
         // The scheduler and undo read these refs before React has rendered again.
         synthsRef.current = nextLanes;
         drumStateRef.current = nextDrums;
-        drumsForUndoRef.current = nextDrums;
+        drumStateRef.current = nextDrums;
         scenesRef.current = nextScenes;
         currentSceneIdRef.current = nextSceneId;
         songRef.current = nextSong;
@@ -1119,12 +1001,12 @@ export function useStudio() {
       // lane's open one, as checked and kept, and the next edit is built on it.
       case 'patternCreated': {
         const { synthId, pattern } = message.data;
-        commitPattern(synthId, pattern, s => ({ ...s, patterns: [...s.patterns, pattern], pattern }));
+        commitPattern(synthId, s => ({ ...s, patterns: [...s.patterns, pattern], pattern }));
         break;
       }
       case 'patternUpdated': {
         const { synthId, pattern } = message.data;
-        commitPattern(synthId, pattern, s => ({ ...s, patterns: s.patterns.map(p => (p.id === pattern.id ? pattern : p)), pattern }));
+        commitPattern(synthId, s => ({ ...s, patterns: s.patterns.map(p => (p.id === pattern.id ? pattern : p)), pattern }));
         break;
       }
       case 'synthCreated': {
@@ -1318,14 +1200,12 @@ export function useStudio() {
   }, []);
 
   const handleTempoChange = useCallback(async (bpm: number) => {
-    const firstSynth = synthsRef.current[0];
-    if (firstSynth?.pattern) pushHistorySnapshot(firstSynth.id, firstSynth.pattern.id);
     // The tempoChange event sets the tempo; nothing sends the lanes their patterns' copy of it.
     setSynths(prev => prev.map(s =>
       s.pattern ? { ...s, pattern: { ...s.pattern, tempo: bpm } } : s
     ));
     localService.setTempo(bpm);
-  }, [pushHistorySnapshot]);
+  }, []);
 
   const handleGlobalPlayStop = useCallback(async () => {
     const currentSynths = synthsRef.current;
@@ -1390,11 +1270,9 @@ export function useStudio() {
   // undo entry keeps all of them: one undo brings back the steps a shorter bar cut off.
   const handleSceneSignature = useCallback((signature: string) => {
     if (timeSignature(signature) === timeSignature(signatureOfRef.current(currentSceneIdRef.current))) return;
-    const synth = synthsRef.current[0];
-    if (synth?.pattern) pushHistorySnapshot(synth.id, synth.pattern.id, true);
     const result = localService.setSceneSignature(signature);
     if (!result.ok) setStorageError(result.error);
-  }, [pushHistorySnapshot]);
+  }, []);
   const handleSceneDelete = useCallback((sceneId: string) => sceneChange(() => localService.deleteScene(sceneId)), [sceneChange]);
   // The sceneChanged event sets the song, as the store kept it.
   const handleSongChange = useCallback((next: Partial<Song>) => {
@@ -1428,7 +1306,6 @@ export function useStudio() {
     const step = pattern.steps[stepIndex];
 
     if (sameSelectedStep && step?.note) {
-      pushHistorySnapshot(synthId, pattern.id);
       const updatedPattern = {
         ...pattern,
         steps: pattern.steps.map((s, i) => (
@@ -1447,7 +1324,7 @@ export function useStudio() {
       if (s.id !== synthId) return s;
       return { ...s, selectedStep: s.selectedStep === stepIndex ? null : stepIndex };
     }));
-  }, [pushHistorySnapshot]);
+  }, []);
 
   // Moves the selection without the toggle and clear behaviour a click on a step has.
   const handleStepSelect = useCallback((synthId: number, stepIndex: number) => {
@@ -1467,7 +1344,6 @@ export function useStudio() {
     const changed = Array.isArray(note) ? note : [note];
     const synth = synthsRef.current.find(s => s.id === synthId);
     if (!synth?.pattern) return;
-    pushHistorySnapshot(synthId, synth.pattern.id);
 
     const updatedPattern = {
       ...synth.pattern,
@@ -1487,13 +1363,11 @@ export function useStudio() {
     // synthsRef on by the time this returns, so the next call sees this one. Its undo entry
     // holds this one too, so each cell is undone by itself.
     localService.writePattern(synthId, synth.pattern.id, updatedPattern);
-    lanesBeforeEditRef.current.delete(synthId);
-  }, [pushHistorySnapshot]);
+  }, []);
 
   const handleClearPatternNotes = useCallback(async (synthId: number) => {
     const synth = synthsRef.current.find(s => s.id === synthId);
     if (!synth?.pattern) return;
-    pushHistorySnapshot(synthId, synth.pattern.id);
     const updatedPattern = {
       ...synth.pattern,
       steps: synth.pattern.steps.map((step) => withStepNotes(step, [])),
@@ -1504,7 +1378,7 @@ export function useStudio() {
       s.id === synthId ? { ...s, selectedStep: null } : s
     )));
     localService.writePattern(synthId, synth.pattern.id, updatedPattern);
-  }, [pushHistorySnapshot]);
+  }, []);
 
   // Moves every note of a lane's pattern, in the open scene, by so many semitones. Nothing moves
   // if any note could not, and then nothing is written and no undo step is made.
@@ -1513,24 +1387,21 @@ export function useStudio() {
     if (!synth?.pattern) return;
     const steps = transposeSteps(synth.pattern.steps, semitones);
     if (!steps) return;
-    pushHistorySnapshot(synthId, synth.pattern.id);
     localService.writePattern(synthId, synth.pattern.id, { ...synth.pattern, steps });
-  }, [pushHistorySnapshot]);
+  }, []);
 
   // Replaces a lane's notes, in the open scene, with a new random line in a key and scale. The
   // line starts in the lowest octave the lane's piano roll shows.
   const handleRandomizeLane = useCallback((synthId: number, choice: RandomChoice) => {
     const synth = synthsRef.current.find(s => s.id === synthId);
     if (!synth?.pattern) return;
-    pushHistorySnapshot(synthId, synth.pattern.id);
     localService.writePattern(synthId, synth.pattern.id, randomLine(synth.pattern, choice, 3 + synth.octaveShift, Math.random, signatureOfRef.current(currentSceneIdRef.current)));
-  }, [pushHistorySnapshot]);
+  }, []);
 
   // Writes a note to a step. `add` joins it to the chord already there instead of replacing it.
   const upsertStepNote = useCallback(async (synthId: number, stepIndex: number, note: string, velocity: number, add = false, offset?: number, select = true) => {
     const synth = synthsRef.current.find(s => s.id === synthId);
     if (!synth?.pattern) return;
-    pushHistorySnapshot(synthId, synth.pattern.id);
 
     const boundedVelocity = Math.max(0, Math.min(1, velocity));
     const updatedPattern = {
@@ -1552,8 +1423,7 @@ export function useStudio() {
     }));
     // The next note's undo entry holds this one, as with a painted cell.
     localService.writePattern(synthId, synth.pattern.id, updatedPattern);
-    lanesBeforeEditRef.current.delete(synthId);
-  }, [pushHistorySnapshot]);
+  }, []);
 
   // Where a note played now on this lane is recorded: the step the player is hearing, moved
   // towards the nearest step by the quantize strength. Null when the transport is not running, or
@@ -1604,7 +1474,6 @@ export function useStudio() {
     const step = synth.selectedStep;
     const pattern = synthsRef.current.find(s => s.id === synthId)?.pattern;
     if (recorded || step === null || !pattern) return;
-    pushHistorySnapshot(synthId, pattern.id);
 
     const updated = {
       ...pattern,
@@ -1612,7 +1481,7 @@ export function useStudio() {
     };
 
     localService.writePattern(synthId, pattern.id, updated);
-  }, [synthAudio, triggerSynthNote, globalTempo, pushHistorySnapshot, recordNote]);
+  }, [synthAudio, triggerSynthNote, globalTempo, recordNote]);
 
   const handleNoteRelease = useCallback(async (synthId: number, note: string) => {
     const synthParams = synthsRef.current.find(s => s.id === synthId)?.synthParams;
@@ -1733,8 +1602,6 @@ export function useStudio() {
           heardTicks: transport.ticksAt(context.currentTime - (context.outputLatency || 0)), scheduledTicks: transport.scheduledTicks,
           playheadStep: playhead.get('drums'), ticksPerStep: 2, steps: drums[instrument].steps.length, strength: 1,
         });
-        const lane = synthsRef.current[0];
-        if (lane?.pattern) pushHistorySnapshot(lane.id, lane.pattern.id);
         localService.applyAll([
           { type: 'drum.step', instrument, step, active: true },
           { type: 'drum.stepVelocity', instrument, step, velocity },
@@ -1781,7 +1648,7 @@ export function useStudio() {
     const stepIndex = joins ? chord.stepIndex : targetSynth.stepRecordPointer % pattern.steps.length;
     midiChordRef.current = { synthId: targetSynth.id, stepIndex, at: now };
     void upsertStepNote(targetSynth.id, stepIndex, noteName, velocity, joins);
-  }, [handleNoteRelease, releaseLiveGestures, upsertStepNote, triggerSynthNote, globalTempo, synthAudio, recordNote, drumAudio, pushHistorySnapshot]);
+  }, [handleNoteRelease, releaseLiveGestures, upsertStepNote, triggerSynthNote, globalTempo, synthAudio, recordNote, drumAudio]);
 
   const midiState = useMidiInput({ onMessage: handleMidiMessage });
 
@@ -1807,6 +1674,7 @@ export function useStudio() {
       localService.writePattern(synthId, lane.pattern.id, { automation: sentAutomation(automation) });
     }
     autoPassRef.current.clear();
+    localService.holdUndo('auto', false);
   };
 
   // With Auto on and the lane playing, the automatable parameters a knob moves are written into
@@ -1823,7 +1691,8 @@ export function useStudio() {
     if (Object.keys(moved).length === 0) return rest as Partial<SynthParameters> | null;
     let pass = autoPassRef.current.get(synth.id);
     if (!pass || pass.patternId !== pattern.id) {
-      pushHistorySnapshot(synth.id, pattern.id);
+      // The pass is one undo step, held open until the passes end.
+      localService.holdUndo('auto', true);
       pass = { patternId: pattern.id, held: {}, step: {}, tick: {} };
       autoPassRef.current.set(synth.id, pass);
     }
@@ -1833,14 +1702,12 @@ export function useStudio() {
     // Heard at once, not when the pattern next comes round to this step.
     synthAudio.automate(synth.id, synth.synthParams, globalTempoRef.current, stepVoiceParams(synth.synthParams, automation, at.step, globalTempoRef.current, recording.held));
     return rest as Partial<SynthParameters> | null;
-  }, [recordedStep, pushHistorySnapshot, synthAudio]);
+  }, [recordedStep, synthAudio]);
 
   // A change to a lane's own sound.
   const changeSound = useCallback(async (synthId: number, params: Partial<SynthParameters>) => {
-    const synth = synthsRef.current.find((entry) => entry.id === synthId);
-    if (synth?.pattern) pushHistorySnapshotThrottled(synthId, synth.pattern.id, `synth-params-${synthId}`);
     localService.setSynthParams(synthId, params);
-  }, [pushHistorySnapshotThrottled]);
+  }, []);
 
   // What a knob calls, on screen or on a controller: recorded as automation where Auto says so,
   // and otherwise a change to the sound. A preset is always the sound, and calls `changeSound`.
@@ -1856,16 +1723,15 @@ export function useStudio() {
     if (!synth?.pattern) return;
     const automation = withAutomationValues(synth.pattern.automation, key, steps, value, synth.pattern.steps.length);
     if (automation === synth.pattern.automation) return;
-    pushHistorySnapshotThrottled(synthId, synth.pattern.id, `automation-${key}`);
+    localService.undoAs(`automation:${synthId}:${key}`);
     localService.writePattern(synthId, synth.pattern.id, { automation: sentAutomation(automation) });
-  }, [pushHistorySnapshotThrottled]);
+  }, []);
 
   const handleAutomationClear = useCallback((synthId: number, key: string) => {
     const synth = synthsRef.current.find(entry => entry.id === synthId);
     if (!synth?.pattern?.automation?.[key]) return;
-    pushHistorySnapshot(synthId, synth.pattern.id);
     localService.writePattern(synthId, synth.pattern.id, { automation: sentAutomation(withoutAutomation(synth.pattern.automation, key)) });
-  }, [pushHistorySnapshot]);
+  }, []);
 
   const handleSynthModelChange = useCallback(async (
     synthId: number,
@@ -1874,7 +1740,6 @@ export function useStudio() {
   ) => {
     const synth = synthsRef.current.find((entry) => entry.id === synthId);
     if (!synth) return;
-    if (synth.pattern) pushHistorySnapshot(synthId, synth.pattern.id);
     const normalizedModelId = normalizeSynthModelId(modelId);
     const normalizedModelParams = normalizeSynthModelParams({
       ...synth.synthModelParams,
@@ -1890,7 +1755,7 @@ export function useStudio() {
       ? enterSynthModel(normalizedModelId, normalizedModelParams, synth.synthModelId)
       : mapSynthModelToEngineParams(normalizedModelId, normalizedModelParams);
     if (Object.keys(mapped).length > 0) localService.setSynthParams(synthId, mapped);
-  }, [pushHistorySnapshot]);
+  }, []);
 
   // How many steps a bar of the lane has: the bar's sixteenths, or twice that for finer steps.
   const handleStepCountChange = useCallback(async (synthId: number, stepCount: number) => {
@@ -1900,7 +1765,6 @@ export function useStudio() {
     if (stepCount !== barSteps(signature) && stepCount !== barSteps(signature) * 2) return;
     const bars = laneBars(synth.pattern.steps.length, synth.pattern.bars, signature), perBar = synth.pattern.steps.length / bars;
     if (perBar === stepCount) return;
-    pushHistorySnapshot(synthId, synth.pattern.id);
 
     // Each bar keeps its steps from the start of the bar; a finer grid adds empty steps after them.
     const nextSteps = clampLengths(Array.from({ length: stepCount * bars }, (_, i) => {
@@ -1920,13 +1784,13 @@ export function useStudio() {
       };
     }));
     localService.writePattern(synthId, synth.pattern.id, nextPattern);
-  }, [pushHistorySnapshot]);
+  }, []);
 
   const handleStepVelocityChange = useCallback(async (synthId: number, stepIndex: number, velocity: number) => {
     const synth = synthsRef.current.find((entry) => entry.id === synthId);
     if (!synth?.pattern || !synth.pattern.steps[stepIndex]) return;
     const normalizedVelocity = Math.max(0, Math.min(1, velocity));
-    pushHistorySnapshotThrottled(synthId, synth.pattern.id, `step-velocity-${stepIndex}`);
+    localService.undoAs(`step-velocity:${synthId}:${stepIndex}`);
     const nextPattern = {
       ...synth.pattern,
       steps: synth.pattern.steps.map((step, index) => (
@@ -1934,18 +1798,17 @@ export function useStudio() {
       )),
     };
     localService.writePattern(synthId, synth.pattern.id, nextPattern);
-  }, [pushHistorySnapshotThrottled]);
+  }, []);
 
   const handleStepSlideChange = useCallback(async (synthId: number, stepIndex: number, slide: boolean) => {
     const synth = synthsRef.current.find((entry) => entry.id === synthId);
     if (!synth?.pattern || !synth.pattern.steps[stepIndex]) return;
-    pushHistorySnapshot(synthId, synth.pattern.id);
     const nextPattern = {
       ...synth.pattern,
       steps: synth.pattern.steps.map((step, index) => (index === stepIndex ? { ...step, slide } : step)),
     };
     localService.writePattern(synthId, synth.pattern.id, nextPattern);
-  }, [pushHistorySnapshot]);
+  }, []);
 
   // How long a step's notes last: all of them, or with `note` given, that one note of its chord.
   const handleStepLengthChange = useCallback(async (synthId: number, stepIndex: number, length: number, note?: string) => {
@@ -1955,19 +1818,17 @@ export function useStudio() {
     const bounded = Math.max(1, Math.min(synth.pattern.steps.length - stepIndex, Math.round(length)));
     const changed = withStepLength(current, bounded, note);
     if ((changed.length ?? 1) === (current.length ?? 1) && JSON.stringify(changed.lengths ?? null) === JSON.stringify(current.lengths ?? null)) return;
-    pushHistorySnapshot(synthId, synth.pattern.id);
     const nextPattern = {
       ...synth.pattern,
       steps: synth.pattern.steps.map((step, index) => (index === stepIndex ? changed : step)),
     };
     localService.writePattern(synthId, synth.pattern.id, nextPattern);
-  }, [pushHistorySnapshot]);
+  }, []);
 
   // Chance and repeats for one step.
   const handleStepDetailChange = useCallback(async (synthId: number, stepIndex: number, detail: { probability?: number; ratchet?: number; offset?: number }) => {
     const synth = synthsRef.current.find((entry) => entry.id === synthId);
     if (!synth?.pattern || !synth.pattern.steps[stepIndex]) return;
-    pushHistorySnapshot(synthId, synth.pattern.id);
     const nextPattern = {
       ...synth.pattern,
       steps: synth.pattern.steps.map((step, index) => {
@@ -1982,7 +1843,7 @@ export function useStudio() {
       }),
     };
     localService.writePattern(synthId, synth.pattern.id, nextPattern);
-  }, [pushHistorySnapshot]);
+  }, []);
 
   // How many bars a lane's pattern lasts. A longer one starts as the old one repeated.
   const handleLaneBarsChange = useCallback(async (synthId: number, bars: number) => {
@@ -1990,7 +1851,6 @@ export function useStudio() {
     if (!synth?.pattern || !BAR_CHOICES.some(choice => choice === bars)) return;
     const current = laneBars(synth.pattern.steps.length, synth.pattern.bars, signatureOfRef.current(currentSceneIdRef.current));
     if (current === bars) return;
-    pushHistorySnapshot(synthId, synth.pattern.id);
     const perBar = synth.pattern.steps.length / current;
     const steps = clampLengths(resizeBars(synth.pattern.steps, perBar, bars, () => ({ active: false, velocity: 0.7 })));
     const { bars: _bars, ...rest } = synth.pattern;
@@ -2001,21 +1861,17 @@ export function useStudio() {
       : s)));
     // The store keeps the bar count it has when none is sent, so one bar is sent as 1.
     localService.writePattern(synthId, synth.pattern.id, { ...nextPattern, bars });
-  }, [pushHistorySnapshot]);
+  }, []);
 
   const handleDrumBarsChange = useCallback(async (bars: number) => {
-    const synth = synthsRef.current[0];
-    if (synth?.pattern) pushHistorySnapshot(synth.id, synth.pattern.id);
     localService.setDrumBars(bars);
-  }, [pushHistorySnapshot]);
+  }, []);
 
   // Lays one bar of the drum grid over others, as one undo step.
   const handleCopyDrumBar = useCallback((from: number, to: number[]) => {
     if (!barTargets(drumBars(drumStateRef.current, signatureOfRef.current(currentSceneIdRef.current)), from, to)) return;
-    const synth = synthsRef.current[0];
-    if (synth?.pattern) pushHistorySnapshot(synth.id, synth.pattern.id);
     localService.copyDrumBar(from, to);
-  }, [pushHistorySnapshot]);
+  }, []);
 
   // Lays one bar of a lane's pattern over others, as one undo step. A note that was held past the
   // end of its bar is held as long in its new place, and stopped at the end of the pattern.
@@ -2026,10 +1882,9 @@ export function useStudio() {
     const signature = signatureOfRef.current(currentSceneIdRef.current);
     const targets = barTargets(laneBars(steps.length, synth.pattern.bars, signature), from, to);
     if (!targets) return;
-    pushHistorySnapshot(synthId, synth.pattern.id);
     const perBar = stepsPerBar(steps.length, synth.pattern.bars, signature);
     localService.writePattern(synthId, synth.pattern.id, { ...synth.pattern, steps: clampLengths(copyBar(steps, perBar, from, targets)), automation: sentAutomation(copyAutomationBar(synth.pattern.automation, perBar, from, targets)) });
-  }, [pushHistorySnapshot]);
+  }, []);
 
   const handleSynthMixChange = useCallback(async (synthId: number, mix: { muted?: boolean; solo?: boolean }) => {
     localService.setSynthMix(synthId, mix);
@@ -2307,7 +2162,6 @@ export function useStudio() {
     transportRef.current?.stop();
     synthAudio.stopAllNotes();
     drumAudio.stopAllNotes();
-    historyRef.current = { undo: [], redo: [] };
     setSongPosition(null);
   }, [synthAudio, drumAudio]);
   const projectAction = useCallback(async (action: () => Promise<{ ok: true; repaired?: boolean } | { ok: false; error: string }>) => {
@@ -2407,11 +2261,17 @@ export function useStudio() {
     e.target.value = '';
   }, []);
 
+  // An import waits for lanes to be made between its edits, and is still one undo step.
   const handleMidiImportApplyAll = useCallback(async () => {
+    if (!midiImportData) return;
+    localService.holdUndo('midi-import', true);
+    try { await importMidi(); } finally { localService.holdUndo('midi-import', false); }
+  }, [midiImportData, midiImportAssignments, ensureSynthExists]);
+
+  const importMidi = async () => {
     if (!midiImportData) return;
     const tempo = midiImportData.detectedTempo;
     const importedDrums = midiImportData.tracks.filter((track, i) => track.drums && midiImportAssignments[i] === 'drums');
-    let snapshotTaken = false;
     // A MIDI file is read as 4/4. In a scene of another time signature its steps are laid from the
     // start along that scene's bars, as many as hold them, and what is past the eighth is left out.
     const bar = barSteps(signatureOfRef.current(currentSceneIdRef.current)), plain = bar === barSteps();
@@ -2423,8 +2283,6 @@ export function useStudio() {
       if (!await ensureSynthExists(synthId)) continue;
       const current = synthsRef.current.find(s => s.id === synthId)?.pattern;
       if (!current) continue;
-      pushHistorySnapshot(synthId, current.id);
-      snapshotTaken = true;
       // Replace the lane's steps in place so repeated imports do not pile up stored patterns.
       const { bars: _bars, ...rest } = current;
       const fine = track.pattern.steps.length / (track.pattern.bars ?? 1) > barSteps() ? 2 : 1;
@@ -2438,8 +2296,6 @@ export function useStudio() {
       localService.writePattern(synthId, pattern.id, pattern);
     }
 
-    const firstSynth = synthsRef.current[0];
-    if (!snapshotTaken && firstSynth?.pattern) pushHistorySnapshot(firstSynth.id, firstSynth.pattern.id);
     if (importedDrums.length > 0) {
       const next = cloneDrumState(drumStateRef.current);
       for (const instrument of Object.keys(next) as DrumInstrument[]) {
@@ -2458,7 +2314,7 @@ export function useStudio() {
     localService.setTempo(tempo);
     setMidiImportData(null);
     setMidiImportAssignments({});
-  }, [midiImportData, midiImportAssignments, ensureSynthExists, pushHistorySnapshot]);
+  };
 
   useEffect(() => {
     const data = localService.getDrumKits();
@@ -2475,42 +2331,31 @@ export function useStudio() {
   }, []);
 
   const handleDrumStepToggle = useCallback((instrument: DrumInstrument, step: number, active: boolean) => {
-    const synth = synthsRef.current[0];
-    if (synth?.pattern) pushHistorySnapshot(synth.id, synth.pattern.id);
     localService.setDrumStep(instrument, step, active);
-  }, [pushHistorySnapshot]);
+  }, []);
 
   const handleDrumStepVelocity = useCallback((instrument: DrumInstrument, step: number, velocity: number) => {
-    const synth = synthsRef.current[0];
-    if (synth?.pattern) pushHistorySnapshot(synth.id, synth.pattern.id);
     localService.setDrumStepVelocity(instrument, step, velocity);
-  }, [pushHistorySnapshot]);
+  }, []);
 
   const handleDrumStepDetail = useCallback((instrument: DrumInstrument, step: number, detail: { probability?: number; ratchet?: number }) => {
-    const synth = synthsRef.current[0];
-    if (synth?.pattern) pushHistorySnapshotThrottled(synth.id, synth.pattern.id, `drum-step-detail-${instrument}-${step}`, 300);
     localService.setDrumStepDetail(instrument, step, detail);
-  }, [pushHistorySnapshotThrottled]);
+  }, []);
 
   const handleDrumSettingsChange = useCallback((instrument: DrumInstrument, settings: Partial<DrumSettings>) => {
     const synth = synthsRef.current[0];
     if (synth?.pattern) {
-      pushHistorySnapshotThrottled(synth.id, synth.pattern.id, `drum-settings-${instrument}`, 300);
     }
     localService.setDrumSettings(instrument, settings);
-  }, [pushHistorySnapshotThrottled]);
+  }, []);
 
   const handleDrumMixChange = useCallback((instrument: DrumInstrument, mix: { muted?: boolean; solo?: boolean }) => {
-    const synth = synthsRef.current[0];
-    if (synth?.pattern) pushHistorySnapshot(synth.id, synth.pattern.id);
     localService.setDrumMix(instrument, mix);
-  }, [pushHistorySnapshot]);
+  }, []);
 
   const handleDrumReset = useCallback(() => {
-    const synth = synthsRef.current[0];
-    if (synth?.pattern) pushHistorySnapshot(synth.id, synth.pattern.id);
     localService.resetDrums();
-  }, [pushHistorySnapshot]);
+  }, []);
 
   // Fills an empty project with a starting point: its tempo, a bar of drums and a bass line on
   // the first lane. It is one edit, so one undo takes all of it back.
@@ -2518,13 +2363,12 @@ export function useStudio() {
     const starter = STARTERS.find(entry => entry.id === starterId);
     const synth = synthsRef.current[0];
     if (!starter || !synth?.pattern) return;
-    pushHistorySnapshot(synth.id, synth.pattern.id);
     localService.applyAll([
       { type: 'tempo.set', tempo: starter.tempo },
-      { type: 'drum.state', state: starterDrums(starter, drumsForUndoRef.current, signatureOfRef.current(currentSceneIdRef.current)) },
+      { type: 'drum.state', state: starterDrums(starter, drumStateRef.current, signatureOfRef.current(currentSceneIdRef.current)) },
       { type: 'pattern.write', synthId: synth.id, patternId: synth.pattern.id, patch: { steps: starterPattern(starter, synth.pattern, signatureOfRef.current(currentSceneIdRef.current)).steps, automation: sentAutomation(undefined) } },
     ]);
-  }, [pushHistorySnapshot]);
+  }, []);
 
   // One part of the open scene into another scene. It is not an edit to the open scene, so it is not
   // in the undo history; the control that calls this asks first when it would replace something.
@@ -2545,47 +2389,37 @@ export function useStudio() {
   // under the pointer that had just put it in.
   const [showStarters, setShowStarters] = useState(false);
   useEffect(() => {
-    setShowStarters(projectOpens > 0 && projectIsEmpty(synthsRef.current.map(synth => synth.pattern), drumsForUndoRef.current, scenesRef.current.length));
+    setShowStarters(projectOpens > 0 && projectIsEmpty(synthsRef.current.map(synth => synth.pattern), drumStateRef.current, scenesRef.current.length));
   }, [projectOpens]);
   const dismissStarters = useCallback(() => setShowStarters(false), []);
 
   const handleDrumMasterVolumeChange = useCallback((volume: number) => {
-    const synth = synthsRef.current[0];
-    if (synth?.pattern) pushHistorySnapshotThrottled(synth.id, synth.pattern.id, 'drum-master-volume', 300);
     localService.setDrumMasterVolume(volume);
-    }, [pushHistorySnapshotThrottled]);
+    }, []);
 
   const handleDrumSwingChange = useCallback((swing: number) => {
-    const synth = synthsRef.current[0];
-    if (synth?.pattern) pushHistorySnapshotThrottled(synth.id, synth.pattern.id, 'drum-swing', 300);
     localService.setDrumSwing(swing);
-  }, [pushHistorySnapshotThrottled]);
+  }, []);
 
   const handleDrumFxChange = useCallback((next: Partial<{ sends: Partial<FxSendLevels>; returnLevel: number }>) => {
-    const synth = synthsRef.current[0];
-    if (synth?.pattern) pushHistorySnapshotThrottled(synth.id, synth.pattern.id, 'drum-fx', 300);
     const previous = drumFxRef.current;
     const updated = normalizeDrumFx({
       sends: { ...previous.sends, ...(next.sends || {}) },
       returnLevel: next.returnLevel ?? previous.returnLevel,
     });
     localService.setDrumFx(updated);
-  }, [pushHistorySnapshotThrottled]);
+  }, []);
 
   const handleEffectsLoopChange = useCallback((next: Partial<EffectsLoopState>) => {
-    const synth = synthsRef.current[0];
-    if (synth?.pattern) pushHistorySnapshotThrottled(synth.id, synth.pattern.id, 'effects-loop', 300);
     const previous = effectsLoopRef.current;
     const updated = normalizeEffectsLoop({
       ...previous,
       ...next,
     });
     localService.setEffectsLoop(updated);
-  }, [pushHistorySnapshotThrottled]);
+  }, []);
 
   const handleDrumMuteAll = useCallback((muted: boolean) => {
-    const synth = synthsRef.current[0];
-    if (synth?.pattern) pushHistorySnapshot(synth.id, synth.pattern.id);
     const nextState = Object.fromEntries(
       (Object.keys(drumStateRef.current) as DrumInstrument[]).map(inst => [
         inst,
@@ -2593,11 +2427,9 @@ export function useStudio() {
       ])
     ) as DrumState;
     localService.setDrumState(nextState);
-  }, [pushHistorySnapshot]);
+  }, []);
 
   const handleDrumSoloAll = useCallback(() => {
-    const synth = synthsRef.current[0];
-    if (synth?.pattern) pushHistorySnapshot(synth.id, synth.pattern.id);
     const nextState = Object.fromEntries(
       (Object.keys(drumStateRef.current) as DrumInstrument[]).map(inst => [
         inst,
@@ -2605,9 +2437,15 @@ export function useStudio() {
       ])
     ) as DrumState;
     localService.setDrumState(nextState);
-  }, [pushHistorySnapshot]);
+  }, []);
 
+  // Everything back to a new project's, as one undo step.
   const handleReset = useCallback(async () => {
+    localService.holdUndo('reset', true);
+    try { reset(); } finally { localService.holdUndo('reset', false); }
+  }, [handleDrumReset, synthAudio, drumAudio]);
+
+  const reset = () => {
     synthAudio.stopAllNotes();
     drumAudio.stopAllNotes();
     transportRef.current?.stop();
@@ -2647,10 +2485,9 @@ export function useStudio() {
     localService.setDrumFx(DEFAULT_DRUM_FX);
     localService.setEffectsLoop(DEFAULT_EFFECTS_LOOP);
     handleDrumReset();
-    historyRef.current = { undo: [], redo: [] };
     // Back to a single empty scene, taken from the lanes and drums that were just cleared.
     localService.replaceScenes();
-  }, [handleDrumReset, synthAudio, drumAudio]);
+  };
 
   const memoizedDrumState = useMemo(() => drumState, [drumState]);
 
