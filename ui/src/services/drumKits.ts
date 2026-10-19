@@ -25,10 +25,11 @@ const definitions: [DrumKitId, string, DrumKitModelVariant, number[][]][] = [
   ['linndrum', 'LinnDrum', 'modern', [[.68,.52,.6],[.72,.58,.82],[.44,.65,.55],[.5,.68,.58],[.42,.62,.52],[.46,.58,.68],[.6,.55,.72],[.52,.52,.65]]],
   ['oberheim-dmx', 'Oberheim DMX', 'analog', [[.7,.55,.58],[.68,.52,.75],[.43,.68,.48],[.48,.72,.55],[.4,.65,.45],[.44,.6,.62],[.55,.5,.65],[.5,.55,.58]]],
   ['tr-707', 'Roland TR-707', 'modern', [[.68,.5,.62],[.66,.55,.72],[.42,.62,.52],[.48,.65,.58],[.4,.58,.48],[.44,.55,.65],[.54,.52,.62],[.5,.52,.6]]],
+  ['recorded', 'Recorded', 'analog', [[.62,.5,1],[.55,.5,1],[.4,.5,1],[.4,.5,1],[.55,.5,1],[.5,.5,.7],[.55,.5,1],[.5,.5,1]]],
 ];
 
 export const DRUM_KITS: DrumKitDefinition[] = definitions.map(([id, name, modelVariant, values]) => ({
-  id, name, modelVariant, description: `${name} synthesized drum kit`,
+  id, name, modelVariant, description: id === 'recorded' ? 'Recordings of real drums' : `${name} synthesized drum kit`,
   instrumentDefaults: Object.fromEntries(DRUM_INSTRUMENTS.map((instrument, i) => [
     instrument, { volume: values[i][0], tone: values[i][1], extra: values[i][2], tune: 0, humanize: .35, pan: 0 },
   ])) as DrumKitDefinition['instrumentDefaults'],

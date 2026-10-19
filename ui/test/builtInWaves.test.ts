@@ -1,3 +1,4 @@
+import { KIT_RECORDINGS } from '../src/services/builtInWaves.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -48,10 +49,10 @@ const same = (a: Float32Array, b: Float32Array) => a.length === b.length && a.ev
 const sequence = (scan: number, fade: number) => ({ sample: { root: 60, loop: false, wave: 'seq-overtones', scan, fade } });
 
 test('the wave file holds every sound the menu offers, is small, and a damaged one gives nothing', () => {
-  assert.ok(file.byteLength < 1000 * 1024, `${Math.round(file.byteLength / 1024)} KB`);
-  // Beside the sample engine's sounds it holds the drum machine's cymbals, one for each kind.
+  assert.ok(file.byteLength < 1200 * 1024, `${Math.round(file.byteLength / 1024)} KB`);
+  // Beside the sample engine's sounds it holds the drum machine's cymbals, one for each kind, and the recorded kit's drums.
   const cymbals = CYMBAL_TYPES.map(kind => `cymbal-${kind}`);
-  assert.deepEqual([...BUNDLED_WAVES.keys()].sort(), [...BUILT_IN_WAVES.map(entry => entry.id), ...cymbals].sort());
+  assert.deepEqual([...BUNDLED_WAVES.keys()].sort(), [...BUILT_IN_WAVES.map(entry => entry.id), ...cymbals, ...KIT_RECORDINGS.map(drum => `kit-${drum}`)].sort());
   for (const id of cymbals) assert.ok(wave(id).data.length > wave(id).rate / 2 && wave(id).rate >= 32000, id);
   for (const entry of BUILT_IN_WAVES) {
     const found = wave(entry.id);

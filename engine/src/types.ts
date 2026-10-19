@@ -340,7 +340,7 @@ export interface Pattern {
 export type Automation = Record<string, Array<number | null>>;
 
 export type DrumInstrument = 'kick' | 'snare' | 'openHH' | 'closedHH' | 'ride' | 'crash' | 'snare2' | 'clap';
-export type DrumKitId = 'clean-analog' | 'punchy-modern' | 'lofi-dirty' | 'tr-808' | 'tr-909' | 'linndrum' | 'oberheim-dmx' | 'tr-707';
+export type DrumKitId = 'clean-analog' | 'punchy-modern' | 'lofi-dirty' | 'tr-808' | 'tr-909' | 'linndrum' | 'oberheim-dmx' | 'tr-707' | 'recorded';
 export type DrumKitModelVariant = 'analog' | 'modern' | 'dirty';
 
 export type CymbalType = 'crash' | 'ride' | 'bell' | 'splash';

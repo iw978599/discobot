@@ -1,8 +1,8 @@
 # Audio that ships with the app
 
-One file of audio is part of the app: `ui/public/waves.bin`, about 860 KB. It
+One file of audio is part of the app: `ui/public/waves.bin`, about 1.04 MB. It
 holds the sounds the sample engine offers under "Built in", which the M1, D-50
-and Wavestation models play, and the drum machine's four cymbals. Nothing
+and Wavestation models play, the drum machine's four cymbals and the Recorded drum kit. Nothing
 else in the app is a recording.
 
 The owner chose on 2026-10-12 to take these from two free libraries, after the
@@ -33,7 +33,38 @@ without credit. Credit is given here anyway.
 `scripts/build-waves.mjs` holds the full address of every file and is what
 turns them into `waves.bin`.
 
+### The Recorded drum kit (added 2026-10-19)
+
+The owner asked on 2026-10-19 for more bundled open-source sounds, drums
+especially. These seven are from the Versilian Community Sample Library
+(VCSL), folders `Membranophones/Struck Membranophones/` (M) and
+`Idiophones/Struck Idiophones/` (I). Each is one hit, from the `ui/public/waves.bin`
+ids `kit-<drum>`, played by the Recorded kit. The Cymbal lane in that kit
+plays the cymbal recordings above.
+
+| Lane | VCSL file |
+|---|---|
+| Kick | M `Bass Drum 1/BDrumNew_hit_v5_rr1_Sum` |
+| Snare | M `Snare Drum, Modern 1/Snare2_HitSN_v6_rr1_Mid` (snares on) |
+| Clap | I `Claps/Clap_rr1` |
+| Closed Hat | I `Hi-Hat Cymbal/HiHat_HitC_v3_rr1_Mid` |
+| Open Hat | I `Hi-Hat Cymbal/HiHat_HitO_rr1_Mid` |
+| Low Tom | M `Tom 2/Stick/TomL_HitS_v3_rr1_Mid` |
+| High Tom | M `Tom 1/Stick/TomH_HitS_v3_rr1_Mid` |
+
+They are kept at 22,050 Hz, except the two hats, which are at 32,000 Hz, and
+cut to between a quarter of a second and a second. Together they added
+212,892 bytes (about 208 KB) to `waves.bin`, which is now 1,091,846 bytes.
+
 ## The licences
+
+**Versilian Community Sample Library (VCSL)**, Versilian Studios LLC.
+<https://github.com/sgossner/VCSL>. Read on 2026-10-19: the repository's
+`LICENSE` is CC0 1.0 Universal, and its README says "This collection is under
+a Creative Commons 0 license. Essentially it's Public Domain- you can do
+whatever you want with these sounds (even make commercial software), no
+royalties, no credit, no special terms." The folders the drum recordings come
+from hold only audio files; they have no notes of their own and no other terms.
 
 **VSCO 2 Community Edition**, Versilian Studios LLC.
 <https://github.com/sgossner/VSCO-2-CE>. The repository's licence is CC0 1.0

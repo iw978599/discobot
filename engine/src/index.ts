@@ -5,7 +5,7 @@ export type { VoiceParams } from './synth/voiceParams';
 export { InsertChain, insertsActive } from './synth/inserts';
 export type { InsertSettings } from './synth/inserts';
 export { DrumCore } from './drums/DrumCore';
-export type { DrumHitMessage, DrumSample } from './drums/DrumCore';
+export type { DrumHitMessage, DrumRecordings, DrumSample } from './drums/DrumCore';
 export type { DrumWorkletMessage, GuestPlayerMessage, SynthWorkletMessage } from './workletMessages';
 export * from './types';
 // The values types.ts holds are named here as well: a star export does not carry them to every way this file is loaded.

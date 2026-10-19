@@ -1,4 +1,4 @@
-import { CYMBAL_TYPES, type CymbalType, type SynthParameters, type SynthSample } from '@discobot/engine';
+import { CYMBAL_TYPES, type DrumRecordings, type SynthParameters, type SynthSample } from '@discobot/engine';
 import { loadDrumSample } from './drumSamples';
 
 // The sounds that come with the app for the sample engine: recordings of instruments and single
@@ -64,15 +64,21 @@ export function loadBuiltInWave(id: string): Promise<SynthSample | null> {
   return loading.then(waves => waves.get(id) ?? null);
 }
 
-// The drum machine's cymbals, by kind. One that could not be fetched is left out, and the drum
-// voice plays its synthesized cymbal for it.
-export async function loadCymbals(): Promise<Partial<Record<CymbalType, SynthSample>>> {
-  const cymbals: Partial<Record<CymbalType, SynthSample>> = {};
-  for (const kind of CYMBAL_TYPES) {
-    const sample = await loadBuiltInWave(`cymbal-${kind}`);
-    if (sample) cymbals[kind] = { data: sample.data, rate: sample.rate };
+// The drum machine's recordings: the cymbals by kind (`crash`), and the drums of the recorded kit
+// as `kit-<instrument>`. One that could not be fetched is left out, and the drum voice plays its
+// synthesized voice for it. Live playback, export and the share page all take this one list.
+export const KIT_RECORDINGS = ['kick', 'snare', 'clap', 'closedHH', 'openHH', 'snare2', 'ride'];
+export async function loadCymbals(): Promise<DrumRecordings> {
+  const recordings: DrumRecordings = {};
+  const names: Array<[string, string]> = [
+    ...CYMBAL_TYPES.map((kind): [string, string] => [kind, `cymbal-${kind}`]),
+    ...KIT_RECORDINGS.map((drum): [string, string] => [`kit-${drum}`, `kit-${drum}`]),
+  ];
+  for (const [name, id] of names) {
+    const sample = await loadBuiltInWave(id);
+    if (sample) recordings[name] = { data: sample.data, rate: sample.rate };
   }
-  return cymbals;
+  return recordings;
 }
 
 // What a lane's sample engine plays: one of the app's sounds, an imported sample, or nothing.

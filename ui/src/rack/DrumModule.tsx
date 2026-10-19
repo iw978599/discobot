@@ -36,6 +36,9 @@ const EXTRA: Record<DrumInstrument, { knob: string; display: (v: number) => stri
   crash: { knob: 'Decay', display: (v) => `${Math.round(v * 100)}%`, parse: (n) => n / 100 },
 };
 
+// In the recorded kit every drum is a recording, and its knob is how much of the recording's own ring is left.
+const RECORDING_EXTRA = { knob: 'Decay', display: (v: number) => `${Math.round(v * 100)}%`, parse: (n: number) => n / 100 };
+
 const parseNumber = (input: string): number | null => {
   const n = Number.parseFloat(input.replace(/[^0-9+-.]/g, ''));
   return Number.isFinite(n) ? n : null;
@@ -114,7 +117,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
   };
 
   const track = drumState[selected];
-  const extra = EXTRA[selected];
+  const extra = selectedDrumKitId === 'recorded' && !track.sampleId ? RECORDING_EXTRA : EXTRA[selected];
   const stepLabel = `${LABELS[selected]} step ${selectedStep + 1}`;
 
   const handleStepClick = (instrument: DrumInstrument, step: number, shiftKey: boolean) => {
