@@ -69,7 +69,7 @@ const COLUMN_TABS: Record<string, SynthTab> = {
 };
 
 const MOD_SOURCE_NAMES: Record<ModSource, string> = {
-  lfo1: 'LFO 1', lfo2: 'LFO 2', ampEnv: 'Level envelope', filterEnv: 'Filter envelope', velocity: 'Velocity', key: 'Key', random: 'Random',
+  lfo1: 'LFO 1', lfo2: 'LFO 2', ampEnv: 'Level envelope', filterEnv: 'Filter envelope', velocity: 'Velocity', key: 'Key', random: 'Random', modWheel: 'Mod wheel',
 };
 const MOD_DESTINATION_NAMES: Record<ModDestination, string> = {
   pitch: 'Pitch', osc2Pitch: 'Osc 2 pitch', filter: 'Filter', amp: 'Level', pulseWidth: 'Pulse width', pan: 'Pan', fmIndex: 'FM amount',
@@ -557,6 +557,7 @@ export default function SynthControls({
             </div>
             <Knob
               label="Detune"
+              param="detune"
               value={parameters.oscillator.detune}
               defaultValue={DEFAULTS.oscillator.detune}
               min={-100}
@@ -569,6 +570,7 @@ export default function SynthControls({
             />
             <Knob
               label="Pulse W"
+              param="pulseWidth"
               value={parameters.oscillator.pulseWidth ?? 0.5}
               defaultValue={DEFAULTS.oscillator.pulseWidth ?? 0.5}
               min={0.05}
@@ -771,6 +773,16 @@ export default function SynthControls({
                   />
                 </>
               )}
+              <label className="synth-sync" title="Go round again while the note is held, instead of playing once">
+                <input
+                  type="checkbox"
+                  aria-label="Loop the sample"
+                  disabled={Boolean(builtIn?.steps)}
+                  checked={sample.loop}
+                  onChange={(e) => updateSample({ loop: e.target.checked })}
+                />
+                Loop
+              </label>
               {!builtIn?.steps && (
                 <>
                 <Knob
@@ -817,16 +829,6 @@ export default function SynthControls({
                 />
                   </>
               )}
-              <label className="synth-sync" title="Go round again while the note is held, instead of playing once">
-                <input
-                  type="checkbox"
-                  aria-label="Loop the sample"
-                  disabled={Boolean(builtIn?.steps)}
-                  checked={sample.loop}
-                  onChange={(e) => updateSample({ loop: e.target.checked })}
-                />
-                Loop
-              </label>
               {!sample.wave && (!sample.id || sampleMissing) && (
                 <p className="synth-sample-note" role="status">
                   {sampleMissing ? 'This sample is not on this device, so the lane plays its oscillator.' : 'Choose a sample. Until then the lane plays its oscillator.'}
@@ -937,6 +939,7 @@ export default function SynthControls({
                 />
                 <Knob
                   label="Sub"
+                  param="sub"
                   value={mixer.sub}
                   defaultValue={DEFAULTS.mixer!.sub}
                   min={0}
@@ -950,6 +953,7 @@ export default function SynthControls({
                 />
                 <Knob
                   label="Noise"
+                  param="noise"
                   value={mixer.noise}
                   defaultValue={DEFAULTS.mixer!.noise}
                   min={0}
@@ -1160,6 +1164,7 @@ export default function SynthControls({
             />
             <Knob
               label="Cutoff"
+              param="cutoff"
               value={parameters.filter.frequency}
               defaultValue={DEFAULTS.filter.frequency}
               min={20}
@@ -1173,6 +1178,7 @@ export default function SynthControls({
             />
             <Knob
               label="Resonance"
+              param="resonance"
               value={parameters.filter.q}
               defaultValue={DEFAULTS.filter.q}
               min={0.1}
@@ -1190,6 +1196,7 @@ export default function SynthControls({
           <div className="synth-column-controls">
             <Knob
               label="Env Amt"
+              param="filterEnv"
               value={parameters.filter.envAmount ?? 0}
               defaultValue={DEFAULTS.filter.envAmount ?? 0}
               min={-1}
@@ -1216,6 +1223,7 @@ export default function SynthControls({
             />
             <Knob
               label="Drive"
+              param="drive"
               ariaLabel="Filter drive"
               value={parameters.filter.drive ?? 0}
               defaultValue={DEFAULTS.filter.drive ?? 0}
@@ -1415,6 +1423,7 @@ export default function SynthControls({
               </div>
               <Knob
                 label="Rate"
+                param="lfo1Rate"
                 value={parameters.lfo1.sync ? (parameters.lfo1.rate || 4) : parameters.lfo1.rate}
                 defaultValue={parameters.lfo1.sync ? 4 : DEFAULTS.lfo1.rate}
                 min={parameters.lfo1.sync ? 1 : 0.1}
@@ -1432,6 +1441,7 @@ export default function SynthControls({
             </div>
             <Knob
               label="Depth"
+              param="lfo1Depth"
               value={parameters.lfo1.depth}
               defaultValue={DEFAULTS.lfo1.depth}
               min={0}
@@ -1528,6 +1538,7 @@ export default function SynthControls({
               </div>
               <Knob
                 label="Rate"
+                param="lfo2Rate"
                 value={parameters.lfo2.sync ? (parameters.lfo2.rate || 4) : parameters.lfo2.rate}
                 defaultValue={parameters.lfo2.sync ? 4 : DEFAULTS.lfo2.rate}
                 min={parameters.lfo2.sync ? 1 : 0.1}
@@ -1545,6 +1556,7 @@ export default function SynthControls({
             </div>
             <Knob
               label="Depth"
+              param="lfo2Depth"
               value={parameters.lfo2.depth}
               defaultValue={DEFAULTS.lfo2.depth}
               min={0}
@@ -1578,7 +1590,7 @@ export default function SynthControls({
                     aria-label={`Route ${index + 1} source`}
                     value={route?.source ?? ''}
                     disabled={!usable}
-                    title="What moves. Random is a new value each time LFO 1 comes round. Choose the dash to take the route away"
+                    title="What moves. Random is a new value each time LFO 1 comes round. Mod wheel is a controller's wheel (MIDI CC 1), played live and not saved: an export plays it at 0. A wheel tied to a knob under Controller knobs moves that knob instead. Choose the dash to take the route away"
                     onChange={(e) => setRoute(e.target.value ? { source: e.target.value as ModSource, destination: route?.destination ?? 'filter', depth: route?.depth ?? 0.5 } : null)}
                   >
                     <option value="">—</option>
@@ -1622,6 +1634,7 @@ export default function SynthControls({
           <div className="synth-column-controls">
             <Knob
               label="Attack"
+              param="attack"
               value={parameters.envelope.attack}
               defaultValue={DEFAULTS.envelope.attack}
               min={0.001}
@@ -1635,6 +1648,7 @@ export default function SynthControls({
             />
             <Knob
               label="Decay"
+              param="decay"
               value={parameters.envelope.decay}
               defaultValue={DEFAULTS.envelope.decay}
               min={0.001}
@@ -1673,6 +1687,7 @@ export default function SynthControls({
           <div className="synth-column-controls">
             <Knob
               label="Sustain"
+              param="sustain"
               value={parameters.envelope.sustain}
               defaultValue={DEFAULTS.envelope.sustain}
               min={0}
@@ -1686,6 +1701,7 @@ export default function SynthControls({
             />
             <Knob
               label="Release"
+              param="release"
               value={parameters.envelope.release}
               defaultValue={DEFAULTS.envelope.release}
               min={0.001}
@@ -1800,6 +1816,7 @@ export default function SynthControls({
           <div className="synth-column-controls">
             <Knob
               label="Gain"
+              param="level"
               value={parameters.gain}
               defaultValue={DEFAULTS.gain}
               min={0}
@@ -1832,6 +1849,7 @@ export default function SynthControls({
           <div className="synth-column-controls">
             <Knob
               label="Pan"
+              param="pan"
               value={parameters.pan}
               defaultValue={DEFAULTS.pan}
               min={-1}
@@ -1869,6 +1887,7 @@ export default function SynthControls({
             </div>
             <Knob
               label="Glide"
+              param="glide"
               value={parameters.portamento.glide}
               defaultValue={DEFAULTS.portamento.glide}
               min={0.001}

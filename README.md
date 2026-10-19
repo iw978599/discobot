@@ -87,6 +87,13 @@ up, so you can see how the parts sit against each other.
    Arp and Sends. Turn
    a knob by dragging, with the scroll wheel, or by typing its value. A click
    of the middle mouse button puts a knob back at its default.
+   - **Automation.** Under the open lane's steps is a row that shows how one
+     of its knobs (cutoff, resonance, level, pan, the envelope and more, up to
+     eight per lane) moves through the pattern: draw it across the steps, or
+     switch Auto on and turn the knob while the song plays. Each step's value
+     holds until the next step; a step without one plays the knob's own
+     setting. It is kept per scene, and is in audio exports and shared songs
+     but not in MIDI files.
 4. **Add drums.** Click cells in the drum grid and choose a kit. The strip
    under the grid edits the drum and step you last touched: velocity, chance,
    and up to four hits packed into one step.
@@ -202,6 +209,9 @@ turns. Imported samples are not synced. The accounts service is in `server/`
   knob is tied to a parameter the same way. With more than one controller
   connected, each can be sent to a lane of its own, to the drums, or nowhere.
   These are kept in the browser, not in the project.
+- **Pitch bend and mod wheel.** A controller's pitch bend bends its lane by two
+  semitones; its mod wheel (CC 1) is a source in a sound's modulation routes.
+  Both are live gestures: not saved, recorded or exported.
 - **MIDI out.** The sequencer can play a hardware synth and send it clock:
   lanes on channels 1 to 3, drums on channel 10.
 - **Import MIDI.** Bring notes and tempo in from a `.mid` file.

@@ -1,6 +1,8 @@
 import { Adsr, Ladder, Noise, Svf, approachCoefficient, finiteClamp as clamp, halve, ladderFeedback, lfoShape, noteFrequency, oscillator, svfCoefficient } from '../dsp';
 import { VoiceParams, createDefaultSynthParameters, toVoiceParams } from './voiceParams';
 
+type ParamUpdate = Partial<Record<keyof VoiceParams, unknown>>;
+
 export interface NoteOnMessage {
   note: string;
   velocity?: number;
@@ -80,9 +82,10 @@ const SECOND_STAGE_DAMPING = Math.SQRT2;
 // the instrument's feedback does: with the peak down it is the clean two-pole, and pushed, the peak stops
 // growing and flattens, which is the distortion it is known for. This is how fast the holding back comes on.
 const MS20_HOLD = 0.1;
-const MOD_SOURCES = ['lfo1', 'lfo2', 'ampEnv', 'filterEnv', 'velocity', 'key', 'random'];
+const MOD_SOURCES = ['lfo1', 'lfo2', 'ampEnv', 'filterEnv', 'velocity', 'key', 'random', 'modWheel'];
 const MOD_DESTINATIONS = ['pitch', 'osc2Pitch', 'filter', 'amp', 'pulseWidth', 'pan', 'fmIndex'];
 const MOD_ROUTES = 4;
+const BEND_SEMITONES = 2;
 
 // The one synth voice implementation. The AudioWorklet runs it block by block for live
 // playback and the WAV exporter runs it offline, so both produce the same audio.
@@ -99,6 +102,8 @@ export class SynthCore {
     unisonCount: 1, unisonRatios: new Float64Array(MAX_UNISON).fill(1), unisonLevels: new Float64Array(MAX_UNISON).fill(1), twoStage: false,
   };
   private pending: Array<NoteOnMessage & { frame: number }> = [];
+  // Parameter changes that have a time of their own, soonest first: a pattern's automation.
+  private scheduled: Array<{ frame: number; update: ParamUpdate }> = [];
   private globalLfoPhase: [number, number] = [0, 0];
   private noise = new Noise();
   // The random source has a sequence of its own, so routing it never changes what the noise oscillator plays.
@@ -107,6 +112,11 @@ export class SynthCore {
   private routeDestination = new Int8Array(MOD_ROUTES);
   private routeDepth = new Float64Array(MOD_ROUTES);
   private routeCount = 0;
+  // Live playing gestures from a controller, not part of the sound: the wheel (0 to 1) and the bend (-1 to 1, a BEND_SEMITONES range each way). Each moves to its target over a few milliseconds.
+  private bendTarget = 0;
+  private bend = 0;
+  private wheelTarget = 0;
+  private wheel = 0;
   private sample: SynthSample | null = null;
   // Each recording's copies at half, a quarter and an eighth of its rate, for notes played two,
   // four and eight times faster than it was recorded: read as it is, a recording played that
@@ -155,8 +165,17 @@ export class SynthCore {
     }
   }
 
-  setParams(update: Partial<Record<keyof VoiceParams, unknown>> | null | undefined): void {
+  // With a time (seconds on the core's clock) that has not come yet, the change waits for it and
+  // is made on that sample; without one, or with one that has passed, it is made now.
+  setParams(update: ParamUpdate | null | undefined, time?: number): void {
     if (!update) return;
+    if (Number.isFinite(time) && time! * this.sampleRate > this.frame) {
+      const frame = Math.round(time! * this.sampleRate);
+      let at = this.scheduled.length;
+      while (at > 0 && this.scheduled[at - 1].frame > frame) at--;
+      this.scheduled.splice(at, 0, { frame, update });
+      return;
+    }
     const p = this.params as unknown as Record<string, unknown>;
     const signature = () => `${p.oscType}|${p.filterType}|${p.engine}|${p.osc2Type}|${p.filterSlope}|${p.unisonVoices}|${p.filterModel}|${p.layerEnabled}`;
     const before = signature();
@@ -237,6 +256,14 @@ export class SynthCore {
     const drive = clamp(p.filterDrive, 0, 1);
     d.driveGain = 1 + drive * 5;
     d.driveMakeup = 1 / (1 + drive * 1.6);
+  }
+
+  setBend(value: number): void {
+    this.bendTarget = clamp(value, -1, 1, 0);
+  }
+
+  setWheel(value: number): void {
+    this.wheelTarget = clamp(value, 0, 1, 0);
   }
 
   noteOn(message: NoteOnMessage): void {
@@ -371,11 +398,29 @@ export class SynthCore {
     voice.filterEnv.gateOff();
   }
 
+  // Forgets the parameter changes still waiting for their time: the transport has stopped.
+  clearScheduledParams(): void {
+    this.scheduled = [];
+  }
+
   get idle(): boolean {
     return this.pending.length === 0 && this.voices.every(voice => !voice.active);
   }
 
+  // With no parameter change waiting this is one call to `render`, as it always was. A change
+  // due inside the block cuts it there: what is before is rendered, the change is made, and the
+  // rest follows.
   process(left: Float32Array, right: Float32Array): void {
+    if (this.scheduled.length === 0) { this.render(left, right); return; }
+    for (let at = 0; at < left.length;) {
+      while (this.scheduled.length && this.scheduled[0].frame <= this.frame) this.setParams(this.scheduled.shift()!.update);
+      const end = this.scheduled.length ? Math.min(left.length, at + this.scheduled[0].frame - this.frame) : left.length;
+      this.render(left.subarray(at, end), right.subarray(at, end));
+      at = end;
+    }
+  }
+
+  private render(left: Float32Array, right: Float32Array): void {
     const p = this.params, s = this.smoothed, d = this.derived, sr = this.sampleRate, k = this.smoothing;
     const maxCutoff = Math.min(20000, sr * 0.45);
     const fm = p.engine === 'fm';
@@ -426,6 +471,9 @@ export class SynthCore {
       s.filterFreq += (clamp(p.filterFreq, 20, maxCutoff, s.filterFreq) - s.filterFreq) * k;
       s.filterQ += (clamp(p.filterQ, 0.1, 20, s.filterQ) - s.filterQ) * k;
       s.pulseWidth += (clamp(p.pulseWidth, 0.05, 0.95, s.pulseWidth) - s.pulseWidth) * k;
+      if (this.bend !== this.bendTarget) this.bend = Math.abs(this.bendTarget - this.bend) < 1e-5 ? this.bendTarget : this.bend + (this.bendTarget - this.bend) * k;
+      if (this.wheel !== this.wheelTarget) this.wheel = Math.abs(this.wheelTarget - this.wheel) < 1e-5 ? this.wheelTarget : this.wheel + (this.wheelTarget - this.wheel) * k;
+      const bendOctaves = this.bend * BEND_SEMITONES / 12;
       this.globalLfoPhase[0] = (this.globalLfoPhase[0] + lfoRates[0]) % 1;
       this.globalLfoPhase[1] = (this.globalLfoPhase[1] + lfoRates[1]) % 1;
 
@@ -467,6 +515,7 @@ export class SynthCore {
             else if (source === 3) { amount = filterEnv; swing = filterEnv; }
             else if (source === 4) { amount = v.velocity; swing = v.velocity; }
             else if (source === 5) { swing = clamp(v.keyOctaves * 0.5, -1, 1); amount = (swing + 1) * 0.5; }
+            else if (source === 7) { swing = this.wheel; amount = this.wheel; }
             else {
               // Random: a new value each time the first LFO comes round, held until the next.
               const phase = lfoRetrigger[0] ? v.lfoPhase[0] : this.globalLfoPhase[0];
@@ -487,7 +536,7 @@ export class SynthCore {
           if (osc2Octaves !== 0) osc2Mod = 2 ** osc2Octaves;
         }
 
-        const step = clamp((second ? v.frequency * d.layerRatio : v.frequency) * 2 ** (s.detune / 1200 + pitchMod) / sr, 0.000001, 0.45);
+        const step = clamp((second ? v.frequency * d.layerRatio : v.frequency) * 2 ** (s.detune / 1200 + pitchMod + bendOctaves) / sr, 0.000001, 0.45);
         let source: number;
         if (fm) {
           v.fmEnv += (0.2 - v.fmEnv) * d.fmDecay;

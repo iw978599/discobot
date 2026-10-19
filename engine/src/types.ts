@@ -75,7 +75,7 @@ export interface EffectsLoopState {
 // 'pitch' is up to an octave either way; 'vibrato' is the same movement scaled to one semitone.
 export type LfoTarget = 'pitch' | 'filter' | 'amp' | 'pulseWidth' | 'vibrato';
 // Something that moves, and something it can move. A route sends one to the other by an amount.
-export type ModSource = 'lfo1' | 'lfo2' | 'ampEnv' | 'filterEnv' | 'velocity' | 'key' | 'random';
+export type ModSource = 'lfo1' | 'lfo2' | 'ampEnv' | 'filterEnv' | 'velocity' | 'key' | 'random' | 'modWheel';
 export type ModDestination = 'pitch' | 'osc2Pitch' | 'filter' | 'amp' | 'pulseWidth' | 'pan' | 'fmIndex';
 export interface ModRoute {
   source: ModSource;
@@ -85,7 +85,7 @@ export interface ModRoute {
   depth: number;
 }
 export const MAX_MOD_ROUTES = 4;
-export const MOD_SOURCES: ModSource[] = ['lfo1', 'lfo2', 'ampEnv', 'filterEnv', 'velocity', 'key', 'random'];
+export const MOD_SOURCES: ModSource[] = ['lfo1', 'lfo2', 'ampEnv', 'filterEnv', 'velocity', 'key', 'random', 'modWheel'];
 export const MOD_DESTINATIONS: ModDestination[] = ['pitch', 'osc2Pitch', 'filter', 'amp', 'pulseWidth', 'pan', 'fmIndex'];
 
 export type FilterModel = 'svf' | 'ladder' | 'ms20';
@@ -298,7 +298,14 @@ export interface Pattern {
   tempo: number;
   // how many bars the steps cover: 1, 2, 4 or 8. Absent means one.
   bars?: number;
+  // knob movements kept with the steps. Absent means none, as every pattern was before there were any.
+  automation?: Automation;
 }
+
+// A lane's automation: for each parameter that has any (named as in the UI's table of lane
+// parameters), a value for every step of the pattern, or null where the step has none and plays
+// the sound's own setting.
+export type Automation = Record<string, Array<number | null>>;
 
 export type DrumInstrument = 'kick' | 'snare' | 'openHH' | 'closedHH' | 'ride' | 'crash' | 'snare2' | 'clap';
 export type DrumKitId = 'clean-analog' | 'punchy-modern' | 'lofi-dirty' | 'tr-808' | 'tr-909' | 'linndrum' | 'oberheim-dmx' | 'tr-707';
@@ -380,6 +387,8 @@ export interface Scene {
   drums: Record<DrumInstrument, DrumLanePattern>;
   // bars per synth lane id, for lanes longer than one bar
   laneBars?: Record<number, number>;
+  // automation per synth lane id, for lanes that have any
+  laneAutomation?: Record<number, Automation>;
   // each guest instrument's settings in this scene, by guest id. Opaque to Discobot.
   guests?: Record<string, unknown>;
   // each guest's level and mute in this scene, by guest id

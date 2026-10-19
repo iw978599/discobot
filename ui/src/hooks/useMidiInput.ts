@@ -12,7 +12,11 @@ export interface MidiDeviceInfo {
 export type MidiMessage =
   | { type: 'noteOn'; note: number; velocity: number; channel: number }
   | { type: 'noteOff'; note: number; channel: number }
-  | { type: 'controlChange'; controller: number; value: number; channel: number };
+  | { type: 'controlChange'; controller: number; value: number; channel: number }
+  // -1 to 1, 0 at the wheel's rest
+  | { type: 'pitchBend'; value: number; channel: number }
+  // the device went away: its bend and wheel should be let go
+  | { type: 'deviceGone' };
 
 // The input a message came from. Its name is what a device's place is kept by.
 export interface MidiSource {
@@ -26,7 +30,7 @@ interface UseMidiInputOptions {
 
 const ALL_DEVICES_ID = '__all__';
 
-function parseMessage(event: any): MidiMessage | null {
+export function parseMessage(event: any): MidiMessage | null {
   const data: Uint8Array | undefined = event?.data;
   if (!data || data.length < 2) return null;
 
@@ -45,6 +49,10 @@ function parseMessage(event: any): MidiMessage | null {
   }
   if (type === 0xb0) {
     return { type: 'controlChange', controller: data1, value: data2, channel };
+  }
+  if (type === 0xe0) {
+    const raw = (data1 & 0x7f) | ((data2 & 0x7f) << 7);
+    return { type: 'pitchBend', value: Math.max(-1, Math.min(1, (raw - 8192) / (raw >= 8192 ? 8191 : 8192))), channel };
   }
   return null;
 }
@@ -74,7 +82,9 @@ export function useMidiInput({ onMessage }: UseMidiInputOptions) {
     const names = new Map<string, string>();
     const sourceOf = (inputId: string): MidiSource => ({ id: inputId, name: names.get(inputId) ?? inputId });
 
+    const gestured = new Set<string>();
     const releaseInput = (inputId: string) => {
+      if (gestured.delete(inputId)) onMessageRef.current({ type: 'deviceGone' }, sourceOf(inputId));
       const notes = held.get(inputId);
       if (!notes) return;
       held.delete(inputId);
@@ -92,8 +102,12 @@ export function useMidiInput({ onMessage }: UseMidiInputOptions) {
       } else if (parsed.type === 'noteOff') {
         setLastMessage(`Ch ${parsed.channel} Note Off ${parsed.note}`);
         held.get(inputId)?.delete(`${parsed.channel}:${parsed.note}`);
-      } else {
+      } else if (parsed.type === 'pitchBend') {
+        setLastMessage(`Ch ${parsed.channel} Pitch bend ${Math.round(parsed.value * 100)}%`);
+        gestured.add(inputId);
+      } else if (parsed.type === 'controlChange') {
         setLastMessage(`Ch ${parsed.channel} CC ${parsed.controller} (${parsed.value})`);
+        if (parsed.controller === 1) gestured.add(inputId);
       }
       onMessageRef.current(parsed, sourceOf(inputId));
     };
@@ -128,7 +142,7 @@ export function useMidiInput({ onMessage }: UseMidiInputOptions) {
         input.onmidimessage = shouldAttach ? (event: any) => onMidiInput(id, event) : null;
         if (shouldAttach && state === 'connected') listening.add(id);
       });
-      [...held.keys()].forEach((id) => { if (!listening.has(id)) releaseInput(id); });
+      new Set([...held.keys(), ...gestured]).forEach((id) => { if (!listening.has(id)) releaseInput(id); });
 
       if (!mounted) return;
       setDevices(nextDevices);
@@ -164,7 +178,7 @@ export function useMidiInput({ onMessage }: UseMidiInputOptions) {
 
     return () => {
       mounted = false;
-      [...held.keys()].forEach(releaseInput);
+      new Set([...held.keys(), ...gestured]).forEach(releaseInput);
       const access = accessRef.current;
       if (!access) return;
       Array.from(access.inputs.values()).forEach((input: any) => {

@@ -855,6 +855,9 @@ on the owner's laptop.
 | `rack-empty` | A new project, nothing in it |
 | `rack-full` | The whole rack top to bottom, with music in it |
 | `rack-playing` | The top of the rack while playing, a step light lit |
+| `automation-empty` | The open lane's Automation row before a parameter is chosen |
+| `automation-sweep` | The lane's steps with a cutoff sweep drawn under them, step 6 focused, and the Cutoff knob's mark (the whole lane is `automation-lane`, desktop only) |
+| `automation-auto-on` | The Automation row with Auto on and the Erase button focused |
 | `focus-button`, `focus-step`, `focus-knob` | The keyboard focus ring on a button or field, a step and a knob |
 | `states-step-row`, `states-step-row-2` | One row of steps with the states beside each other: a mute that is on, a step selected, a step focused and (desktop) a step under the pointer; in `-2` the selected step is the focused one |
 | `focus-step-empty`, `states-drum-grid` | The focus ring on an empty step two along from an empty selected one, and on a drum step beside a picked one |

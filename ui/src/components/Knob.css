@@ -97,5 +97,8 @@
   border-radius: 50%;
 }
 
+/* A lamp at the knob's shoulder: the pattern holds automation for this parameter. */
+.knob-auto-mark { position: absolute; top: 0; right: 0; width: 7px; height: 7px; border-radius: 50%; background: var(--on); box-shadow: 0 0 0 1px var(--gap), var(--shadow-lamp); }
+
 /* The wheel will turn this knob (knobWheel.ts) */
 .knob-rotary[data-wheel="ready"] { cursor: ns-resize; }

@@ -251,9 +251,7 @@ target; removal of the AI review workflow.
    by ear: up to four routes a sound, on the LFO tab under Routing. Sources
    are the two LFOs, both envelopes, velocity, key and a stepped random;
    destinations are pitch, the second oscillator's pitch, the filter, the
-   level, pulse width, pan and FM amount. Open: the mod wheel as a source
-   (the app does not read a controller's wheel yet, which belongs with the
-   MIDI work, features 6); more than four routes; and the LFO tab's own
+   level, pulse width, pan and FM amount. The mod wheel is now a source (features 6); open: more than four routes; and the LFO tab's own
    target menus are still there beside the routes, not replaced by them.
 
 5. **A true ladder filter.** (M) Done on 2026-10-12, not verified by ear.
@@ -471,6 +469,8 @@ may redistribute.
    that are not a whole number of bars, and sharing a part between scenes.
 
 5. **Parameter automation.** (L, after the typed store)
+   Built on 2026-10-14 and merged as built at the owner's word: every choice
+   listed on its pull request (#187) is accepted.
    Record knob movements per step or per bar and play them back. Filter sweeps
    over a section are a large part of electronic arrangement. The owner asked
    on 2026-10-12 whether a hardware knob could record it: yes, if the knob
@@ -478,6 +478,21 @@ may redistribute.
    parameter by the same store operation the knob on screen sends. Recording
    is then the same for both. A hardware knob sends 128 positions, so a
    recorded sweep needs smoothing between them on playback.
+   First version built on 2026-10-13 and waiting as a draft for the owner:
+   a synth lane's own numbers (cutoff, resonance, level, pan, the envelope,
+   the LFOs' rates and depths, detune, pulse width, sub, noise, glide, the
+   filter's envelope amount and drive; up to eight per lane) get a value per
+   step, kept with the pattern and so with the scene. Drawn in a row under
+   the open lane's steps, or recorded with Auto from a knob on screen or a
+   tied controller knob while the song plays. Played live at each step's own
+   time and in audio exports, stems, loops and shared songs. Each value is
+   held for its step (the voice's own hundredth of a second of smoothing is
+   all there is between steps); a step with none plays the knob's setting.
+   Still open: the drums, the effects, the tempo, a model's macro knobs and
+   the lane's sends and duck (all outside the synth voice); ramps between
+   steps, which a recorded hardware sweep wants; automation recorded against
+   the song rather than a scene's pattern; automation in MIDI files; and the
+   knob on screen turning with the automation while the song plays.
 
 6. **More MIDI.** (L in all)
    Following an external clock, sending notes played by hand, and choosing
@@ -525,8 +540,7 @@ may redistribute.
    note; Reset pads puts the General MIDI notes back), and with more than
    one controller connected each has a place of its own (as before, the
    open lane, Synth 1 to 3, the drums, or off). Both are kept in the
-   browser, not the project. Still open from this item: the mod wheel and
-   pitch bend, aftertouch, following an external clock, sending notes
+   browser, not the project. Pitch bend (two semitones) and the mod wheel (CC 1, a route source) are done, as live gestures that are not saved or exported, not verified by ear or on hardware. Still open from this item: aftertouch, following an external clock, sending notes
    played by hand, and choosing the output channels. Choices made in
    building it that the owner has not confirmed: a device's place is kept
    by its name; a device sent to a lane plays it on every channel; Off

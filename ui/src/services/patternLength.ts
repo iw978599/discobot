@@ -1,4 +1,4 @@
-import type { DrumInstrument, DrumLanePattern, Scene, SequencerStep, TimeSignature } from '../types';
+import type { Automation, DrumInstrument, DrumLanePattern, Scene, SequencerStep, TimeSignature } from '../types';
 
 // A lane or the drum grid can be 1, 2, 4 or 8 bars long. How long a bar is comes from the scene's
 // time signature: 16 steps in 4/4, or twice that on a synth lane set to finer steps. Lanes of
@@ -185,6 +185,13 @@ export function sceneBar(scene: Scene, bar: number): Scene {
     id: scene.id, name: scene.name,
     lanes: Object.fromEntries(Object.entries(scene.lanes ?? {}).map(([id, steps]) => [id, barOf(steps, stepsPerBar(steps.length, scene.laneBars?.[Number(id)], scene.signature), bar)])),
     drums: Object.fromEntries((Object.keys(scene.drums ?? {}) as DrumInstrument[]).map(instrument => [instrument, drumLaneBar(scene.drums[instrument], bar, scene.signature)])) as Scene['drums'],
+    // A lane's automation is cut at the same place as its steps.
+    ...(scene.laneAutomation ? {
+      laneAutomation: Object.fromEntries(Object.entries(scene.laneAutomation).map(([id, automation]): [string, Automation] => {
+        const steps = scene.lanes?.[Number(id)] ?? [], perBar = stepsPerBar(steps.length, scene.laneBars?.[Number(id)], scene.signature);
+        return [id, Object.fromEntries(Object.entries(automation).map(([key, values]) => [key, barOf(values, perBar, bar)]))];
+      })),
+    } : {}),
     ...(scene.mutes ? { mutes: scene.mutes } : {}),
     ...(scene.color ? { color: scene.color } : {}),
     ...(scene.signature ? { signature: scene.signature } : {}),

@@ -1,6 +1,7 @@
 import { useRef, useCallback, useEffect, useMemo } from 'react';
 import type { SynthParameters, EffectsLoopState } from '../types';
-import { toVoiceParams, type SynthSample, type SynthWorkletMessage } from '@discobot/engine';
+import { toVoiceParams, type SynthSample, type SynthWorkletMessage, type VoiceParams } from '@discobot/engine';
+import { automationChange } from '../services/automation';
 import { createAudioLane, getAudioContext, ensureAudioReady, loadAudioWorklet, setEffectsLoop } from './browserAudio';
 
 interface SynthLane {
@@ -8,8 +9,14 @@ interface SynthLane {
   audio?: ReturnType<typeof createAudioLane>;
   loading?: Promise<AudioWorkletNode>;
   parameters?: SynthParameters;
+  // What the lane's automation last set, by the voice's own names. While there is any, those
+  // parameters are the automation's: a change to the sound made now leaves them alone, and the
+  // next step sends them at its own time.
+  automated?: Partial<VoiceParams> | null;
   // The recording the lane's sample engine plays, kept for a node that does not exist yet.
   sample?: SynthSample | null;
+  // The controller's bend and wheel as last sent, for a node that does not exist yet.
+  live?: { bend: number; wheel: number };
   bpm: number;
   generation: number;
   // Note-ons still waiting on audio resume or worklet loading, keyed by note name.
@@ -17,6 +24,12 @@ interface SynthLane {
 }
 
 const send = (node: AudioWorkletNode | undefined, message: SynthWorkletMessage) => node?.port.postMessage(message);
+// A lane's sound for the voice, without the parameters its automation is holding.
+const soundFor = (lane: SynthLane): Partial<VoiceParams> => {
+  const sound: Partial<VoiceParams> = toVoiceParams(lane.parameters!, lane.bpm);
+  for (const name of Object.keys(lane.automated ?? {}) as Array<keyof VoiceParams>) delete sound[name];
+  return sound;
+};
 
 export function useSynthAudio() {
   const lanesRef = useRef(new Map<number, SynthLane>());
@@ -36,8 +49,30 @@ export function useSynthAudio() {
     lane.parameters = parameters;
     lane.bpm = bpm;
     if (loop) setEffectsLoop(loop);
-    send(lane.node, { type: 'params', params: toVoiceParams(parameters, bpm) });
+    send(lane.node, { type: 'params', params: soundFor(lane) });
     lane.audio?.setSends(parameters.fxSends, parameters.fxReturn);
+  }, []);
+  // A step's automation: what the voice is to be at `time` on the audio clock, which is when the
+  // step sounds (the scheduler works ahead of it). With nothing for the step, whatever automation
+  // last set goes back to the lane's own sound at that time. Without a time it is made now.
+  const automate = useCallback((synthId: number, parameters: SynthParameters, bpm: number, step: Partial<VoiceParams> | null, time?: number) => {
+    const lane = laneFor(synthId);
+    if (!lane.parameters) { lane.parameters = parameters; lane.bpm = bpm; }
+    if (!step && !lane.automated) return;
+    const change = automationChange(lane.automated ?? null, step, toVoiceParams(lane.parameters, lane.bpm));
+    lane.automated = step;
+    // Made now, it is a knob being recorded: what was waiting for the steps already scheduled is older than it.
+    if (time === undefined) send(lane.node, { type: 'unschedule' });
+    if (change) send(lane.node, { type: 'params', params: change, time });
+  }, []);
+  // The transport has stopped: nothing more is waiting, and every lane is back at its own sound.
+  const endAutomation = useCallback(() => {
+    lanesRef.current.forEach(lane => {
+      send(lane.node, { type: 'unschedule' });
+      if (!lane.automated) return;
+      lane.automated = null;
+      if (lane.parameters) send(lane.node, { type: 'params', params: toVoiceParams(lane.parameters, lane.bpm) });
+    });
   }, []);
 
   async function getNode(lane: SynthLane): Promise<AudioWorkletNode> {
@@ -55,9 +90,12 @@ export function useSynthAudio() {
         lane.node = node;
         if (lane.parameters) {
           send(node, { type: 'params', params: toVoiceParams(lane.parameters, lane.bpm) });
+          // A step's automation sent before there was a node to send it to.
+          if (lane.automated) send(node, { type: 'params', params: lane.automated });
           audio.setSends(lane.parameters.fxSends, lane.parameters.fxReturn);
         }
         if (lane.sample) send(node, { type: 'sample', sample: lane.sample });
+        if (lane.live) send(node, { type: 'live', ...lane.live });
         return node;
       }).finally(() => { lane.loading = undefined; });
     }
@@ -113,9 +151,19 @@ export function useSynthAudio() {
   const duck = useCallback((synthId: number, time: number, amount: number) => {
     lanesRef.current.get(synthId)?.audio?.duck(time, amount);
   }, []);
+  // A controller's bend (-1 to 1) and mod wheel (0 to 1) for a lane; either left out stays where it was.
+  const setLive = useCallback((synthId: number, live: { bend?: number; wheel?: number }) => {
+    const lane = laneFor(synthId);
+    lane.live = { bend: 0, wheel: 0, ...lane.live, ...live };
+    send(lane.node, { type: 'live', ...live });
+  }, []);
+  // Stopping lets go of the bend, as the wheel springs back; the mod wheel stays where the hand left it.
   const stopAllNotes = useCallback((release = 0.03) => {
-    lanesRef.current.forEach((_lane, id) => stopSynth(id, release));
-  }, [stopSynth]);
+    lanesRef.current.forEach((lane, id) => {
+      stopSynth(id, release);
+      if (lane.live?.bend) setLive(id, { bend: 0 });
+    });
+  }, [stopSynth, setLive]);
   const setVolume = useCallback((volume: number) => {
     volumeRef.current = Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : 0;
     lanesRef.current.forEach(lane => lane.audio?.setVolume(volumeRef.current));
@@ -132,6 +180,6 @@ export function useSynthAudio() {
   // The same object on every render, so effects and callbacks that depend on it do not re-run.
   return useMemo(() => ({
     ensureAudioReady, tryResume: () => { void ensureAudioReady(); },
-    playNote, stopNote, stopSynth, stopAllNotes, updateParameters, setEffectsLoop, setVolume, setSample, duck, dispose,
-  }), [playNote, stopNote, stopSynth, stopAllNotes, updateParameters, setVolume, setSample, duck, dispose]);
+    playNote, stopNote, stopSynth, stopAllNotes, updateParameters, automate, endAutomation, setEffectsLoop, setVolume, setSample, setLive, duck, dispose,
+  }), [playNote, stopNote, stopSynth, stopAllNotes, updateParameters, automate, endAutomation, setVolume, setSample, setLive, duck, dispose]);
 }
