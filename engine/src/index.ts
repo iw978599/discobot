@@ -9,4 +9,4 @@ export type { DrumHitMessage, DrumRecordings, DrumSample } from './drums/DrumCor
 export type { DrumWorkletMessage, GuestPlayerMessage, SynthWorkletMessage } from './workletMessages';
 export * from './types';
 // The values types.ts holds are named here as well: a star export does not carry them to every way this file is loaded.
-export { MAX_MOD_ROUTES, MOD_DESTINATIONS, MOD_SOURCES, RATE_SYNCS, CYMBAL_TYPES, AUX_KINDS } from './types';
+export { MAX_MOD_ROUTES, MOD_DESTINATIONS, MOD_SOURCES, RATE_SYNCS, CYMBAL_TYPES, PERC_CHOICES, AUX_KINDS } from './types';

@@ -1,4 +1,5 @@
 import { Noise, Svf, finiteClamp as clamp, oscillator, svfCoefficient } from '../dsp';
+import { PERC_CHOICES } from '../types';
 import type { DrumInstrument, DrumSettings } from '../types';
 
 export interface DrumHitMessage {
@@ -233,7 +234,8 @@ export class DrumCore {
     // An imported sample comes first; then, on the cymbal lane, the app's recording of the cymbal
     // chosen, or, in the recorded kit, the app's recording of that drum.
     const imported = this.samples[message.instrument] ?? null;
-    const recordingName = message.instrument === 'crash' ? settings.cymbalType ?? 'crash' : message.kitId === RECORDED_KIT ? `kit-${message.instrument}` : '';
+    const perc = settings.percType && PERC_CHOICES[message.instrument]?.includes(settings.percType) ? `perc-${settings.percType}` : '';
+    const recordingName = perc && this.cymbals[perc] ? perc : message.instrument === 'crash' ? settings.cymbalType ?? 'crash' : message.kitId === RECORDED_KIT ? `kit-${message.instrument}` : '';
     const cymbal = !imported && recordingName ? this.cymbals[recordingName] ?? null : null;
     voice.sample = imported ?? cymbal;
     voice.shaped = cymbal !== null;
