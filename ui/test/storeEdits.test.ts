@@ -625,7 +625,7 @@ const cases: Case[] = [
   }, ['patternCreated']),
   changed('a pattern\'s automation is kept as checked: known parameters, inside their ranges, as long as the steps', {
     type: 'pattern.write', echo: false, arrange: service => service.snapshot().synths[0].pattern,
-    body: (pattern: any) => ({ synthId: 1, patternId: pattern.id, patch: { automation: { cutoff: [300, 1e9, null, 'x'], macro1: [1], reverbSend: [1] } } }),
+    body: (pattern: any) => ({ synthId: 1, patternId: pattern.id, patch: { automation: { cutoff: [300, 1e9, null, 'x'], macro1: [1], duck: [1] } } }),
     check: (result, service, pattern) => {
       const kept = { cutoff: [300, 20000, ...Array(14).fill(null)] };
       assert.deepEqual(result.data, { ...pattern, automation: kept });

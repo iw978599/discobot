@@ -4,13 +4,13 @@ import { type BarTime, barSteps, barTimes, wholeNotes } from './patternLength';
 import { sceneDrumState } from './songPlayback';
 import { DRUM_INSTRUMENTS } from './drumKits';
 import { expandStepNotes } from './noteScheduling';
-import { automationChange, stepVoiceParams } from './automation';
+import { SEND_PARAMS, automationChange, stepSends, stepVoiceParams } from './automation';
 import { delaySeconds } from './delayTime';
 import { auxBuses, auxSeconds } from './auxSettings';
 import { rateHz } from './rateSync';
 import { expandDrumStep, seededRandom, swingLate } from './drumScheduling';
 import { createZip } from '../utils/zip';
-import { MASTER_LEVEL, chorusSweep, configureLimiter, createAuxEffect, createChorus, createHallReverb, createMasterEq, driveCurve, eqGains, reverbImpulse, safetyCurve, scheduleDuck } from '../hooks/browserAudio';
+import { MASTER_LEVEL, SEND_GLIDE, chorusSweep, configureLimiter, createAuxEffect, createChorus, createHallReverb, createMasterEq, driveCurve, eqGains, reverbImpulse, safetyCurve, scheduleDuck } from '../hooks/browserAudio';
 import type { DrumInstrument, DrumSettings } from '../types';
 
 export interface ExportArrangement {
@@ -208,39 +208,45 @@ export function renderDrums(
 
 // `own` gives the delay or the reverb a signal of its own to take in place of `input`, still at the
 // level `sends` says. It is only asked for when that effect is on and sent to.
-function connectEffects(ctx: OfflineAudioContext, input: AudioNode, master: AudioNode, sends: FxSendLevels, fxReturn: number, state: EffectsLoopState, group: 'synth' | 'drums', tempo: number, own: Partial<Record<OwnMix, () => AudioNode>> = {}) {
+// `timeline` is a lane's automated sends: the levels from each step's time on. An effect is built
+// for any send that reaches above nothing at some step, and each send moves as the live one does.
+function connectEffects(ctx: OfflineAudioContext, input: AudioNode, master: AudioNode, sends: FxSendLevels, fxReturn: number, state: EffectsLoopState, group: 'synth' | 'drums', tempo: number, own: Partial<Record<OwnMix, () => AudioNode>> = {}, timeline: SendTimeline = []) {
   input.connect(master);
   if (!state.enabled) return;
   const wet = ctx.createGain();
   wet.gain.value = fxReturn * state.returns[group];
   wet.connect(master);
-  const send = (level: number, from: AudioNode = input) => {
-    const gain = ctx.createGain(); gain.gain.value = level; from.connect(gain); return gain;
+  const peak = { ...sends } as Record<keyof FxSendLevels, number>;
+  for (const { sends: at } of timeline) for (const name of Object.keys(at) as Array<keyof FxSendLevels>) peak[name] = Math.max(peak[name] ?? 0, at[name] ?? 0);
+  const send = (name: keyof FxSendLevels, from: AudioNode = input) => {
+    const gain = ctx.createGain(); gain.gain.value = sends[name] ?? 0; from.connect(gain);
+    for (const step of timeline) gain.gain.setTargetAtTime(step.sends[name] ?? 0, step.time, SEND_GLIDE);
+    return gain;
   };
-  if (state.delay.enabled && sends.delay > 0) {
+  if (state.delay.enabled && peak.delay > 0) {
     const delay = ctx.createDelay(2), feedback = ctx.createGain(), level = ctx.createGain();
     delay.delayTime.value = delaySeconds(state.delay, tempo); feedback.gain.value = Math.min(.85, state.delay.feedback);
     level.gain.value = state.delay.mix;
-    send(sends.delay, own.delay?.()).connect(delay); delay.connect(feedback).connect(delay); delay.connect(level).connect(wet);
+    send('delay', own.delay?.()).connect(delay); delay.connect(feedback).connect(delay); delay.connect(level).connect(wet);
   }
-  if (state.reverb.enabled && sends.reverb > 0 && state.reverb.kind === 'hall') {
+  if (state.reverb.enabled && peak.reverb > 0 && state.reverb.kind === 'hall') {
     const hall = createHallReverb(ctx), level = ctx.createGain();
     hall.set(state.reverb); level.gain.value = state.reverb.mix;
-    send(sends.reverb, own.reverb?.()).connect(hall.input); hall.output.connect(level).connect(wet);
-  } else if (state.reverb.enabled && sends.reverb > 0) {
+    send('reverb', own.reverb?.()).connect(hall.input); hall.output.connect(level).connect(wet);
+  } else if (state.reverb.enabled && peak.reverb > 0) {
     const reverb = ctx.createConvolver(), level = ctx.createGain();
     reverb.buffer = reverbImpulse(ctx, state.reverb.decay, seededRandom(3), state.reverb.preDelay, state.reverb.damping); level.gain.value = state.reverb.mix;
-    send(sends.reverb, own.reverb?.()).connect(reverb).connect(level).connect(wet);
+    send('reverb', own.reverb?.()).connect(reverb).connect(level).connect(wet);
   }
-  if (state.drive.enabled && sends.drive > 0) {
+  if (state.drive.enabled && peak.drive > 0) {
     const drive = ctx.createWaveShaper(), tone = ctx.createBiquadFilter(), level = ctx.createGain();
     drive.curve = driveCurve(state.drive.amount); drive.oversample = '4x'; tone.frequency.value = 400 * Math.pow(40, state.drive.tone);
     level.gain.value = .5;
-    send(sends.drive).connect(drive).connect(tone).connect(level).connect(wet);
+    send('drive').connect(drive).connect(tone).connect(level).connect(wet);
   }
-  if (state.phaser.enabled && sends.phaser > 0) {
+  if (state.phaser.enabled && peak.phaser > 0) {
     const filters = Array.from({ length: 4 }, () => ctx.createBiquadFilter());
-    const source = send(sends.phaser), level = ctx.createGain(), feedback = ctx.createGain();
+    const source = send('phaser'), level = ctx.createGain(), feedback = ctx.createGain();
     const lfo = ctx.createOscillator(), depth = ctx.createGain();
     lfo.frequency.value = rateHz(state.phaser, tempo); depth.gain.value = state.phaser.depth * 650;
     lfo.connect(depth); lfo.start();
@@ -251,26 +257,42 @@ function connectEffects(ctx: OfflineAudioContext, input: AudioNode, master: Audi
     level.gain.value = state.phaser.mix * .5; level.connect(wet);
   }
   auxBuses(state.aux).forEach((bus, slot) => {
-    const amount = sends[AUX_SENDS[slot]] ?? 0;
+    const amount = peak[AUX_SENDS[slot]] ?? 0;
     if (bus.level <= 0 || amount <= 0) return;
     const effect = createAuxEffect(ctx, bus.kind), level = ctx.createGain();
     effect.set(bus, tempo); level.gain.value = bus.level;
-    send(amount).connect(effect.input); effect.output.connect(level).connect(wet);
+    send(AUX_SENDS[slot]).connect(effect.input); effect.output.connect(level).connect(wet);
   });
-  if (state.chorus?.enabled && (sends.chorus ?? 0) > 0) {
+  if (state.chorus?.enabled && (peak.chorus ?? 0) > 0) {
     const chorus = createChorus(ctx), level = ctx.createGain();
     chorus.lfo.frequency.value = rateHz(state.chorus, tempo); chorus.depth.gain.value = chorusSweep(state.chorus.depth);
     level.gain.value = state.chorus.mix;
-    send(sends.chorus!).connect(chorus.input); chorus.output.connect(level).connect(wet);
+    send('chorus').connect(chorus.input); chorus.output.connect(level).connect(wet);
   }
 }
 
 const AUX_SENDS = ['auxA', 'auxB'] as const;
 
+// A lane's automated sends through an arrangement, one entry a step: from that step's time, its
+// send levels, as the live scheduler sends them (`stepSends`, or the sound's own where the step
+// has none). Empty when no send of the lane is automated anywhere, and the sends stay as set.
+export type SendTimeline = Array<{ time: number; sends: FxSendLevels }>;
+const automatesSends = (automation: Automation | undefined) => SEND_PARAMS.some(key => automation?.[key]?.some(value => value !== null));
+export function sendTimeline(bars: SequencerStep[][], params: SynthParameters, automation: Array<Automation | undefined>, times: BarTime[]): SendTimeline {
+  if (!automation.some(automatesSends)) return [];
+  return bars.flatMap((steps, bar) => {
+    const { start, duration } = times[bar], each = duration / Math.max(1, steps.length);
+    return steps.map((_, index) => ({ time: start + index * each, sends: stepSends(params, automation[bar], index) ?? params.fxSends }));
+  });
+}
+
 // How long the effects that something is sent to, and the delays on the lanes, go on ringing after
 // the last note: an aux bus counts only when a lane, the drums or a guest sends to it.
 export function effectsTail(arrangement: ExportArrangement): number {
-  const sent = (name: typeof AUX_SENDS[number]) => arrangement.synths.some(synth => (synth.synthParams?.fxSends?.[name] ?? 0) > 0)
+  // A lane's automation can send to a bus its sound does not.
+  const automated = (synth: ExportArrangement['synths'][number], key: string) => [synth.pattern?.automation, ...(arrangement.bars ?? []).map(bar => bar.laneAutomation?.[synth.id])]
+    .some(automation => automation?.[key]?.some(value => (value ?? 0) > 0));
+  const sent = (name: typeof AUX_SENDS[number]) => arrangement.synths.some(synth => (synth.synthParams?.fxSends?.[name] ?? 0) > 0 || automated(synth, `${name}Send`))
     || (arrangement.drumFx.sends[name] ?? 0) > 0 || (arrangement.guestTakes ?? []).some(take => (take.sends?.[name] ?? 0) > 0);
   const aux = auxBuses(arrangement.effectsLoop.aux).map((bus, slot) => {
     if (bus.level <= 0 || !sent(AUX_SENDS[slot])) return 0;
@@ -359,9 +381,9 @@ export async function renderArrangement(arrangement: ExportArrangement, options:
     source.start(0);
     return ducker;
   };
-  const play = (stereo: Stereo, sends: FxSendLevels, returnLevel: number, group: 'synth' | 'drums', duck = 0, mixes: Partial<Record<OwnMix, Stereo>> = {}) => {
+  const play = (stereo: Stereo, sends: FxSendLevels, returnLevel: number, group: 'synth' | 'drums', duck = 0, mixes: Partial<Record<OwnMix, Stereo>> = {}, timeline: SendTimeline = []) => {
     const own = Object.fromEntries(Object.entries(mixes).map(([name, mix]) => [name, () => ducked(mix, duck)]));
-    connectEffects(ctx, ducked(stereo, duck), master, sends, returnLevel, arrangement.effectsLoop, group, arrangement.tempo, own);
+    connectEffects(ctx, ducked(stereo, duck), master, sends, returnLevel, arrangement.effectsLoop, group, arrangement.tempo, own, timeline);
   };
   const { only } = options;
   const synthSolo = arrangement.synths.some(s => s.solo);
@@ -371,7 +393,7 @@ export async function renderArrangement(arrangement: ExportArrangement, options:
     const laneBars = song ? song.map(scene => scene.lanes[lane.id] ?? []) : Array.from({ length: bars }, () => lane.pattern!.steps);
     const laneAutomation = song ? song.map(scene => scene.laneAutomation?.[lane.id]) : Array.from({ length: bars }, () => lane.pattern!.automation);
     play(renderSynthBars(laneBars, lane.synthParams, arrangement.tempo, frames, sampleRate, barDuration, arrangement.synthSamples?.[lane.id], times, laneAutomation, lane.swing ? arrangement.drumSwing : 0),
-      lane.synthParams.fxSends, lane.synthParams.fxReturn, 'synth', lane.synthParams.duck ?? 0);
+      lane.synthParams.fxSends, lane.synthParams.fxReturn, 'synth', lane.synthParams.duck ?? 0, {}, sendTimeline(laneBars, lane.synthParams, laneAutomation, times));
   }
   if (only === undefined || only === 'drums') {
     // The kit's own sends are a master over each drum's: the delay and the reverb take the mix the

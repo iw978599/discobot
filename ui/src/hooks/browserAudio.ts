@@ -6,6 +6,8 @@ import { EQ_RANGE_DB, MAX_PRE_DELAY } from '../services/effectSettings';
 
 const limit = (v: number | undefined, min: number, max: number, fallback = min) =>
   v !== undefined && Number.isFinite(v) ? Math.max(min, Math.min(max, v)) : fallback;
+// How fast a send moves to a step's automated level, live and in export.
+export const SEND_GLIDE = 0.005;
 const smooth = (p: AudioParam, value: number, ctx: AudioContext) =>
   p.setTargetAtTime(value, ctx.currentTime, 0.015);
 type EffectName = keyof FxSendLevels;
@@ -649,9 +651,14 @@ export class AudioEngine {
         handed = tap;
       },
       setVolume(value: number) { for (const node of [input, ...Object.values(taps)]) smooth(node.gain, limit(value, 0, 1), ctx); },
-      setSends(values: FxSendLevels, returnLevel = 1) {
+      // With a time, the levels are reached then, glided as quickly as an export's are (`SEND_GLIDE`): a step's automation.
+      setSends(values: FxSendLevels, returnLevel = 1, time?: number) {
         AUX_SENDS.forEach((name, slot) => { if (limit(values[name], 0, 1) > 0) engine.syncAux(bus, slot, true); });
-        for (const name of Object.keys(sends) as EffectName[]) smooth(sends[name].gain, limit(values[name], 0, 1) * limit(returnLevel, 0, 1), ctx);
+        for (const name of Object.keys(sends) as EffectName[]) {
+          const level = limit(values[name], 0, 1) * limit(returnLevel, 0, 1);
+          if (time === undefined) smooth(sends[name].gain, level, ctx);
+          else sends[name].gain.setTargetAtTime(level, Math.max(time, ctx.currentTime), SEND_GLIDE);
+        }
       },
       dispose,
     };
