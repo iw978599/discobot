@@ -1,4 +1,5 @@
-import type { DrumInstrument, DrumState, EffectsLoopState, SynthModelId, SynthParameters } from '../types';
+import type { AuxBus, DrumInstrument, DrumState, EffectsLoopState, SynthModelId, SynthParameters } from '../types';
+import { auxBuses } from './auxSettings';
 import { getSynthModelDefinition } from '../synthModels';
 import { DRUM_ROWS } from './drumKits';
 import { guestOrigin, type Guest } from './guests';
@@ -16,6 +17,8 @@ export interface MixerChannels {
   drumMaster: number;
   guests: MixerGuest[];
   returns: { synth: number; drums: number };
+  // The two aux buses as they are stored, A then B: the mixer shows their return levels and kinds.
+  aux: AuxBus[];
   // This browser's output volume, which is not the project's.
   main: number;
 }
@@ -25,7 +28,7 @@ export interface MixerSource {
   drumState: DrumState;
   drumMasterVolume: number;
   guests: Array<Pick<Guest, 'id' | 'url' | 'name' | 'volume' | 'muted'>>;
-  effectsLoop: Pick<EffectsLoopState, 'returns'>;
+  effectsLoop: Pick<EffectsLoopState, 'returns' | 'aux'>;
   browserVolume: number;
 }
 
@@ -46,6 +49,7 @@ export function mixerChannels(source: MixerSource): MixerChannels {
     drumMaster: source.drumMasterVolume,
     guests: source.guests.map(guest => ({ id: guest.id, name: guest.name || guestOrigin(guest.url) || 'Guest', volume: guest.volume, muted: Boolean(guest.muted) })),
     returns: { synth: source.effectsLoop.returns.synth, drums: source.effectsLoop.returns.drums },
+    aux: auxBuses(source.effectsLoop.aux),
     main: source.browserVolume,
   };
 }

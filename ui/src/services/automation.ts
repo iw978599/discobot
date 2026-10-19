@@ -13,7 +13,7 @@ import { copyBar, layAlong, resizeBars, resizeEachBar } from './patternLength';
 // What can be automated: a lane's own numbers that the voice plays. A model's four macros are
 // not (they are several parameters each), and neither are the sends and the duck, which are
 // levels in the mixer, outside the voice.
-const IN_THE_MIXER = ['reverbSend', 'delaySend', 'chorusSend', 'duck'];
+const IN_THE_MIXER = ['reverbSend', 'delaySend', 'chorusSend', 'auxASend', 'auxBSend', 'duck'];
 export const AUTOMATABLE: string[] = Object.keys(LANE_PARAMS).filter(key => LANE_PARAMS[key].path && !IN_THE_MIXER.includes(key));
 // How many of a lane's parameters can have automation at once.
 export const MAX_AUTOMATED = 8;

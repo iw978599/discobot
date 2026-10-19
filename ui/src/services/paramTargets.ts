@@ -49,6 +49,8 @@ export const LANE_PARAMS: Record<string, ParamRange & { path?: string[]; macro?:
   reverbSend: { label: 'Reverb send', min: 0, max: 1, path: ['fxSends', 'reverb'] },
   delaySend: { label: 'Delay send', min: 0, max: 1, path: ['fxSends', 'delay'] },
   chorusSend: { label: 'Chorus send', min: 0, max: 1, path: ['fxSends', 'chorus'] },
+  auxASend: { label: 'Aux A send', min: 0, max: 1, path: ['fxSends', 'auxA'] },
+  auxBSend: { label: 'Aux B send', min: 0, max: 1, path: ['fxSends', 'auxB'] },
   duck: { label: 'Duck', min: 0, max: 1, path: ['duck'] },
 };
 
@@ -76,6 +78,9 @@ export const FX_PARAMS: Record<string, ParamRange> = {
   'reverb.mix': { label: 'Reverb mix', min: 0, max: 1 },
   'returns.synth': { label: 'Synth return', min: 0, max: 1 },
   'returns.drums': { label: 'Drum return', min: 0, max: 1 },
+  // An aux bus's return level: the bus, A or B, then its field.
+  'auxA.level': { label: 'Aux A level', min: 0, max: 1 },
+  'auxB.level': { label: 'Aux B level', min: 0, max: 1 },
 };
 
 const TOP: Record<string, ParamRange> = {

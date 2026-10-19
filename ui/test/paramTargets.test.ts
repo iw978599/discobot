@@ -4,6 +4,7 @@ import { createDefaultSynthParameters } from '@discobot/engine';
 import { DRUM_PARAMS, FX_PARAMS, LANE_PARAMS, fromUnit, lanePatch, listTargets, parseTarget, targetLabel } from '../src/services/paramTargets.ts';
 import { MAX_MIDI_TIES, asMidiTies, storeMidiTies, storedMidiTies, tieFor, withTie, withoutTie } from '../src/services/midiTies.ts';
 import { sanitizeEffects, sanitizeSynthParams } from '../src/services/projectSanitization.ts';
+import { auxBuses } from '../src/services/auxSettings.ts';
 import type { EffectsLoopState } from '../src/types.ts';
 
 test('every name in the menu means something, and a name that is not one means nothing', () => {
@@ -53,8 +54,9 @@ test('setting a lane\'s parameter is a change the store can merge, and what it s
       for (const name of range.path.slice(0, -1)) at = at[name] as Record<string, unknown>;
       at[range.path.at(-1)!] = value;
       let kept: unknown = sanitizeSynthParams(merged, defaults);
-      for (const name of range.path) kept = (kept as Record<string, unknown>)[name];
-      assert.equal(kept, value, `${key} at ${unit}`);
+      for (const name of range.path) kept = (kept as Record<string, unknown> | undefined)?.[name];
+      // A send of nothing is stored as no send at all.
+      assert.equal(kept === undefined && range.path[0] === 'fxSends' ? 0 : kept, value, `${key} at ${unit}`);
     }
   }
   assert.ok(Object.keys(DRUM_PARAMS).length >= 4 && Object.keys(FX_PARAMS).length >= 8);
@@ -70,6 +72,13 @@ test('every effect parameter, at both ends of its travel, is a value the store k
     const [effect, field] = key.split('.');
     for (const unit of [0, 1]) {
       const value = fromUnit(range, unit);
+      if (effect === 'auxA' || effect === 'auxB') {
+        // The buses are a list, A then B.
+        const slot = effect === 'auxA' ? 0 : 1;
+        const aux = auxBuses(undefined).map((bus, index) => (index === slot ? { ...bus, [field]: value } : bus));
+        assert.equal((auxBuses(sanitizeEffects({ ...loop, aux }, loop).aux)[slot] as unknown as Record<string, unknown>)[field], value, `${key} at ${unit}`);
+        continue;
+      }
       const changed = structuredClone(loop) as unknown as Record<string, Record<string, unknown>>;
       changed[effect][field] = value;
       const kept = sanitizeEffects(changed, loop) as unknown as Record<string, Record<string, unknown>>;

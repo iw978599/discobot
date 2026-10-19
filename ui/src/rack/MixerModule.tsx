@@ -4,6 +4,7 @@ import type { Studio } from '../studio/useStudio';
 import { tracked } from '../studio/tracked';
 import { DRUM_NAMES, DRUM_SETTINGS_DEFAULT } from '../services/drumKits';
 import { EFFECTS_DEFAULT } from '../services/effectSettings';
+import { AUX_KIND_DEFAULT, AUX_KIND_LABELS, AUX_NAMES } from '../services/auxSettings';
 import { panText, parsePan, parsePercent, percentText, type MixerChannels } from '../services/mixerChannels';
 import { storeMixerHidden, storedMixerHidden } from '../services/rackView';
 import Fader from '../components/Fader';
@@ -184,6 +185,15 @@ function MixerModule({ studio, channels, onHelp }: { studio: Studio; channels: M
               under="Return"
               level={{ value: returns.drums, home: EFFECTS_DEFAULT.returns.drums, hint: 'How much of the shared effects the drums get back', onChange: value => studio.handleEffectsLoopChange({ returns: { ...returns, drums: value } }) }}
             />
+            {channels.aux.map((bus, slot) => (
+              <Strip
+                key={AUX_NAMES[slot]}
+                about={`Aux ${AUX_NAMES[slot]} return`}
+                name={`Aux ${AUX_NAMES[slot]}`}
+                under={AUX_KIND_LABELS[bus.kind]}
+                level={{ value: bus.level, home: AUX_KIND_DEFAULT[bus.kind].level, hint: `How loud aux bus ${AUX_NAMES[slot]} comes back. The same as its Level knob in the effects`, onChange: value => studio.handleEffectsLoopChange({ aux: channels.aux.map((entry, index) => (index === slot ? { ...entry, level: value } : entry)) }) }}
+              />
+            ))}
           </Group>
           <Group name="Main" note="This browser">
             <Strip

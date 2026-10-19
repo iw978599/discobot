@@ -42,7 +42,7 @@ directly, with no builder.
 5. **Inversions and a strum for chords** (V8). Done: an Inversion menu beside Chord, and Strum in the step controls.
 6. **Effects presets, the plain ones** (the first half of V5). Done: Presets menus on the delay and the reverb. Was: a small room,
    a long hall, a slapback, a dub delay, in a menu on each effect.
-7. **The aux buses on the mixer, by MIDI Learn and in automation**: the parts
+7. **The aux buses on the mixer, by MIDI Learn and in automation**. The mixer and MIDI Learn are done; automation of the sends is next. The parts
    the aux sends were built without.
 8. **A first-run choice** (V15): start from a beat, the sample song, or
    empty.
