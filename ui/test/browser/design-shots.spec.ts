@@ -225,6 +225,15 @@ test('design shots: the rack, its units and the states of its controls', async (
       await share.press('Enter');
       await unit.getByRole('button', { name: 'Sends', exact: true }).click();
     });
+    await attempt(walk, 'unit-drums-recorded-voice', async () => {
+      const unit = page.locator('[data-unit="drums"]');
+      await unit.getByLabel('Drum kit', { exact: true }).selectOption('recorded');
+      await unit.getByRole('button', { name: 'Select Clap', exact: true }).click();
+      await unit.getByLabel('Clap voice', { exact: true }).selectOption('tambourine');
+      await near(walk, unit.locator('.drum-strip'), 'unit-drums-recorded-voice', 12);
+      await unit.getByLabel('Clap voice', { exact: true }).selectOption('default');
+      await unit.getByLabel('Drum kit', { exact: true }).selectOption('clean-analog');
+    });
     await attempt(walk, 'unit-effects-hall', async () => {
       const kind = page.locator('.effects-unit').getByLabel('Reverb kind', { exact: true });
       await kind.selectOption('hall');

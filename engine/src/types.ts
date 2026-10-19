@@ -314,6 +314,12 @@ export type DrumKitModelVariant = 'analog' | 'modern' | 'dirty';
 export type CymbalType = 'crash' | 'ride' | 'bell' | 'splash';
 export const CYMBAL_TYPES: CymbalType[] = ['crash', 'ride', 'bell', 'splash'];
 
+// Other percussion a lane can be instead of its own drum, in any kit. A choice is stored only when it is not the lane's own drum.
+export type PercType = 'tambourine' | 'shaker' | 'cowbell' | 'sidestick' | 'conga' | 'bongo';
+export const PERC_CHOICES: Partial<Record<DrumInstrument, PercType[]>> = {
+  clap: ['tambourine', 'shaker', 'cowbell'], snare: ['sidestick'], snare2: ['conga'], ride: ['bongo'],
+};
+
 export interface DrumSettings {
   volume: number;
   tone: number;
@@ -322,6 +328,7 @@ export interface DrumSettings {
   humanize?: number;
   pan?: number;
   cymbalType?: CymbalType;
+  percType?: PercType;
   // How much of this drum reaches the shared delay and the shared reverb, as a share from 0 to 1 of
   // what the kit's own send lets through. Absent means 1: all of it, as before a drum had its own.
   delaySend?: number;

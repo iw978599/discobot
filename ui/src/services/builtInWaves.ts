@@ -1,4 +1,4 @@
-import { CYMBAL_TYPES, type DrumRecordings, type SynthParameters, type SynthSample } from '@discobot/engine';
+import { CYMBAL_TYPES, type DrumRecordings, type PercType, type SynthParameters, type SynthSample } from '@discobot/engine';
 import { loadDrumSample } from './drumSamples';
 
 // The sounds that come with the app for the sample engine: recordings of instruments and single
@@ -68,11 +68,13 @@ export function loadBuiltInWave(id: string): Promise<SynthSample | null> {
 // as `kit-<instrument>`. One that could not be fetched is left out, and the drum voice plays its
 // synthesized voice for it. Live playback, export and the share page all take this one list.
 export const KIT_RECORDINGS = ['kick', 'snare', 'clap', 'closedHH', 'openHH', 'snare2', 'ride'];
+export const PERC_TYPES: PercType[] = ['tambourine', 'shaker', 'cowbell', 'sidestick', 'conga', 'bongo'];
 export async function loadCymbals(): Promise<DrumRecordings> {
   const recordings: DrumRecordings = {};
   const names: Array<[string, string]> = [
     ...CYMBAL_TYPES.map((kind): [string, string] => [kind, `cymbal-${kind}`]),
     ...KIT_RECORDINGS.map((drum): [string, string] => [`kit-${drum}`, `kit-${drum}`]),
+    ...PERC_TYPES.map((kind): [string, string] => [`perc-${kind}`, `perc-${kind}`]),
   ];
   for (const [name, id] of names) {
     const sample = await loadBuiltInWave(id);

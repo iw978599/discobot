@@ -10,10 +10,10 @@ import { BAR_CHOICES, barSteps, drumBars, onBeat, stepsAcross } from '../service
 import CopyToScene from './CopyToScene';
 import CopyBar from './CopyBar';
 import type { Studio } from '../studio/useStudio';
-import { CYMBAL_TYPES } from '@discobot/engine';
+import { CYMBAL_TYPES, PERC_CHOICES } from '@discobot/engine';
 import { DRUM_NAMES, DRUM_ROWS, DRUM_SETTINGS_DEFAULT } from '../services/drumKits';
 import { DRUM_FX_DEFAULT } from '../services/effectSettings';
-import { DrumInstrument, DrumKitId, DrumState, CymbalType } from '../types';
+import { DrumInstrument, DrumKitId, DrumState, CymbalType, PercType } from '../types';
 import DrumKnob from '../components/DrumKnob';
 
 const INSTRUMENTS = DRUM_ROWS;
@@ -21,6 +21,7 @@ const INSTRUMENTS = DRUM_ROWS;
 const LABELS = DRUM_NAMES;
 
 // The cymbals the Cymbal lane can be. A crash is the lane's own name; the others show theirs.
+const PERC_NAMES: Record<PercType, string> = { tambourine: 'Tambourine', shaker: 'Shaker', cowbell: 'Cowbell', sidestick: 'Cross-stick', conga: 'Conga', bongo: 'Bongo' };
 const CYMBAL_NAMES: Record<CymbalType, string> = { crash: 'Crash', ride: 'Ride', bell: 'Bell', splash: 'Splash' };
 const cymbalName = (type: CymbalType | undefined) => (type && type !== 'crash' && CYMBAL_NAMES[type]) || LABELS.crash;
 
@@ -321,6 +322,19 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
             </label>
           )}
         </div>
+        {PERC_CHOICES[selected] && (
+          <label className="drum-sound" title="Which drum or percussion instrument this lane plays. Each is a recording of a real one, the same in every kit">
+            Voice
+            <select
+              aria-label={`${LABELS[selected]} voice`}
+              value={track.settings.percType ?? 'default'}
+              onChange={(event) => onSettings(selected, { percType: event.target.value as PercType })}
+            >
+              <option value="default">{LABELS[selected]}</option>
+              {PERC_CHOICES[selected]!.map(type => <option key={type} value={type}>{PERC_NAMES[type]}</option>)}
+            </select>
+          </label>
+        )}
         <label className="drum-sound" title="Play an imported sample on this lane instead of its built-in sound. Volume, tune and pan still apply">
           Sound
           <select

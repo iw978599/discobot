@@ -58,3 +58,24 @@ test('the Recorded kit is a choice in the kit menu, plays recordings, and its kn
   await kits.selectOption('clean-analog');
   await expect(page.getByLabel('Kick Punch', { exact: true }).first()).toBeAttached();
 });
+
+test('a lane can be another percussion instrument in any kit, and the choice is stored only when made', async ({ page }, info) => {
+  const stored = () => page.evaluate(key => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem(key) || '{}')), 'discobot_browser_project_v1');
+  await page.getByRole('button', { name: 'Select Clap', exact: true }).click();
+  const voice = page.getByLabel('Clap voice', { exact: true });
+  await expect(voice.locator('option')).toHaveText(['Clap', 'Tambourine', 'Shaker', 'Cowbell']);
+  expect((await stored()).drumState.clap.settings.percType).toBeUndefined();
+  await page.getByRole('button', { name: 'Clap step 1', exact: true }).click();
+  const own = await exportScene(page, info.outputPath('clap.wav'));
+  await voice.selectOption('cowbell');
+  await expect.poll(async () => (await stored()).drumState.clap.settings.percType).toBe('cowbell');
+  const cowbell = await exportScene(page, info.outputPath('cowbell.wav'));
+  expect(cowbell.equals(own)).toBe(false);
+  expect(loudness(cowbell, 0, 0.3)).toBeGreaterThan(200);
+  await voice.selectOption('default');
+  await expect.poll(async () => (await stored()).drumState.clap.settings.percType).toBeUndefined();
+  await page.getByRole('button', { name: 'Select Kick', exact: true }).click();
+  await expect(page.getByLabel('Kick voice', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Select Low Tom', exact: true }).click();
+  await expect(page.getByLabel('Low Tom voice', { exact: true }).locator('option')).toHaveText(['Low Tom', 'Conga']);
+});

@@ -1,5 +1,5 @@
 import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, Scene, SceneMutes, Song, SynthParameters, SynthModelParams } from '../types';
-import { CYMBAL_TYPES, MAX_MOD_ROUTES, MOD_DESTINATIONS, MOD_SOURCES, type ModRoute } from '@discobot/engine';
+import { CYMBAL_TYPES, PERC_CHOICES, MAX_MOD_ROUTES, MOD_DESTINATIONS, MOD_SOURCES, type ModRoute } from '@discobot/engine';
 import { DELAY_SYNCS } from './delayTime';
 import { storedRateSync } from './rateSync';
 import { CHORUS_DEFAULT, EQ_RANGE_DB, MAX_PRE_DELAY } from './effectSettings';
@@ -227,6 +227,7 @@ export function sanitizeDrums(value: unknown, defaults: DrumState, signature?: u
         humanize: number(settings.humanize, base.settings.humanize ?? .35, 0, 1),
         pan: number(settings.pan, base.settings.pan ?? 0, -1, 1),
         ...(CYMBAL_TYPES.includes(settings.cymbalType) ? { cymbalType: settings.cymbalType } : {}),
+        ...(PERC_CHOICES[instrument]?.includes(settings.percType) ? { percType: settings.percType } : {}),
         ...drumSend('delaySend', settings.delaySend), ...drumSend('reverbSend', settings.reverbSend),
       },
       ...(Array.isArray(track.stepVelocities) ? {

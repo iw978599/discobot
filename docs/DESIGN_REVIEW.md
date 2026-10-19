@@ -905,6 +905,7 @@ on the owner's laptop.
 | Name | What it shows |
 |---|---|
 | `unit-transport`, `unit-song`, `unit-drums`, `unit-mixer`, `unit-effects` | Each unit close up |
+| `unit-drums-recorded-voice` | The drum strip in the Recorded kit with the Clap lane set to Tambourine, showing the Voice menu |
 | `unit-synth-piano-roll` | An open lane with the piano roll |
 | `unit-keyboard` | The on-screen keyboard |
 | `step-tools-selected` | The step controls with a step that holds a note |
