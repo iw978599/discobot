@@ -366,6 +366,18 @@ may redistribute.
    sizzle, which the library does not have; a second cymbal lane; kids
    mode, which still plays the synthesized cymbal.
 
+9. **More bundled open-source sounds, drums especially.** (M) Asked for by
+   the owner on 2026-10-19, to be done first, from the Versilian Community
+   Sample Library (CC0). Part 1, done on 2026-10-19, not verified by ear:
+   a **Recorded** kit in the kit menu in which every drum lane plays a
+   recording (one hit each), about 208 KB added to `waves.bin`. Tune,
+   Decay and Tone act on a recording as they do on the cymbal. Open: a
+   second, harder hit for velocity; the name "Recorded", which the owner
+   may change; the kit's default levels, set by reasoning. Part 2 (more
+   percussion as choices on a lane, such as a tambourine on the clap lane)
+   and part 3 (VCSL instruments for the sample engine, loaded on demand)
+   follow.
+
 ## Features
 
 1. **A layout for phones and the installed app.** (L) First part done: at

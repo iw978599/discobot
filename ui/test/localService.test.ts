@@ -52,7 +52,7 @@ test('local synth state merges nested controls, isolates lanes, persists across 
 test('drum kits, velocity, pan, mute, swing, effects and tempo are functional state', async () => {
   const service = setup();
   const kits = service.getDrumKits();
-  assert.equal(kits.kits.length, 8);
+  assert.equal(kits.kits.length, 9);
   service.setDrumStep('kick', 3, true);
   service.setDrumStepVelocity('kick', 3, .33);
   service.setDrumSettings('kick', { pan: -.5, tune: .4 });

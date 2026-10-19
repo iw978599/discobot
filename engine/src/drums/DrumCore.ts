@@ -1,5 +1,5 @@
 import { Noise, Svf, finiteClamp as clamp, oscillator, svfCoefficient } from '../dsp';
-import type { CymbalType, DrumInstrument, DrumSettings } from '../types';
+import type { DrumInstrument, DrumSettings } from '../types';
 
 export interface DrumHitMessage {
   instrument: DrumInstrument;
@@ -34,6 +34,8 @@ const KIT_CHARACTERS: Record<string, KitCharacter> = {
 // The six detuned square oscillators the TR-808 uses for its hats and cymbal.
 const METAL_HZ = [205.3, 304.4, 369.6, 522.7, 540, 800];
 const INSTRUMENTS: DrumInstrument[] = ['kick', 'snare', 'openHH', 'closedHH', 'ride', 'crash', 'snare2', 'clap'];
+// The kit whose drums are all recordings (the cymbal lane's always are).
+const RECORDED_KIT = 'recorded';
 // Brings every voice to a similar peak before the kit's drive, so drive colours all drums
 // evenly and the volume knobs mean the same thing on every instrument.
 const VOICE_TRIM: Record<DrumInstrument, number> = {
@@ -43,6 +45,9 @@ const HIT_LEVEL = 0.7;
 
 // A recording a lane plays instead of its synthesized voice: one channel, at its own rate.
 export interface DrumSample { data: Float32Array; rate: number }
+// The app's own drum recordings by name: a cymbal by its kind (`crash`), a drum of the recorded kit
+// as `kit-<instrument>`.
+export type DrumRecordings = Partial<Record<string, DrumSample>>;
 // Somewhere to write one of the two send mixes: a left and a right channel.
 export type DrumSendMix = ArrayLike<Float32Array>;
 
@@ -88,7 +93,7 @@ interface DrumVoice {
   sample: DrumSample | null;
   position: number;
   advance: number;
-  // For one of the app's cymbal recordings: the Decay knob as a fade laid over it, where that has
+  // For one of the app's own recordings (a cymbal, or a drum of the recorded kit): the Decay knob as a fade laid over it, where that has
   // got to, and whether the Tone knob has a low-pass on it.
   shaped: boolean;
   fade: number;
@@ -104,7 +109,7 @@ export class DrumCore {
   private pending: Array<DrumHitMessage & { frame: number }> = [];
   private humanizer = new Noise(0x51ed270b);
   private samples: Partial<Record<DrumInstrument, DrumSample>> = {};
-  private cymbals: Partial<Record<CymbalType, DrumSample>> = {};
+  private cymbals: Record<string, DrumSample> = {};
   private readonly fadeLength: number;
   private readonly attackLength: number;
 
@@ -125,12 +130,12 @@ export class DrumCore {
     }])) as Record<DrumInstrument, DrumVoice>;
   }
 
-  // The recordings the cymbal lane plays, one for each kind of cymbal. Until they are given, and
-  // for a kind that is missing, the lane plays its synthesized cymbal.
-  setCymbals(cymbals: Partial<Record<CymbalType, DrumSample>> | null | undefined): void {
+  // The app's own recordings: one for each kind of cymbal, and one for each drum of the recorded
+  // kit. Until they are given, and for one that is missing, the lane plays its synthesized voice.
+  setCymbals(cymbals: DrumRecordings | null | undefined): void {
     this.cymbals = {};
-    for (const [kind, sample] of Object.entries(cymbals ?? {})) {
-      if (sample && sample.data.length > 1 && sample.rate > 0) this.cymbals[kind as CymbalType] = sample;
+    for (const [name, sample] of Object.entries(cymbals ?? {})) {
+      if (sample && sample.data.length > 1 && sample.rate > 0) this.cymbals[name] = sample;
     }
   }
 
@@ -225,9 +230,11 @@ export class DrumCore {
     voice.noiseLevel = 0;
     voice.burstLength = 0;
 
-    // An imported sample comes first; then, on the cymbal lane, the app's recording of the cymbal chosen.
+    // An imported sample comes first; then, on the cymbal lane, the app's recording of the cymbal
+    // chosen, or, in the recorded kit, the app's recording of that drum.
     const imported = this.samples[message.instrument] ?? null;
-    const cymbal = !imported && message.instrument === 'crash' ? this.cymbals[settings.cymbalType ?? 'crash'] ?? null : null;
+    const recordingName = message.instrument === 'crash' ? settings.cymbalType ?? 'crash' : message.kitId === RECORDED_KIT ? `kit-${message.instrument}` : '';
+    const cymbal = !imported && recordingName ? this.cymbals[recordingName] ?? null : null;
     voice.sample = imported ?? cymbal;
     voice.shaped = cymbal !== null;
     voice.fadeLevel = 1;

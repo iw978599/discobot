@@ -4,13 +4,16 @@
 //   node scripts/build-waves.mjs <folder holding the source files>
 //
 // The source folder has `vsco/` and `akwf/`, each file fetched from the address beside it in
-// SOURCES below and saved under the name given there. Both libraries are CC0 (docs/BUNDLED_AUDIO.md).
+// SOURCES below and saved under the name given there (VCSL's go in `vcsl/`). All three libraries are CC0 (docs/BUNDLED_AUDIO.md).
 // Everything is cut short, mixed to one channel and stored as 16-bit, so the whole set stays small.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const VSCO = 'https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/';
-const AKWF = 'https://raw.githubusercontent.com/KristofferKarlAxelEkstrand/AKWF-FREE/main/AKWF/';
+const VCSL = 'https://raw.githubusercontent.com/sgossner/VCSL/master/';
+const MEMBRANE = `${VCSL}Membranophones/Struck%20Membranophones/`;
+const IDIOPHONE = `${VCSL}Idiophones/Struck%20Idiophones/`;
+const AKWF ='https://raw.githubusercontent.com/KristofferKarlAxelEkstrand/AKWF-FREE/main/AKWF/';
 const RATE = 22050;
 const FRAME = 600;
 
@@ -34,6 +37,17 @@ export const SOURCES = [
   // most of a cymbal is above what 22,050 Hz can hold. A cymbal has no note; the root is not used.
   ...[['crash', 'cymbal-crash1_ff_rr1', 2.5], ['ride', 'susCymb1-hitstick_f_rr1', 1.8], ['bell', 'susCymb1-hit-bell_mf', 1.5], ['splash', 'cymbal-crashshort_v1', 1]]
     .map(([name, source, seconds]) => ({ id: `cymbal-${name}`, zones: [{ file: `vsco/cymbal_${name}.wav`, from: `${VSCO}Percussion/${source}.wav`, root: 60, seconds, rate: 32000, unpitched: true }] })),
+  // The recorded drum kit, one hit per lane (VCSL). Like the cymbals they have no note. The hats are
+  // kept at the higher rate for the same reason the cymbals are.
+  ...[
+    ['kick', `${MEMBRANE}Bass%20Drum%201/BDrumNew_hit_v5_rr1_Sum.wav`, 0.7],
+    ['snare', `${MEMBRANE}Snare%20Drum,%20Modern%201/Snare2_HitSN_v6_rr1_Mid.wav`, 0.5],
+    ['clap', `${IDIOPHONE}Claps/Clap_rr1.wav`, 0.5],
+    ['closedHH', `${IDIOPHONE}Hi-Hat%20Cymbal/HiHat_HitC_v3_rr1_Mid.wav`, 0.25, 32000],
+    ['openHH', `${IDIOPHONE}Hi-Hat%20Cymbal/HiHat_HitO_rr1_Mid.wav`, 1, 32000],
+    ['snare2', `${MEMBRANE}Tom%202/Stick/TomL_HitS_v3_rr1_Mid.wav`, 0.7],
+    ['ride', `${MEMBRANE}Tom%201/Stick/TomH_HitS_v3_rr1_Mid.wav`, 0.6],
+  ].map(([name, from, seconds, rate]) => ({ id: `kit-${name}`, zones: [{ file: `vcsl/kit_${name}.wav`, from, root: 60, seconds, rate: rate ?? RATE, unpitched: true }] })),
   { id: 'organ', frames: cycles('eorgan', [1]) },
   { id: 'choir', frames: cycles('hvoice', [1]) },
   { id: 'seq-voices', frames: cycles('hvoice', [1, 14, 27, 40, 53, 66, 79, 92]) },
