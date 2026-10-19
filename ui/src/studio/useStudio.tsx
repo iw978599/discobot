@@ -34,7 +34,7 @@ import { DEFAULT_DRUM_CHANNEL, defaultPads, drumForNote, storePads, storedPads, 
 import { destinationFor, destinationLane, storeMidiDestinations, storedMidiDestinations, withDestination, type MidiDestination, type MidiDestinations } from '../services/midiDevices';
 import { DEFAULT_QUANTIZE, asQuantize, recordPosition } from '../services/recordTiming';
 import { LANE_PARAMS, fromUnit, lanePatch, parseTarget } from '../services/paramTargets';
-import { canAutomate, copyAutomationBar, resizeAutomationBars, resizeAutomationEachBar, sentAutomation, splitAutomated, stepVoiceParams, stepsThrough, withAutomationValues, withoutAutomation } from '../services/automation';
+import { canAutomate, copyAutomationBar, resizeAutomationBars, resizeAutomationEachBar, sentAutomation, splitAutomated, stepSends, stepVoiceParams, stepsThrough, withAutomationValues, withoutAutomation } from '../services/automation';
 import { storeMidiTies, storedMidiTies, tieFor, withTie, withoutTie, type MidiTie } from '../services/midiTies';
 import { CLICK_LEVEL, clickAt, clickLevel, countInBars, countInBeats, countInSeconds, storeMetronome, storedMetronome, type MetronomeSettings } from '../services/metronome';
 import { BrowserTransport, TransportTick } from '../services/browserTransport';
@@ -771,10 +771,9 @@ export function useStudio() {
       // brings its own. A knob being recorded plays where it is, whatever the pattern holds.
       // A lane handed to a guest is played early by its lead (services/guestInput), so the guest has it in time.
       const early = guestInputs.leadSeconds(`synth:${synth.id}`);
-      synthAudio.automate(synth.id, synth.synthParams, globalTempoRef.current, stepVoiceParams(
-        synth.synthParams, scene ? scene.laneAutomation?.[synth.id] : synth.pattern.automation, index, globalTempoRef.current,
-        scene ? undefined : autoPassRef.current.get(synth.id)?.held,
-      ), time - early);
+      const automation = scene ? scene.laneAutomation?.[synth.id] : synth.pattern.automation, held = scene ? undefined : autoPassRef.current.get(synth.id)?.held;
+      synthAudio.automate(synth.id, synth.synthParams, globalTempoRef.current,
+        stepVoiceParams(synth.synthParams, automation, index, globalTempoRef.current, held), time - early, stepSends(synth.synthParams, automation, index, held));
       // A lane that swings plays every second sixteenth late by the drums' swing. Its automation stays on the step.
       const late = synth.swing ? swingLate(step * duration, duration * 2, drumSwingRef.current) : 0;
       if (heard.has(synth.id) && note?.active && note.note) {
@@ -1725,7 +1724,8 @@ export function useStudio() {
     const automation = Object.entries(moved).reduce((next, [key, value]) => writePass(synth, recording, next, key, at.step, value), pattern.automation);
     localService.writePattern(synth.id, pattern.id, { automation: sentAutomation(automation) });
     // Heard at once, not when the pattern next comes round to this step.
-    synthAudio.automate(synth.id, synth.synthParams, globalTempoRef.current, stepVoiceParams(synth.synthParams, automation, at.step, globalTempoRef.current, recording.held));
+    synthAudio.automate(synth.id, synth.synthParams, globalTempoRef.current, stepVoiceParams(synth.synthParams, automation, at.step, globalTempoRef.current, recording.held),
+      undefined, stepSends(synth.synthParams, automation, at.step, recording.held));
     return rest as Partial<SynthParameters> | null;
   }, [recordedStep, synthAudio]);
 

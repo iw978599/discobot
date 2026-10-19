@@ -1,5 +1,5 @@
 import { createDefaultSynthParameters, toVoiceParams, type VoiceParams } from '@discobot/engine';
-import type { Automation, SynthParameters } from '../types';
+import type { Automation, FxSendLevels, SynthParameters } from '../types';
 import { LANE_PARAMS, type ParamRange } from './paramTargets';
 import { copyBar, layAlong, resizeBars, resizeEachBar } from './patternLength';
 
@@ -10,10 +10,12 @@ import { copyBar, layAlong, resizeBars, resizeEachBar } from './patternLength';
 // step plays (the scheduler and the exporter both ask `stepVoiceParams`), and what every edit
 // that moves, copies or resizes a lane's steps does to the automation beside them.
 
-// What can be automated: a lane's own numbers that the voice plays. A model's four macros are
-// not (they are several parameters each), and neither are the sends and the duck, which are
-// levels in the mixer, outside the voice.
-const IN_THE_MIXER = ['reverbSend', 'delaySend', 'chorusSend', 'auxASend', 'auxBSend', 'duck'];
+// What can be automated: a lane's own numbers that the voice plays, and its sends. A model's four
+// macros are not (they are several parameters each), and neither is the duck, which the kick sets.
+// The sends are levels in the mixer, outside the voice: they are sent at a step's time on their own
+// path (`stepSends`), live and in export alike.
+const IN_THE_MIXER = ['duck'];
+export const SEND_PARAMS = ['reverbSend', 'delaySend', 'chorusSend', 'auxASend', 'auxBSend'];
 export const AUTOMATABLE: string[] = Object.keys(LANE_PARAMS).filter(key => LANE_PARAMS[key].path && !IN_THE_MIXER.includes(key));
 // How many of a lane's parameters can have automation at once.
 export const MAX_AUTOMATED = 8;
@@ -143,6 +145,13 @@ export function stepVoiceParams(params: SynthParameters, automation: Automation 
   if (keys.length === 0) return null;
   const voice = toVoiceParams(withParamValues(params, { ...automationAt(automation, step), ...held }), tempo) as unknown as Record<string, unknown>;
   return Object.fromEntries(keys.flatMap(key => voiceKeysOf(key)).map(name => [name, voice[name]])) as Partial<VoiceParams>;
+}
+
+// A lane's send levels at the start of a step, when any send is automated: each at the step's value
+// or, where the step has none, the sound's own. Null when no send is, and the sound's sends stand.
+export function stepSends(params: SynthParameters, automation: Automation | undefined, step: number, held: Record<string, number> = {}): FxSendLevels | null {
+  if (!SEND_PARAMS.some(key => automation?.[key]?.some(value => value !== null) || typeof held[key] === 'number')) return null;
+  return withParamValues(params, { ...automationAt(automation, step), ...held }).fxSends;
 }
 
 // What the voice is sent when one step's automated parameters follow another's: the step's own,

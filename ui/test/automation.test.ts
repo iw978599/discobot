@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  AUTOMATABLE, MAX_AUTOMATED, automatedKeys, automatedParams, automationAt, automationChange, canAutomate, copyAutomationBar, describeValue, fitAutomation,
+  AUTOMATABLE, SEND_PARAMS, stepSends, MAX_AUTOMATED, automatedKeys, automatedParams, automationAt, automationChange, canAutomate, copyAutomationBar, describeValue, fitAutomation,
   layAutomationAlong, resizeAutomationBars, resizeAutomationEachBar, sanitizeAutomation, sentAutomation, splitAutomated, stepVoiceParams, stepsThrough, toUnit,
   voiceKeysOf, withAutomationValues, withParamValues, withoutAutomation,
 } from '../src/services/automation.ts';
@@ -9,7 +9,7 @@ import { LANE_PARAMS, fromUnit, lanePatch } from '../src/services/paramTargets.t
 import { sceneAsBars } from '../src/services/patternLength.ts';
 import { songBars } from '../src/services/songPlayback.ts';
 import { sanitizePattern, sanitizeScenes } from '../src/services/projectSanitization.ts';
-import { renderSynthBars, renderSynthLane } from '../src/services/wavExport.ts';
+import { effectsTail, renderSynthBars, renderSynthLane, sendTimeline, type ExportArrangement } from '../src/services/wavExport.ts';
 import { MAX_SHARE_LENGTH, decodeShare, encodeShare } from '../src/services/shareLink.ts';
 import { LocalProjectService } from '../src/services/localService.ts';
 import { createMemoryLibrary } from '../src/services/projectLibrary.ts';
@@ -40,14 +40,17 @@ const brightness = (samples: Float32Array) => samples.reduce((sum, value, index)
 
 test('what can be automated is a lane\'s own numbers that the voice plays, each one of the voice\'s parameters', () => {
   assert.ok(AUTOMATABLE.includes('cutoff') && AUTOMATABLE.includes('level') && AUTOMATABLE.includes('pan') && AUTOMATABLE.includes('attack'));
-  for (const key of ['macro1', 'macro2', 'macro3', 'macro4', 'reverbSend', 'delaySend', 'chorusSend', 'duck']) assert.equal(AUTOMATABLE.includes(key), false, `${key} is not automated in this version`);
+  for (const key of ['macro1', 'macro2', 'macro3', 'macro4', 'duck']) assert.equal(AUTOMATABLE.includes(key), false, `${key} is not automated in this version`);
+  // The sends are, on their own path: they are levels in the mixer, not the voice's.
+  for (const key of ['reverbSend', 'delaySend', 'chorusSend', 'auxASend', 'auxBSend']) assert.ok(AUTOMATABLE.includes(key), key);
   for (const key of AUTOMATABLE) {
     assert.ok(LANE_PARAMS[key].path, `${key} is named in the one table of lane parameters`);
+    if (SEND_PARAMS.includes(key)) { assert.deepEqual(voiceKeysOf(key), [], `${key} is nothing of the voice's`); continue; }
     assert.equal(voiceKeysOf(key).length, 1, `${key} is one parameter of the voice: ${voiceKeysOf(key)}`);
   }
   assert.deepEqual(voiceKeysOf('cutoff'), ['filterFreq']);
   assert.deepEqual(voiceKeysOf('level'), ['gain']);
-  assert.equal(new Set(AUTOMATABLE.flatMap(voiceKeysOf)).size, AUTOMATABLE.length, 'no two share one');
+  assert.equal(new Set(AUTOMATABLE.flatMap(voiceKeysOf)).size, AUTOMATABLE.length - SEND_PARAMS.length, 'no two share one');
 });
 
 test('automation from a file is held to known parameters, their ranges, the pattern\'s length and eight parameters', () => {
@@ -59,7 +62,7 @@ test('automation from a file is held to known parameters, their ranges, the patt
   assert.equal(sanitizeAutomation({ cutoff: 'high', level: { 0: 1 } }, 16), undefined);
   const hostile = sanitizeAutomation({
     cutoff: [1e9, -5, 'x', Number.NaN, null, 800, Number.POSITIVE_INFINITY, { valueOf: () => 4 }, ...Array(100).fill(900)],
-    detune: [12.6, 5000], macro1: [0.5], reverbSend: [1], constructor: [1], __proto__: [1], tempo: [90],
+    detune: [12.6, 5000], macro1: [0.5], duck: [1], constructor: [1], __proto__: [1], tempo: [90],
   }, 8)!;
   assert.deepEqual(Object.keys(hostile), ['cutoff', 'detune']);
   assert.deepEqual(hostile.cutoff, [20000, 20, null, null, null, 800, null, null], 'clamped, and exactly as long as the pattern');
@@ -142,9 +145,11 @@ test('a knob\'s change is split into what is recorded and what is still a change
   const mixed = splitAutomated({ filter: { ...sound.filter, frequency: 2000, type: 'highpass' } }, sound);
   assert.deepEqual(mixed.moved, { cutoff: 2000 });
   assert.deepEqual(mixed.rest, { filter: { ...sound.filter, type: 'highpass' } }, 'what cannot be automated is still made, with the recorded parameter put back');
-  const other = splitAutomated({ fxSends: { ...sound.fxSends, reverb: 0.9 }, voiceMode: 'mono' }, sound);
+  const other = splitAutomated({ duck: 0.9, voiceMode: 'mono' }, sound);
   assert.deepEqual(other.moved, {});
-  assert.deepEqual(other.rest, { fxSends: { ...sound.fxSends, reverb: 0.9 }, voiceMode: 'mono' }, 'a send is not automated: the change is the sound\'s');
+  assert.deepEqual(other.rest, { duck: 0.9, voiceMode: 'mono' }, 'the duck is not automated: the change is the sound\'s');
+  const send = splitAutomated({ fxSends: { ...sound.fxSends, reverb: 0.9 } }, sound);
+  assert.deepEqual([send.moved, send.rest], [{ reverbSend: 0.9 }, null], 'a send is recorded like any other knob');
   assert.deepEqual(splitAutomated({ filter: { ...sound.filter } }, sound), { moved: {}, rest: null }, 'a change that changes nothing');
   const refused = splitAutomated({ filter: { ...sound.filter, frequency: 2000 } }, sound, () => false);
   assert.deepEqual([refused.moved, refused.rest], [{}, { filter: { ...sound.filter, frequency: 2000 } }], 'a lane that can automate no more: the knob changes the sound as it always did');
@@ -365,4 +370,31 @@ test('an exported sweep is heard, step by step, and is exactly what the live sch
   assert.deepEqual(sent[16], [{ filterFreq: sound.filter.frequency }, 2]);
   assert.deepEqual(sent[3], [{ filterFreq: sweep.cutoff[3] }, 0.375]);
   assert.deepEqual(sent[12], [{ filterFreq: sound.filter.frequency }, 1.5], 'a step with no value is sent the sound\'s own');
+});
+
+test('a lane\'s sends are automated on a path of their own, and an export moves them where the scheduler does', () => {
+  const sound = createDefaultSynthParameters();
+  assert.equal(stepSends(sound, undefined, 0), null, 'no automation: the sound\'s sends stand');
+  assert.equal(stepSends(sound, { cutoff: [500, null] }, 0), null, 'automation of the voice alone leaves the sends to the sound');
+  const automation: Automation = { auxASend: [0.8, null, 0, null] };
+  assert.deepEqual(stepSends(sound, automation, 0), { ...sound.fxSends, auxA: 0.8 });
+  assert.deepEqual(stepSends(sound, automation, 1), sound.fxSends, 'a step with no value plays the sound\'s own');
+  assert.equal(stepSends(sound, automation, 2)!.auxA, 0);
+  assert.deepEqual(stepSends(sound, undefined, 0, { reverbSend: 0.5 }), { ...sound.fxSends, reverb: 0.5 }, 'a knob being recorded plays where it is');
+
+  // The export's timeline is the scheduler's sends at each step's start.
+  const steps: SequencerStep[] = Array.from({ length: 4 }, off);
+  const timeline = sendTimeline([steps, steps], sound, [automation, undefined], [{ start: 0, duration: 2 }, { start: 2, duration: 2 }]);
+  assert.deepEqual(timeline.map(entry => entry.time), [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5]);
+  assert.deepEqual(timeline.map(entry => entry.sends.auxA ?? 0), [0.8, sound.fxSends.auxA ?? 0, 0, sound.fxSends.auxA ?? 0, ...Array(4).fill(sound.fxSends.auxA ?? 0)]);
+  assert.deepEqual(sendTimeline([steps], sound, [{ cutoff: [500] }], [{ start: 0, duration: 2 }]), [], 'nothing sent where no send is automated');
+
+  // An aux bus that only automation sends to still rings on after the last note.
+  const loop = { enabled: true, returns: { synth: .8, drums: .7 }, drive: { enabled: false, amount: 0, tone: .5 }, phaser: { enabled: false, rate: .5, depth: .4, feedback: .2, mix: .2 }, delay: { enabled: false, time: .2, feedback: .3, mix: .3 }, reverb: { enabled: false, decay: 2, mix: .3 } };
+  const arrangement = (automated?: Automation): ExportArrangement => ({
+    tempo: 120, drumState: {} as ExportArrangement['drumState'], drumKitId: 'clean-analog', drumMasterVolume: 1, drumSwing: 0,
+    drumFx: { sends: { reverb: 0, delay: 0, drive: 0, phaser: 0 }, returnLevel: 1 }, effectsLoop: loop,
+    synths: [{ id: 1, pattern: { id: 'p', name: 'p', tempo: 120, steps, ...(automated ? { automation: automated } : {}) }, synthParams: sound, muted: false, solo: false }],
+  });
+  assert.ok(effectsTail(arrangement(automation)) > effectsTail(arrangement()));
 });

@@ -172,3 +172,20 @@ test('with Auto on, a knob turned while the song plays is written along the patt
   expect(await values(page)).toBeNull();
   expect(errors).toEqual([]);
 });
+
+test('a lane\'s sends can be automated too, the aux sends among them', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await choose(page, 'auxASend');
+  const first = cell(page, 1, 'Aux A send');
+  await expect(lane(page).getByRole('slider', { name: /^Aux A send automation, step/ })).toHaveCount(16);
+  await first.focus();
+  for (let n = 0; n < 3; n++) await first.press('ArrowUp');
+  await expect.poll(async () => (await values(page, 'auxASend'))?.[0] ?? null).not.toBeNull();
+  expect(set(await values(page, 'auxASend'))).toEqual([1]);
+  // Playing with the automation in place is not an error.
+  await page.getByRole('button', { name: /Play All/ }).click();
+  await page.waitForTimeout(800);
+  await page.getByRole('button', { name: /Stop All/ }).click();
+  expect(errors).toEqual([]);
+});

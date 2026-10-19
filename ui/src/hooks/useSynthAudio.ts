@@ -1,5 +1,5 @@
 import { useRef, useCallback, useEffect, useMemo } from 'react';
-import type { SynthParameters, EffectsLoopState } from '../types';
+import type { SynthParameters, EffectsLoopState, FxSendLevels } from '../types';
 import { toVoiceParams, type SynthSample, type SynthWorkletMessage, type VoiceParams } from '@discobot/engine';
 import { automationChange } from '../services/automation';
 import { createAudioLane, getAudioContext, ensureAudioReady, loadAudioWorklet, setEffectsLoop } from './browserAudio';
@@ -13,6 +13,9 @@ interface SynthLane {
   // parameters are the automation's: a change to the sound made now leaves them alone, and the
   // next step sends them at its own time.
   automated?: Partial<VoiceParams> | null;
+  // The send levels the automation last set, while it sets any. A change to the sound leaves the
+  // sends alone meanwhile: a level set now would stand until the next step put its own.
+  automatedSends?: FxSendLevels | null;
   // The recording the lane's sample engine plays, kept for a node that does not exist yet.
   sample?: SynthSample | null;
   // The controller's bend and wheel as last sent, for a node that does not exist yet.
@@ -52,14 +55,19 @@ export function useSynthAudio() {
     lane.bpm = bpm;
     if (loop) setEffectsLoop(loop);
     send(lane.node, { type: 'params', params: soundFor(lane) });
-    lane.audio?.setSends(parameters.fxSends, parameters.fxReturn);
+    if (!lane.automatedSends) lane.audio?.setSends(parameters.fxSends, parameters.fxReturn);
   }, []);
   // A step's automation: what the voice is to be at `time` on the audio clock, which is when the
   // step sounds (the scheduler works ahead of it). With nothing for the step, whatever automation
   // last set goes back to the lane's own sound at that time. Without a time it is made now.
-  const automate = useCallback((synthId: number, parameters: SynthParameters, bpm: number, step: Partial<VoiceParams> | null, time?: number) => {
+  // `sends` is the step's send levels when any send is automated; without, the sound's go back.
+  const automate = useCallback((synthId: number, parameters: SynthParameters, bpm: number, step: Partial<VoiceParams> | null, time?: number, sends: FxSendLevels | null = null) => {
     const lane = laneFor(synthId);
     if (!lane.parameters) { lane.parameters = parameters; lane.bpm = bpm; }
+    if (sends || lane.automatedSends) {
+      lane.automatedSends = sends;
+      lane.audio?.setSends(sends ?? lane.parameters.fxSends, lane.parameters.fxReturn, time);
+    }
     if (!step && !lane.automated) return;
     const change = automationChange(lane.automated ?? null, step, toVoiceParams(lane.parameters, lane.bpm));
     lane.automated = step;
@@ -71,6 +79,10 @@ export function useSynthAudio() {
   const endAutomation = useCallback(() => {
     lanesRef.current.forEach(lane => {
       send(lane.node, { type: 'unschedule' });
+      if (lane.automatedSends) {
+        lane.automatedSends = null;
+        if (lane.parameters) lane.audio?.setSends(lane.parameters.fxSends, lane.parameters.fxReturn);
+      }
       if (!lane.automated) return;
       lane.automated = null;
       if (lane.parameters) send(lane.node, { type: 'params', params: toVoiceParams(lane.parameters, lane.bpm) });
@@ -94,7 +106,7 @@ export function useSynthAudio() {
           send(node, { type: 'params', params: toVoiceParams(lane.parameters, lane.bpm) });
           // A step's automation sent before there was a node to send it to.
           if (lane.automated) send(node, { type: 'params', params: lane.automated });
-          audio.setSends(lane.parameters.fxSends, lane.parameters.fxReturn);
+          audio.setSends(lane.automatedSends ?? lane.parameters.fxSends, lane.parameters.fxReturn);
         }
         if (lane.sample) send(node, { type: 'sample', sample: lane.sample });
         if (lane.live) send(node, { type: 'live', ...lane.live });
