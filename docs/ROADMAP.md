@@ -69,7 +69,7 @@ directly, with no builder.
 14. **The Hall's Decay in Chrome** (Known Issues in `AGENTS.md`). Comes
     before the clones, which lean on it, and is also what the Hall aux bus
     plays.
-15. **Clones of well-known effects** (the second half of V5): the list the
+15. **Clones of well-known effects** (the second half of V5). Done but for the spring reverb, which waits on 14: presets named "… style" on each effect, with a colour and a wow on the delay and kinds of drive. Was: the list the
     owner agreed on 2026-10-19, with knobs added to an effect where a clone
     needs them.
 16. **A scale lock** (V7): the keyboard, roll, chord menu and randomizer all
