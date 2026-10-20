@@ -44,6 +44,9 @@ design, the stages, and how far they have got.
 - **Only the Play button tells the session about the transport.** An export's
   play-through or a song ending must never start or stop anyone else's music;
   they use the internal `playStop`, not `handleGlobalPlayStop`.
+- **Presence marks are attributes, not renders.** `Rack` sets `data-present`
+  on the units from a layout effect; never pass presence to a unit as a prop,
+  which would render the tracked units for someone else's pointer.
 - **The studio must take a remote edit from its event alone.** Anything a
   handler sets around its call to the store (a ref, the audio) is missing
   when the same edit arrives from someone else.

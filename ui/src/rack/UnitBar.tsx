@@ -116,6 +116,7 @@ export default function UnitBar({ shown, synths, drums, playing, guests, onShow,
           key={unit.id}
           className={`unit-tab ${unit.empty ? 'empty' : ''}`}
           aria-label={unit.name}
+          data-tab={unit.id}
           aria-current={unit.id === shown ? 'true' : undefined}
           aria-keyshortcuts={unit.mute ? 'Shift+M' : undefined}
           data-muted={unit.muted ? 'true' : undefined}
