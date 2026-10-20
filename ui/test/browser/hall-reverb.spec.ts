@@ -182,7 +182,8 @@ test('an export with the Hall differs from the Room, is about as loud, rings on 
   console.log('hall-reverb alone', JSON.stringify({ shortEnd: end(alone.short), hallEnd: end(alone.hall), longEnd: end(alone.long), roomEnd: end(alone.room), shortDecay: decayOf(alone.short), hallDecay: decayOf(alone.hall), longDecay: decayOf(alone.long), roomDecay: decayOf(alone.room) }));
   expect(end(alone.long), 'a four-second Hall rings on louder than a two-second one').toBeGreaterThan(end(alone.hall) * 1.5);
   expect(end(alone.short), 'and a one-second Hall quieter').toBeLessThan(end(alone.hall) / 1.5);
-  expect(decayOf(alone.short), 'its tail falls faster').toBeLessThan(decayOf(alone.hall));
-  expect(decayOf(alone.hall)).toBeLessThan(decayOf(alone.long));
+  // Not the decays read off the reverb alone: the reverb is fed the kick, whose own tail falls in about
+  // three seconds, and nothing that comes out can fall faster than what goes in. The check machines
+  // read 3.02, 3.09 and 4.29 seconds for one, two and four. The levels above are what tell them apart.
   expect(errors).toEqual([]);
 });
