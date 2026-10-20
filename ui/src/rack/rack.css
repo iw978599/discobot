@@ -699,6 +699,11 @@
 .mixer-group-name { display: flex; align-items: baseline; gap: 8px; color: var(--text-faint); font-size: var(--type-caption); white-space: nowrap; }
 .mixer-group-name b { color: var(--text-label); font-size: var(--type-label); font-weight: 700; }
 .mixer-strips { display: flex; justify-content: center; gap: 2px; }
+/* The whole mix's picture beside the main volume: taller, with its switch underneath. */
+.mixer-picture { flex: none; width: 180px; display: flex; flex-direction: column; justify-content: center; padding-top: 5px; border-top: 3px solid var(--edge); }
+.mixer-picture .scope { flex-direction: column; }
+.mixer-picture .scope-canvas { flex: none; height: 120px; }
+.mixer-picture .scope-modes { flex-direction: row; justify-content: center; }
 .mixer-strip { flex: none; width: 60px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 5px; border-top: 3px solid var(--edge); }
 .mixer-strip[data-drum] { border-top-color: var(--drum-color); }
 .mixer-name { width: 100%; height: 3.45em; overflow: hidden; display: flex; flex-direction: column; align-items: center; text-align: center; font-size: var(--type-caption); line-height: 1.15; letter-spacing: 0.02em; }

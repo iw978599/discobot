@@ -190,6 +190,8 @@ export function useSynthAudio(engine: AudioEngine = audioEngine) {
     volumeRef.current = Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : 0;
     lanesRef.current.forEach(lane => lane.audio?.setVolume(volumeRef.current));
   }, []);
+  // What a picture of a lane's sound reads: none until the lane has sounded.
+  const analyser = useCallback((synthId: number) => lanesRef.current.get(synthId)?.audio?.analyser() ?? null, []);
   const dispose = useCallback(() => {
     stopAllNotes();
     const previous = [...lanesRef.current.values()];
@@ -202,6 +204,6 @@ export function useSynthAudio(engine: AudioEngine = audioEngine) {
   // The same object on every render, so effects and callbacks that depend on it do not re-run.
   return useMemo(() => ({
     ensureAudioReady: () => engine.ensureReady(), tryResume: () => { void engine.ensureReady(); },
-    playNote, stopNote, stopSynth, stopAllNotes, updateParameters, automate, endAutomation, setEffectsLoop: (state: EffectsLoopState) => engine.setEffectsLoop(state), setVolume, setSample, setLive, duck, handOver, dispose,
-  }), [playNote, stopNote, stopSynth, stopAllNotes, updateParameters, automate, endAutomation, setVolume, setSample, setLive, duck, handOver, dispose]);
+    playNote, stopNote, stopSynth, stopAllNotes, updateParameters, automate, endAutomation, setEffectsLoop: (state: EffectsLoopState) => engine.setEffectsLoop(state), setVolume, setSample, setLive, duck, handOver, analyser, dispose,
+  }), [playNote, stopNote, stopSynth, stopAllNotes, updateParameters, automate, endAutomation, setVolume, setSample, setLive, duck, handOver, analyser, dispose]);
 }

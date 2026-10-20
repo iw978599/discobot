@@ -1,0 +1,8 @@
+/* A picture of the sound: a dark screen with the trace in the figure colour, and a switch beside it. */
+.scope { display: flex; align-items: stretch; gap: 8px; min-width: 0; }
+.scope-canvas {
+  flex: 1 1 auto; min-width: 0; height: 56px;
+  background: var(--surface-display); border: 1px solid var(--edge-control); border-radius: var(--corner-control);
+}
+.scope-modes { display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+.scope-modes .rack-btn { font-size: var(--type-caption); padding: 2px 8px; }

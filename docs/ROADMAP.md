@@ -105,7 +105,9 @@ directly, with no builder.
     MIDI channel and its place on the rack, so moving one is the owner's call
     (see the questions).
 21. **A picture of the sound** (V12): a small scope or spectrum on a lane
-    and on the master.
+    and on the master. Done: a Wave or Spectrum picture at the top of the open
+    lane's Sound level and beside the main volume on the mixer, drawn outside
+    React from an analyser made only when a picture asks.
 22. **Several recordings across the keyboard for an imported sample** (V1).
 23. **A listener's page that shows the song moving** (V16).
 24. **More MIDI** (features 6): following an external clock, sending notes

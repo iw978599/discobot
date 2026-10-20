@@ -48,6 +48,7 @@ class Context {
   createOscillator = () => this.node('oscillator');
   createChannelMerger = () => this.node('merger');
   createBufferSource = () => this.node('source');
+  createAnalyser = () => this.node('analyser');
   createBuffer(channels: number, length: number) {
     const data = Array.from({ length: channels }, () => new Float32Array(length));
     return { getChannelData: (channel: number) => data[channel] };
@@ -97,6 +98,26 @@ test('an engine makes its context once and everything it is asked for goes throu
   await Promise.all([engine.loadWorklet(), engine.loadWorklet()]);
   assert.equal(contexts[0].modules.length, 1);
   await engine.dispose();
+});
+
+test('a picture of the sound reads an analyser made only when it is asked for, which feeds nothing', async () => {
+  const { engine, contexts } = make();
+  assert.equal(engine.analyser(), null, 'none before there is a context');
+  assert.equal(contexts.length, 0, 'and asking for one makes no context');
+  const lane = engine.createLane('synth');
+  const ctx = contexts[0];
+  assert.equal(ctx.nodes.filter(node => node.kind === 'analyser').length, 0, 'none until a picture asks');
+  const own = fake(lane.analyser());
+  assert.equal(lane.analyser(), lane.analyser(), 'one for a lane');
+  assert.ok(fake(lane.output).connections.includes(own), 'after the level of the lane, beside its sends');
+  assert.deepEqual(own.connections, [], 'it feeds nothing, so the sound is as it was');
+  const master = fake(engine.analyser()!);
+  assert.equal(engine.analyser(), engine.analyser(), 'one for the whole mix');
+  const safety = ctx.nodes.find(node => node.kind === 'shaper' && node.connections.includes(ctx.destination))!;
+  assert.ok(safety.connections.includes(master), 'the mix as it leaves');
+  assert.deepEqual(master.connections, []);
+  await engine.dispose();
+  assert.ok(master.cut > 0, 'and it is let go with the rest');
 });
 
 test('disposing stops and disconnects what the engine made and closes its context', async () => {
