@@ -14,3 +14,14 @@ migrations_dir = "migrations"
 
 [observability]
 enabled = false
+
+# Live sessions (src/live.ts): one Durable Object for each shared project, holding the connections of
+# the people who have it open. The free plan's Durable Objects are SQLite-backed, so the class is
+# declared as one, though a room stores nothing.
+[[durable_objects.bindings]]
+name = "LIVE"
+class_name = "LiveRoomObject"
+
+[[migrations]]
+tag = "live-rooms-1"
+new_sqlite_classes = ["LiveRoomObject"]

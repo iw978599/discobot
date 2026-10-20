@@ -400,7 +400,7 @@ npm run migrate --workspace=server  # Apply new database migrations to the live 
 - Passwords, session tokens and recovery codes are stored only as hashes and never logged. PBKDF2 is capped at 100,000 iterations by Cloudflare
 - The API is called with a bearer token, not cookies, and only answers origins in `ALLOWED_ORIGINS` (`server/wrangler.toml`)
 - `server/` has no runtime dependencies and `wrangler` is run with `npx`, not installed, to keep the lockfile small
-- Do not reintroduce Discord integration or a WebSocket transport
+- Do not reintroduce Discord integration. A WebSocket is used for live sessions alone, which the owner allowed on 2026-10-20 (`docs/LIVE_SESSIONS_PLAN.md`); nothing else holds a connection open
 
 ## Project Sync
 - The browser copy is the working copy. The account holds a copy of each synced project with a revision number; a save names the revision it was based on and is refused (409) if the account has moved on.
@@ -421,6 +421,11 @@ npm run migrate --workspace=server  # Apply new database migrations to the live 
 - A server that has never heard of `/shared` answers 404. Sync reads that as "nothing is shared" and leaves every link alone; it must not read it as everything having been unshared. The accounts API is deployed by hand, so the site can be ahead of it.
 - Sharing stores which account shared which project with which, and which account saved a project last (`project_shares`, `projects.updated_by`). No names, messages or activity beyond that.
 - With anything shared, sync looks for changes every 20 seconds instead of every two minutes (`CHECK_SHARED_EVERY_MS`).
+
+## Live Sessions
+- The people a shared project is shared with can have it open together and see each other's edits at once (`docs/LIVE_SESSIONS_PLAN.md`, which says the design and the stages, and how far it has got). The owner chose a free Cloudflare Durable Object as the relay, everything shared (edits and the transport), sharing by username as now, and presence.
+- The room (`server/src/live.ts`) keeps nothing and passes messages on: an edit to everyone, the sender too, in one order; a project for someone joining to them alone; the rest to the others. Its rules are plain functions used by the Durable Object (`LiveRoomObject`, hibernating) and by `server/devLive.ts`, the local runner's WebSocket server, which has no dependency and is never deployed. `liveTarget` checks who may join: the session token comes as the connection's second protocol name, never in the address, and is not passed to the room. A Worker without the `LIVE` binding answers 503.
+- The free plan's caps are hard: past them requests fail, nothing is billed. Keep messages few (an edit stream is batched, a knob's drag is not a message for every value).
 
 ## Guest Instruments
 - A guest is another creator's web page in a frame (`GuestModule`), listed in the project as `guests`. The protocol is `docs/GUEST_PROTOCOL.md`; `docs/guest-example.html` is a complete guest, and the browser tests run against it (served by `server/dev.ts` at `/__guest`). Change the three together.
