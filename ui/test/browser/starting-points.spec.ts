@@ -42,8 +42,8 @@ test('an empty project offers beats to start from, and one press fills it in', a
   await expect(tempo(page)).toHaveText('120');
 });
 
-test('the offer leaves only when it is hidden, and is not made on a project that has something in it', async ({ page }) => {
-  await offer(page).getByRole('button', { name: 'Hide', exact: true }).click();
+test('the offer leaves only when Start empty is pressed, and is not made on a project that has something in it', async ({ page }) => {
+  await offer(page).getByRole('button', { name: 'Start empty', exact: true }).click();
   await expect(offer(page)).toHaveCount(0);
   await expect(kick(page, 1), 'nothing was put in').toHaveAttribute('aria-pressed', 'false');
 
@@ -65,15 +65,15 @@ test('the offer leaves only when it is hidden, and is not made on a project that
   await expect(offer(page), 'a project with a hit in it is not offered a beat').toHaveCount(0);
 });
 
-test('Sample Song opens a finished song as a new project, ready to play as a song', async ({ page }) => {
+test('a sample song opens as a new project, ready to play as a song', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   const stored = () => page.evaluate(() => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem('discobot_browser_project_v1') || '{}')));
   const first = (await stored()).projectId;
-  await offer(page).getByRole('button', { name: 'Sample Song', exact: true }).click();
+  await offer(page).getByRole('group', { name: 'A song to hear', exact: true }).getByRole('button', { name: 'Neon Drive', exact: true }).click();
 
   await expect(tempo(page)).toHaveText('118');
-  await expect.poll(async () => (await stored()).name).toBe('Sample Song');
+  await expect.poll(async () => (await stored()).name).toBe('Neon Drive');
   const project = await stored();
   expect(project.projectId, 'the empty project it was started from is left alone').not.toBe(first);
   expect(project.scenes.map((scene: { name: string }) => scene.name)).toEqual(['Intro', 'Verse', 'Chorus', 'Break', 'Outro']);
@@ -84,6 +84,25 @@ test('Sample Song opens a finished song as a new project, ready to play as a son
 
   await page.getByRole('button', { name: /Play All/ }).click();
   await page.waitForTimeout(1200);
+  await page.getByRole('button', { name: /Stop All/ }).click();
+  expect(errors).toEqual([]);
+});
+
+test('the songs on offer are in many styles, and one in another time signature opens in it', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const songs = offer(page).getByRole('group', { name: 'A song to hear', exact: true }).getByRole('button');
+  await expect(songs).toHaveText([/Neon Drive/, /Blue Waltz/, /Late Study/, /Seven Lights/, /Market Day/, /Cathedral/]);
+  await expect(offer(page).getByRole('group', { name: 'A beat to start from', exact: true }).getByRole('button')).not.toHaveCount(0);
+
+  const stored = () => page.evaluate(() => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem('discobot_browser_project_v1') || '{}')));
+  await songs.filter({ hasText: 'Blue Waltz' }).click();
+  await expect.poll(async () => (await stored()).name).toBe('Blue Waltz');
+  const project = await stored();
+  expect(project.scenes.map((scene: { signature?: string }) => scene.signature)).toEqual(['3/4', '3/4', '3/4']);
+  expect(project.synths[1].pattern.steps.length, 'eight bars of twelve steps').toBe(96);
+  await page.getByRole('button', { name: /Play All/ }).click();
+  await page.waitForTimeout(1500);
   await page.getByRole('button', { name: /Stop All/ }).click();
   expect(errors).toEqual([]);
 });
