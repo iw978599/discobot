@@ -9,6 +9,7 @@ import { createDefaultSynthParameters } from '@discobot/engine';
 import { localService } from '../services/localService';
 import type { GuestPatch } from '../services/projectOps';
 import { projectSync, startProjectSync } from '../services/projectSync';
+import { startLiveSessions } from '../services/liveSession';
 import { loadDrumSample } from '../services/drumSamples';
 import { loadCymbals, loadLaneSample } from '../services/builtInWaves';
 import { MAX_EMBEDDED_TOTAL_BYTES, MAX_PROJECT_FILE_BYTES, adoptSamples, embedSamples } from '../services/projectSamples';
@@ -1036,25 +1037,25 @@ export function useStudio() {
       }
       case 'synthCreated': {
         const { synthId, pattern, synthParams, synthModelId, synthModelParams } = message.data;
-        setSynths(prev => {
-          if (prev.some(s => s.id === synthId)) return prev;
-          return [...prev, {
-            id: synthId,
-            pattern,
-            patterns: pattern ? [pattern] : [],
-            synthParams: normalizeSynthParams(synthParams),
-            synthModelId: normalizeSynthModelId(synthModelId),
-            synthModelParams: normalizeSynthModelParams(synthModelParams),
-            isPlaying: Boolean(message.data.isPlaying),
-            selectedStep: null,
-            keyboardMode: 'keyboard',
-            stepRecordPointer: 0,
-            octaveShift: 0,
-            muted: Boolean(message.data.muted),
-            solo: Boolean(message.data.solo), swing: message.data.swing === true, name: message.data.name,
-            forceReleaseSignal: false,
-          }];
-        });
+        const created: SynthState = {
+          id: synthId,
+          pattern,
+          patterns: pattern ? [pattern] : [],
+          synthParams: normalizeSynthParams(synthParams),
+          synthModelId: normalizeSynthModelId(synthModelId),
+          synthModelParams: normalizeSynthModelParams(synthModelParams),
+          isPlaying: Boolean(message.data.isPlaying),
+          selectedStep: null,
+          keyboardMode: 'keyboard',
+          stepRecordPointer: 0,
+          octaveShift: 0,
+          muted: Boolean(message.data.muted),
+          solo: Boolean(message.data.solo), swing: message.data.swing === true, name: message.data.name, preset: message.data.preset,
+          forceReleaseSignal: false,
+        };
+        // A lane made by someone else in a live session has no handler here to write the ref.
+        if (!synthsRef.current.some(s => s.id === synthId)) synthsRef.current = [...synthsRef.current, created];
+        setSynths(prev => (prev.some(s => s.id === synthId) ? prev : [...prev, created]));
         break;
       }
       case 'synthModelUpdate': {
@@ -1103,6 +1104,7 @@ export function useStudio() {
       }
       case 'synthRemoved': {
         const { synthId } = message.data;
+        synthAudio.stopSynth(synthId);
         synthsRef.current = synthsRef.current.filter(s => s.id !== synthId);
         setSynths(prev => prev.filter(s => s.id !== synthId));
         break;
@@ -1189,7 +1191,7 @@ export function useStudio() {
       effectsLoop: DEFAULT_EFFECTS_LOOP, drumFx: DEFAULT_DRUM_FX,
     });
     const unsubscribe = localService.subscribe(message => messageHandlerRef.current(message));
-    void localService.openLibrary().then(startProjectSync);
+    void localService.openLibrary().then(() => { startProjectSync(); startLiveSessions(); });
     return unsubscribe;
   }, []);
 

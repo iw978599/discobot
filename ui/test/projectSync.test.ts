@@ -324,3 +324,77 @@ test('the account only gives projects to their owner, and enforces its limits', 
   const left = (await remote.env.DB.prepare('SELECT name FROM projects').all<{ name: string }>()).results.map(row => row.name);
   assert.deepEqual(left, ['Private'], 'deleting an account deletes its projects');
 });
+
+test('a project held for a live session is not uploaded until the hold ends', async () => {
+  const remote = await server();
+  const laptop = await browser(remote);
+  await laptop.signIn();
+  laptop.use();
+  await laptop.service.newProject('Together');
+  await laptop.run();
+  const id = await laptop.idOf('Together');
+  const before = puts(remote);
+  // Someone else in the session is saving it: edits here go to them, not to the account.
+  laptop.sync.hold(id, true);
+  await laptop.edit(s => s.setTempo(111));
+  await laptop.run();
+  assert.equal(puts(remote), before);
+  laptop.sync.hold(id, false);
+  await laptop.run();
+  assert.equal(puts(remote), before + 1);
+});
+
+// Two browsers in one live session, the phone saving: both have the same edits, but only the
+// phone's save has reached the account. The laptop's sync still knows the revision before it.
+async function liveTogether() {
+  const remote = await server();
+  const laptop = await browser(remote);
+  await laptop.signIn();
+  laptop.use();
+  await laptop.service.newProject('Together');
+  await laptop.run();
+  const phone = await browser(remote);
+  await phone.signIn();
+  phone.use();
+  await phone.service.openProject(await phone.idOf('Together'));
+  const id = await laptop.idOf('Together');
+  laptop.sync.hold(id, true);
+  await laptop.edit(s => s.setTempo(120));
+  await phone.edit(s => s.setTempo(120));
+  await phone.run();
+  await laptop.run();
+  return { laptop, phone, id };
+}
+
+test('a browser that stays on in a live session after the one saving leaves saves on top, and nothing is kept twice', async () => {
+  const { laptop, phone, id } = await liveTogether();
+  await laptop.edit(s => s.setDrumStep('kick', 4, true));
+  laptop.sync.hold(id, false, 'adopt');
+  await laptop.run();
+  assert.deepEqual(laptop.sync.status().keptBoth, []);
+  assert.deepEqual(await laptop.names(), ['Together', 'Untitled']);
+  await phone.run();
+  assert.equal(phone.service.snapshot().drumState.kick.steps[4], true);
+  assert.equal(phone.service.snapshot().tempo, 120);
+});
+
+test('a browser that leaves others in a live session takes their saved copy, and nothing is kept twice', async () => {
+  const { laptop, phone, id } = await liveTogether();
+  await phone.edit(s => s.setDrumStep('kick', 6, true));
+  await phone.run();
+  laptop.sync.hold(id, false, 'yield');
+  await laptop.run();
+  assert.deepEqual(laptop.sync.status().keptBoth, []);
+  assert.deepEqual(await laptop.names(), ['Together', 'Untitled']);
+  assert.equal(laptop.service.snapshot().drumState.kick.steps[6], true);
+});
+
+test('a browser that loses its live session keeps both copies, as when any two browsers clash', async () => {
+  const { laptop, phone, id } = await liveTogether();
+  await laptop.edit(s => s.setDrumStep('kick', 2, true));
+  await phone.edit(s => s.setDrumStep('kick', 6, true));
+  await phone.run();
+  laptop.sync.hold(id, false);
+  await laptop.run();
+  assert.deepEqual(laptop.sync.status().keptBoth, ['Together']);
+});

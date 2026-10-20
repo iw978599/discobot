@@ -64,7 +64,7 @@ test.beforeEach(async ({ page, request }, testInfo) => {
   await ready(page);
 });
 
-test('two people work on one project in turns, and it ends when the owner says so', async ({ page, browser }, testInfo) => {
+test('two people work on one project together or in turns, and it ends when the owner says so', async ({ page, browser }, testInfo) => {
   const baseURL = String(testInfo.project.use.baseURL);
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -107,6 +107,8 @@ test('two people work on one project in turns, and it ends when the owner says s
   await expect(sharing.getByRole('group', { name: 'Shared with Dana', exact: true })).toBeVisible();
   await expect(mine).toContainText('Shared with 1');
   await page.keyboard.press('Escape');
+  // Ian's browser learns from the account that the project is shared, and opens its live session.
+  await syncNow(page);
 
   // Dana is offered it. It is not in her browser until she opens it.
   await syncNow(dana);
@@ -125,24 +127,39 @@ test('two people work on one project in turns, and it ends when the owner says s
   await expect(hers.getByRole('group', { name: 'Project Night Drive', exact: true }).getByRole('button', { name: 'Share', exact: true }), 'it is not hers to share on').toHaveCount(0);
   await dana.keyboard.press('Escape');
 
-  // Dana takes a turn. Ian's browser gets it and says whose save it was.
+  // Both have it open, so they are in a live session: an edit reaches the other at once, with no sync.
   await setTempo(dana, '90');
+  await expect(page.locator('.tempo-led-value')).toHaveText('90', { timeout: 10_000 });
+  await setTempo(page, '95');
+  await expect(dana.locator('.tempo-led-value')).toHaveText('95', { timeout: 10_000 });
+  // Ian was there first, so his browser saves it, and nothing is kept twice.
   await syncNow(dana);
   await syncNow(page);
-  await expect(page.locator('.tempo-led-value')).toHaveText('90');
+  list = await projects(page);
+  await expect(list.getByRole('group', { name: 'Project Night Drive', exact: true })).not.toContainText('Last saved by Dana');
+  await expect(list.getByRole('group', { name: /this browser's version/ })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+
+  // Ian moves to another project, and Dana takes a turn alone. Ian's browser gets it and says whose save it was.
+  await more(page);
+  await page.getByRole('button', { name: 'Project ▾', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'New Project', exact: true }).click();
+  await setTempo(dana, '100');
+  await syncNow(dana);
+  await syncNow(page);
   await expect(page.getByRole('status').filter({ hasText: 'Dana saved “Night Drive”' })).toBeVisible();
   await page.getByRole('button', { name: 'Dismiss sharing message', exact: true }).click();
+  list = await projects(dana);
+  await expect(list.getByRole('group', { name: /this browser's version/ }), 'her turn did not split the project').toHaveCount(0);
+  await dana.keyboard.press('Escape');
   list = await projects(page);
   await expect(list.getByRole('group', { name: 'Project Night Drive', exact: true })).toContainText('Last saved by Dana');
 
-  // Ian takes his, then stops sharing. Dana gets his turn, and then keeps her copy as her own.
-  await page.keyboard.press('Escape');
+  // Ian opens it again and joins Dana in the session. Then he stops sharing, and Dana keeps her copy as her own.
+  await list.getByRole('group', { name: 'Project Night Drive', exact: true }).getByRole('button', { name: 'Open', exact: true }).click();
+  await expect(page.locator('.tempo-led-value')).toHaveText('100');
   await setTempo(page, '110');
-  await syncNow(page);
-  await syncNow(dana);
-  await expect(dana.locator('.tempo-led-value')).toHaveText('110');
-  await expect(dana.getByRole('status').filter({ hasText: 'Ian saved “Night Drive”' })).toBeVisible();
-  await dana.getByRole('button', { name: 'Dismiss sharing message', exact: true }).click();
+  await expect(dana.locator('.tempo-led-value')).toHaveText('110', { timeout: 10_000 });
   list = await projects(page);
   await list.getByRole('group', { name: 'Project Night Drive', exact: true }).getByRole('button', { name: 'Share', exact: true }).click();
   await list.getByRole('group', { name: 'Shared with Dana', exact: true }).getByRole('button', { name: 'Remove', exact: true }).click();

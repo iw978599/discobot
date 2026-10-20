@@ -94,6 +94,14 @@ export function createProjectSync(deps: SyncDeps) {
   let status: SyncStatus = { signedIn: false, state: 'idle', error: '', lastSyncedAt: 0, inAccount: [], browserOnly: [], problems: {}, keptBoth: [], ...NOTHING_SHARED };
   let running: Promise<void> | null = null;
   let again = false;
+  // Projects in a live session that someone else is saving (liveSession.ts): neither sent nor
+  // replaced from here until the session ends, or every save would refuse the others'.
+  const held = new Set<string>();
+  // How a project that was in a live session is settled the first time after: 'adopt', this browser
+  // stayed on as the one saving, and its copy holds what the others saved meanwhile, so it goes on
+  // top of theirs; 'yield', it left the others in the session, whose copy holds everything it had,
+  // so theirs replaces it (a version of it is kept first). Otherwise both are kept, as always.
+  const after = new Map<string, 'adopt' | 'yield'>();
   let knownUser: string | null = null;
   let started = false;
 
@@ -190,6 +198,9 @@ export function createProjectSync(deps: SyncDeps) {
     const updates: SyncStatus['updates'] = [];
     // Brings one project and its other copy back in step, whichever side changed.
     const settle = async (there: { id: string; revision: number; savedBy?: string }, place: Place) => {
+      if (held.has(there.id)) return;
+      const ending = after.get(there.id);
+      after.delete(there.id);
       const here = records!.find(entry => entry.id === there.id);
       if (!here) { await download(there.id, there.revision, undefined, place); return; }
       const linked = place.linked(there.id);
@@ -200,6 +211,7 @@ export function createProjectSync(deps: SyncDeps) {
         return;
       }
       let file: unknown;
+      if (changedHere && ending === 'adopt') { await push(here, there.revision, place); return; }
       if (changedHere) {
         file = await place.get(there.id);
         const theirs = (file as { project?: unknown } | null)?.project;
@@ -210,11 +222,13 @@ export function createProjectSync(deps: SyncDeps) {
           return;
         }
         // Changed in both places: keep both. The copy kept from here is this account's own.
-        const forked = await store.syncFork(there.id, `${here.name.slice(0, 60 - KEPT_SUFFIX.length)}${KEPT_SUFFIX}`);
-        if (!forked) return;
-        place.unlink(there.id);
-        meta.projects[forked] = { revision: 0, hash: '' };
-        keptBoth.push(here.name);
+        if (ending !== 'yield') {
+          const forked = await store.syncFork(there.id, `${here.name.slice(0, 60 - KEPT_SUFFIX.length)}${KEPT_SUFFIX}`);
+          if (!forked) return;
+          place.unlink(there.id);
+          meta.projects[forked] = { revision: 0, hash: '' };
+          keptBoth.push(here.name);
+        }
       } else {
         // Check again right before replacing it, in case it was edited while this pass was waiting on the network.
         const latest = (await store.syncRecords())?.find(entry => entry.id === there.id);
@@ -334,6 +348,13 @@ export function createProjectSync(deps: SyncDeps) {
     sync,
     status: () => status,
     subscribe: (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; },
+    // Holds a project in a live session that someone else is saving, or lets it go, saying how
+    // its session ended for this browser (see `after`).
+    hold: (id: string, on: boolean, ending?: 'adopt' | 'yield') => {
+      if (on) { held.add(id); after.delete(id); return; }
+      held.delete(id);
+      if (ending) after.set(id, ending); else after.delete(id);
+    },
     dismissKeptBoth: () => setStatus({ keptBoth: [] }),
     dismissShared: () => setStatus({ updates: [], ended: [] }),
     // Opens a project someone shared in this browser, linked to the owner's copy. Resolves to

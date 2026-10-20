@@ -154,3 +154,12 @@ export const account = {
   members: async () => (await call<{ members: Member[] }>('GET', '/members')).members,
   removeMember: async (username: string) => { await call('POST', '/members/remove', { username }); },
 };
+
+// The connection of a live session (liveSession.ts), or null when there can be none. A browser cannot
+// put a header on a WebSocket, so the session token travels as its second protocol name, never in
+// the address, and it stays in this file.
+export function openLiveSocket(owner: string, id: string): WebSocket | null {
+  if (!session || !accountsEnabled || typeof WebSocket === 'undefined') return null;
+  const url = `${API_URL.replace(/^http/, 'ws')}/live/${encodeURIComponent(owner)}/${encodeURIComponent(id)}`;
+  try { return new WebSocket(url, ['discobot', session.token]); } catch { return null; }
+}

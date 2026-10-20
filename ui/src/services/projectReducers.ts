@@ -25,7 +25,7 @@ const refuse = (status: Rejected['status'], error: string): Rejected => ({ ok: f
 const BAD_DATA = 'Invalid local operation data';
 const NO_SYNTH = 'Synth not found';
 // The parts a patch carries only when it is a whole sound and not one knob's change.
-const WHOLE_SOUND = ['oscillator', 'filter', 'envelope', 'lfo1', 'lfo2', 'fxSends', 'gain'];
+export const WHOLE_SOUND = ['oscillator', 'filter', 'envelope', 'lfo1', 'lfo2', 'fxSends', 'gain'];
 const BAD_ADDRESS = 'That is not an address a guest instrument can be loaded from. It must start with https:// and be on another site.';
 
 // An object in an operation, as a route's body used to arrive: after a trip through JSON, which
