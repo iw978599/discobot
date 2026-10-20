@@ -383,7 +383,16 @@ export function eqGains(eq: EffectsLoopState['eq']): [number, number, number] {
 }
 const EFFECT_NAMES: EffectName[] = ['reverb', 'delay', 'drive', 'phaser', 'chorus', 'auxA', 'auxB'];
 type Group = 'synth' | 'drums';
-type Live = { context: AudioContext; master: GainNode; eq: BiquadFilterNode[]; limiter: DynamicsCompressorNode; safety: WaveShaperNode };
+type Live = { context: AudioContext; master: GainNode; eq: BiquadFilterNode[]; limiter: DynamicsCompressorNode; safety: WaveShaperNode; analyser?: AnalyserNode };
+
+// What a picture of the sound reads (roadmap 21): enough of a wave for a few cycles of a low note.
+export const ANALYSER_SIZE = 2048;
+const makeAnalyser = (ctx: BaseAudioContext) => {
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = ANALYSER_SIZE;
+  analyser.smoothingTimeConstant = 0.7;
+  return analyser;
+};
 
 const halt = (source: AudioScheduledSourceNode) => {
   try { source.stop(); } catch { /* already stopped */ }
@@ -706,6 +715,18 @@ export class AudioEngine {
     eqGains(state.eq).forEach((gain, band) => smooth(live.eq[band].gain, gain, live.context));
   }
 
+  // A picture of the whole mix as it leaves (roadmap 21), made the first time one is asked for.
+  // None before there is a context, so drawing one never makes audio start before a click.
+  analyser(): AnalyserNode | null {
+    const live = this.live;
+    if (!live) return null;
+    if (!live.analyser) {
+      live.analyser = makeAnalyser(live.context);
+      live.safety.connect(live.analyser);
+    }
+    return live.analyser;
+  }
+
   // `ownMix` names the effects this lane feeds with a mix of its own (the drums, whose every drum
   // has its own share of the delay and the reverb) in place of the signal at `input`. Each gets an
   // input in `taps` with the lane's volume and ducking, and the lane's send to that effect is fed
@@ -735,6 +756,7 @@ export class AudioEngine {
       } else ducker.connect(sends[name]).connect(bus.inputs[name]);
     }
     let handed: AudioNode | null = null;
+    let analyser: AnalyserNode | undefined;
     const dispose = () => {
       this.lanes.delete(dispose);
       input.disconnect();
@@ -773,6 +795,15 @@ export class AudioEngine {
           else sends[name].gain.setTargetAtTime(level, Math.max(time, ctx.currentTime), SEND_GLIDE);
         }
       },
+      // A picture of the lane's sound (roadmap 21): after its level and its inserts, before its
+      // sends, made the first time one is asked for. It feeds nothing, so the sound is as it was.
+      analyser() {
+        if (!analyser) {
+          analyser = makeAnalyser(ctx);
+          ducker.connect(analyser);
+        }
+        return analyser;
+      },
       dispose,
     };
   }
@@ -793,7 +824,7 @@ export class AudioEngine {
     this.effects.forEach(releaseEffects);
     this.effects.clear();
     if (!live) return;
-    [live.master, ...live.eq, live.limiter, live.safety].forEach(node => node.disconnect());
+    [live.master, ...live.eq, live.limiter, live.safety, ...(live.analyser ? [live.analyser] : [])].forEach(node => node.disconnect());
     if (live.context.state !== 'closed') await live.context.close().catch(() => {});
   }
 }

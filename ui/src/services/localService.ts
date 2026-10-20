@@ -864,6 +864,7 @@ export class LocalProjectService {
   renameScene(sceneId: string, name: string) { return this.apply({ type: 'scene.rename', sceneId, name }); }
   setSceneColor(sceneId: string, color?: string) { return this.apply({ type: 'scene.color', sceneId, color }); }
   setSceneTempo(sceneId: string, tempo?: number) { return this.apply({ type: 'scene.tempo', sceneId, tempo }); }
+  moveScene(sceneId: string, to: number) { return this.apply({ type: 'scene.move', sceneId, to }); }
   setSceneSignature(signature: string) { return this.apply({ type: 'scene.signature', signature }); }
   copyPartToScene(toSceneId: string, part: { synthId?: number; drum?: DrumInstrument }) { return this.apply({ type: 'scene.copyPart', toSceneId, ...part }); }
   deleteScene(sceneId: string) { return this.apply({ type: 'scene.delete', sceneId }); }

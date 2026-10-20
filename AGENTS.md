@@ -95,7 +95,7 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 | `ui/src/services/noteScheduling.ts` | `expandStepNotes`: everything one step plays (its chord, its length, arpeggio pulses, slide); used live and by export. `stepNotes` and `withStepNotes` read and write a step's chord |
 | `ui/src/utils/midiExport.ts` / `midiImport.ts` | Standard MIDI File export (PPQ 480, drums on channel 10) and import |
 | `ui/src/synthModels.ts` | Synth model definitions and macro mapping |
-| `ui/src/components/` | Controls used inside rack modules: `SynthControls` (the open lane's editor, in two levels: Notes and Sound), `KeyboardPanel`, `Keyboard`, `PianoRoll`, `EffectsPanel`, `MidiPanel`, `SamplePanel`, `Knob`, `DrumKnob` |
+| `ui/src/components/` | Controls used inside rack modules: `SynthControls` (the open lane's editor, in two levels: Notes and Sound), `KeyboardPanel`, `Keyboard`, `PianoRoll`, `EffectsPanel`, `MidiPanel`, `SamplePanel`, `Knob`, `DrumKnob`, and `Scope`, the picture of a lane's sound or the whole mix |
 | `engine/src/types.ts` | Type definitions (single source of truth; `ui/src/types.ts` re-exports them) |
 | `engine/src/synth/SynthCore.ts` | The synth voice implementation: 8 voices, 2 oscillators + sub + noise, SVF filter, amp and filter envelopes, LFOs, FM, mono/legato |
 | `engine/src/synth/voiceParams.ts` | Default `SynthParameters`, and `toVoiceParams` which flattens them for the core |

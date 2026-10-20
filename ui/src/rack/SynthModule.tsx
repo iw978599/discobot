@@ -18,6 +18,7 @@ import { AutomatedParams } from '../components/automatedParams';
 import { automatedKeys } from '../services/automation';
 import { usePlayhead } from '../hooks/usePlayhead';
 import { tracked } from '../studio/tracked';
+import Scope from '../components/Scope';
 import UnitHelp, { UNIT_HELP } from './UnitHelp';
 import { laneName, laneSound } from '../services/lanes';
 
@@ -299,6 +300,7 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
 
       {selected && params && (
         <SynthControls
+          picture={<Scope label={`Synth ${synthId}`} source={() => studio.soundAnalyser(synthId)} />}
           parameters={params}
           onParameterChange={(next) => { void change(synthId, next); }}
           presets={studio.synthPresets}

@@ -626,6 +626,8 @@ const colour = sceneChange('scene.color', (service, body) => service.setSceneCol
 const colourRefused = sceneRefused('scene.color', (service, body) => service.setSceneColor(body.sceneId, body.color));
 const sceneTempo = sceneChange('scene.tempo', (service, body) => service.setSceneTempo(body.sceneId, body.tempo));
 const sceneTempoRefused = sceneRefused('scene.tempo', (service, body) => service.setSceneTempo(body.sceneId, body.tempo));
+const sceneMove = sceneChange('scene.move', (service, body) => service.moveScene(body.sceneId, body.to));
+const sceneMoveRefused = sceneRefused('scene.move', (service, body) => service.moveScene(body.sceneId, body.to));
 const signature = sceneChange('scene.signature', (service, body) => service.setSceneSignature(body.signature));
 const signatureRefused = sceneRefused('scene.signature', (service, body) => service.setSceneSignature(body.signature));
 const copyPart = sceneChange('scene.copyPart', (service, body) => service.copyPartToScene(body.toSceneId, body.part));
@@ -726,6 +728,17 @@ const sceneCases: Case[] = [
     assert.equal('tempo' in project.scenes[1], false);
   }),
   sceneTempoRefused('a scene that does not exist cannot be given a tempo', { sceneId: 'nope', tempo: 90 }, 400, 'That scene is not in the project.'),
+
+  sceneMove('a scene moves to another place, and the open scene and the song are as they were', (ids: Ids) => ({ sceneId: ids.second, to: 0 }), twoScenes, project => {
+    assert.deepEqual(project.scenes.map((scene: any) => scene.name), ['Scene 2', 'Scene 1']);
+    assert.equal(project.currentSceneId, project.scenes[0].id, 'the open scene is still open');
+    assert.equal(project.scenes[1].drums.kick.steps[3], true, 'and each scene keeps its own steps');
+  }),
+  sceneMove('a place past the end is the end', (ids: Ids) => ({ sceneId: ids.first, to: 9 }), twoScenes, project => {
+    assert.deepEqual(project.scenes.map((scene: any) => scene.name), ['Scene 2', 'Scene 1']);
+  }),
+  sceneMoveRefused('a scene that does not exist cannot be moved', { sceneId: 'nope', to: 0 }, 400, 'That scene is not in the project.'),
+  sceneMoveRefused('nor moved to a place that is not a whole number', (ids: Ids) => ({ sceneId: ids.first, to: 0.5 }), 400, 'A scene moves to a place in the list', twoScenes),
 
   signature('the open scene takes a time signature and its lanes and drums become bars of it', { signature: '6/8' }, twoScenes, project => {
     assert.deepEqual(project.scenes.map((scene: any) => scene.signature), [undefined, '6/8']);

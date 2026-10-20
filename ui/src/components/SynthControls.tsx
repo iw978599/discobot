@@ -40,6 +40,8 @@ interface SynthControlsProps {
   onTabChange: (tab: SynthTab) => void;
   // shown on the Notes level: step tools and the keyboard
   notes: ReactNode;
+  // shown at the top of the Sound level: a picture of the lane's sound
+  picture?: ReactNode;
   onRemove?: () => void;
   // The lane's number, its own name (empty for none), and what renaming it calls.
   laneId?: number;
@@ -191,6 +193,7 @@ export default function SynthControls({
   tab,
   onTabChange,
   notes,
+  picture,
   onRemove,
   laneId,
   laneName,
@@ -401,6 +404,7 @@ export default function SynthControls({
 
       {level === 'sound' && (
         <>
+          {picture}
           <div className="synth-header">
             <div className="model-selector-wrap">
               <label>MODEL</label>
