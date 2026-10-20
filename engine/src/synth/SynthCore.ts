@@ -110,7 +110,7 @@ export class SynthCore {
     attack: 0, decay: 0, sustain: 0.7, release: 0,
     filterAttack: 0, filterDecay: 0, filterSustain: 0.2, filterRelease: 0,
     layerAttack: 0, layerRatio: 1, layerFirst: 1, layerSecond: 1,
-    glide: 1, osc2Ratio: 1, mixScale: 1, fmDecay: 0, driveGain: 1, driveMakeup: 1,
+    glide: 1, glideStep: 0, osc2Ratio: 1, mixScale: 1, fmDecay: 0, driveGain: 1, driveMakeup: 1,
     unisonCount: 1, unisonRatios: new Float64Array(MAX_UNISON).fill(1), unisonLevels: new Float64Array(MAX_UNISON).fill(1), twoStage: false,
   };
   private pending: Array<NoteOnMessage & { frame: number }> = [];
@@ -231,6 +231,9 @@ export class SynthCore {
     d.filterSustain = clamp(p.filterSustain, 0, 1, 0.2);
     d.filterRelease = approachCoefficient(clamp(p.filterRelease, 0.005, 10, 0.3), sr, 6.9);
     d.glide = p.portamentoEnabled ? approachCoefficient(clamp(p.portamentoGlide, 0.001, 2, 0.05), sr, 1) : 1;
+    // A glide at the same speed for any distance moves by this ratio of frequency each sample: an
+    // octave in `portamentoGlide` seconds. None for a glide that takes the same time whatever the leap.
+    d.glideStep = p.portamentoEnabled && p.portamentoSpeed ? Math.pow(2, 1 / (clamp(p.portamentoGlide, 0.001, 2, 0.05) * sr)) : 0;
     d.osc2Ratio = 2 ** (clamp(p.osc2Semitones, -36, 36, 0) / 12 + clamp(p.osc2Detune, -100, 100, 0) / 1200);
     const osc2 = p.osc2Enabled ? clamp(p.osc2Level, 0, 1) : 0;
     const osc1 = clamp(p.oscLevel, 0, 1, 1), sub = clamp(p.subLevel, 0, 1), noise = clamp(p.noiseLevel, 0, 1);
@@ -321,7 +324,9 @@ export class SynthCore {
       return;
     }
 
-    const from = p.portamentoEnabled ? this.lastFrequency : frequency;
+    // Fingered: a poly lane glides only into a note played while another key is still held.
+    const held = !p.portamentoFingered || this.voices.some(v => v.active && v.amp.stage !== 'release');
+    const from = p.portamentoEnabled && held ? this.lastFrequency : frequency;
     for (let layer = 0; layer < layers; layer++) {
       let voice = this.voices.find(v => v.active && v.note === message.note && (layers === 1 || v.layer === layer))
         || this.voices.find(v => !v.active);
@@ -507,7 +512,8 @@ export class SynthCore {
         const amp = v.amp.tick(second ? d.layerAttack : d.attack, d.decay, d.sustain, v.releaseOverride || d.release);
         if (v.amp.stage === 'off') { v.active = false; v.last = 0; continue; }
         const filterEnv = v.filterEnv.tick(d.filterAttack, d.filterDecay, d.filterSustain, v.releaseOverride || d.filterRelease);
-        v.frequency += (v.targetFrequency - v.frequency) * d.glide;
+        if (d.glideStep) v.frequency = v.frequency < v.targetFrequency ? Math.min(v.targetFrequency, v.frequency * d.glideStep) : Math.max(v.targetFrequency, v.frequency / d.glideStep);
+        else v.frequency += (v.targetFrequency - v.frequency) * d.glide;
 
         let pitchMod = 0, filterMod = 0, ampMod = 1, pulseMod = 0;
         for (let n = 0; n < 2; n++) {

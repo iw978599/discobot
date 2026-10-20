@@ -168,6 +168,10 @@ export function sanitizeSynthParams(value: unknown, defaults: SynthParameters): 
   for (const key of ['attack', 'decay', 'release'] as const) params.envelope[key] = number(params.envelope[key], defaults.envelope[key], 0, 10);
   params.envelope.sustain = number(params.envelope.sustain, defaults.envelope.sustain, 0, 1);
   params.portamento.glide = number(params.portamento.glide, defaults.portamento.glide, 0, 2);
+  params.portamento.fingered = params.portamento.fingered === true;
+  params.portamento.speed = params.portamento.speed === true;
+  const glideSync = storedRateSync(record(input.portamento).sync);
+  if (glideSync) params.portamento.sync = glideSync; else delete params.portamento.sync;
   if (!['up', 'down', 'updown', 'downup', 'random', 'converge', 'diverge'].includes(params.arpeggiator.mode)) params.arpeggiator.mode = defaults.arpeggiator.mode;
   if (!['1/4', '1/8', '1/16', '1/32'].includes(params.arpeggiator.rate)) params.arpeggiator.rate = defaults.arpeggiator.rate;
   params.arpeggiator.gate = number(params.arpeggiator.gate, defaults.arpeggiator.gate, .1, 1);
