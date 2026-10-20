@@ -2,12 +2,12 @@ import type { Studio } from '../studio/useStudio';
 import { MAX_LANES, nextExtraLane } from '../services/lanes';
 
 // After the standing three lanes, a place to add the next one, while there are fewer than the most a
-// project can have. On a narrow screen it is shown with Synth 3, which it follows on the rack.
+// project can have. On a narrow screen it is shown with Synth 3, which it follows on the rack (by a rule in the phone block of rack.css).
 export default function AddLaneUnit({ studio }: { studio: Studio }) {
   const next = nextExtraLane(studio.synths.map(synth => synth.id));
   if (next === null) return null;
   return (
-    <section className="rack-unit empty add-lane" aria-label="Add a lane" data-unit="synth-3">
+    <section className="rack-unit empty add-lane" aria-label="Add a lane" data-unit="add-lane">
       <button
         className="rack-btn"
         onClick={() => { void studio.ensureSynthExists(next).then(created => { if (created) studio.setSelectedSynthId(next); }); }}
