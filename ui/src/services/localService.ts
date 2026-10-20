@@ -4,7 +4,7 @@ import { createIndexedDbLibrary, createMemoryLibrary, hasIndexedDb, type Project
 import { COPY_SUFFIX, DEFAULT_PROJECT_NAME, EARLIER_SUFFIX } from './projectFamilies';
 import { DRUM_KITS } from './drumKits';
 import { barSteps } from './patternLength';
-import { isLaneId, storedLaneName } from './lanes';
+import { isLaneId, storedLaneName, storedPresetName } from './lanes';
 import { normalizeSynthModelId } from '../synthModels';
 import { NEW_PROJECT_REVERB } from './effectSettings';
 import { record, number, clone, matchesShape, sanitizePattern, sanitizeSynthParams, sanitizeDrums, sanitizeEffects, sanitizeSends, sanitizeSaved, sanitizeModelParams, sanitizeKit, sanitizeScenes, sanitizeSong } from './projectSanitization';
@@ -26,6 +26,8 @@ type LocalSynth = {
   swing?: boolean;
   // What the lane is called, in place of "Synth N". Absent until it is named.
   name?: string;
+  // The name of the preset last loaded on the lane, shown in place of "Generic". Absent when none was.
+  preset?: string;
 };
 type State = Defaults & {
   version: 1; schema: typeof SCHEMA; synths: LocalSynth[]; tempo: number; selectedDrumKitId: string;
@@ -166,6 +168,7 @@ export class LocalProjectService {
         isPlaying: false, muted: input.muted === true, solo: input.solo === true,
         ...(input.swing === true ? { swing: true } : {}),
         ...(storedLaneName(input.name) ? { name: storedLaneName(input.name) } : {}),
+        ...(storedPresetName(input.preset) ? { preset: storedPresetName(input.preset) } : {}),
         octaveShift: Math.round(number(input.octaveShift, 0, -2, 2)), keyboardMode: input.keyboardMode === 'piano-roll' ? 'piano-roll' : 'keyboard',
       }];
     });
@@ -831,6 +834,7 @@ export class LocalProjectService {
   setSynthParams(synthId: number, patch: DeepPartial<SynthParameters>) { return this.apply({ type: 'synth.params', synthId, patch }); }
   setSynthModel(synthId: number, model: { modelId?: SynthModelId; modelParams?: Partial<SynthModelParams> }) { return this.apply({ type: 'synth.model', synthId, modelId: model.modelId, modelParams: model.modelParams }); }
   setSynthMix(synthId: number, mix: { muted?: boolean; solo?: boolean }) { return this.apply({ type: 'synth.mix', synthId, muted: mix.muted, solo: mix.solo }); }
+  setSynthPreset(synthId: number, preset: string) { return this.apply({ type: 'synth.preset', synthId, preset }); }
   setSynthName(synthId: number, name: string) { return this.apply({ type: 'synth.name', synthId, name }); }
   setSynthSwing(synthId: number, swing: boolean) { return this.apply({ type: 'synth.swing', synthId, swing }); }
   setSynthPrefs(synthId: number, prefs: { octaveShift?: number; keyboardMode?: 'keyboard' | 'piano-roll' }) { return this.apply({ type: 'synth.prefs', synthId, octaveShift: prefs.octaveShift, keyboardMode: prefs.keyboardMode }); }

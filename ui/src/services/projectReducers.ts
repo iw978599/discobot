@@ -4,7 +4,7 @@
 import { MAX_SCENES, clone, merge, number, sanitizeDrums, sanitizeEffects, sanitizeModelParams, sanitizePattern, sanitizeScenes, sanitizeSends, sanitizeSong, sanitizeSynthParams } from './projectSanitization';
 import { MAX_GUESTS, guestUrl, patchGuest, sanitizeGuests } from './guests';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
-import { LANE_IDS, MAX_LANES, storedLaneName } from './lanes';
+import { LANE_IDS, MAX_LANES, storedLaneName, storedPresetName } from './lanes';
 import { BAR_CHOICES, TIME_SIGNATURES, barSteps, barTargets, clampLengths, copyBar, drumBars, laneBars, layAlong, resizeBars, resizeEachBar, stepsPerBar, storedSignature } from './patternLength';
 import { emptySteps } from './songPlayback';
 import { layAutomationAlong, resizeAutomationEachBar } from './automation';
@@ -356,6 +356,15 @@ export const reducers: Reducers = {
     if (typeof op.solo === 'boolean') synth.solo = op.solo;
     return update('synthMix', { synthId: synth.synthId, muted: synth.muted, solo: synth.solo });
   },
+  // The preset last loaded on the lane, kept only while there is one. Empty takes it away.
+  'synth.preset': ({ state }, op) => {
+    const synth = laneOf(state, op.synthId);
+    if (!synth) return refuse(404, NO_SYNTH);
+    const preset = storedPresetName(op.preset);
+    if (preset) synth.preset = preset;
+    else delete synth.preset;
+    return update('synthPreset', { synthId: synth.synthId, preset: synth.preset ?? '' });
+  },
   // Kept only while it has one, so a lane never named is stored as it was. Empty takes the name away.
   'synth.name': ({ state }, op) => {
     const synth = laneOf(state, op.synthId);
@@ -378,7 +387,11 @@ export const reducers: Reducers = {
   'synth.model': ({ state }, op) => {
     const synth = laneOf(state, op.synthId);
     if (!synth) return refuse(404, NO_SYNTH);
-    synth.synthModelId = normalizeSynthModelId(sentValue(op.modelId) || synth.synthModelId);
+    const modelId = normalizeSynthModelId(sentValue(op.modelId) || synth.synthModelId);
+    // Another model is another sound: the preset that was loaded no longer names it. A preset being
+    // loaded sets its model first and its name after, so its name is kept.
+    if (modelId !== synth.synthModelId) delete synth.preset;
+    synth.synthModelId = modelId;
     synth.synthModelParams = sanitizeModelParams(merge(synth.synthModelParams, sent(op.modelParams) ?? {}));
     return update('synthModelUpdate', { synthId: synth.synthId, modelId: synth.synthModelId, modelParams: synth.synthModelParams });
   },

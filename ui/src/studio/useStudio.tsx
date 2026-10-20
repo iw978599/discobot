@@ -91,6 +91,7 @@ interface SynthState {
   solo: boolean;
   swing?: boolean;
   name?: string;
+  preset?: string;
   forceReleaseSignal: boolean;
 }
 
@@ -887,7 +888,7 @@ export function useStudio() {
             stepRecordPointer: 0,
             octaveShift: s.octaveShift || 0,
             muted: Boolean(s.muted),
-            solo: Boolean(s.solo), swing: s.swing === true, name: s.name,
+            solo: Boolean(s.solo), swing: s.swing === true, name: s.name, preset: s.preset,
             forceReleaseSignal: false,
           })));
         } else if (message.data.synthParameters) {
@@ -953,7 +954,7 @@ export function useStudio() {
             stepRecordPointer: was?.stepRecordPointer ?? 0,
             octaveShift: s.octaveShift || 0,
             muted: Boolean(s.muted),
-            solo: Boolean(s.solo), swing: s.swing === true, name: s.name,
+            solo: Boolean(s.solo), swing: s.swing === true, name: s.name, preset: s.preset,
             forceReleaseSignal: was?.forceReleaseSignal ?? false,
           };
         });
@@ -1064,6 +1065,8 @@ export function useStudio() {
               ...s,
               synthModelId: normalizeSynthModelId(modelId),
               synthModelParams: normalizeSynthModelParams(modelParams),
+              // The store forgets the preset when the model changes; so does the screen.
+              ...(normalizeSynthModelId(modelId) !== s.synthModelId ? { preset: undefined } : {}),
             }
             : s
         )));
@@ -1077,6 +1080,12 @@ export function useStudio() {
         setSynths(prev => prev.map(s =>
           s.id === synthId ? { ...s, muted: Boolean(muted), solo: Boolean(solo) } : s
         ));
+        break;
+      }
+      case 'synthPreset': {
+        const { synthId, preset } = message.data;
+        synthsRef.current = synthsRef.current.map(s => s.id === synthId ? { ...s, preset: preset || undefined } : s);
+        setSynths(prev => prev.map(s => s.id === synthId ? { ...s, preset: preset || undefined } : s));
         break;
       }
       case 'synthName': {
@@ -1213,7 +1222,7 @@ export function useStudio() {
         isPlaying: Boolean(data.isPlaying), selectedStep: null,
         keyboardMode: data.keyboardMode || 'keyboard', stepRecordPointer: 0,
         octaveShift: data.octaveShift || 0, muted: Boolean(data.muted),
-        solo: Boolean(data.solo), swing: data.swing === true, name: data.name, forceReleaseSignal: false,
+        solo: Boolean(data.solo), swing: data.swing === true, name: data.name, preset: data.preset, forceReleaseSignal: false,
       };
       if (!synthsRef.current.some(s => s.id === synthId)) synthsRef.current = [...synthsRef.current, created];
       return true;
@@ -2002,6 +2011,8 @@ ${note}`, { synthId, note, step: at.step, ticks });
     if (!preset) return;
     await handleSynthModelChange(synthId, preset.modelId, preset.modelParams);
     await changeSound(synthId, cloneSynthParams(preset.params) || DEFAULT_PARAMS);
+    // After the model, which forgets the last preset's name when it changes.
+    localService.setSynthPreset(synthId, preset.name);
   }, [synthPresets, changeSound, handleSynthModelChange]);
 
   // Reads a preset made in Discobot or in another synth, keeps it with the user's presets and

@@ -25,6 +25,20 @@ export function laneName(id: number, name?: string | null): string {
   return name?.trim() || `Synth ${id}`;
 }
 
+// The longest preset name a lane keeps.
+export const MAX_PRESET_NAME = 60;
+// A preset's name as a lane keeps it, or nothing.
+export function storedPresetName(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  return value.replace(/\s+/g, ' ').trim().slice(0, MAX_PRESET_NAME).trim() || undefined;
+}
+
+// What a lane says under its name: the preset loaded on it, where its model is the plain engine and
+// it has one, or else its model.
+export function laneSound(modelId: string, modelName: string, preset?: string | null): string {
+  return modelId === 'generic' && preset ? preset : modelName;
+}
+
 // A name as it is stored: trimmed, cut to its length, and nothing at all when it is empty.
 export function storedLaneName(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;

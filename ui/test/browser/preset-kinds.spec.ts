@@ -228,3 +228,21 @@ test('typing in the preset menu finds presets in every group at once, and Enter 
   await expect(search(page)).toHaveValue('');
   await expect(lane(page).locator('[role="menuitem"][data-group]')).toHaveCount(6);
 });
+
+test('a lane playing a preset on the plain engine is called by the preset, not Generic, until its model changes', async ({ page }) => {
+  const plate = page.getByRole('button', { name: 'Synth 1', exact: true }).locator('span');
+  await expect(plate).toHaveText('Generic');
+  await picker(page).click();
+  await search(page).fill('Felt Piano');
+  await search(page).press('Enter');
+  await expect(picker(page)).toHaveAccessibleName('Synth preset: Felt Piano');
+  await expect(plate, 'the preset names the sound').toHaveText('Felt Piano');
+  await page.reload();
+  await expect(plate, 'and is kept with the project').toHaveText('Felt Piano');
+
+  await lane(page).getByRole('tab', { name: 'Sound', exact: true }).click();
+  await lane(page).getByRole('button', { name: /^Synth model: / }).click();
+  await lane(page).locator('[role="menuitem"][data-group="Poly"]').click();
+  await lane(page).getByRole('menuitem', { name: 'Juno-106', exact: true }).click();
+  await expect(plate, 'another model is another sound').toHaveText('Juno-106');
+});

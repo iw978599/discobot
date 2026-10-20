@@ -2,7 +2,7 @@ import type { AuxBus, DrumInstrument, DrumState, EffectsLoopState, SynthModelId,
 import { auxBuses } from './auxSettings';
 import { getSynthModelDefinition } from '../synthModels';
 import { DRUM_ROWS } from './drumKits';
-import { laneName } from './lanes';
+import { laneName, laneSound } from './lanes';
 import { guestOrigin, type Guest } from './guests';
 
 // What the mixer shows: every level the project already has, gathered into one plain list. It
@@ -25,7 +25,7 @@ export interface MixerChannels {
 }
 
 export interface MixerSource {
-  synths: Array<{ id: number; name?: string; synthModelId: SynthModelId; synthParams: Pick<SynthParameters, 'gain' | 'pan'> | null; muted?: boolean; solo?: boolean }>;
+  synths: Array<{ id: number; name?: string; preset?: string; synthModelId: SynthModelId; synthParams: Pick<SynthParameters, 'gain' | 'pan'> | null; muted?: boolean; solo?: boolean }>;
   drumState: DrumState;
   drumMasterVolume: number;
   guests: Array<Pick<Guest, 'id' | 'url' | 'name' | 'volume' | 'muted'>>;
@@ -38,7 +38,7 @@ export function mixerChannels(source: MixerSource): MixerChannels {
     lanes: [...source.synths].sort((a, b) => a.id - b.id).map(synth => ({
       id: synth.id,
       name: laneName(synth.id, synth.name),
-      model: getSynthModelDefinition(synth.synthModelId).name,
+      model: laneSound(synth.synthModelId, getSynthModelDefinition(synth.synthModelId).name, synth.preset),
       level: synth.synthParams?.gain ?? 1,
       pan: synth.synthParams?.pan ?? 0,
       muted: Boolean(synth.muted),

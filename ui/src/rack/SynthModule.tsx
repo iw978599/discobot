@@ -19,7 +19,7 @@ import { automatedKeys } from '../services/automation';
 import { usePlayhead } from '../hooks/usePlayhead';
 import { tracked } from '../studio/tracked';
 import UnitHelp, { UNIT_HELP } from './UnitHelp';
-import { laneName } from '../services/lanes';
+import { laneName, laneSound } from '../services/lanes';
 
 // Where a middle click puts a lane's knobs back to.
 const SOUND_DEFAULTS = createDefaultSynthParameters();
@@ -144,7 +144,7 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
             title={selected ? 'This lane is open for editing' : 'Open this lane for editing'}
           >
             <b>{laneName(synthId, synth.name)}</b>
-            <span data-handed={handedTo ? 'true' : undefined} title={handedTo ? `Sent to the guest ${handedTo}, and heard through it` : undefined}>{handedTo ? `→ ${handedTo}` : model.name}</span>
+            <span data-handed={handedTo ? 'true' : undefined} title={handedTo ? `Sent to the guest ${handedTo}, and heard through it` : undefined}>{handedTo ? `→ ${handedTo}` : laneSound(synth.synthModelId, model.name, synth.preset)}</span>
           </button>
           {onHelp && <UnitHelp about={`Synth ${synthId}`} section={UNIT_HELP.synth} onHelp={onHelp} />}
         </div>

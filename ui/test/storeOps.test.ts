@@ -352,6 +352,7 @@ const juno = (service: LocalProjectService) => { assert.ok(service.setSynthModel
 const mix = laneCase('synth.mix', 'synthMix', (service, synthId, body) => service.setSynthMix(synthId, { muted: body.muted, solo: body.solo }));
 const mixed = (muted: boolean, solo: boolean) => ({ answer: { synthId: 1, muted, solo } });
 const soloed = (service: LocalProjectService) => { assert.ok(service.setSynthMix(1, { solo: true }).ok); };
+const preset = laneCase('synth.preset', 'synthPreset', (service, synthId, body) => service.setSynthPreset(synthId, body.preset));
 const named = laneCase('synth.name', 'synthName', (service, synthId, body) => service.setSynthName(synthId, body.name));
 const swung = laneCase('synth.swing', 'synthSwing', (service, synthId, body) => service.setSynthSwing(synthId, body.swing));
 const prefs = laneCase('synth.prefs', '', (service, synthId, body) => service.setSynthPrefs(synthId, { octaveShift: body.octaveShift, keyboardMode: body.keyboardMode }));
@@ -412,6 +413,9 @@ const laneCases: Case[] = [
   mix('what is not a number at all, infinity, null and a number are not a mute or a solo', { muted: Number.NaN, solo: Number.POSITIVE_INFINITY }, mixed(false, true), soloed),
   mix('null and a number are not either', { muted: 1, solo: null }, mixed(false, true), soloed),
   mix('a mix for a lane that does not exist is refused', { muted: true }, { status: 404, error: NO_SYNTH }, soloed, 3),
+  preset('a lane keeps the name of the preset loaded on it', { preset: 'Warm Pad' }, { answer: { synthId: 1, preset: 'Warm Pad' } }),
+  preset('and forgets it', { preset: '' }, { answer: { synthId: 1, preset: '' } }, service => { assert.ok(service.setSynthPreset(1, 'Warm Pad').ok); }),
+  preset('a preset on a lane that does not exist is refused', { preset: 'Warm Pad' }, { status: 404, error: NO_SYNTH }, undefined, 3),
   named('a lane is named', { name: 'Pad' }, { answer: { synthId: 1, name: 'Pad' } }),
   named('and named no more', { name: '' }, { answer: { synthId: 1, name: '' } }, service => { assert.ok(service.setSynthName(1, 'Pad').ok); }),
   named('naming a lane that does not exist is refused', { name: 'Pad' }, { status: 404, error: NO_SYNTH }, undefined, 3),

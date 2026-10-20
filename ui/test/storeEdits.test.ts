@@ -97,7 +97,7 @@ const cases: Case[] = [
   ]),
   // --- A lane that does not exist
   ...([
-    ['synth.remove', {}], ['synth.params', { patch: {} }], ['synth.model', {}], ['synth.mix', {}], ['synth.swing', { swing: true }], ['synth.name', { name: 'Lead' }], ['synth.prefs', {}],
+    ['synth.remove', {}], ['synth.params', { patch: {} }], ['synth.model', {}], ['synth.mix', {}], ['synth.swing', { swing: true }], ['synth.name', { name: 'Lead' }], ['synth.preset', { preset: 'Pad' }], ['synth.prefs', {}],
     ['pattern.write', { patternId: fresh(), patch: {} }], ['pattern.write', { patternId: 'x', patch: {} }],
   ] as const).map(([type, rest]): Case => (
     { type, title: `a lane that does not exist: ${type}`, body: { synthId: 2, ...rest }, status: 404, error: 'Synth not found' }
@@ -542,6 +542,23 @@ const cases: Case[] = [
       assert.equal('name' in service.snapshot().synths[0], false);
     },
   }, ['synthName']),
+  changed('the preset loaded on a lane is kept by its name, and an empty one takes it away', {
+    type: 'synth.preset', body: { synthId: 1, preset: '  Steinway  Grand Piano ' },
+    check: (result, service) => {
+      assert.deepEqual(result.events[0].data, { synthId: 1, preset: 'Steinway Grand Piano' });
+      assert.equal(service.snapshot().synths[0].preset, 'Steinway Grand Piano');
+    },
+  }, ['synthPreset']),
+  changed('another model forgets the preset that was loaded; a turned macro does not', {
+    type: 'synth.model', body: { synthId: 1, modelId: 'juno-106' },
+    arrange: service => { ok(service.setSynthPreset(1, 'Felt Piano')); },
+    check: (result, service) => {
+      assert.equal('preset' in service.snapshot().synths[0], false);
+      ok(service.setSynthPreset(1, 'Juno Keys'));
+      ok(service.setSynthModel(1, { modelParams: { macro1: 0.2 } }));
+      assert.equal(service.snapshot().synths[0].preset, 'Juno Keys');
+    },
+  }, ['synthModelUpdate']),
   changed('swing is stored on the lane only while it is on', {
     type: 'synth.swing', body: { synthId: 1, swing: true },
     check: (result, service) => {
