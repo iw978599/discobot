@@ -116,7 +116,7 @@ test('with two devices each is sent somewhere of its own: one to a lane, the oth
   const padsTo = page.getByLabel('Where Test pads is sent', { exact: true });
   await expect(keys).toHaveValue('default');
   await expect(padsTo).toHaveValue('default');
-  await expect(keys.locator('option')).toHaveText(['As set above', 'The open lane', 'Synth 1', 'Synth 2', 'Synth 3', 'Drums', 'Off']);
+  await expect(keys.locator('option')).toHaveText(['As set above', 'The open lane', 'Synth 1', 'Synth 2', 'Synth 3', 'Synth 4', 'Synth 5', 'Drums', 'Off']);
 
   await keys.selectOption('synth:2');
   await padsTo.selectOption('drums');
