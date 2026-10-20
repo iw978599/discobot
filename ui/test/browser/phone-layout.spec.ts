@@ -229,7 +229,7 @@ test('a wide screen keeps the rack as one panel', async ({ page }, testInfo) => 
   await expect(top.locator('.save-state')).toBeVisible();
   await expect(top.getByRole('slider', { name: 'Volume', exact: true })).toBeVisible();
   await expect(top.getByRole('button', { name: 'Undo', exact: true }), 'Undo is the word, not a drawing').toHaveText('Undo');
-  await expect(page.locator('.rack > [data-unit]:visible'), 'every unit is on the page').toHaveCount(7);
+  await expect(page.locator('.rack > [data-unit]:visible'), 'every unit is on the page, the Add Lane unit among them').toHaveCount(8);
   await page.getByRole('slider', { name: 'Synth 1 level', exact: true }).click();
   await expect(page.getByRole('dialog'), 'a mouse click on a knob opens nothing').toHaveCount(0);
   await page.getByRole('button', { name: 'Help', exact: true }).click();
