@@ -288,7 +288,8 @@ sample for sample as it did.
 
 Further reading:
 
-- `AGENTS.md`: how the code is organised and the rules a change must keep.
+- `AGENTS.md`: how the code is organised and the rules a change must keep,
+  with the rules for each area of the app in `docs/agents/`.
 - `docs/ROADMAP.md`: what is done and what is planned.
 - `docs/SYNTH_MODELS_PLAN.md`: the synth models, and where each differs from
   its namesake.

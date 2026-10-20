@@ -43,8 +43,10 @@ published songs, synced copies and kept versions, and all of it goes through
 8. **Tests.** A unit test that an old project (the field deleted from an
    exported file) imports unchanged and is not reported damaged; that hostile
    values are bounded; and, for sound, that absent equals the old output.
-9. **Docs.** One line under "Behaviour Worth Knowing" in `AGENTS.md` for
-   anything a later change could break by not knowing it.
+9. **Docs.** One line for anything a later change could break by not
+   knowing it: in the area's file under `docs/agents/` (synth sound,
+   effects, samples and so on), or under "Behaviour Worth Knowing" in
+   `AGENTS.md` if it belongs to no one area.
 
 ## Things that have gone wrong before
 
