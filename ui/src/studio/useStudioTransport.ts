@@ -14,7 +14,6 @@ import { stepSends, stepVoiceParams } from '../services/automation';
 import { CLICK_LEVEL, clickAt, clickLevel, countInBars } from '../services/metronome';
 import { BrowserTransport } from '../services/browserTransport';
 import { expandDrumStep, swingLate } from '../services/drumScheduling';
-import { getAudioContext, scheduleClick } from '../hooks/browserAudio';
 import { DRUM_NOTE_MAP } from '../utils/midiExport';
 import { guestInputs } from '../services/guestInput';
 import { STEP_LIGHT_AHEAD, midiTime, resetMidiClock } from './studioState';
@@ -30,10 +29,10 @@ export interface StudioTransportNeeds {
 }
 
 export function useStudioTransport(core: StudioCore, needs: StudioTransportNeeds) {
-  const { transportRef, scheduleTickRef, countInRef, metronomeRef, playModeRef, songRef, songStartTickRef, songEndingRef, stopPlaybackRef, setSongPosition, currentSceneIdRef, scenesRef, barAnchorRef, exportingRef, handedByBarRef, synthsRef, autoPassRef, synthAudio, globalTempoRef, drumSwingRef, drumStateRef, drumAudio, synths, liveStartRef, songStartEntryRef, signatureOfRef, announceRef, sceneLengthRef, setStorageError, endAutoPassesRef, setSynths, handleGlobalPlayStopRef, setPlayMode, setSongStartEntry } = core;
+  const { engine, transportRef, scheduleTickRef, countInRef, metronomeRef, playModeRef, songRef, songStartTickRef, songEndingRef, stopPlaybackRef, setSongPosition, currentSceneIdRef, scenesRef, barAnchorRef, exportingRef, handedByBarRef, synthsRef, autoPassRef, synthAudio, globalTempoRef, drumSwingRef, drumStateRef, drumAudio, synths, liveStartRef, songStartEntryRef, signatureOfRef, announceRef, sceneLengthRef, setStorageError, endAutoPassesRef, setSynths, handleGlobalPlayStopRef, setPlayMode, setSongStartEntry } = core;
   const { sceneLength, signatureOf, triggerStep, endRecordedHolds } = needs;
   const showStep = (lane: number | 'drums', step: number, time: number) => {
-    const ahead = time - getAudioContext().currentTime;
+    const ahead = time - engine.getContext().currentTime;
     if (ahead <= STEP_LIGHT_AHEAD) { playhead.set(lane, step); return; }
     setTimeout(() => { if (transportRef.current?.running) playhead.set(lane, step); }, (ahead - STEP_LIGHT_AHEAD) * 1000);
   };
@@ -43,7 +42,7 @@ export function useStudioTransport(core: StudioCore, needs: StudioTransportNeeds
     const countIn = countInRef.current;
     if (counted < countIn.ticks) {
       const kind = clickAt(counted % barTicks(countIn.signature), countIn.signature);
-      if (kind) scheduleClick(time, kind === 'bar', clickLevel(metronomeRef.current) / CLICK_LEVEL);
+      if (kind) engine.scheduleClick(time, kind === 'bar', clickLevel(metronomeRef.current) / CLICK_LEVEL);
       return;
     }
     const tick = counted - countIn.ticks;
@@ -64,7 +63,7 @@ export function useStudioTransport(core: StudioCore, needs: StudioTransportNeeds
         if (!songEndingRef.current) {
           songEndingRef.current = true;
           // Stop on the bar line this tick belongs to, not now: ticks are scheduled a little ahead.
-          setTimeout(() => stopPlaybackRef.current(), Math.max(0, (time - getAudioContext().currentTime) * 1000));
+          setTimeout(() => stopPlaybackRef.current(), Math.max(0, (time - engine.getContext().currentTime) * 1000));
         }
         return;
       }
@@ -100,7 +99,7 @@ export function useStudioTransport(core: StudioCore, needs: StudioTransportNeeds
     if (exportingRef.current && step === 0) handedByBarRef.current.push(guestInputs.all().map(entry => entry.source));
     if (metronomeRef.current.click && !exportingRef.current) {
       const kind = clickAt(step, signature);
-      if (kind) scheduleClick(time, kind === 'bar', clickLevel(metronomeRef.current) / CLICK_LEVEL);
+      if (kind) engine.scheduleClick(time, kind === 'bar', clickLevel(metronomeRef.current) / CLICK_LEVEL);
     }
     const ticksPerBar = barTicks(signature);
     const lanes = synthsRef.current;
@@ -160,12 +159,12 @@ export function useStudioTransport(core: StudioCore, needs: StudioTransportNeeds
   const transportPlaying = synths.some(s => s.isPlaying);
   const startTransport = () => {
     transportRef.current ??= new BrowserTransport(
-      () => getAudioContext().currentTime,
+      () => engine.getContext().currentTime,
       () => globalTempoRef.current,
       tick => scheduleTickRef.current(tick),
       () => guestInputs.reachSeconds(),
     );
-    const transport = transportRef.current, context = getAudioContext();
+    const transport = transportRef.current, context = engine.getContext();
     // Guests are told where the beats fall on the computer's clock, which they share with this page.
     // A count-in is for a person about to play, never for an export that is recording the guests.
     // Music someone else in a live session started begins when they said, with their count-in.
@@ -286,7 +285,7 @@ export function useStudioTransport(core: StudioCore, needs: StudioTransportNeeds
   // before this page has been touched, since a browser keeps its audio off until then.
   useEffect(() => liveTransport.connect({
     start: play => {
-      if (exportingRef.current || getAudioContext().state !== 'running') return;
+      if (exportingRef.current || engine.getContext().state !== 'running') return;
       const mode: PlayMode = play.mode === 'song' ? 'song' : 'pattern';
       const entry = Math.min(play.entry, Math.max(0, songRef.current.entries.length - 1));
       playModeRef.current = mode;
@@ -308,7 +307,7 @@ export function useStudioTransport(core: StudioCore, needs: StudioTransportNeeds
     now: () => {
       const transport = transportRef.current;
       if (!transport?.running || exportingRef.current) return null;
-      const context = getAudioContext(), time = context.currentTime;
+      const context = engine.getContext(), time = context.currentTime;
       return { wall: wallAtContextTime(context, time), tick: Math.max(0, transport.ticksAt(time)), mode: playModeRef.current, entry: songStartEntryRef.current, countIn: countInRef.current.ticks };
     },
   }), [playStop, synthAudio, drumAudio]);

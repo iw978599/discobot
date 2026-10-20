@@ -1,4 +1,4 @@
-import { createAudioLane, getAudioContext, loadAudioWorklet } from './browserAudio';
+import { audioEngine, type AudioEngine } from './browserAudio';
 import { GUEST_LATENCY_MS, NO_SENDS, contextTimeAtWall, latencyAfterLateBlocks, placeBlock, resample } from '../services/guests';
 import type { FxSendLevels } from '../types';
 import type { GuestPlayerMessage, GuestTapMessage } from '@discobot/engine';
@@ -21,16 +21,17 @@ export interface GuestPlayerStats { blocks: number; late: number; latencyMs: num
 // is called, so the guest can be told to play that much earlier and land on the beat again.
 const send = (node: AudioWorkletNode | null, message: GuestPlayerMessage) => node?.port.postMessage(message);
 
-export function createGuestPlayer(onLatency: (latencyMs: number) => void, initialLatencyMs = GUEST_LATENCY_MS) {
-  const context = getAudioContext();
-  const lane = createAudioLane('synth');
+// `engine` is the app's unless another is given (a test's, say).
+export function createGuestPlayer(onLatency: (latencyMs: number) => void, initialLatencyMs = GUEST_LATENCY_MS, engine: AudioEngine = audioEngine) {
+  const context = engine.getContext();
+  const lane = engine.createLane('synth');
   let node: AudioWorkletNode | null = null;
   let expected: number | null = null;
   let disposed = false;
   let lateRun = 0, worstLate = 0;
   const stats: GuestPlayerStats = { blocks: 0, late: 0, latencyMs: initialLatencyMs, failed: false };
 
-  void loadAudioWorklet().then(() => {
+  void engine.loadWorklet().then(() => {
     if (disposed) return;
     node = new AudioWorkletNode(context, 'guest-player', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
     node.connect(lane.input);
@@ -83,10 +84,10 @@ export type GuestPlayer = ReturnType<typeof createGuestPlayer>;
 // Where a voice handed to a guest is taken (services/guestInput): the `guest-tap` processor, whose
 // blocks are handed to `onBlock` with the frame each starts on. Its own output is silence, sent
 // to the speakers only so that the browser keeps running it.
-export function createGuestTap(onBlock: (frame: number, left: Float32Array, right: Float32Array) => void) {
-  const context = getAudioContext();
+export function createGuestTap(onBlock: (frame: number, left: Float32Array, right: Float32Array) => void, engine: AudioEngine = audioEngine) {
+  const context = engine.getContext();
   let node: AudioWorkletNode | null = null, keepAlive: GainNode | null = null, disposed = false;
-  const ready = loadAudioWorklet().then(() => {
+  const ready = engine.loadWorklet().then(() => {
     if (disposed) return null;
     node = new AudioWorkletNode(context, 'guest-tap', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2], channelCount: 2, channelCountMode: 'explicit' });
     node.port.onmessage = ({ data }: MessageEvent<GuestTapMessage>) => { if (data?.type === 'block') onBlock(data.frame, data.left, data.right); };

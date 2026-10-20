@@ -5,6 +5,7 @@ import {
   playSample, scheduleClick, setEffectsLoop, setEffectsTempo, setMasterMuted, setMasterVolume, stopAllSamples,
 } from '../src/hooks/browserAudio';
 import type { EffectsLoopState } from '../src/types';
+import { createGuestPlayer } from '../src/hooks/guestAudio';
 
 class Param {
   value = 0;
@@ -281,4 +282,23 @@ test('choosing the Hall crossfades to it, its decay and damping are settings, an
   assert.equal(second.length, 12);
   await engine.dispose();
   assert.ok(second.every(node => node.connections.length === 0), 'a Hall sounding when the engine goes goes with it');
+});
+
+// The audio hooks and the guest audio are handed an engine (roadmap 13), so they can be tried here,
+// on an engine with a pretend context, without a browser.
+test('a guest player is built on the engine it is given, and sorts good blocks from bad', async () => {
+  const { engine, contexts } = make();
+  const player = createGuestPlayer(() => {}, 120, engine);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(contexts.length, 1, 'its lane is on the engine it was handed');
+  assert.deepEqual(contexts[0].modules.map(url => url.split('/').pop()), ['audio-worklet.js'], 'and so is its worklet');
+  // This pretend context has no worklet node to make, which the player counts as failed.
+  assert.equal(player.stats.failed, true);
+  const block = (length: number) => new Float32Array(length);
+  assert.equal(player.push(Date.now(), 48000, block(64), block(32)), false, 'channels of different lengths');
+  assert.equal(player.push(Date.now(), 1, block(64), block(64)), false, 'no such sample rate');
+  assert.equal(player.push('now', 48000, block(64), block(64)), false, 'a time that is not a number');
+  assert.equal(player.push(Date.now(), 48000, block(64), block(64)), true);
+  assert.equal(player.stats.blocks, 1);
+  player.dispose();
 });

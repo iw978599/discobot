@@ -18,12 +18,12 @@ import { storeMetronome, type MetronomeSettings } from '../services/metronome';
 import { LiveArp, type LiveArpLane } from '../services/liveArp';
 import { auxBuses } from '../services/auxSettings';
 import { isLaneId } from '../services/lanes';
-import { getAudioContext, setMasterVolume, setMasterMuted, setEffectsTempo } from '../hooks/browserAudio';
 import { noteNameToMidi } from '../utils/midiExport';
 import { DEFAULT_SYNTH_MODEL_ID, createDefaultSynthModelParams, getSynthModelDefinition, normalizeSynthModelId, normalizeSynthModelParams } from '../synthModels';
 import { guestInputs, inputSources } from '../services/guestInput';
 import { DEFAULT_PARAMS, DEFAULT_DRUM_FX, DEFAULT_EFFECTS_LOOP, createDefaultDrumState, parseUserPresets, normalizeSynthParams, normalizeDrumFx, normalizeEffectsLoop, midiTime } from './studioState';
 import { useStudioCore } from './useStudioCore';
+import type { AudioEngine } from '../hooks/browserAudio';
 import { useStudioGuests } from './useStudioGuests';
 import { useStudioScenes } from './useStudioScenes';
 import { useStudioTransport } from './useStudioTransport';
@@ -35,9 +35,11 @@ import { useStudioExport } from './useStudioExport';
 import type { SynthState } from './studioState';
 export type { PlayMode } from './studioState';
 
-export function useStudio() {
-  const core = useStudioCore();
+// `engine` is the one that plays everything: the app's, unless another is given (a test's, say).
+export function useStudio(engine?: AudioEngine) {
+  const core = useStudioCore(engine);
   const {
+    engine: audio,
     synths,
     setSynths,
     selectedSynthId,
@@ -232,10 +234,10 @@ export function useStudio() {
   }, [synths, midiTargetSynthId]);
 
   useEffect(() => {
-    setMasterVolume(browserVolume);
+    audio.setMasterVolume(browserVolume);
   }, [browserVolume, synthAudio, drumAudio]);
 
-  useEffect(() => { setMasterMuted(browserMuted); }, [browserMuted]);
+  useEffect(() => { audio.setMasterMuted(browserMuted); }, [browserMuted]);
 
   // The voices a guest may be handed (services/guestInput): each lane by its model's name, the kit
   // and each drum. A guest whose voice has gone is told by its own unit.
@@ -378,7 +380,7 @@ export function useStudio() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [helpOpen, midiImportOpen, handleUndo, handleRedo]);
-  liveArpRef.current ??= new LiveArp(() => getAudioContext().currentTime);
+  liveArpRef.current ??= new LiveArp(() => audio.getContext().currentTime);
   useEffect(() => () => liveArpRef.current?.stop(), []);
   const arpLane = (synthId: number): LiveArpLane => ({
     beat: () => 60 / Math.max(20, globalTempoRef.current),
@@ -408,7 +410,7 @@ export function useStudio() {
     }
   }, [synthAudio]);
 
-  useEffect(() => { setEffectsTempo(globalTempo); }, [globalTempo]);
+  useEffect(() => { audio.setEffectsTempo(globalTempo); }, [globalTempo]);
 
   // A scene's time signature. The open scene's is read from its slot in `scenes` like any
   // other's: it is the one thing about the open scene the live lanes cannot say.

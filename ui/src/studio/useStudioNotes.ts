@@ -14,7 +14,6 @@ import { recordPosition } from '../services/recordTiming';
 import { storeMidiTies, tieFor, withTie } from '../services/midiTies';
 import { type LiveArpLane } from '../services/liveArp';
 import { useComputerKeyboard } from '../hooks/useComputerKeyboard';
-import { getAudioContext } from '../hooks/browserAudio';
 import { CHORD_WINDOW_MS, midiNoteToName } from './studioState';
 import type { StudioCore } from './useStudioCore';
 
@@ -25,7 +24,7 @@ export interface StudioNotesNeeds {
 }
 
 export function useStudioNotes(core: StudioCore, needs: StudioNotesNeeds) {
-  const { synthsRef, setSynths, quantizeRef, transportRef, signatureOfRef, currentSceneIdRef, recordHeldRef, midiChordRef, recordingRef, synthAudio, liveArpRef, browserMutedRef, effectsLoopRef, globalTempo, synths, selectedSynthId, liveLanesRef, midiHeldRef, midiDestinationsRef, setMidiDestinations, midiChannelRef, midiTargetSynthIdRef, selectedSynthIdRef, midiLearnRef, setMidiTies, setMidiLearn, midiTiesRef, applyParamTargetRef, midiPadLearnRef, midiPadsRef, setMidiPads, setMidiPadLearn, midiDrumChannelRef, drumStateRef, drumAudio, midiModeRef, globalTempoRef } = core;
+  const { engine, synthsRef, setSynths, quantizeRef, transportRef, signatureOfRef, currentSceneIdRef, recordHeldRef, midiChordRef, recordingRef, synthAudio, liveArpRef, browserMutedRef, effectsLoopRef, globalTempo, synths, selectedSynthId, liveLanesRef, midiHeldRef, midiDestinationsRef, setMidiDestinations, midiChannelRef, midiTargetSynthIdRef, selectedSynthIdRef, midiLearnRef, setMidiTies, setMidiLearn, midiTiesRef, applyParamTargetRef, midiPadLearnRef, midiPadsRef, setMidiPads, setMidiPadLearn, midiDrumChannelRef, drumStateRef, drumAudio, midiModeRef, globalTempoRef } = core;
   const { arpLane, handleOctaveShift } = needs;
   // Writes a note to a step. `add` joins it to the chord already there instead of replacing it.
   const upsertStepNote = useCallback(async (synthId: number, stepIndex: number, note: string, velocity: number, add = false, offset?: number, select = true) => {
@@ -60,7 +59,7 @@ export function useStudioNotes(core: StudioCore, needs: StudioNotesNeeds) {
     const transport = transportRef.current;
     const pattern = synthsRef.current.find(s => s.id === synthId)?.pattern;
     if (!transport?.running || !pattern || pattern.steps.length === 0 || playhead.get(synthId) < 0) return null;
-    const context = getAudioContext();
+    const context = engine.getContext();
     const signature = signatureOfRef.current(currentSceneIdRef.current);
     const perBar = stepsPerBar(pattern.steps.length, pattern.bars, signature);
     return recordPosition({
@@ -74,7 +73,7 @@ export function useStudioNotes(core: StudioCore, needs: StudioNotesNeeds) {
   const heardTicks = (): number | null => {
     const transport = transportRef.current;
     if (!transport) return null;
-    const context = getAudioContext();
+    const context = engine.getContext();
     return transport.ticksAt(context.currentTime - (context.outputLatency || 0));
   };
   const ticksPerStepOf = (synthId: number): number | null => {
@@ -254,7 +253,7 @@ ${note}`, { synthId, note, step: at.step, ticks });
       const transport = transportRef.current;
       if (midiModeRef.current === 'record' && transport?.running && playhead.get('drums') >= 0) {
         // On the step the player is hearing, as a recorded note is: the scheduler is ahead of that.
-        const context = getAudioContext();
+        const context = engine.getContext();
         const { step } = recordPosition({
           heardTicks: transport.ticksAt(context.currentTime - (context.outputLatency || 0)), scheduledTicks: transport.scheduledTicks,
           playheadStep: playhead.get('drums'), ticksPerStep: 2, steps: drums[instrument].steps.length, strength: 1,
@@ -316,7 +315,7 @@ ${note}`, { synthId, note, step: at.step, ticks });
   // page's audio is on.
   const jamHeldRef = useRef(new Map<string, number>());
   useEffect(() => liveJam.connect(played => {
-    const context = getAudioContext();
+    const context = engine.getContext();
     if (context.state !== 'running') return;
     const transport = transportRef.current;
     let wait = 0;
