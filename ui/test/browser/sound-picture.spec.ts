@@ -23,10 +23,13 @@ test('the open lane and the mixer each show the sound as a wave or a spectrum', 
   // Nothing has sounded, so there is nothing to see, and no audio was started to look.
   await expect(wave).toHaveAttribute('data-peak', '0.00');
 
-  // A note held on the keyboard.
+  // A note a whole bar long, played by the transport. (A key held on the on-screen keyboard is let
+  // go when the Notes level is left, which unmounts the keyboard.)
   await page.getByRole('tab', { name: 'Notes', exact: true }).first().click();
-  await page.getByLabel('Hold notes', { exact: true }).first().check();
-  await page.getByRole('button', { name: 'Play C3', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Piano Roll', exact: true }).first().click();
+  await page.getByRole('button', { name: 'C3 step 1', exact: true }).click();
+  await page.getByLabel('Step 1 note length', { exact: true }).first().selectOption('16');
+  await page.getByRole('button', { name: /Play All/ }).click();
   await page.getByRole('tab', { name: 'Sound', exact: true }).first().click();
   await expect.poll(() => peak(wave), { timeout: 10000 }).toBeGreaterThan(0.01);
 
@@ -38,5 +41,6 @@ test('the open lane and the mixer each show the sound as a wave or a spectrum', 
   const main = page.getByRole('img', { name: 'Mixer main: the wave as it sounds now', exact: true });
   await main.scrollIntoViewIfNeeded();
   await expect.poll(() => peak(main), { timeout: 10000 }).toBeGreaterThan(0.01);
+  await page.getByRole('button', { name: /Stop All/ }).click();
   expect(errors).toEqual([]);
 });
