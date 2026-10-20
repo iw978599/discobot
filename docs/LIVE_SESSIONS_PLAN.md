@@ -110,6 +110,16 @@ other person last was.
    units. A place is sent only when it changes. Not looked at on a screen yet: the design pictures
    are taken on GitHub for a design-review branch.
 
+## After the four stages: playing together
+
+Asked for by the owner on 2026-10-20, with an option to snap to the beat. Keys pressed and let go on
+a lane, and drum pads hit, go to the others as `jam` on the transport channel (no change to the room)
+and are heard on the same lane in each browser, with its own sound and mutes, never recorded. With
+Snap on (each browser's choice, starting on) and the music playing, someone else's note starts on the
+next sixteenth here, which hides the 50 to 150 ms the room takes; with it off, or while stopped, it
+plays as it arrives. Known limits: two people playing one lane with its arpeggiator on share one
+arpeggio; a pitch bend or the mod wheel is not sent; snap ignores swing. Not verified by ear.
+
 ## Deploying
 
 The accounts API with the relay was deployed on 2026-10-20, creating the Durable Object class. A later

@@ -137,6 +137,13 @@ test('two people work on one project together or in turns, and it ends when the 
   await expect(dana.locator('.live-people')).toContainText('Ian');
   await dana.locator('[data-unit="drums"] button').first().focus();
   await expect(page.locator('.rack > [data-unit="drums"]')).toHaveAttribute('data-present-names', 'Dana', { timeout: 10_000 });
+  // What the others play is heard here, snapped to the next step while the music plays unless this
+  // browser turns that off. It starts on.
+  const snap = page.getByRole('button', { name: 'Snap their notes to the beat', exact: true });
+  await expect(snap).toHaveAttribute('aria-pressed', 'true');
+  await snap.click();
+  await expect(snap).toHaveAttribute('aria-pressed', 'false');
+  await snap.click();
   // Dana presses Play and the music plays for Ian too: at once if his browser has its audio on, or
   // when he presses Play himself, which listens along rather than starting it over. His Stop stops both.
   await dana.locator('.play-all-button').click();

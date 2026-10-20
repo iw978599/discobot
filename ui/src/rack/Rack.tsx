@@ -16,7 +16,7 @@ import ProjectsDialog from './ProjectsDialog';
 import ShareDialog from './ShareDialog';
 import AccountDialog, { useAccountUser, useSyncStatus } from './AccountDialog';
 import { projectSync } from '../services/projectSync';
-import { livePlace, liveStatus, subscribeLive } from '../services/liveSession';
+import { liveJam, livePlace, liveStatus, subscribeLive } from '../services/liveSession';
 import { markWalkthroughSeen } from '../services/walkthrough';
 import Walkthrough from './Walkthrough';
 import MidiImportDialog from './MidiImportDialog';
@@ -99,6 +99,7 @@ export default function Rack({ studio }: { studio: Studio }) {
   const playingBy = useSyncExternalStore(subscribeLive, livePlayer);
   const peopleText = useSyncExternalStore(subscribeLive, livePeople);
   const people = useMemo(() => JSON.parse(peopleText) as Person[], [peopleText]);
+  const snap = useSyncExternalStore(subscribeLive, liveJam.snap);
 
   // The mixer is handed the levels it shows, already gathered, and the same object for as long as
   // none of them changes: the lanes and the drums are new objects after every note and step.
@@ -257,6 +258,14 @@ export default function Rack({ studio }: { studio: Studio }) {
                 {at < people.length - 1 ? ',' : ''}
               </Fragment>
             ))}
+            <button
+              className={`rack-btn live-snap ${snap ? 'on' : ''}`}
+              aria-pressed={snap}
+              onClick={() => liveJam.setSnap(!snap)}
+              title="While the music plays, the notes the others play start on the next step here, so the time they take to arrive is not heard"
+            >
+              Snap their notes to the beat
+            </button>
           </div>
         )}
         {playingBy && !studio.isAnyPlaying && (
