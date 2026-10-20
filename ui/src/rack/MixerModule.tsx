@@ -11,6 +11,7 @@ import Fader from '../components/Fader';
 import { useHandOvers } from '../hooks/useHandedTo';
 import Knob from '../components/Knob';
 import UnitHelp, { UNIT_HELP } from './UnitHelp';
+import Scope from '../components/Scope';
 import type { DrumInstrument } from '../types';
 
 const SOUND_DEFAULTS = createDefaultSynthParameters();
@@ -201,6 +202,9 @@ function MixerModule({ studio, channels, onHelp }: { studio: Studio; channels: M
               name="Volume"
               level={{ word: 'volume', value: channels.main, home: 1, hint: 'Output volume for this browser tab. It is this browser’s, not the project’s: it is not saved, shared or exported', onChange: studio.setBrowserVolume }}
             />
+            <div className="mixer-picture">
+              <Scope label="Mixer main" source={() => studio.soundAnalyser('master')} />
+            </div>
           </Group>
         </div>
       )}
