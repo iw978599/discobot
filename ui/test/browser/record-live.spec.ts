@@ -68,6 +68,7 @@ test('a recorded note lasts as long as its key was held, and one Undo takes back
   await page.getByRole('button', { name: /Play All/ }).click();
   await page.waitForTimeout(500);
 
+  await key.scrollIntoViewIfNeeded();
   const box = (await key.boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height * 0.8);
   await page.mouse.down();
