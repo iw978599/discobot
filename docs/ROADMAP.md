@@ -57,10 +57,10 @@ directly, with no builder.
 
 ### 2. The architecture work the owner asked for (M to L, the agent)
 
-12. **Split `useStudio.tsx` into hooks per concern** (improvements 1), now
-    that undo is in the store. Starts once #191, #192 and #194 are merged,
-    since all three change that file. Nothing changes for a person using
-    the app; everything after it gets cheaper.
+12. **Split `useStudio.tsx` into hooks per concern** (improvements 1). Done:
+    from 2,738 lines to 963, with eight hooks beside it in `ui/src/studio/`
+    and the state made in one place (`useStudioCore`). Nothing changes for a
+    person using the app.
 13. **The audio engine handed to the hooks** (V17, improvements 4): the step
     after it, which makes the audio testable without a browser.
 
