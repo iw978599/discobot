@@ -836,7 +836,7 @@ export function useStudio(engine?: AudioEngine) {
     ));
     localService.setTempo(bpm);
   }, []);
-  const { handleSceneSelect, handleSceneAdd, handleSceneRename, handleSceneColor, handleSceneTempo, handleSceneSignature, handleSceneDelete, handleSongChange, songArrangement } = useStudioScenes(core);
+  const { handleSceneSelect, handleSceneAdd, handleSceneRename, handleSceneColor, handleSceneTempo, handleSceneMove, handleSceneSignature, handleSceneDelete, handleSongChange, songArrangement } = useStudioScenes(core);
 
   // Another tab saved the project. Either take that version (a reload reads it) or keep this one.
   const loadOtherTabVersion = useCallback(() => { window.location.reload(); }, []);
@@ -963,7 +963,7 @@ export function useStudio(engine?: AudioEngine) {
     handleDrumSettingsChange, handleDrumMixChange, handleDrumReset, handleDrumMasterVolumeChange, handleDrumSwingChange,
     handleDrumFxChange, handleEffectsLoopChange, handleDrumMuteAll, handleDrumSoloAll, handleReset,
     scenes, currentSceneId, song, playMode, setPlayMode, songStartEntry, setSongStartEntry, songPosition,
-    handleSceneSelect, handleSceneAdd, handleSceneRename, handleSceneColor, handleSceneTempo, handleSceneSignature, handleSceneDelete, handleSongChange, songArrangement, handleExportSongMidi,
+    handleSceneSelect, handleSceneAdd, handleSceneRename, handleSceneColor, handleSceneTempo, handleSceneMove, handleSceneSignature, handleSceneDelete, handleSongChange, songArrangement, handleExportSongMidi,
     // The open scene's time signature, and any scene's by its id.
     signature: timeSignature(scenes.find(scene => scene.id === currentSceneId)?.signature), sceneSignature, sceneInfo,
     isAnyPlaying,

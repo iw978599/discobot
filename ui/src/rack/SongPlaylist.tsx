@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Studio } from '../studio/useStudio';
 import { sceneLengthIn, sceneSignatureIn, sceneTempoIn } from '../studio/studioState';
+import { dragClass, useDragOrder } from './useDragOrder';
 import { MAX_REPEATS, MAX_SONG_ENTRIES, insertSongEntry, moveSongEntry, removeSongEntry, repeatSongEntry, songClock, songRows, type SongOrder } from '../services/songPlayback';
 
 const barsText = (count: number) => `${count} ${count === 1 ? 'bar' : 'bars'}`;
@@ -55,6 +56,11 @@ export default function SongPlaylist({ studio }: { studio: Studio }) {
     removeSongEntry(song.entries, songStartEntry, index), Math.min(index, song.entries.length - 2), ['remove', 'open'],
     `Row ${index + 1}, ${nameOf(song.entries[index].sceneId)}, removed from the song`,
   );
+  // A row dragged to another place.
+  const rowOrder = useDragOrder('playlist', (from, to) => change(
+    moveSongEntry(song.entries, songStartEntry, from, to), to, ['open'],
+    `${nameOf(song.entries[from].sceneId)} is now row ${to + 1} of ${song.entries.length}`,
+  ));
   const insert = (at: number) => {
     if (adding) change(insertSongEntry(song.entries, songStartEntry, at, adding.id), at, ['open'], `${adding.name} added as row ${at + 1}`);
   };
@@ -68,7 +74,8 @@ export default function SongPlaylist({ studio }: { studio: Studio }) {
           return (
             <li
               key={index}
-              className={`song-list-row ${playing ? 'playing' : ''} ${start ? 'start' : ''}`}
+              {...rowOrder.item(index, rows.length)}
+              className={`song-list-row ${playing ? 'playing' : ''} ${start ? 'start' : ''} ${dragClass(rowOrder.dragging, index)}`}
               data-row={index}
               data-color={scenes.find(scene => scene.id === row.sceneId)?.color}
               aria-current={playing ? 'true' : undefined}

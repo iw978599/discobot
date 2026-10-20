@@ -98,7 +98,12 @@ directly, with no builder.
     the browser's own render is the second half, which stops at ten points
     to say so (`suspend`). Stems count across the whole zip.
 20. **Drag to reorder lanes, scenes and the playlist's rows** (V14,
-    features 14), with a keyboard way as well.
+    features 14), with a keyboard way as well. Done for the scenes (drag, or
+    Alt and an arrow, a `scene.move` edit), the song's blocks and the
+    playlist's rows (drag; their arrow buttons were already the keyboard way).
+    A finger holds before it drags. Lanes are not done: a lane's number is its
+    MIDI channel and its place on the rack, so moving one is the owner's call
+    (see the questions).
 21. **A picture of the sound** (V12): a small scope or spectrum on a lane
     and on the master.
 22. **Several recordings across the keyboard for an imported sample** (V1).
@@ -1096,6 +1101,12 @@ for new accounts.
     shown, and needs the audio layer's single owner (improvements 4) first.
 
 ## Questions waiting on the owner
+
+- **Moving lanes** (plan item 20). Scenes, blocks and playlist rows can be
+  dragged. Lanes cannot yet, because a lane's number is also its MIDI
+  channel, its MIDI place and its fixed place on the rack. Should moving a
+  lane change only where it is shown (Synth 3 above Synth 1, still channel
+  3), or renumber it, so its channel changes too?
 
 - **Firefox guests.** The owner said on 2026-10-13 that the timing "still
   seems off" on Firefox after PRs #76 and #77. Still to ask: what is

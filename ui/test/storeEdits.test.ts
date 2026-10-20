@@ -275,6 +275,19 @@ const cases: Case[] = [
     type: 'scene.color', title: 'a scene that does not exist cannot be coloured',
     body: { sceneId: 'nope', color: 'teal' }, status: 400, error: 'That scene is not in the project.',
   },
+  sceneChange('a scene moves to another place in the strip, and the song and the open scene are as they were', {
+    type: 'scene.move', arrange: twoScenes,
+    body: (ids: any) => ({ sceneId: ids.second, to: 0 }),
+    check: (result, _service, ids, before) => {
+      assert.deepEqual(result.events[0].data.scenes.map((scene: any) => scene.id), [ids.second, ids.first]);
+      assert.equal(result.events[0].data.currentSceneId, ids.second);
+      assert.deepEqual(result.events[0].data.song, before.song);
+    },
+  }),
+  {
+    type: 'scene.move', title: 'a scene that does not exist cannot be moved',
+    body: { sceneId: 'nope', to: 0 }, status: 400, error: 'That scene is not in the project.',
+  },
   {
     type: 'scene.tempo', title: 'a scene that does not exist cannot be given a tempo',
     body: { sceneId: 'nope', tempo: 90 }, status: 400, error: 'That scene is not in the project.',

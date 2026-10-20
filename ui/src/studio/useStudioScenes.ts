@@ -28,6 +28,8 @@ export function useStudioScenes(core: StudioCore) {
   const handleSceneColor = useCallback((sceneId: string, color: string) => sceneChange(() => localService.setSceneColor(sceneId, color || undefined), false), [sceneChange]);
   // A scene's own tempo, or none to play it at the song's (roadmap 17).
   const handleSceneTempo = useCallback((sceneId: string, tempo?: number) => sceneChange(() => localService.setSceneTempo(sceneId, tempo), false), [sceneChange]);
+  // A scene to another place in the strip (roadmap 20).
+  const handleSceneMove = useCallback((sceneId: string, to: number) => sceneChange(() => localService.moveScene(sceneId, to), false), [sceneChange]);
   // The open scene's time signature. Every lane and the drum grid change length with it, so the
   // undo entry keeps all of them: one undo brings back the steps a shorter bar cut off.
   const handleSceneSignature = useCallback((signature: string) => {
@@ -51,5 +53,5 @@ export function useStudioScenes(core: StudioCore) {
       bars: applySceneMutes(songBars(stored.song, stored.scenes), arrangement.synths),
     };
   }, []);
-  return { handleSceneSelect, handleSceneAdd, handleSceneRename, handleSceneColor, handleSceneTempo, handleSceneSignature, handleSceneDelete, handleSongChange, songArrangement };
+  return { handleSceneSelect, handleSceneAdd, handleSceneRename, handleSceneColor, handleSceneTempo, handleSceneMove, handleSceneSignature, handleSceneDelete, handleSongChange, songArrangement };
 }

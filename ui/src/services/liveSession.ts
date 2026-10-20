@@ -138,6 +138,7 @@ export function editKeys(op: Operation, scene: string): string[] {
     case 'scene.rename': return [`scenes/${op.sceneId}/name`];
     case 'scene.color': return [`scenes/${op.sceneId}/color`];
     case 'scene.tempo': return [`scenes/${op.sceneId}/tempo`];
+    case 'scene.move': return ['scenes'];
     case 'scene.signature': return [here];
     case 'scene.copyPart': return [`scenes/${op.toSceneId}`];
     case 'scene.replace': return [''];
