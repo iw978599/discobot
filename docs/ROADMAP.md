@@ -74,7 +74,7 @@ directly, with no builder.
     reverb clone (15) no longer waits on it.
 14a. **Importing SoundFonts** (V18). Asked for by the owner on 2026-10-19, to come
     after 14.
-15. **Clones of well-known effects** (the second half of V5). Done but for the spring reverb, which waits on 14: presets named "… style" on each effect, with a colour and a wow on the delay and kinds of drive. Was: the list the
+15. **Clones of well-known effects** (the second half of V5). Done, the spring reverb last (a Spring kind of reverb and a "Spring style" preset, not verified by ear): presets named "… style" on each effect, with a colour and a wow on the delay and kinds of drive. Was: the list the
     owner agreed on 2026-10-19, with knobs added to an effect where a clone
     needs them.
 16. **A scale lock** (V7). Done: Randomize's key and scale are the studio's

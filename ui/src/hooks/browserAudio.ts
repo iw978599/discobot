@@ -30,9 +30,10 @@ type Effects = {
   output: GainNode;
   delay: DelayNode;
   feedback: GainNode;
-  // The reverb that is sounding: the Room's convolver or the Hall, and never both.
+  // The reverb that is sounding: the Room's convolver or one built of nodes (the Hall, the Spring),
+  // and never both.
   reverb: ConvolverNode | null;
-  hall: Hall | null;
+  hall: BuiltReverb | null;
   reverbFade: GainNode;
   decay: number;
   drive: WaveShaperNode;
@@ -257,7 +258,76 @@ export function createHallReverb(ctx: BaseAudioContext) {
   };
   return { input, output, pre, lines, sides, nodes, set };
 }
-type Hall = ReturnType<typeof createHallReverb>;
+
+// The Spring (`reverb.kind` 'spring', roadmap 15): a guitar amplifier's spring tank. A spring carries
+// high frequencies faster than low ones, so each echo arrives as a falling chirp, the drip. Here a tank
+// for each side is one loop, its delay then a chain of all-passes, which hold the low frequencies back
+// longer than the high, then a low-pass, since a tank is dark, and the feedback: so each echo has been
+// through the chain once more than the last, and chirps more. A few all-passes on the way in give the
+// first echo its chirp too, and a high-pass takes out the bass a spring does not carry. It keeps the
+// Hall's rules for loops (above): one way out of each, its delay; none feeds another; no node adds more
+// than two signals; whole frames; `HALL_QUANTUM` in every loop's length.
+const SPRING_TANKS = [1301, 1429];
+const SPRING_DISPERSION = 10;
+const SPRING_SPREAD = 6;
+const SPRING_HZ = 1100;
+const SPRING_Q = 1.5;
+// Sets the Spring about as loud as the Hall at the same mix, measured in `springReverb.test.ts`: the
+// Hall's level follows its decay (`hallLevel`), and the Spring's two tanks need the cube root of theirs.
+export const SPRING_LEVEL = 0.22;
+export const springLevel = (decay: number) => SPRING_LEVEL * Math.cbrt(limit(decay, 0.1, 8));
+// Damping darkens the tank: its low-pass goes from 6 kHz down to 1.5 kHz.
+export const springDampHz = (damping: number | undefined) => 6000 * Math.pow(4, -limit(damping, 0, 1));
+export function createSpringReverb(ctx: BaseAudioContext) {
+  const mono = <T extends AudioNode>(node: T) => { node.channelCount = 1; node.channelCountMode = 'explicit'; return node; };
+  const nodes: AudioNode[] = [];
+  const gain = (value: number) => { const node = mono(ctx.createGain()); node.gain.value = value; nodes.push(node); return node; };
+  const filter = (type: BiquadFilterType, frequency: number, q: number) => {
+    const node = mono(ctx.createBiquadFilter());
+    node.type = type; node.frequency.value = frequency; node.Q.value = q;
+    nodes.push(node);
+    return node;
+  };
+  const whole = (frames: number) => Math.round(frames / 44100 * ctx.sampleRate) / ctx.sampleRate;
+  const chain = (from: AudioNode, count: number) => {
+    let at = from;
+    for (let index = 0; index < count; index++) at = at.connect(filter('allpass', SPRING_HZ, SPRING_Q));
+    return at;
+  };
+  // The sends are stereo and the tanks are not: each side has a tank of its own.
+  const input = gain(1), pre = mono(ctx.createDelay(MAX_PRE_DELAY + 0.05));
+  nodes.push(pre);
+  pre.delayTime.value = 0;
+  chain(input.connect(filter('highpass', 180, -3)), SPRING_SPREAD).connect(pre);
+  const output = ctx.createChannelMerger(2);
+  nodes.push(output);
+  const tanks = SPRING_TANKS.map((frames, side) => {
+    const delay = mono(ctx.createDelay(0.25)), back = gain(0), damp = filter('lowpass', springDampHz(0), -3), level = gain(SPRING_LEVEL);
+    delay.delayTime.value = whole(frames);
+    nodes.push(delay);
+    pre.connect(delay);
+    chain(delay, SPRING_DISPERSION).connect(damp).connect(back).connect(delay);
+    delay.connect(level).connect(output, 0, side);
+    return { seconds: whole(frames) + HALL_QUANTUM / ctx.sampleRate, back, damp, level };
+  });
+  // With a time the settings glide there, for live playback; without one they are simply set.
+  const set = (reverb: EffectsLoopState['reverb'], at?: number) => {
+    const put = (param: AudioParam, value: number, glide = 0.015) => {
+      if (at === undefined) param.value = value;
+      else param.setTargetAtTime(value, at, glide);
+    };
+    put(pre.delayTime, limit(reverb.preDelay, 0, MAX_PRE_DELAY), 0.05);
+    for (const tank of tanks) {
+      put(tank.back.gain, hallFeedback(reverb.decay, tank.seconds));
+      put(tank.damp.frequency, springDampHz(reverb.damping));
+      put(tank.level.gain, springLevel(reverb.decay));
+    }
+  };
+  return { input, output, pre, tanks, nodes, set };
+}
+// The reverbs built of nodes, whose settings are set on those nodes: the Hall and the Spring.
+type BuiltReverb = { kind: 'hall' | 'spring'; input: AudioNode; output: AudioNode; nodes: AudioNode[]; set: (reverb: EffectsLoopState['reverb'], at?: number) => void };
+export const createBuiltReverb = (ctx: BaseAudioContext, kind: 'hall' | 'spring'): BuiltReverb => ({ kind, ...(kind === 'spring' ? createSpringReverb(ctx) : createHallReverb(ctx)) });
 
 // The effect behind an aux bus: an echo, the Hall or a chorus. It returns only the wet signal, which
 // the caller scales by the bus's level. Live playback and export build it with this, and `set`
@@ -520,7 +590,7 @@ export class AudioEngine {
 
   // Puts another reverb in the place of the one that is sounding: the new one fades up as the old
   // fades down, and the old one, with every node inside it, is cut loose once it is silent.
-  private replaceReverb(bus: Effects, ctx: AudioContext, next: { reverb: ConvolverNode } | { hall: Hall }) {
+  private replaceReverb(bus: Effects, ctx: AudioContext, next: { reverb: ConvolverNode } | { hall: BuiltReverb }) {
     const previous = bus.reverb ?? bus.hall!.input, previousNodes = bus.reverb ? [bus.reverb] : bus.hall!.nodes, previousFade = bus.reverbFade;
     const fade = ctx.createGain();
     fade.gain.value = 0;
@@ -545,11 +615,12 @@ export class AudioEngine {
     smooth(bus.wet.reverb.gain, state.reverb.enabled ? limit(state.reverb.mix, 0, 1) : 0, ctx);
     const decay = limit(state.reverb.decay, 0.1, 8);
     const shape = `${(state.reverb.preDelay ?? 0).toFixed(3)}/${(state.reverb.damping ?? 0).toFixed(2)}`;
-    if (state.reverb.kind === 'hall') {
-      // The Hall's decay and damping are settings of the nodes it has: only choosing it builds one.
-      if (bus.hall) bus.hall.set(state.reverb, ctx.currentTime);
+    if (state.reverb.kind === 'hall' || state.reverb.kind === 'spring') {
+      // A Hall's or a Spring's decay and damping are settings of the nodes it has: only choosing one
+      // builds one, and choosing the other builds that in its place.
+      if (bus.hall?.kind === state.reverb.kind) bus.hall.set(state.reverb, ctx.currentTime);
       else {
-        const hall = createHallReverb(ctx);
+        const hall = createBuiltReverb(ctx, state.reverb.kind);
         hall.set(state.reverb);
         this.replaceReverb(bus, ctx, { hall });
         bus.decay = 0;

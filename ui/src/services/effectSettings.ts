@@ -34,8 +34,8 @@ export const MAX_PRE_DELAY = 0.25;
 // The two reverbs, by what is heard. Room is the one every project had before there was a choice
 // and is stored as nothing; the control sends 'room' and the sanitizer drops it.
 export type ReverbKind = NonNullable<EffectsLoopState['reverb']['kind']>;
-export const REVERB_KINDS: ReverbKind[] = ['room', 'hall'];
-export const REVERB_KIND_LABELS: Record<ReverbKind, string> = { room: 'Room', hall: 'Hall' };
+export const REVERB_KINDS: ReverbKind[] = ['room', 'hall', 'spring'];
+export const REVERB_KIND_LABELS: Record<ReverbKind, string> = { room: 'Room', hall: 'Hall', spring: 'Spring' };
 
 // What a new project starts with. Older projects keep the plain reverb they were made with.
 export const NEW_PROJECT_REVERB = { preDelay: 0.02, damping: 0.35 };
