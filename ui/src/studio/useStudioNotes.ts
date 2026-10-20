@@ -2,6 +2,7 @@
 // with the arpeggiator, record timing, held lengths, Learn, pads and each device's place. Split out
 // of useStudio.tsx.
 import { useCallback, useEffect, useRef } from 'react';
+import { scaleLock, toScale } from '../services/scaleLock';
 import { liveJam } from '../services/liveSession';
 import { MidiMessage, MidiSource } from '../hooks/useMidiInput';
 import { localService } from '../services/localService';
@@ -115,7 +116,13 @@ ${note}`, { synthId, note, step: at.step, ticks });
     void upsertStepNote(synthId, at.step, note, velocity, joins, at.offset, false);
     return true;
   }, [recordedStep, upsertStepNote]);
-  const handleNotePlay = useCallback(async (synthId: number, note: string) => {
+  // The scale lock (scaleLock.ts): a key played by hand sounds as the nearest note of the key and
+  // scale. What a key became is kept until it is let go, so a lock changed meanwhile leaves no note held.
+  const lockedKeysRef = useRef(new Map<string, string>());
+  const toLock = (note: string) => { const lock = scaleLock.get(); return lock.locked ? toScale(note, lock) : note; };
+  const handleNotePlay = useCallback(async (synthId: number, pressed: string) => {
+    const note = toLock(pressed);
+    lockedKeysRef.current.set(`${synthId}:${pressed}`, note);
     const synth = synthsRef.current.find(s => s.id === synthId);
     if (!synth?.synthParams) return;
     if (synth.muted || (synthsRef.current.some(s => s.solo) && !synth.solo)) return;
@@ -144,7 +151,9 @@ ${note}`, { synthId, note, step: at.step, ticks });
 
     localService.writePattern(synthId, pattern.id, updated);
   }, [synthAudio, globalTempo, recordNote]);
-  const handleNoteRelease = useCallback(async (synthId: number, note: string) => {
+  const handleNoteRelease = useCallback(async (synthId: number, released: string) => {
+    const key = `${synthId}:${released}`, note = lockedKeysRef.current.get(key) ?? released;
+    lockedKeysRef.current.delete(key);
     const synthParams = synthsRef.current.find(s => s.id === synthId)?.synthParams;
     if (!synthParams) return;
     endRecordedHold(synthId, note, true);
@@ -266,7 +275,9 @@ ${note}`, { synthId, note, step: at.step, ticks });
       }
       return;
     }
-    const noteName = midiNoteToName(message.note);
+    // With the scale lock on a key is moved into the scale here, so playing, recording and the note's
+    // release (midiHeldRef keeps this name) all have the note that sounded.
+    const noteName = toLock(midiNoteToName(message.note));
     // A device with a lane of its own plays it on every channel. A lane the project does not have
     // plays nothing.
     if (place === 'default' && message.channel !== midiChannelRef.current) return;

@@ -120,3 +120,6 @@
 .black-spacer {
   width: calc(100% / 7 * 0.55);
 }
+
+/* The scale lock: a key outside the key and scale is darker. It still plays, as the nearest note in it. */
+.key.out-of-scale { filter: brightness(0.6); }
