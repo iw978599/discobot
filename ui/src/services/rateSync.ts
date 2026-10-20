@@ -2,7 +2,8 @@ import { RATE_SYNCS, syncedRateHz, type RateSync } from '@discobot/engine';
 
 export { RATE_SYNCS };
 export const RATE_SYNC_LABELS: Record<RateSync, string> = {
-  off: 'Free', '8bar': '8 bars', '4bar': '4 bars', '2bar': '2 bars', '1bar': '1 bar', '1/2': '1/2', '1/4': '1/4', '1/8': '1/8', '1/16': '1/16',
+  off: 'Free', '8bar': '8 bars', '4bar': '4 bars', '2bar': '2 bars', '1bar': '1 bar', '1/2': '1/2',
+  '1/4d': 'Dotted 1/4', '1/4': '1/4', '1/4t': '1/4 triplet', '1/8d': 'Dotted 1/8', '1/8': '1/8', '1/8t': '1/8 triplet', '1/16': '1/16', '1/16t': '1/16 triplet',
 };
 
 // A stored sync, or undefined for anything that is not one. Off is stored as nothing at all.

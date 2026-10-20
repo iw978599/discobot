@@ -50,7 +50,7 @@ directly, with no builder.
    always land in "My presets".
 10. **How long a recorded note is held** (features 3): every recorded note is
     one step long today.
-11. **Small tidying, low gain:** the delay's Sync menu has dotted and
+11. **Small tidying, low gain:** two parts done: every Sync menu now has dotted and triplet values, and new projects named Untitled each have a row of their own. Left: the transport bar and song strip render on every edit; the song strip calls `studio.sceneLength` while rendering, so the lengths must become values before it can be `tracked`, and the transport bar needs stable callbacks from `Rack`. Was: the delay's Sync menu has dotted and
     triplet values and the others do not (features 18); the transport bar
     and song strip still render on every edit (improvements 3); two
     "Untitled" projects share a row in Projects (features 16).

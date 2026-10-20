@@ -104,9 +104,9 @@ test('projects follow the account to a second browser, and edits and conflicts a
   await expect(phoneDialog.getByRole('group', { name: 'Project sync', exact: true })).toContainText('2 in your account');
   await phone.keyboard.press('Escape');
   let phoneList = await projects(phone);
-  // The account's Untitled arrived beside the phone's own as "Untitled 2"; the two share a row.
-  await expect(phoneList.getByRole('group')).toHaveCount(2);
-  await expect(phoneList.getByLabel('Version of Untitled', { exact: true }).locator('option')).toHaveCount(2);
+  // The account's Untitled arrived beside the phone's own as "Untitled 2": another project, with a row of its own.
+  await expect(phoneList.getByRole('group')).toHaveCount(3);
+  await expect(phoneList.getByRole('group', { name: 'Project Untitled 2', exact: true })).toHaveCount(1);
   await phoneList.getByRole('group', { name: 'Project Night Drive', exact: true }).getByRole('button', { name: 'Open', exact: true }).click();
   await expect(phone.locator('.tempo-led-value')).toHaveText('133');
   await expect(phone.getByRole('button', { name: 'Snare step 5', exact: true })).toHaveAttribute('aria-pressed', 'true');

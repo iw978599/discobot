@@ -165,7 +165,6 @@ test('new projects start empty and each project remembers its own work across re
   await page.getByRole('button', { name: /^Project: / }).click();
   const dialog = page.getByRole('dialog', { name: 'Projects', exact: true });
   const row = dialog.getByRole('group', { name: 'Project Untitled', exact: true });
-  await row.getByLabel('Version of Untitled', { exact: true }).selectOption('Untitled');
   await row.getByRole('button', { name: 'Open', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Kick step 1', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('button', { name: 'Snare step 9', exact: true })).toHaveAttribute('aria-pressed', 'false');

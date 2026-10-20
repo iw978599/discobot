@@ -498,11 +498,11 @@ test('design shots: menus, dialogs, the walkthrough and a guest', async ({ page 
     await shot(walk, 'unit-guest');
   });
   await attempt(walk, 'dialog-projects', async () => {
-    await menu(page, 'Project', 'New Project');
+    await menu(page, 'Project', 'Save a Copy');
     await more(page);
     await page.getByRole('button', { name: /^Project: / }).click();
     const projects = page.getByRole('dialog', { name: 'Projects', exact: true });
-    // "Untitled" and "Untitled 2" share a row, with a list to choose between them.
+    // "Untitled" and "Untitled copy" share a row, with a list to choose between them.
     await expect(projects.getByRole('group')).toHaveCount(1);
     await expect(projects.getByLabel('Version of Untitled', { exact: true }).locator('option')).toHaveCount(2);
     await shot(walk, 'dialog-projects-family');

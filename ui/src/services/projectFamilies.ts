@@ -5,6 +5,9 @@ import type { ProjectInfo } from './projectLibrary';
 export const COPY_SUFFIX = ' copy';
 export const EARLIER_SUFFIX = ' (earlier version)';
 export const KEPT_SUFFIX = ' (this browser\'s version)';
+// What a new project is called. Two new projects are "Untitled" and "Untitled 2", which are not
+// related: the number on this name is part of a project's own name, not an ending of the family's.
+export const DEFAULT_PROJECT_NAME = 'Untitled';
 // `uniqueName` counts from 2 and never writes a leading zero.
 const NUMBER_SUFFIX = / (?:[2-9]|[1-9]\d+)$/;
 
@@ -34,7 +37,10 @@ function withoutEnding(name: string): string | null {
 // "Song copy 2" and "Song (this browser's version)" both belong to "Song".
 export function familyName(name: string): string {
   let base = name;
-  for (let rest = withoutEnding(base); rest !== null; rest = withoutEnding(base)) base = rest;
+  for (let rest = withoutEnding(base); rest !== null; rest = withoutEnding(base)) {
+    if (rest.toLowerCase() === DEFAULT_PROJECT_NAME.toLowerCase() && NUMBER_SUFFIX.test(base)) break;
+    base = rest;
+  }
   return base;
 }
 

@@ -123,7 +123,8 @@ export function syncedLfoHz(rate: number, bpm: number): number {
 }
 
 const RATE_SYNC_BEATS: Record<Exclude<RateSync, 'off'>, number> = {
-  '8bar': 32, '4bar': 16, '2bar': 8, '1bar': 4, '1/2': 2, '1/4': 1, '1/8': 0.5, '1/16': 0.25,
+  '8bar': 32, '4bar': 16, '2bar': 8, '1bar': 4, '1/2': 2, '1/4d': 1.5, '1/4': 1, '1/4t': 2 / 3,
+  '1/8d': 0.75, '1/8': 0.5, '1/8t': 1 / 3, '1/16': 0.25, '1/16t': 1 / 6,
 };
 
 // How many times a second something set to a note value comes round at this tempo, or null when it
