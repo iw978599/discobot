@@ -27,8 +27,9 @@ export interface AuxBus {
 }
 
 // A rate that follows the tempo: once every so many bars, or once every note of this length.
-export type RateSync = 'off' | '8bar' | '4bar' | '2bar' | '1bar' | '1/2' | '1/4' | '1/8' | '1/16';
-export const RATE_SYNCS: RateSync[] = ['off', '8bar', '4bar', '2bar', '1bar', '1/2', '1/4', '1/8', '1/16'];
+// A note value, a dotted one (d, half as long again) or a triplet (t, two thirds as long).
+export type RateSync = 'off' | '8bar' | '4bar' | '2bar' | '1bar' | '1/2' | '1/4d' | '1/4' | '1/4t' | '1/8d' | '1/8' | '1/8t' | '1/16' | '1/16t';
+export const RATE_SYNCS: RateSync[] = ['off', '8bar', '4bar', '2bar', '1bar', '1/2', '1/4d', '1/4', '1/8d', '1/4t', '1/8', '1/8t', '1/16', '1/16t'];
 
 export type DelaySync = 'off' | '1/4' | '1/8d' | '1/8' | '1/8t' | '1/16';
 
