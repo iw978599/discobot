@@ -1516,11 +1516,12 @@ test('the store keeps nothing of a scene or song operation\'s own objects', () =
 
 // Undo puts back the whole project, so every edit to the scenes and the song is undone. Opening a
 // scene is moving about in the project, not an edit.
-test('scene operations are saved, undone and shared, and opening a scene is not undone', () => {
+test('scene operations are saved, undone and shared; opening a scene is neither undone nor shared', () => {
   for (const type of ['scene.signature', 'scene.create', 'scene.rename', 'scene.color', 'scene.copyPart', 'scene.delete', 'scene.replace', 'song.set'] as const) {
     assert.deepEqual(OP_META[type], { save: true, undoable: true, share: true }, type);
   }
-  assert.deepEqual(OP_META['scene.select'], { save: true, undoable: false, share: true });
+  // Each person in a live session opens their own scenes; an edit says the scene it was made in.
+  assert.deepEqual(OP_META['scene.select'], { save: true, undoable: false, share: false });
 });
 
 // The studio is not run by these tests, so the two things the plan asks of it are read from its

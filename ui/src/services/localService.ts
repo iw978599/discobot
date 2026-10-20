@@ -4,7 +4,7 @@ import { createIndexedDbLibrary, createMemoryLibrary, hasIndexedDb, type Project
 import { COPY_SUFFIX, DEFAULT_PROJECT_NAME, EARLIER_SUFFIX } from './projectFamilies';
 import { DRUM_KITS } from './drumKits';
 import { barSteps } from './patternLength';
-import { isLaneId, storedLaneName, storedPresetName } from './lanes';
+import { LANE_IDS, isLaneId, storedLaneName, storedPresetName } from './lanes';
 import { normalizeSynthModelId } from '../synthModels';
 import { NEW_PROJECT_REVERB } from './effectSettings';
 import { record, number, clone, matchesShape, sanitizePattern, sanitizeSynthParams, sanitizeDrums, sanitizeEffects, sanitizeSends, sanitizeSaved, sanitizeModelParams, sanitizeKit, sanitizeScenes, sanitizeSong } from './projectSanitization';
@@ -429,6 +429,15 @@ export class LocalProjectService {
     } catch { return null; }
   }
 
+  // For a live session (liveSession.ts): which project and scene are open, and a whole project
+  // someone in the session sent, put in place of the open one the way a download is.
+  openProjectId() { return this.ready().projectId; }
+  openSceneId() { return this.ready().currentSceneId; }
+  hasScene(id: string) { return this.ready().scenes.some(scene => scene.id === id); }
+  async receiveLive(file: unknown): Promise<boolean> {
+    return (await this.syncReceive(this.ready().projectId, file)) !== null;
+  }
+
   // Gives a project a new identity, so the account's version can take the old one. Used when
   // the same project was changed in two places: both are kept.
   async syncFork(id: string, name: string): Promise<string | null> {
@@ -839,7 +848,8 @@ export class LocalProjectService {
   setSynthSwing(synthId: number, swing: boolean) { return this.apply({ type: 'synth.swing', synthId, swing }); }
   setSynthPrefs(synthId: number, prefs: { octaveShift?: number; keyboardMode?: 'keyboard' | 'piano-roll' }) { return this.apply({ type: 'synth.prefs', synthId, octaveShift: prefs.octaveShift, keyboardMode: prefs.keyboardMode }); }
   writePattern(synthId: number, patternId: string, patch: Partial<Pattern>) { return this.apply({ type: 'pattern.write', synthId, patternId, patch }); }
-  createLane(synthId?: number) { return this.apply({ type: 'synth.create', synthId }); }
+  // The lane's id is in the operation, so it is the same wherever the operation is applied.
+  createLane(synthId?: number) { return this.apply({ type: 'synth.create', synthId: synthId ?? LANE_IDS.find(id => !this.ready().synths.some(s => s.synthId === id)) }); }
   removeLane(synthId: number) { return this.apply({ type: 'synth.remove', synthId }); }
   playLane(synthId: number, patternId?: string) { return this.apply({ type: 'transport.play', synthId, patternId }); }
   stopLane(synthId: number) { return this.apply({ type: 'transport.stop', synthId }); }

@@ -130,6 +130,8 @@ export interface OpNotice { op: Operation; origin: Origin; saved: boolean }
 // to someone editing the same project. Playing is not project state, and a lane's octave and
 // keyboard are this person's view of it. Opening a scene is moving about, not an edit; a lane is
 // made when a project is opened as well as by hand; a guest's settings come from the guest.
+// Opening a scene is not shared either: each person opens their own, and every edit sent says
+// the scene it was made in (`liveSession.ts`).
 export const OP_META: Record<OpType, { save: boolean; undoable: boolean; share: boolean }> = {
   'tempo.set': { save: true, undoable: true, share: true },
   'drum.swing': { save: true, undoable: true, share: true },
@@ -159,7 +161,7 @@ export const OP_META: Record<OpType, { save: boolean; undoable: boolean; share: 
   'pattern.write': { save: true, undoable: true, share: true },
   'transport.play': { save: false, undoable: false, share: false },
   'transport.stop': { save: false, undoable: false, share: false },
-  'scene.select': { save: true, undoable: false, share: true },
+  'scene.select': { save: true, undoable: false, share: false },
   'scene.delete': { save: true, undoable: true, share: true },
   'scene.create': { save: true, undoable: true, share: true },
   'scene.rename': { save: true, undoable: true, share: true },

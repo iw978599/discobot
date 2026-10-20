@@ -35,7 +35,15 @@ design, the stages, and how far they have got.
   browser's undo and must keep them from being sent again.
 - **Only one person saves to the account** during a session (the one longest
   in the room); the others hold their saves, or every save would refuse the
-  others' and split the project.
+  others' and split the project. When the hold ends, say how (`projectSync.hold`:
+  `'adopt'` on taking over the saving, `'yield'` on leaving others behind,
+  nothing when the connection was lost), or the next sync splits it anyway.
+- **Ids are made before an edit is applied**, never inside a reducer, or each
+  browser makes its own. An edit whose result cannot be repeated (Reset All)
+  goes as the whole project instead.
+- **The studio must take a remote edit from its event alone.** Anything a
+  handler sets around its call to the store (a ref, the audio) is missing
+  when the same edit arrives from someone else.
 
 ## Testing
 
@@ -44,8 +52,11 @@ design, the stages, and how far they have got.
   round trip through the local runner using Node's built-in WebSocket client.
 - `server/devLive.ts` is the local runner's WebSocket server (no dependency,
   never deployed); the browser tests reach live sessions through it.
-- Keep the browser side's logic a plain object with its connection, store and
-  clock passed in, so it can be tested the same way.
+- The browser side's logic is a plain object (`createLiveSession`) given its
+  connection, store and timers. `ui/test/liveSession.test.ts` runs real
+  project stores through the real room rules with messages delivered by hand;
+  add a case there for any new kind of edit or message. `sharing.spec.ts` is
+  the browser test: two people live, then in turns.
 
 ## Deploying
 

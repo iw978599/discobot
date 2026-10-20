@@ -45,8 +45,9 @@ Stage 2 in detail:
   `shared[id]` names the owner, `sharedByMe[id]` makes it one's own) and its person is signed in.
   The socket is opened by `openLiveSocket(owner, id)` in `account.ts`, so the token stays there.
 - It hears local edits through `localService.subscribeOps`, sends those `OP_META` marks `share`
-  and whose origin is `local` as `{ t: 'op', n, op, keys, scene }`, and coalesces edits to the same
-  keys within about 40 ms, so a knob's drag is a few messages, not hundreds.
+  and whose origin is `local` as `{ t: 'op', n, edits: [{ op, scene }] }`: one message for the
+  edits of about 40 ms, a run of edits to the same keys sent as its last, so a knob's drag is a few
+  messages, not hundreds. The keys are not sent; each browser works them out (`editKeys`).
 - A remote edit is applied with the `remote` origin (kept out of undo, never sent again), in the
   scene it was made in: the browser opens that scene for it with `scene.select` and goes back.
 - A joiner applies the host's project through `syncReceive`, which keeps a version first, then the
@@ -78,12 +79,25 @@ other person last was.
 
 1. The relay: the room, the Worker's route, the Durable Object, the local runner, tests. **Done.**
 2. Edits, joining, undo and saving: `ui/src/services/liveSession.ts`, connected when a shared project
-   is opened by someone signed in.
+   is opened by someone signed in. **Done.** As built, beyond the design above:
+   - Opening a scene is not sent (`scene.select` became `share: false`): each person opens their own.
+   - A guest's own settings are not sent; each browser's guest reports its own.
+   - Reset All sends the whole project, like undo, because it makes a scene id inside the store.
+   - A lane's id is put in the operation before it is applied (`createLane`), and the studio sets up
+     a lane made by someone else from its event alone.
+   - How the sync hold ends: `adopt` when a browser takes over the saving mid-session, `yield` when
+     it leaves others in the session, and the usual "keep both" when the connection is lost. Without
+     these, every change of who saves split the project in two.
+   - Known limits: someone else's undo forgets your own undo steps (the whole project is put in
+     place); an edit made in a scene that is gone when it arrives is dropped; edits made while
+     disconnected are replaced by the session's project on joining again (a version is kept); a
+     project over the room's 600,000-character message limit cannot be sent, and the session ends.
+     There is nothing on screen yet that says a session is on; that is stage 4.
 3. The transport.
 4. Presence on screen.
 
-## What the owner has to do
+## Deploying
 
-Deploy the accounts API after stage 1 is merged (`npm run deploy --workspace=server`): it creates the
-Durable Object class. Until then the site's live sessions are refused (503) and everything else works
-as it does now.
+The accounts API with the relay was deployed on 2026-10-20, creating the Durable Object class. A later
+stage that changes `server/` needs `npm run deploy --workspace=server` again; until then the site can
+be ahead of the API, and a refused live session leaves everything else working as it does now.
