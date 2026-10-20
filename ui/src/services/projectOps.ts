@@ -51,6 +51,8 @@ export type Operation =
   | { type: 'scene.create'; sceneId: string; name?: string; empty?: boolean }
   | { type: 'scene.rename'; sceneId: string; name: string }
   | { type: 'scene.color'; sceneId: string; color?: string }
+  // A scene's own tempo; none plays it at the project's.
+  | { type: 'scene.tempo'; sceneId: string; tempo?: number }
   // The open scene's time signature: one of the six, with every lane and the drum grid resized to it.
   | { type: 'scene.signature'; signature: string }
   // One part of the open scene, a lane's notes or one drum's row, put into another scene.
@@ -106,6 +108,7 @@ type OpResults = Total<{
   'scene.create': SceneAnswer;
   'scene.rename': SceneAnswer;
   'scene.color': SceneAnswer;
+  'scene.tempo': SceneAnswer;
   'scene.signature': SceneAnswer;
   'scene.copyPart': SceneAnswer;
   'scene.replace': SceneAnswer;
@@ -166,6 +169,7 @@ export const OP_META: Record<OpType, { save: boolean; undoable: boolean; share: 
   'scene.create': { save: true, undoable: true, share: true },
   'scene.rename': { save: true, undoable: true, share: true },
   'scene.color': { save: true, undoable: true, share: true },
+  'scene.tempo': { save: true, undoable: true, share: true },
   'scene.signature': { save: true, undoable: true, share: true },
   'scene.copyPart': { save: true, undoable: true, share: true },
   'scene.replace': { save: true, undoable: true, share: true },

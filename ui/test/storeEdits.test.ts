@@ -219,6 +219,16 @@ const cases: Case[] = [
       assert.equal('color' in service.snapshot().scenes[0], false);
     },
   }),
+  sceneChange('a scene is given a tempo of its own, and anything that is not a tempo takes it away', {
+    type: 'scene.tempo', arrange: twoScenes,
+    body: (ids: any) => ({ sceneId: ids.first, tempo: 92 }),
+    check: (result, service, ids) => {
+      assert.deepEqual(result.events[0].data.scenes.map((scene: any) => scene.tempo), [92, undefined]);
+      assert.equal(result.events[0].data.currentSceneId, ids.second, 'it does not open the scene');
+      ok(service.setSceneTempo(ids.first, Number.NaN));
+      assert.equal('tempo' in service.snapshot().scenes[0], false);
+    },
+  }),
   sceneChange('the open scene is given a time signature, and every lane and the drums become bars of it', {
     type: 'scene.signature',
     arrange: (service) => {
@@ -264,6 +274,10 @@ const cases: Case[] = [
   {
     type: 'scene.color', title: 'a scene that does not exist cannot be coloured',
     body: { sceneId: 'nope', color: 'teal' }, status: 400, error: 'That scene is not in the project.',
+  },
+  {
+    type: 'scene.tempo', title: 'a scene that does not exist cannot be given a tempo',
+    body: { sceneId: 'nope', tempo: 90 }, status: 400, error: 'That scene is not in the project.',
   },
   sceneChange('one drum row of the open scene is put into another scene, and the rest of that scene is left', {
     type: 'scene.copyPart',

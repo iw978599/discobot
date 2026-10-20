@@ -157,10 +157,19 @@ export function useStudioTransport(core: StudioCore, needs: StudioTransportNeeds
     }
   };
   const transportPlaying = synths.some(s => s.isPlaying);
+  // How fast a tick of the transport plays (roadmap 17): the tempo of the scene it falls in, which is
+  // the open scene's in scene mode and the song's scene there in song mode, or the project's for a
+  // scene with none of its own. The count-in is at the tempo of the scene the music starts with.
+  const tempoAt = (counted: number) => {
+    const own = (sceneId: string | undefined) => (sceneId ? scenesRef.current.find(scene => scene.id === sceneId)?.tempo : undefined) ?? globalTempoRef.current;
+    if (playModeRef.current !== 'song') return own(currentSceneIdRef.current);
+    const tick = Math.max(0, counted - countInRef.current.ticks);
+    return own(sceneAtTick(songRef.current, songStartTickRef.current + tick, sceneLengthRef.current, signatureOfRef.current)?.sceneId);
+  };
   const startTransport = () => {
     transportRef.current ??= new BrowserTransport(
       () => engine.getContext().currentTime,
-      () => globalTempoRef.current,
+      tick => tempoAt(tick),
       tick => scheduleTickRef.current(tick),
       () => guestInputs.reachSeconds(),
     );
