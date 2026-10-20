@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import type { Studio } from '../studio/useStudio';
 import { playSample } from '../hooks/browserAudio';
 import EffectsPanel from '../components/EffectsPanel';
@@ -249,7 +249,14 @@ export default function Rack({ studio }: { studio: Studio }) {
         {people.length > 0 && (
           <div role="status" className="live-people">
             <span>In this live session with</span>
-            {people.map(([user, colour]) => <span key={user} className="live-person" style={{ '--present': `var(--person-${colour})` } as CSSProperties}>{user}</span>)}
+            {/* The spaces and commas are in the text, so it reads as words and not only as it looks. */}
+            {people.map(([user, colour], at) => (
+              <Fragment key={user}>
+                {' '}
+                <span className="live-person" style={{ '--present': `var(--person-${colour})` } as CSSProperties}>{user}</span>
+                {at < people.length - 1 ? ',' : ''}
+              </Fragment>
+            ))}
           </div>
         )}
         {playingBy && !studio.isAnyPlaying && (
