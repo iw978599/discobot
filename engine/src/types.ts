@@ -435,6 +435,9 @@ export interface Scene {
   // how long a bar of this scene is and where its beats fall, for every lane and the drum grid.
   // Absent means 4/4, as every scene was before there was a choice.
   signature?: TimeSignature;
+  // how fast this scene plays, in beats a minute, so a song can slow for its break. Absent means the
+  // project's tempo, as every scene had before there was a choice.
+  tempo?: number;
   // steps per synth lane id; a missing lane is silent in this scene
   lanes: Record<number, SequencerStep[]>;
   drums: Record<DrumInstrument, DrumLanePattern>;

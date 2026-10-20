@@ -9,7 +9,7 @@ import SongPlaylist from './SongPlaylist';
 import { SCENE_COLORS, SCENE_COLOR_NAMES } from '../services/sceneColors';
 import UnitHelp, { UNIT_HELP } from './UnitHelp';
 import { tracked } from '../studio/tracked';
-import { sceneLengthIn, sceneSignatureIn } from '../studio/studioState';
+import { sceneLengthIn, sceneSignatureIn, sceneTempoIn } from '../studio/studioState';
 
 // Scenes are one-bar sections of the whole arrangement; the song is the order they play in.
 // Everything below this module in the rack shows, and edits, the selected scene.
@@ -105,6 +105,27 @@ function SongModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
             {TIME_SIGNATURES.map(signature => <option key={signature} value={signature}>{signature}</option>)}
           </select>
         </label>
+        <label className="scene-color scene-time scene-tempo" title="How fast the open scene plays, so a song can slow for its break or speed up. Leave it empty to play the scene at the song's tempo">
+          Tempo
+          <input
+            key={`${current?.id}:${current?.tempo ?? ''}`}
+            type="number"
+            min={20}
+            max={400}
+            step={1}
+            aria-label="Tempo of the open scene"
+            disabled={!current}
+            placeholder={String(studio.globalTempo)}
+            defaultValue={current?.tempo ?? ''}
+            onBlur={(event) => {
+              if (!current) return;
+              const text = event.currentTarget.value.trim(), tempo = text === '' ? undefined : Number(text);
+              const next = tempo !== undefined && Number.isFinite(tempo) ? tempo : undefined;
+              if (next !== current.tempo) void studio.handleSceneTempo(current.id, next);
+            }}
+            onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }}
+          />
+        </label>
         <button
           className="rack-btn danger"
           disabled={!current || scenes.length < 2}
@@ -118,7 +139,7 @@ function SongModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
       <div className="rack-row song-row">
         <div className="rack-plate static">
           <b>Song</b>
-          <span>{bars} {bars === 1 ? 'bar' : 'bars'} · {songClock(songSeconds(song, lengthOf, studio.globalTempo, sceneSignatureIn(studio.sceneInfo)))}</span>
+          <span>{bars} {bars === 1 ? 'bar' : 'bars'} · {songClock(songSeconds(song, lengthOf, studio.globalTempo, sceneSignatureIn(studio.sceneInfo), sceneTempoIn(studio.sceneInfo)))}</span>
         </div>
         <div className="rack-ms mode-toggle" role="group" aria-label="Play mode">
           <button

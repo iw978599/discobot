@@ -1,7 +1,7 @@
 // What each operation does to the project. A reducer is the body of the route it replaces,
 // moved as it was. It changes the state it is handed and says what to save and send; it never
 // emits, saves or reads the clock itself, which is `apply`'s work in localService.ts.
-import { MAX_SCENES, clone, merge, number, sanitizeDrums, sanitizeEffects, sanitizeModelParams, sanitizePattern, sanitizeScenes, sanitizeSends, sanitizeSong, sanitizeSynthParams } from './projectSanitization';
+import { MAX_SCENES, clone, merge, number, sanitizeDrums, sanitizeEffects, sanitizeModelParams, sanitizePattern, sanitizeScenes, sanitizeSends, sanitizeSong, sanitizeSynthParams, sceneTempoOf } from './projectSanitization';
 import { MAX_GUESTS, guestUrl, patchGuest, sanitizeGuests } from './guests';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
 import { LANE_IDS, MAX_LANES, storedLaneName, storedPresetName } from './lanes';
@@ -101,10 +101,11 @@ const transport = (playing: boolean) => ({ state }: ReducerContext, op: { synthI
 // the service on its open project.
 
 // The live lanes and drum grid as a scene.
-export const captureScene = (state: ProjectState, id: string, name: string, color?: string, signature?: TimeSignature): Scene => ({
+export const captureScene = (state: ProjectState, id: string, name: string, color?: string, signature?: TimeSignature, tempo?: number): Scene => ({
   id, name,
   ...(color ? { color } : {}),
   ...(storedSignature(signature) ? { signature: storedSignature(signature) } : {}),
+  ...(tempo !== undefined ? { tempo } : {}),
   lanes: Object.fromEntries(state.synths.map(synth => [synth.synthId, clone(synth.pattern.steps)])),
   ...(state.synths.some(synth => (synth.pattern.bars ?? 1) > 1)
     ? { laneBars: Object.fromEntries(state.synths.filter(synth => (synth.pattern.bars ?? 1) > 1).map(synth => [synth.synthId, synth.pattern.bars!])) } : {}),
@@ -141,7 +142,7 @@ export const ensureScenes = (state: ProjectState) => {
 // drums, so this runs before anything reads `scenes`: saving, switching, exporting.
 export const commitScene = (state: ProjectState) => {
   const index = state.scenes.findIndex(scene => scene.id === state.currentSceneId);
-  if (index >= 0) state.scenes[index] = captureScene(state, state.currentSceneId, state.scenes[index].name, state.scenes[index].color, state.scenes[index].signature);
+  if (index >= 0) state.scenes[index] = captureScene(state, state.currentSceneId, state.scenes[index].name, state.scenes[index].color, state.scenes[index].signature, state.scenes[index].tempo);
 };
 
 // Makes a scene the live pattern.
@@ -454,7 +455,8 @@ export const reducers: Reducers = {
     commitScene(state);
     const name = (typeof op.name === 'string' && op.name.trim() ? op.name.trim() : `Scene ${state.scenes.length + 1}`).slice(0, 40);
     // A new scene is in the time signature of the one it was made from.
-    const scene = captureScene(state, op.sceneId, name, nextSceneColor(state.scenes), openSignature(state));
+    // A new scene plays as fast as the one it was made from.
+    const scene = captureScene(state, op.sceneId, name, nextSceneColor(state.scenes), openSignature(state), state.scenes.find(entry => entry.id === state.currentSceneId)?.tempo);
     if (op.empty === true) {
       for (const id of Object.keys(scene.lanes)) scene.lanes[Number(id)] = emptySteps(scene.lanes[Number(id)].length);
       delete scene.laneAutomation;
@@ -480,6 +482,14 @@ export const reducers: Reducers = {
     if (!target) return refuse(400, 'That scene is not in the project.');
     const color = sceneColor(op.color);
     if (color) target.color = color; else delete target.color;
+    return sceneChanged(state);
+  },
+  // A scene's own tempo, or none, when it plays at the project's: anything not a tempo is none.
+  'scene.tempo': ({ state }, op) => {
+    const target = state.scenes.find(scene => scene.id === op.sceneId);
+    if (!target) return refuse(400, 'That scene is not in the project.');
+    const tempo = sceneTempoOf(op.tempo);
+    if (tempo !== undefined) target.tempo = tempo; else delete target.tempo;
     return sceneChanged(state);
   },
   // The open scene's part goes into the other scene, in place of what that scene had for it. A

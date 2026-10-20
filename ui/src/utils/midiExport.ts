@@ -22,7 +22,7 @@ interface MidiExportPayload {
   // A whole song, one entry per bar. When present, each lane's own pattern and
   // `drumState` above are ignored for notes and these are written end to end instead. Each bar
   // is as long as its own time signature makes it.
-  bars?: Array<{ name: string; lanes: Record<number, SequencerStep[]>; drumState: DrumState; signature?: unknown }>;
+  bars?: Array<{ name: string; lanes: Record<number, SequencerStep[]>; drumState: DrumState; signature?: unknown; tempo?: number }>;
 }
 
 interface MidiEvent {
@@ -153,13 +153,19 @@ function signatureEvent(tick: number, signature: unknown): MidiEvent {
   return { tick, data: [0xff, 0x58, 0x04, numerator, Math.log2(denominator), click, 8] };
 }
 
-function buildTempoTrack(tempo: number, markers: MidiEvent[] = [], signatures: MidiEvent[] = [signatureEvent(0, undefined)]): number[] {
+function tempoEvent(tick: number, tempo: number): MidiEvent {
   const safeTempo = Math.max(20, Math.min(400, Math.round(tempo)));
   const mpqn = Math.round(60000000 / safeTempo);
+  return { tick, data: [0xff, 0x51, 0x03, (mpqn >> 16) & 0xff, (mpqn >> 8) & 0xff, mpqn & 0xff] };
+}
+
+// `tempos` are the changes after the start, where a scene with a tempo of its own begins (roadmap 17).
+function buildTempoTrack(tempo: number, markers: MidiEvent[] = [], signatures: MidiEvent[] = [signatureEvent(0, undefined)], tempos: MidiEvent[] = []): number[] {
   const events: MidiEvent[] = [
     textMetaEvent(0, 'Discobot MIDI Export'),
-    { tick: 0, data: [0xff, 0x51, 0x03, (mpqn >> 16) & 0xff, (mpqn >> 8) & 0xff, mpqn & 0xff] },
+    tempoEvent(0, tempo),
     ...signatures,
+    ...tempos,
     ...markers,
   ];
   return makeTrackChunk(encodeTrack(events));
@@ -238,7 +244,10 @@ export function createMidiFile(payload: MidiExportPayload): Uint8Array {
   ));
   // The time signature at the start, and again wherever the song changes it.
   const changes = signatures.flatMap((signature, index) => (index === 0 || signatures[index - 1] !== signature ? [signatureEvent(times[index]?.start ?? 0, signature)] : []));
-  const trackChunks: number[][] = [buildTempoTrack(payload.tempo, markers, changes.length ? changes : undefined)];
+  // The tempo at the start, and again wherever a scene plays at another.
+  const tempos = payload.bars ? payload.bars.map(bar => bar.tempo ?? payload.tempo) : [payload.tempo];
+  const tempoChanges = tempos.flatMap((tempo, index) => (index > 0 && tempo !== tempos[index - 1] ? [tempoEvent(times[index].start, tempo)] : []));
+  const trackChunks: number[][] = [buildTempoTrack(tempos[0], markers, changes.length ? changes : undefined, tempoChanges)];
 
   const nonDrumChannels = [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15];
   activeSynths.forEach((lane, index) => {

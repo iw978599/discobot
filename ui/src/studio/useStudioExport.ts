@@ -26,7 +26,7 @@ export function useStudioExport(core: StudioCore, needs: StudioExportNeeds) {
       .map((entry) => ({ id: entry.id, pattern: clonePattern(entry.pattern!), muted: entry.muted, solo: entry.solo, swing: entry.swing }));
     downloadMidiFile(
       {
-        tempo: globalTempo,
+        tempo: liveSceneRef.current().tempo ?? globalTempo,
         synthLanes,
         drumState: cloneDrumState(drumStateRef.current),
         drumSwing,
@@ -40,7 +40,8 @@ export function useStudioExport(core: StudioCore, needs: StudioExportNeeds) {
     );
   }, [globalTempo, drumSwing, drumMasterVolume]);
   const currentArrangement = useCallback((): ExportArrangement => ({
-    tempo: globalTempoRef.current, synths: synthsRef.current, drumState: drumStateRef.current,
+    // The open scene at its own tempo, when it has one (roadmap 17).
+    tempo: liveSceneRef.current().tempo ?? globalTempoRef.current, synths: synthsRef.current, drumState: drumStateRef.current,
     drumKitId: selectedDrumKitIdRef.current, drumMasterVolume, drumSwing,
     drumFx: drumFxRef.current, effectsLoop: effectsLoopRef.current, drumSamples: { ...drumSamplesRef.current },
     synthSamples: { ...synthSamplesRef.current }, drumCymbals: cymbalsRef.current,
@@ -56,7 +57,7 @@ export function useStudioExport(core: StudioCore, needs: StudioExportNeeds) {
       {
         tempo: globalTempoRef.current, drumSwing, drumMasterVolume, drumState: kit,
         synthLanes: synthsRef.current.filter((entry) => entry.pattern).map((entry) => ({ id: entry.id, pattern: clonePattern(entry.pattern!), muted: false, solo: false, swing: entry.swing })),
-        bars: bars.map(scene => ({ name: scene.name, signature: scene.signature, lanes: scene.lanes, drumState: sceneDrumState(scene, kit) })),
+        bars: bars.map(scene => ({ name: scene.name, signature: scene.signature, tempo: scene.tempo, lanes: scene.lanes, drumState: sceneDrumState(scene, kit) })),
       },
       `discobot-song-${Date.now()}.mid`
     );

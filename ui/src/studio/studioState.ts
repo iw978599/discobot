@@ -34,10 +34,11 @@ export interface SynthPreset {
 export type PlayMode = 'pattern' | 'song';
 
 // A scene's length in bars (the open one's from its live lanes) and its time signature.
-export interface SceneInfo { bars: number; signature: TimeSignature | undefined }
+export interface SceneInfo { bars: number; signature: TimeSignature | undefined; tempo?: number }
 // What a unit that has `sceneInfo` hands the song helpers in place of the studio's functions.
 export const sceneLengthIn = (info: Record<string, SceneInfo>) => (sceneId: string) => info[sceneId]?.bars ?? 1;
 export const sceneSignatureIn = (info: Record<string, SceneInfo>) => (sceneId: string) => info[sceneId]?.signature;
+export const sceneTempoIn = (info: Record<string, SceneInfo>) => (sceneId: string) => info[sceneId]?.tempo;
 
 export interface SynthState {
   id: number;

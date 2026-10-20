@@ -59,10 +59,12 @@ export function onBeat(signature: unknown, stepInBar: number, perBar: number = b
 // whole note lasts, which is a bar of 4/4: a run of 4/4 bars is that length over and over, as it
 // was before a bar could be any other length.
 export interface BarTime { start: number; duration: number }
-export function barTimes(signatures: unknown[], whole: number): BarTime[] {
+// `scales` stretches a bar played at another tempo than the project's (a scene's own, roadmap 17):
+// the project's tempo over the bar's. Bars at the project's tempo come out exactly as they did.
+export function barTimes(signatures: unknown[], whole: number, scales: number[] = []): BarTime[] {
   let sixteenths = 0;
-  return signatures.map(signature => {
-    const steps = barSteps(signature), time = { start: sixteenths / 16 * whole, duration: steps / 16 * whole };
+  return signatures.map((signature, bar) => {
+    const steps = barSteps(signature) * (scales[bar] ?? 1), time = { start: sixteenths / 16 * whole, duration: steps / 16 * whole };
     sixteenths += steps;
     return time;
   });
@@ -195,6 +197,7 @@ export function sceneBar(scene: Scene, bar: number): Scene {
     ...(scene.mutes ? { mutes: scene.mutes } : {}),
     ...(scene.color ? { color: scene.color } : {}),
     ...(scene.signature ? { signature: scene.signature } : {}),
+    ...(scene.tempo !== undefined ? { tempo: scene.tempo } : {}),
     ...(scene.guestMix ? { guestMix: scene.guestMix } : {}),
   };
 }
