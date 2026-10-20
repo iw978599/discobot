@@ -110,7 +110,7 @@ test('disposing stops and disconnects what the engine made and closes its contex
   const made = ctx.nodes.length;
   const oscillators = ctx.nodes.filter(node => node.kind === 'oscillator');
   const sources = ctx.nodes.filter(node => node.kind === 'source');
-  assert.equal(oscillators.length, 5, 'a phaser and a chorus sweep for each bus, and the click');
+  assert.equal(oscillators.length, 9, 'a phaser and a chorus sweep for each bus, the wow and flutter of the delay on each bus, and the click');
   assert.equal(sources.length, 1);
   assert.ok(ctx.nodes.some(node => node.connections.includes(ctx.destination)));
 
@@ -213,7 +213,8 @@ test('the functions the app calls all reach the one engine', async () => {
     setMasterMuted(false);
     assert.equal(master.gain.value, MASTER_LEVEL * 0.3);
     assert.deepEqual(eqOf(master).map(node => node.gain.value), [3, -2, 6]);
-    const delay = ctx.nodes.find(node => node.kind === 'delay' && node.connections.length === 2)!;
+    // The shared delay is the one whose repeats go through its colour filter.
+    const delay = ctx.nodes.find(node => node.kind === 'delay' && node.connections.length === 1 && node.connections[0].kind === 'filter')!;
     assert.equal(delay.delayTime.value, 0.6, 'a quarter note at the tempo the function set');
     setEffectsTempo(120);
     assert.equal(delay.delayTime.value, 0.5);

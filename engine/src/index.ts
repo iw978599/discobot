@@ -10,4 +10,4 @@ export type { DrumWorkletMessage, GuestPlayerMessage, GuestTapMessage, SynthWork
 export { GUEST_TAP_FRAMES } from './workletMessages';
 export * from './types';
 // The values types.ts holds are named here as well: a star export does not carry them to every way this file is loaded.
-export { MAX_MOD_ROUTES, MOD_DESTINATIONS, MOD_SOURCES, RATE_SYNCS, CYMBAL_TYPES, PERC_CHOICES, AUX_KINDS } from './types';
+export { MAX_MOD_ROUTES, MOD_DESTINATIONS, MOD_SOURCES, RATE_SYNCS, CYMBAL_TYPES, PERC_CHOICES, AUX_KINDS, DRIVE_KINDS } from './types';

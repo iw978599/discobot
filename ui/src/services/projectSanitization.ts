@@ -1,5 +1,5 @@
 import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, Scene, SceneMutes, Song, SynthParameters, SynthModelParams } from '../types';
-import { CYMBAL_TYPES, PERC_CHOICES, MAX_MOD_ROUTES, MOD_DESTINATIONS, MOD_SOURCES, type ModRoute } from '@discobot/engine';
+import { CYMBAL_TYPES, DRIVE_KINDS, PERC_CHOICES, MAX_MOD_ROUTES, MOD_DESTINATIONS, MOD_SOURCES, type DriveKind, type ModRoute } from '@discobot/engine';
 import { DELAY_SYNCS } from './delayTime';
 import { storedRateSync } from './rateSync';
 import { CHORUS_DEFAULT, EQ_RANGE_DB, INSERT_DEFAULT, MAX_INSERT_DELAY_TIME, MAX_PRE_DELAY } from './effectSettings';
@@ -357,6 +357,15 @@ export function sanitizeEffects(value: unknown, defaults: EffectsLoopState): Eff
   const sync = record(record(value).delay).sync;
   if (DELAY_SYNCS.includes(sync) && sync !== 'off') state.delay.sync = sync;
   else delete state.delay.sync;
+  // The delay's colour and wow, and the drive's kind, came later: kept only where they are set.
+  for (const key of ['color', 'wow'] as const) {
+    const amount = number(record(record(value).delay)[key], 0, 0, 1);
+    if (amount > 0) state.delay[key] = amount;
+    else delete state.delay[key];
+  }
+  const driveKind = record(record(value).drive).kind;
+  if (DRIVE_KINDS.includes(driveKind as DriveKind)) state.drive.kind = driveKind as DriveKind;
+  else delete state.drive.kind;
   state.reverb.decay = number(state.reverb.decay, defaults.reverb.decay, .2, 8);
   state.reverb.mix = number(state.reverb.mix, defaults.reverb.mix, 0, 1);
   const raw = record(value), reverb = record(raw.reverb);

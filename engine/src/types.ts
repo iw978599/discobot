@@ -43,6 +43,8 @@ export interface EffectsLoopState {
     enabled: boolean;
     amount: number;
     tone: number;
+    // how it clips: absent is the smooth curve it always had
+    kind?: DriveKind;
   };
   phaser: {
     enabled: boolean;
@@ -60,6 +62,10 @@ export interface EffectsLoopState {
     mix: number;
     // a note value that sets the time from the tempo; absent or 'off' uses `time`
     sync?: DelaySync;
+    // how much darker each repeat is than the one before, 0 to 1, as a tape or an analogue delay; absent is none
+    color?: number;
+    // how far the time wavers, 0 to 1, as worn tape does: a slow wow and a quicker flutter; absent is none
+    wow?: number;
   };
   reverb: {
     enabled: boolean;
@@ -411,6 +417,10 @@ export interface DrumLanePattern {
   stepProbabilities?: number[];
   stepRatchets?: number[];
 }
+
+// The drive's ways of clipping besides its own smooth one: soft and lopsided, hard, and extreme.
+export type DriveKind = 'overdrive' | 'distortion' | 'fuzz';
+export const DRIVE_KINDS: DriveKind[] = ['overdrive', 'distortion', 'fuzz'];
 
 export type TimeSignature = '4/4' | '3/4' | '6/8' | '5/4' | '7/8' | '12/8';
 

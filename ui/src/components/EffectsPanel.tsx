@@ -6,7 +6,10 @@ import { DELAY_SYNCS, DELAY_SYNC_LABELS } from '../services/delayTime';
 import { CHORUS_DEFAULT, EFFECTS_DEFAULT, EQ_DEFAULT, EQ_RANGE_DB, MAX_PRE_DELAY, REVERB_KINDS, REVERB_KIND_LABELS, type ReverbKind } from '../services/effectSettings';
 import Knob from './Knob';
 import Menu from '../rack/Menu';
-import { DELAY_PRESETS, REVERB_PRESETS } from '../services/effectPresets';
+import { CHORUS_PRESETS, DELAY_PRESETS, DRIVE_PRESETS, PHASER_PRESETS, REVERB_PRESETS } from '../services/effectPresets';
+import { DRIVE_KINDS } from '@discobot/engine';
+
+const DRIVE_KIND_LABELS: Record<string, string> = { classic: 'Classic', overdrive: 'Overdrive', distortion: 'Distortion', fuzz: 'Fuzz' };
 import UnitHelp, { UNIT_HELP } from '../rack/UnitHelp';
 import './EffectsPanel.css';
 
@@ -89,6 +92,20 @@ function EffectsPanel({ effectsLoop, onChange, onHelp }: EffectsPanelProps) {
               />
               <span>On</span>
             </label>
+            <label className="effects-toggle" title="How it clips: Classic is smooth, Overdrive soft and warm, Distortion hard, Fuzz hardest of all">
+              <span>Kind</span>
+              <select
+                aria-label="Drive kind"
+                value={effectsLoop.drive.kind ?? 'classic'}
+                onChange={(e) => onChange({ drive: { ...effectsLoop.drive, kind: e.target.value as NonNullable<EffectsLoopState['drive']['kind']> } })}
+              >
+                {['classic', ...DRIVE_KINDS].map(kind => <option key={kind} value={kind}>{DRIVE_KIND_LABELS[kind]}</option>)}
+              </select>
+            </label>
+            <Menu label="Presets" name="Drive presets" groups={[DRIVE_PRESETS.map(preset => ({
+              label: preset.name, title: preset.title,
+              onSelect: () => onChange({ drive: { ...effectsLoop.drive, ...preset.settings, enabled: true } as EffectsLoopState['drive'] }),
+            }))]} />
           </div>
           <div className="effects-knobs">
             <Knob
@@ -138,6 +155,10 @@ function EffectsPanel({ effectsLoop, onChange, onHelp }: EffectsPanelProps) {
                 {RATE_SYNCS.map(value => <option key={value} value={value}>{RATE_SYNC_LABELS[value]}</option>)}
               </select>
             </label>
+            <Menu label="Presets" name="Phaser presets" groups={[PHASER_PRESETS.map(preset => ({
+              label: preset.name, title: preset.title,
+              onSelect: () => onChange({ phaser: { ...effectsLoop.phaser, ...preset.settings, enabled: true } }),
+            }))]} />
           </div>
           <div className="effects-knobs">
             <Knob
@@ -252,6 +273,32 @@ function EffectsPanel({ effectsLoop, onChange, onHelp }: EffectsPanelProps) {
               onChange={(value) => onChange({ delay: { ...effectsLoop.delay, mix: value } })}
               color="#ec4899"
             />
+            <Knob
+              label="Color"
+              ariaLabel="Delay color"
+              value={effectsLoop.delay.color ?? 0}
+              defaultValue={0}
+              min={0}
+              max={1}
+              displayValue={`${Math.round((effectsLoop.delay.color ?? 0) * 100)}%`}
+              parseInputValue={parsePercent}
+              tooltip="How much darker each repeat is than the one before, as on a tape or an analogue delay"
+              onChange={(value) => onChange({ delay: { ...effectsLoop.delay, color: value } })}
+              color="#ec4899"
+            />
+            <Knob
+              label="Wow"
+              ariaLabel="Delay wow"
+              value={effectsLoop.delay.wow ?? 0}
+              defaultValue={0}
+              min={0}
+              max={1}
+              displayValue={`${Math.round((effectsLoop.delay.wow ?? 0) * 100)}%`}
+              parseInputValue={parsePercent}
+              tooltip="How much the time wavers, as worn tape does: a slow wow and a quicker flutter"
+              onChange={(value) => onChange({ delay: { ...effectsLoop.delay, wow: value } })}
+              color="#ec4899"
+            />
           </div>
         </div>
 
@@ -277,6 +324,10 @@ function EffectsPanel({ effectsLoop, onChange, onHelp }: EffectsPanelProps) {
                 {RATE_SYNCS.map(value => <option key={value} value={value}>{RATE_SYNC_LABELS[value]}</option>)}
               </select>
             </label>
+            <Menu label="Presets" name="Chorus presets" groups={[CHORUS_PRESETS.map(preset => ({
+              label: preset.name, title: preset.title,
+              onSelect: () => onChange({ chorus: { ...(effectsLoop.chorus ?? CHORUS_DEFAULT), ...preset.settings, enabled: true } }),
+            }))]} />
           </div>
           <div className="effects-knobs">
             <Knob
