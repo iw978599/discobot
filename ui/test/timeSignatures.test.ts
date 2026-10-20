@@ -13,6 +13,7 @@ import { clickAt, countInBeats, countInSeconds } from '../src/services/metronome
 import { randomLine } from '../src/services/randomize.ts';
 import { STARTERS, starterDrums, starterPattern } from '../src/services/starters.ts';
 import { buildSampleSong } from '../src/services/sampleSong.ts';
+import { SAMPLE_SONGS } from '../src/services/sampleSongs.ts';
 import { createBuiltInPresets } from '../src/services/builtInPresets.ts';
 import { seededRandom } from '../src/services/drumScheduling.ts';
 import { LocalProjectService } from '../src/services/localService.ts';
@@ -500,7 +501,7 @@ test('a random line follows the beats of the signature, and in 4/4 is the line i
   assert.ok(fine.steps.every((step, index) => !step.active || index % 2 === 0), 'finer steps get the same rhythm on every second step');
 });
 
-test('a starting beat in a shorter bar takes as much as fits, and the sample song is in 4/4', () => {
+test('a starting beat in a shorter bar takes as much as fits, and a sample song in 4/4 stores no signature', () => {
   const starter = STARTERS[0];
   const laid = starterDrums(starter, drums(24), '3/4');
   for (const instrument of DRUM_INSTRUMENTS) {
@@ -513,7 +514,9 @@ test('a starting beat in a shorter bar takes as much as fits, and the sample son
   assert.deepEqual(bass.steps.slice(12).map(step => step.note), bass.steps.slice(0, 12).map(step => step.note));
   assert.deepEqual(starterPattern(starter, { id: 'p', name: 'P', tempo: 120, steps: steps(16) }), starterPattern(starter, { id: 'p', name: 'P', tempo: 120, steps: steps(16) }, '4/4'));
 
-  const built = buildSampleSong(fresh().exportProject(), createBuiltInPresets()) as any;
+  const built = buildSampleSong(fresh().exportProject(), createBuiltInPresets(), SAMPLE_SONGS[0]) as any;
   assert.ok(built.project.scenes.length > 1);
-  for (const scene of built.project.scenes) assert.equal('signature' in scene, false);
+  for (const scene of built.project.scenes) assert.equal('signature' in scene, false, 'Neon Drive is in 4/4, which is stored as nothing');
+  const waltz = buildSampleSong(fresh().exportProject(), createBuiltInPresets(), SAMPLE_SONGS.find(song => song.id === 'blue-waltz')!) as any;
+  for (const scene of waltz.project.scenes) assert.equal(scene.signature, '3/4');
 });

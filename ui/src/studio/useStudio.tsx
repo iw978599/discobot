@@ -30,6 +30,7 @@ import { transposeSteps } from '../services/transpose';
 import { randomLine, type RandomChoice } from '../services/randomize';
 import { STARTERS, projectIsEmpty, starterDrums, starterPattern } from '../services/starters';
 import { buildSampleSong } from '../services/sampleSong';
+import { SAMPLE_SONGS } from '../services/sampleSongs';
 import { DEFAULT_DRUM_CHANNEL, defaultPads, drumForNote, storePads, storedPads, withPad, type PadMap } from '../services/midiDrums';
 import { destinationFor, destinationLane, storeMidiDestinations, storedMidiDestinations, withDestination, type MidiDestination, type MidiDestinations } from '../services/midiDevices';
 import { DEFAULT_QUANTIZE, asQuantize, recordPosition } from '../services/recordTiming';
@@ -2414,8 +2415,10 @@ export function useStudio() {
   }, []);
 
   // The sample song is a project of its own, opened as a file is: nothing here is changed.
-  const handleSampleSong = useCallback(async () => {
-    const file = buildSampleSong(localService.exportProject(), createBuiltInPresets());
+  // One of the sample songs, by its id, opened as a new project of its own.
+  const handleSampleSong = useCallback(async (id: string) => {
+    const song = SAMPLE_SONGS.find(entry => entry.id === id);
+    const file = song && buildSampleSong(localService.exportProject(), createBuiltInPresets(), song);
     if (!file) { setStorageError('The sample song could not be made.'); return; }
     if (await handleImportProject(file)) setPlayMode('song');
   }, [handleImportProject]);

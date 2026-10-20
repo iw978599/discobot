@@ -44,7 +44,7 @@ directly, with no builder.
    a long hall, a slapback, a dub delay, in a menu on each effect.
 7. **The aux buses on the mixer, by MIDI Learn and in automation**. Done: return strips on the mixer, aux sends and levels by MIDI Learn, and every send of a lane automatable. Was: the parts
    the aux sends were built without.
-8. **A first-run choice** (V15): start from a beat, the sample song, or
+8. **A first-run choice** (V15). Done: the strip on an empty project asks it, with six sample songs in different styles. Was: start from a beat, the sample song, or
    empty.
 9. **A kind chosen when a preset is imported** (sound 7), so it does not
    always land in "My presets".
