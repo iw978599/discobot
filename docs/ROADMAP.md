@@ -117,7 +117,7 @@ Cheap for the agent but blocked until the owner does or says something.
 - **MIDI hardware**: nothing MIDI has been tried with a real controller.
 - **A screen reader trial** (improvements 5).
 - **Firefox and guest instruments**: what the owner sees there.
-- **Live collaboration** (features 7): the owner lifted the rule on 2026-10-20 and it is being built in stages (`docs/LIVE_SESSIONS_PLAN.md`): the relay and edits are done; the transport and presence are next. Was: needs the rule against a held-open
+- **Live collaboration** (features 7): the owner lifted the rule on 2026-10-20 and it is being built in stages (`docs/LIVE_SESSIONS_PLAN.md`): the relay, edits and the transport are done; presence is next. Was: needs the rule against a held-open
   connection changed on purpose. L.
 - **Samples that sync** (sound 2): not planned; the storage asks for a card.
 

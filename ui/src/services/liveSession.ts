@@ -43,10 +43,21 @@ export interface LiveDeps {
   // session. Told when that changes while the session lasts; what happens after it is the caller's.
   saving?(on: boolean): void;
   changed?(): void;
+  // The studio's transport: started at a moment someone else chose, stopped, and where it is now.
+  transport?: LiveTransportHandlers;
+  // Milliseconds on this computer's clock.
+  wall?(): number;
 }
 
 export type LiveState = 'connecting' | 'joining' | 'live' | 'closed';
-export interface LiveStatus { state: LiveState; me: LiveMember | null; others: LiveMember[] }
+export interface LiveStatus { state: LiveState; me: LiveMember | null; others: LiveMember[]; playing: LivePlay | null }
+
+// Where the music is: tick `tick` of the transport (counted from its start, count-in included) is
+// heard at `wall` on this computer's clock. The play mode, the song entry it started from and the
+// count-in's ticks come with it, so every browser plays the same thing from the same place.
+export interface LiveAnchor { wall: number; tick: number; mode: string; entry: number; countIn: number }
+export interface LivePlay extends LiveAnchor { by: string }
+export interface LiveTransportHandlers { start(play: LivePlay): void; stop(): void; now(): LiveAnchor | null }
 
 // A knob's drag is a few messages a second, not one for every value.
 export const BATCH_MS = 40;
@@ -54,6 +65,16 @@ export const BATCH_MS = 40;
 export const JOIN_WAIT_MS = 10_000;
 // The room's own limit (MAX_MESSAGE in server/src/live.ts).
 const MAX_MESSAGE = 600_000;
+// Each person's clock is measured against the others' by this many round trips through the room.
+export const CLOCK_PINGS = 3;
+const CLOCK_GAP_MS = 250;
+// How long a play from someone whose clock is not measured yet waits for the first measurement.
+export const CLOCK_WAIT_MS = 1_000;
+// How long pressing Play to listen along waits for someone to say where the music is.
+export const LISTEN_WAIT_MS = 1_500;
+// How far ahead music started here is placed while someone else is in the session, so the start
+// reaches them in time (the room is a round trip away).
+export const LIVE_LEAD_SECONDS = 0.3;
 
 interface Edit { op: Operation; scene: string }
 // Something of this browser's applied here and not yet back from the room: an edit, or a whole
@@ -138,6 +159,14 @@ export function createLiveSession(deps: LiveDeps) {
   let state: LiveState = 'connecting';
   let me: LiveMember | null = null;
   let others: LiveMember[] = [];
+  // The music as this browser last heard of it, on this computer's clock, and who started it.
+  let playing: LivePlay | null = null;
+  // How far each other person's clock is ahead of this one, from the quickest round trip so far.
+  const clocks = new Map<string, { ahead: number; trip: number }>();
+  // Plays from people whose clocks are not measured yet, until they are.
+  const unclocked = new Map<string, Record<string, unknown>>();
+  let listening = false;
+  const wall = deps.wall ?? (() => Date.now());
   let openScene = store.openSceneId();
   let pending: Own[] = [];
   let queue: Own[] = [];
@@ -240,7 +269,72 @@ export function createLiveSession(deps: LiveDeps) {
     if (message.type === 'restored' && state !== 'closed') { wholeWanted = true; schedule(true); }
   });
 
+  function timeClocks() {
+    for (let ping = 0; ping < CLOCK_PINGS; ping++) {
+      deps.later(() => { if (state !== 'closed') send({ t: 'transport', kind: 'clock', sent: wall() }); }, ping * CLOCK_GAP_MS);
+    }
+  }
+
+  function readAnchor(value: Record<string, unknown>): LiveAnchor | null {
+    const { wall: at, tick, mode, entry, countIn } = value;
+    if (![at, tick, entry, countIn].every(number => typeof number === 'number' && Number.isFinite(number)) || typeof mode !== 'string') return null;
+    return { wall: at as number, tick: Math.max(0, tick as number), mode, entry: Math.max(0, Math.floor(entry as number)), countIn: Math.max(0, Math.floor(countIn as number)) };
+  }
+
+  // A message about the transport from someone else: their clock, their music, or a question.
+  function hear(message: Record<string, unknown>) {
+    const from = others.find(member => member.id === message.from);
+    if (!from || (typeof message.to === 'string' && message.to !== me?.id)) return;
+    switch (message.kind) {
+      case 'clock':
+        if (typeof message.sent === 'number') send({ t: 'transport', kind: 'clock-back', to: from.id, sent: message.sent, at: wall() });
+        return;
+      case 'clock-back': {
+        if (typeof message.sent !== 'number' || typeof message.at !== 'number') return;
+        const now = wall(), trip = now - message.sent;
+        const known = clocks.get(from.id);
+        if (trip >= 0 && (!known || trip < known.trip)) clocks.set(from.id, { ahead: message.at - (message.sent + now) / 2, trip });
+        const held = unclocked.get(from.id);
+        unclocked.delete(from.id);
+        if (held) hear(held);
+        return;
+      }
+      case 'play': {
+        const anchor = readAnchor(message);
+        if (!anchor) return;
+        if (!clocks.has(from.id)) {
+          if (!unclocked.has(from.id)) deps.later(() => { const held = unclocked.get(from.id); unclocked.delete(from.id); if (held) { clocks.set(from.id, { ahead: 0, trip: Infinity }); hear(held); } }, CLOCK_WAIT_MS);
+          unclocked.set(from.id, message);
+          return;
+        }
+        const play: LivePlay = { ...anchor, wall: anchor.wall - clocks.get(from.id)!.ahead, by: from.user };
+        const here = deps.transport?.now() ?? null;
+        // An answer to a question this browser no longer needs: it is playing already.
+        if (message.to && here && !listening) return;
+        // Two people pressed Play at once: the earlier start is kept everywhere.
+        if (!message.to && here && playing && (playing.wall < play.wall || (playing.wall === play.wall && playing.by <= play.by))) return;
+        listening = false;
+        playing = play;
+        changed();
+        deps.transport?.start(play);
+        return;
+      }
+      case 'stop':
+        playing = null;
+        listening = false;
+        changed();
+        deps.transport?.stop();
+        return;
+      case 'where': {
+        const here = deps.transport?.now();
+        if (here) send({ t: 'transport', kind: 'play', to: from.id, ...here });
+        return;
+      }
+    }
+  }
+
   async function take(message: Record<string, unknown>) {
+    if (message.t === 'transport') { hear(message); return; }
     if (me && message.from === me.id) {
       pending = pending.filter(entry => entry.n !== message.n);
       return;
@@ -262,6 +356,7 @@ export function createLiveSession(deps: LiveDeps) {
     changed();
     const waiting = buffered;
     buffered = [];
+    if (others.length) timeClocks();
     for (const message of waiting) await take(message);
     schedule(true);
   }
@@ -288,14 +383,31 @@ export function createLiveSession(deps: LiveDeps) {
         if (isRecord(message.member)) others = [...others, message.member as unknown as LiveMember];
         hostingChanged();
         changed();
+        if (state === 'live') timeClocks();
         return;
-      case 'leave':
+      case 'leave': {
+        const gone = others.find(member => member.id === message.id);
         others = others.filter(member => member.id !== message.id);
+        clocks.delete(String(message.id));
+        unclocked.delete(String(message.id));
+        // The music they started is not playing anywhere this browser knows of.
+        if (gone && playing?.by === gone.user && !deps.transport?.now()) playing = null;
         hostingChanged();
         changed();
         return;
-      case 'send-state':
-        if (state === 'live') send({ t: 'state', to: message.to, project: store.exportProject() });
+      }
+      case 'send-state': {
+        if (state !== 'live') return;
+        send({ t: 'state', to: message.to, project: store.exportProject() });
+        // Someone joining while the music plays is told where it is.
+        const here = deps.transport?.now();
+        if (here) send({ t: 'transport', kind: 'play', to: message.to, ...here });
+        return;
+      }
+      case 'transport':
+        // A clock is measured at once; the rest waits, while joining, for the project to arrive.
+        if (state === 'joining' && message.kind !== 'clock' && message.kind !== 'clock-back') { buffered.push(message); return; }
+        if (state === 'live' || state === 'joining') hear(message);
         return;
       case 'state': {
         if (state !== 'joining' || message.to !== me?.id) return;
@@ -334,7 +446,35 @@ export function createLiveSession(deps: LiveDeps) {
 
   return {
     close,
-    status: (): LiveStatus => ({ state, me, others }),
+    status: (): LiveStatus => ({ state, me, others, playing }),
+    // This browser started the music: everyone else starts it at the same moment.
+    sendPlay(anchor: LiveAnchor) {
+      if (state !== 'live' || !me) return;
+      playing = { ...anchor, by: me.user };
+      listening = false;
+      changed();
+      send({ t: 'transport', kind: 'play', ...anchor });
+    },
+    sendStop() {
+      if (state !== 'live') return;
+      playing = null;
+      listening = false;
+      changed();
+      send({ t: 'transport', kind: 'stop' });
+    },
+    // Someone else is playing: asks where the music is, to start there. If nobody answers, it
+    // starts from what this browser last heard. Answers whether it asked.
+    listen(): boolean {
+      if (state !== 'live' || !playing || !others.length) return false;
+      listening = true;
+      send({ t: 'transport', kind: 'where' });
+      deps.later(() => {
+        if (!listening || !playing) return;
+        listening = false;
+        deps.transport?.start(playing);
+      }, LISTEN_WAIT_MS);
+      return true;
+    },
     // Resolves when every message received so far has been dealt with. For the tests.
     settled: () => chain,
   };
@@ -358,8 +498,26 @@ let retryKey = '';
 const listeners = new Set<() => void>();
 const changed = () => listeners.forEach(listener => listener());
 
-export const liveStatus = (): LiveStatus => running?.session.status() ?? { state: 'closed', me: null, others: [] };
+export const liveStatus = (): LiveStatus => running?.session.status() ?? { state: 'closed', me: null, others: [], playing: null };
 export const subscribeLive = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
+
+// Between the studio's Play button and this page's session. Only the button (and Space) tells the
+// session anything: an export playing the song through, or a song ending, is this browser's own.
+let studioTransport: LiveTransportHandlers | null = null;
+const withOthers = () => { const status = running?.session.status(); return !!status && status.state === 'live' && status.others.length > 0; };
+export const liveTransport = {
+  connect(handlers: LiveTransportHandlers) {
+    studioTransport = handlers;
+    return () => { if (studioTransport === handlers) studioTransport = null; };
+  },
+  // Someone else is in the session, so music started here is placed far enough ahead for them.
+  shared: withOthers,
+  // Someone else's music is playing in the session.
+  playingElsewhere: () => withOthers() && !!running?.session.status().playing,
+  play: (anchor: LiveAnchor) => running?.session.sendPlay(anchor),
+  stop: () => running?.session.sendStop(),
+  listen: () => running?.session.listen() ?? false,
+};
 
 function wanted(): { owner: string; id: string } | null {
   const user = currentUser();
@@ -405,6 +563,12 @@ function check() {
       return { send: text => { if (socket.readyState === 1) socket.send(text); }, close: () => socket.close() };
     },
     later: (run, ms) => { const timer = setTimeout(run, ms); return () => clearTimeout(timer); },
+    wall: () => performance.timeOrigin + performance.now(),
+    transport: {
+      start: play => studioTransport?.start(play),
+      stop: () => studioTransport?.stop(),
+      now: () => studioTransport?.now() ?? null,
+    },
     saving: on => {
       if (!on) { projectSync.hold(target.id, true); holding = true; return; }
       // Taking over from someone who left: this copy holds what they saved, and goes on top of it.

@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { LocalProjectService } from '../src/services/localService.ts';
-import { BATCH_MS, JOIN_WAIT_MS, createLiveSession, editKeys, overlap } from '../src/services/liveSession.ts';
+import { BATCH_MS, CLOCK_PINGS, JOIN_WAIT_MS, LISTEN_WAIT_MS, createLiveSession, editKeys, overlap, type LiveAnchor, type LivePlay } from '../src/services/liveSession.ts';
 import { freeColour, joined, left, received, type Peer } from '../../server/src/live.ts';
 import { comparable, defaults, ok, setup, storage } from './helpers/store.ts';
 
@@ -15,7 +15,8 @@ function room() {
   const timers: Array<{ at: number; run: () => void; done: boolean }> = [];
 
   // A browser with a project of its own (the first one made shares the helper's storage).
-  function browser(user: string, store?: LocalProjectService) {
+  // `skew` is how far this browser's computer clock is ahead of the room's.
+  function browser(user: string, store?: LocalProjectService, skew = 0) {
     if (!store) {
       storage.clear();
       store = new LocalProjectService();
@@ -25,6 +26,8 @@ function room() {
     const sent: any[] = [];
     const saving: boolean[] = [];
     let events!: { received(text: string): void; closed(): void };
+    // The studio's transport, pretended: what it was told to start, how often to stop, and where it is.
+    const music = { started: [] as LivePlay[], stops: 0, now: null as LiveAnchor | null };
     const peer: Peer = { id: user, user, colour: freeColour(peers), since: ++since, send: text => inbox.push(text) };
     const session = createLiveSession({
       store,
@@ -37,10 +40,16 @@ function room() {
       },
       later: (run, ms) => { const timer = { at: now + ms, run, done: false }; timers.push(timer); return () => { timer.done = true; }; },
       saving: on => saving.push(on),
+      wall: () => now + skew,
+      transport: {
+        start: play => { music.started.push(play); music.now = { wall: play.wall, tick: play.tick, mode: play.mode, entry: play.entry, countIn: play.countIn }; },
+        stop: () => { music.stops++; music.now = null; },
+        now: () => music.now,
+      },
     });
     peers.push(peer);
     joined(peers, peer);
-    const made = { user, store, session, inbox, sent, saving, receive: (text: string) => events.received(text) };
+    const made = { user, store, session, inbox, sent, saving, music, receive: (text: string) => events.received(text) };
     browsers.push(made);
     return made;
   }
@@ -67,7 +76,12 @@ function room() {
     }
   }
 
-  return { browser, deliver, tick };
+  // Lets the clocks be measured: each browser's round trips through the room, which take no time here.
+  async function clocks() {
+    for (let round = 0; round <= CLOCK_PINGS; round++) { tick(300); await deliver(); }
+  }
+
+  return { browser, deliver, tick, clocks, wallOf: (skew: number) => now + skew };
 }
 type Browser = ReturnType<ReturnType<typeof room>['browser']>;
 
@@ -84,13 +98,21 @@ function shape(store: LocalProjectService) {
 }
 const kick = (store: LocalProjectService) => (store.snapshot() as any).drumState.kick.steps.map((step: any) => step === true || step?.active === true);
 
+// Ben's computer clock is five seconds ahead of Ann's.
+const BEN_AHEAD = 5_000;
 async function twoInSession() {
   const live = room();
   const ann = live.browser('ann', setup());
   await live.deliver();
-  const ben = live.browser('ben');
+  const ben = live.browser('ben', undefined, BEN_AHEAD);
   await live.deliver();
+  await live.clocks();
   return { live, ann, ben };
+}
+// Pressing Play in a browser: its transport starts, and the session is told.
+function press(browser: { music: { now: LiveAnchor | null }; session: { sendPlay(anchor: LiveAnchor): void } }, anchor: LiveAnchor) {
+  browser.music.now = anchor;
+  browser.session.sendPlay(anchor);
 }
 
 test('the parts of the project an edit changes overlap where one contains the other', () => {
@@ -303,4 +325,71 @@ test('when the person saving leaves, the next longest in the session saves', asy
   ok(ann.store.setTempo(90));
   live.tick();
   assert.deepEqual(ann.sent, []);
+});
+
+const anchor = (wall: number, tick = 0): LiveAnchor => ({ wall, tick, mode: 'song', entry: 1, countIn: 32 });
+
+test('music started in one browser starts in the other at the same moment, on its own clock', async () => {
+  const { live, ann, ben } = await twoInSession();
+  press(ann, anchor(10_000));
+  await live.deliver();
+  assert.deepEqual(ben.music.started, [{ ...anchor(10_000 + BEN_AHEAD), by: 'ann' }]);
+  assert.equal(ben.session.status().playing?.by, 'ann');
+  ann.music.now = null;
+  ann.session.sendStop();
+  await live.deliver();
+  assert.equal(ben.music.stops, 1);
+  assert.equal(ben.session.status().playing, null);
+});
+
+test('pressing Play while someone else plays listens along from where their music is', async () => {
+  const { live, ann, ben } = await twoInSession();
+  press(ann, anchor(10_000));
+  await live.deliver();
+  // Ben's browser could not start (its audio was off), and his Play asks where the music is now.
+  ben.music.started.length = 0;
+  ann.music.now = anchor(30_000, 640);
+  assert.equal(ben.session.listen(), true);
+  await live.deliver();
+  assert.deepEqual(ben.music.started, [{ ...anchor(30_000 + BEN_AHEAD, 640), by: 'ann' }]);
+  // Another answer coming late is not a reason to start again.
+  ann.music.now = anchor(31_000, 700);
+  ann.receive(JSON.stringify({ t: 'transport', kind: 'where', from: 'ben' }));
+  await live.deliver();
+  assert.equal(ben.music.started.length, 1);
+});
+
+test('with nobody to say where the music is, listening along starts from what was last heard', async () => {
+  const { live, ann, ben } = await twoInSession();
+  press(ann, anchor(10_000));
+  await live.deliver();
+  ben.music.started.length = 0;
+  ann.music.now = null;
+  assert.equal(ben.session.listen(), true);
+  await live.deliver();
+  assert.deepEqual(ben.music.started, []);
+  live.tick(LISTEN_WAIT_MS);
+  assert.deepEqual(ben.music.started, [{ ...anchor(10_000 + BEN_AHEAD), by: 'ann' }]);
+});
+
+test('two people pressing Play at once both end up with the earlier start', async () => {
+  const { live, ann, ben } = await twoInSession();
+  press(ann, anchor(10_000));
+  press(ben, anchor(10_200 + BEN_AHEAD));
+  await live.deliver();
+  assert.deepEqual(ann.music.started, [], 'Ann started first and keeps her start');
+  assert.deepEqual(ben.music.started, [{ ...anchor(10_000 + BEN_AHEAD), by: 'ann' }]);
+});
+
+test('someone joining while the music plays is told where it is, against their own clock', async () => {
+  const live = room();
+  const ann = live.browser('ann', setup());
+  await live.deliver();
+  ann.music.now = anchor(50_000, 1_000);
+  const ben = live.browser('ben', undefined, BEN_AHEAD);
+  await live.deliver();
+  // The play waits for Ben's clock to be measured against Ann's.
+  assert.deepEqual(ben.music.started, []);
+  await live.clocks();
+  assert.deepEqual(ben.music.started, [{ ...anchor(50_000 + BEN_AHEAD, 1_000), by: 'ann' }]);
 });

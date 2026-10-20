@@ -132,6 +132,18 @@ test('two people work on one project together or in turns, and it ends when the 
   await expect(page.locator('.tempo-led-value')).toHaveText('90', { timeout: 10_000 });
   await setTempo(page, '95');
   await expect(dana.locator('.tempo-led-value')).toHaveText('95', { timeout: 10_000 });
+  // Dana presses Play and the music plays for Ian too: at once if his browser has its audio on, or
+  // when he presses Play himself, which listens along rather than starting it over. His Stop stops both.
+  await dana.locator('.play-all-button').click();
+  await expect(dana.locator('.play-all-button')).toHaveClass(/playing/);
+  const listen = page.getByRole('status').filter({ hasText: 'Dana is playing in this live session' });
+  await expect(page.locator('.play-all-button.playing').or(listen).first()).toBeVisible({ timeout: 10_000 });
+  if (await listen.isVisible()) await page.locator('.play-all-button').click();
+  await expect(page.locator('.play-all-button')).toHaveClass(/playing/, { timeout: 10_000 });
+  await expect(listen).toHaveCount(0);
+  await page.locator('.play-all-button').click();
+  await expect(dana.locator('.play-all-button')).not.toHaveClass(/playing/, { timeout: 10_000 });
+  await expect(page.locator('.play-all-button')).not.toHaveClass(/playing/);
   // Ian was there first, so his browser saves it, and nothing is kept twice.
   await syncNow(dana);
   await syncNow(page);
