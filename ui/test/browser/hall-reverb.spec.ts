@@ -122,6 +122,22 @@ test('an export with the Hall differs from the Room, is about as loud, rings on 
   await edit(unit.getByLabel('FX Return value', { exact: true }), '100%');
   await expect.poll(async () => (await stored(page)).effectsLoop.reverb).toEqual({ enabled: true, decay: 2, mix: 1 });
 
+  // The kick rings on quietly by itself for about three seconds, under every reverb tail: the check
+  // machines' takes showed it, and it is what read every tail as about three seconds long, whatever
+  // the knob said (roadmap 14). So a tail is measured with the same kick and no reverb subtracted,
+  // sample by sample. Renders repeat, and nothing here comes near the limiter, so what is left is the
+  // reverb alone.
+  await effects(page).getByLabel('Reverb enabled', { exact: true }).uncheck();
+  await expect.poll(async () => (await stored(page)).effectsLoop.reverb.enabled).toBe(false);
+  const dry = await take('dry');
+  await effects(page).getByLabel('Reverb enabled', { exact: true }).check();
+  await expect.poll(async () => (await stored(page)).effectsLoop.reverb.enabled).toBe(true);
+  const wet = (wav: Buffer) => {
+    const out = Buffer.from(wav);
+    for (let i = 44; i + 1 < out.length; i += 2) out.writeInt16LE(Math.max(-32768, Math.min(32767, wav.readInt16LE(i) - (i + 1 < dry.length ? dry.readInt16LE(i) : 0))), i);
+    return out;
+  };
+
   const room = await take('room');
   await kind(page).selectOption({ label: 'Hall' });
   await expect.poll(async () => (await stored(page)).effectsLoop.reverb.kind).toBe('hall');
@@ -153,14 +169,21 @@ test('an export with the Hall differs from the Room, is about as loud, rings on 
   await expect.poll(async () => (await stored(page)).effectsLoop.reverb.decay).toBe(1);
   const short = await take('hall-short');
   const end = (wav: Buffer) => loudness(wav, 1.5, 1.9);
-  // The model in `hallReverb.test.ts` has a four-second Hall 16 times louder here than a two-second
-  // one; the check machines gave 2.4, and read both reverbs' decay long, as if something steady sat
-  // under the tail. Not yet explained, so this holds only that the tail follows the knob.
+  // The whole takes, the kick's own tail included: they only show the tail following the knob
+  // upwards, since a short reverb sinks under the kick's tail. The model in `hallReverb.test.ts` has
+  // a four-second Hall 16 times louder here than a two-second one; the whole takes gave 2.4 for
+  // that reason. The reverb alone is measured below.
   console.log('hall-reverb tails', JSON.stringify({ long: end(long), hall: end(hall), short: end(short), room: end(room), hallLast: loudness(hall, 2.2, 2.4), roomLast: loudness(room, 2.2, 2.4), longDecay: decayOf(long), shortDecay: decayOf(short) }));
   expect(end(long), 'a four-second Hall is louder late than a two-second one').toBeGreaterThan(end(hall) * 1.5);
-  // Not held yet: on the check machines a one-second Hall rang as long as a two-second one
-  // (Known Issues in AGENTS.md). Put this back when that is found.
-  // expect(end(short), 'and a one-second Hall quieter').toBeLessThan(end(hall) / 1.5);
   expect(decayOf(long), 'which follows the knob').toBeGreaterThan(decayOf(hall) * 1.2);
+
+  // The reverb alone, with the kick's own tail taken out: the decay knob is followed both ways.
+  const alone = { short: wet(short), hall: wet(hall), long: wet(long), room: wet(room) };
+  console.log('hall-reverb alone', JSON.stringify({ shortEnd: end(alone.short), hallEnd: end(alone.hall), longEnd: end(alone.long), roomEnd: end(alone.room), shortDecay: decayOf(alone.short), hallDecay: decayOf(alone.hall), longDecay: decayOf(alone.long), roomDecay: decayOf(alone.room) }));
+  expect(end(alone.long), 'a four-second Hall rings on louder than a two-second one').toBeGreaterThan(end(alone.hall) * 1.5);
+  expect(end(alone.short), 'and a one-second Hall quieter').toBeLessThan(end(alone.hall) / 1.5);
+  // Not the decays read off the reverb alone: the reverb is fed the kick, whose own tail falls in about
+  // three seconds, and nothing that comes out can fall faster than what goes in. The check machines
+  // read 3.02, 3.09 and 4.29 seconds for one, two and four. The levels above are what tell them apart.
   expect(errors).toEqual([]);
 });

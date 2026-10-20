@@ -68,9 +68,10 @@ directly, with no builder.
 
 ### 3. Medium (M each, about one builder's run)
 
-14. **The Hall's Decay in Chrome** (Known Issues in `AGENTS.md`). Comes
-    before the clones, which lean on it, and is also what the Hall aux bus
-    plays.
+14. **The Hall's Decay in Chrome**. Done: the Hall was right; the browser
+    test measured its tail on top of the kick's own three-second tail. The
+    spec now subtracts a dry take and holds the knob both ways. The spring
+    reverb clone (15) no longer waits on it.
 14a. **Importing SoundFonts** (V18). Asked for by the owner on 2026-10-19, to come
     after 14.
 15. **Clones of well-known effects** (the second half of V5). Done but for the spring reverb, which waits on 14: presets named "… style" on each effect, with a colour and a wow on the delay and kinds of drive. Was: the list the
