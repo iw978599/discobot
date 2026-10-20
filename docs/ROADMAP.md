@@ -1104,6 +1104,12 @@ for new accounts.
 
 ## Questions waiting on the owner
 
+- **The scale lock** (plan item 16). Built with the builder's choices: the
+  key and scale are this browser's, not the project's; a key played outside
+  the scale sounds as the nearest note in it; the piano roll will not take a
+  note outside it; the chord menu offers the key's own chords. Is each of
+  these what the owner wants, and should the lock be saved with the project?
+
 - **Moving lanes** (plan item 20). Scenes, blocks and playlist rows can be
   dragged. Lanes cannot yet, because a lane's number is also its MIDI
   channel, its MIDI place and its fixed place on the rack. Should moving a
