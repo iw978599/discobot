@@ -20,12 +20,21 @@ export interface SynthSample {
   rate: number;
   // The note the recording sounds at. Absent, the sound's own root setting says.
   root?: number;
-  // More recordings of the same instrument at other notes. A note plays the one whose root is nearest.
-  zones?: Array<{ data: Float32Array; rate: number; root: number }>;
+  // More recordings of the same instrument at other notes. A note plays the one whose root is nearest,
+  // among those whose key range holds it when any does.
+  zones?: Array<SampleZone>;
+  // A SoundFont's recordings bring their own loop, in frames, and the keys each is for. Absent, as in
+  // every recording from before, the sound's own loop points say and every recording is for any key.
+  loopStart?: number;
+  loopEnd?: number;
+  keyLow?: number;
+  keyHigh?: number;
   // Set when `data` is not a recording but single cycles end to end, each this many samples long.
   // It is then played as an oscillator, and stepped through from one cycle to the next.
   frame?: number;
 }
+
+export interface SampleZone { data: Float32Array; rate: number; root: number; loopStart?: number; loopEnd?: number; keyLow?: number; keyHigh?: number }
 
 interface Voice {
   active: boolean;
@@ -68,6 +77,8 @@ interface Voice {
   // the note. Null for a sample with one recording and no root of its own, which is read as it is set.
   sampleData: Float32Array | null;
   sampleScale: number;
+  // The loop of the recording this note plays, in its frames, when the recording has one of its own.
+  sampleLoopFrames: [number, number] | null;
   // Which copy of the recording this voice reads: 0 is the recording, 1 one with its top octave
   // taken out, and so on. -1 until the note's first sample has chosen.
   sampleLevel: number;
@@ -139,7 +150,7 @@ export class SynthCore {
       fmPhase: [0, 0, 0, 0], fmFeedback: 0, fmEnv: 0, lfoPhase: [0, 0],
       amp: new Adsr(), filterEnv: new Adsr(), filter: new Svf(), filter2: new Svf(), ladder: new Ladder(), highpass: new Svf(), previousInput: 0,
       last: 0, transition: 0, transitionSamples: 0, age: 0, remaining: Infinity, releaseOverride: 0,
-      random: 0, randomPhase: 0, layer: 0, samplePosition: 0, sampleData: null, sampleScale: 0, sampleLevel: -1,
+      random: 0, randomPhase: 0, layer: 0, samplePosition: 0, sampleData: null, sampleScale: 0, sampleLoopFrames: null, sampleLevel: -1,
     }));
     this.refreshDerived();
     Object.assign(this.smoothed, {
@@ -343,19 +354,26 @@ export class SynthCore {
     }
     voice.samplePosition = 0;
     voice.sampleData = null;
+    voice.sampleLoopFrames = null;
     voice.sampleLevel = -1;
     const sample = this.sample;
     let recording = sample && !sample.frame ? sample.data : null;
     if (sample && !sample.frame && (sample.zones || sample.root !== undefined)) {
       // The recording made nearest this note.
       const midi = 69 + 12 * Math.log2(frequency / 440);
-      let data = sample.data, rate = sample.rate, root = sample.root ?? clamp(this.params.sampleRoot, 0, 127, 60);
-      for (const zone of sample.zones ?? []) {
-        if (Math.abs(zone.root - midi) < Math.abs(root - midi)) { data = zone.data; rate = zone.rate; root = zone.root; }
-      }
-      voice.sampleData = data;
-      voice.sampleScale = rate / (440 * 2 ** ((root - 69) / 12));
-      recording = data;
+      const { data, rate, loopStart, loopEnd, keyLow, keyHigh } = sample;
+      const first: SampleZone = { data, rate, root: sample.root ?? clamp(this.params.sampleRoot, 0, 127, 60), loopStart, loopEnd, keyLow, keyHigh };
+      const all = [first, ...(sample.zones ?? [])], key = Math.round(midi);
+      // A SoundFont's recordings are each for a range of keys: a note takes one whose range holds it,
+      // the nearest root among them. With no ranges, as before, it is the nearest root of them all.
+      const holding = all.filter(zone => zone.keyLow !== undefined && zone.keyHigh !== undefined && key >= zone.keyLow && key <= zone.keyHigh);
+      const pool = holding.length ? holding : all;
+      let chosen = pool[0];
+      for (const zone of pool) if (Math.abs(zone.root - midi) < Math.abs(chosen.root - midi)) chosen = zone;
+      voice.sampleData = chosen.data;
+      voice.sampleScale = chosen.rate / (440 * 2 ** ((chosen.root - 69) / 12));
+      voice.sampleLoopFrames = chosen.loopStart !== undefined && chosen.loopEnd !== undefined && chosen.loopEnd - chosen.loopStart >= 2 ? [chosen.loopStart, chosen.loopEnd] : null;
+      recording = chosen.data;
     }
     // A note begins where the sound says, as a share of whichever recording it plays.
     const start = clamp(this.params.sampleStart, 0, 1, 0);
@@ -593,8 +611,11 @@ export class SynthCore {
             const read = copy ?? data, shrink = copy ? 1 / 2 ** v.sampleLevel : 1;
             let at = v.samplePosition, lead = -1, leadMix = 0;
             if (sampleLoop) {
-              // A loop too short to hold a sample is the whole recording.
-              const whole = (loopTo - loopFrom) * end < 2, from = whole ? 0 : loopFrom * end, round = whole ? end : loopTo * end;
+              // A loop too short to hold a sample is the whole recording. A recording with a loop of its
+              // own (a SoundFont's) goes round that, unless the sound's loop points have been moved.
+              const own = v.sampleLoopFrames && loopFrom === 0 && loopTo === 1 ? v.sampleLoopFrames : null;
+              const whole = !own && (loopTo - loopFrom) * end < 2;
+              const from = own ? own[0] : whole ? 0 : loopFrom * end, round = own ? Math.min(own[1], end) : whole ? end : loopTo * end;
               if (at >= round) at = from + (at - round) % (round - from);
               // The last of the loop is faded into what the recording has just before the loop's
               // start, which is what leads into the start, so the join does not click. A loop from

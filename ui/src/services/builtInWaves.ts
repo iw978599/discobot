@@ -1,5 +1,6 @@
-import { CYMBAL_TYPES, type DrumRecordings, type PercType, type SynthParameters, type SynthSample } from '@discobot/engine';
+import { CYMBAL_TYPES, type DrumRecordings, type PercType, type SampleZone, type SynthParameters, type SynthSample } from '@discobot/engine';
 import { loadDrumSample } from './drumSamples';
+import { INSTRUMENT_TYPE, getSample } from './sampleStore';
 
 // The sounds that come with the app for the sample engine: recordings of instruments and single
 // cycles of waves, in `public/waves.bin`. `scripts/build-waves.mjs` makes that file, and
@@ -28,6 +29,36 @@ export const BUILT_IN_WAVES: Array<{ id: string; name: string; steps?: number; f
   { id: 'fm-clavisynth', name: 'FM Clavisynth', file: 'sounds/fm-clavisynth.bin' },
 ];
 
+// A zone's own loop (frames into its recording) and the keys it is for, which a SoundFont's zones
+// have (`soundFontImport.ts`); kept only when they make sense.
+const whole = (value: unknown, low: number, high: number) => Number.isInteger(value) && (value as number) >= low && (value as number) <= high;
+function extras(zone: Record<string, unknown>): Pick<SampleZone, 'loopStart' | 'loopEnd' | 'keyLow' | 'keyHigh'> {
+  const length = Number(zone.length);
+  const loop = whole(zone.loopStart, 0, length) && whole(zone.loopEnd, 0, length) && (zone.loopEnd as number) - (zone.loopStart as number) >= 2;
+  const keys = whole(zone.keyLow, 0, 127) && whole(zone.keyHigh, 0, 127) && (zone.keyLow as number) <= (zone.keyHigh as number);
+  return { ...(loop ? { loopStart: zone.loopStart as number, loopEnd: zone.loopEnd as number } : {}), ...(keys ? { keyLow: zone.keyLow as number, keyHigh: zone.keyHigh as number } : {}) };
+}
+
+// Writes the same file for one instrument, `id`: how an imported SoundFont instrument is kept in the
+// sample store. The recordings are kept as 16-bit audio, as the app's own are.
+export function encodeWaveBundle(id: string, zones: SampleZone[]): ArrayBuffer {
+  let at = 0;
+  const listed = zones.map(zone => {
+    const entry = { offset: at, length: zone.data.length, rate: zone.rate, root: zone.root, loopStart: zone.loopStart, loopEnd: zone.loopEnd, keyLow: zone.keyLow, keyHigh: zone.keyHigh };
+    at += zone.data.length;
+    return entry;
+  });
+  const list = new TextEncoder().encode(JSON.stringify({ waves: [{ id, zones: listed }] }));
+  const buffer = new ArrayBuffer(12 + list.length + at * 2), view = new DataView(buffer);
+  view.setUint32(0, 0x56574244, true);
+  view.setUint32(4, 1, true);
+  view.setUint32(8, list.length, true);
+  new Uint8Array(buffer, 12, list.length).set(list);
+  let frame = 0;
+  for (const zone of zones) for (const value of zone.data) view.setInt16(12 + list.length + 2 * frame++, Math.max(-32768, Math.min(32767, Math.round(value * 32768))), true);
+  return buffer;
+}
+
 // Reads the file the build script writes: a short header, a list of what is in it, then 16-bit audio.
 // A file that is not one, or is cut short, gives nothing: the lanes then play their oscillators.
 export function parseWaveBundle(buffer: ArrayBuffer): Map<string, SynthSample> {
@@ -47,8 +78,8 @@ export function parseWaveBundle(buffer: ArrayBuffer): Map<string, SynthSample> {
   };
   for (const wave of (list as { waves?: Array<Record<string, unknown>> })?.waves ?? []) {
     const zones = (Array.isArray(wave.zones) ? wave.zones as Array<Record<string, unknown>> : [])
-      .map(zone => ({ data: audio(zone.offset, zone.length), rate: Number(zone.rate), root: Number(zone.root) }))
-      .filter((zone): zone is { data: Float32Array; rate: number; root: number } => zone.data !== null);
+      .map(zone => ({ data: audio(zone.offset, zone.length), rate: Number(zone.rate), root: Number(zone.root), ...extras(zone) }))
+      .filter((zone): zone is SampleZone => zone.data !== null);
     if (typeof wave.id !== 'string' || zones.length === 0) continue;
     const [first, ...rest] = zones;
     if (Number.isInteger(wave.frame) && (wave.frame as number) > 1) waves.set(wave.id, { data: first.data, rate: 1, frame: wave.frame as number });
@@ -101,11 +132,24 @@ export async function loadCymbals(): Promise<DrumRecordings> {
   return recordings;
 }
 
+// An imported sample: an instrument from a SoundFont is read as its recordings, kept in memory once
+// read; anything else is decoded as the drum lanes' samples are.
+const instruments = new Map<string, Promise<SynthSample | null>>();
+function loadImported(id: string): Promise<SynthSample | null> {
+  let found = instruments.get(id);
+  if (!found) {
+    found = getSample(id).then(stored => (stored?.type === INSTRUMENT_TYPE ? [...parseWaveBundle(stored.data).values()][0] ?? null : loadDrumSample(id))).catch(() => null);
+    instruments.set(id, found);
+    void found.then(sample => { if (!sample) instruments.delete(id); });
+  }
+  return found;
+}
+
 // What a lane's sample engine plays: one of the app's sounds, an imported sample, or nothing.
 export function loadLaneSample(params: SynthParameters | null | undefined): Promise<SynthSample | null> {
   const sample = params?.sample;
   if (sample?.wave) return loadBuiltInWave(sample.wave);
-  return sample?.id ? loadDrumSample(sample.id) : Promise.resolve(null);
+  return sample?.id ? loadImported(sample.id) : Promise.resolve(null);
 }
 
 // The lanes' samples by lane id, for a render outside the studio (the page a share link opens).
