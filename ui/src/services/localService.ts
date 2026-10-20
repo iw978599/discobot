@@ -1,7 +1,7 @@
 import type { DrumInstrument, DrumKitDefinition, DrumKitId, DrumSettings, DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, Scene, Song, SynthParameters, SynthModelId, SynthModelParams } from '../types';
 import { sanitizeGuests, type Guest } from './guests';
 import { createIndexedDbLibrary, createMemoryLibrary, hasIndexedDb, type ProjectInfo, type ProjectLibrary, type ProjectRecord, type VersionInfo, type VersionReason } from './projectLibrary';
-import { COPY_SUFFIX, EARLIER_SUFFIX } from './projectFamilies';
+import { COPY_SUFFIX, DEFAULT_PROJECT_NAME, EARLIER_SUFFIX } from './projectFamilies';
 import { DRUM_KITS } from './drumKits';
 import { barSteps } from './patternLength';
 import { normalizeSynthModelId } from '../synthModels';
@@ -38,7 +38,6 @@ type State = Defaults & {
 };
 export type { State as ProjectState, LocalSynth as ProjectLane, Defaults as ProjectDefaults };
 type ProjectResult = { ok: true; repaired?: boolean } | { ok: false; error: string };
-const DEFAULT_PROJECT_NAME = 'Untitled';
 const projectName = (value: unknown, fallback = DEFAULT_PROJECT_NAME) =>
   (typeof value === 'string' && value.trim() ? value.trim() : fallback).slice(0, 60);
 export interface ProjectFile {

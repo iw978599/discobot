@@ -20,6 +20,8 @@ test('a synced rate comes round once each note value, and follows the tempo', ()
   assert.equal(syncedRateHz('1bar', 120), 0.5);
   assert.equal(syncedRateHz('8bar', 120), 0.0625);
   assert.equal(syncedRateHz('1/4', 60), 1, 'half the tempo, half the rate');
+  assert.ok(Math.abs(syncedRateHz('1/8d', 120)! - 8 / 3) < 1e-9, 'a dotted eighth is three quarters of a beat');
+  assert.ok(Math.abs(syncedRateHz('1/8t', 120)! - 6) < 1e-9, 'an eighth triplet a third of one');
   for (const none of ['off', undefined, null, '', '1/3', 4, {}]) assert.equal(syncedRateHz(none, 120), null);
   // Every value the menus offer has a name and, apart from Free, a rate; slower values come first.
   const rates = RATE_SYNCS.filter(value => value !== 'off').map(value => syncedRateHz(value, 120)!);

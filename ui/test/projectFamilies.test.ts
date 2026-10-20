@@ -82,7 +82,17 @@ test('every name the app gives a copy lands in the family of the project it came
   await service.newProject('Something else');
 
   const families = projectFamilies(await service.listProjects());
-  assert.deepEqual(families.map(family => family.title).sort(), ['Something else', 'Untitled']);
+  // A second new project is "Untitled 2": a project of its own, not a version of the first.
+  assert.deepEqual(families.map(family => family.title).sort(), ['Something else', 'Untitled', 'Untitled 2']);
   assert.deepEqual(families.find(family => family.title === 'Untitled')!.members.map(member => member.label).sort(),
-    ['2', 'Original', 'copy 2', 'earlier version', 'this browser\'s version']);
+    ['Original', 'copy 2', 'earlier version', 'this browser\'s version']);
+});
+
+test('new projects numbered by the app are projects of their own; their copies still join them', () => {
+  assert.equal(familyName('Untitled 2'), 'Untitled 2');
+  assert.equal(familyName('untitled 3'), 'untitled 3');
+  assert.equal(familyName('Untitled 2 copy'), 'Untitled 2');
+  assert.equal(familyName('Untitled copy 2'), 'Untitled', 'a second copy of Untitled is still a copy');
+  assert.equal(familyName('Untitled (earlier version)'), 'Untitled');
+  assert.equal(familyName('Song 2'), 'Song', 'any other name is numbered as a version of itself, as before');
 });

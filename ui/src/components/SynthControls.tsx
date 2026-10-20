@@ -47,7 +47,7 @@ const SOUND_TABS: Array<{ id: SynthTab; label: string }> = [
   { id: 'osc', label: 'Osc' }, { id: 'filter', label: 'Filter' }, { id: 'amp', label: 'Amp' },
   { id: 'lfo', label: 'LFO' }, { id: 'arp', label: 'Arp' }, { id: 'inserts', label: 'Inserts' }, { id: 'sends', label: 'Sends' },
 ];
-const INSERT_DELAY_SYNCS: RateSync[] = ['off', '1/2', '1/4', '1/8', '1/16'];
+const INSERT_DELAY_SYNCS: RateSync[] = ['off', '1/2', '1/4d', '1/4', '1/8d', '1/4t', '1/8', '1/8t', '1/16'];
 
 // In a row of tabs the arrow keys, Home and End move to a tab and open it; Tab leaves the row.
 const tabKeys = (event: KeyboardEvent<HTMLDivElement>) => {

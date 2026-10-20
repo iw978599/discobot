@@ -290,10 +290,9 @@ test('a project file restores lanes, drums, saved arrangements and presets over 
   await more(page);
   await page.getByRole('button', { name: /^Project: / }).click();
   const projects = page.getByRole('dialog', { name: 'Projects', exact: true });
-  await expect(projects.getByRole('group'), 'the three share a name, so they share a row').toHaveCount(1);
-  await expect(projects.getByLabel('Version of Untitled', { exact: true }).locator('option')).toHaveCount(3);
+  await expect(projects.getByRole('group'), 'Untitled and the two imported after it are projects of their own, each with a row').toHaveCount(3);
   await page.keyboard.press('Escape');
-  await openProject(page, 'Untitled 2', 'Untitled');
+  await openProject(page, 'Untitled 2');
   await expect(page.locator('.tempo-led-value')).toHaveText('150');
 
   await input.setInputFiles({ name: 'notes.json', mimeType: 'application/json', buffer: Buffer.from('{"hello":"world"}') });
