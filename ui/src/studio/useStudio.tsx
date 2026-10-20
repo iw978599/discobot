@@ -9,7 +9,7 @@ import { createDefaultSynthParameters } from '@discobot/engine';
 import { localService } from '../services/localService';
 import type { GuestPatch } from '../services/projectOps';
 import { projectSync, startProjectSync } from '../services/projectSync';
-import { startLiveSessions } from '../services/liveSession';
+import { LIVE_LEAD_SECONDS, liveTransport, startLiveSessions } from '../services/liveSession';
 import { loadDrumSample } from '../services/drumSamples';
 import { loadCymbals, loadLaneSample } from '../services/builtInWaves';
 import { MAX_EMBEDDED_TOTAL_BYTES, MAX_PROJECT_FILE_BYTES, adoptSamples, embedSamples } from '../services/projectSamples';
@@ -18,7 +18,7 @@ import { BAR_CHOICES, barSteps, barTargets, barTicks, clampLengths, copyBar, dru
 import { DRUM_INSTRUMENTS, DRUM_SETTINGS_DEFAULT } from '../services/drumKits';
 import { DRUM_FX_DEFAULT, EFFECTS_DEFAULT } from '../services/effectSettings';
 import type { DrumSample } from '../../../engine/src/drums/DrumCore';
-import { guestCapture, guestLink, guestOrigin, guestUrl, trustOrigin, wallAtContextTime, wallNow, type Guest } from '../services/guests';
+import { contextTimeAtWall, guestCapture, guestLink, guestOrigin, guestUrl, trustOrigin, wallAtContextTime, wallNow, type Guest } from '../services/guests';
 import { playhead } from '../services/playhead';
 import { loadStoredPresets, presetStore } from '../services/presetStore';
 import { downloadArrangementWav, downloadStemsZip } from '../services/wavExport';
@@ -38,7 +38,7 @@ import { DEFAULT_QUANTIZE, asQuantize, recordPosition } from '../services/record
 import { LANE_PARAMS, fromUnit, lanePatch, parseTarget } from '../services/paramTargets';
 import { canAutomate, copyAutomationBar, resizeAutomationBars, resizeAutomationEachBar, sentAutomation, splitAutomated, stepSends, stepVoiceParams, stepsThrough, withAutomationValues, withoutAutomation } from '../services/automation';
 import { storeMidiTies, storedMidiTies, tieFor, withTie, withoutTie, type MidiTie } from '../services/midiTies';
-import { CLICK_LEVEL, clickAt, clickLevel, countInBars, countInBeats, countInSeconds, storeMetronome, storedMetronome, type MetronomeSettings } from '../services/metronome';
+import { CLICK_LEVEL, clickAt, clickLevel, countInBars, storeMetronome, storedMetronome, type MetronomeSettings } from '../services/metronome';
 import { BrowserTransport, TransportTick } from '../services/browserTransport';
 import { arrangementWholes, downloadFile, ExportArrangement, loopPass } from '../services/wavExport';
 import { expandDrumStep, swingLate } from '../services/drumScheduling';
@@ -462,6 +462,11 @@ export function useStudio() {
   const songEndingRef = useRef(false);
   const stopPlaybackRef = useRef<() => void>(() => {});
   const handleGlobalPlayStopRef = useRef<() => Promise<void>>(async () => {});
+  // A live session's music (liveSession.ts): where the first tick of a start someone else chose
+  // falls on this computer's clock, with their count-in; and when this browser's Play was pressed,
+  // so the start it makes is told to the others.
+  const liveStartRef = useRef<{ wall: number; countIn: number } | null>(null);
+  const announceRef = useRef(0);
   const transportRef = useRef<BrowserTransport | null>(null);
   const liveSceneRef = useRef<() => Scene>(() => ({ id: '', name: '', lanes: {}, drums: createDefaultDrumState() }));
   const sceneLengthRef = useRef<(sceneId: string) => number>(() => 1);
@@ -747,9 +752,12 @@ export function useStudio() {
     } else {
       signature = signatureOf(currentSceneIdRef.current);
       const perBar = barTicks(signature), anchor = barAnchorRef.current;
-      // A bar of another length starts a new bar here, on a whole step of the bar before.
-      if (anchor.perBar !== perBar && (anchor.perBar === 0 || (tick - anchor.tick) % 2 === 0)) {
-        barAnchorRef.current = { tick, bar: anchor.perBar ? anchor.bar + Math.ceil((tick - anchor.tick) / anchor.perBar) : 0, perBar };
+      // A bar of another length starts a new bar here, on a whole step of the bar before. The first
+      // bars count from where the music starts, which is the first tick unless the transport began
+      // part of the way in (music someone else started in a live session).
+      if (anchor.perBar === 0) barAnchorRef.current = { tick: 0, bar: 0, perBar };
+      else if (anchor.perBar !== perBar && (tick - anchor.tick) % 2 === 0) {
+        barAnchorRef.current = { tick, bar: anchor.bar + Math.ceil((tick - anchor.tick) / anchor.perBar), perBar };
       }
       const from = barAnchorRef.current;
       passBar = from.bar + Math.floor((tick - from.tick) / from.perBar);
@@ -818,35 +826,53 @@ export function useStudio() {
   };
 
   const transportPlaying = synths.some(s => s.isPlaying);
+  const startTransport = () => {
+    transportRef.current ??= new BrowserTransport(
+      () => getAudioContext().currentTime,
+      () => globalTempoRef.current,
+      tick => scheduleTickRef.current(tick),
+      () => guestInputs.reachSeconds(),
+    );
+    const transport = transportRef.current, context = getAudioContext();
+    // Guests are told where the beats fall on the computer's clock, which they share with this page.
+    // A count-in is for a person about to play, never for an export that is recording the guests.
+    // Music someone else in a live session started begins when they said, with their count-in.
+    const remote = liveStartRef.current;
+    liveStartRef.current = null;
+    const countIn = metronomeRef.current.countIn && !exportingRef.current ? countInBars(metronomeRef.current) : 0;
+    // The count-in is a bar of the scene that plays first.
+    const firstScene = playModeRef.current === 'song' ? songRef.current.entries[songStartEntryRef.current]?.sceneId : undefined;
+    const counted = signatureOfRef.current(firstScene ?? currentSceneIdRef.current);
+    const countInTicks = remote ? remote.countIn : countIn * barTicks(counted);
+    countInRef.current = { ticks: countInTicks, signature: counted };
+    barAnchorRef.current = { tick: 0, bar: 0, perBar: 0 };
+    // Nothing is playing during the count-in, so no step is lit: the playhead is put before the first.
+    if (countInTicks > 0) for (const lane of ['drums' as const, ...synthsRef.current.map(synth => synth.id)]) playhead.set(lane, -1);
+    // Guests count their beats from where the music starts, which is after the count-in (a beat is eight ticks).
+    const countedBeats = countInTicks / 8;
+    transport.onTempo = (bpm, time, beat) => {
+      if (beat >= countedBeats) guestLink.announce({ playing: true, bpm, anchorWall: wallAtContextTime(context, time), anchorBeat: beat - countedBeats });
+    };
+    // With guests connected the first beat is placed far enough ahead for all of them to make it, and
+    // with someone else in a live session far enough ahead for them to hear of it. A start someone
+    // else chose may be past already: the transport then skips to where the music is now.
+    const announce = !remote && !exportingRef.current && Date.now() - announceRef.current < 2000;
+    announceRef.current = 0;
+    const lead = remote
+      ? contextTimeAtWall(context, remote.wall) - context.currentTime
+      : Math.max(guestLink.startLead(), announce && liveTransport.shared() ? LIVE_LEAD_SECONDS : 0);
+    transport.start(lead || undefined);
+    guestLink.announce({
+      playing: true, bpm: globalTempoRef.current, anchorBeat: 0,
+      anchorWall: wallAtContextTime(context, transport.startTime + countedBeats * 60 / Math.max(20, globalTempoRef.current)),
+    });
+    if (announce) liveTransport.play({ wall: wallAtContextTime(context, transport.startTime), tick: 0, mode: playModeRef.current, entry: songStartEntryRef.current, countIn: countInTicks });
+  };
+  const startTransportRef = useRef(startTransport);
+  startTransportRef.current = startTransport;
   useEffect(() => {
     if (transportPlaying) {
-      transportRef.current ??= new BrowserTransport(
-        () => getAudioContext().currentTime,
-        () => globalTempoRef.current,
-        tick => scheduleTickRef.current(tick),
-        () => guestInputs.reachSeconds(),
-      );
-      const transport = transportRef.current, context = getAudioContext();
-      // Guests are told where the beats fall on the computer's clock, which they share with this page.
-      // A count-in is for a person about to play, never for an export that is recording the guests.
-      const countIn = metronomeRef.current.countIn && !exportingRef.current ? countInBars(metronomeRef.current) : 0;
-      // The count-in is a bar of the scene that plays first.
-      const firstScene = playModeRef.current === 'song' ? songRef.current.entries[songStartEntryRef.current]?.sceneId : undefined;
-      const counted = signatureOfRef.current(firstScene ?? currentSceneIdRef.current);
-      countInRef.current = { ticks: countIn * barTicks(counted), signature: counted };
-      barAnchorRef.current = { tick: 0, bar: 0, perBar: 0 };
-      // Nothing is playing during the count-in, so no step is lit: the playhead is put before the first.
-      if (countIn > 0) for (const lane of ['drums' as const, ...synthsRef.current.map(synth => synth.id)]) playhead.set(lane, -1);
-      // Guests count their beats from where the music starts, which is after the count-in.
-      transport.onTempo = (bpm, time, beat) => {
-        if (beat >= countInBeats(countIn, counted)) guestLink.announce({ playing: true, bpm, anchorWall: wallAtContextTime(context, time), anchorBeat: beat - countInBeats(countIn, counted) });
-      };
-      // With guests connected the first beat is placed far enough ahead for all of them to make it.
-      transport.start(guestLink.startLead() || undefined);
-      guestLink.announce({
-        playing: true, bpm: globalTempoRef.current, anchorBeat: 0,
-        anchorWall: wallAtContextTime(context, transport.startTime + countInSeconds(countIn, globalTempoRef.current, counted)),
-      });
+      startTransportRef.current();
     } else {
       if (guestLink.transport().playing) guestLink.announce({ playing: false });
       transportRef.current?.stop();
@@ -1255,7 +1281,7 @@ export function useStudio() {
     localService.setTempo(bpm);
   }, []);
 
-  const handleGlobalPlayStop = useCallback(async () => {
+  const playStop = useCallback(async () => {
     const currentSynths = synthsRef.current;
     const isAnyPlaying = currentSynths.some(s => s.isPlaying);
     const playableSynths = currentSynths.filter(s => s.pattern);
@@ -1295,10 +1321,59 @@ export function useStudio() {
     drumAudio.stopAllNotes();
     setSongPosition(null);
   }, [synthAudio, drumAudio]);
-  handleGlobalPlayStopRef.current = handleGlobalPlayStop;
+  handleGlobalPlayStopRef.current = playStop;
   stopPlaybackRef.current = () => {
-    if (synthsRef.current.some(s => s.isPlaying)) void handleGlobalPlayStop();
+    if (synthsRef.current.some(s => s.isPlaying)) void playStop();
   };
+
+  // The Play button and Space. In a live session they play and stop for everyone; anything else that
+  // starts or stops the transport (an export playing through, a song ending) is this browser's alone.
+  const handleGlobalPlayStop = useCallback(async () => {
+    if (synthsRef.current.some(s => s.isPlaying)) {
+      await playStop();
+      liveTransport.stop();
+      return;
+    }
+    if (liveTransport.playingElsewhere()) {
+      // Someone else's music is playing: listen along from where it is, rather than start everyone over.
+      const ready = await Promise.all([synthAudio.ensureAudioReady(), drumAudio.ensureAudioReady()]);
+      if (ready.every(Boolean) && liveTransport.listen()) return;
+    }
+    announceRef.current = Date.now();
+    await playStop();
+  }, [playStop, synthAudio, drumAudio]);
+
+  // A live session's music: started here at the moment someone else chose (from where it is, if it
+  // has begun), stopped when they stop it, and where it is now, for someone joining. Nothing starts
+  // before this page has been touched, since a browser keeps its audio off until then.
+  useEffect(() => liveTransport.connect({
+    start: play => {
+      if (exportingRef.current || getAudioContext().state !== 'running') return;
+      const mode: PlayMode = play.mode === 'song' ? 'song' : 'pattern';
+      const entry = Math.min(play.entry, Math.max(0, songRef.current.entries.length - 1));
+      playModeRef.current = mode;
+      setPlayMode(mode);
+      songStartEntryRef.current = entry;
+      setSongStartEntry(entry);
+      // Where the transport's first tick falls, on this computer's clock, at the tempo now.
+      liveStartRef.current = { wall: play.wall - play.tick * 60 / Math.max(20, globalTempoRef.current) / 8, countIn: play.countIn };
+      if (!synthsRef.current.some(s => s.isPlaying)) { void playStop(); return; }
+      // Already playing: start again from where theirs is.
+      transportRef.current?.stop();
+      synthAudio.stopAllNotes();
+      drumAudio.stopAllNotes();
+      songEndingRef.current = false;
+      songStartTickRef.current = mode === 'song' ? entryStartTick(songRef.current, entry, sceneLengthRef.current, signatureOfRef.current) : 0;
+      startTransportRef.current();
+    },
+    stop: () => { if (synthsRef.current.some(s => s.isPlaying)) void playStop(); },
+    now: () => {
+      const transport = transportRef.current;
+      if (!transport?.running || exportingRef.current) return null;
+      const context = getAudioContext(), time = context.currentTime;
+      return { wall: wallAtContextTime(context, time), tick: Math.max(0, transport.ticksAt(time)), mode: playModeRef.current, entry: songStartEntryRef.current, countIn: countInRef.current.ticks };
+    },
+  }), [playStop, synthAudio, drumAudio]);
 
   const sceneChange = useCallback(async (change: () => { ok: boolean; error?: string }, leavesScene = true) => {
     // Leaving the open scene records it, so first collect what each guest is set to right now.

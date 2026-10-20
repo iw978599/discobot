@@ -41,6 +41,9 @@ design, the stages, and how far they have got.
 - **Ids are made before an edit is applied**, never inside a reducer, or each
   browser makes its own. An edit whose result cannot be repeated (Reset All)
   goes as the whole project instead.
+- **Only the Play button tells the session about the transport.** An export's
+  play-through or a song ending must never start or stop anyone else's music;
+  they use the internal `playStop`, not `handleGlobalPlayStop`.
 - **The studio must take a remote edit from its event alone.** Anything a
   handler sets around its call to the store (a ref, the audio) is missing
   when the same edit arrives from someone else.

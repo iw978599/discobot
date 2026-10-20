@@ -93,7 +93,17 @@ other person last was.
      disconnected are replaced by the session's project on joining again (a version is kept); a
      project over the room's 600,000-character message limit cannot be sent, and the session ends.
      There is nothing on screen yet that says a session is on; that is stage 4.
-3. The transport.
+3. The transport. **Done.** As built: a play is a moment on the sender's clock and a tick, with the play
+   mode, song entry and count-in; each browser measures the others' clocks through the room (the
+   quickest of three round trips) and starts its transport at that moment on its own, skipping
+   ahead when it is already past. Pressing Play while someone else's music plays listens along from
+   where it is; Stop stops everyone; two starts at once keep the earlier; someone joining is told
+   where the music is. A browser whose page has not been touched cannot start its audio, so it says
+   who is playing and waits for Play. Known limits: a tempo change while playing reaches each
+   browser when its edit arrives, so the beats can slip by that delay's share of a beat; the
+   computers' audio clocks drift by a few milliseconds a minute and nothing pulls them back during
+   a long play; the clock measurement is as good as the room's round trip is even in both
+   directions. Not verified by ear across two real computers.
 4. Presence on screen.
 
 ## Deploying

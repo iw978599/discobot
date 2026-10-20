@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { Studio } from '../studio/useStudio';
 import { playSample } from '../hooks/browserAudio';
 import EffectsPanel from '../components/EffectsPanel';
@@ -16,6 +16,7 @@ import ProjectsDialog from './ProjectsDialog';
 import ShareDialog from './ShareDialog';
 import AccountDialog, { useAccountUser, useSyncStatus } from './AccountDialog';
 import { projectSync } from '../services/projectSync';
+import { liveStatus, subscribeLive } from '../services/liveSession';
 import { markWalkthroughSeen } from '../services/walkthrough';
 import Walkthrough from './Walkthrough';
 import MidiImportDialog from './MidiImportDialog';
@@ -37,6 +38,13 @@ import { shownLanes } from '../services/lanes';
 
 // The whole instrument as one rack, read top to bottom: transport, three synth lanes,
 // the drum grid, the mixer, then the shared effects.
+// The name of whoever started the music in a live session with others in it, or nothing. A plain
+// string, so the store's snapshot is the same until it changes.
+const livePlayer = () => {
+  const status = liveStatus();
+  return status.state === 'live' && status.others.length > 0 ? status.playing?.by ?? '' : '';
+};
+
 export default function Rack({ studio }: { studio: Studio }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [projectsOpen, setProjectsOpen] = useState(false);
@@ -79,6 +87,8 @@ export default function Rack({ studio }: { studio: Studio }) {
   useWakeLock(studio.isAnyPlaying);
   const sync = useSyncStatus();
   const user = useAccountUser();
+  // Who started the music in this live session (liveSession.ts), shown while it is not playing here.
+  const playingBy = useSyncExternalStore(subscribeLive, livePlayer);
 
   // The mixer is handed the levels it shows, already gathered, and the same object for as long as
   // none of them changes: the lanes and the drums are new objects after every note and step.
@@ -189,6 +199,11 @@ export default function Rack({ studio }: { studio: Studio }) {
               {sync.ended.length > 0 && `${sync.ended.map(name => `“${name}”`).join(' and ')} ${sync.ended.length === 1 ? 'is' : 'are'} no longer shared with you. Your copy is still here, in this browser only.`}
             </span>
             <button className="rack-btn" onClick={projectSync.dismissShared} aria-label="Dismiss sharing message">✕</button>
+          </div>
+        )}
+        {playingBy && !studio.isAnyPlaying && (
+          <div role="status" className="app-alert">
+            <span>{playingBy} is playing in this live session. Press Play to listen along.</span>
           </div>
         )}
         {studio.guestRecording !== null && (
