@@ -493,6 +493,7 @@
 .drum-name:hover { border-color: var(--hover); color: var(--text); }
 /* A drum handed to a guest is heard through the guest, not the mix: its name plate is dashed. */
 .drum-name[data-handed] { border-style: dashed; }
+.drum-name-sample { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 3px; }
 .rack-plate .handed-to { font-size: var(--type-caption); color: var(--text-faint); white-space: nowrap; }
 .drum-grid-row.selected .drum-name { background: var(--drum-color); border-color: var(--drum-color); color: var(--text-on); }
 /* --bar is how many steps the scene's time signature puts in a bar; DrumModule sets it. */
