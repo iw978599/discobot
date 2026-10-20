@@ -849,6 +849,8 @@ export function useStudio() {
       synthAudio.endAutomation();
       autoPassRef.current.clear();
       localService.holdUndo('auto', false);
+      // A key still held (or latched) when the transport stops keeps the length it was given.
+      endRecordedHolds();
       drumAudio.stopAllNotes();
     }
   }, [transportPlaying]);
@@ -1465,12 +1467,52 @@ export function useStudio() {
     });
   }, []);
 
+  // Where the player is on the transport's clock, in ticks, and how many ticks a step of a lane is.
+  const heardTicks = (): number | null => {
+    const transport = transportRef.current;
+    if (!transport) return null;
+    const context = getAudioContext();
+    return transport.ticksAt(context.currentTime - (context.outputLatency || 0));
+  };
+  const ticksPerStepOf = (synthId: number): number | null => {
+    const pattern = synthsRef.current.find(s => s.id === synthId)?.pattern;
+    if (!pattern || pattern.steps.length === 0) return null;
+    const signature = signatureOfRef.current(currentSceneIdRef.current);
+    return barTicks(signature) / stepsPerBar(pattern.steps.length, pattern.bars, signature);
+  };
+  // Recorded keys still down, by lane and note: where each went down, so that letting it go can give
+  // its note the length it was held. While any key of a lane is down its edits are one undo step,
+  // so a chord or a run of overlapping notes is undone with its lengths.
+  const recordHeldRef = useRef(new Map<string, { synthId: number; note: string; step: number; ticks: number }>());
+  const endRecordedHold = (synthId: number, note: string, write: boolean) => {
+    const key = `${synthId}
+${note}`, held = recordHeldRef.current.get(key);
+    if (!held) return;
+    recordHeldRef.current.delete(key);
+    const now = heardTicks(), each = ticksPerStepOf(synthId), synth = synthsRef.current.find(s => s.id === synthId);
+    const pattern = synth?.pattern, step = pattern?.steps[held.step];
+    if (write && now !== null && each && pattern && step && stepNotes(step).includes(note)) {
+      const length = Math.min(pattern.steps.length - held.step, Math.max(1, Math.round((now - held.ticks) / each)));
+      if (length !== (step.length ?? 1)) {
+        localService.writePattern(synthId, pattern.id, { ...pattern, steps: pattern.steps.map((entry, index) => (index === held.step ? withStepLength(entry, length, note) : entry)) });
+      }
+    }
+    if (![...recordHeldRef.current.values()].some(entry => entry.synthId === synthId)) localService.holdUndo(`record:${synthId}`, false);
+  };
+  const endRecordedHolds = () => { for (const held of [...recordHeldRef.current.values()]) endRecordedHold(held.synthId, held.note, true); };
+
   // A note recorded from the keys: one played with another, within a moment, joins its chord.
   const recordNote = useCallback((synthId: number, note: string, velocity: number): boolean => {
     const now = performance.now(), chord = midiChordRef.current;
     const joins = chord !== null && chord.synthId === synthId && now - chord.at < CHORD_WINDOW_MS;
     const at = joins ? { step: chord.stepIndex, offset: 0 } : recordedStep(synthId);
     if (!at) return false;
+    const ticks = heardTicks();
+    if (ticks !== null) {
+      localService.holdUndo(`record:${synthId}`, true);
+      recordHeldRef.current.set(`${synthId}
+${note}`, { synthId, note, step: at.step, ticks });
+    }
     midiChordRef.current = { synthId, stepIndex: at.step, at: now };
     void upsertStepNote(synthId, at.step, note, velocity, joins, at.offset, false);
     return true;
@@ -1508,6 +1550,7 @@ export function useStudio() {
   const handleNoteRelease = useCallback(async (synthId: number, note: string) => {
     const synthParams = synthsRef.current.find(s => s.id === synthId)?.synthParams;
     if (!synthParams) return;
+    endRecordedHold(synthId, note, true);
     liveArpRef.current!.release(synthId, note);
     synthAudio.stopNote(note, synthParams, synthId);
   }, [synthAudio]);
