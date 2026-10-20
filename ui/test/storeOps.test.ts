@@ -3,7 +3,7 @@
 // the events, whether a save was scheduled and the project left behind are held to what the case
 // says. storeEdits.test.ts pins the same facts by applying each operation directly.
 import test from 'node:test';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { LocalProjectService } from '../src/services/localService.ts';
 import { OP_META, type Applied, type OpNotice, type Operation } from '../src/services/projectOps.ts';
@@ -1524,12 +1524,17 @@ test('scene operations are saved, undone and shared; opening a scene is neither 
   assert.deepEqual(OP_META['scene.select'], { save: true, undoable: false, share: false });
 });
 
+// The studio's source: useStudio.tsx and the hooks it is split into, as one text.
+const studioSource = () => readdirSync(new URL('../src/studio/', import.meta.url))
+  .filter(name => /\.tsx?$/.test(name)).sort()
+  .map(name => readFileSync(new URL(`../src/studio/${name}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n')).join('\n');
+
 // The studio is not run by these tests, so the two things the plan asks of it are read from its
 // source: the scheduler's scene change is a plain call with nothing awaited, and a scene handler
 // that leaves the open scene collects the guests' settings before the change.
 test('the scheduler opens a scene with a plain call, and a scene change waits for the guests first', () => {
-  const source = readFileSync(new URL('../src/studio/useStudio.tsx', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
-  assert.equal(source.includes('localRequest'), false, 'useStudio makes no route call at all');
+  const source = studioSource();
+  assert.equal(source.includes('localRequest'), false, 'the studio makes no route call at all');
   const from = source.indexOf('scheduleTickRef.current = ');
   const tick = source.slice(from, source.indexOf('const lanes = synthsRef.current;', from));
   const calls = (tick.match(/^.*selectScene.*$/gm) ?? []).filter(line => !line.trim().startsWith('//'));
@@ -1543,7 +1548,7 @@ test('the scheduler opens a scene with a plain call, and a scene change waits fo
 
 // Undo is the store's: the studio records nothing by hand and only asks for a step.
 test('the studio leaves undo to the store', () => {
-  const source = readFileSync(new URL('../src/studio/useStudio.tsx', import.meta.url), 'utf8');
+  const source = studioSource();
   for (const gone of ['pushHistorySnapshot', 'historyRef', 'applySnapshot', 'getSnapshot']) assert.equal(source.includes(gone), false, gone);
   assert.ok(source.includes('const handleUndo = useCallback(() => { localService.undo(); }, []);'));
   assert.ok(source.includes('const handleRedo = useCallback(() => { localService.redo(); }, []);'));
