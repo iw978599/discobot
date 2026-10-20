@@ -14,48 +14,76 @@ const late = (amount: number) => ({ offset: amount });
 const ramp = (steps: number, from: number, to: number): Array<number | null> => Array.from({ length: steps }, (_, index) => Number((from + (to - from) * index / Math.max(1, steps - 1)).toFixed(3)));
 const held = (steps: number, value: number): Array<number | null> => Array(steps).fill(value);
 
-// ---------------------------------------------------------------- Neon Drive (synthwave, 4/4)
+// ---------------------------------------------------------------- Night Circuit (dark synthwave, 4/4)
+// F minor at 104 BPM, after the darker side of synthwave: a Pro One bass pulsing in sixteenths and
+// pushed down by every kick (its duck), a Juno running the chords through its arpeggiator, an OB pad,
+// an MS-20 lead screaming through the Tube Screamer-style drive, and OB brass stabbing the off-beats.
+// The bridge turns to G flat, a half step above the home chord, and to C major, the darkest pair in
+// the key. The arpeggio comes in from behind a closed filter and goes out the same way.
 
-const NEON_ROOTS = ['A2', 'F2', 'C3', 'G2'];
-const NEON_CHORDS = [['A3', 'C4', 'E4'], ['A3', 'C4', 'F4'], ['G3', 'C4', 'E4'], ['G3', 'B3', 'D4']];
-const octaveUp = (note: string) => note.replace(/\d$/, digit => String(Number(digit) + 1));
-const bassSteady = (root: string): Placed[] => [[0, root, 3], [6, root, 1, 0.75], [8, root, 3], [14, root, 1, 0.75]];
-const bassBusy = (root: string): Placed[] => [[0, root, 2], [3, root, 1, 0.7], [6, root, 1, 0.8], [8, root, 2], [11, octaveUp(root), 1, 0.7], [14, root, 1, 0.8]];
-const NEON_MELODY: Placed[][] = [
-  [[0, 'E5', 2], [3, 'D5'], [4, 'C5', 2], [7, 'A4'], [8, 'C5', 3], [12, 'E5', 2]],
-  [[0, 'C5', 2], [3, 'A4'], [4, 'C5'], [6, 'D5', 2], [8, 'C5', 4], [14, 'A4']],
-  [[0, 'E5', 2], [2, 'G5', 2], [4, 'E5'], [6, 'D5'], [8, 'C5', 3], [12, 'D5'], [14, 'E5']],
-  [[0, 'D5', 3], [4, 'B4', 2], [6, 'G4', 2], [8, 'B4'], [10, 'D5', 2], [12, 'G5', 4]],
+const CIRCUIT_ROOTS = ['F2', 'C#2', 'G#1', 'D#2'];
+const CIRCUIT_PADS = [['F3', 'G#3', 'C4'], ['F3', 'G#3', 'C#4'], ['D#3', 'G#3', 'C4'], ['D#3', 'G3', 'A#3']];
+const CIRCUIT_ARPS = [['F4', 'G#4', 'C5'], ['F4', 'G#4', 'C#5'], ['D#4', 'G#4', 'C5'], ['D#4', 'G4', 'A#4']];
+const UNDERTOW_ROOTS = ['F2', 'F#2', 'C#2', 'C2'];
+const UNDERTOW_PADS = [['F3', 'G#3', 'C4'], ['F#3', 'A#3', 'C#4'], ['F3', 'G#3', 'C#4'], ['E3', 'G3', 'C4']];
+const UNDERTOW_ARPS = [['F4', 'G#4', 'C5'], ['F#4', 'A#4', 'C#5'], ['F4', 'G#4', 'C#5'], ['E4', 'G4', 'C5']];
+// Sixteen pulses a bar, the first of each beat the hardest, and the octave on the last but one.
+const pulse = (root: string): Placed[] => Array.from({ length: 16 }, (_, step): Placed => [step, step === 14 ? up(root, 12) : root, 1, step % 4 === 0 ? 1 : 0.7]);
+const held4 = (chords: string[][], velocity: number): Placed[][] => chords.map((chord): Placed[] => [[0, chord, 16, velocity]]);
+const stabs = CIRCUIT_PADS.map((chord): Placed[] => [[6, chord.map(note => up(note, 12)), 2, 0.75], [14, chord.map(note => up(note, 12)), 2, 0.85]]);
+const RUN_TUNE: Placed[][] = [
+  [[0, 'C5', 3], [3, 'G#4'], [4, 'C5', 2], [6, 'D#5', 2], [8, 'F5', 6], [14, 'D#5', 2]],
+  [[0, 'C#5', 6], [6, 'C5', 2], [8, 'G#4', 4], [12, 'F4', 4]],
+  [[0, 'G#4', 3], [3, 'A#4'], [4, 'C5', 4], [8, 'D#5', 4], [12, 'C5', 4]],
+  [[0, 'A#4', 6], [6, 'G4', 2], [8, 'D#5', 8]],
 ];
-const NEON_SPARSE = NEON_MELODY.map(bar => bar.filter(([step]) => step === 0 || step === 8).map(([step, notes]): Placed => [step, notes, 6, 0.7]));
-const SIXTEENTHS: Array<[number, number]> = Array.from({ length: 16 }, (_, step) => [step, step % 4 === 0 ? 0.6 : step % 2 === 0 ? 0.5 : 0.3]);
-const EIGHTHS: Array<[number, number]> = [0, 2, 4, 6, 8, 10, 12, 14].map(step => [step, step % 4 === 0 ? 0.55 : 0.4]);
-const GROOVE: Hits = { kick: [0, 4, 8, 12], clap: [4, 12], closedHH: SIXTEENTHS.filter(([step]) => step % 4 !== 2), openHH: [[2, 0.6], [6, 0.6], [10, 0.6], [14, 0.7]] };
-const FILL: Hits = { ...GROOVE, snare: [[10, 0.4], [12, 0.55], [13, 0.6], [14, 0.75], [15, 0.9]], clap: [4] };
-const neonPad = NEON_CHORDS.map((chord): Placed[] => [[0, chord, 16, 0.7]]);
+const UNDERTOW_TUNE: Placed[][] = [[[0, 'C5', 16, 0.7]], [[0, 'C#5', 16, 0.75]], [[0, 'C#5', 8, 0.7], [8, 'A#4', 8, 0.65]], [[0, 'C5', 16, 0.8]]];
+const HATS16: Array<[number, number]> = Array.from({ length: 16 }, (_, step): [number, number] => [step, step % 4 === 0 ? 0.5 : step % 2 === 0 ? 0.35 : 0.22]);
+const CIRCUIT_BEAT: Hits = { kick: [0, 4, 8, 12], clap: [4, 12], closedHH: HATS16, openHH: [[14, 0.5]] };
+const CIRCUIT_DRIVE: Hits = { ...CIRCUIT_BEAT, snare: [[4, 0.8], [12, 0.8]] };
+const CIRCUIT_FILL: Hits = { ...CIRCUIT_DRIVE, snare2: [[12, 0.8], [13, 0.85]], ride: [[14, 0.9], [15, 0.95]], openHH: [] };
+const BARS_4 = 4 * 16;
 
-const NEON_DRIVE: SampleSong = {
-  id: 'neon-drive', name: 'Neon Drive', genre: 'Synthwave',
-  hint: 'Synthwave in A minor at 118 BPM: a rubber bass, a CS-80 pad and a bell lead through an aux echo, in five sections',
-  tempo: 118, kit: 'clean-analog',
+const NIGHT_CIRCUIT: SampleSong = {
+  id: 'night-circuit', name: 'Night Circuit', genre: 'Dark synthwave',
+  hint: 'Dark synthwave in F minor at 104 BPM on five named lanes: a pulsing Pro One bass ducked by the kick, a Juno through its arpeggiator, an OB pad, an MS-20 lead through the Tube Screamer-style drive, and OB brass stabs',
+  tempo: 104, kit: 'punchy-modern', drumVolume: 0.42, level: 0.65,
   lanes: [
-    { preset: 'builtin-bass-rubber', octaveShift: -1 },
-    { preset: 'builtin-pad-cs80' },
-    { preset: 'builtin-pluck-bell', octaveShift: 1, sound: { fxSends: { auxA: 0.35 } } },
+    { preset: 'builtin-bass-pro', name: 'Pulse Bass', octaveShift: -1, sound: { duck: 0.5, fxSends: { reverb: 0 } } },
+    { preset: 'builtin-keys-juno', name: 'Arp', sound: { arpeggiator: { enabled: true, mode: 'up', rate: '1/16', gate: 0.5, octaves: 2 }, fxSends: { reverb: 0.2, auxA: 0.3 } } },
+    { preset: 'builtin-pad-ob', name: 'Night Pad', sound: { duck: 0.35, inserts: { chorus: { mix: 0.35, depth: 0.55, rate: 0.83 } }, fxSends: { reverb: 0.4 } } },
+    { preset: 'builtin-lead-ms', name: 'Screamer', octaveShift: 1, sound: { fxSends: { drive: 0.45, reverb: 0.25, auxA: 0.35 } } },
+    { preset: 'builtin-keys-ob', name: 'Brass Stabs', sound: { fxSends: { reverb: 0.3 } } },
   ],
-  effects: { aux: [{ kind: 'echo', level: 0.6, main: 0.375, shape: 0.45, sync: '1/8' }, { kind: 'hall', level: 0.8, main: 2.5, shape: 0.4 }] },
+  effects: {
+    drive: { enabled: true, amount: 0.5, tone: 0.55, kind: 'overdrive' },
+    delay: { enabled: true, time: 0.43, feedback: 0.45, mix: 0.25, sync: '1/8d', color: 0.4, wow: 0.1 },
+    reverb: { enabled: true, kind: 'hall', decay: 3.5, mix: 0.3, preDelay: 0.02, damping: 0.35 },
+    aux: [{ kind: 'echo', level: 0.55, main: 0.43, shape: 0.45, sync: '1/8d' }, { kind: 'hall', level: 0.8, main: 4, shape: 0.35 }],
+  },
   scenes: [
-    { id: 'neon-intro', name: 'Intro', color: 'teal', bars: 4, lanes: { 2: neonPad },
-      drums: [{ closedHH: EIGHTHS }, { closedHH: EIGHTHS }, { closedHH: EIGHTHS, kick: [0, 4, 8, 12] }, { closedHH: EIGHTHS, kick: [0, 4, 8, 12], openHH: [[14, 0.7]], snare: [[14, 0.5], [15, 0.7]] }] },
-    { id: 'neon-verse', name: 'Verse', color: 'blue', bars: 4, lanes: { 1: NEON_ROOTS.map(bassSteady), 2: neonPad }, drums: [GROOVE, GROOVE, GROOVE, FILL] },
-    { id: 'neon-chorus', name: 'Chorus', color: 'red', bars: 4, lanes: { 1: NEON_ROOTS.map(bassBusy), 2: neonPad, 3: NEON_MELODY },
-      drums: [{ ...GROOVE, crash: [0] }, GROOVE, GROOVE, FILL] },
-    { id: 'neon-break', name: 'Break', color: 'violet', bars: 4, lanes: { 2: neonPad, 3: NEON_SPARSE },
-      drums: [{ closedHH: EIGHTHS }, { closedHH: EIGHTHS }, { closedHH: EIGHTHS }, { closedHH: EIGHTHS, snare: [[12, 0.4], [13, 0.55], [14, 0.7], [15, 0.9]] }] },
-    { id: 'neon-outro', name: 'Outro', color: 'green', bars: 4, lanes: { 1: NEON_ROOTS.map(bassSteady), 2: neonPad },
-      drums: [{ kick: [0, 8], closedHH: EIGHTHS, crash: [0] }, { kick: [0, 8], closedHH: EIGHTHS }, { kick: [0, 8], closedHH: EIGHTHS }, { kick: [0] }] },
+    // The arpeggio alone, its filter opening; the pad underneath, and the hats coming in.
+    { id: 'circuit-ignition', name: 'Ignition', color: 'blue', bars: 4, lanes: { 2: held4(CIRCUIT_ARPS, 0.8), 3: held4(CIRCUIT_PADS, 0.55) },
+      drums: [{}, {}, { closedHH: HATS16 }, { closedHH: HATS16, openHH: [[14, 0.5]] }],
+      automation: { 2: { cutoff: ramp(BARS_4, 300, 5000) } } },
+    { id: 'circuit-pulse', name: 'Pulse', color: 'violet', bars: 4, lanes: { 1: CIRCUIT_ROOTS.map(pulse), 2: held4(CIRCUIT_ARPS, 0.8), 3: held4(CIRCUIT_PADS, 0.6) },
+      drums: [CIRCUIT_BEAT, CIRCUIT_BEAT, CIRCUIT_BEAT, CIRCUIT_FILL] },
+    { id: 'circuit-run', name: 'Run', color: 'red', bars: 4, lanes: { 1: CIRCUIT_ROOTS.map(pulse), 2: held4(CIRCUIT_ARPS, 0.8), 3: held4(CIRCUIT_PADS, 0.6), 4: RUN_TUNE, 5: stabs },
+      drums: [{ ...CIRCUIT_DRIVE, crash: [0] }, CIRCUIT_DRIVE, CIRCUIT_DRIVE, CIRCUIT_FILL] },
+    // A half step up to G flat and down to C major: the lead held, its echo growing, the kick gone.
+    { id: 'circuit-undertow', name: 'Undertow', color: 'teal', bars: 4, lanes: { 1: UNDERTOW_ROOTS.map((root): Placed[] => [[0, root, 16, 0.8]]), 2: held4(UNDERTOW_ARPS, 0.7), 3: held4(UNDERTOW_PADS, 0.6), 4: UNDERTOW_TUNE },
+      drums: [{ closedHH: HATS16.filter(([step]) => step % 2 === 0) }, { closedHH: HATS16.filter(([step]) => step % 2 === 0) }, { closedHH: HATS16 }, { closedHH: HATS16, snare: [[12, 0.5], [13, 0.6], [14, 0.7], [15, 0.85]] }],
+      automation: { 4: { auxASend: ramp(BARS_4, 0.2, 0.75) }, 3: { cutoff: held(BARS_4, 1200) } } },
+    // The lead dirtier and brighter as the section goes on.
+    { id: 'circuit-overdrive', name: 'Overdrive', color: 'pink', bars: 4, lanes: { 1: CIRCUIT_ROOTS.map(pulse), 2: held4(CIRCUIT_ARPS, 0.85), 3: held4(CIRCUIT_PADS, 0.65), 4: RUN_TUNE, 5: stabs },
+      drums: [{ ...CIRCUIT_DRIVE, crash: [0] }, CIRCUIT_DRIVE, { ...CIRCUIT_DRIVE, crash: [0] }, CIRCUIT_FILL],
+      automation: { 4: { drive: ramp(BARS_4, 0.1, 0.7), cutoff: ramp(BARS_4, 2500, 9000) } } },
+    // The arpeggio closes again and fades; the pad is last.
+    { id: 'circuit-shutdown', name: 'Shutdown', color: 'blue', bars: 4, lanes: { 2: held4(CIRCUIT_ARPS, 0.7), 3: held4(CIRCUIT_PADS, 0.5) },
+      drums: [{ kick: [[0, 0.8]], closedHH: HATS16 }, { kick: [[0, 0.6]] }, {}, {}],
+      automation: { 2: { cutoff: ramp(BARS_4, 5000, 300) }, 3: { cutoff: ramp(BARS_4, 2500, 300) } } },
   ],
-  order: [['neon-intro', 1], ['neon-verse', 2], ['neon-chorus', 2], ['neon-break', 1], ['neon-chorus', 2], ['neon-outro', 1]],
+  order: [['circuit-ignition', 1], ['circuit-pulse', 2], ['circuit-run', 2], ['circuit-undertow', 1], ['circuit-overdrive', 2], ['circuit-run', 1], ['circuit-shutdown', 1]],
 };
 
 // ---------------------------------------------------------------- Blue Waltz (jazz waltz, 3/4)
@@ -101,13 +129,16 @@ const BLUE_WALTZ: SampleSong = {
   hint: 'A jazz waltz in 3/4 at 152 BPM: a Steinway comping in strummed chords, a tenor sax head and a swung solo, a walking bass, and the recorded kit with a ride and a cross-stick',
   tempo: 152, kit: 'recorded',
   lanes: [
-    { preset: 'builtin-bass-pluck', octaveShift: -1, sound: { fxSends: { reverb: 0.15 } } },
-    { preset: 'builtin-keys-steinway-grand', sound: { fxSends: { reverb: 0.3, auxB: 0.15 } } },
-    { preset: 'builtin-lead-tenor-sax', sound: { fxSends: { reverb: 0.25, auxB: 0.3 } } },
+    { preset: 'builtin-bass', name: 'Upright', octaveShift: -1, sound: { fxSends: { reverb: 0.15 } } },
+    { preset: 'builtin-keys-steinway-grand', name: 'Piano', sound: { fxSends: { reverb: 0.3, auxB: 0.15, chorus: 0.2 } } },
+    { preset: 'builtin-lead-tenor-sax', name: 'Tenor Sax', sound: { fxSends: { reverb: 0.25, auxB: 0.3 } } },
   ],
   drums: { crash: { cymbalType: 'ride', volume: 0.55 }, snare: { percType: 'sidestick', volume: 0.6 }, closedHH: { volume: 0.5 }, kick: { volume: 0.6 } },
   drumSends: { reverb: 0.25 },
-  effects: { reverb: { enabled: true, kind: 'room', decay: 0.9, mix: 0.25, preDelay: 0.01, damping: 0.4 } },
+  effects: {
+    reverb: { enabled: true, kind: 'room', decay: 0.9, mix: 0.25, preDelay: 0.01, damping: 0.4 },
+    chorus: { enabled: true, rate: 0.25, depth: 0.2, mix: 0.45 },
+  },
   scenes: [
     { id: 'waltz-head', name: 'Head', color: 'blue', signature: '3/4', bars: 8, lanes: { 1: walk, 2: comp, 3: HEAD }, drums: waltzDrums(true) },
     { id: 'waltz-solo', name: 'Sax Solo', color: 'violet', signature: '3/4', bars: 8, lanes: { 1: walk, 2: compSparse, 3: SOLO }, drums: waltzDrums(true) },
@@ -140,14 +171,16 @@ const lofiDrums = [LOFI_BEAT, LOFI_BEAT, LOFI_BEAT, LOFI_TURN];
 const LATE_STUDY: SampleSong = {
   id: 'late-study', name: 'Late Study', genre: 'Lo-fi hip hop',
   hint: 'Lo-fi hip hop in D minor at 80 BPM, swung throughout: a felt piano made dusty by its own drive, tone and chorus, strummed jazz chords, and an FM piano whose echo send rises by automation',
-  tempo: 80, drumSwing: 0.45, kit: 'lofi-dirty',
+  tempo: 80, drumSwing: 0.45, kit: 'lofi-dirty', drumVolume: 0.7, level: 0.85,
   lanes: [
-    { preset: 'builtin-bass-sub', octaveShift: -1, swing: true },
-    { preset: 'builtin-keys-felt', swing: true, sound: { inserts: { drive: 0.3, tone: -0.45, chorus: { mix: 0.35, depth: 0.5, rate: 0.4 } }, fxSends: { reverb: 0.3 } } },
-    { preset: 'builtin-keys-fm-piano', sound: { fxSends: { reverb: 0.2, auxA: 0.2 } } },
+    { preset: 'builtin-bass', name: 'Bass', octaveShift: -1, swing: true },
+    { preset: 'builtin-grand-piano', name: 'Rhodes', swing: true, sound: { inserts: { drive: 0.3, tone: -0.45, chorus: { mix: 0.35, depth: 0.5, rate: 0.4 } }, fxSends: { reverb: 0.3 } } },
+    { preset: 'builtin-keys-d50-bell', name: 'Bells', sound: { fxSends: { reverb: 0.2, auxA: 0.2, delay: 0.25 } } },
   ],
   effects: {
     reverb: { enabled: true, kind: 'room', decay: 1.6, mix: 0.3, preDelay: 0.02, damping: 0.6 },
+    // The bells' tape echo: darker each time round, and wavering.
+    delay: { enabled: true, time: 0.38, feedback: 0.5, mix: 0.3, color: 0.55, wow: 0.45 },
     aux: [{ kind: 'echo', level: 0.65, main: 0.56, shape: 0.55 }, { kind: 'hall', level: 0.8, main: 2.5, shape: 0.4 }],
     eq: { enabled: true, low: 2, mid: 0, high: -4 },
   },
@@ -188,11 +221,11 @@ const STEPS_7 = 4 * 14;
 const SEVEN_LIGHTS: SampleSong = {
   id: 'seven-lights', name: 'Seven Lights', genre: 'Electronic in 7/8',
   hint: 'Electronic music in 7/8 at 128 BPM: an acid bass with slides and accents whose filter is swept by automation, chords run through the arpeggiator, a supersaw pad and rolled hats on a TR-909',
-  tempo: 128, kit: 'tr-909',
+  tempo: 128, kit: 'tr-909', drumVolume: 0.8, level: 0.85,
   lanes: [
-    { preset: 'builtin-bass-acid', octaveShift: -1, sound: { fxSends: { delay: 0.15 } } },
-    { preset: 'builtin-pad-jp', sound: { fxSends: { reverb: 0.35 } } },
-    { preset: 'builtin-pluck-bell', octaveShift: 1,
+    { preset: 'builtin-bass-acid', name: 'Acid', octaveShift: -1, sound: { fxSends: { delay: 0.15 } } },
+    { preset: 'builtin-pad-jp', name: 'Supersaw Pad', sound: { fxSends: { reverb: 0.35 } } },
+    { preset: 'builtin-pluck-bell', name: 'Arp Bells', octaveShift: 1,
       sound: { arpeggiator: { enabled: true, mode: 'updown', rate: '1/16', gate: 0.55, octaves: 2 }, fxSends: { delay: 0.25, auxA: 0.3 } } },
   ],
   effects: {
@@ -243,11 +276,11 @@ const STEPS_12 = 4 * 24;
 const MARKET_DAY: SampleSong = {
   id: 'market-day', name: 'Market Day', genre: 'Afrobeat in 12/8',
   hint: 'An Afrobeat groove in 12/8 at 96 BPM on the recorded kit: a bell pattern, congas, bongos and a shaker, a marimba ostinato, an FM bass, and a kalimba answering through an echo',
-  tempo: 96, kit: 'recorded',
+  tempo: 96, kit: 'recorded', drumVolume: 0.85,
   lanes: [
-    { preset: 'builtin-bass-fm', octaveShift: -1 },
-    { preset: 'builtin-pluck-m1-marimba', sound: { fxSends: { reverb: 0.2 } } },
-    { preset: 'builtin-pluck-kalimba', octaveShift: 1, sound: { fxSends: { reverb: 0.25, auxA: 0.4 }, pan: 0.3 } },
+    { preset: 'builtin-bass-101', name: 'Bass', octaveShift: -1 },
+    { preset: 'builtin-pluck-m1-marimba', name: 'Marimba', sound: { fxSends: { reverb: 0.2 } } },
+    { preset: 'builtin-keys-d50-bell', name: 'Bells', octaveShift: 1, sound: { fxSends: { reverb: 0.25, auxA: 0.4 }, pan: 0.3 } },
   ],
   drums: {
     crash: { cymbalType: 'bell', volume: 0.5 }, clap: { percType: 'shaker', volume: 0.55, pan: -0.4 },
@@ -290,15 +323,17 @@ const auxSwell: Automation = { auxBSend: ramp(STEPS_5, 0.1, 0.9) };
 const CATHEDRAL: SampleSong = {
   id: 'cathedral', name: 'Cathedral', genre: 'Ambient in 5/4',
   hint: 'Ambient music in 5/4 at 72 BPM: a pipe organ, a CS-80 swell, a lead sent ever deeper into the long Hall by automation, and a heartbeat kick',
-  tempo: 72, kit: 'clean-analog',
+  tempo: 72, kit: 'clean-analog', level: 0.6,
   lanes: [
-    { preset: 'builtin-pad-cs80-swell', octaveShift: -1, sound: { fxSends: { reverb: 0.5 } } },
-    { preset: 'builtin-keys-pipe-organ', sound: { fxSends: { reverb: 0.45 } } },
-    { preset: 'builtin-lead-soft', octaveShift: 1, sound: { fxSends: { reverb: 0.3, auxA: 0.25, auxB: 0.1 } } },
+    { preset: 'builtin-pad-cs80-swell', name: 'Swell', octaveShift: -1, sound: { fxSends: { reverb: 0.5, phaser: 0.4 } } },
+    { preset: 'builtin-keys-pipe-organ', name: 'Organ', sound: { fxSends: { reverb: 0.45 } } },
+    { preset: 'builtin-lead-ms-hollow', name: 'Choir Lead', octaveShift: 1, sound: { fxSends: { reverb: 0.3, auxA: 0.25, auxB: 0.1 } } },
   ],
   drums: { kick: { volume: 0.7, tone: 0.3 } },
   effects: {
     reverb: { enabled: true, kind: 'hall', decay: 4, mix: 0.35, preDelay: 0.03, damping: 0.3 },
+    // A deep, slow phaser on the swell.
+    phaser: { enabled: true, rate: 0.15, depth: 0.85, feedback: 0.6, mix: 0.6 },
     aux: [{ kind: 'echo', level: 0.55, main: 0.833, shape: 0.5, sync: '1/4' }, { kind: 'hall', level: 0.85, main: 5, shape: 0.25 }],
   },
   scenes: [
@@ -380,15 +415,15 @@ const nothing: Hits[] = Array.from({ length: 8 }, () => ({}));
 const LANTERNS: SampleSong = {
   id: 'lanterns', name: 'Lanterns Over Dark Water', genre: 'Post-rock, 7 minutes',
   hint: 'Seven minutes of post-rock in B minor at 100 BPM, on all five lanes: a clean guitar into a dotted-eighth echo, a glockenspiel into a long hall, strings, and a wall of tremolo-picked guitar, built quiet to loud and back by automation of the filters, levels, drive and reverb sends',
-  tempo: 100, kit: 'recorded',
+  tempo: 100, kit: 'recorded', drumVolume: 0.5, level: 0.47,
   lanes: [
     { preset: 'builtin-bass-pro', name: 'Bass', octaveShift: -1, sound: { gain: 1.35, inserts: { drive: 0.15 }, fxSends: { reverb: 0.1 } } },
-    { preset: 'builtin-pluck-nylon', name: 'Clean Guitar',
+    { preset: 'builtin-keys-juno', name: 'Clean Guitar',
       sound: { gain: 2, inserts: { chorus: { mix: 0.3, depth: 0.4, rate: 0.5 } }, fxSends: { reverb: 0.3, auxA: 0.45, auxB: 0.15 } } },
     { preset: 'builtin-pluck-bell', name: 'Glockenspiel', octaveShift: 1, sound: { gain: 1.4, fxSends: { reverb: 0.25, auxA: 0.2, auxB: 0.5 } } },
-    { preset: 'builtin-lead-supersaw', name: 'Tremolo Wall',
+    { preset: 'builtin-lead-jp', name: 'Tremolo Wall',
       sound: { gain: 0.7, inserts: { drive: 0.65, tone: -0.15 }, fxSends: { reverb: 0.35, auxB: 0.3 } } },
-    { preset: 'builtin-pad-strings', name: 'Strings', sound: { gain: 0.65, fxSends: { reverb: 0.4, auxB: 0.3 } } },
+    { preset: 'builtin-pad-cs80', name: 'Strings', sound: { gain: 0.65, fxSends: { reverb: 0.4, auxB: 0.3 } } },
   ],
   drums: { kick: { volume: 0.9 }, crash: { volume: 0.6 } },
   drumSends: { reverb: 0.25 },
@@ -430,4 +465,4 @@ const LANTERNS: SampleSong = {
   ],
 };
 
-export const SAMPLE_SONGS: SampleSong[] = [NEON_DRIVE, BLUE_WALTZ, LATE_STUDY, SEVEN_LIGHTS, MARKET_DAY, CATHEDRAL, LANTERNS];
+export const SAMPLE_SONGS: SampleSong[] = [NIGHT_CIRCUIT, BLUE_WALTZ, LATE_STUDY, SEVEN_LIGHTS, MARKET_DAY, CATHEDRAL, LANTERNS];

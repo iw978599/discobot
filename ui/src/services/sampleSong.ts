@@ -52,6 +52,11 @@ export interface SampleSong {
   hint: string;
   tempo: number;
   drumSwing?: number;
+  // the drums' master level, 0 to 1; absent is the project's own
+  drumVolume?: number;
+  // what every lane's level, and every automated level, is multiplied by, so that the song is mixed
+  // as a whole without retuning each lane; absent is 1
+  level?: number;
   kit: DrumKitId;
   lanes: SongLane[];
   // laid over each drum's settings: another kind of cymbal, a percussion in place of a drum, a tune
@@ -101,7 +106,13 @@ function grid(scene: SongScene): Scene['drums'] {
   })) as Scene['drums'];
 }
 
-type Sound = { id: string; params: SynthParameters; modelId: SynthModelId; modelParams: SynthModelParams };
+// A lane's level, and its automated levels, at the song's overall level.
+const levelled = (params: SynthParameters, level: number): SynthParameters => ({ ...params, gain: Number((params.gain * level).toFixed(3)) });
+const scaled = (automation: Record<number, Automation>, level: number): Record<number, Automation> => Object.fromEntries(Object.entries(automation).map(([lane, keys]) => [lane,
+  Object.fromEntries(Object.entries(keys).map(([key, values]) => [key, key === 'level' ? values.map(value => (value === null ? null : Number((value * level).toFixed(3)))) : values])),
+]));
+
+type Sound = { id: string; name: string; params: SynthParameters; modelId: SynthModelId; modelParams: SynthModelParams };
 
 // The song as a project file, made from the file of the project that is open (for its shape) and
 // the app's own sounds. Null if that file is not one, or a sound the song names is missing.
@@ -119,7 +130,7 @@ export function buildSampleSong(file: unknown, sounds: Sound[], song: SampleSong
     ...(scene.signature && scene.signature !== '4/4' ? { signature: scene.signature } : {}),
     lanes: Object.fromEntries(ids.map(id => [id, lane(blank, scene, scene.lanes[id] ?? [])])),
     laneBars: Object.fromEntries(ids.map(id => [id, scene.bars])),
-    ...(scene.automation ? { laneAutomation: scene.automation as Record<number, Automation> } : {}),
+    ...(scene.automation ? { laneAutomation: scaled(scene.automation as Record<number, Automation>, song.level ?? 1) } : {}),
     drums: grid(scene),
   }));
   const order: Song = { entries: song.order.map(([sceneId, repeats]) => ({ sceneId, repeats })), loop: false };
@@ -129,13 +140,13 @@ export function buildSampleSong(file: unknown, sounds: Sound[], song: SampleSong
   project.synths = ids.map((synthId, index) => {
     const from: Json = structuredClone(project.synths.find((entry: Json) => entry.synthId === synthId) ?? first);
     const sound = chosen[index]!, spec = song.lanes[index];
-    const automation = openScene.automation?.[synthId];
+    const automation = openScene.automation?.[synthId] && scaled({ [synthId]: openScene.automation[synthId]! }, song.level ?? 1)[synthId];
     const { automation: _old, ...rest } = from.pattern;
     const pattern = { ...rest, id: `sample-lane-${synthId}`, steps: open.lanes[synthId], bars: openScene.bars, ...(automation ? { automation } : {}) };
     return {
       ...from, synthId, pattern, patterns: [pattern], muted: false, solo: false, isPlaying: false,
-      synthParams: layOver(structuredClone(sound.params), spec.sound), synthModelId: sound.modelId, synthModelParams: { ...sound.modelParams },
-      octaveShift: spec.octaveShift ?? 0, ...(spec.swing ? { swing: true } : {}), name: spec.name,
+      synthParams: levelled(layOver(structuredClone(sound.params), spec.sound), song.level ?? 1), synthModelId: sound.modelId, synthModelParams: { ...sound.modelParams },
+      octaveShift: spec.octaveShift ?? 0, ...(spec.swing ? { swing: true } : {}), name: spec.name, preset: sound.name,
     };
   });
   for (const instrument of DRUMS) {
@@ -149,6 +160,7 @@ export function buildSampleSong(file: unknown, sounds: Sound[], song: SampleSong
   const effects: EffectsLoopState = layOver(structuredClone(EFFECTS_DEFAULT), song.effects ?? {});
   Object.assign(project, {
     name: song.name, tempo: song.tempo, drumSwing: song.drumSwing ?? 0, selectedDrumKitId: song.kit,
+    ...(song.drumVolume !== undefined ? { drumMasterVolume: song.drumVolume } : {}),
     effectsLoop: effects, drumFx: { ...project.drumFx, sends: { ...project.drumFx?.sends, ...song.drumSends } },
     scenes, currentSceneId: open.id, song: order, guests: [],
   });
