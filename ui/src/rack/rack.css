@@ -56,6 +56,15 @@
   --scene-teal: #14b8a6;
   --scene-violet: #8b5cf6;
   --scene-pink: #ec4899;
+  /* Each person in a live session, by the colour the room gave them (0 to 7). */
+  --person-0: #3b82f6;
+  --person-1: #22c55e;
+  --person-2: #ec4899;
+  --person-3: #14b8a6;
+  --person-4: #8b5cf6;
+  --person-5: #f97316;
+  --person-6: #06b6d4;
+  --person-7: #ef4444;
   /* Three faces: condensed capitals for labels and names, a plain face for anything longer than a
      label (a hint, a message, a dialog's words), and the lit figures. */
   --panel-font: 'Barlow Condensed', 'Arial Narrow', 'Roboto Condensed', Arial, sans-serif;
@@ -316,6 +325,24 @@
   background: #2a1a12; border: 1px solid var(--danger); border-radius: var(--corner-panel); padding: 8px 14px;
   color: #ffd9cc; font-family: var(--sentence-font); text-transform: none; letter-spacing: 0; font-weight: 400; font-size: var(--type-body);
 }
+
+/* A live session: who else is in it, each name in their colour, and on each unit (and its switch on
+   the bar of units) the colour and names of whoever was last there. Rack.tsx sets `data-present`. */
+.live-people {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+  background: var(--surface-inset); border: 1px solid var(--edge); border-radius: var(--corner-panel); padding: 8px 14px;
+  color: var(--text-plain); font-family: var(--sentence-font); font-size: var(--type-body);
+}
+.live-person { display: inline-flex; align-items: center; gap: 6px; color: var(--text); }
+.live-person::before { content: ''; width: 10px; height: 10px; border-radius: 50%; background: var(--present); }
+/* A guests unit off screen keeps `position: fixed`: its rule in the phone block is more specific. */
+.rack > [data-present] { position: relative; box-shadow: inset 0 3px 0 var(--present); }
+.rack > [data-present]::after {
+  content: attr(data-present-names); position: absolute; top: 0; right: 0; pointer-events: none;
+  background: var(--present); color: var(--text-on); border-radius: 0 0 0 var(--corner-control);
+  padding: 1px 8px; font-family: var(--panel-font); font-size: var(--type-caption); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.unit-bar .unit-tab[data-present] { background-image: linear-gradient(var(--present), var(--present)); background-size: 100% 3px; background-position: bottom; background-repeat: no-repeat; }
 
 .export-status {
   display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;

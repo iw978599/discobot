@@ -104,7 +104,11 @@ other person last was.
    computers' audio clocks drift by a few milliseconds a minute and nothing pulls them back during
    a long play; the clock measurement is as good as the room's round trip is even in both
    directions. Not verified by ear across two real computers.
-4. Presence on screen.
+4. Presence on screen. **Done.** A line under the top bar says who else is in the session, each name
+   in their colour; each unit someone was last at (the one they last pressed or moved the keyboard
+   into) has a stripe of their colour and their name, and so does its switch on a phone's bar of
+   units. A place is sent only when it changes. Not looked at on a screen yet: the design pictures
+   are taken on GitHub for a design-review branch.
 
 ## Deploying
 

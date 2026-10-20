@@ -393,3 +393,20 @@ test('someone joining while the music plays is told where it is, against their o
   await live.clocks();
   assert.deepEqual(ben.music.started, [{ ...anchor(50_000 + BEN_AHEAD, 1_000), by: 'ann' }]);
 });
+
+test('each person says where on the rack they are, once for each change, and again to someone joining', async () => {
+  const { live, ann, ben } = await twoInSession();
+  const places = () => ann.sent.filter(message => message.t === 'presence').length;
+  ann.session.place('drums');
+  ann.session.place('drums');
+  await live.deliver();
+  assert.equal(places(), 1);
+  assert.equal(ben.session.status().others[0].at, 'drums');
+  const cy = live.browser('cy');
+  await live.deliver();
+  assert.equal(cy.session.status().others.find(member => member.user === 'ann')?.at, 'drums');
+  // Only a unit's name is taken.
+  ben.receive(JSON.stringify({ t: 'presence', at: '<b>everywhere</b>', from: 'ann' }));
+  await ben.session.settled();
+  assert.equal(ben.session.status().others[0].at, 'drums');
+});

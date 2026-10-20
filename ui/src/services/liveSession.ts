@@ -50,7 +50,8 @@ export interface LiveDeps {
 }
 
 export type LiveState = 'connecting' | 'joining' | 'live' | 'closed';
-export interface LiveStatus { state: LiveState; me: LiveMember | null; others: LiveMember[]; playing: LivePlay | null }
+// `at` is the unit of the rack this person was last at (its `data-unit`), once they have said.
+export interface LiveStatus { state: LiveState; me: LiveMember | null; others: Array<LiveMember & { at?: string }>; playing: LivePlay | null }
 
 // Where the music is: tick `tick` of the transport (counted from its start, count-in included) is
 // heard at `wall` on this computer's clock. The play mode, the song entry it started from and the
@@ -167,6 +168,10 @@ export function createLiveSession(deps: LiveDeps) {
   const unclocked = new Map<string, Record<string, unknown>>();
   let listening = false;
   const wall = deps.wall ?? (() => Date.now());
+  // Where on the rack each other person was last, and this browser's own.
+  const places = new Map<string, string>();
+  let here = '';
+  const sendPlace = () => { if (here && state === 'live' && others.length) send({ t: 'presence', at: here }); };
   let openScene = store.openSceneId();
   let pending: Own[] = [];
   let queue: Own[] = [];
@@ -357,6 +362,7 @@ export function createLiveSession(deps: LiveDeps) {
     const waiting = buffered;
     buffered = [];
     if (others.length) timeClocks();
+    sendPlace();
     for (const message of waiting) await take(message);
     schedule(true);
   }
@@ -383,12 +389,13 @@ export function createLiveSession(deps: LiveDeps) {
         if (isRecord(message.member)) others = [...others, message.member as unknown as LiveMember];
         hostingChanged();
         changed();
-        if (state === 'live') timeClocks();
+        if (state === 'live') { timeClocks(); sendPlace(); }
         return;
       case 'leave': {
         const gone = others.find(member => member.id === message.id);
         others = others.filter(member => member.id !== message.id);
         clocks.delete(String(message.id));
+        places.delete(String(message.id));
         unclocked.delete(String(message.id));
         // The music they started is not playing anywhere this browser knows of.
         if (gone && playing?.by === gone.user && !deps.transport?.now()) playing = null;
@@ -404,6 +411,13 @@ export function createLiveSession(deps: LiveDeps) {
         if (here) send({ t: 'transport', kind: 'play', to: message.to, ...here });
         return;
       }
+      case 'presence':
+        // Where someone is: a unit's name, never anything else.
+        if (others.some(member => member.id === message.from) && typeof message.at === 'string' && /^[a-z0-9-]{1,40}$/.test(message.at)) {
+          places.set(String(message.from), message.at);
+          changed();
+        }
+        return;
       case 'transport':
         // A clock is measured at once; the rest waits, while joining, for the project to arrive.
         if (state === 'joining' && message.kind !== 'clock' && message.kind !== 'clock-back') { buffered.push(message); return; }
@@ -446,7 +460,13 @@ export function createLiveSession(deps: LiveDeps) {
 
   return {
     close,
-    status: (): LiveStatus => ({ state, me, others, playing }),
+    status: (): LiveStatus => ({ state, me, others: others.map(member => (places.has(member.id) ? { ...member, at: places.get(member.id) } : member)), playing }),
+    // This person is now at another unit of the rack. Sent only when it changes, and again to anyone joining.
+    place(at: string) {
+      if (at === here) return;
+      here = at;
+      sendPlace();
+    },
     // This browser started the music: everyone else starts it at the same moment.
     sendPlay(anchor: LiveAnchor) {
       if (state !== 'live' || !me) return;
@@ -518,6 +538,13 @@ export const liveTransport = {
   stop: () => running?.session.sendStop(),
   listen: () => running?.session.listen() ?? false,
 };
+
+// Where on the rack this person is, kept for a session that starts later.
+let place = '';
+export function livePlace(at: string) {
+  place = at;
+  running?.session.place(at);
+}
 
 function wanted(): { owner: string; id: string } | null {
   const user = currentUser();
@@ -594,6 +621,7 @@ function check() {
     },
   });
   running = { key, id: target.id, session };
+  if (place) session.place(place);
   changed();
 }
 

@@ -132,6 +132,11 @@ test('two people work on one project together or in turns, and it ends when the 
   await expect(page.locator('.tempo-led-value')).toHaveText('90', { timeout: 10_000 });
   await setTempo(page, '95');
   await expect(dana.locator('.tempo-led-value')).toHaveText('95', { timeout: 10_000 });
+  // Each sees who else is in the session, and where on the rack they last were.
+  await expect(page.locator('.live-people')).toContainText('In this live session with Dana');
+  await expect(dana.locator('.live-people')).toContainText('Ian');
+  await dana.locator('[data-unit="drums"] button').first().focus();
+  await expect(page.locator('.rack > [data-unit="drums"]')).toHaveAttribute('data-present-names', 'Dana', { timeout: 10_000 });
   // Dana presses Play and the music plays for Ian too: at once if his browser has its audio on, or
   // when he presses Play himself, which listens along rather than starting it over. His Stop stops both.
   await dana.locator('.play-all-button').click();

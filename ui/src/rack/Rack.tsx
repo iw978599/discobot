@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import type { Studio } from '../studio/useStudio';
 import { playSample } from '../hooks/browserAudio';
 import EffectsPanel from '../components/EffectsPanel';
@@ -16,7 +16,7 @@ import ProjectsDialog from './ProjectsDialog';
 import ShareDialog from './ShareDialog';
 import AccountDialog, { useAccountUser, useSyncStatus } from './AccountDialog';
 import { projectSync } from '../services/projectSync';
-import { liveStatus, subscribeLive } from '../services/liveSession';
+import { livePlace, liveStatus, subscribeLive } from '../services/liveSession';
 import { markWalkthroughSeen } from '../services/walkthrough';
 import Walkthrough from './Walkthrough';
 import MidiImportDialog from './MidiImportDialog';
@@ -43,6 +43,14 @@ import { shownLanes } from '../services/lanes';
 const livePlayer = () => {
   const status = liveStatus();
   return status.state === 'live' && status.others.length > 0 ? status.playing?.by ?? '' : '';
+};
+
+// The other people in a live session: each one's name, colour and the unit they were last at, as
+// text for the same reason.
+type Person = [user: string, colour: number, at: string];
+const livePeople = () => {
+  const status = liveStatus();
+  return status.state === 'live' ? JSON.stringify(status.others.map((member): Person => [member.user, member.colour, member.at ?? ''])) : '[]';
 };
 
 export default function Rack({ studio }: { studio: Studio }) {
@@ -89,6 +97,8 @@ export default function Rack({ studio }: { studio: Studio }) {
   const user = useAccountUser();
   // Who started the music in this live session (liveSession.ts), shown while it is not playing here.
   const playingBy = useSyncExternalStore(subscribeLive, livePlayer);
+  const peopleText = useSyncExternalStore(subscribeLive, livePeople);
+  const people = useMemo(() => JSON.parse(peopleText) as Person[], [peopleText]);
 
   // The mixer is handed the levels it shows, already gathered, and the same object for as long as
   // none of them changes: the lanes and the drums are new objects after every note and step.
@@ -152,6 +162,41 @@ export default function Rack({ studio }: { studio: Studio }) {
       studio.setSelectedSynthId(lane);
     }
   }, [narrow, unit, openLane, lanes]);
+  // A live session: the unit this person is at is the one they last pressed or moved the keyboard
+  // into, and the units the others are at carry their colour and names. The marks are attributes set
+  // here, as `data-shown` is, so no unit renders for them.
+  useEffect(() => {
+    const page = pageRef.current;
+    if (!page) return;
+    const note = (event: Event) => {
+      const at = (event.target as Element | null)?.closest?.('.rack > [data-unit]')?.getAttribute('data-unit');
+      if (at) livePlace(at);
+    };
+    page.addEventListener('pointerdown', note, true);
+    page.addEventListener('focusin', note, true);
+    return () => {
+      page.removeEventListener('pointerdown', note, true);
+      page.removeEventListener('focusin', note, true);
+    };
+  }, []);
+  useLayoutEffect(() => {
+    const page = pageRef.current;
+    if (!page) return;
+    page.querySelectorAll<HTMLElement>('[data-present]').forEach((marked) => {
+      marked.removeAttribute('data-present');
+      marked.removeAttribute('data-present-names');
+      marked.style.removeProperty('--present');
+    });
+    const byUnit = new Map<string, Person[]>();
+    for (const person of people) if (person[2]) byUnit.set(person[2], [...(byUnit.get(person[2]) ?? []), person]);
+    for (const [at, here] of byUnit) {
+      page.querySelectorAll<HTMLElement>(`.rack > [data-unit="${at}"], .unit-bar [data-tab="${at}"]`).forEach((marked) => {
+        marked.setAttribute('data-present', String(here[0][1]));
+        marked.setAttribute('data-present-names', here.map(person => person[0]).join(', '));
+        marked.style.setProperty('--present', `var(--person-${here[0][1]})`);
+      });
+    }
+  });
   // Guests that are not on show stay laid out, out of sight (rack.css), so their pages go on
   // running. They are also put out of reach of the keyboard and of a screen reader.
   useLayoutEffect(() => {
@@ -199,6 +244,12 @@ export default function Rack({ studio }: { studio: Studio }) {
               {sync.ended.length > 0 && `${sync.ended.map(name => `“${name}”`).join(' and ')} ${sync.ended.length === 1 ? 'is' : 'are'} no longer shared with you. Your copy is still here, in this browser only.`}
             </span>
             <button className="rack-btn" onClick={projectSync.dismissShared} aria-label="Dismiss sharing message">✕</button>
+          </div>
+        )}
+        {people.length > 0 && (
+          <div role="status" className="live-people">
+            <span>In this live session with</span>
+            {people.map(([user, colour]) => <span key={user} className="live-person" style={{ '--present': `var(--person-${colour})` } as CSSProperties}>{user}</span>)}
           </div>
         )}
         {playingBy && !studio.isAnyPlaying && (
