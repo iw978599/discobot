@@ -18,6 +18,9 @@ export interface Env {
   ALLOWED_ORIGINS: string;
   // A secret. Signing up with it as the invite code creates the owner, once.
   OWNER_INVITE?: string;
+  // The rooms of live sessions (live.ts), one Durable Object for each shared project. Absent where
+  // the Worker was deployed without them, and then a live session is refused.
+  LIVE?: { idFromName(name: string): unknown; get(id: unknown): { fetch(request: Request): Promise<Response> } };
 }
 
 interface UserRow { id: string; username: string; username_key: string; password_hash: string; recovery_hash: string; is_owner: number; created_at: number }
@@ -408,6 +411,39 @@ async function userSongs(env: Env, name: string): Promise<Response> {
   });
 }
 
+// Who may join the live session of a project, and which room it is: its owner, and the people it is
+// shared with. A browser cannot put a header on a live connection, so the session token comes as the
+// connection's second protocol name ("discobot", then the token), and never in the address.
+export async function liveTarget(request: Request, env: Env, now: number): Promise<{ user: string; room: string }> {
+  const [, ownerName, id] = /^\/live\/([^/]+)\/([^/]+)$/.exec(new URL(request.url).pathname) || [];
+  if (!ownerName || !id || !PROJECT_ID.test(id)) throw new Refusal(404, 'Not found.');
+  if ((request.headers.get('Upgrade') || '').toLowerCase() !== 'websocket') throw new Refusal(426, 'A live session needs a live connection.');
+  const [kind, token] = (request.headers.get('Sec-WebSocket-Protocol') || '').split(',').map(part => part.trim());
+  if (kind !== 'discobot' || !token) throw new Refusal(401, 'Sign in first.');
+  const user = await env.DB.prepare(
+    'SELECT users.* FROM sessions JOIN users ON users.id = sessions.user_id WHERE sessions.token_hash = ? AND sessions.expires_at > ?',
+  ).bind(await sha256(token), now).first<UserRow>();
+  if (!user) throw new Refusal(401, 'You have been signed out. Sign in again.');
+  const owner = await env.DB.prepare('SELECT id FROM users WHERE username_key = ?').bind(ownerName.toLowerCase().slice(0, 40)).first<{ id: string }>();
+  if (!owner) throw new Refusal(404, NOT_SHARED);
+  const allowed = owner.id === user.id
+    ? await env.DB.prepare('SELECT id FROM projects WHERE owner_id = ? AND id = ? AND deleted = 0').bind(owner.id, id).first()
+    : await env.DB.prepare('SELECT project_shares.project_id FROM project_shares JOIN projects ON projects.owner_id = project_shares.owner_id AND projects.id = project_shares.project_id WHERE project_shares.owner_id = ? AND project_shares.project_id = ? AND project_shares.member_id = ? AND projects.deleted = 0').bind(owner.id, id, user.id).first();
+  if (!allowed) throw new Refusal(404, NOT_SHARED);
+  return { user: user.username, room: `${owner.id}:${id}` };
+}
+
+async function live(request: Request, env: Env, now: number): Promise<Response> {
+  const { user, room } = await liveTarget(request, env, now);
+  if (!env.LIVE) throw new Refusal(503, 'Live sessions are not available on this server yet.');
+  // The room is told who it is; the token goes no further.
+  const headers = new Headers(request.headers);
+  headers.delete('Sec-WebSocket-Protocol');
+  headers.delete('Authorization');
+  headers.set('X-Live-User', user);
+  return env.LIVE.get(env.LIVE.idFromName(room)).fetch(new Request(request.url, { method: 'GET', headers }));
+}
+
 async function route(request: Request, env: Env, now: number): Promise<Response> {
   const { pathname } = new URL(request.url);
   const method = request.method;
@@ -423,6 +459,7 @@ async function route(request: Request, env: Env, now: number): Promise<Response>
   if (pathname === '/songs' || pathname.startsWith('/songs/')) return songs(request, env, now, pathname.slice('/songs'.length));
   if (pathname === '/projects' || pathname.startsWith('/projects/')) return projects(request, env, now, pathname.slice('/projects'.length));
   if (pathname === '/shared' || pathname.startsWith('/shared/')) return shared(request, env, now, pathname.slice('/shared'.length));
+  if (method === 'GET' && pathname.startsWith('/live/')) return live(request, env, now);
 
   if (is('GET', '/me')) return json(200, { user: publicUser((await sessionUser(env, request, now)).user) });
 
@@ -524,7 +561,9 @@ export async function handle(request: Request, env: Env, now = Date.now()): Prom
     // A browser always sends Origin on these; a page on any other site is turned away.
     if (origin && !allowed.includes(origin)) throw new Refusal(403, 'This site is not allowed to use the Discobot API.');
     if (request.method === 'OPTIONS') return withCors(new Response(null, { status: 204 }));
-    return withCors(await route(request, env, now));
+    const response = await route(request, env, now);
+    // A live connection is answered by its room, with headers that are not this function's to change.
+    return response.status === 101 ? response : withCors(response);
   } catch (error) {
     if (error instanceof Refusal) return withCors(json(error.status, { error: error.message }));
     console.error('Unhandled error', error instanceof Error ? error.message : 'unknown');
@@ -532,4 +571,5 @@ export async function handle(request: Request, env: Env, now = Date.now()): Prom
   }
 }
 
+export { LiveRoomObject } from './live.ts';
 export default { fetch: (request: Request, env: Env) => handle(request, env) };

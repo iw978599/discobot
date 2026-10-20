@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { handle, type Env } from './src/index.ts';
+import { handle, liveTarget, type Env } from './src/index.ts';
+import { acceptLive, resetRooms } from './devLive.ts';
 import { createLocalDatabase } from './src/localDatabase.ts';
 
 // Runs the API on this machine with a database that lives in memory, for development and
@@ -26,6 +27,7 @@ createServer(async (incoming, outgoing) => {
     response = new Response(readFileSync(new URL('../docs/guest-example.html', import.meta.url)), { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
   } else if (method === 'POST' && incoming.url === '/__reset') {
     current = env();
+    resetRooms();
     response = new Response('reset');
   } else {
     response = await handle(new Request(`http://127.0.0.1:${port}${incoming.url}`, {
@@ -34,4 +36,18 @@ createServer(async (incoming, outgoing) => {
   }
   outgoing.writeHead(response.status, Object.fromEntries(response.headers));
   outgoing.end(Buffer.from(await response.arrayBuffer()));
+}).on('upgrade', async (incoming, socket) => {
+  // A live session: checked as the Worker checks one, then held here instead of in a Durable Object.
+  const headers = new Headers();
+  for (const [name, value] of Object.entries(incoming.headers)) if (typeof value === 'string') headers.set(name, value);
+  const origin = headers.get('Origin'), allowed = current.ALLOWED_ORIGINS.split(',').map(entry => entry.trim());
+  try {
+    if (origin && !allowed.includes(origin)) throw Object.assign(new Error('origin'), { status: 403 });
+    const { user, room } = await liveTarget(new Request(`http://127.0.0.1:${port}${incoming.url}`, { headers }), current, Date.now());
+    acceptLive(incoming, socket, room, user);
+  } catch (error) {
+    socket.end(`HTTP/1.1 ${(error as { status?: number }).status ?? 400} Refused
+
+`);
+  }
 }).listen(port, '127.0.0.1', () => console.log(`Discobot API (local, in memory) on http://127.0.0.1:${port}`));
