@@ -53,7 +53,12 @@ export interface RenderOptions {
   only?: StemPart;
   // Render exactly one bar that repeats seamlessly, with the effect tails wrapped into it.
   loop?: boolean;
+  // Told how far the render has got, from 0 to 1. Given one, the render stops for a moment after
+  // each lane and the drums so the page can show it, and the browser's render reports ten times.
+  onProgress?: (fraction: number) => void;
 }
+
+const PROGRESS_POINTS = 10;
 
 export type StemPart = number | 'drums' | { guest: number };
 
@@ -400,21 +405,33 @@ export async function renderArrangement(arrangement: ExportArrangement, options:
     const own = Object.fromEntries(Object.entries(mixes).map(([name, mix]) => [name, () => ducked(mix, duck)]));
     connectEffects(ctx, ducked(stereo, duck), master, sends, returnLevel, arrangement.effectsLoop, group, arrangement.tempo, own, timeline);
   };
-  const { only } = options;
+  const { only, onProgress } = options;
   const synthSolo = arrangement.synths.some(s => s.solo);
-  for (const lane of arrangement.synths) {
+  const lanes = arrangement.synths.filter(lane => lane.pattern && lane.synthParams && (only !== undefined ? only === lane.id : !lane.muted && (!synthSolo || lane.solo)));
+  const drums = only === undefined || only === 'drums';
+  // The lanes and the drums are rendered here, on the page's thread, and are the first half of the
+  // work; the browser's render of the effects is the second. A guest's stem has only the second.
+  const parts = lanes.length + (drums ? 1 : 0), share = parts ? 0.5 : 0;
+  let rendered = 0;
+  const partDone = async () => {
+    if (!onProgress) return;
+    onProgress(share * ++rendered / parts);
+    await new Promise(resolve => setTimeout(resolve, 0));
+  };
+  for (const lane of lanes) {
     if (!lane.pattern || !lane.synthParams) continue;
-    if (only !== undefined ? only !== lane.id : lane.muted || (synthSolo && !lane.solo)) continue;
     const laneBars = song ? song.map(scene => scene.lanes[lane.id] ?? []) : Array.from({ length: bars }, () => lane.pattern!.steps);
     const laneAutomation = song ? song.map(scene => scene.laneAutomation?.[lane.id]) : Array.from({ length: bars }, () => lane.pattern!.automation);
     play(renderSynthBars(laneBars, lane.synthParams, arrangement.tempo, frames, sampleRate, barDuration, arrangement.synthSamples?.[lane.id], times, laneAutomation, lane.swing ? arrangement.drumSwing : 0),
       lane.synthParams.fxSends, lane.synthParams.fxReturn, 'synth', lane.synthParams.duck ?? 0, {}, sendTimeline(laneBars, lane.synthParams, laneAutomation, times));
+    await partDone();
   }
-  if (only === undefined || only === 'drums') {
+  if (drums) {
     // The kit's own sends are a master over each drum's: the delay and the reverb take the mix the
     // core made for them, at the kit's level. A stem of the drums has its effects, as it always had.
     const { kit, ...mixes } = renderDrumMixes(arrangement, frames, sampleRate, bars, barDuration);
     play(kit, arrangement.drumFx.sends, arrangement.drumFx.returnLevel, 'drums', 0, mixes);
+    await partDone();
   }
   // Guests are finished audio: their level and their effect sends, no ducking. In a loop the
   // take is one pass of the pattern and is laid end to end like everything else, so what it
@@ -442,8 +459,16 @@ export async function renderArrangement(arrangement: ExportArrangement, options:
     connectEffects(ctx, level, master, take.sends ?? { reverb: 0, delay: 0, drive: 0, phaser: 0 }, 1, arrangement.effectsLoop, 'synth', arrangement.tempo);
     source.start(0);
   });
-  const rendered = await ctx.startRendering();
-  return { channels: [rendered.getChannelData(0).subarray(start), rendered.getChannelData(1).subarray(start)], sampleRate };
+  // The browser's render stops at each point to say so, on a whole render quantum, and goes on.
+  if (onProgress) {
+    for (let point = 1; point < PROGRESS_POINTS; point++) {
+      const at = Math.floor(frames * point / PROGRESS_POINTS / 128) * 128;
+      if (at > 0) void ctx.suspend(at / sampleRate).then(() => { onProgress(share + (1 - share) * point / PROGRESS_POINTS); return ctx.resume(); });
+    }
+  }
+  const output = await ctx.startRendering();
+  onProgress?.(1);
+  return { channels: [output.getChannelData(0).subarray(start), output.getChannelData(1).subarray(start)], sampleRate };
 }
 
 export async function renderArrangementWav(arrangement: ExportArrangement, options: RenderOptions = {}): Promise<ArrayBuffer> {
@@ -467,13 +492,16 @@ export function stemParts(arrangement: ExportArrangement): Array<{ only: StemPar
 }
 
 // Every stem is the same length and starts at the same instant, so they line up in a DAW.
-export async function renderStemsZip(arrangement: ExportArrangement, onProgress?: (done: number, total: number) => void) {
+// `onProgress` is told which file is being made and how far the whole zip has got, from 0 to 1.
+export async function renderStemsZip(arrangement: ExportArrangement, onProgress?: (done: number, total: number, fraction: number) => void) {
   const parts = stemParts(arrangement);
   if (parts.length === 0) throw new Error('There are no notes, drum steps or guest instruments to export.');
   const entries = [];
   for (const part of parts) {
-    onProgress?.(entries.length, parts.length);
-    entries.push({ name: part.name, data: new Uint8Array(await renderArrangementWav(arrangement, { only: part.only })) });
+    const done = entries.length;
+    onProgress?.(done, parts.length, done / parts.length);
+    const progress = onProgress && ((fraction: number) => onProgress(done, parts.length, (done + fraction) / parts.length));
+    entries.push({ name: part.name, data: new Uint8Array(await renderArrangementWav(arrangement, { only: part.only, ...(progress ? { onProgress: progress } : {}) })) });
   }
   return createZip(entries);
 }
@@ -490,6 +518,6 @@ export async function downloadArrangementWav(arrangement: ExportArrangement, opt
   downloadFile(await renderArrangementWav(arrangement, options), 'audio/wav', `discobot-${kind}${Date.now()}.wav`);
 }
 
-export async function downloadStemsZip(arrangement: ExportArrangement, onProgress?: (done: number, total: number) => void) {
+export async function downloadStemsZip(arrangement: ExportArrangement, onProgress?: (done: number, total: number, fraction: number) => void) {
   downloadFile(await renderStemsZip(arrangement, onProgress), 'application/zip', `discobot-stems-${Date.now()}.zip`);
 }

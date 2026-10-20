@@ -32,6 +32,8 @@ export interface SynthPreset {
 }
 
 export type PlayMode = 'pattern' | 'song';
+// An audio export being made or just made: which file, the stem it is on, and how far it has got (0 to 1).
+export interface ExportStatus { phase: 'working' | 'done'; what: string; part?: string; progress?: number }
 
 // A scene's length in bars (the open one's from its live lanes) and its time signature.
 export interface SceneInfo { bars: number; signature: TimeSignature | undefined; tempo?: number }

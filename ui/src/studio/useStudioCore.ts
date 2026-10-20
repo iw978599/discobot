@@ -23,7 +23,7 @@ import { ExportArrangement } from '../services/wavExport';
 import { LiveArp } from '../services/liveArp';
 import { MidiImportResult } from '../utils/midiImport';
 import { DEFAULT_DRUM_FX, DEFAULT_EFFECTS_LOOP, DEFAULT_DRUM_KIT_ID, createDefaultDrumState } from './studioState';
-import type { SynthPreset, PlayMode, SynthState } from './studioState';
+import type { SynthPreset, PlayMode, SynthState, ExportStatus } from './studioState';
 export type { PlayMode } from './studioState';
 
 // `engine` is the one that plays everything: the app's, unless another is given (a test's, say).
@@ -60,7 +60,7 @@ export function useStudioCore(engine: AudioEngine = audioEngine) {
   // Set while an export is playing the arrangement through to record its guests: how long it will take.
   const [guestRecording, setGuestRecording] = useState<number | null>(null);
   // An audio export in progress, or just finished. handleExportWav refuses a second while one is working.
-  const [exportStatus, setExportStatus] = useState<{ phase: 'working' | 'done'; what: string; part?: string } | null>(null);
+  const [exportStatus, setExportStatus] = useState<ExportStatus | null>(null);
   const exportingRef = useRef(false);
   // The metronome is this browser's, not the project's. The scheduler reads the ref.
   const [metronome, setMetronome] = useState<MetronomeSettings>(storedMetronome);

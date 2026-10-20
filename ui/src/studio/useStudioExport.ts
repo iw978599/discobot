@@ -66,7 +66,7 @@ export function useStudioExport(core: StudioCore, needs: StudioExportNeeds) {
   // real time so their sound can be recorded; then the export is rendered as usual. A loop is
   // played through twice and the second pass kept: by then what rings on from the end of the
   // pattern is sounding over its start, which is what makes the loop seamless.
-  const exportWav = useCallback(async (kind: boolean | 'pattern' | 'song' | 'loop' | 'stems', onPart: (part: string) => void) => {
+  const exportWav = useCallback(async (kind: boolean | 'pattern' | 'song' | 'loop' | 'stems', onProgress: (progress: number, part?: string) => void) => {
     const wholeSong = kind === true || kind === 'song', loop = kind === 'loop';
     let arrangement: ExportArrangement = wholeSong ? await songArrangement() : currentArrangementRef.current();
     // A song gives each guest its scene's own level and mute bar by bar, so a guest is recorded
@@ -121,19 +121,19 @@ export function useStudioExport(core: StudioCore, needs: StudioExportNeeds) {
       }
     }
     arrangement = leaveOutHanded(arrangement, handedByBarRef.current);
-    if (kind === 'stems') await downloadStemsZip(arrangement, (done, total) => onPart(`file ${done + 1} of ${total}`));
-    else await downloadArrangementWav(arrangement, loop ? { loop: true } : {});
+    if (kind === 'stems') await downloadStemsZip(arrangement, (done, total, fraction) => onProgress(fraction, `file ${done + 1} of ${total}`));
+    else await downloadArrangementWav(arrangement, { ...(loop ? { loop: true } : {}), onProgress: fraction => onProgress(fraction) });
   }, [songArrangement]);
   const handleExportWav = useCallback(async (kind: boolean | 'pattern' | 'song' | 'loop' | 'stems') => {
     if (exportingRef.current) return;
     exportingRef.current = true;
     if (doneTimerRef.current) clearTimeout(doneTimerRef.current);
     const what = kind === true || kind === 'song' ? 'Song WAV' : kind === 'loop' ? 'Loop WAV' : kind === 'stems' ? 'Stems' : 'Scene WAV';
-    setExportStatus({ phase: 'working', what });
+    setExportStatus({ phase: 'working', what, progress: 0 });
     // A moment for the message to be painted before the render takes the page's thread.
     await new Promise(resolve => setTimeout(resolve, 50));
     try {
-      await exportWav(kind, part => setExportStatus({ phase: 'working', what, part }));
+      await exportWav(kind, (progress, part) => setExportStatus({ phase: 'working', what, part, progress }));
       setExportStatus({ phase: 'done', what });
       doneTimerRef.current = setTimeout(() => setExportStatus(null), 12000);
     } catch (error) {
