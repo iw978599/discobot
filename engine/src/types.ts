@@ -243,6 +243,14 @@ export interface SynthParameters {
   portamento: {
     enabled: boolean;
     glide: number;
+    // Roadmap 18. A poly lane glides only into a note played while another key is held, as a mono
+    // lane always has (fingered). False or absent: a poly lane glides into every note.
+    fingered?: boolean;
+    // Glide at a steady rate in pitch, `glide` being the seconds an octave takes, so a wider leap
+    // takes longer. False or absent: every glide takes about `glide`, whatever the distance.
+    speed?: boolean;
+    // The glide time as a note value at the tempo, in place of `glide`'s seconds. Absent: off.
+    sync?: RateSync;
   };
   arpeggiator: {
     enabled: boolean;

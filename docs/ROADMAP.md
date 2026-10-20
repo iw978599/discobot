@@ -85,8 +85,10 @@ directly, with no builder.
     and the chord menu has chords in the key. The details are the builder's
     choice, for the owner to confirm (`docs/agents/editing.md`).
 17. **A tempo for each scene** (V10).
-18. **More from portamento** (V11b): fingered glide, same speed for any
-    distance, a synced glide time.
+18. **More from portamento** (V11b). Done: on the Amp page, a Sync menu for
+    the glide time, Held keys only (fingered glide on a poly lane) and Same
+    speed (an octave in the knob's time). Not done: each voice of a chord
+    gliding from its own last note, and Glide on a lane's face.
 19. **A true progress bar for exports** (features 13), by rendering in
     pieces.
 20. **Drag to reorder lanes, scenes and the playlist's rows** (V14,

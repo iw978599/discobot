@@ -2116,13 +2116,37 @@ export default function SynthControls({
               min={0.001}
               max={0.5}
               step={0.001}
-              displayValue={`${(parameters.portamento.glide * 1000).toFixed(0)}ms`}
+              displayValue={parameters.portamento.speed ? `${(parameters.portamento.glide * 1000).toFixed(0)}ms/oct` : `${(parameters.portamento.glide * 1000).toFixed(0)}ms`}
               onChange={(v) => updatePortamento({ glide: v })}
               parseInputValue={parseMilliseconds}
-              disabled={!parameters.portamento.enabled}
+              disabled={!parameters.portamento.enabled || Boolean(parameters.portamento.sync && parameters.portamento.sync !== 'off')}
               color="#8b5cf6"
-              tooltip={TOOLTIPS.portamentoGlide}
+              tooltip={parameters.portamento.speed ? 'Glide speed: how long the pitch takes to slide an octave. A wider leap takes longer' : TOOLTIPS.portamentoGlide}
             />
+            {/* Roadmap 18: a glide time that follows the tempo, a poly lane gliding only from a held
+                key, and a glide at the same speed for any distance. Each is sent whole, "off" and
+                false included, or the store's merge would keep the value from before. */}
+            <div className="synth-glide-options">
+              <label title="The glide time as a note value at the tempo, in place of the knob's time">
+                Sync
+                <select
+                  aria-label="Glide sync"
+                  value={parameters.portamento.sync ?? 'off'}
+                  disabled={!parameters.portamento.enabled}
+                  onChange={(event) => updatePortamento({ sync: event.target.value as RateSync })}
+                >
+                  {RATE_SYNCS.map(sync => <option key={sync} value={sync}>{RATE_SYNC_LABELS[sync]}</option>)}
+                </select>
+              </label>
+              <label title="Glide only into a note played while another key is still held, as a mono synth does. A mono lane always glides this way">
+                <input type="checkbox" aria-label="Glide only from held keys" checked={Boolean(parameters.portamento.fingered)} disabled={!parameters.portamento.enabled} onChange={(event) => updatePortamento({ fingered: event.target.checked })} />
+                Held keys only
+              </label>
+              <label title="Glide at the same speed for any distance, so a wide leap takes longer than a small one. The knob is then the time an octave takes">
+                <input type="checkbox" aria-label="Glide at the same speed" checked={Boolean(parameters.portamento.speed)} disabled={!parameters.portamento.enabled} onChange={(event) => updatePortamento({ speed: event.target.checked })} />
+                Same speed
+              </label>
+            </div>
           </div>
         </div>
       </div>

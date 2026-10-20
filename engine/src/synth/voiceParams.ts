@@ -64,6 +64,8 @@ export interface VoiceParams extends InsertSettings {
   spread: number;
   portamentoEnabled: boolean;
   portamentoGlide: number;
+  portamentoFingered: boolean;
+  portamentoSpeed: boolean;
   lfo1Enabled: boolean;
   lfo1Target: string;
   lfo1Waveform: string;
@@ -92,7 +94,7 @@ export function createDefaultSynthParameters(): SynthParameters {
     spread: 0,
     engine: 'subtractive',
     voiceMode: 'poly',
-    portamento: { enabled: false, glide: 0.05 },
+    portamento: { enabled: false, glide: 0.05, fingered: false, speed: false },
     arpeggiator: { enabled: false, mode: 'up', rate: '1/16', gate: 0.7 },
     oscillator: { type: 'sine', detune: 0, pulseWidth: 0.5 },
     oscillator2: { enabled: false, type: 'sawtooth', semitones: 0, detune: 7, level: 0.7, sync: false },
@@ -133,6 +135,12 @@ const RATE_SYNC_BEATS: Record<Exclude<RateSync, 'off'>, number> = {
 export function syncedRateHz(sync: unknown, bpm: number): number | null {
   const beats = typeof sync === 'string' ? RATE_SYNC_BEATS[sync as Exclude<RateSync, 'off'>] : undefined;
   return beats === undefined ? null : Math.max(20, Math.min(400, bpm)) / 60 / beats;
+}
+
+// How long a glide takes, in seconds: its note value at the tempo when it follows the tempo.
+function glideSeconds(portamento: Partial<SynthParameters['portamento']> | undefined, bpm: number): number {
+  const beats = portamento?.sync && portamento.sync !== 'off' ? RATE_SYNC_BEATS[portamento.sync] : undefined;
+  return beats === undefined ? portamento?.glide ?? 0 : beats * 60 / Math.max(20, Math.min(400, bpm));
 }
 
 type FlatRoutes = Pick<VoiceParams,
@@ -190,7 +198,9 @@ export function toVoiceParams(p: SynthParameters, bpm = 120): VoiceParams {
     filterSustain: filterEnvelope.sustain, filterRelease: filterEnvelope.release,
     velocityAmp: velocity.amp, velocityFilter: velocity.filter,
     gain: p.gain, pan: p.pan ?? 0, spread: p.spread ?? 0,
-    portamentoEnabled: p.portamento?.enabled ?? false, portamentoGlide: p.portamento?.glide ?? 0,
+    // A synced glide lasts its note value at the tempo.
+    portamentoEnabled: p.portamento?.enabled ?? false, portamentoGlide: glideSeconds(p.portamento, bpm),
+    portamentoFingered: p.portamento?.fingered === true, portamentoSpeed: p.portamento?.speed === true,
     lfo1Enabled: p.lfo1.enabled, lfo1Target: p.lfo1.target, lfo1Waveform: p.lfo1.waveform,
     lfo1Rate: lfoRate(p.lfo1), lfo1Depth: p.lfo1.depth, lfo1Retrigger: p.lfo1.retrigger ?? true,
     lfo2Enabled: p.lfo2.enabled, lfo2Target: p.lfo2.target, lfo2Waveform: p.lfo2.waveform,

@@ -63,8 +63,8 @@ function fromVast(file: Loose, defaults: SynthParameters): ImportedPreset {
   if (params.mixer.sub > 0 && (Math.round(get('sub.wave', 0)) !== 0 || Math.round(get('sub.octave', -1)) !== -1)) notes.push('The sub oscillator\'s wave and octave are fixed in Discobot.');
   params.unison = { voices: clamp(Math.round(get('unison.voices', 1)), 1, 4), detune: clamp(get('unison.detune', 12) / 50, 0, 1) };
   const glide = get('mixer.glide', 0), glideMode = Math.round(get('glide.mode', 1));
-  params.portamento = { enabled: glideMode > 0 && glide > 0.001, glide: clamp(glide, 0, 1) };
-  if (glideMode === 2 && params.portamento.enabled) notes.push('Glide was legato-only; in Discobot a mono lane glides on slides and a poly lane on every note.');
+  // A legato-only glide is Discobot's "held keys only" (a mono lane always glides that way).
+  params.portamento = { enabled: glideMode > 0 && glide > 0.001, glide: clamp(glide, 0, 1), ...(glideMode === 2 ? { fingered: true } : {}) };
   if (get('analog.drift', 0) > 0.001) notes.push('Analog drift is not carried over.');
 
   // Cutoff is stored as a note number; resonance as ladder feedback, where about 4 self-oscillates.
