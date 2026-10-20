@@ -323,3 +323,6 @@
 
 /* A lane's name, on the line above its editor. */
 .lane-name { width: 14ch; background: var(--surface-field); border: 1px solid var(--edge-control); border-radius: var(--corner-control); color: var(--text); font-family: var(--sentence-font); font-size: var(--type-label); padding: 4px 6px; text-transform: none; }
+/* The glide's sync and its two switches, under the Glide knob (roadmap 18). */
+.synth-glide-options { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; color: var(--text-label); font-size: var(--type-label); }
+.synth-glide-options label { display: inline-flex; align-items: center; gap: 4px; }
