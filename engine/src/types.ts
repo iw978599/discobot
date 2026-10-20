@@ -76,8 +76,8 @@ export interface EffectsLoopState {
     preDelay?: number;
     damping?: number;
     // Which reverb: absent or 'room' is the convolver every project had before there was a choice,
-    // 'hall' the one made of delay lines. Only 'hall' is ever stored.
-    kind?: 'room' | 'hall';
+    // 'hall' the one made of delay lines, 'spring' a spring tank. 'room' is never stored.
+    kind?: 'room' | 'hall' | 'spring';
   };
   // Absent means off, so older projects still match the expected shape.
   chorus?: {

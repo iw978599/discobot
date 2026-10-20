@@ -27,6 +27,7 @@ export const DELAY_PRESETS: Array<EffectPreset<Omit<Delay, 'enabled'>>> = [
 export const REVERB_PRESETS: Array<EffectPreset<Omit<Reverb, 'enabled'>>> = [
   { name: 'Small room', title: 'A short, close room', settings: { kind: 'room', decay: 0.8, mix: 0.22, preDelay: 0.005, damping: 0.4 } },
   { name: 'Long hall', title: 'A large, smooth hall with a moment before it starts', settings: { kind: 'hall', decay: 4, mix: 0.32, preDelay: 0.03, damping: 0.3 } },
+  { name: 'Spring style', title: 'The drip of a guitar amplifier\'s spring tank: short, dark and boingy', settings: { kind: 'spring', decay: 2, mix: 0.3, preDelay: 0, damping: 0.35 } },
   { name: 'Plate', title: 'A bright, dense plate that starts at once, as a studio plate reverb does', settings: { kind: 'room', decay: 2.2, mix: 0.3, preDelay: 0, damping: 0 } },
 ];
 

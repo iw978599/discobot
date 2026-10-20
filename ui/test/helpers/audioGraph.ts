@@ -1,4 +1,5 @@
-// A small offline renderer for graphs made of gains, delays, high shelves and a two-channel merger:
+// A small offline renderer for graphs made of gains, delays, filters (high shelves, low- and high-passes
+// and all-passes) and a two-channel merger:
 // enough of Web Audio to play the Hall reverb's own graph, as `createHallReverb` builds it, and
 // measure what comes out. Every signal is one channel. It renders the way Chrome was seen to on
 // the check machines (the probe in pull request 188): a block of 128 frames at a time, each node
@@ -43,8 +44,21 @@ export class GraphContext {
         if (Math.abs(length - Math.round(length)) > 1e-3) throw new Error('a delay between frames');
         lines.set(node, { line: new Float32Array(Math.round(length) + QUANTUM), length: Math.round(length), at: 0 });
       }
-      if (node.kind === 'filter') {
-        if (node.type !== 'highshelf') throw new Error(`no ${node.type} filter here`);
+      if (node.kind === 'filter' && node.type !== 'highshelf') {
+        // The Web Audio specification's other filters this needs: a low-pass and a high-pass, whose Q
+        // is in decibels, and an all-pass, whose Q is not.
+        const w = 2 * Math.PI * node.frequency.value / rate, cos = Math.cos(w), sin = Math.sin(w);
+        const inDb = sin / (2 * Math.pow(10, node.Q.value / 20)), plain = sin / (2 * node.Q.value);
+        const sets: Record<string, number[]> = {
+          lowpass: [(1 - cos) / 2, 1 - cos, (1 - cos) / 2, 1 + inDb, -2 * cos, 1 - inDb],
+          highpass: [(1 + cos) / 2, -(1 + cos), (1 + cos) / 2, 1 + inDb, -2 * cos, 1 - inDb],
+          allpass: [1 - plain, -2 * cos, 1 + plain, 1 + plain, -2 * cos, 1 - plain],
+        };
+        const set = sets[node.type];
+        if (!set) throw new Error(`no ${node.type} filter here`);
+        const [b0, b1, b2, a0, a1, a2] = set;
+        shelves.set(node, { b0: b0 / a0, b1: b1 / a0, b2: b2 / a0, a1: a1 / a0, a2: a2 / a0, x1: 0, x2: 0, y1: 0, y2: 0 });
+      } else if (node.kind === 'filter') {
         const A = Math.pow(10, node.gain.value / 40), w = 2 * Math.PI * node.frequency.value / rate, cos = Math.cos(w);
         const alpha = Math.sin(w) / 2 * Math.SQRT2 * 2 * Math.sqrt(A), a0 = (A + 1) - (A - 1) * cos + alpha;
         shelves.set(node, {
