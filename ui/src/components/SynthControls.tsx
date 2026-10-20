@@ -15,6 +15,7 @@ import { RATE_SYNCS, RATE_SYNC_LABELS } from '../services/rateSync';
 import { INSERT_DEFAULT } from '../services/effectSettings';
 import Knob from './Knob';
 import './SynthControls.css';
+import { MAX_LANE_NAME } from '../services/lanes';
 
 interface SynthControlsProps {
   parameters: SynthParameters;
@@ -33,6 +34,10 @@ interface SynthControlsProps {
   // shown on the Notes level: step tools and the keyboard
   notes: ReactNode;
   onRemove?: () => void;
+  // The lane's number, its own name (empty for none), and what renaming it calls.
+  laneId?: number;
+  laneName?: string;
+  onRename?: (name: string) => void;
   // Goes up when samples arrive from somewhere else (an imported project file), so the list is read again.
   sampleStoreVersion?: number;
   onSampleError?: (message: string) => void;
@@ -180,6 +185,9 @@ export default function SynthControls({
   onTabChange,
   notes,
   onRemove,
+  laneId,
+  laneName,
+  onRename,
   sampleStoreVersion,
   onSampleError,
 }: SynthControlsProps) {
@@ -339,6 +347,7 @@ export default function SynthControls({
           ))}
         </div>
         <div className="synth-header-tools">
+          {onRename && laneId !== undefined && <LaneNameField id={laneId} name={laneName ?? ''} onRename={onRename} />}
           <label className="synth-toggle" title={TOOLTIPS.hold}>
             <input
               type="checkbox"
@@ -2082,5 +2091,28 @@ export default function SynthControls({
         </div>
       </div>
     </div>
+  );
+}
+
+// A lane's name, typed in its editor. It is kept when the field is left or Enter is pressed;
+// Escape puts back what it was, and an empty name gives the lane back its number.
+function LaneNameField({ id, name, onRename }: { id: number; name: string; onRename: (name: string) => void }) {
+  const [draft, setDraft] = useState(name);
+  useEffect(() => { setDraft(name); }, [name]);
+  return (
+    <input
+      className="lane-name"
+      aria-label={`Synth ${id} name`}
+      title="Name this lane"
+      placeholder={`Synth ${id}`}
+      maxLength={MAX_LANE_NAME}
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => { if (draft.trim() !== name) onRename(draft); }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') event.currentTarget.blur();
+        else if (event.key === 'Escape') { setDraft(name); event.stopPropagation(); }
+      }}
+    />
   );
 }

@@ -4,6 +4,7 @@ import { playhead } from '../services/playhead';
 import { drumsMuted, drumsSound, laneSounds, type ActivityLane } from '../services/unitActivity';
 import { TAP_HOLD_MS, TAP_SLOP } from '../components/useKnobInteraction';
 import type { DrumState } from '../types';
+import { laneName, shownLanes } from '../services/lanes';
 
 interface UnitBarProps {
   shown: RackUnit;
@@ -38,11 +39,11 @@ export default function UnitBar({ shown, synths, drums, playing, guests, onShow,
   const allDrumsMuted = drumsMuted(drums);
   const units: Tab[] = [
     { id: 'song', label: 'Song', name: 'Show Song' },
-    ...[1, 2, 3].map((id): Tab => {
+    ...shownLanes(synths.map(synth => synth.id)).map((id): Tab => {
       const lane = synths.find(synth => synth.id === id);
       if (!lane) return { id: laneUnit(id), label: `Synth ${id}`, empty: true, name: `Show Synth ${id}, an empty slot` };
       return {
-        id: laneUnit(id), label: `Synth ${id}`, name: `Show Synth ${id}`, lamp: String(id), muted: Boolean(lane.muted),
+        id: laneUnit(id), label: laneName(id, lane.name), name: `Show ${laneName(id, lane.name)}`, lamp: String(id), muted: Boolean(lane.muted),
         mute: () => onMuteLane(id, !lane.muted),
       };
     }),

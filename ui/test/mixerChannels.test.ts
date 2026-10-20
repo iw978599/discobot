@@ -25,8 +25,8 @@ const source = (more: Partial<MixerSource> = {}): MixerSource => ({
 test('every lane the project has gets a channel, in order, with its own level, pan, mute and solo', () => {
   const { lanes } = mixerChannels(source());
   assert.deepEqual(lanes.map(lane => lane.id), [1, 2]);
-  assert.deepEqual(lanes[0], { id: 1, model: lanes[0].model, level: 0.8, pan: 0, muted: false, solo: true });
-  assert.deepEqual(lanes[1], { id: 2, model: lanes[1].model, level: 1.5, pan: -0.25, muted: true, solo: false });
+  assert.deepEqual(lanes[0], { id: 1, name: 'Synth 1', model: lanes[0].model, level: 0.8, pan: 0, muted: false, solo: true });
+  assert.deepEqual(lanes[1], { id: 2, name: 'Synth 2', model: lanes[1].model, level: 1.5, pan: -0.25, muted: true, solo: false });
   assert.ok(lanes[0].model.length > 0, 'a lane says its model');
   assert.deepEqual(mixerChannels(source({ synths: [] })).lanes, [], 'no lanes, no channels');
   assert.equal(mixerChannels(source({ synths: [{ id: 3, synthModelId: 'generic', synthParams: null }] })).lanes[0].level, 1, 'a lane whose sound has not arrived reads as full');

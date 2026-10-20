@@ -5,6 +5,7 @@ import { storedRateSync } from './rateSync';
 import { CHORUS_DEFAULT, EQ_RANGE_DB, INSERT_DEFAULT, MAX_INSERT_DELAY_TIME, MAX_PRE_DELAY } from './effectSettings';
 import { MAX_STEP_NOTES, MAX_STEP_OFFSET, MAX_STRUM } from './noteScheduling';
 import { BAR_CHOICES, MAX_BARS, barSteps, clampLengths, laneBars, storedSignature } from './patternLength';
+import { LANE_IDS } from './lanes';
 import { sanitizeGuestMix, sanitizeSceneGuests } from './guests';
 import { MAX_REPEATS, MAX_SONG_ENTRIES } from './songPlayback';
 import { sceneColor } from './sceneColors';
@@ -276,7 +277,7 @@ export const MAX_SCENES = 64;
 export function sanitizeSceneMutes(value: unknown): SceneMutes | undefined {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const input = record(value), flags = (entry: unknown) => ({ muted: record(entry).muted === true, solo: record(entry).solo === true });
-  const lanes = Object.fromEntries([1, 2, 3].filter(id => record(input.lanes)[id] !== undefined).map(id => [id, flags(record(input.lanes)[id])]));
+  const lanes = Object.fromEntries(LANE_IDS.filter(id => record(input.lanes)[id] !== undefined).map(id => [id, flags(record(input.lanes)[id])]));
   const drums = Object.fromEntries(DRUM_INSTRUMENTS.filter(instrument => record(input.drums)[instrument] !== undefined).map(instrument => [instrument, flags(record(input.drums)[instrument])]));
   return { lanes, drums };
 }
@@ -292,7 +293,7 @@ export function sanitizeScenes(value: unknown, defaults: DrumState): Scene[] | n
     const lanes: Scene['lanes'] = {};
     const lengths: Record<number, number> = {};
     const automated: NonNullable<Scene['laneAutomation']> = {};
-    for (const id of [1, 2, 3]) {
+    for (const id of LANE_IDS) {
       const steps = record(input.lanes)[id];
       if (!Array.isArray(steps)) continue;
       const bars = laneBars(steps.length, record(input.laneBars)[id], signature);

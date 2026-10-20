@@ -3,7 +3,7 @@
 // channel plays the drums. The others take every note from the device, whatever its channel:
 // 'open' is whichever lane is open, 'synth:2' is that lane, 'drums' makes every note a pad, and
 // 'off' has the device ignored, knobs and all.
-export type MidiDestination = 'default' | 'open' | 'synth:1' | 'synth:2' | 'synth:3' | 'drums' | 'off';
+export type MidiDestination = 'default' | 'open' | 'synth:1' | 'synth:2' | 'synth:3' | 'synth:4' | 'synth:5' | 'drums' | 'off';
 
 export const MIDI_DESTINATIONS: Array<{ id: MidiDestination; label: string }> = [
   { id: 'default', label: 'As set above' },
@@ -11,6 +11,8 @@ export const MIDI_DESTINATIONS: Array<{ id: MidiDestination; label: string }> = 
   { id: 'synth:1', label: 'Synth 1' },
   { id: 'synth:2', label: 'Synth 2' },
   { id: 'synth:3', label: 'Synth 3' },
+  { id: 'synth:4', label: 'Synth 4' },
+  { id: 'synth:5', label: 'Synth 5' },
   { id: 'drums', label: 'Drums' },
   { id: 'off', label: 'Off' },
 ];

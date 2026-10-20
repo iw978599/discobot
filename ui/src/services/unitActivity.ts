@@ -5,6 +5,8 @@ import { stepNotes } from './noteScheduling';
 // the step its playhead is on is one it sounds. Chance is left out: a step that may play counts.
 export interface ActivityLane {
   id: number;
+  // what the lane is called, where it has been named
+  name?: string;
   muted?: boolean;
   solo?: boolean;
   isPlaying?: boolean;
