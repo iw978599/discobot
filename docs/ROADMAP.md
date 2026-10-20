@@ -109,6 +109,8 @@ directly, with no builder.
     lane's Sound level and beside the main volume on the mixer, drawn outside
     React from an analyser made only when a picture asks.
 22. **Several recordings across the keyboard for an imported sample** (V1).
+    Done: Import several recordings… on the Osc page, each file's note read
+    from its name and shown to be changed, kept as one instrument.
 23. **A listener's page that shows the song moving** (V16).
 24. **More MIDI** (features 6): following an external clock, sending notes
     played by hand, choosing the output channels, aftertouch. Each part is

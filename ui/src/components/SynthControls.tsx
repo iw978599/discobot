@@ -14,6 +14,10 @@ import { BUILT_IN_WAVES } from '../services/builtInWaves';
 import { readSoundFont, type SoundFontFile, type SoundFontPreset } from '../services/soundFont';
 import { soundFontInstrument } from '../services/soundFontImport';
 import SoundFontDialog from './SoundFontDialog';
+import RecordingsDialog from './RecordingsDialog';
+import { recordingsInstrument, toRecording, type Recording } from '../services/multiSample';
+import { type InstrumentImport } from '../services/soundFontImport';
+import { getAudioContext } from '../hooks/browserAudio';
 import { RATE_SYNCS, RATE_SYNC_LABELS } from '../services/rateSync';
 import { INSERT_DEFAULT } from '../services/effectSettings';
 import Knob from './Knob';
@@ -267,13 +271,29 @@ export default function SynthControls({
   // several asks which one first.
   const fontFileRef = useRef<HTMLInputElement>(null);
   const [font, setFont] = useState<{ buffer: ArrayBuffer; file: SoundFontFile } | null>(null);
-  const importInstrument = (buffer: ArrayBuffer, preset: SoundFontPreset) => {
-    const made = soundFontInstrument(buffer, preset);
+  // An instrument made of several recordings, from a SoundFont or from files, kept and put on the lane.
+  const keepInstrument = (made: InstrumentImport) => {
     if (!made.ok) { onSampleError?.(made.error); return; }
     // Its recordings go round their own loops, which needs the lane's Loop on.
     void saveSample(made.file)
       .then(async (stored) => { await refreshSamples(); updateSample({ id: stored.id, wave: '', ...(made.loops ? { loop: true } : {}) }); })
       .catch((cause) => onSampleError?.(cause instanceof Error ? cause.message : 'The instrument could not be imported.'));
+  };
+  const importInstrument = (buffer: ArrayBuffer, preset: SoundFontPreset) => keepInstrument(soundFontInstrument(buffer, preset));
+  // Several recordings, each a note (roadmap 22): decoded first, then their notes asked for.
+  const recordingsFileRef = useRef<HTMLInputElement>(null);
+  const [recordings, setRecordings] = useState<Recording[] | null>(null);
+  const readRecordings = async (files: File[]) => {
+    const read: Recording[] = [];
+    for (const file of files) {
+      try {
+        const buffer = await getAudioContext().decodeAudioData(await file.arrayBuffer());
+        read.push(toRecording(file.name, Array.from({ length: buffer.numberOfChannels }, (_, channel) => buffer.getChannelData(channel)), buffer.sampleRate));
+      } catch {
+        onSampleError?.(`“${file.name}” is not audio this browser can read, so it was left out.`);
+      }
+    }
+    if (read.length) setRecordings(read);
   };
   const refreshSamples = () => listSamples().then(list => setSamples(list.map(({ id, name }) => ({ id, name })))).catch(() => {});
   useEffect(() => { if (isSample) void refreshSamples(); }, [isSample, sample.id, sampleStoreVersion]);
@@ -713,6 +733,7 @@ export default function SynthControls({
                     const chosen = event.target.value;
                     if (chosen === 'import') sampleFileRef.current?.click();
                     else if (chosen === 'soundfont') fontFileRef.current?.click();
+                    else if (chosen === 'recordings') recordingsFileRef.current?.click();
                     // An empty name or id is sent, not left out: the store keeps whatever a change does not mention.
                     else if (chosen.startsWith('wave:')) updateSample({ wave: chosen.slice(5), id: '', scan: sample.scan ?? 2, fade: sample.fade ?? 1 });
                     else updateSample({ id: chosen, wave: '' });
@@ -727,6 +748,7 @@ export default function SynthControls({
                     {(samples ?? []).map(entry => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
                     {!sample.wave && sample.id && (samples === null || sampleMissing) && <option value={sample.id}>{sampleMissing ? 'Sample not on this device' : '…'}</option>}
                     <option value="import">Import a sample…</option>
+                    <option value="recordings">Import several recordings…</option>
                     <option value="soundfont">Import a SoundFont…</option>
                   </optgroup>
                 </select>
@@ -764,6 +786,20 @@ export default function SynthControls({
                   });
                 }}
               />
+              <input
+                ref={recordingsFileRef}
+                type="file"
+                hidden
+                multiple
+                accept="audio/*,.wav,.mp3,.ogg,.flac,.m4a"
+                aria-label="Import several recordings"
+                onChange={(event) => {
+                  const files = [...(event.currentTarget.files ?? [])];
+                  event.currentTarget.value = '';
+                  if (files.length) void readRecordings(files);
+                }}
+              />
+              {recordings && <RecordingsDialog recordings={recordings} onClose={() => setRecordings(null)} onImport={(name, noted) => { setRecordings(null); keepInstrument(recordingsInstrument(name, noted)); }} />}
               {font && <SoundFontDialog font={font.file} onClose={() => setFont(null)} onImport={(preset) => { setFont(null); importInstrument(font.buffer, preset); }} />}
               <Knob
                 label="Root"
