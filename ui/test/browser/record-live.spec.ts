@@ -54,3 +54,33 @@ test('with Rec on, a key played while the song runs is written where it was play
   await expect.poll(() => notes(page)).toEqual([]);
   expect(errors).toEqual([]);
 });
+
+test('a recorded note lasts as long as its key was held, and one Undo takes back the note and its length', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const lane = page.getByRole('region', { name: 'Synth 1 module', exact: true });
+  const key = lane.getByRole('button', { name: 'Play C3', exact: true });
+  // At 60 a step is a quarter of a second, so a second held is four steps.
+  await page.locator('.tempo-led').click();
+  await page.locator('.tempo-led-input').fill('60');
+  await page.locator('.tempo-led-input').press('Enter');
+  await lane.getByRole('button', { name: 'Rec', exact: true }).click();
+  await page.getByRole('button', { name: /Play All/ }).click();
+  await page.waitForTimeout(500);
+
+  await key.scrollIntoViewIfNeeded();
+  const box = (await key.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height * 0.8);
+  await page.mouse.down();
+  await page.waitForTimeout(1000);
+  await page.mouse.up();
+  await expect.poll(async () => (await notes(page)).length).toBe(1);
+  const [[step]] = await notes(page);
+  await expect.poll(async () => (await stored(page)).synths[0].pattern.steps[step].length ?? 1).toBeGreaterThanOrEqual(3);
+  expect((await stored(page)).synths[0].pattern.steps[step].length).toBeLessThanOrEqual(5);
+  await page.getByRole('button', { name: /Stop All/ }).click();
+
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect.poll(async () => (await notes(page)).length, 'the note and its length are one step').toBe(0);
+  expect(errors).toEqual([]);
+});

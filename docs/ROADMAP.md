@@ -48,7 +48,7 @@ directly, with no builder.
    empty.
 9. **A kind chosen when a preset is imported** (sound 7), so it does not
    always land in "My presets".
-10. **How long a recorded note is held** (features 3): every recorded note is
+10. **How long a recorded note is held** (features 3). Done: a recorded note lasts as long as its key was held. Was: every recorded note is
     one step long today.
 11. **Small tidying, low gain:** two parts done: every Sync menu now has dotted and triplet values, and new projects named Untitled each have a row of their own. Left: the transport bar and song strip render on every edit; the song strip calls `studio.sceneLength` while rendering, so the lengths must become values before it can be `tracked`, and the transport bar needs stable callbacks from `Rack`. Was: the delay's Sync menu has dotted and
     triplet values and the others do not (features 18); the transport bar
