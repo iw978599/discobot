@@ -41,6 +41,7 @@ export type Operation =
   | { type: 'synth.mix'; synthId: number; muted?: boolean; solo?: boolean }
   | { type: 'synth.swing'; synthId: number; swing: boolean }
   | { type: 'synth.name'; synthId: number; name: string }
+  | { type: 'synth.preset'; synthId: number; preset: string }
   | { type: 'synth.prefs'; synthId: number; octaveShift?: number; keyboardMode?: 'keyboard' | 'piano-roll' }
   | { type: 'pattern.write'; synthId: number; patternId: string; patch: Partial<Pattern> }
   | { type: 'transport.play'; synthId: number; patternId?: string }
@@ -95,6 +96,7 @@ type OpResults = Total<{
   'synth.mix': { synthId: number; muted: boolean; solo: boolean };
   'synth.swing': { synthId: number; swing: boolean };
   'synth.name': { synthId: number; name: string };
+  'synth.preset': { synthId: number; preset: string };
   'synth.prefs': ProjectLane;
   'pattern.write': Pattern;
   'transport.play': { success: boolean };
@@ -152,6 +154,7 @@ export const OP_META: Record<OpType, { save: boolean; undoable: boolean; share: 
   'synth.mix': { save: true, undoable: true, share: true },
   'synth.swing': { save: true, undoable: true, share: true },
   'synth.name': { save: true, undoable: true, share: true },
+  'synth.preset': { save: true, undoable: true, share: true },
   'synth.prefs': { save: true, undoable: false, share: false },
   'pattern.write': { save: true, undoable: true, share: true },
   'transport.play': { save: false, undoable: false, share: false },
