@@ -10,14 +10,13 @@ description: The checks and steps for finishing a change in Discobot and opening
 1. `npm run typecheck`
 2. `npm test -- --test-timeout 120000` (a test that leaves a timer running
    would otherwise hang the run)
-3. Browser tests. Run the specs the change touches while working
-   (`npx playwright test ui/test/browser/<name>.spec.ts`), and the whole suite
-   before the pull request is marked ready: `npm run test:browser` (one at a
-   time, nine minutes or more) or `npm run test:browser:fast` (desktop and
-   phone width side by side). A test that fails in a whole run and times real
-   audio or makes many exports may only have been starved: run it again on
-   its own before believing it. The check on GitHub deals each width's specs
-   out to four machines of their own and is the steadier of the two.
+3. Browser tests. **The owner's rule: do not run Playwright on this machine.**
+   Push and let the check on GitHub run them (it deals each width's specs out
+   to four machines). Before pushing, parse every changed spec with
+   `npx esbuild <spec> --log-level=error > /dev/null`, since the typecheck does
+   not cover the specs. A test that fails on GitHub and times real audio or
+   makes many exports may only have been starved: re-run the failed jobs
+   (`gh run rerun <id> --failed`) before believing it.
 4. Update `AGENTS.md` (behaviour a later change must know) and
    `docs/ROADMAP.md` (what is now done, what is still open). Keep
    `docs/GUEST_PROTOCOL.md`, `docs/guest-example.html` and the guest tests in
@@ -53,6 +52,15 @@ description: The checks and steps for finishing a change in Discobot and opening
 - The description states what was run and its result, and plainly lists what
   was not verified. Sound that has not been listened to is "not verified by
   ear".
+- Wait for the checks with one background command, not by polling by hand:
+  `sleep 120; for i in $(seq 1 80); do p=$(gh pr checks <n> 2>&1 | grep -c -E "pending|queued|in_progress|no checks"); [ "$p" = 0 ] && break; sleep 30; done; gh pr checks <n>`
+  run in the background; you are told when it ends.
+- The owner allows merging a pull request once every check is green
+  (`gh pr merge <n> --merge --delete-branch`). Merge them in order when one
+  builds on another.
+- `docs/ROADMAP.md` and `AGENTS.md` conflict often, because pull requests add
+  lines next to each other. Merge `main` into the branch and keep both sides'
+  lines; never drop the other pull request's.
 - Merging to `main` publishes the site, once the checks on that merge have
   passed (about six minutes). If a check fails, nothing is published. The accounts API is deployed
   separately and by hand (`npm run deploy --workspace=server`, then

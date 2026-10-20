@@ -31,9 +31,31 @@ given it.
 applies its own at once and sends it with its keys: the things it changes, finely enough that two
 people turning different knobs on one lane do not touch each other (`synth:2:filter.frequency`; a
 pattern written whole is one key). The room sends every edit to everyone, the sender too, in one
-order. A browser applies someone else's edit unless an edit of its own to one of the same keys is
-still on its way: its own was then ordered after, so it is the one everybody keeps. Everybody ends
-with the last edit the room ordered to each key, without a clock or a counter.
+order. A browser applies someone else's edit, then applies again any edit of its own that is still
+on its way and whose keys overlap it (its own was ordered after, so it must land on top, as it will
+everywhere else). Keys are paths (`synth/2/sound/filter/frequency`, `scenes/<id>/synth/2/pattern`),
+and two overlap when one is the start of the other, so a whole pattern and one cell of it overlap.
+Every browser ends with the edits applied in the room's order, without a clock or a counter. Simply
+skipping the other person's edit is not enough: where it covers more than one's own (a whole
+pattern against a cell), the browsers would differ.
+
+Stage 2 in detail:
+
+- `ui/src/services/liveSession.ts` runs while the open project is shared (`projectSync.status()`:
+  `shared[id]` names the owner, `sharedByMe[id]` makes it one's own) and its person is signed in.
+  The socket is opened by `openLiveSocket(owner, id)` in `account.ts`, so the token stays there.
+- It hears local edits through `localService.subscribeOps`, sends those `OP_META` marks `share`
+  and whose origin is `local` as `{ t: 'op', n, op, keys, scene }`, and coalesces edits to the same
+  keys within about 40 ms, so a knob's drag is a few messages, not hundreds.
+- A remote edit is applied with the `remote` origin (kept out of undo, never sent again), in the
+  scene it was made in: the browser opens that scene for it with `scene.select` and goes back.
+- A joiner applies the host's project through `syncReceive`, which keeps a version first, then the
+  edits that arrived meanwhile.
+- Undo and redo send `replace` with the whole project; a receiver puts it back as undo does
+  (`restoreContent`), keeping a version, and does not send it on.
+- Project sync is held for everyone but the host during a session (a hold in `startProjectSync`).
+- The logic is a plain object given its socket, store and clock, so a unit test can run two
+  browsers and a room against each other.
 
 **Joining** someone in the room already: the room asks the person longest in it (`send-state`) to
 send the whole project (`state`) to the newcomer, who opens it in place of their own copy and then

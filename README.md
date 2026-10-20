@@ -1,9 +1,9 @@
 # Discobot
 
-A music workstation that runs in the browser: three synth lanes, a step
+A music workstation that runs in the browser: up to five synth lanes, a step
 sequencer with a piano roll, an eight-instrument drum machine, scenes and a
-song, shared effects, MIDI, and audio export. Sound is made on your own device.
-No login is needed.
+song, shared and per-lane effects, MIDI, and audio export. Sound is made on your
+own device. No login is needed.
 
 **Use it at https://iw978599.github.io/discobot/**
 
@@ -13,31 +13,40 @@ controls sized for a finger.
 
 ## What is in it
 
-**Three synth lanes.** Each plays one of twenty synth models: a plain engine
-with every control on show, and nineteen set up in the manner of a well-known
-instrument, each with four knobs of its own.
+**Up to five synth lanes.** A project starts with three; Add Lane adds a fourth
+and a fifth. A lane can be given a name of its own, and can swing with the drums.
+Each plays one of twenty synth models: a plain engine with every control on show,
+and nineteen set up in the manner of a well-known instrument, each with four knobs
+of its own.
 
 | Mono | Poly | Digital |
 |---|---|---|
 | Minimoog Model D, TB-303, SH-101, Pro-One, Mono/Poly, MS-20, Odyssey | Juno-106, Prophet-5, Jupiter-8, OB-Xa, Polysix, CS-80 | DX7, JP-8000, Virus, M1, D-50, Wavestation |
 
 A model is this synth's own voice set up to behave like the instrument it is
-named for. It is not that instrument's circuit and uses none of its samples.
-The M1, D-50 and Wavestation, and the drums' cymbals, play recordings and waves from two free
-libraries, VSCO 2 Community Edition (Versilian Studios, with an upright piano
-sampled by Simon Dalzell of Ivy Audio) and Adventure Kid Waveforms (Kristoffer
-Ekstrand), both in the public domain; `docs/BUNDLED_AUDIO.md` has the details.
+named for. It is not that instrument's circuit. The M1, D-50 and Wavestation, the
+recorded instruments (two grand pianos, a pipe organ, a tenor sax and three FM
+keyboards), the Recorded drum kit and its percussion, and the cymbals play
+recordings and waves from free libraries; `docs/BUNDLED_AUDIO.md` has the details.
 
-**Eighty-six presets** in six kinds: bass, lead, pad, keys, pluck and effects.
-They are level-matched, so choosing another does not mean reaching for the
-volume. You can save, export and import your own, including presets from some
-other synths.
+**Ninety-three presets** in six kinds: bass, lead, pad, keys, pluck and effects,
+found by group or by typing in the menu's search. They are level-matched, so
+choosing another does not mean reaching for the volume. You can save, export and
+import your own, including presets from some other synths. A lane on the plain
+engine is called by the preset it plays.
 
-**A drum machine** with eight lanes and eight kits (Clean, Punchy, Lo-Fi,
-TR-808, TR-909, LinnDrum, DMX, TR-707). The drums are synthesized, except the
-cymbal lane, which plays a recording of a real crash, ride, bell or splash.
-Any lane can play a sample of your own instead of its built-in voice, and a
-whole kit can be imported at once.
+**Playing and writing.** The keyboard, the computer keyboard or a MIDI controller,
+recorded where it is played and as long as it is held. The piano roll builds
+chords with inversions, and a chord can be strummed. The arpeggiator runs for as
+long as a key is held. Each step can have a chance, repeats, a late start and its
+own note lengths. Automation draws or records a knob's movement through a pattern,
+the effect sends among them.
+
+**A drum machine** with eight lanes and nine kits (Clean, Punchy, Lo-Fi, TR-808,
+TR-909, LinnDrum, DMX, TR-707 and Recorded, in which every drum is a recording).
+Lanes can be other percussion (tambourine, shaker, cowbell, cross-stick, conga,
+bongo), the cymbal any of four, and any lane a sample of your own, shown by its
+name; a whole kit can be imported at once.
 
 **Scenes and a song.** A scene is every lane's pattern plus the drum grid,
 one, two, four or eight bars long; Copy bar lays one bar of a longer pattern over another.
@@ -46,15 +55,25 @@ which sets how long its bars are and where the beats fall, so a song can
 change from one to the next. A song is scenes in order, each repeated as many times as
 you like. Scenes can be given a colour so a song's shape reads at a glance.
 
-**Effects** shared by the whole rack: drive, phaser, delay (free or in time
-with the tempo), chorus, reverb (a close Room or a smoother Hall) and a
-three-band master EQ. Each lane and the
-drums have their own sends, and each drum has a share of its own of the kit's
-delay and reverb sends, so a kick can stay dry under a snare with reverb on it.
+**Effects.** Shared by the whole rack: drive (classic, overdrive, distortion or
+fuzz), phaser, delay (with colour and tape wow, free or in time), chorus, reverb
+(Room or Hall), two aux buses (an echo, a hall or a chorus each) and a three-band
+master EQ. Each has presets, among them clones in the manner of well-known units
+(Space Echo, Memory Man, Juno chorus, Small Stone, Tube Screamer, RAT, Big Muff and
+more). Each lane has its own insert drive, tone, chorus and delay too.
 
 **A mixer.** Every level side by side: a fader for each lane, each drum, each
-guest instrument and the effect returns, with pan, mute and solo. A fader and
-the knob in its own unit are the same setting.
+guest instrument, the effect returns and the aux buses, with pan, mute and solo.
+A fader and the knob in its own unit are the same setting.
+
+**Sample songs.** An empty project offers seven finished songs to open and take
+apart, in different styles and time signatures (dark synthwave, a jazz waltz,
+lo-fi, 7/8 electronic, 12/8 Afrobeat, 5/4 ambient and a seven-minute post-rock
+piece), a few starting beats, or a start from nothing.
+
+**Accounts, optional.** Sign in to keep projects in an account, publish songs,
+and share a project with other people to work on it in turns. Live sessions,
+where everyone edits at once, are being built (`docs/LIVE_SESSIONS_PLAN.md`).
 
 **Guest instruments.** A project can host another creator's web instrument in
 a frame, following the tempo and playing through the mixer. See
@@ -66,7 +85,7 @@ small child. It keeps its own tune and is reached from the Project menu.
 ## Make music
 
 The screen is one rack, read top to bottom: the transport, the scenes and
-song, three synth lanes, the drums, the mixer, then the effects. Every lane's steps line
+song, the synth lanes, the drums, the mixer, then the effects. Every lane's steps line
 up, so you can see how the parts sit against each other.
 
 1. **Start.** A new project offers three beats to start from (House Beat, Slow
