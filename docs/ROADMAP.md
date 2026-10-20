@@ -69,6 +69,8 @@ directly, with no builder.
 14. **The Hall's Decay in Chrome** (Known Issues in `AGENTS.md`). Comes
     before the clones, which lean on it, and is also what the Hall aux bus
     plays.
+14a. **Importing SoundFonts** (V18). Asked for by the owner on 2026-10-19, to come
+    after 14.
 15. **Clones of well-known effects** (the second half of V5). Done but for the spring reverb, which waits on 14: presets named "… style" on each effect, with a colour and a wow on the delay and kinds of drive. Was: the list the
     owner agreed on 2026-10-19, with knobs added to an effect where a clone
     needs them.
@@ -1248,3 +1250,19 @@ V17. **The audio engine handed to the hooks.** (M) The current roadmap gives
     the audio layer one owner. The step after is for the hooks and the
     studio to be given that owner instead of reaching for it, which is what
     makes the audio testable without a browser.
+
+### Sound, added later
+
+V18. **Importing SoundFonts.** (M) Asked for by the owner on 2026-10-19. A
+    SoundFont (`.sf2`) is recordings tied to key ranges, with loop points and a
+    root note, which is what the sample engine already plays for the bundled
+    pianos. What is new: a reader for the file's instruments and their zones, a
+    choice of which instrument to take, and keeping the result in this browser
+    like an imported sample (not synced, as samples are not). A SoundFont's own
+    envelopes and filter carry over only in part: the lane's sound stands in for
+    them. Importing a person's own file avoids bundling: free fonts are 30 to
+    300 MB and each needs its licence read. Test files with clear licences:
+    FreePats' Upright Piano KW (small, SF2, 5.8 MB) and Spanish Classical Guitar
+    (SF2, 9.5 MB), both CC0 (freepats.zenvoid.org); its MuldjordKit drum kit (SF2,
+    53 MB, CC BY 4.0); and MuseScore's MS_General, a General MIDI set under MIT, for
+    a file of many instruments.
