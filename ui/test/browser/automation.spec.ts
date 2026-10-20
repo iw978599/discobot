@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { SYNTH_MODELS } from '../../src/synthModels';
 
 const stored = (page: Page) => page.evaluate(() => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem('discobot_browser_project_v1') || '{}')));
 // Synth 1's automation of one parameter as stored, or null for none.
@@ -187,5 +188,44 @@ test('a lane\'s sends can be automated too, the aux sends among them', async ({ 
   await page.getByRole('button', { name: /Play All/ }).click();
   await page.waitForTimeout(800);
   await page.getByRole('button', { name: /Stop All/ }).click();
+  expect(errors).toEqual([]);
+});
+
+// A lane's model and a choice from its menu, as the other specs that change one do.
+async function chooseModel(scope: Page | Locator, id: string) {
+  await scope.getByRole('button', { name: /^Synth model: / }).click();
+  const group = SYNTH_MODELS.find(model => model.id === id)?.group;
+  if (group) await scope.locator(`[role="menuitem"][data-group="${group}"]`).click();
+  await scope.locator(`[role="menuitem"][data-item="${id}"]`).click();
+}
+
+test('with Auto on, a macro turned while the song plays is written as the parameters it sets, and its own knob is left as it was', async ({ page }) => {
+  // A controller's knob tied to a macro goes through this same handler (paramTargets.ts), so this is
+  // what Auto records from it too.
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.getByRole('tab', { name: 'Sound', exact: true }).first().click();
+  await chooseModel(lane(page), 'juno-106');
+  await expect.poll(async () => (await stored(page)).synths[0].synthModelId).toBe('juno-106');
+  const before = (await stored(page)).synths[0].synthModelParams.macro2;
+  const knob = lane(page).getByLabel('Synth 1 resonance value', { exact: true });
+  const turn = async (value: string) => { await knob.fill(value); await knob.press('Enter'); };
+  await page.locator('.tempo-led').click();
+  await page.locator('.tempo-led-input').fill('60');
+  await page.locator('.tempo-led-input').press('Enter');
+  await page.getByRole('tab', { name: 'Notes', exact: true }).first().click();
+  await lane(page).getByRole('button', { name: 'Record automation', exact: true }).click();
+
+  await page.getByRole('button', { name: /Play All/ }).click();
+  await page.waitForTimeout(600);
+  await turn('90%');
+  await page.waitForTimeout(700);
+  await turn('20%');
+  await page.waitForTimeout(400);
+  await page.getByRole('button', { name: /Stop All/ }).click();
+
+  const written = set(await values(page, 'resonance'));
+  expect(written.length, 'the resonance it sets is written along the pattern').toBeGreaterThanOrEqual(2);
+  expect((await stored(page)).synths[0].synthModelParams.macro2, "the macro itself is the sound's and is left alone").toBe(before);
   expect(errors).toEqual([]);
 });
