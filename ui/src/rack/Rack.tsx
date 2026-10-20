@@ -294,6 +294,7 @@ export default function Rack({ studio }: { studio: Studio }) {
                 ? `Making ${studio.exportStatus.what}${studio.exportStatus.part ? ` (${studio.exportStatus.part})` : ''}. A long song takes a while; the file downloads when it is done.`
                 : `${studio.exportStatus.what} finished. The file has been downloaded.`}
             </span>
+            {studio.exportStatus.phase === 'working' && studio.exportStatus.progress !== undefined && <progress className="export-bar" aria-label="Export progress" max={100} value={Math.round(studio.exportStatus.progress * 100)} />}
             {studio.exportStatus.phase === 'done' && <button className="rack-btn" onClick={studio.dismissExportStatus} aria-label="Dismiss export message">✕</button>}
           </div>
         )}

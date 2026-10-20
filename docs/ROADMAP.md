@@ -92,8 +92,11 @@ directly, with no builder.
     the glide time, Held keys only (fingered glide on a poly lane) and Same
     speed (an octave in the knob's time). Not done: each voice of a chord
     gliding from its own last note, and Glide on a lane's face.
-19. **A true progress bar for exports** (features 13), by rendering in
-    pieces.
+19. **A true progress bar for exports** (features 13). Done: a bar in the
+    Export dialog and on the rack's message. The lanes and the drums are the
+    first half, one share each, with a pause after each so the page can draw;
+    the browser's own render is the second half, which stops at ten points
+    to say so (`suspend`). Stems count across the whole zip.
 20. **Drag to reorder lanes, scenes and the playlist's rows** (V14,
     features 14), with a keyboard way as well. Done for the scenes (drag, or
     Alt and an arrow, a `scene.move` edit), the song's blocks and the
@@ -848,8 +851,7 @@ may redistribute.
     Done: "Download WAV" is now Scene WAV and "Export MIDI" Scene MIDI. While a WAV
     export is made a message at the top says so, the other WAV exports are
     greyed out, and the message says when the file has downloaded (Stems say
-    which file of how many). Still open: a true progress bar or percentage,
-    since the browser's offline renderer does not report how far it has got.
+    which file of how many). A true progress bar followed (plan item 19).
     Done on 2026-10-13: Export is one dialog in place of the menu, with what
     to export, as what, how long the file will be, and the message about
     its making in the same place.
