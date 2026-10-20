@@ -101,3 +101,8 @@
 .piano-roll-step-header.playing {
   box-shadow: inset 0 0 0 9999px rgba(255, 255, 255, 0.08);
 }
+
+/* The scale lock: a row outside the key and scale is faint and takes no new note. A note already
+   there stays as it is, to be seen and taken out. */
+.piano-roll-note-label.out-of-scale { color: var(--text-faint); }
+.piano-roll-cell.out-of-scale:not(.active):not(.held) { opacity: 0.35; cursor: not-allowed; }

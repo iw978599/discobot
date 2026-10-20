@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useSyncExternalStore } from 'react';
+import { inScale, scaleLock } from '../services/scaleLock';
 import { keyboardKeyTarget, keyboardNotes, octaveOnShow } from '../services/keyboardKeys';
 import './Keyboard.css';
 
@@ -149,6 +150,9 @@ export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0, h
     };
   }, []);
 
+  // With the scale lock on, a key outside the key and scale is marked: it plays the nearest note in it.
+  const lock = useSyncExternalStore(scaleLock.subscribe, scaleLock.get);
+  const outside = (note: string) => lock.locked && !inScale(note, lock);
   const handleNoteDown = (note: string) => {
     if (notesRef.current.has(note)) {
       if (holdEnabled) {
@@ -283,7 +287,7 @@ export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0, h
                     key={fullNote}
                     className={`key white ${
                       activeNotes.has(fullNote) ? 'active' : ''
-                    }`}
+                    } ${outside(fullNote) ? 'out-of-scale' : ''}`}
                     {...keyEvents(fullNote)}
                   >
                     <span className="key-label">{note}</span>
@@ -300,7 +304,7 @@ export default function Keyboard({ onNotePlay, onNoteRelease, octaveShift = 0, h
                     key={fullNote}
                     className={`key black ${
                       activeNotes.has(fullNote) ? 'active' : ''
-                    }`}
+                    } ${outside(fullNote) ? 'out-of-scale' : ''}`}
                     {...keyEvents(fullNote)}
                     style={{ left: `${black.offset * 14.28}%`, touchAction: 'none' }}
                   />

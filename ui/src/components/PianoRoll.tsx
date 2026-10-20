@@ -1,7 +1,8 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import { Pattern } from '../types';
 import { MAX_STEP_NOTES, noteLengths, stepNotes, stepOffset } from '../services/noteScheduling';
-import { CHORD_SHAPES, INVERSIONS, chordNotes, type ChordShapeId } from '../services/chords';
+import { CHORD_SHAPES, INVERSIONS, KEY_CHORD_SHAPES, chordNotes, type ChordShapeId } from '../services/chords';
+import { inScale, scaleLock } from '../services/scaleLock';
 import { usePlayheadMark } from '../hooks/usePlayhead';
 import { useNarrow } from '../hooks/useNarrow';
 import { beatLength, onBeat } from '../services/patternLength';
@@ -70,6 +71,9 @@ export default function PianoRoll({
   // Which chord a note put in brings with it. It is how the roll is being used, not part of the song.
   const [chord, setChord] = useState<ChordShapeId | 'off'>('off');
   const [inversion, setInversion] = useState(0);
+  // With the scale lock on, rows outside the key and scale are marked and take no new note.
+  const lock = useSyncExternalStore(scaleLock.subscribe, scaleLock.get);
+  const outside = (note: string) => lock.locked && !inScale(note, lock);
   const onNoteAssignRef = useRef(onNoteAssign);
   onNoteAssignRef.current = onNoteAssign;
 
@@ -255,12 +259,14 @@ export default function PianoRoll({
   const full = (stepIndex: number) => stepNotes(pattern.steps[stepIndex]).length >= MAX_STEP_NOTES;
   // With a chord shape chosen, a note put in is the root and brings the rest of the chord with it,
   // as far as the roll has rows for them. Taking a note out is always that note alone.
-  const adding = (note: string) => (chord === 'off' ? note : chordNotes(note, chord, inversion).filter(entry => notes.includes(entry)));
+  const adding = (note: string) => (chord === 'off' ? note : chordNotes(note, chord, inversion, lock).filter(entry => notes.includes(entry) && !outside(entry)));
 
   const handleCellDown = (stepIndex: number, note: string, x: number, y: number, late = false) => {
     pressedAt.current = { x, y };
     lastPaintCell.current = `${stepIndex}:${note}`;
     const nextMode: 'assign' | 'erase' = has(stepIndex, note) ? 'erase' : 'assign';
+    // Outside a locked scale a note can be taken out, but none put in.
+    if (nextMode === 'assign' && outside(note)) { painting.current = null; return; }
     painting.current = nextMode;
     pressing.current = true;
     onStepSelect(stepIndex);
@@ -277,7 +283,7 @@ export default function PianoRoll({
     const cell = `${stepIndex}:${note}`;
     if (lastPaintCell.current === cell) return;
     lastPaintCell.current = cell;
-    if (mode === 'assign' ? has(stepIndex, note) || full(stepIndex) : !has(stepIndex, note)) return;
+    if (mode === 'assign' ? has(stepIndex, note) || full(stepIndex) || outside(note) : !has(stepIndex, note)) return;
     onStepSelect(stepIndex);
     onNoteAssign(stepIndex, mode === 'assign' ? adding(note) : note, mode === 'assign');
   };
@@ -321,6 +327,7 @@ export default function PianoRoll({
           <select aria-label="Chord shape" value={chord} onChange={(event) => setChord(event.target.value as ChordShapeId | 'off')}>
             <option value="off">Off</option>
             {CHORD_SHAPES.map(shape => <option key={shape.id} value={shape.id}>{shape.name}</option>)}
+            {KEY_CHORD_SHAPES.map(shape => <option key={shape.id} value={shape.id}>{`${shape.name} (${lock.key})`}</option>)}
           </select>
         </label>
         <label className="piano-roll-chord" title="Which note of the chord is lowest. The note you put in stays where it is, and the notes above it go down an octave">
@@ -367,7 +374,7 @@ export default function PianoRoll({
 
         {notes.map((note) => (
           <div key={note} className="piano-roll-row" role="row">
-            <div className={`piano-roll-note-label ${note.includes('#') ? 'sharp' : ''}`} role="rowheader">
+            <div className={`piano-roll-note-label ${note.includes('#') ? 'sharp' : ''} ${outside(note) ? 'out-of-scale' : ''}`} role="rowheader">
               {note}
             </div>
             {columns.map((stepIndex) => {
@@ -382,7 +389,7 @@ export default function PianoRoll({
               return (
                 <div key={`${note}-${stepIndex}`} className="piano-roll-slot" role="gridcell">
                 <button
-                  className={`piano-roll-cell ${active ? 'active' : ''} ${late > 0 ? 'late' : ''} ${active && noteLength > 1 ? 'long' : ''} ${sustained ? 'held' : ''} ${selectedStep === stepIndex ? 'selected' : ''}`}
+                  className={`piano-roll-cell ${active ? 'active' : ''} ${late > 0 ? 'late' : ''} ${active && noteLength > 1 ? 'long' : ''} ${sustained ? 'held' : ''} ${selectedStep === stepIndex ? 'selected' : ''} ${outside(note) ? 'out-of-scale' : ''}`}
                   aria-label={`${note} step ${stepIndex + 1}`}
                   aria-pressed={active}
                   tabIndex={stopStep === stepIndex && stopNote === note ? 0 : -1}
