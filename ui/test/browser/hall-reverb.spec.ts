@@ -162,5 +162,11 @@ test('an export with the Hall differs from the Room, is about as loud, rings on 
   // (Known Issues in AGENTS.md). Put this back when that is found.
   // expect(end(short), 'and a one-second Hall quieter').toBeLessThan(end(hall) / 1.5);
   expect(decayOf(long), 'which follows the knob').toBeGreaterThan(decayOf(hall) * 1.2);
+  // Probe (roadmap 14): each take's loudness in tenths of a second, and the kick with no reverb at
+  // all, to find what rings on under every tail.
+  await effects(page).getByLabel('Reverb enabled', { exact: true }).uncheck();
+  const dry = await take('dry');
+  const profile = (wav: Buffer) => Array.from({ length: 30 }, (_, i) => Math.round(loudness(wav, i / 10, (i + 1) / 10) * 10) / 10);
+  console.log('hall-probe', JSON.stringify({ dry: profile(dry), room: profile(room), hall: profile(hall), short: profile(short), long: profile(long), seconds: (dry.length - 44) / 4 / 44100 }));
   expect(errors).toEqual([]);
 });
