@@ -56,8 +56,12 @@ export function getSample(id: string): Promise<SampleRecord | undefined> {
   return transaction('readonly', store => store.get(id));
 }
 
+// An instrument imported from a SoundFont (`soundFontImport.ts`): several recordings in the format
+// of the app's own instruments, played by a synth lane's sample engine.
+export const INSTRUMENT_TYPE = 'application/x-discobot-instrument';
+
 export function isAudioFile(file: { name: string; type: string }): boolean {
-  if (file.type.startsWith('audio/')) return true;
+  if (file.type.startsWith('audio/') || file.type === INSTRUMENT_TYPE) return true;
   const dot = file.name.lastIndexOf('.');
   return dot >= 0 && AUDIO_EXTENSIONS.has(file.name.slice(dot + 1).toLowerCase());
 }
