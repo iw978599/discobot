@@ -72,8 +72,10 @@ directly, with no builder.
     test measured its tail on top of the kick's own three-second tail. The
     spec now subtracts a dry take and holds the knob both ways. The spring
     reverb clone (15) no longer waits on it.
-14a. **Importing SoundFonts** (V18). Asked for by the owner on 2026-10-19, to come
-    after 14.
+14a. **Importing SoundFonts** (V18). Done: "Import a SoundFont…" on a lane's
+    Osc page reads a `.sf2`, asks which instrument, and keeps it as a sample of
+    its own kind with each recording's keys and loop. Not tried with a real
+    font yet: FreePats' Upright Piano KW (CC0) is the first to try.
 15. **Clones of well-known effects** (the second half of V5). Done, the spring reverb last (a Spring kind of reverb and a "Spring style" preset, not verified by ear): presets named "… style" on each effect, with a colour and a wow on the delay and kinds of drive. Was: the list the
     owner agreed on 2026-10-19, with knobs added to an effect where a clone
     needs them.

@@ -206,6 +206,14 @@ export function useStudioLanes(core: StudioCore, needs: StudioLanesNeeds) {
       ...synth.synthModelParams,
       ...modelParams,
     });
+    // A macro turned while Auto records (the knob on screen, or a controller's knob tied to it) is
+    // written as the parameters it sets, which is what automation plays: a macro is several of them
+    // and is not automated itself. As for any knob, the sound is left alone.
+    if (normalizedModelId === synth.synthModelId && autoRecordingRef.current && synth.isPlaying && synth.pattern && recordedStep(synthId, 0)) {
+      const kept = recordAutomation(synth, mapSynthModelToEngineParams(normalizedModelId, normalizedModelParams));
+      if (kept && Object.keys(kept).length > 0) localService.setSynthParams(synthId, kept);
+      return;
+    }
     localService.setSynthModel(synthId, { modelId: normalizedModelId, modelParams: normalizedModelParams });
     // The macros' parameters went a turn later when these were requests, after React had rendered
     // the model for a click. A preset load pushes its second undo entry after this returns, and
@@ -216,7 +224,7 @@ export function useStudioLanes(core: StudioCore, needs: StudioLanesNeeds) {
       ? enterSynthModel(normalizedModelId, normalizedModelParams, synth.synthModelId)
       : mapSynthModelToEngineParams(normalizedModelId, normalizedModelParams);
     if (Object.keys(mapped).length > 0) localService.setSynthParams(synthId, mapped);
-  }, []);
+  }, [recordAutomation, recordedStep]);
   // How many steps a bar of the lane has: the bar's sixteenths, or twice that for finer steps.
   const handleStepCountChange = useCallback(async (synthId: number, stepCount: number) => {
     const synth = synthsRef.current.find(s => s.id === synthId);

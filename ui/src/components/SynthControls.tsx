@@ -11,6 +11,9 @@ import { groupPresets, type PresetKind } from '../services/presetKinds';
 import NestedMenu, { type NestedMenuItem } from '../rack/NestedMenu';
 import { listSamples, saveSample } from '../services/sampleStore';
 import { BUILT_IN_WAVES } from '../services/builtInWaves';
+import { readSoundFont, type SoundFontFile, type SoundFontPreset } from '../services/soundFont';
+import { soundFontInstrument } from '../services/soundFontImport';
+import SoundFontDialog from './SoundFontDialog';
 import { RATE_SYNCS, RATE_SYNC_LABELS } from '../services/rateSync';
 import { INSERT_DEFAULT } from '../services/effectSettings';
 import Knob from './Knob';
@@ -257,6 +260,18 @@ export default function SynthControls({
   // Imported samples the sample engine can play. Read when the engine is chosen, and again when one arrives.
   const [samples, setSamples] = useState<Array<{ id: string; name: string }> | null>(null);
   const sampleFileRef = useRef<HTMLInputElement>(null);
+  // A SoundFont: one of its instruments becomes this lane's sample (`soundFontImport.ts`). A font with
+  // several asks which one first.
+  const fontFileRef = useRef<HTMLInputElement>(null);
+  const [font, setFont] = useState<{ buffer: ArrayBuffer; file: SoundFontFile } | null>(null);
+  const importInstrument = (buffer: ArrayBuffer, preset: SoundFontPreset) => {
+    const made = soundFontInstrument(buffer, preset);
+    if (!made.ok) { onSampleError?.(made.error); return; }
+    // Its recordings go round their own loops, which needs the lane's Loop on.
+    void saveSample(made.file)
+      .then(async (stored) => { await refreshSamples(); updateSample({ id: stored.id, wave: '', ...(made.loops ? { loop: true } : {}) }); })
+      .catch((cause) => onSampleError?.(cause instanceof Error ? cause.message : 'The instrument could not be imported.'));
+  };
   const refreshSamples = () => listSamples().then(list => setSamples(list.map(({ id, name }) => ({ id, name })))).catch(() => {});
   useEffect(() => { if (isSample) void refreshSamples(); }, [isSample, sample.id, sampleStoreVersion]);
   const builtIn = BUILT_IN_WAVES.find(wave => wave.id === sample.wave);
@@ -693,6 +708,7 @@ export default function SynthControls({
                   onChange={(event) => {
                     const chosen = event.target.value;
                     if (chosen === 'import') sampleFileRef.current?.click();
+                    else if (chosen === 'soundfont') fontFileRef.current?.click();
                     // An empty name or id is sent, not left out: the store keeps whatever a change does not mention.
                     else if (chosen.startsWith('wave:')) updateSample({ wave: chosen.slice(5), id: '', scan: sample.scan ?? 2, fade: sample.fade ?? 1 });
                     else updateSample({ id: chosen, wave: '' });
@@ -707,6 +723,7 @@ export default function SynthControls({
                     {(samples ?? []).map(entry => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
                     {!sample.wave && sample.id && (samples === null || sampleMissing) && <option value={sample.id}>{sampleMissing ? 'Sample not on this device' : '…'}</option>}
                     <option value="import">Import a sample…</option>
+                    <option value="soundfont">Import a SoundFont…</option>
                   </optgroup>
                 </select>
               </div>
@@ -725,6 +742,25 @@ export default function SynthControls({
                     .catch((cause) => onSampleError?.(cause instanceof Error ? cause.message : 'The sample could not be imported.'));
                 }}
               />
+              <input
+                ref={fontFileRef}
+                type="file"
+                hidden
+                accept=".sf2"
+                aria-label="Import SoundFont"
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0];
+                  event.currentTarget.value = '';
+                  if (!file) return;
+                  void file.arrayBuffer().then((buffer) => {
+                    const font = readSoundFont(buffer);
+                    if (!font || font.presets.length === 0) { onSampleError?.(`“${file.name}” is not a SoundFont this app can read.`); return; }
+                    if (font.presets.length === 1) importInstrument(buffer, font.presets[0]);
+                    else setFont({ buffer, file: font });
+                  });
+                }}
+              />
+              {font && <SoundFontDialog font={font.file} onClose={() => setFont(null)} onImport={(preset) => { setFont(null); importInstrument(font.buffer, preset); }} />}
               <Knob
                 label="Root"
                 ariaLabel="Sample root note"
