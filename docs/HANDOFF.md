@@ -15,22 +15,26 @@ owner merges and changes things without announcing it.
   the file for the area you change.
 - **Live sessions** (several people editing one shared project at once) are
   built: the relay (222), edits, joining, undo and saving (225), the
-  transport (226), and presence, the pull request from branch
-  `feat/live-presence`. `docs/LIVE_SESSIONS_PLAN.md` holds the owner's
-  decisions, the design and the known limits of each stage.
+  transport (226) and presence (227), and playing together with a snap to
+  the beat (branch `feat/live-jam`). `docs/LIVE_SESSIONS_PLAN.md` holds the
+  owner's decisions, the design and the known limits of each stage.
+- `useStudio.tsx` is split into hooks per concern (roadmap 12, branch
+  `refactor/split-studio`): the state is made in `useStudioCore`, and each
+  concern is a hook in `ui/src/studio/`. Change the hook for the concern.
 - The accounts API with the relay was deployed on 2026-10-20 (version
   `2fa154e0`); its live route answers. Stages 2 to 4 need no server change.
 
 ## 2. Next, in order
 
 1. **The owner tries a live session** with someone on the site: edits, Play
-   and Stop together, the names and marks. Nothing of it has been heard or
+   and Stop together, playing together with and without Snap, the names and
+   marks. Nothing of it has been heard or
    seen by a person yet. What they report comes first.
 2. If beats slip on a long play: pull the audio clocks back together (the
    plan's known limits for stage 3).
 3. Then `docs/ROADMAP.md`, "The plan from here", in its order: item 11's
-   remainder (the transport bar and song strip render on every edit), 12 and
-   13 (split `useStudio.tsx`, hand the audio engine to the hooks), 14 (the
+   remainder (the transport bar and song strip render on every edit), 13
+   (hand the audio engine to the hooks), 14 (the
    Hall's Decay in Chrome; the spring reverb clone waits on it), 16 onwards.
    Item 9 (a kind chosen on preset import) was tabled by the owner.
 4. Waiting on the owner and not to be started: listening, MIDI hardware, a

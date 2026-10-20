@@ -1,7 +1,8 @@
 // Notes played and recorded: from the on-screen keys, the computer keyboard and MIDI devices,
 // with the arpeggiator, record timing, held lengths, Learn, pads and each device's place. Split out
 // of useStudio.tsx.
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
+import { liveJam } from '../services/liveSession';
 import { MidiMessage, MidiSource } from '../hooks/useMidiInput';
 import { localService } from '../services/localService';
 import { barTicks, stepsPerBar } from '../services/patternLength';
@@ -24,7 +25,7 @@ export interface StudioNotesNeeds {
 }
 
 export function useStudioNotes(core: StudioCore, needs: StudioNotesNeeds) {
-  const { synthsRef, setSynths, quantizeRef, transportRef, signatureOfRef, currentSceneIdRef, recordHeldRef, midiChordRef, recordingRef, synthAudio, liveArpRef, browserMutedRef, effectsLoopRef, globalTempo, synths, selectedSynthId, liveLanesRef, midiHeldRef, midiDestinationsRef, setMidiDestinations, midiChannelRef, midiTargetSynthIdRef, selectedSynthIdRef, midiLearnRef, setMidiTies, setMidiLearn, midiTiesRef, applyParamTargetRef, midiPadLearnRef, midiPadsRef, setMidiPads, setMidiPadLearn, midiDrumChannelRef, drumStateRef, drumAudio, midiModeRef } = core;
+  const { synthsRef, setSynths, quantizeRef, transportRef, signatureOfRef, currentSceneIdRef, recordHeldRef, midiChordRef, recordingRef, synthAudio, liveArpRef, browserMutedRef, effectsLoopRef, globalTempo, synths, selectedSynthId, liveLanesRef, midiHeldRef, midiDestinationsRef, setMidiDestinations, midiChannelRef, midiTargetSynthIdRef, selectedSynthIdRef, midiLearnRef, setMidiTies, setMidiLearn, midiTiesRef, applyParamTargetRef, midiPadLearnRef, midiPadsRef, setMidiPads, setMidiPadLearn, midiDrumChannelRef, drumStateRef, drumAudio, midiModeRef, globalTempoRef } = core;
   const { arpLane, handleOctaveShift } = needs;
   // Writes a note to a step. `add` joins it to the chord already there instead of replacing it.
   const upsertStepNote = useCallback(async (synthId: number, stepIndex: number, note: string, velocity: number, add = false, offset?: number, select = true) => {
@@ -118,6 +119,7 @@ ${note}`, { synthId, note, step: at.step, ticks });
     const synth = synthsRef.current.find(s => s.id === synthId);
     if (!synth?.synthParams) return;
     if (synth.muted || (synthsRef.current.some(s => s.solo) && !synth.solo)) return;
+    liveJam.send({ kind: 'note', lane: synthId, note, velocity: 1, on: true });
     // Recording: the note goes where it was played in the bar, not on the selected step. It is
     // taken before the sound starts, so starting audio cannot make it late.
     const recorded = recordingRef.current && synth.isPlaying && recordNote(synthId, note, 1);
@@ -146,6 +148,7 @@ ${note}`, { synthId, note, step: at.step, ticks });
     const synthParams = synthsRef.current.find(s => s.id === synthId)?.synthParams;
     if (!synthParams) return;
     endRecordedHold(synthId, note, true);
+    liveJam.send({ kind: 'note', lane: synthId, note, velocity: 0, on: false });
     liveArpRef.current!.release(synthId, note);
     synthAudio.stopNote(note, synthParams, synthId);
   }, [synthAudio]);
@@ -245,6 +248,7 @@ ${note}`, { synthId, note, step: at.step, ticks });
       const drums = drumStateRef.current;
       if (!instrument || !drums[instrument]) return;
       const velocity = Math.max(0.05, message.velocity / 127);
+      liveJam.send({ kind: 'hit', drum: instrument, velocity });
       const silenced = drums[instrument].muted || (Object.values(drums).some(track => track.solo) && !drums[instrument].solo);
       if (!silenced) void drumAudio.playDrumHit(instrument, drums[instrument].settings, velocity);
       const transport = transportRef.current;
@@ -281,6 +285,7 @@ ${note}`, { synthId, note, step: at.step, ticks });
       if (!targetSynth.synthParams) return;
       // Held under the device's key whether or not it is arpeggiated, so its note-off finds the lane.
       midiHeldRef.current.set(`${source.id}\n${message.channel}:${message.note}`, { synthId: targetSynth.id, note: noteName, device: source.name });
+      liveJam.send({ kind: 'note', lane: targetSynth.id, note: noteName, velocity, on: true });
       if (targetSynth.synthParams.arpeggiator.enabled) {
         liveArpRef.current!.press(targetSynth.id, noteName, velocity, arpLane(targetSynth.id));
       } else {
@@ -304,5 +309,49 @@ ${note}`, { synthId, note, step: at.step, ticks });
     midiChordRef.current = { synthId: targetSynth.id, stepIndex, at: now };
     void upsertStepNote(targetSynth.id, stepIndex, noteName, velocity, joins);
   }, [handleNoteRelease, releaseLiveGestures, upsertStepNote, globalTempo, synthAudio, recordNote, drumAudio]);
+  // Someone else in a live session played a note or hit a drum: it is heard here on the same lane,
+  // with this browser's own sound, mutes and arpeggiator, and is never recorded or sent on. With
+  // snap on and the music playing it starts on the next step here, which hides how long it took to
+  // arrive, and its release waits as long, so the note keeps its length. Nothing plays before this
+  // page's audio is on.
+  const jamHeldRef = useRef(new Map<string, number>());
+  useEffect(() => liveJam.connect(played => {
+    const context = getAudioContext();
+    if (context.state !== 'running') return;
+    const transport = transportRef.current;
+    let wait = 0;
+    if (liveJam.snap() && transport?.running) {
+      // A step is two ticks of the transport.
+      const ticks = transport.ticksAt(context.currentTime);
+      wait = (Math.ceil(ticks / 2) * 2 - ticks) * 60 / Math.max(20, globalTempoRef.current) / 8;
+    }
+    if (played.kind === 'hit') {
+      const drums = drumStateRef.current, track = drums[played.drum];
+      if (!track || track.muted || (Object.values(drums).some(entry => entry.solo) && !track.solo)) return;
+      void drumAudio.playDrumHit(played.drum, track.settings, Math.max(0.05, played.velocity), context.currentTime + wait);
+      return;
+    }
+    const key = `${played.by}:${played.lane}:${played.note}`;
+    const lane = synthsRef.current.find(entry => entry.id === played.lane);
+    if (!played.on) {
+      const held = jamHeldRef.current.get(key);
+      if (held === undefined) return;
+      jamHeldRef.current.delete(key);
+      const release = () => {
+        liveArpRef.current!.release(played.lane, played.note);
+        synthAudio.stopNote(played.note, lane?.synthParams, played.lane);
+      };
+      if (held > 0) setTimeout(release, held * 1000); else release();
+      return;
+    }
+    if (!lane?.synthParams || lane.muted || (synthsRef.current.some(entry => entry.solo) && !lane.solo)) return;
+    jamHeldRef.current.set(key, wait);
+    if (lane.synthParams.arpeggiator.enabled) {
+      const press = () => liveArpRef.current!.press(lane.id, played.note, played.velocity, arpLane(lane.id));
+      if (wait > 0) setTimeout(press, wait * 1000); else press();
+    } else {
+      void synthAudio.playNote(played.note, lane.synthParams, undefined, played.velocity, browserMutedRef.current, effectsLoopRef.current, globalTempoRef.current, lane.id, wait > 0 ? context.currentTime + wait : undefined);
+    }
+  }), [synthAudio, drumAudio]);
   return { recordedStep, endRecordedHolds, handleNotePlay, handleNoteRelease, computerKeyNotes, handleMidiDestinationChange, handleMidiMessage };
 }

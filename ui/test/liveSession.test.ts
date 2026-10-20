@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { LocalProjectService } from '../src/services/localService.ts';
-import { BATCH_MS, CLOCK_PINGS, JOIN_WAIT_MS, LISTEN_WAIT_MS, createLiveSession, editKeys, overlap, type LiveAnchor, type LivePlay } from '../src/services/liveSession.ts';
+import { readJam, BATCH_MS, CLOCK_PINGS, JOIN_WAIT_MS, LISTEN_WAIT_MS, createLiveSession, editKeys, overlap, type HeardJam, type LiveAnchor, type LivePlay } from '../src/services/liveSession.ts';
 import { freeColour, joined, left, received, type Peer } from '../../server/src/live.ts';
 import { comparable, defaults, ok, setup, storage } from './helpers/store.ts';
 
@@ -28,6 +28,8 @@ function room() {
     let events!: { received(text: string): void; closed(): void };
     // The studio's transport, pretended: what it was told to start, how often to stop, and where it is.
     const music = { started: [] as LivePlay[], stops: 0, now: null as LiveAnchor | null };
+    // What the others played, as this browser heard it.
+    const heard: HeardJam[] = [];
     const peer: Peer = { id: user, user, colour: freeColour(peers), since: ++since, send: text => inbox.push(text) };
     const session = createLiveSession({
       store,
@@ -41,6 +43,7 @@ function room() {
       later: (run, ms) => { const timer = { at: now + ms, run, done: false }; timers.push(timer); return () => { timer.done = true; }; },
       saving: on => saving.push(on),
       wall: () => now + skew,
+      jam: played => heard.push(played),
       transport: {
         start: play => { music.started.push(play); music.now = { wall: play.wall, tick: play.tick, mode: play.mode, entry: play.entry, countIn: play.countIn }; },
         stop: () => { music.stops++; music.now = null; },
@@ -49,7 +52,7 @@ function room() {
     });
     peers.push(peer);
     joined(peers, peer);
-    const made = { user, store, session, inbox, sent, saving, music, receive: (text: string) => events.received(text) };
+    const made = { user, store, session, inbox, sent, saving, music, heard, receive: (text: string) => events.received(text) };
     browsers.push(made);
     return made;
   }
@@ -409,4 +412,30 @@ test('each person says where on the rack they are, once for each change, and aga
   ben.receive(JSON.stringify({ t: 'presence', at: '<b>everywhere</b>', from: 'ann' }));
   await ben.session.settled();
   assert.equal(ben.session.status().others[0].at, 'drums');
+});
+
+test('a note played or a drum hit in one browser is heard in the others, with who played it', async () => {
+  const { live, ann, ben } = await twoInSession();
+  ann.session.sendJam({ kind: 'note', lane: 2, note: 'C#4', velocity: 0.8, on: true });
+  ann.session.sendJam({ kind: 'note', lane: 2, note: 'C#4', velocity: 0, on: false });
+  ann.session.sendJam({ kind: 'hit', drum: 'snare', velocity: 0.6 });
+  await live.deliver();
+  assert.deepEqual(ben.heard, [
+    { kind: 'note', lane: 2, note: 'C#4', velocity: 0.8, on: true, by: 'ann' },
+    { kind: 'note', lane: 2, note: 'C#4', velocity: 0, on: false, by: 'ann' },
+    { kind: 'hit', drum: 'snare', velocity: 0.6, by: 'ann' },
+  ]);
+  assert.deepEqual(ann.heard, [], 'nobody hears their own playing back');
+});
+
+test('playing alone sends nothing, and only what could be played is taken from someone else', async () => {
+  const live = room();
+  const ann = live.browser('ann', setup());
+  await live.deliver();
+  ann.session.sendJam({ kind: 'note', lane: 1, note: 'C4', velocity: 1, on: true });
+  assert.deepEqual(ann.sent.filter(message => message.kind === 'jam'), []);
+  assert.equal(readJam({ kind: 'note', lane: 9, note: 'C4', velocity: 1, on: true }), null, 'a lane that cannot exist');
+  assert.equal(readJam({ kind: 'note', lane: 1, note: '<script>', velocity: 1, on: true }), null, 'not a note');
+  assert.equal(readJam({ kind: 'hit', drum: 'cowbell', velocity: 1 }), null, 'not a drum');
+  assert.deepEqual(readJam({ kind: 'hit', drum: 'kick', velocity: 7 }), { kind: 'hit', drum: 'kick', velocity: 1 }, 'a strength is held to 0 to 1');
 });

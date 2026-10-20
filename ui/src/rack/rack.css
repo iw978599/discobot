@@ -333,6 +333,7 @@
   background: var(--surface-inset); border: 1px solid var(--edge); border-radius: var(--corner-panel); padding: 8px 14px;
   color: var(--text-plain); font-family: var(--sentence-font); font-size: var(--type-body);
 }
+.live-snap { margin-left: auto; }
 .live-person { display: inline-flex; align-items: center; gap: 6px; color: var(--text); }
 .live-person::before { content: ''; width: 10px; height: 10px; border-radius: 50%; background: var(--present); }
 /* A guests unit off screen keeps `position: fixed`: its rule in the phone block is more specific. */
@@ -590,7 +591,7 @@
 .rack-dialog-body h3 { margin: 6px 0 0; font-family: var(--panel-font); font-size: var(--type-label); letter-spacing: 0.12em; text-transform: uppercase; color: var(--text); }
 .rack-dialog-body p { margin: 0; }
 /* A button is a label wherever it stands, also among sentences. */
-.rack-dialog-body .rack-btn, .app-alert .rack-btn, .export-status .rack-btn, .guest-ask .rack-btn { font-family: var(--panel-font); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; font-size: var(--type-label); }
+.rack-dialog-body .rack-btn, .app-alert .rack-btn, .live-people .rack-btn, .export-status .rack-btn, .guest-ask .rack-btn { font-family: var(--panel-font); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; font-size: var(--type-label); }
 .rack-dialog-actions { display: flex; justify-content: flex-end; }
 .rack-dialog-actions.start { justify-content: flex-start; }
 /* A question laid over whatever is open: a small panel in the middle, on a phone as well. */

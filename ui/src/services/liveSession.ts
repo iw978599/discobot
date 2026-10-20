@@ -3,6 +3,9 @@ import { localService } from './localService';
 import { OP_META, type Applied, type Operation, type OpNotice, type OpType, type Origin } from './projectOps';
 import { WHOLE_SOUND } from './projectReducers';
 import { projectSync } from './projectSync';
+import { DRUM_INSTRUMENTS } from './drumKits';
+import { isLaneId } from './lanes';
+import type { DrumInstrument } from '../types';
 
 // A live session: the people a project is shared with, editing it at once (docs/LIVE_SESSIONS_PLAN.md).
 // The room (server/src/live.ts) keeps nothing and sends every edit to everyone, the sender too, in
@@ -47,6 +50,8 @@ export interface LiveDeps {
   transport?: LiveTransportHandlers;
   // Milliseconds on this computer's clock.
   wall?(): number;
+  // Someone else played a note or hit a drum.
+  jam?(played: HeardJam): void;
 }
 
 export type LiveState = 'connecting' | 'joining' | 'live' | 'closed';
@@ -59,6 +64,13 @@ export interface LiveStatus { state: LiveState; me: LiveMember | null; others: A
 export interface LiveAnchor { wall: number; tick: number; mode: string; entry: number; countIn: number }
 export interface LivePlay extends LiveAnchor { by: string }
 export interface LiveTransportHandlers { start(play: LivePlay): void; stop(): void; now(): LiveAnchor | null }
+
+// Playing together: a key someone pressed or let go on a lane, or a drum they hit, as it happens.
+// It is sound only, never an edit: nothing is recorded, undone or saved from it.
+export type LiveJam =
+  | { kind: 'note'; lane: number; note: string; velocity: number; on: boolean }
+  | { kind: 'hit'; drum: DrumInstrument; velocity: number };
+export type HeardJam = LiveJam & { by: string };
 
 // A knob's drag is a few messages a second, not one for every value.
 export const BATCH_MS = 40;
@@ -142,6 +154,18 @@ export const overlap = (a: string[], b: string[]) => a.some(x => b.some(y => cov
 const sameKeys = (a: string[], b: string[]) => a.length === b.length && a.every((key, at) => key === b[at]);
 const copy = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
 const isRecord = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
+
+// What someone else played: a lane that can exist, a note's name, a drum, a strength from 0 to 1.
+const NOTE_NAME = /^[A-G]#?-?\d$/;
+export function readJam(value: unknown): LiveJam | null {
+  if (!isRecord(value) || typeof value.velocity !== 'number' || !Number.isFinite(value.velocity)) return null;
+  const velocity = Math.max(0, Math.min(1, value.velocity));
+  if (value.kind === 'note' && isLaneId(value.lane) && typeof value.note === 'string' && NOTE_NAME.test(value.note) && typeof value.on === 'boolean') {
+    return { kind: 'note', lane: value.lane, note: value.note, velocity, on: value.on };
+  }
+  if (value.kind === 'hit' && (DRUM_INSTRUMENTS as readonly unknown[]).includes(value.drum)) return { kind: 'hit', drum: value.drum as DrumInstrument, velocity };
+  return null;
+}
 
 // Edits from someone else are untrusted: an edit is only ever an operation that is shared, and the
 // store checks everything in it as it checks anything else.
@@ -330,6 +354,11 @@ export function createLiveSession(deps: LiveDeps) {
         changed();
         deps.transport?.stop();
         return;
+      case 'jam': {
+        const played = readJam(message.played);
+        if (played && state === 'live') deps.jam?.({ ...played, by: from.user });
+        return;
+      }
       case 'where': {
         const here = deps.transport?.now();
         if (here) send({ t: 'transport', kind: 'play', to: from.id, ...here });
@@ -482,6 +511,10 @@ export function createLiveSession(deps: LiveDeps) {
       changed();
       send({ t: 'transport', kind: 'stop' });
     },
+    // This person played something: everyone else hears it. Only while there is someone to hear it.
+    sendJam(played: LiveJam) {
+      if (state === 'live' && others.length) send({ t: 'transport', kind: 'jam', played });
+    },
     // Someone else is playing: asks where the music is, to start there. If nobody answers, it
     // starts from what this browser last heard. Answers whether it asked.
     listen(): boolean {
@@ -539,6 +572,26 @@ export const liveTransport = {
   listen: () => running?.session.listen() ?? false,
 };
 
+// Playing together. The studio is told what someone else played and tells the session what was
+// played here. Whether others' notes are snapped to this browser's next step while the music plays
+// is this browser's own choice, kept here like the rack's view; it starts on.
+const SNAP_KEY = 'discobot_jam_snap_v1';
+let studioJam: ((played: HeardJam) => void) | null = null;
+let snap = (() => { try { return localStorage.getItem(SNAP_KEY) !== 'off'; } catch { return true; } })();
+export const liveJam = {
+  connect(handler: (played: HeardJam) => void) {
+    studioJam = handler;
+    return () => { if (studioJam === handler) studioJam = null; };
+  },
+  send: (played: LiveJam) => running?.session.sendJam(played),
+  snap: () => snap,
+  setSnap(on: boolean) {
+    snap = on;
+    try { localStorage.setItem(SNAP_KEY, on ? 'on' : 'off'); } catch { /* for this visit only */ }
+    changed();
+  },
+};
+
 // Where on the rack this person is, kept for a session that starts later.
 let place = '';
 export function livePlace(at: string) {
@@ -591,6 +644,7 @@ function check() {
     },
     later: (run, ms) => { const timer = setTimeout(run, ms); return () => clearTimeout(timer); },
     wall: () => performance.timeOrigin + performance.now(),
+    jam: played => studioJam?.(played),
     transport: {
       start: play => studioTransport?.start(play),
       stop: () => studioTransport?.stop(),
