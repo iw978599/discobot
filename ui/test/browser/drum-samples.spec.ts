@@ -68,6 +68,11 @@ test('a drum lane plays an imported sample, in playback and export, and falls ba
 
   await page.getByLabel('Import drum sample', { exact: true }).setInputFiles({ name: 'beep.wav', mimeType: 'audio/wav', buffer: toneWav() });
   await expect(sound.locator('option:checked')).toHaveText('beep.wav');
+  // The lane is shown as the sample it plays, without the file's ending; its controls keep the drum's name.
+  const snareRow = page.getByRole('button', { name: 'Select Snare', exact: true });
+  await expect(snareRow).toHaveText('beep');
+  await expect(snareRow).toHaveAttribute('title', /^Snare, playing beep:/);
+  await expect(page.locator('.drum-strip-name b')).toHaveText('beep');
   const sampleId = (await stored(page)).drumState.snare.sampleId;
   expect(sampleId).toMatch(/^[0-9a-f-]{36}$/);
   expect((await stored(page)).drumState.kick.sampleId, 'only the chosen lane changes').toBeUndefined();
@@ -102,6 +107,7 @@ test('a drum lane plays an imported sample, in playback and export, and falls ba
   await page.getByRole('button', { name: 'Snare step 7', exact: true }).click();
   await expect(page.getByLabel('Snare sound', { exact: true }).locator('option:checked')).toHaveText('Sample not on this device');
   await expect(page.locator('.drum-strip').getByRole('status')).toContainText('not on this device');
+  await expect(page.getByRole('button', { name: 'Select Snare', exact: true }), 'a sample not on this device is not what is heard: so the lane shows the name of the drum').toHaveText('Snare');
   await page.getByRole('button', { name: /Play All/ }).click();
   await page.waitForTimeout(500);
   await page.getByRole('button', { name: /Stop All/ }).click();
