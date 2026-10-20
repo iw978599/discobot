@@ -97,7 +97,7 @@ const cases: Case[] = [
   ]),
   // --- A lane that does not exist
   ...([
-    ['synth.remove', {}], ['synth.params', { patch: {} }], ['synth.model', {}], ['synth.mix', {}], ['synth.swing', { swing: true }], ['synth.prefs', {}],
+    ['synth.remove', {}], ['synth.params', { patch: {} }], ['synth.model', {}], ['synth.mix', {}], ['synth.swing', { swing: true }], ['synth.name', { name: 'Lead' }], ['synth.prefs', {}],
     ['pattern.write', { patternId: fresh(), patch: {} }], ['pattern.write', { patternId: 'x', patch: {} }],
   ] as const).map(([type, rest]): Case => (
     { type, title: `a lane that does not exist: ${type}`, body: { synthId: 2, ...rest }, status: 404, error: 'Synth not found' }
@@ -472,12 +472,12 @@ const cases: Case[] = [
       unchanged(result, service, null, before);
     },
   }, ['synthCreated']),
-  ...([4, -1, 1.5, '2'] as const).map((synthId): Case => (
-    { type: 'synth.create', title: `lane ${JSON.stringify(synthId)} is refused`, body: { synthId }, status: 400, error: 'Three synths maximum' }
+  ...([6, -1, 1.5, '2'] as const).map((synthId): Case => (
+    { type: 'synth.create', title: `lane ${JSON.stringify(synthId)} is refused`, body: { synthId }, status: 400, error: '5 synths maximum' }
   )),
   {
-    type: 'synth.create', title: 'with all three lanes there, no lane named is refused', body: {},
-    arrange: service => { ok(service.createLane()); ok(service.createLane()); }, status: 400, error: 'Three synths maximum',
+    type: 'synth.create', title: 'with all five lanes there, no lane named is refused', body: {},
+    arrange: service => { for (let n = 0; n < 4; n++) ok(service.createLane()); }, status: 400, error: '5 synths maximum',
   },
   { type: 'synth.remove', title: 'lane 1 cannot be removed', body: { synthId: 1 }, status: 400, error: 'Synth 1 cannot be removed' },
   changed('removing a lane', {
@@ -528,6 +528,20 @@ const cases: Case[] = [
     arrange: service => ok(service.setSynthModel(1, { modelId: 'juno-106' })),
     check: result => assert.equal(result.events[0].data.modelId, 'generic'),
   }, ['synthModelUpdate']),
+  changed('a lane\'s name is stored tidied and cut to its length; an empty one takes it away', {
+    type: 'synth.name', body: { synthId: 1, name: '  Bass   line  ' },
+    check: (result, service) => {
+      assert.deepEqual(result.events[0].data, { synthId: 1, name: 'Bass line' });
+      assert.equal(service.snapshot().synths[0].name, 'Bass line');
+    },
+  }, ['synthName']),
+  changed('a name of nothing but spaces gives the lane back its number', {
+    type: 'synth.name', body: { synthId: 1, name: '   ' }, arrange: service => ok(service.setSynthName(1, 'x'.repeat(40))),
+    check: (result, service) => {
+      assert.deepEqual(result.events[0].data, { synthId: 1, name: '' });
+      assert.equal('name' in service.snapshot().synths[0], false);
+    },
+  }, ['synthName']),
   changed('swing is stored on the lane only while it is on', {
     type: 'synth.swing', body: { synthId: 1, swing: true },
     check: (result, service) => {

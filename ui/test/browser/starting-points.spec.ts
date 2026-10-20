@@ -92,7 +92,7 @@ test('the songs on offer are in many styles, and one in another time signature o
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   const songs = offer(page).getByRole('group', { name: 'A song to hear', exact: true }).getByRole('button');
-  await expect(songs).toHaveText([/Neon Drive/, /Blue Waltz/, /Late Study/, /Seven Lights/, /Market Day/, /Cathedral/]);
+  await expect(songs).toHaveText([/Neon Drive/, /Blue Waltz/, /Late Study/, /Seven Lights/, /Market Day/, /Cathedral/, /Lanterns Over Dark Water/]);
   await expect(offer(page).getByRole('group', { name: 'A beat to start from', exact: true }).getByRole('button')).not.toHaveCount(0);
 
   const stored = () => page.evaluate(() => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem('discobot_browser_project_v1') || '{}')));

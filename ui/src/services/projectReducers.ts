@@ -4,6 +4,7 @@
 import { MAX_SCENES, clone, merge, number, sanitizeDrums, sanitizeEffects, sanitizeModelParams, sanitizePattern, sanitizeScenes, sanitizeSends, sanitizeSong, sanitizeSynthParams } from './projectSanitization';
 import { MAX_GUESTS, guestUrl, patchGuest, sanitizeGuests } from './guests';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
+import { LANE_IDS, MAX_LANES, storedLaneName } from './lanes';
 import { BAR_CHOICES, TIME_SIGNATURES, barSteps, barTargets, clampLengths, copyBar, drumBars, laneBars, layAlong, resizeBars, resizeEachBar, stepsPerBar, storedSignature } from './patternLength';
 import { emptySteps } from './songPlayback';
 import { layAutomationAlong, resizeAutomationEachBar } from './automation';
@@ -355,6 +356,15 @@ export const reducers: Reducers = {
     if (typeof op.solo === 'boolean') synth.solo = op.solo;
     return update('synthMix', { synthId: synth.synthId, muted: synth.muted, solo: synth.solo });
   },
+  // Kept only while it has one, so a lane never named is stored as it was. Empty takes the name away.
+  'synth.name': ({ state }, op) => {
+    const synth = laneOf(state, op.synthId);
+    if (!synth) return refuse(404, NO_SYNTH);
+    const name = storedLaneName(op.name);
+    if (name) synth.name = name;
+    else delete synth.name;
+    return update('synthName', { synthId: synth.synthId, name: synth.name ?? '' });
+  },
   // Kept only while on, so a lane that never swung is stored as it was.
   'synth.swing': ({ state }, op) => {
     const synth = laneOf(state, op.synthId);
@@ -395,8 +405,8 @@ export const reducers: Reducers = {
   // No lane named, or one that counts as none (0, and infinity, which JSON made null), is the
   // lowest free number. A lane that is there is answered as it is, and still saved and sent.
   'synth.create': ({ state, defaults }, op) => {
-    const id = sentValue(op.synthId) || [1, 2, 3].find(id => !state.synths.some(s => s.synthId === id));
-    if (!Number.isInteger(id) || (id as number) < 1 || (id as number) > 3) return refuse(400, 'Three synths maximum');
+    const id = sentValue(op.synthId) || LANE_IDS.find(id => !state.synths.some(s => s.synthId === id));
+    if (!Number.isInteger(id) || (id as number) < 1 || (id as number) > MAX_LANES) return refuse(400, `${MAX_LANES} synths maximum`);
     let synth = state.synths.find(s => s.synthId === id);
     if (!synth) { synth = newLane(id as number, state.tempo, defaults, openSignature(state)); state.synths.push(synth); }
     return update('synthCreated', synth);

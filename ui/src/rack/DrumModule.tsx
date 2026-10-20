@@ -25,6 +25,8 @@ const LABELS = DRUM_NAMES;
 const PERC_NAMES: Record<PercType, string> = { tambourine: 'Tambourine', shaker: 'Shaker', cowbell: 'Cowbell', sidestick: 'Cross-stick', conga: 'Conga', bongo: 'Bongo' };
 const CYMBAL_NAMES: Record<CymbalType, string> = { crash: 'Crash', ride: 'Ride', bell: 'Bell', splash: 'Splash' };
 const cymbalName = (type: CymbalType | undefined) => (type && type !== 'crash' && CYMBAL_NAMES[type]) || LABELS.crash;
+// A sample's name as a lane shows it: its file's name without the ending.
+const sampleTitle = (name: string) => name.replace(/.[a-z0-9]{1,5}$/i, '') || name;
 
 const EXTRA: Record<DrumInstrument, { knob: string; display: (v: number) => string; parse: (n: number) => number }> = {
   kick: { knob: 'Punch', display: (v) => `${(20 + v * 80).toFixed(0)}%`, parse: (n) => (n - 20) / 80 },
@@ -107,6 +109,13 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
   const refreshSamples = () => listSamples().then(list => setSamples(list.map(({ id, name }) => ({ id, name })))).catch(() => {});
   // Read again when a lane's sample changes: an imported project file brings its own.
   const laneSamples = INSTRUMENTS.map(instrument => drumState[instrument].sampleId ?? '').join('|');
+  // What a lane is shown as: the sample it plays, where it plays one that is on this device; the
+  // kind of cymbal; or the drum. Its controls keep the drum's name, as a screen reader and the tests know them.
+  const shownName = (instrument: DrumInstrument): string => {
+    const track = drumState[instrument], sample = track.sampleId ? samples.find(entry => entry.id === track.sampleId) : undefined;
+    if (sample) return sampleTitle(sample.name);
+    return instrument === 'crash' ? cymbalName(track.settings.cymbalType) : LABELS[instrument];
+  };
   useEffect(() => { void refreshSamples(); }, [laneSamples, studio.sampleStoreVersion]);
   // Several files picked at once, waiting in the kit import dialog to be given lanes.
   const [kitFiles, setKitFiles] = useState<{ files: File[]; picked: number } | null>(null);
@@ -220,7 +229,8 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
           </div>
           {INSTRUMENTS.map((instrument) => {
             const row = drumState[instrument];
-            const shown = instrument === 'crash' ? cymbalName(row.settings.cymbalType) : LABELS[instrument];
+            const shown = shownName(instrument), sampled = Boolean(row.sampleId) && samples.some(entry => entry.id === row.sampleId);
+            const playing = sampled ? `${LABELS[instrument]}, playing ${shown}` : LABELS[instrument];
             return (
               <div
                 key={instrument}
@@ -231,11 +241,11 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
                   className="drum-name"
                   aria-label={`Select ${LABELS[instrument]}`}
                   aria-pressed={selected === instrument}
-                  title={handed[`drum:${instrument}`] ? `${LABELS[instrument]}: sent to the guest ${handed[`drum:${instrument}`]}, and heard through it. Click to hear it and edit its sound` : `${LABELS[instrument]}: click to hear it and edit its sound`}
+                  title={`${playing}${handed[`drum:${instrument}`] ? `: sent to the guest ${handed[`drum:${instrument}`]}, and heard through it. Click to hear it and edit its sound` : ': click to hear it and edit its sound'}`}
                   data-handed={handed[`drum:${instrument}`] ? 'true' : undefined}
                   onClick={() => { setSelected(instrument); preview(instrument); }}
                 >
-                  {shown}
+                  {sampled ? <span className="drum-name-sample">{shown}</span> : shown}
                 </button>
                 <div className="rack-ms small">
                   <button
@@ -313,7 +323,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
       <div className="rack-row drum-strip" data-drum={selected}>
         <div className="drum-strip-name">
           <span className="drum-selected-dot" />
-          <b>{selected === 'crash' ? cymbalName(track.settings.cymbalType) : LABELS[selected]}</b>
+          <b>{shownName(selected)}</b>
           {selected === 'crash' && (
             <label className="drum-sound" title="Which cymbal this lane is. Each is a recording of a real one, the same in every kit">
               Cymbal

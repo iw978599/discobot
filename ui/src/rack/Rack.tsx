@@ -32,6 +32,8 @@ import '@fontsource/barlow-condensed/latin-600.css';
 import '@fontsource/barlow-condensed/latin-700.css';
 import '@fontsource/share-tech-mono/latin-400.css';
 import './rack.css';
+import AddLaneUnit from './AddLaneUnit';
+import { shownLanes } from '../services/lanes';
 
 // The whole instrument as one rack, read top to bottom: transport, three synth lanes,
 // the drum grid, the mixer, then the shared effects.
@@ -214,7 +216,8 @@ export default function Rack({ studio }: { studio: Studio }) {
         )}
         <StarterUnit studio={studio} />
         <SongModule studio={studio} onHelp={openHelpAt} />
-        {[1, 2, 3].map(id => <SynthModule key={id} studio={studio} synthId={id} synth={studio.synths.find(entry => entry.id === id)} onHelp={openHelpAt} />)}
+        {shownLanes(studio.synths.map(entry => entry.id)).map(id => <SynthModule key={id} studio={studio} synthId={id} synth={studio.synths.find(entry => entry.id === id)} onHelp={openHelpAt} />)}
+        <AddLaneUnit studio={studio} />
         {studio.guests.map(guest => <GuestModule key={guest.id} studio={studio} guest={guest} onHelp={openHelpAt} />)}
         <DrumModule studio={studio} onHelp={openHelpAt} />
         <MixerModule studio={studio} channels={mixer.current} onHelp={openHelpAt} />

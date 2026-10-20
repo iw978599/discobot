@@ -256,7 +256,7 @@ export default function MidiPanel({
             </label>
           </div>
           <p className="midi-note">
-            The sequencer plays the device while Discobot plays: Synth 1 to 3 on channels 1 to 3, drums on channel 10. Mute a lane here to hear only the hardware.
+            The sequencer plays the device while Discobot plays: each synth lane on the channel of its number (Synth 1 on channel 1, up to Synth 5 on 5), drums on channel 10. Mute a lane here to hear only the hardware.
             This setting is not saved with the project.
           </p>
         </>

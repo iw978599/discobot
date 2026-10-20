@@ -15,7 +15,8 @@ export type Placed = [step: number, notes: string | string[], length?: number, v
 // A bar of drums: for each drum, the steps it hits, with a strength and a number of repeats where
 // they are not full and one.
 export type Hits = Partial<Record<DrumInstrument, Array<number | [step: number, velocity: number, repeats?: number]>>>;
-type Lanes = 1 | 2 | 3;
+// A lane by its number, 1 to 5.
+type Lanes = number;
 
 export interface SongScene {
   id: string;
@@ -35,6 +36,8 @@ export interface SongScene {
 export interface SongLane {
   // a built-in preset's id
   preset: string;
+  // what the lane is called, in place of "Synth N"
+  name?: string;
   // laid over the preset's sound: an insert, a send, the arpeggiator
   sound?: Record<string, unknown>;
   octaveShift?: number;
@@ -109,7 +112,7 @@ export function buildSampleSong(file: unknown, sounds: Sound[], song: SampleSong
   if (!first?.pattern?.steps?.length || !source?.project?.drumState || chosen.some(sound => !sound)) return null;
   const project: Json = structuredClone(source.project);
   const blank = withStepNotes(first.pattern.steps[0] as SequencerStep, []);
-  const ids = song.lanes.map((_, index) => (index + 1) as Lanes);
+  const ids = song.lanes.map((_, index) => index + 1);
 
   const scenes: Scene[] = song.scenes.map(scene => ({
     id: scene.id, name: scene.name, color: scene.color,
@@ -132,7 +135,7 @@ export function buildSampleSong(file: unknown, sounds: Sound[], song: SampleSong
     return {
       ...from, synthId, pattern, patterns: [pattern], muted: false, solo: false, isPlaying: false,
       synthParams: layOver(structuredClone(sound.params), spec.sound), synthModelId: sound.modelId, synthModelParams: { ...sound.modelParams },
-      octaveShift: spec.octaveShift ?? 0, ...(spec.swing ? { swing: true } : {}),
+      octaveShift: spec.octaveShift ?? 0, ...(spec.swing ? { swing: true } : {}), name: spec.name,
     };
   });
   for (const instrument of DRUMS) {

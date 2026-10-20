@@ -43,6 +43,7 @@ import { arrangementWholes, downloadFile, ExportArrangement, loopPass } from '..
 import { expandDrumStep, swingLate } from '../services/drumScheduling';
 import { LiveArp, type LiveArpLane } from '../services/liveArp';
 import { auxBuses } from '../services/auxSettings';
+import { LANE_IDS, isLaneId } from '../services/lanes';
 import { useComputerKeyboard } from '../hooks/useComputerKeyboard';
 import { getAudioContext, scheduleClick, setMasterVolume, setMasterMuted, setEffectsTempo } from '../hooks/browserAudio';
 import { DRUM_NOTE_MAP, downloadMidiFile, noteNameToMidi } from '../utils/midiExport';
@@ -89,6 +90,7 @@ interface SynthState {
   muted: boolean;
   solo: boolean;
   swing?: boolean;
+  name?: string;
   forceReleaseSignal: boolean;
 }
 
@@ -885,7 +887,7 @@ export function useStudio() {
             stepRecordPointer: 0,
             octaveShift: s.octaveShift || 0,
             muted: Boolean(s.muted),
-            solo: Boolean(s.solo), swing: s.swing === true,
+            solo: Boolean(s.solo), swing: s.swing === true, name: s.name,
             forceReleaseSignal: false,
           })));
         } else if (message.data.synthParameters) {
@@ -951,7 +953,7 @@ export function useStudio() {
             stepRecordPointer: was?.stepRecordPointer ?? 0,
             octaveShift: s.octaveShift || 0,
             muted: Boolean(s.muted),
-            solo: Boolean(s.solo), swing: s.swing === true,
+            solo: Boolean(s.solo), swing: s.swing === true, name: s.name,
             forceReleaseSignal: was?.forceReleaseSignal ?? false,
           };
         });
@@ -1048,7 +1050,7 @@ export function useStudio() {
             stepRecordPointer: 0,
             octaveShift: 0,
             muted: Boolean(message.data.muted),
-            solo: Boolean(message.data.solo), swing: message.data.swing === true,
+            solo: Boolean(message.data.solo), swing: message.data.swing === true, name: message.data.name,
             forceReleaseSignal: false,
           }];
         });
@@ -1075,6 +1077,12 @@ export function useStudio() {
         setSynths(prev => prev.map(s =>
           s.id === synthId ? { ...s, muted: Boolean(muted), solo: Boolean(solo) } : s
         ));
+        break;
+      }
+      case 'synthName': {
+        const { synthId, name } = message.data;
+        synthsRef.current = synthsRef.current.map(s => s.id === synthId ? { ...s, name: name || undefined } : s);
+        setSynths(prev => prev.map(s => s.id === synthId ? { ...s, name: name || undefined } : s));
         break;
       }
       case 'synthSwing': {
@@ -1191,7 +1199,7 @@ export function useStudio() {
 
   const ensureSynthExists = useCallback(async (synthId: number): Promise<boolean> => {
     if (synthsRef.current.some(s => s.id === synthId)) return true;
-    if (synthId < 2 || synthId > 3) return false;
+    if (!isLaneId(synthId) || synthId < 2) return false;
     try {
       const res = localService.createLane(synthId);
       if (!res.ok) return false;
@@ -1205,7 +1213,7 @@ export function useStudio() {
         isPlaying: Boolean(data.isPlaying), selectedStep: null,
         keyboardMode: data.keyboardMode || 'keyboard', stepRecordPointer: 0,
         octaveShift: data.octaveShift || 0, muted: Boolean(data.muted),
-        solo: Boolean(data.solo), swing: data.swing === true, forceReleaseSignal: false,
+        solo: Boolean(data.solo), swing: data.swing === true, name: data.name, forceReleaseSignal: false,
       };
       if (!synthsRef.current.some(s => s.id === synthId)) synthsRef.current = [...synthsRef.current, created];
       return true;
@@ -1969,6 +1977,11 @@ ${note}`, { synthId, note, step: at.step, ticks });
     localService.setSynthSwing(synthId, swing);
   }, []);
 
+  // An empty name gives the lane back its number.
+  const handleSynthRename = useCallback((synthId: number, name: string) => {
+    localService.setSynthName(synthId, name);
+  }, []);
+
   const handleSaveSynthPreset = useCallback((synthId: number, name: string) => {
     const synth = synthsRef.current.find((entry) => entry.id === synthId);
     if (!synth?.synthParams) return;
@@ -2333,7 +2346,7 @@ ${note}`, { synthId, note, step: at.step, ticks });
         return;
       }
       const autoAssign: Record<number, number | null | 'drums'> = {};
-      const synthIds = [1, 2, 3];
+      const synthIds = LANE_IDS;
       let synthIdx = 0;
       result.tracks.forEach((track, i) => {
         autoAssign[i] = track.drums ? 'drums' : synthIds[synthIdx++] ?? null;
@@ -2621,7 +2634,7 @@ ${note}`, { synthId, note, step: at.step, ticks });
     ensureSynthExists, handleOctaveShift, handleTempoChange, handleGlobalPlayStop, handleStepChange, handleStepSelect, handleKeyboardModeChange,
     handlePianoRollNoteAssign, handleClearPatternNotes, handleCopyLaneBar, handleCopyDrumBar, handleTransposeLane, handleRandomizeLane, handleNotePlay, handleNoteRelease, computerKeyNotes, midiState,
     handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange, guests, handleAddGuest, handleRemoveGuest, handleGuestChange, guestRecording, handleExportWav, exportStatus, dismissExportStatus, missingDrumSamples, sampleStoreVersion, handleDrumSampleChange, handleLaneBarsChange, handleDrumBarsChange, sceneLength,
-    handleSynthMixChange, handleSynthSwingChange, handleSaveSynthPreset, handleLoadSynthPreset, handleDeleteSynthPreset,
+    handleSynthMixChange, handleSynthSwingChange, handleSynthRename, handleSaveSynthPreset, handleLoadSynthPreset, handleDeleteSynthPreset,
     handleExportMidi, currentArrangement, reportExportError, handleExportProject, projectImportFileRef, handleImportProjectFile, handleImportProject,
     handleNewProject, handleOpenProject, handleCopyProject, handleRenameProject, handleDeleteProject, handleRestoreVersion, handleCopyVersion, handleImportSynthPreset, handleExportSynthPreset, presetImportReport, setPresetImportReport, handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail,
     handleDrumSettingsChange, handleDrumMixChange, handleDrumReset, handleDrumMasterVolumeChange, handleDrumSwingChange,

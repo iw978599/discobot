@@ -121,7 +121,7 @@ function MixerModule({ studio, channels, onHelp }: { studio: Studio; channels: M
               <Strip
                 key={lane.id}
                 about={`Synth ${lane.id}`}
-                name={`Synth ${lane.id}`}
+                name={lane.name}
                 under={lane.model}
                 handedTo={handed[`synth:${lane.id}`]}
                 level={{ word: 'level', value: lane.level, max: 2, home: SOUND_DEFAULTS.gain, hint: 'How loud this lane is. The same as its Level knob', onChange: (value) => { void studio.handleParameterChange(lane.id, { gain: value }); } }}

@@ -493,6 +493,7 @@
 .drum-name:hover { border-color: var(--hover); color: var(--text); }
 /* A drum handed to a guest is heard through the guest, not the mix: its name plate is dashed. */
 .drum-name[data-handed] { border-style: dashed; }
+.drum-name-sample { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 3px; }
 .rack-plate .handed-to { font-size: var(--type-caption); color: var(--text-faint); white-space: nowrap; }
 .drum-grid-row.selected .drum-name { background: var(--drum-color); border-color: var(--drum-color); color: var(--text-on); }
 /* --bar is how many steps the scene's time signature puts in a bar; DrumModule sets it. */
@@ -909,7 +910,9 @@
   .rack[data-shown="song"] > [data-unit]:not([data-unit="song"]):not([data-unit="guests"]),
   .rack[data-shown="synth-1"] > [data-unit]:not([data-unit="synth-1"]):not([data-unit="guests"]),
   .rack[data-shown="synth-2"] > [data-unit]:not([data-unit="synth-2"]):not([data-unit="guests"]),
-  .rack[data-shown="synth-3"] > [data-unit]:not([data-unit="synth-3"]):not([data-unit="guests"]),
+  .rack[data-shown="synth-3"] > [data-unit]:not([data-unit="synth-3"]):not([data-unit="add-lane"]):not([data-unit="guests"]),
+  .rack[data-shown="synth-4"] > [data-unit]:not([data-unit="synth-4"]):not([data-unit="guests"]),
+  .rack[data-shown="synth-5"] > [data-unit]:not([data-unit="synth-5"]):not([data-unit="guests"]),
   .rack[data-shown="guests"] > [data-unit]:not([data-unit="guests"]),
   .rack[data-shown="drums"] > [data-unit]:not([data-unit="drums"]):not([data-unit="guests"]),
   .rack[data-shown="mixer"] > [data-unit]:not([data-unit="mixer"]):not([data-unit="guests"]),

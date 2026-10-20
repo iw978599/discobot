@@ -82,8 +82,9 @@ test('every sample song opens sound and whole: its time signatures, sounds, swin
     const made = await service();
     const opened = await made.importProject(build(made, song));
     assert.deepEqual([opened.ok, opened.ok && opened.repaired], [true, false], `${song.name} opens with nothing repaired`);
-    const state = made.snapshot(), scenes = made.getScenes().scenes as Scene[];
+    const state = made.snapshot(), scenes = made.getScenes().scenes as Scene[], lanes = song.lanes.map((_, index) => index + 1);
     assert.equal(state.name, song.name);
+    assert.deepEqual(state.synths.map(lane => lane.synthId), lanes, `${song.name} has its lanes`);
     assert.equal(state.tempo, song.tempo);
     assert.equal(state.drumSwing, song.drumSwing ?? 0);
     assert.equal(state.selectedDrumKitId, song.kit);
@@ -92,7 +93,7 @@ test('every sample song opens sound and whole: its time signatures, sounds, swin
       const scene = scenes[index], per = barSteps(spec.signature), length = spec.bars * per;
       assert.equal(scene.signature ?? '4/4', spec.signature ?? '4/4', `${song.name}: ${spec.name}`);
       assert.equal(sceneBars(scene), spec.bars, `${song.name}: ${spec.name} bars`);
-      for (const lane of [1, 2, 3]) {
+      for (const lane of lanes) {
         assert.equal(scene.lanes[lane].length, length, `${song.name}: ${spec.name} lane ${lane}`);
         assert.ok(played(scene.lanes[lane]).every(note => noteNameToMidi(note) !== null));
         // A note never runs past the end of its scene.
@@ -103,7 +104,7 @@ test('every sample song opens sound and whole: its time signatures, sounds, swin
         assert.deepEqual(Object.keys(scene.laneAutomation?.[Number(lane)] ?? {}).sort(), Object.keys(automation!).sort(), `${song.name}: ${spec.name} keeps its automation`);
         for (const values of Object.values(automation!)) assert.equal(values.length, length);
       }
-      const sounding = [1, 2, 3].some(lane => played(scene.lanes[lane]).length > 0) || DRUM_INSTRUMENTS.some(instrument => scene.drums[instrument].steps.some(Boolean));
+      const sounding = lanes.some(lane => played(scene.lanes[lane]).length > 0) || DRUM_INSTRUMENTS.some(instrument => scene.drums[instrument].steps.some(Boolean));
       assert.ok(sounding, `${song.name}: ${spec.name} plays something`);
     }
     assert.ok(song.order.every(([id]) => song.scenes.some(scene => scene.id === id)));
@@ -112,6 +113,7 @@ test('every sample song opens sound and whole: its time signatures, sounds, swin
       assert.ok(sound, `${song.name}: ${spec.preset}`);
       assert.equal(lane.synthModelId, sound.modelId);
       assert.equal(Boolean(lane.swing), Boolean(spec.swing));
+      assert.equal(lane.name, spec.name, `${song.name}: lane ${index + 1} is called what the song calls it`);
       const sends = (spec.sound?.fxSends ?? {}) as Record<string, number>;
       for (const [key, value] of Object.entries(sends)) assert.equal((lane.synthParams.fxSends as unknown as Record<string, number>)[key], value, `${song.name}: ${spec.preset} ${key}`);
     });
@@ -122,6 +124,21 @@ test('every sample song opens sound and whole: its time signatures, sounds, swin
     const aux = (song.effects as { aux?: unknown[] } | undefined)?.aux;
     if (aux) assert.deepEqual(auxBuses(state.effectsLoop.aux), aux, `${song.name} keeps its aux buses`);
   }
+});
+
+test('the post-rock song is seven minutes long on all five lanes, and builds by its automation', async () => {
+  const song = SAMPLE_SONGS.find(entry => entry.id === 'lanterns')!;
+  const made = await service();
+  await made.importProject(build(made, song));
+  const state = made.snapshot(), scenes = made.getScenes().scenes as Scene[];
+  assert.equal(state.synths.length, 5);
+  const seconds = songBars(state.song, scenes).length * 4 * 60 / song.tempo;
+  assert.ok(seconds >= 6.5 * 60 && seconds <= 7.5 * 60, `about seven minutes: ${seconds} seconds`);
+  const rise = scenes.find(scene => scene.id === 'lanterns-rise')!.laneAutomation![4];
+  assert.ok(rise.level[0]! < 0.1 && rise.level.at(-1)! > 0.5, 'the wall climbs out of nothing');
+  assert.ok(rise.cutoff.at(-1)! > rise.cutoff[0]! * 5 && rise.drive.at(-1)! > rise.drive[0]!, 'and brightens and dirties as it does');
+  const fall = scenes.find(scene => scene.id === 'lanterns-fall')!.laneAutomation![4];
+  assert.equal(fall.level.at(-1), 0, 'and dies away again in the Fall');
 });
 
 test('a sample song is made from whatever project is open, and from nothing if that is not a project', async () => {

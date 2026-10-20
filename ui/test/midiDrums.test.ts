@@ -124,14 +124,14 @@ test('a MIDI export writes the General MIDI drum notes whatever the pads have le
 });
 
 test('a device is sent as before until it is given a place, and a stored list is made safe', () => {
-  assert.deepEqual(MIDI_DESTINATIONS.map(place => place.id), ['default', 'open', 'synth:1', 'synth:2', 'synth:3', 'drums', 'off']);
+  assert.deepEqual(MIDI_DESTINATIONS.map(place => place.id), ['default', 'open', 'synth:1', 'synth:2', 'synth:3', 'synth:4', 'synth:5', 'drums', 'off']);
   assert.equal(MIDI_DESTINATIONS[0].label, 'As set above');
   const none = asMidiDestinations(null);
   assert.equal(destinationFor(none, 'Launchkey'), 'default');
   for (const inherited of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) assert.equal(destinationFor(none, inherited), 'default', inherited);
 
   for (const odd of [undefined, 7, 'drums', [], ['drums']]) assert.deepEqual(asMidiDestinations(odd), {}, JSON.stringify(odd));
-  assert.deepEqual(asMidiDestinations({ Keys: 'synth:2', Pads: 'drums', Old: 'default', Odd: 'synth:4', Worse: 7, None: null, '': 'drums', ['x'.repeat(121)]: 'off', Quiet: 'off', Open: 'open' }),
+  assert.deepEqual(asMidiDestinations({ Keys: 'synth:2', Pads: 'drums', Old: 'default', Odd: 'synth:6', Worse: 7, None: null, '': 'drums', ['x'.repeat(121)]: 'off', Quiet: 'off', Open: 'open' }),
     { Keys: 'synth:2', Pads: 'drums', Quiet: 'off', Open: 'open' });
   const many = Object.fromEntries(Array.from({ length: MAX_MIDI_DEVICES + 10 }, (_, index) => [`Device ${index}`, 'drums']));
   assert.equal(Object.keys(asMidiDestinations(many)).length, MAX_MIDI_DEVICES);

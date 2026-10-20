@@ -320,3 +320,6 @@
 .synth-env-viz polyline {
   stroke: var(--value);
 }
+
+/* A lane's name, on the line above its editor. */
+.lane-name { width: 14ch; background: var(--surface-field); border: 1px solid var(--edge-control); border-radius: var(--corner-control); color: var(--text); font-family: var(--sentence-font); font-size: var(--type-label); padding: 4px 6px; text-transform: none; }
