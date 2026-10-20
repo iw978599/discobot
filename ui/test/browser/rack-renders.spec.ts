@@ -39,7 +39,7 @@ test('an edit to one lane leaves the other lanes and the drums as they are', asy
   page.on('pageerror', error => errors.push(error.message));
 
   let before = await settled(page);
-  expect(Object.keys(before).sort()).toEqual(['drums', 'mixer', 'synth 1', 'synth 2', 'synth 3']);
+  expect(Object.keys(before).sort()).toEqual(['drums', 'mixer', 'song', 'synth 1', 'synth 2', 'synth 3', 'transport']);
 
   await setLevel(page, 1, '40%');
   let after = await settled(page);
@@ -108,4 +108,31 @@ test('undo reaches units that did not render for each other\'s edit', async ({ p
   // step all the same (undoHistory.ts): one more undo puts it back.
   await undo.click();
   await expect(level(page, 2)).toHaveValue(original);
+});
+
+test("the transport bar and the song unit render for what they show, not for a lane's edit", async ({ page }) => {
+  let before = await settled(page);
+  await setLevel(page, 1, '45%');
+  await page.getByRole('button', { name: 'Kick step 2', exact: true }).click();
+  let after = await settled(page);
+  expect(after.transport, "the transport bar, for a lane's level and a drum step").toBe(before.transport);
+  expect(after.song, 'the song unit, for the same').toBe(before.song);
+
+  // The tempo is on the transport bar, and it says the new one.
+  before = after;
+  await page.locator('.tempo-led').click();
+  await page.locator('.tempo-led-input').fill('97');
+  await page.locator('.tempo-led-input').press('Enter');
+  await expect(page.locator('.tempo-led-value')).toHaveText('97');
+  after = await settled(page);
+  expect(after.transport).toBeGreaterThan(before.transport);
+
+  // A new scene is in the song unit, which shows it.
+  before = after;
+  const chips = page.locator('[data-unit="song"] .scene-chip');
+  const scenes = await chips.count();
+  await page.getByRole('button', { name: '+ Empty', exact: true }).click();
+  await expect(chips).toHaveCount(scenes + 1);
+  after = await settled(page);
+  expect(after.song).toBeGreaterThan(before.song);
 });

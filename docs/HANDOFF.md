@@ -10,16 +10,15 @@ owner merges and changes things without announcing it.
 
 ## 1. State
 
-- Everything up to pull request 226 is merged and published. 224 moved the
+- Everything up to pull request 229 is merged and published. 224 moved the
   rules for each area of the app out of `AGENTS.md` into `docs/agents/`; read
   the file for the area you change.
 - **Live sessions** (several people editing one shared project at once) are
   built: the relay (222), edits, joining, undo and saving (225), the
   transport (226) and presence (227), and playing together with a snap to
-  the beat (branch `feat/live-jam`). `docs/LIVE_SESSIONS_PLAN.md` holds the
+  the beat (229). `docs/LIVE_SESSIONS_PLAN.md` holds the
   owner's decisions, the design and the known limits of each stage.
-- `useStudio.tsx` is split into hooks per concern (roadmap 12, branch
-  `refactor/split-studio`): the state is made in `useStudioCore`, and each
+- `useStudio.tsx` is split into hooks per concern (roadmap 12, 228): the state is made in `useStudioCore`, and each
   concern is a hook in `ui/src/studio/`. Change the hook for the concern.
 - The accounts API with the relay was deployed on 2026-10-20 (version
   `2fa154e0`); its live route answers. Stages 2 to 4 need no server change.
@@ -32,9 +31,8 @@ owner merges and changes things without announcing it.
    seen by a person yet. What they report comes first.
 2. If beats slip on a long play: pull the audio clocks back together (the
    plan's known limits for stage 3).
-3. Then `docs/ROADMAP.md`, "The plan from here", in its order: item 11's
-   remainder (the transport bar and song strip render on every edit), 13
-   (hand the audio engine to the hooks), 14 (the
+3. Then `docs/ROADMAP.md`, "The plan from here", in its order (11 and 12 are
+   done): 13 (hand the audio engine to the hooks), 14 (the
    Hall's Decay in Chrome; the spring reverb clone waits on it), 16 onwards.
    Item 9 (a kind chosen on preset import) was tabled by the owner.
 4. Waiting on the owner and not to be started: listening, MIDI hardware, a

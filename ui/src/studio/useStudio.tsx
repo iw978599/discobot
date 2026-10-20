@@ -1,7 +1,7 @@
 import { useCallback, useRef, useEffect, useMemo } from 'react';
 import { useMidiInput } from '../hooks/useMidiInput';
 import { midiOut } from '../services/midiOutput';
-import { SequencerStep, SynthParameters, DrumState, DrumInstrument, DrumKitId, EffectsLoopState, Scene } from '../types';
+import { SequencerStep, SynthParameters, DrumState, DrumInstrument, DrumKitId, EffectsLoopState, Scene, TimeSignature } from '../types';
 import { audibleLanes } from '../services/songPlayback';
 import { localService } from '../services/localService';
 import { startProjectSync } from '../services/projectSync';
@@ -32,7 +32,7 @@ import { useStudioNotes } from './useStudioNotes';
 import { useStudioDrums } from './useStudioDrums';
 import { useStudioProjects } from './useStudioProjects';
 import { useStudioExport } from './useStudioExport';
-import type { SynthState } from './studioState';
+import type { SceneInfo, SynthState } from './studioState';
 export type { PlayMode } from './studioState';
 
 // `engine` is the one that plays everything: the app's, unless another is given (a test's, say).
@@ -438,6 +438,12 @@ export function useStudio(engine?: AudioEngine) {
   };
   sceneLengthRef.current = sceneLength;
   const sceneSignature = useCallback((sceneId: string) => signatureOfRef.current(sceneId), []);
+  // Each scene's length in bars and its time signature, as values: a tracked unit may read them
+  // while rendering, which it may not do with the functions above. The same object until one of
+  // them changes, so a unit that reads it renders only then.
+  const sceneInfoText = JSON.stringify(scenes.map(scene => [scene.id, sceneLength(scene.id), signatureOf(scene.id) ?? null]));
+  const sceneInfo = useMemo(() => Object.fromEntries((JSON.parse(sceneInfoText) as Array<[string, number, TimeSignature | null]>)
+    .map(([id, bars, signature]) => [id, { bars, signature: signature ?? undefined }])) as Record<string, SceneInfo>, [sceneInfoText]);
 
   const handleMessage = useCallback((message: any) => {
     switch (message.type) {
@@ -957,7 +963,7 @@ export function useStudio(engine?: AudioEngine) {
     scenes, currentSceneId, song, playMode, setPlayMode, songStartEntry, setSongStartEntry, songPosition,
     handleSceneSelect, handleSceneAdd, handleSceneRename, handleSceneColor, handleSceneSignature, handleSceneDelete, handleSongChange, songArrangement, handleExportSongMidi,
     // The open scene's time signature, and any scene's by its id.
-    signature: timeSignature(scenes.find(scene => scene.id === currentSceneId)?.signature), sceneSignature,
+    signature: timeSignature(scenes.find(scene => scene.id === currentSceneId)?.signature), sceneSignature, sceneInfo,
     isAnyPlaying,
   };
 }

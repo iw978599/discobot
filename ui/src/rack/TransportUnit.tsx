@@ -12,6 +12,7 @@ import { accountsEnabled } from '../services/account';
 import { useAccountUser } from './AccountDialog';
 import { enterKidsMode } from '../services/kids';
 import { CLICK_LEVEL, COUNT_IN_CHOICES, clickLevel, countInBars } from '../services/metronome';
+import { tracked } from '../studio/tracked';
 
 interface TransportUnitProps {
   studio: Studio;
@@ -27,7 +28,7 @@ interface TransportUnitProps {
 // everything you do once per session instead of once per bar. A narrow screen has room for one
 // line of it, the tempo, Play and (where they fit) Undo and Redo; the rest is in a sheet that
 // the last button on that line raises from the bottom edge.
-export default function TransportUnit({ studio, onOpenSettings, onOpenProjects, onShare, onOpenAccount, onAddGuest, onOpenVersions }: TransportUnitProps) {
+function TransportUnit({ studio, onOpenSettings, onOpenProjects, onShare, onOpenAccount, onAddGuest, onOpenVersions }: TransportUnitProps) {
   const { midiState } = studio;
   const [exporting, setExporting] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -267,3 +268,5 @@ export default function TransportUnit({ studio, onOpenSettings, onOpenProjects, 
     </header>
   );
 }
+
+export default tracked(TransportUnit, 'transport');

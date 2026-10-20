@@ -8,10 +8,12 @@ import ConfirmDialog from './ConfirmDialog';
 import SongPlaylist from './SongPlaylist';
 import { SCENE_COLORS, SCENE_COLOR_NAMES } from '../services/sceneColors';
 import UnitHelp, { UNIT_HELP } from './UnitHelp';
+import { tracked } from '../studio/tracked';
+import { sceneLengthIn, sceneSignatureIn } from '../studio/studioState';
 
 // Scenes are one-bar sections of the whole arrangement; the song is the order they play in.
 // Everything below this module in the rack shows, and edits, the selected scene.
-export default function SongModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: string) => void }) {
+function SongModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: string) => void }) {
   const { scenes, currentSceneId, song, playMode, songPosition, songStartEntry } = studio;
   const [view, setView] = useState<SongView>(storedSongView);
   const showAs = (next: SongView) => { setView(next); storeSongView(next); };
@@ -21,7 +23,8 @@ export default function SongModule({ studio, onHelp }: { studio: Studio; onHelp?
   const current = scenes.find(scene => scene.id === currentSceneId);
   const nameOf = (sceneId: string) => scenes.find(scene => scene.id === sceneId)?.name ?? '?';
   const colorOf = (sceneId: string) => scenes.find(scene => scene.id === sceneId)?.color;
-  const bars = songLengthBars(song, studio.sceneLength);
+  const lengthOf = sceneLengthIn(studio.sceneInfo);
+  const bars = songLengthBars(song, lengthOf);
   const setEntries = (entries: Song['entries']) => studio.handleSongChange({ entries });
 
   const commitRename = () => {
@@ -115,7 +118,7 @@ export default function SongModule({ studio, onHelp }: { studio: Studio; onHelp?
       <div className="rack-row song-row">
         <div className="rack-plate static">
           <b>Song</b>
-          <span>{bars} {bars === 1 ? 'bar' : 'bars'} · {songClock(songSeconds(song, studio.sceneLength, studio.globalTempo, studio.sceneSignature))}</span>
+          <span>{bars} {bars === 1 ? 'bar' : 'bars'} · {songClock(songSeconds(song, lengthOf, studio.globalTempo, sceneSignatureIn(studio.sceneInfo)))}</span>
         </div>
         <div className="rack-ms mode-toggle" role="group" aria-label="Play mode">
           <button
@@ -223,3 +226,5 @@ export default function SongModule({ studio, onHelp }: { studio: Studio; onHelp?
     </section>
   );
 }
+
+export default tracked(SongModule, 'song');

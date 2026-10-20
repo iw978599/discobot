@@ -163,6 +163,13 @@ export default function Rack({ studio }: { studio: Studio }) {
       studio.setSelectedSynthId(lane);
     }
   }, [narrow, unit, openLane, lanes]);
+  // The transport unit is tracked, so what it is handed must stay the same from render to render.
+  const openSettings = useCallback(() => setSettingsOpen(true), []);
+  const openProjects = useCallback(() => setProjectsOpen(true), []);
+  const openShare = useCallback(() => setShareOpen(true), []);
+  const openAccount = useCallback(() => setAccountOpen(true), []);
+  const openGuest = useCallback(() => setGuestOpen(true), []);
+  const openVersions = useCallback(() => setVersionsOpen(true), []);
   // A live session: the unit this person is at is the one they last pressed or moved the keyboard
   // into, and the units the others are at carry their colour and names. The marks are attributes set
   // here, as `data-shown` is, so no unit renders for them.
@@ -213,12 +220,12 @@ export default function Rack({ studio }: { studio: Studio }) {
       <div className="rack" data-shown={paged ? shown : undefined}>
         <TransportUnit
           studio={studio}
-          onOpenSettings={() => setSettingsOpen(true)}
-          onOpenProjects={() => setProjectsOpen(true)}
-          onShare={() => setShareOpen(true)}
-          onOpenAccount={() => setAccountOpen(true)}
-          onAddGuest={() => setGuestOpen(true)}
-          onOpenVersions={() => setVersionsOpen(true)}
+          onOpenSettings={openSettings}
+          onOpenProjects={openProjects}
+          onShare={openShare}
+          onOpenAccount={openAccount}
+          onAddGuest={openGuest}
+          onOpenVersions={openVersions}
         />
         {studio.changedElsewhere && (
           <div role="alert" className="app-alert">

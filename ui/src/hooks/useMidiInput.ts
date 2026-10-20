@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { midiOut, type MidiOutPort } from '../services/midiOutput';
 
 export type MidiMode = 'live' | 'record' | 'step';
@@ -191,7 +191,9 @@ export function useMidiInput({ onMessage }: UseMidiInputOptions) {
   useEffect(() => { bindOutputRef.current(); }, [selectedOutputId]);
   useEffect(() => () => { midiOut.setPort(null); }, []);
 
-  return {
+  // The same object until one of these changes: a unit that reads it (the transport bar, which is
+  // tracked) then renders only for a change in MIDI, not for every edit to the project.
+  return useMemo(() => ({
     supported,
     connected,
     devices,
@@ -203,5 +205,5 @@ export function useMidiInput({ onMessage }: UseMidiInputOptions) {
     outputs,
     selectedOutputId,
     setSelectedOutputId,
-  };
+  }), [supported, connected, devices, selectedDeviceId, lastMessage, error, outputs, selectedOutputId]);
 }
