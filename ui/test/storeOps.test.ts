@@ -624,6 +624,8 @@ const rename = sceneChange('scene.rename', (service, body) => service.renameScen
 const renameRefused = sceneRefused('scene.rename', (service, body) => service.renameScene(body.sceneId, body.name));
 const colour = sceneChange('scene.color', (service, body) => service.setSceneColor(body.sceneId, body.color));
 const colourRefused = sceneRefused('scene.color', (service, body) => service.setSceneColor(body.sceneId, body.color));
+const sceneTempo = sceneChange('scene.tempo', (service, body) => service.setSceneTempo(body.sceneId, body.tempo));
+const sceneTempoRefused = sceneRefused('scene.tempo', (service, body) => service.setSceneTempo(body.sceneId, body.tempo));
 const signature = sceneChange('scene.signature', (service, body) => service.setSceneSignature(body.signature));
 const signatureRefused = sceneRefused('scene.signature', (service, body) => service.setSceneSignature(body.signature));
 const copyPart = sceneChange('scene.copyPart', (service, body) => service.copyPartToScene(body.toSceneId, body.part));
@@ -712,6 +714,18 @@ const sceneCases: Case[] = [
     assert.equal('color' in project.scenes[1], false);
   }),
   colourRefused('a scene that does not exist cannot be coloured', { sceneId: 'nope', color: 'blue' }, 400, 'That scene is not in the project.'),
+
+  sceneTempo('a scene is given a tempo of its own, to a tenth, and the open scene keeps none', (ids: Ids) => ({ sceneId: ids.first, tempo: 92.25 }), twoScenes, project => {
+    assert.deepEqual(project.scenes.map((scene: any) => scene.tempo), [92.3, undefined]);
+    assert.equal(project.currentSceneId, project.scenes[1].id, 'it does not open the scene');
+  }),
+  sceneTempo('a tempo out of range takes the scene back to the project tempo', (ids: Ids) => ({ sceneId: ids.second, tempo: 900 }), twoScenes, project => {
+    assert.equal('tempo' in project.scenes[1], false);
+  }),
+  sceneTempo('no tempo takes it back to the project tempo', (ids: Ids) => ({ sceneId: ids.second }), twoScenes, project => {
+    assert.equal('tempo' in project.scenes[1], false);
+  }),
+  sceneTempoRefused('a scene that does not exist cannot be given a tempo', { sceneId: 'nope', tempo: 90 }, 400, 'That scene is not in the project.'),
 
   signature('the open scene takes a time signature and its lanes and drums become bars of it', { signature: '6/8' }, twoScenes, project => {
     assert.deepEqual(project.scenes.map((scene: any) => scene.signature), [undefined, '6/8']);
@@ -1517,7 +1531,7 @@ test('the store keeps nothing of a scene or song operation\'s own objects', () =
 // Undo puts back the whole project, so every edit to the scenes and the song is undone. Opening a
 // scene is moving about in the project, not an edit.
 test('scene operations are saved, undone and shared; opening a scene is neither undone nor shared', () => {
-  for (const type of ['scene.signature', 'scene.create', 'scene.rename', 'scene.color', 'scene.copyPart', 'scene.delete', 'scene.replace', 'song.set'] as const) {
+  for (const type of ['scene.signature', 'scene.create', 'scene.rename', 'scene.color', 'scene.tempo', 'scene.copyPart', 'scene.delete', 'scene.replace', 'song.set'] as const) {
     assert.deepEqual(OP_META[type], { save: true, undoable: true, share: true }, type);
   }
   // Each person in a live session opens their own scenes; an edit says the scene it was made in.

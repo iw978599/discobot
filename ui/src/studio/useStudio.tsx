@@ -420,9 +420,11 @@ export function useStudio(engine?: AudioEngine) {
   const liveScene = (): Scene => {
     const lanes = synthsRef.current.filter(synth => synth.pattern);
     const signature = storedSignature(signatureOf(currentSceneIdRef.current));
+    const stored = scenesRef.current.find(scene => scene.id === currentSceneIdRef.current);
     return {
-      id: currentSceneIdRef.current, name: scenesRef.current.find(scene => scene.id === currentSceneIdRef.current)?.name ?? 'Scene',
+      id: currentSceneIdRef.current, name: stored?.name ?? 'Scene',
       ...(signature ? { signature } : {}),
+      ...(stored?.tempo !== undefined ? { tempo: stored.tempo } : {}),
       lanes: Object.fromEntries(lanes.map(synth => [synth.id, synth.pattern!.steps])),
       laneBars: Object.fromEntries(lanes.map(synth => [synth.id, laneBars(synth.pattern!.steps.length, synth.pattern!.bars, signature)])),
       ...(lanes.some(synth => synth.pattern!.automation) ? { laneAutomation: Object.fromEntries(lanes.filter(synth => synth.pattern!.automation).map(synth => [synth.id, synth.pattern!.automation!])) } : {}),
@@ -441,9 +443,9 @@ export function useStudio(engine?: AudioEngine) {
   // Each scene's length in bars and its time signature, as values: a tracked unit may read them
   // while rendering, which it may not do with the functions above. The same object until one of
   // them changes, so a unit that reads it renders only then.
-  const sceneInfoText = JSON.stringify(scenes.map(scene => [scene.id, sceneLength(scene.id), signatureOf(scene.id) ?? null]));
-  const sceneInfo = useMemo(() => Object.fromEntries((JSON.parse(sceneInfoText) as Array<[string, number, TimeSignature | null]>)
-    .map(([id, bars, signature]) => [id, { bars, signature: signature ?? undefined }])) as Record<string, SceneInfo>, [sceneInfoText]);
+  const sceneInfoText = JSON.stringify(scenes.map(scene => [scene.id, sceneLength(scene.id), signatureOf(scene.id) ?? null, scene.tempo ?? null]));
+  const sceneInfo = useMemo(() => Object.fromEntries((JSON.parse(sceneInfoText) as Array<[string, number, TimeSignature | null, number | null]>)
+    .map(([id, bars, signature, tempo]) => [id, { bars, signature: signature ?? undefined, ...(tempo !== null ? { tempo } : {}) }])) as Record<string, SceneInfo>, [sceneInfoText]);
 
   const handleMessage = useCallback((message: any) => {
     switch (message.type) {
@@ -834,7 +836,7 @@ export function useStudio(engine?: AudioEngine) {
     ));
     localService.setTempo(bpm);
   }, []);
-  const { handleSceneSelect, handleSceneAdd, handleSceneRename, handleSceneColor, handleSceneSignature, handleSceneDelete, handleSongChange, songArrangement } = useStudioScenes(core);
+  const { handleSceneSelect, handleSceneAdd, handleSceneRename, handleSceneColor, handleSceneTempo, handleSceneSignature, handleSceneDelete, handleSongChange, songArrangement } = useStudioScenes(core);
 
   // Another tab saved the project. Either take that version (a reload reads it) or keep this one.
   const loadOtherTabVersion = useCallback(() => { window.location.reload(); }, []);
@@ -961,7 +963,7 @@ export function useStudio(engine?: AudioEngine) {
     handleDrumSettingsChange, handleDrumMixChange, handleDrumReset, handleDrumMasterVolumeChange, handleDrumSwingChange,
     handleDrumFxChange, handleEffectsLoopChange, handleDrumMuteAll, handleDrumSoloAll, handleReset,
     scenes, currentSceneId, song, playMode, setPlayMode, songStartEntry, setSongStartEntry, songPosition,
-    handleSceneSelect, handleSceneAdd, handleSceneRename, handleSceneColor, handleSceneSignature, handleSceneDelete, handleSongChange, songArrangement, handleExportSongMidi,
+    handleSceneSelect, handleSceneAdd, handleSceneRename, handleSceneColor, handleSceneTempo, handleSceneSignature, handleSceneDelete, handleSongChange, songArrangement, handleExportSongMidi,
     // The open scene's time signature, and any scene's by its id.
     signature: timeSignature(scenes.find(scene => scene.id === currentSceneId)?.signature), sceneSignature, sceneInfo,
     isAnyPlaying,

@@ -863,6 +863,7 @@ export class LocalProjectService {
   createScene(options: { name?: string; empty?: boolean } = {}) { return this.apply({ type: 'scene.create', sceneId: crypto.randomUUID(), name: options.name, empty: options.empty }); }
   renameScene(sceneId: string, name: string) { return this.apply({ type: 'scene.rename', sceneId, name }); }
   setSceneColor(sceneId: string, color?: string) { return this.apply({ type: 'scene.color', sceneId, color }); }
+  setSceneTempo(sceneId: string, tempo?: number) { return this.apply({ type: 'scene.tempo', sceneId, tempo }); }
   setSceneSignature(signature: string) { return this.apply({ type: 'scene.signature', signature }); }
   copyPartToScene(toSceneId: string, part: { synthId?: number; drum?: DrumInstrument }) { return this.apply({ type: 'scene.copyPart', toSceneId, ...part }); }
   deleteScene(sceneId: string) { return this.apply({ type: 'scene.delete', sceneId }); }

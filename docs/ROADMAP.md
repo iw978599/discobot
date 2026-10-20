@@ -84,7 +84,10 @@ directly, with no builder.
     keyboard and roll mark the notes outside it and the roll takes none there,
     and the chord menu has chords in the key. The details are the builder's
     choice, for the owner to confirm (`docs/agents/editing.md`).
-17. **A tempo for each scene** (V10).
+17. **A tempo for each scene** (V10). Done: a Tempo field beside the scene's
+    time signature; the transport, the song's length, WAV and MIDI export
+    follow it. Synced effects, swing and the arpeggiator still follow the
+    project's tempo.
 18. **More from portamento** (V11b): fingered glide, same speed for any
     distance, a synced glide time.
 19. **A true progress bar for exports** (features 13), by rendering in

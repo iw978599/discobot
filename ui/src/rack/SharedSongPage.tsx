@@ -45,8 +45,9 @@ export default function SharedSongPage({ file, author, error: fetchError, onOpen
   const project = read.project;
   const lengthOf = (sceneId: string) => { const scene = project.scenes.find(entry => entry.id === sceneId); return scene ? sceneBars(scene) : 1; };
   const bars = songLengthBars(project.song, lengthOf);
-  // A bar lasts as long as its scene's time signature makes it.
-  const seconds = songSeconds(project.song, lengthOf, project.tempo, sceneId => project.scenes.find(entry => entry.id === sceneId)?.signature);
+  // A bar lasts as long as its scene's time signature and tempo make it.
+  const sceneOf = (sceneId: string) => project.scenes.find(entry => entry.id === sceneId);
+  const seconds = songSeconds(project.song, lengthOf, project.tempo, sceneId => sceneOf(sceneId)?.signature, sceneId => sceneOf(sceneId)?.tempo);
   const laneCount = project.synths.filter(synth => project.scenes.some(scene => scene.lanes[synth.synthId]?.some(step => step.active && step.note))).length;
 
   const listen = async () => {

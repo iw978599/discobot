@@ -379,6 +379,7 @@
 [data-color="pink"] { --scene-color: var(--scene-pink); }
 .scene-strip .scene-chip[data-color], .song-chain .song-block[data-color], .shared-song-order span[data-color] { border-left: 5px solid var(--scene-color); }
 .scene-color, .scene-time { display: flex; align-items: center; gap: 6px; color: var(--text-label); }
+.scene-tempo input { width: 4.5em; }
 .mode-toggle { width: var(--side); }
 .mode-toggle button { width: auto; flex: 1; height: 24px; padding: 0 4px; font-size: var(--type-caption); text-transform: inherit; letter-spacing: inherit; }
 .song-block { display: flex; align-items: stretch; background: var(--surface-control); border: 1px solid var(--edge-control); border-radius: var(--corner-control); overflow: hidden; }

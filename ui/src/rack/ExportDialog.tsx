@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Studio } from '../studio/useStudio';
-import { sceneLengthIn, sceneSignatureIn } from '../studio/studioState';
+import { sceneLengthIn, sceneSignatureIn, sceneTempoIn } from '../studio/studioState';
 import { songLengthBars, songSeconds } from '../services/songPlayback';
 import { barQuarters } from '../services/patternLength';
 import Dialog from './Dialog';
@@ -33,7 +33,7 @@ export default function ExportDialog({ studio, onClose }: { studio: Studio; onCl
   const lengthOf = sceneLengthIn(studio.sceneInfo);
   const bars = what === 'song' ? songLengthBars(studio.song, lengthOf) : lengthOf(studio.currentSceneId);
   // A bar lasts as long as its scene's time signature makes it.
-  const seconds = what === 'song' ? songSeconds(studio.song, lengthOf, studio.globalTempo, sceneSignatureIn(studio.sceneInfo)) : bars * barQuarters(studio.signature) * 60 / studio.globalTempo;
+  const seconds = what === 'song' ? songSeconds(studio.song, lengthOf, studio.globalTempo, sceneSignatureIn(studio.sceneInfo), sceneTempoIn(studio.sceneInfo)) : bars * barQuarters(studio.signature) * 60 / studio.globalTempo;
   const length = `${bars} ${bars === 1 ? 'bar' : 'bars'}${what === 'scene' && studio.signature !== '4/4' ? ` of ${studio.signature}` : ''} at ${studio.globalTempo} BPM: ${clock(seconds)}`;
 
   const run = () => {

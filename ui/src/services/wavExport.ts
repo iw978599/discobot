@@ -140,19 +140,22 @@ type DrumArrangement = Pick<ExportArrangement, 'tempo' | 'drumState' | 'drumKitI
 // The time signature of each bar a render plays.
 const barSignatures = (arrangement: Pick<ExportArrangement, 'bars' | 'signature'>, bars: number): unknown[] =>
   (arrangement.bars ? arrangement.bars.map(scene => scene.signature) : Array.from({ length: bars }, () => arrangement.signature));
+// How much longer each bar is than at the project's tempo: a scene with a tempo of its own plays at
+// it (roadmap 17). None at all for an arrangement whose scenes have none.
+const barScales = (arrangement: Pick<ExportArrangement, 'bars' | 'tempo'>): number[] =>
+  (arrangement.bars?.some(scene => scene.tempo) ? arrangement.bars.map(scene => (scene.tempo ? arrangement.tempo / scene.tempo : 1)) : []);
 interface DrumHit { instrument: DrumInstrument; time: number; velocity: number; settings: DrumSettings }
 
 // Every drum hit the export plays, with its start time. Worked out once so the drum render
 // and the kick ducking on the synth lanes agree on which chance steps played. `barDuration` is
 // how long a bar of 4/4 lasts; a drum step is a sixteenth of it in every time signature.
 export function drumHits(arrangement: DrumArrangement, bars = 1, barDuration = 240 / arrangement.tempo): DrumHit[] {
-  const stepDuration = barDuration / 16;
   const random = seededRandom(1);
   const hits: DrumHit[] = [];
   const count = arrangement.bars ? arrangement.bars.length : bars;
-  const signatures = barSignatures(arrangement, count), times = barTimes(signatures, barDuration);
+  const signatures = barSignatures(arrangement, count), scales = barScales(arrangement), times = barTimes(signatures, barDuration, scales);
   for (let bar = 0; bar < count; bar++) {
-    const steps = barSteps(signatures[bar]), start = times[bar].start;
+    const steps = barSteps(signatures[bar]), start = times[bar].start, stepDuration = barDuration / 16 * (scales[bar] ?? 1);
     const state = arrangement.bars ? sceneDrumState(arrangement.bars[bar], arrangement.drumState) : arrangement.drumState;
     // Mutes and solos can differ from scene to scene.
     const solo = DRUM_INSTRUMENTS.some(instrument => state[instrument].solo);
@@ -342,7 +345,10 @@ export function renderPlan(tempo: number, tail: number, sampleRate: number, loop
 }
 
 // How long an arrangement lasts, in whole notes: its bars, each as long as its time signature.
-export const arrangementWholes = (arrangement: Pick<ExportArrangement, 'bars' | 'signature'>): number => wholeNotes(barSignatures(arrangement, 1));
+export const arrangementWholes = (arrangement: Pick<ExportArrangement, 'bars' | 'signature' | 'tempo'>): number => {
+  const signatures = barSignatures(arrangement, 1), scales = barScales(arrangement);
+  return scales.length ? signatures.reduce<number>((sum, signature, bar) => sum + barSteps(signature) / 16 * scales[bar], 0) : wholeNotes(signatures);
+};
 
 export async function renderArrangement(arrangement: ExportArrangement, options: RenderOptions = {}): Promise<{ channels: Stereo; sampleRate: number }> {
   const sampleRate = 44100;
@@ -362,7 +368,7 @@ export async function renderArrangement(arrangement: ExportArrangement, options:
   if (song) arrangement = { ...arrangement, bars: song };
   const bars = plan.bars, barDuration = plan.barDuration, start = plan.start, frames = plan.frames;
   // When each bar starts: bars of different time signatures are of different lengths.
-  const times = barTimes(barSignatures(arrangement, bars), barDuration);
+  const times = barTimes(barSignatures(arrangement, bars), barDuration, barScales(arrangement));
   const ctx = new OfflineAudioContext(2, frames, sampleRate);
   const master = ctx.createGain(), limiter = ctx.createDynamicsCompressor(), safety = ctx.createWaveShaper();
   safety.curve = safetyCurve();

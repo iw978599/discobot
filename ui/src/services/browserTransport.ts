@@ -19,7 +19,9 @@ export class BrowserTransport {
 
   constructor(
     private clock: () => number,
-    private tempo: () => number,
+    // The tempo the tick about to be placed plays at. A scene can have a tempo of its own, so the
+    // tick says which scene: in song mode the tempo changes on the first tick of a scene.
+    private tempo: (tick: number) => number,
     private schedule: (tick: TransportTick) => void,
     // How much further ahead than usual to schedule, in seconds: a voice handed to a guest is
     // played that much early (services/guestInput), so its ticks must be known that soon.
@@ -31,7 +33,7 @@ export class BrowserTransport {
   start(lead = .04) {
     if (this.timer !== null) return;
     this.ticks = 0;
-    this.lastTempo = this.tempo();
+    this.lastTempo = this.tempo(0);
     this.nextTime = this.startTime = this.clock() + lead;
     this.timer = setInterval(() => this.pump(), 20);
     this.pump();
@@ -40,16 +42,18 @@ export class BrowserTransport {
   // One tick is a 32nd note; the drum grid and a lane of sixteenth steps use every second tick.
   pump() {
     const now = this.clock();
-    const tempo = Math.max(20, Math.min(400, this.tempo()));
-    const duration = 60 / tempo / 8;
-    this.tickSeconds = duration;
-    // One tick is an eighth of a beat.
-    if (tempo !== this.lastTempo) { this.lastTempo = tempo; this.onTempo?.(tempo, this.nextTime, this.ticks / 8); }
+    // Each tick is placed at the tempo of its own, which changes where a scene with another starts.
+    const duration = () => {
+      const tempo = Math.max(20, Math.min(400, this.tempo(this.ticks)));
+      // One tick is an eighth of a beat.
+      if (tempo !== this.lastTempo) { this.lastTempo = tempo; this.onTempo?.(tempo, this.nextTime, this.ticks / 8); }
+      return (this.tickSeconds = 60 / tempo / 8);
+    };
     // Skip missed beats after a suspended tab instead of playing a burst of stale notes.
-    while (this.nextTime < now - duration) this.advance(duration);
-    while (this.nextTime < now + .08 + this.reach()) {
-      this.schedule({ tick: this.ticks, time: this.nextTime, duration });
-      this.advance(duration);
+    for (let step = duration(); this.nextTime < now - step; step = duration()) this.advance(step);
+    for (let step = duration(); this.nextTime < now + .08 + this.reach(); step = duration()) {
+      this.schedule({ tick: this.ticks, time: this.nextTime, duration: step });
+      this.advance(step);
     }
   }
 

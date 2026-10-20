@@ -213,6 +213,11 @@ export function sanitizeSteps(value: unknown, bars: unknown = 1, signature?: unk
   }));
 }
 
+// A scene's own tempo: the range the project's tempo has, to a tenth of a beat a minute; anything
+// else is none, and the scene plays at the project's tempo.
+export const sceneTempoOf = (value: unknown): number | undefined =>
+  (typeof value === 'number' && Number.isFinite(value) && value >= 20 && value <= 400 ? Math.round(value * 10) / 10 : undefined);
+
 export function sanitizePattern(value: unknown, tempo: number, signature?: unknown): Pattern | null {
   const input = record(value);
   if (typeof input.id !== 'string' || !input.id || !Array.isArray(input.steps)) return null;
@@ -308,6 +313,7 @@ export function sanitizeScenes(value: unknown, defaults: DrumState): Scene[] | n
       name: (typeof input.name === 'string' && input.name.trim() ? input.name.trim() : 'Scene').slice(0, 40),
       ...(sceneColor(input.color) ? { color: sceneColor(input.color) } : {}),
       ...(signature ? { signature } : {}),
+      ...(sceneTempoOf(input.tempo) !== undefined ? { tempo: sceneTempoOf(input.tempo) } : {}),
       lanes,
       ...(Object.keys(lengths).length ? { laneBars: lengths } : {}),
       ...(Object.keys(automated).length ? { laneAutomation: automated } : {}),
