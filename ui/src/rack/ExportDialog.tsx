@@ -77,6 +77,7 @@ export default function ExportDialog({ studio, onClose }: { studio: Studio; onCl
           {status?.phase === 'working' && `Making ${status.what}${status.part ? ` (${status.part})` : ''}. A long song takes a while; the file downloads when it is done.`}
           {status?.phase === 'done' && `${status.what} finished. The file has been downloaded.`}
         </p>
+        {working && status.progress !== undefined && <progress className="export-bar" aria-label="Export progress" max={100} value={Math.round(status.progress * 100)} />}
         <div className="rack-dialog-actions">
           <button className="rack-btn go" disabled={working && as !== 'midi'} title={working && as !== 'midi' ? 'One audio file at a time: wait for the one being made' : `Make ${NAMES[what][as]}`} onClick={run}>
             Export

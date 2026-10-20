@@ -70,6 +70,9 @@ for (const item of ['Scene WAV', 'Song WAV']) {
 
     const progress = exportDialog(page).getByRole('status');
     await expect(progress).toContainText(`Making ${item}`);
+    // The lanes and the drums are made before the browser's render, which is held: half way.
+    const bar = exportDialog(page).getByRole('progressbar', { name: 'Export progress', exact: true });
+    await expect(bar).toHaveAttribute('value', '50');
     await expect(go(page), 'one audio file at a time').toBeDisabled();
     // The MIDI files are made at once and stay available.
     await radio(page, 'MIDI').check();
@@ -81,6 +84,7 @@ for (const item of ['Scene WAV', 'Song WAV']) {
     const file = await download;
     expect(file.suggestedFilename()).toMatch(/\.wav$/);
     await expect(progress).toContainText(`${item} finished`);
+    await expect(bar, 'the bar goes once the file is made').toHaveCount(0);
     await expect(go(page)).toBeEnabled();
 
     // Closed, the rack still says so until it is dismissed.
