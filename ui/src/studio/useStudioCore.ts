@@ -1,6 +1,7 @@
 // The studio's state and refs, made in one place and handed out as one object (`StudioCore`), so
 // the hooks each concern of the studio lives in can be given what they read. Split out of useStudio.tsx.
 import { useState, useRef } from 'react';
+import { audioEngine, type AudioEngine } from '../hooks/browserAudio';
 import { useSynthAudio } from '../hooks/useSynthAudio';
 import { useDrumAudio } from '../hooks/useDrumAudio';
 import { MidiMode } from '../hooks/useMidiInput';
@@ -25,10 +26,11 @@ import { DEFAULT_DRUM_FX, DEFAULT_EFFECTS_LOOP, DEFAULT_DRUM_KIT_ID, createDefau
 import type { SynthPreset, PlayMode, SynthState } from './studioState';
 export type { PlayMode } from './studioState';
 
-export function useStudioCore() {
+// `engine` is the one that plays everything: the app's, unless another is given (a test's, say).
+export function useStudioCore(engine: AudioEngine = audioEngine) {
   // The audio of the lanes and of the drums.
-  const synthAudio = useSynthAudio();
-  const drumAudio = useDrumAudio();
+  const synthAudio = useSynthAudio(engine);
+  const drumAudio = useDrumAudio(engine);
   const [synths, setSynths] = useState<SynthState[]>([]);
   const [selectedSynthId, setSelectedSynthId] = useState(1);
   const selectedSynthIdRef = useRef(selectedSynthId);
@@ -196,6 +198,7 @@ export function useStudioCore() {
   // under the pointer that had just put it in.
   const [showStarters, setShowStarters] = useState(false);
   return {
+    engine,
     synthAudio,
     drumAudio,
     synths,

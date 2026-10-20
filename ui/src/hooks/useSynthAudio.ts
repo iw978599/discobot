@@ -2,11 +2,11 @@ import { useRef, useCallback, useEffect, useMemo } from 'react';
 import type { SynthParameters, EffectsLoopState, FxSendLevels } from '../types';
 import { toVoiceParams, type SynthSample, type SynthWorkletMessage, type VoiceParams } from '@discobot/engine';
 import { automationChange } from '../services/automation';
-import { createAudioLane, getAudioContext, ensureAudioReady, loadAudioWorklet, setEffectsLoop } from './browserAudio';
+import { audioEngine, type AudioEngine } from './browserAudio';
 
 interface SynthLane {
   node?: AudioWorkletNode;
-  audio?: ReturnType<typeof createAudioLane>;
+  audio?: ReturnType<AudioEngine['createLane']>;
   loading?: Promise<AudioWorkletNode>;
   parameters?: SynthParameters;
   // What the lane's automation last set, by the voice's own names. While there is any, those
@@ -36,7 +36,8 @@ const soundFor = (lane: SynthLane): Partial<VoiceParams> => {
   return sound;
 };
 
-export function useSynthAudio() {
+// `engine` is the app's unless another is given (a test's, say).
+export function useSynthAudio(engine: AudioEngine = audioEngine) {
   const lanesRef = useRef(new Map<number, SynthLane>());
   const volumeRef = useRef(1);
   const sequenceRef = useRef(0);
@@ -53,7 +54,7 @@ export function useSynthAudio() {
     const lane = laneFor(synthId);
     lane.parameters = parameters;
     lane.bpm = bpm;
-    if (loop) setEffectsLoop(loop);
+    if (loop) engine.setEffectsLoop(loop);
     send(lane.node, { type: 'params', params: soundFor(lane) });
     if (!lane.automatedSends) lane.audio?.setSends(parameters.fxSends, parameters.fxReturn);
   }, []);
@@ -93,11 +94,11 @@ export function useSynthAudio() {
     if (lane.node) return lane.node;
     if (!lane.loading) {
       const generation = lane.generation;
-      lane.loading = loadAudioWorklet().then(() => {
+      lane.loading = engine.loadWorklet().then(() => {
         if (generation !== lane.generation) throw new Error('Audio lane stopped');
-        const ctx = getAudioContext();
+        const ctx = engine.getContext();
         const node = new AudioWorkletNode(ctx, 'synth-processor', { numberOfOutputs: 1, outputChannelCount: [2] });
-        const audio = createAudioLane('synth');
+        const audio = engine.createLane('synth');
         audio.setVolume(volumeRef.current);
         node.connect(audio.input);
         lane.audio = audio;
@@ -129,9 +130,9 @@ export function useSynthAudio() {
     // A release or lane stop that arrives while this note is still starting must win.
     const cancelled = () => generation !== lane.generation || !lane.starting.get(note)?.has(id);
     try {
-      if (!await ensureAudioReady() || cancelled()) return;
+      if (!await engine.ensureReady() || cancelled()) return;
       if (parameters) updateParameters(parameters, bpm, loop, synthId);
-      else if (loop) setEffectsLoop(loop);
+      else if (loop) engine.setEffectsLoop(loop);
       const node = await getNode(lane);
       if (cancelled()) return;
       send(node, { type: 'noteOn', note, velocity, id, duration, time: scheduledTime });
@@ -200,7 +201,7 @@ export function useSynthAudio() {
   useEffect(() => dispose, [dispose]);
   // The same object on every render, so effects and callbacks that depend on it do not re-run.
   return useMemo(() => ({
-    ensureAudioReady, tryResume: () => { void ensureAudioReady(); },
-    playNote, stopNote, stopSynth, stopAllNotes, updateParameters, automate, endAutomation, setEffectsLoop, setVolume, setSample, setLive, duck, handOver, dispose,
+    ensureAudioReady: () => engine.ensureReady(), tryResume: () => { void engine.ensureReady(); },
+    playNote, stopNote, stopSynth, stopAllNotes, updateParameters, automate, endAutomation, setEffectsLoop: (state: EffectsLoopState) => engine.setEffectsLoop(state), setVolume, setSample, setLive, duck, handOver, dispose,
   }), [playNote, stopNote, stopSynth, stopAllNotes, updateParameters, automate, endAutomation, setVolume, setSample, setLive, duck, handOver, dispose]);
 }

@@ -1,8 +1,8 @@
 import { useRef, useEffect, useMemo } from 'react';
-import type { DrumInstrument, DrumSettings, DrumKitId, FxSendLevels } from '../types';
+import type { DrumInstrument, DrumSettings, DrumKitId, EffectsLoopState, FxSendLevels } from '../types';
 import type { DrumRecordings, DrumSample } from '../../../engine/src/drums/DrumCore';
 import type { DrumWorkletMessage } from '@discobot/engine';
-import { createAudioLane, getAudioContext, ensureAudioReady, loadAudioWorklet, setEffectsLoop } from './browserAudio';
+import { audioEngine, type AudioEngine } from './browserAudio';
 
 const send = (node: AudioWorkletNode | null, message: DrumWorkletMessage) => node?.port.postMessage(message);
 // The effects each drum has a send of its own to, in the order the drum processor's extra outputs are in.
@@ -13,13 +13,14 @@ const DRUM_SEND_MIXES = ['delay', 'reverb'] as const;
 // while the rest of the kit stays in the mix.
 interface Player {
   node: AudioWorkletNode | null;
-  lane: ReturnType<typeof createAudioLane> | null;
+  lane: ReturnType<AudioEngine['createLane']> | null;
   loading: Promise<AudioWorkletNode> | null;
   handedTo: AudioNode | null;
 }
 type PlayerKey = 'kit' | DrumInstrument;
 
-export function useDrumAudio() {
+// `engine` is the app's unless another is given (a test's, say).
+export function useDrumAudio(engine: AudioEngine = audioEngine) {
   const playersRef = useRef(new Map<PlayerKey, Player>());
   const volumeRef = useRef(1);
   const sendsRef = useRef<FxSendLevels>({ reverb: 0, delay: 0, drive: 0, phaser: 0 });
@@ -43,11 +44,11 @@ export function useDrumAudio() {
     function getNode(key: PlayerKey = 'kit'): Promise<AudioWorkletNode> {
       const player = playerFor(key);
       if (player.node) return Promise.resolve(player.node);
-      player.loading ??= loadAudioWorklet().then(() => {
+      player.loading ??= engine.loadWorklet().then(() => {
         // Three outputs: the kit, then what each drum sends to the delay and to the reverb. The lane
         // takes its delay and reverb sends from those two and its other sends from the kit.
-        const node = new AudioWorkletNode(getAudioContext(), 'drum-processor', { numberOfOutputs: 3, outputChannelCount: [2, 2, 2] });
-        const lane = createAudioLane('drums', DRUM_SEND_MIXES);
+        const node = new AudioWorkletNode(engine.getContext(), 'drum-processor', { numberOfOutputs: 3, outputChannelCount: [2, 2, 2] });
+        const lane = engine.createLane('drums', DRUM_SEND_MIXES);
         lane.setVolume(volumeRef.current);
         lane.setSends(sendsRef.current, returnRef.current);
         node.connect(lane.input, 0);
@@ -97,7 +98,7 @@ export function useDrumAudio() {
       if (mutedOrVelocity === true) return;
       const generation = generationRef.current;
       try {
-        if (!await ensureAudioReady()) return;
+        if (!await engine.ensureReady()) return;
         const node = await getNode(ownPlayersRef.current.has(instrument) ? instrument : 'kit');
         // A stop that arrived while the hit was still starting wins.
         if (generation !== generationRef.current) return;
@@ -121,7 +122,7 @@ export function useDrumAudio() {
       players.clear();
       ownPlayersRef.current.clear();
     }
-    return { ensureAudioReady, tryResume: () => { void ensureAudioReady(); }, playDrumHit, setVolume, setFxSends, setKit, setSample, setCymbals, setEffectsLoop, handOver, stopAllNotes, dispose };
+    return { ensureAudioReady: () => engine.ensureReady(), tryResume: () => { void engine.ensureReady(); }, playDrumHit, setVolume, setFxSends, setKit, setSample, setCymbals, setEffectsLoop: (state: EffectsLoopState) => engine.setEffectsLoop(state), handOver, stopAllNotes, dispose };
   }, []);
   useEffect(() => api.dispose, [api]);
   return api;

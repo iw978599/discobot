@@ -61,8 +61,10 @@ directly, with no builder.
     from 2,738 lines to 963, with eight hooks beside it in `ui/src/studio/`
     and the state made in one place (`useStudioCore`). Nothing changes for a
     person using the app.
-13. **The audio engine handed to the hooks** (V17, improvements 4): the step
-    after it, which makes the audio testable without a browser.
+13. **The audio engine handed to the hooks** (V17, improvements 4). Done:
+    the audio hooks, the guest audio and the studio are given the engine (the
+    app's by default), and a unit test tries the guest player on an engine of
+    its own.
 
 ### 3. Medium (M each, about one builder's run)
 
