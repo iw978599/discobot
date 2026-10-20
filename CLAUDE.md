@@ -22,5 +22,7 @@ are how the owner wants a session run.
 - **Usage limits** run out fast: work directly, and use at most one builder
   (a subagent on Sonnet) for a contained item.
 - **Sound** cannot be verified by tests: say "not verified by ear".
-- **Docs:** keep `AGENTS.md` and `docs/ROADMAP.md` up to date with every change.
+- **Docs:** keep `AGENTS.md`, its topic files in `docs/agents/` and
+  `docs/ROADMAP.md` up to date with every change. Read the topic file for the
+  area you are changing.
 - Never work under the `everhealth` GitHub organisation from this machine.

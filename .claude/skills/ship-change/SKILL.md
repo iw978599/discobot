@@ -17,7 +17,8 @@ description: The checks and steps for finishing a change in Discobot and opening
    not cover the specs. A test that fails on GitHub and times real audio or
    makes many exports may only have been starved: re-run the failed jobs
    (`gh run rerun <id> --failed`) before believing it.
-4. Update `AGENTS.md` (behaviour a later change must know) and
+4. Update `AGENTS.md` or the area's file under `docs/agents/` (behaviour a
+   later change must know; keep `AGENTS.md` under 100,000 characters) and
    `docs/ROADMAP.md` (what is now done, what is still open). Keep
    `docs/GUEST_PROTOCOL.md`, `docs/guest-example.html` and the guest tests in
    step with each other.
@@ -58,7 +59,7 @@ description: The checks and steps for finishing a change in Discobot and opening
 - The owner allows merging a pull request once every check is green
   (`gh pr merge <n> --merge --delete-branch`). Merge them in order when one
   builds on another.
-- `docs/ROADMAP.md` and `AGENTS.md` conflict often, because pull requests add
+- `docs/ROADMAP.md`, `AGENTS.md` and `docs/agents/` conflict often, because pull requests add
   lines next to each other. Merge `main` into the branch and keep both sides'
   lines; never drop the other pull request's.
 - Merging to `main` publishes the site, once the checks on that merge have
