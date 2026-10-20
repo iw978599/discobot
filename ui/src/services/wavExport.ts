@@ -10,7 +10,7 @@ import { auxBuses, auxSeconds } from './auxSettings';
 import { rateHz } from './rateSync';
 import { expandDrumStep, seededRandom, swingLate } from './drumScheduling';
 import { createZip } from '../utils/zip';
-import { MASTER_LEVEL, SEND_GLIDE, chorusSweep, configureLimiter, createAuxEffect, createChorus, createHallReverb, createMasterEq, driveCurve, eqGains, reverbImpulse, safetyCurve, scheduleDuck } from '../hooks/browserAudio';
+import { MASTER_LEVEL, SEND_GLIDE, chorusSweep, createWow, delayColorHz, configureLimiter, createAuxEffect, createChorus, createHallReverb, createMasterEq, driveCurve, eqGains, reverbImpulse, safetyCurve, scheduleDuck } from '../hooks/browserAudio';
 import type { DrumInstrument, DrumSettings } from '../types';
 
 export interface ExportArrangement {
@@ -227,7 +227,16 @@ function connectEffects(ctx: OfflineAudioContext, input: AudioNode, master: Audi
     const delay = ctx.createDelay(2), feedback = ctx.createGain(), level = ctx.createGain();
     delay.delayTime.value = delaySeconds(state.delay, tempo); feedback.gain.value = Math.min(.85, state.delay.feedback);
     level.gain.value = state.delay.mix;
-    send('delay', own.delay?.()).connect(delay); delay.connect(feedback).connect(delay); delay.connect(level).connect(wet);
+    // A coloured delay's repeats pass through its filter; a plain one's go straight round, as they always did.
+    let repeats: AudioNode = delay;
+    if (state.delay.color) {
+      const color = ctx.createBiquadFilter();
+      color.type = 'lowpass'; color.Q.value = 0.5; color.frequency.value = delayColorHz(state.delay.color);
+      delay.connect(color);
+      repeats = color;
+    }
+    if (state.delay.wow) createWow(ctx, delay.delayTime).set(state.delay.wow);
+    send('delay', own.delay?.()).connect(delay); repeats.connect(feedback).connect(delay); repeats.connect(level).connect(wet);
   }
   if (state.reverb.enabled && peak.reverb > 0 && state.reverb.kind === 'hall') {
     const hall = createHallReverb(ctx), level = ctx.createGain();
@@ -240,7 +249,7 @@ function connectEffects(ctx: OfflineAudioContext, input: AudioNode, master: Audi
   }
   if (state.drive.enabled && peak.drive > 0) {
     const drive = ctx.createWaveShaper(), tone = ctx.createBiquadFilter(), level = ctx.createGain();
-    drive.curve = driveCurve(state.drive.amount); drive.oversample = '4x'; tone.frequency.value = 400 * Math.pow(40, state.drive.tone);
+    drive.curve = driveCurve(state.drive.amount, state.drive.kind); drive.oversample = '4x'; tone.frequency.value = 400 * Math.pow(40, state.drive.tone);
     level.gain.value = .5;
     send('drive').connect(drive).connect(tone).connect(level).connect(wet);
   }

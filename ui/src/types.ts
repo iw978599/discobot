@@ -9,6 +9,7 @@
 
 export type {
   RateSync,
+  DriveKind,
   AuxBus,
   AuxKind,
   // Audio synthesis types

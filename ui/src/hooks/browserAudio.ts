@@ -1,4 +1,4 @@
-import type { AuxBus, AuxKind, EffectsLoopState, FxSendLevels } from '../types';
+import type { AuxBus, AuxKind, DriveKind, EffectsLoopState, FxSendLevels } from '../types';
 import { auxBuses, auxRate, auxSeconds } from '../services/auxSettings';
 import { delaySeconds } from '../services/delayTime';
 import { rateHz } from '../services/rateSync';
@@ -21,6 +21,10 @@ export function scheduleDuck(gain: AudioParam, time: number, amount: number): vo
   gain.setTargetAtTime(1, time + 0.03, 0.09);
 }
 type Effects = {
+  // the shared delay's colour filter and wow, and the kind of drive its curve was made for
+  color: BiquadFilterNode;
+  wow: ReturnType<typeof createWow>;
+  driveKind: DriveKind | undefined;
   inputs: Record<EffectName, GainNode>;
   wet: Record<EffectName, GainNode>;
   output: GainNode;
@@ -70,14 +74,45 @@ export function configureLimiter(limiter: DynamicsCompressorNode) {
   limiter.release.value = 0.06;
 }
 
-export function driveCurve(amount: number) {
+// The drive's curve. With no kind it is the smooth one it always had. An overdrive clips softly and
+// a little lopsided, as a pedal's diodes in the feedback of an op-amp do; a distortion clips hard at
+// a high gain; a fuzz clips hardest of all and leans to one side, which is what makes it buzz.
+export function driveCurve(amount: number, kind?: DriveKind) {
   const curve = new Float32Array(2049);
-  const k = limit(amount, 0, 1) * 18;
-  for (let i = 0; i < curve.length; i++) {
-    const x = 2 * i / (curve.length - 1) - 1;
-    curve[i] = k === 0 ? x : Math.tanh(x * k) / Math.tanh(k);
-  }
+  const a = limit(amount, 0, 1);
+  const shape = (x: number): number => {
+    if (kind === 'overdrive') { const k = 1 + a * 12; return x >= 0 ? Math.tanh(k * x) / Math.tanh(k) : 0.9 * Math.tanh(0.8 * k * x) / Math.tanh(0.8 * k); }
+    if (kind === 'distortion') { const k = 1 + a * 60; return Math.max(-1, Math.min(1, k * x * (1 - 0.05 * Math.abs(k * x)) )); }
+    if (kind === 'fuzz') { const k = 1 + a * 150; return x >= 0 ? Math.tanh(k * x) : 0.85 * Math.tanh(1.4 * k * x); }
+    const k = a * 18;
+    return k === 0 ? x : Math.tanh(x * k) / Math.tanh(k);
+  };
+  for (let i = 0; i < curve.length; i++) curve[i] = Math.max(-1, Math.min(1, shape(2 * i / (curve.length - 1) - 1)));
   return curve;
+}
+
+// The shared delay's colour as the cut-off of the filter its repeats pass through: none at 0, a
+// little under 1.5 kHz at the most, so each repeat is darker than the one before.
+export const delayColorHz = (color: number | undefined) => 12000 * Math.pow(0.125, limit(color ?? 0, 0, 1));
+// How far, in seconds, the delay's time wavers at the most: a slow wow and a quicker flutter.
+export const WOW_SECONDS = 0.004, FLUTTER_SECONDS = 0.0007, WOW_HZ = 0.6, FLUTTER_HZ = 7;
+// Two slow oscillators moving a delay's time, as worn tape does. Live and export both build it here.
+export function createWow(ctx: BaseAudioContext, time: AudioParam) {
+  const wow = ctx.createOscillator(), flutter = ctx.createOscillator(), wowDepth = ctx.createGain(), flutterDepth = ctx.createGain();
+  wow.frequency.value = WOW_HZ; flutter.frequency.value = FLUTTER_HZ;
+  wowDepth.gain.value = 0; flutterDepth.gain.value = 0;
+  wow.connect(wowDepth).connect(time); flutter.connect(flutterDepth).connect(time);
+  wow.start(); flutter.start();
+  return {
+    set(amount: number, at?: number) {
+      const level = limit(amount, 0, 1);
+      for (const [param, most] of [[wowDepth.gain, WOW_SECONDS], [flutterDepth.gain, FLUTTER_SECONDS]] as const) {
+        if (at === undefined) param.value = level * most; else param.setTargetAtTime(level * most, at, 0.05);
+      }
+    },
+    oscillators: [wow, flutter],
+    nodes: [wow, flutter, wowDepth, flutterDepth],
+  };
 }
 
 // `random` shapes the reverb's noise. Exports pass a seeded one, so the same song always renders the same file.
@@ -288,8 +323,9 @@ const halt = (source: AudioScheduledSourceNode) => {
 function releaseEffects(bus: Effects) {
   halt(bus.lfo);
   halt(bus.chorus.lfo);
+  bus.wow.oscillators.forEach(halt);
   const nodes: AudioNode[] = [
-    ...Object.values(bus.inputs), ...Object.values(bus.wet), bus.output, bus.delay, bus.feedback,
+    ...Object.values(bus.inputs), ...Object.values(bus.wet), bus.output, bus.delay, bus.feedback, bus.color, ...bus.wow.nodes,
     ...(bus.reverb ? [bus.reverb] : []), ...(bus.hall?.nodes ?? []), bus.reverbFade, bus.drive, bus.driveFade, bus.tone, ...bus.phaser, bus.phaserFeedback,
     bus.lfo, bus.depth, bus.chorus.input, bus.chorus.output, bus.chorus.lfo, bus.chorus.depth,
   ];
@@ -417,11 +453,14 @@ export class AudioEngine {
       wet[name].gain.value = 0;
       wet[name].connect(output);
     }
-    const delay = ctx.createDelay(2), feedback = ctx.createGain();
+    const delay = ctx.createDelay(2), feedback = ctx.createGain(), color = ctx.createBiquadFilter();
     feedback.gain.value = 0;
+    color.type = 'lowpass'; color.Q.value = 0.5; color.frequency.value = Math.min(20000, ctx.sampleRate / 2 - 100);
     inputs.delay.connect(delay);
-    delay.connect(feedback).connect(delay);
-    delay.connect(wet.delay);
+    delay.connect(color);
+    color.connect(feedback).connect(delay);
+    color.connect(wet.delay);
+    const wow = createWow(ctx, delay.delayTime);
     const reverb = ctx.createConvolver(), reverbFade = ctx.createGain();
     inputs.reverb.connect(reverb).connect(reverbFade).connect(wet.reverb);
     const drive = ctx.createWaveShaper(), driveFade = ctx.createGain(), tone = ctx.createBiquadFilter();
@@ -444,7 +483,7 @@ export class AudioEngine {
     const chorus = createChorus(ctx);
     inputs.chorus.connect(chorus.input);
     chorus.output.connect(wet.chorus);
-    const bus: Effects = { inputs, wet, output, delay, feedback, reverb, hall: null, reverbFade, decay: 0, drive, driveFade, driveAmount: -1, tone, phaser, phaserFeedback, lfo, depth, chorus, reverbShape: '', aux: [null, null] };
+    const bus: Effects = { inputs, wet, output, delay, feedback, color, wow, driveKind: undefined, reverb, hall: null, reverbFade, decay: 0, drive, driveFade, driveAmount: -1, tone, phaser, phaserFeedback, lfo, depth, chorus, reverbShape: '', aux: [null, null] };
     this.effects.set(group, bus);
     if (this.loop) this.update(bus, group, this.loop, ctx);
     return bus;
@@ -501,6 +540,8 @@ export class AudioEngine {
     smooth(bus.delay.delayTime, delaySeconds(state.delay, tempo), ctx);
     smooth(bus.feedback.gain, state.delay.enabled && enabled ? limit(state.delay.feedback, 0, 0.85) : 0, ctx);
     smooth(bus.wet.delay.gain, state.delay.enabled ? limit(state.delay.mix, 0, 1) : 0, ctx);
+    smooth(bus.color.frequency, state.delay.color ? delayColorHz(state.delay.color) : Math.min(20000, ctx.sampleRate / 2 - 100), ctx);
+    bus.wow.set(state.delay.wow ?? 0, ctx.currentTime);
     smooth(bus.wet.reverb.gain, state.reverb.enabled ? limit(state.reverb.mix, 0, 1) : 0, ctx);
     const decay = limit(state.reverb.decay, 0.1, 8);
     const shape = `${(state.reverb.preDelay ?? 0).toFixed(3)}/${(state.reverb.damping ?? 0).toFixed(2)}`;
@@ -526,8 +567,9 @@ export class AudioEngine {
       bus.decay = decay;
     }
     const driveAmount = limit(state.drive.amount, 0, 1);
-    if (Math.abs(driveAmount - bus.driveAmount) > 0.005) {
-      const curve = driveCurve(driveAmount);
+    if (Math.abs(driveAmount - bus.driveAmount) > 0.005 || state.drive.kind !== bus.driveKind) {
+      const curve = driveCurve(driveAmount, state.drive.kind);
+      bus.driveKind = state.drive.kind;
       if (bus.drive.curve) {
         const previous = bus.drive, previousFade = bus.driveFade;
         const next = ctx.createWaveShaper(), fade = ctx.createGain();

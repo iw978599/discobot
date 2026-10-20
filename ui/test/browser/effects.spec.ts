@@ -175,3 +175,40 @@ test('the delay and the reverb each have presets that set the whole effect at on
   await expect.poll(async () => (await stored(page)).effectsLoop.reverb.kind, 'one undo takes back the whole of the last preset').toBe('hall');
   expect(errors).toEqual([]);
 });
+
+test('the clones of well-known units are presets on each effect, with the knobs they need', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const effects = page.locator('.effects-unit');
+  const choose = async (menu: string, name: string) => {
+    await effects.getByRole('button', { name: menu, exact: true }).click();
+    await effects.getByRole('menu', { name: menu, exact: true }).getByRole('menuitem', { name, exact: true }).click();
+  };
+
+  await choose('Delay presets', 'Space Echo style');
+  await expect.poll(async () => (await stored(page)).effectsLoop.delay).toMatchObject({ enabled: true, color: 0.55, wow: 0.45 });
+  await expect(effects.getByRole('slider', { name: 'Delay wow', exact: true })).toHaveAttribute('aria-valuenow', '0.45');
+  // A plain preset after it takes the tape's colour and wow away again.
+  await choose('Delay presets', 'Slapback');
+  await expect.poll(async () => { const delay = (await stored(page)).effectsLoop.delay; return [delay.color ?? 0, delay.wow ?? 0]; }).toEqual([0, 0]);
+
+  await choose('Drive presets', 'Big Muff style');
+  await expect.poll(async () => (await stored(page)).effectsLoop.drive).toMatchObject({ enabled: true, kind: 'fuzz' });
+  await expect(effects.getByLabel('Drive kind', { exact: true })).toHaveValue('fuzz');
+  await effects.getByLabel('Drive kind', { exact: true }).selectOption('classic');
+  await expect.poll(async () => 'kind' in (await stored(page)).effectsLoop.drive, 'Classic is stored as nothing').toBe(false);
+
+  await choose('Chorus presets', 'Juno II style');
+  await expect.poll(async () => (await stored(page)).effectsLoop.chorus).toMatchObject({ enabled: true, rate: 0.83 });
+  await choose('Phaser presets', 'Small Stone style');
+  await expect.poll(async () => (await stored(page)).effectsLoop.phaser).toMatchObject({ enabled: true, feedback: 0.6 });
+  await choose('Reverb presets', 'Plate');
+  await expect.poll(async () => (await stored(page)).effectsLoop.reverb.decay).toBe(2.2);
+
+  // Played with all of them on, nothing goes wrong.
+  await page.getByRole('button', { name: 'Kick step 1', exact: true }).click();
+  await page.getByRole('button', { name: /Play All/ }).click();
+  await page.waitForTimeout(800);
+  await page.getByRole('button', { name: /Stop All/ }).click();
+  expect(errors).toEqual([]);
+});

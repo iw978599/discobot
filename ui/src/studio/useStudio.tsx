@@ -215,6 +215,8 @@ function normalizeEffectsLoop(loop: Partial<EffectsLoopState> | undefined): Effe
       enabled: loop?.drive?.enabled ?? DEFAULT_EFFECTS_LOOP.drive.enabled,
       amount: Math.max(0, Math.min(1, loop?.drive?.amount ?? DEFAULT_EFFECTS_LOOP.drive.amount)),
       tone: Math.max(0, Math.min(1, loop?.drive?.tone ?? DEFAULT_EFFECTS_LOOP.drive.tone)),
+      // Always present, so going back to Classic reaches the store, which keeps Classic as nothing.
+      kind: (loop?.drive?.kind ?? 'classic') as EffectsLoopState['drive']['kind'],
     },
     phaser: {
       enabled: loop?.phaser?.enabled ?? DEFAULT_EFFECTS_LOOP.phaser.enabled,
@@ -232,6 +234,9 @@ function normalizeEffectsLoop(loop: Partial<EffectsLoopState> | undefined): Effe
       mix: Math.max(0, Math.min(1, loop?.delay?.mix ?? DEFAULT_EFFECTS_LOOP.delay.mix)),
       // Always present here, so turning sync off reaches the store instead of being merged away.
       sync: loop?.delay?.sync ?? 'off',
+      // The same for the colour and the wow: a 0 is sent, and the store keeps it as nothing.
+      color: Math.max(0, Math.min(1, loop?.delay?.color ?? 0)),
+      wow: Math.max(0, Math.min(1, loop?.delay?.wow ?? 0)),
     },
     reverb: {
       enabled: loop?.reverb?.enabled ?? DEFAULT_EFFECTS_LOOP.reverb.enabled,
