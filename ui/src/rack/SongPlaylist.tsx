@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Studio } from '../studio/useStudio';
+import { sceneLengthIn, sceneSignatureIn } from '../studio/studioState';
 import { MAX_REPEATS, MAX_SONG_ENTRIES, insertSongEntry, moveSongEntry, removeSongEntry, repeatSongEntry, songClock, songRows, type SongOrder } from '../services/songPlayback';
 
 const barsText = (count: number) => `${count} ${count === 1 ? 'bar' : 'bars'}`;
@@ -16,7 +17,7 @@ export default function SongPlaylist({ studio }: { studio: Studio }) {
   // An edit reaches the list a moment after its button is pressed. The button that made it may
   // by then belong to another row, so the edit says where the keyboard should be afterwards.
   const focusNext = useRef<{ row: number; controls: string[]; at: number; from: unknown } | null>(null);
-  const rows = songRows(song, studio.sceneLength, studio.globalTempo, studio.sceneSignature);
+  const rows = songRows(song, sceneLengthIn(studio.sceneInfo), studio.globalTempo, sceneSignatureIn(studio.sceneInfo));
   const totalBars = rows.reduce((sum, row) => sum + row.bars, 0);
   const totalSeconds = rows.reduce((sum, row) => sum + row.seconds, 0);
   const nameOf = (sceneId: string) => scenes.find(scene => scene.id === sceneId)?.name ?? '?';

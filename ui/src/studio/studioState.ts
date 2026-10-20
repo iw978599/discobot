@@ -1,6 +1,6 @@
 // What useStudio keeps at module level: the shapes of its state, the defaults, and pure helpers
 // that copy and tidy what the store hands it. Split out of useStudio.tsx.
-import { Pattern, SynthParameters, DrumState, DrumInstrument, DrumKitId, EffectsLoopState, FxSendLevels, SynthModelId, SynthModelParams } from '../types';
+import { Pattern, SynthParameters, DrumState, DrumInstrument, DrumKitId, EffectsLoopState, FxSendLevels, SynthModelId, SynthModelParams, TimeSignature } from '../types';
 import { createDefaultSynthParameters } from '@discobot/engine';
 import { DRUM_INSTRUMENTS, DRUM_SETTINGS_DEFAULT } from '../services/drumKits';
 import { DRUM_FX_DEFAULT, EFFECTS_DEFAULT } from '../services/effectSettings';
@@ -32,6 +32,12 @@ export interface SynthPreset {
 }
 
 export type PlayMode = 'pattern' | 'song';
+
+// A scene's length in bars (the open one's from its live lanes) and its time signature.
+export interface SceneInfo { bars: number; signature: TimeSignature | undefined }
+// What a unit that has `sceneInfo` hands the song helpers in place of the studio's functions.
+export const sceneLengthIn = (info: Record<string, SceneInfo>) => (sceneId: string) => info[sceneId]?.bars ?? 1;
+export const sceneSignatureIn = (info: Record<string, SceneInfo>) => (sceneId: string) => info[sceneId]?.signature;
 
 export interface SynthState {
   id: number;
