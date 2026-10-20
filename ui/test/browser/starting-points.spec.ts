@@ -70,15 +70,15 @@ test('a sample song opens as a new project, ready to play as a song', async ({ p
   page.on('pageerror', error => errors.push(error.message));
   const stored = () => page.evaluate(() => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem('discobot_browser_project_v1') || '{}')));
   const first = (await stored()).projectId;
-  await offer(page).getByRole('group', { name: 'A song to hear', exact: true }).getByRole('button', { name: 'Neon Drive', exact: true }).click();
+  await offer(page).getByRole('group', { name: 'A song to hear', exact: true }).getByRole('button', { name: 'Night Circuit', exact: true }).click();
 
-  await expect(tempo(page)).toHaveText('118');
-  await expect.poll(async () => (await stored()).name).toBe('Neon Drive');
+  await expect(tempo(page)).toHaveText('104');
+  await expect.poll(async () => (await stored()).name).toBe('Night Circuit');
   const project = await stored();
   expect(project.projectId, 'the empty project it was started from is left alone').not.toBe(first);
-  expect(project.scenes.map((scene: { name: string }) => scene.name)).toEqual(['Intro', 'Verse', 'Chorus', 'Break', 'Outro']);
-  expect(project.song.entries).toHaveLength(6);
-  expect(project.synths).toHaveLength(3);
+  expect(project.scenes.map((scene: { name: string }) => scene.name)).toEqual(['Ignition', 'Pulse', 'Run', 'Undertow', 'Overdrive', 'Shutdown']);
+  expect(project.song.entries).toHaveLength(7);
+  expect(project.synths).toHaveLength(5);
   await expect(offer(page), 'a project with a song in it is not offered a beat').toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Kick step 1', exact: true }), 'the intro opens, and has no kick yet').toHaveAttribute('aria-pressed', 'false');
 
@@ -92,7 +92,7 @@ test('the songs on offer are in many styles, and one in another time signature o
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   const songs = offer(page).getByRole('group', { name: 'A song to hear', exact: true }).getByRole('button');
-  await expect(songs).toHaveText([/Neon Drive/, /Blue Waltz/, /Late Study/, /Seven Lights/, /Market Day/, /Cathedral/, /Lanterns Over Dark Water/]);
+  await expect(songs).toHaveText([/Night Circuit/, /Blue Waltz/, /Late Study/, /Seven Lights/, /Market Day/, /Cathedral/, /Lanterns Over Dark Water/]);
   await expect(offer(page).getByRole('group', { name: 'A beat to start from', exact: true }).getByRole('button')).not.toHaveCount(0);
 
   const stored = () => page.evaluate(() => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem('discobot_browser_project_v1') || '{}')));

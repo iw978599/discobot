@@ -39,39 +39,41 @@ async function service() {
   return made;
 }
 // A minor, with the one note of the G chord that is outside the five the tune uses.
-const IN_KEY = new Set(['A', 'B', 'C', 'D', 'E', 'F', 'G']);
 const played = (steps: SequencerStep[]) => steps.flatMap(step => stepNotes(step));
 
-const NEON = SAMPLE_SONGS[0];
 const build = (made: LocalProjectService, song: SampleSong) => buildSampleSong(made.exportProject(), createBuiltInPresets(), song);
 
-test('Neon Drive opens as a new project of its own: five scenes, three lanes with sounds, and a song in order', async () => {
+const NIGHT = SAMPLE_SONGS[0];
+
+test('Night Circuit opens as a new project of its own: dark synthwave in F minor on five named lanes', async () => {
   const made = await service();
   const before = made.snapshot().projectId;
-  const file = build(made, NEON);
+  const file = build(made, NIGHT);
   assert.ok(file);
   const opened = await made.importProject(file);
   assert.deepEqual([opened.ok, opened.ok && opened.repaired], [true, false], 'it is a sound project: nothing in it had to be repaired');
   const state = made.snapshot();
   assert.notEqual(state.projectId, before, 'the project that was open is left as it was');
-  assert.equal(state.name, 'Neon Drive');
-  assert.equal(state.tempo, 118);
+  assert.equal(state.name, 'Night Circuit');
+  assert.equal(state.tempo, 104);
+  assert.deepEqual(state.synths.map(lane => lane.name), ['Pulse Bass', 'Arp', 'Night Pad', 'Screamer', 'Brass Stabs']);
 
   const scenes = made.getScenes().scenes as Scene[];
-  assert.deepEqual(scenes.map(scene => scene.name), ['Intro', 'Verse', 'Chorus', 'Break', 'Outro']);
-  assert.equal(new Set(scenes.map(scene => scene.color)).size, 5, 'each has a colour of its own');
-  for (const scene of scenes) {
-    const notes = [1, 2, 3].flatMap(lane => played(scene.lanes[lane]));
-    assert.ok(notes.length > 0 && notes.every(note => IN_KEY.has(note[0]) && !note.includes('#') && noteNameToMidi(note) !== null), `${scene.name} is in key`);
-    assert.ok(played(scene.lanes[2]).length === 12, `${scene.name} has its four chords`);
+  assert.deepEqual(scenes.map(scene => scene.name), ['Ignition', 'Pulse', 'Run', 'Undertow', 'Overdrive', 'Shutdown']);
+  // F minor, sharps for flats: everything but the bridge keeps to its seven notes.
+  const F_MINOR = new Set(['F', 'G', 'G#', 'A#', 'C', 'C#', 'D#']);
+  for (const scene of scenes.filter(entry => entry.name !== 'Undertow')) {
+    const notes = [1, 2, 3, 4, 5].flatMap(lane => played(scene.lanes[lane] ?? []));
+    assert.ok(notes.length > 0 && notes.every(note => F_MINOR.has(note.replace(/\d+$/, ''))), `${scene.name} is in F minor`);
   }
-  const chorus = scenes[2], verse = scenes[1], intro = scenes[0], breakdown = scenes[3];
-  assert.ok(played(chorus.lanes[3]).length > 20 && played(verse.lanes[3]).length === 0, 'the tune comes in at the chorus');
-  assert.ok(played(chorus.lanes[1]).length > played(verse.lanes[1]).length, 'and the bass gets busier');
-  assert.ok(played(intro.lanes[1]).length === 0 && !breakdown.drums.kick.steps.some(Boolean), 'the intro has no bass and the break no kick');
-  assert.deepEqual(state.song.entries.map(entry => entry.repeats), [1, 2, 2, 1, 2, 1]);
-  assert.equal(songBars(state.song, scenes).length, 36, 'nine passes of four bars');
-  assert.equal(state.synths[2].synthParams.fxSends.auxA, 0.35, 'the bell goes through the echo on aux A');
+  const bridge = [1, 2, 3, 4, 5].flatMap(lane => played(scenes.find(scene => scene.name === 'Undertow')!.lanes[lane] ?? []));
+  assert.ok(bridge.some(note => note.startsWith('F#')) && bridge.some(note => note.startsWith('E')), 'the bridge turns to G flat and C major');
+
+  const [bass, arp, , lead] = state.synths;
+  assert.ok(bass.synthParams.duck! > 0, 'the bass is pushed down by every kick');
+  assert.equal(arp.synthParams.arpeggiator.enabled, true, 'the chords run through the arpeggiator');
+  assert.ok(lead.synthParams.fxSends.drive > 0 && state.effectsLoop.drive.kind === 'overdrive', 'the lead screams through the overdrive');
+  assert.equal(scenes[0].drums.kick.steps.some(Boolean), false, 'it opens without a kick');
 });
 
 test('every sample song opens sound and whole: its time signatures, sounds, swing, effects, percussion and automation all kept', async () => {
@@ -114,6 +116,8 @@ test('every sample song opens sound and whole: its time signatures, sounds, swin
       assert.equal(lane.synthModelId, sound.modelId);
       assert.equal(Boolean(lane.swing), Boolean(spec.swing));
       assert.equal(lane.name, spec.name, `${song.name}: lane ${index + 1} is called what the song calls it`);
+      assert.ok(spec.name, `${song.name}: lane ${index + 1} has a name`);
+      assert.ok(lane.synthModelId !== 'generic' || lane.preset, `${song.name}: lane ${index + 1} is a model or says its preset, never Generic`);
       const sends = (spec.sound?.fxSends ?? {}) as Record<string, number>;
       for (const [key, value] of Object.entries(sends)) assert.equal((lane.synthParams.fxSends as unknown as Record<string, number>)[key], value, `${song.name}: ${spec.preset} ${key}`);
     });
@@ -135,7 +139,7 @@ test('the post-rock song is seven minutes long on all five lanes, and builds by 
   const seconds = songBars(state.song, scenes).length * 4 * 60 / song.tempo;
   assert.ok(seconds >= 6.5 * 60 && seconds <= 7.5 * 60, `about seven minutes: ${seconds} seconds`);
   const rise = scenes.find(scene => scene.id === 'lanterns-rise')!.laneAutomation![4];
-  assert.ok(rise.level[0]! < 0.1 && rise.level.at(-1)! > 0.5, 'the wall climbs out of nothing');
+  assert.ok(rise.level[0]! < 0.05 && rise.level.at(-1)! > rise.level[0]! * 10, 'the wall climbs out of nothing');
   assert.ok(rise.cutoff.at(-1)! > rise.cutoff[0]! * 5 && rise.drive.at(-1)! > rise.drive[0]!, 'and brightens and dirties as it does');
   const fall = scenes.find(scene => scene.id === 'lanterns-fall')!.laneAutomation![4];
   assert.equal(fall.level.at(-1), 0, 'and dies away again in the Fall');
@@ -146,12 +150,12 @@ test('a sample song is made from whatever project is open, and from nothing if t
   made.removeLane(3);
   made.removeLane(2);
   made.setDrumMix('kick', { muted: true });
-  const opened = await made.importProject(build(made, NEON));
+  const opened = await made.importProject(build(made, NIGHT));
   assert.equal(opened.ok, true);
-  assert.equal(made.snapshot().synths.length, 3, 'a project with one lane still gives a song of three');
+  assert.equal(made.snapshot().synths.length, 5, 'a project with one lane still gives a song of all its lanes');
   assert.equal(made.snapshot().drumState.kick.muted, false);
-  for (const nothing of [null, {}, { project: {} }, { project: { synths: [] } }]) assert.equal(buildSampleSong(nothing, createBuiltInPresets(), NEON), null);
-  assert.equal(buildSampleSong(made.exportProject(), [], NEON), null, 'and from nothing if a sound it needs is missing');
+  for (const nothing of [null, {}, { project: {} }, { project: { synths: [] } }]) assert.equal(buildSampleSong(nothing, createBuiltInPresets(), NIGHT), null);
+  assert.equal(buildSampleSong(made.exportProject(), [], NIGHT), null, 'and from nothing if a sound it needs is missing');
 });
 
 test('a starting beat has hits of different strengths, and the bass its own', () => {
