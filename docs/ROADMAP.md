@@ -76,8 +76,11 @@ directly, with no builder.
 15. **Clones of well-known effects** (the second half of V5). Done but for the spring reverb, which waits on 14: presets named "… style" on each effect, with a colour and a wow on the delay and kinds of drive. Was: the list the
     owner agreed on 2026-10-19, with knobs added to an effect where a clone
     needs them.
-16. **A scale lock** (V7): the keyboard, roll, chord menu and randomizer all
-    use one key and scale.
+16. **A scale lock** (V7). Done: Randomize's key and scale are the studio's
+    one, with a Lock switch; locked, keys played land in the scale, the
+    keyboard and roll mark the notes outside it and the roll takes none there,
+    and the chord menu has chords in the key. The details are the builder's
+    choice, for the owner to confirm (`docs/agents/editing.md`).
 17. **A tempo for each scene** (V10).
 18. **More from portamento** (V11b): fingered glide, same speed for any
     distance, a synced glide time.
