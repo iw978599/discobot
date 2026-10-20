@@ -311,4 +311,123 @@ const CATHEDRAL: SampleSong = {
   order: [['cathedral-nave', 1], ['cathedral-choir', 2], ['cathedral-light', 1]],
 };
 
-export const SAMPLE_SONGS: SampleSong[] = [NEON_DRIVE, BLUE_WALTZ, LATE_STUDY, SEVEN_LIGHTS, MARKET_DAY, CATHEDRAL];
+// ---------------------------------------------------------------- Lanterns Over Dark Water (post-rock, 4/4)
+// Seven minutes in B minor at 100 BPM, after the manner of Mogwai: the same four chords (Bm, G, D, A,
+// two bars each) all the way through, and everything else about it moving. A clean guitar picks an
+// arpeggio into a dotted-eighth echo; a glockenspiel rings into a long hall; strings swell; and a
+// wall of distorted, tremolo-picked guitar (a step repeated four times, a sixteenth each) climbs out
+// of nothing. The dynamics are made with the effects as much as the notes: the guitar's filter opens
+// through the first section and closes in the last, the wall's level, brightness and drive are swept
+// up through each Rise and down through the Fall, and the reverb and the hall take more of each lane
+// the quieter the music gets.
+
+const BARS_8 = 8 * 16;
+const LANTERN_CHORDS = [
+  ['B3', 'F#4', 'B4', 'D5'], ['B3', 'F#4', 'B4', 'D5'], ['G3', 'D4', 'G4', 'B4'], ['G3', 'D4', 'G4', 'B4'],
+  ['D4', 'A4', 'D5', 'F#5'], ['D4', 'A4', 'D5', 'F#5'], ['A3', 'E4', 'A4', 'C#5'], ['A3', 'E4', 'A4', 'C#5'],
+];
+const LANTERN_ROOTS = ['B1', 'B1', 'G1', 'G1', 'D2', 'D2', 'A1', 'A1'];
+// The guitar's figure: eight eighths through the chord, the first of each beat a little harder.
+const PICK = [0, 1, 2, 3, 1, 2, 3, 2];
+const picking = (gentle: number) => LANTERN_CHORDS.map((chord): Placed[] => PICK.map((note, eighth): Placed => [eighth * 2, chord[note], 2, (eighth % 2 ? 0.55 : 0.75) * gentle]));
+const bassHeld = LANTERN_ROOTS.map((root, bar): Placed[] => (bar % 2 ? [] : [[0, root, 32, 0.8]]));
+const bassDriving = LANTERN_ROOTS.map((root): Placed[] => Array.from({ length: 8 }, (_, eighth): Placed => [eighth * 2, root, 2, eighth % 4 === 0 ? 1 : 0.85]));
+const GLOCK: Placed[][] = [
+  [[0, 'F#5', 4, 0.7], [4, 'D5', 4, 0.6], [8, 'B5', 8, 0.75]],
+  [[0, 'A5', 4, 0.6], [4, 'F#5', 12, 0.65]],
+  [[0, 'G5', 4, 0.7], [4, 'B5', 4, 0.6], [8, 'D6', 8, 0.75]],
+  [[0, 'B5', 8, 0.65], [8, 'A5', 8, 0.6]],
+  [[0, 'F#5', 4, 0.7], [4, 'A5', 4, 0.6], [8, 'D6', 8, 0.75]],
+  [[0, 'A5', 8, 0.65], [8, 'F#5', 8, 0.6]],
+  [[0, 'E5', 4, 0.7], [4, 'A5', 4, 0.6], [8, 'C#6', 8, 0.75]],
+  [[0, 'B5', 8, 0.65], [8, 'A5', 8, 0.6]],
+];
+const GLOCK_SPARSE = GLOCK.map((bar, index): Placed[] => (index % 2 ? [] : bar.slice(-1)));
+const STRING_CHORDS = [['B3', 'D4', 'F#4'], ['G3', 'B3', 'D4'], ['F#3', 'A3', 'D4'], ['E3', 'A3', 'C#4']];
+const strings = STRING_CHORDS.flatMap((chord): Placed[][] => [[[0, chord, 32, 0.7]], []]);
+// The wall: a power chord on every beat, each beat picked four times.
+const POWER = [['B2', 'F#3', 'B3'], ['G2', 'D3', 'G3'], ['D3', 'A3', 'D4'], ['A2', 'E3', 'A3']];
+const tremolo = POWER.flatMap((chord): Placed[][] => {
+  const bar: Placed[] = [0, 4, 8, 12].map((step): Placed => [step, chord, 4, step === 0 ? 1 : 0.85, { ratchet: 4 }]);
+  return [bar, bar];
+});
+
+const SOFT_HATS: Hits = { closedHH: [0, 2, 4, 6, 8, 10, 12, 14].map((step): [number, number] => [step, step % 4 === 0 ? 0.25 : 0.15]) };
+const GLOW_BEAT: Hits = { ...SOFT_HATS, kick: [[0, 0.4]] };
+const GATHER_BEAT: Hits = {
+  closedHH: [0, 2, 4, 6, 8, 10, 12, 14].map((step): [number, number] => [step, step % 4 === 0 ? 0.35 : 0.22]),
+  kick: [[0, 0.65], [8, 0.5]], snare2: [[6, 0.4], [14, 0.45]], ride: [[10, 0.35], [11, 0.3]],
+};
+// The Rise: the snare comes in and gets harder, then rolls in eighths and sixteenths into the Storm.
+const RISE_BEATS: Hits[] = [
+  ...[0.45, 0.5, 0.55, 0.6, 0.68, 0.75].map((level): Hits => ({ ...GATHER_BEAT, snare: [[4, level], [12, level]], kick: [[0, 0.8], [8, 0.7]] })),
+  { kick: [[0, 0.85], [8, 0.8]], snare: [0, 2, 4, 6, 8, 10, 12, 14].map((step): [number, number] => [step, 0.55 + step * 0.02]), closedHH: GATHER_BEAT.closedHH },
+  { kick: [[0, 0.9], [8, 0.9]], snare: Array.from({ length: 16 }, (_, step): [number, number] => [step, 0.6 + step * 0.025]), crash: [[15, 0.6]] },
+];
+const STORM_BEAT: Hits = {
+  kick: [[0, 1], [3, 0.8], [8, 1], [10, 0.85]], snare: [[4, 1], [12, 1]],
+  crash: [[0, 0.9], [8, 0.6]], openHH: [2, 6, 10, 14].map((step): [number, number] => [step, 0.55]),
+};
+const STORM_FILL: Hits = { ...STORM_BEAT, snare: [[4, 1], [12, 1]], snare2: [[13, 0.9], [14, 0.9]], ride: [[11, 0.85], [12, 0.85]], crash: [[0, 0.9]] };
+const stormBeats: Hits[] = [STORM_BEAT, STORM_BEAT, STORM_BEAT, STORM_BEAT, STORM_BEAT, STORM_BEAT, STORM_BEAT, STORM_FILL];
+// The Fall: the same beat, quieter each bar, and fewer hits.
+const FALL_BEATS: Hits[] = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3].map((level, bar): Hits => ({
+  kick: [[0, level], ...(bar < 4 ? [[8, level * 0.9] as [number, number]] : [])], snare: bar < 6 ? [[12, level]] : [], ...(bar === 0 ? { crash: [[0, 0.9]] as Array<[number, number]> } : {}),
+}));
+const EMBER_BEATS: Hits[] = Array.from({ length: 8 }, (_, bar): Hits => (bar % 2 ? {} : { kick: [[0, 0.35]] }));
+const nothing: Hits[] = Array.from({ length: 8 }, () => ({}));
+
+const LANTERNS: SampleSong = {
+  id: 'lanterns', name: 'Lanterns Over Dark Water', genre: 'Post-rock, 7 minutes',
+  hint: 'Seven minutes of post-rock in B minor at 100 BPM, on all five lanes: a clean guitar into a dotted-eighth echo, a glockenspiel into a long hall, strings, and a wall of tremolo-picked guitar, built quiet to loud and back by automation of the filters, levels, drive and reverb sends',
+  tempo: 100, kit: 'recorded',
+  lanes: [
+    { preset: 'builtin-bass-pro', name: 'Bass', octaveShift: -1, sound: { gain: 1.35, inserts: { drive: 0.15 }, fxSends: { reverb: 0.1 } } },
+    { preset: 'builtin-pluck-nylon', name: 'Clean Guitar',
+      sound: { gain: 2, inserts: { chorus: { mix: 0.3, depth: 0.4, rate: 0.5 } }, fxSends: { reverb: 0.3, auxA: 0.45, auxB: 0.15 } } },
+    { preset: 'builtin-pluck-bell', name: 'Glockenspiel', octaveShift: 1, sound: { gain: 1.4, fxSends: { reverb: 0.25, auxA: 0.2, auxB: 0.5 } } },
+    { preset: 'builtin-lead-supersaw', name: 'Tremolo Wall',
+      sound: { gain: 0.7, inserts: { drive: 0.65, tone: -0.15 }, fxSends: { reverb: 0.35, auxB: 0.3 } } },
+    { preset: 'builtin-pad-strings', name: 'Strings', sound: { gain: 0.65, fxSends: { reverb: 0.4, auxB: 0.3 } } },
+  ],
+  drums: { kick: { volume: 0.9 }, crash: { volume: 0.6 } },
+  drumSends: { reverb: 0.25 },
+  effects: {
+    reverb: { enabled: true, kind: 'hall', decay: 4, mix: 0.35, preDelay: 0.03, damping: 0.3 },
+    aux: [{ kind: 'echo', level: 0.6, main: 0.45, shape: 0.45, sync: '1/8d' }, { kind: 'hall', level: 0.85, main: 6, shape: 0.3 }],
+    eq: { enabled: true, low: 1, mid: 0, high: 0 },
+  },
+  scenes: [
+    // The guitar alone, its filter opening across the eight bars and its echo deepening.
+    { id: 'lanterns-drift', name: 'Drift', color: 'blue', bars: 8, lanes: { 2: picking(0.8) }, drums: nothing,
+      automation: { 2: { cutoff: ramp(BARS_8, 500, 5000), auxBSend: ramp(BARS_8, 0.1, 0.4) } } },
+    { id: 'lanterns-glow', name: 'Glow', color: 'teal', bars: 8, lanes: { 1: bassHeld, 2: picking(0.85), 3: GLOCK }, drums: Array(8).fill(GLOW_BEAT) },
+    { id: 'lanterns-gather', name: 'Gather', color: 'green', bars: 8, lanes: { 1: bassHeld, 2: picking(0.9), 3: GLOCK, 5: strings }, drums: Array(8).fill(GATHER_BEAT),
+      automation: { 5: { level: ramp(BARS_8, 0.2, 0.65) } } },
+    // Everything drops away but the guitar and the glockenspiel, deep in the hall.
+    { id: 'lanterns-hush', name: 'Hush', color: 'violet', bars: 8, lanes: { 2: picking(0.6), 3: GLOCK_SPARSE }, drums: nothing,
+      automation: { 2: { reverbSend: held(BARS_8, 0.7), auxBSend: held(BARS_8, 0.6) }, 3: { auxBSend: held(BARS_8, 0.85) } } },
+    // The wall climbs out of nothing: louder, brighter and dirtier with every step.
+    { id: 'lanterns-rise', name: 'Rise', color: 'pink', bars: 8, lanes: { 1: bassHeld, 2: picking(0.9), 4: tremolo, 5: strings }, drums: RISE_BEATS,
+      automation: { 4: { level: ramp(BARS_8, 0.03, 0.7), cutoff: ramp(BARS_8, 700, 9000), drive: ramp(BARS_8, 0, 0.6) }, 5: { level: ramp(BARS_8, 0.5, 0.85) } } },
+    { id: 'lanterns-storm', name: 'Storm', color: 'red', bars: 8, lanes: { 1: bassDriving, 2: picking(1), 3: GLOCK, 4: tremolo, 5: strings }, drums: stormBeats,
+      automation: { 1: { drive: held(BARS_8, 0.5) } } },
+    { id: 'lanterns-break', name: 'Break', color: 'violet', bars: 8, lanes: { 3: GLOCK, 5: strings }, drums: nothing,
+      automation: { 3: { auxBSend: held(BARS_8, 0.9) }, 5: { reverbSend: held(BARS_8, 0.8), level: ramp(BARS_8, 0.65, 0.4) } } },
+    // The wall dies away, and the guitar's echo takes over.
+    { id: 'lanterns-fall', name: 'Fall', color: 'pink', bars: 8, lanes: { 1: bassHeld, 2: picking(0.9), 3: GLOCK, 4: tremolo, 5: strings }, drums: FALL_BEATS,
+      automation: { 4: { level: ramp(BARS_8, 0.7, 0), cutoff: ramp(BARS_8, 9000, 500) }, 2: { auxASend: ramp(BARS_8, 0.45, 0.8) } } },
+    // The guitar's filter closes and the room fills with its reverb.
+    { id: 'lanterns-ember', name: 'Ember', color: 'teal', bars: 8, lanes: { 2: picking(0.7), 3: GLOCK_SPARSE }, drums: EMBER_BEATS,
+      automation: { 2: { cutoff: ramp(BARS_8, 5000, 600), reverbSend: ramp(BARS_8, 0.3, 0.9) }, 3: { level: ramp(BARS_8, 1.4, 0.5) } } },
+    { id: 'lanterns-last', name: 'Last Light', color: 'blue', bars: 8, lanes: { 2: picking(0.55), 3: GLOCK_SPARSE }, drums: nothing,
+      automation: { 2: { cutoff: held(BARS_8, 600), reverbSend: held(BARS_8, 0.9) }, 3: { level: held(BARS_8, 0.5), auxBSend: held(BARS_8, 0.9) } } },
+  ],
+  // 176 bars at 2.4 seconds a bar: seven minutes and two seconds.
+  order: [
+    ['lanterns-drift', 1], ['lanterns-glow', 3], ['lanterns-gather', 2], ['lanterns-hush', 1], ['lanterns-rise', 1], ['lanterns-storm', 4],
+    ['lanterns-break', 1], ['lanterns-rise', 1], ['lanterns-storm', 4], ['lanterns-fall', 1], ['lanterns-ember', 1], ['lanterns-last', 2],
+  ],
+};
+
+export const SAMPLE_SONGS: SampleSong[] = [NEON_DRIVE, BLUE_WALTZ, LATE_STUDY, SEVEN_LIGHTS, MARKET_DAY, CATHEDRAL, LANTERNS];

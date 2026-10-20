@@ -1,4 +1,4 @@
-import { AUX_KINDS, syncedRateHz, type AuxBus, type AuxKind, type RateSync } from '@discobot/engine';
+import { AUX_KINDS, RATE_SYNCS, syncedRateHz, type AuxBus, type AuxKind, type RateSync } from '@discobot/engine';
 import { storedRateSync } from './rateSync';
 
 // The two aux buses every lane, the drums and each guest can send to. Each is pointed at one of
@@ -10,9 +10,9 @@ export const AUX_NAMES = ['A', 'B'] as const;
 interface AuxRange { min: number; max: number }
 // What a bus's `main` and `shape` are, and what they may be, for each kind of effect.
 export const AUX_LIMITS: Record<AuxKind, { main: AuxRange; shape: AuxRange; mainName: string; shapeName: string; syncs: RateSync[] }> = {
-  echo: { main: { min: 0.02, max: 1.5 }, shape: { min: 0, max: 0.85 }, mainName: 'Time', shapeName: 'Feedback', syncs: ['off', '1/2', '1/4', '1/8', '1/16'] },
+  echo: { main: { min: 0.02, max: 1.5 }, shape: { min: 0, max: 0.85 }, mainName: 'Time', shapeName: 'Feedback', syncs: ['off', '1/2', '1/4d', '1/4', '1/8d', '1/4t', '1/8', '1/8t', '1/16', '1/16t'] },
   hall: { main: { min: 0.3, max: 8 }, shape: { min: 0, max: 1 }, mainName: 'Decay', shapeName: 'Damping', syncs: ['off'] },
-  chorus: { main: { min: 0.05, max: 8 }, shape: { min: 0, max: 1 }, mainName: 'Rate', shapeName: 'Depth', syncs: ['off', '8bar', '4bar', '2bar', '1bar', '1/2', '1/4', '1/8', '1/16'] },
+  chorus: { main: { min: 0.05, max: 8 }, shape: { min: 0, max: 1 }, mainName: 'Rate', shapeName: 'Depth', syncs: RATE_SYNCS },
 };
 
 // What each kind starts with when it is chosen, and the buses a project starts with: A an echo, B a Hall.
