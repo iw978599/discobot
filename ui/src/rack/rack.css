@@ -379,6 +379,11 @@
 [data-color="pink"] { --scene-color: var(--scene-pink); }
 .scene-strip .scene-chip[data-color], .song-chain .song-block[data-color], .shared-song-order span[data-color] { border-left: 5px solid var(--scene-color); }
 .scene-color, .scene-time { display: flex; align-items: center; gap: 6px; color: var(--text-label); }
+/* Dragging a scene, a block or a row: the one picked up is faint, and the place it would go has a
+   lighter edge. Nothing in them is selected as text while they are dragged. */
+[data-order-list] { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.drag-from { opacity: 0.45; }
+.drag-over { box-shadow: inset 0 0 0 2px var(--hover); }
 .scene-tempo input { width: 4.5em; }
 .mode-toggle { width: var(--side); }
 .mode-toggle button { width: auto; flex: 1; height: 24px; padding: 0 4px; font-size: var(--type-caption); text-transform: inherit; letter-spacing: inherit; }

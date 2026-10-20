@@ -492,6 +492,16 @@ export const reducers: Reducers = {
     if (tempo !== undefined) target.tempo = tempo; else delete target.tempo;
     return sceneChanged(state);
   },
+  // A scene to another place in the strip, counted as the list will be once it has moved; a place
+  // past either end is that end. The song and the open scene are as they were.
+  'scene.move': ({ state }, op) => {
+    const from = state.scenes.findIndex(scene => scene.id === op.sceneId);
+    if (from < 0) return refuse(400, 'That scene is not in the project.');
+    if (typeof op.to !== 'number' || !Number.isInteger(op.to)) return refuse(400, 'A scene moves to a place in the list');
+    const to = Math.max(0, Math.min(state.scenes.length - 1, op.to));
+    state.scenes.splice(to, 0, ...state.scenes.splice(from, 1));
+    return sceneChanged(state);
+  },
   // The open scene's part goes into the other scene, in place of what that scene had for it. A
   // lane brings its own length. A drum row is laid along the other scene's grid, which may be
   // longer or shorter, going round again or stopping short. Where the two scenes' bars are of

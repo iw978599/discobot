@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import type { Studio } from '../studio/useStudio';
 import type { Song } from '../types';
-import { MAX_REPEATS, MAX_SONG_ENTRIES, songClock, songLengthBars, songSeconds } from '../services/songPlayback';
+import { MAX_REPEATS, MAX_SONG_ENTRIES, moveSongEntry, songClock, songLengthBars, songSeconds } from '../services/songPlayback';
+import { dragClass, useDragOrder } from './useDragOrder';
 import { TIME_SIGNATURES } from '../services/patternLength';
 import { storeSongView, storedSongView, type SongView } from '../services/songView';
 import ConfirmDialog from './ConfirmDialog';
@@ -26,6 +27,13 @@ function SongModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
   const lengthOf = sceneLengthIn(studio.sceneInfo);
   const bars = songLengthBars(song, lengthOf);
   const setEntries = (entries: Song['entries']) => studio.handleSongChange({ entries });
+  // A scene or a block dragged to another place, or a scene moved with Alt and an arrow.
+  const sceneOrder = useDragOrder('scenes', (from, to) => { void studio.handleSceneMove(scenes[from].id, to); }, true);
+  const blockOrder = useDragOrder('blocks', (from, to) => {
+    const order = moveSongEntry(song.entries, songStartEntry, from, to);
+    setEntries(order.entries);
+    if (order.start !== songStartEntry) studio.setSongStartEntry(order.start);
+  });
 
   const commitRename = () => {
     const name = draftName.trim();
@@ -42,7 +50,7 @@ function SongModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
           {onHelp && <UnitHelp about="scenes and the song" section={UNIT_HELP.song} onHelp={onHelp} />}
         </div>
         <div className="scene-strip" role="group" aria-label="Scenes">
-          {scenes.map(scene => (renaming === scene.id ? (
+          {scenes.map((scene, index) => (renaming === scene.id ? (
             <input
               key={scene.id}
               autoFocus
@@ -60,11 +68,13 @@ function SongModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
           ) : (
             <button
               key={scene.id}
-              className={`scene-chip ${scene.id === currentSceneId ? 'on' : ''}`}
+              {...sceneOrder.item(index, scenes.length)}
+              className={`scene-chip ${scene.id === currentSceneId ? 'on' : ''} ${dragClass(sceneOrder.dragging, index)}`}
               data-color={scene.color}
               aria-label={`Scene: ${scene.name}`}
               aria-pressed={scene.id === currentSceneId}
-              title={scene.id === currentSceneId ? 'This scene is open in the rack below' : 'Open this scene for editing'}
+              aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
+              title={`${scene.id === currentSceneId ? 'This scene is open in the rack below' : 'Open this scene for editing'}. Drag it, or press Alt and an arrow key, to move it along`}
               onClick={() => { void studio.handleSceneSelect(scene.id); }}
             >
               {scene.name}
@@ -171,7 +181,8 @@ function SongModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
             return (
               <div
                 key={`${entry.sceneId}-${index}`}
-                className={`song-block ${playing ? 'playing' : ''} ${songStartEntry === index ? 'start' : ''}`}
+                {...blockOrder.item(index, song.entries.length)}
+                className={`song-block ${playing ? 'playing' : ''} ${songStartEntry === index ? 'start' : ''} ${dragClass(blockOrder.dragging, index)}`}
                 data-color={colorOf(entry.sceneId)}
                 role="group"
                 aria-label={`Song block ${index + 1}: ${nameOf(entry.sceneId)}`}
