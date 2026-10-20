@@ -352,6 +352,7 @@ const juno = (service: LocalProjectService) => { assert.ok(service.setSynthModel
 const mix = laneCase('synth.mix', 'synthMix', (service, synthId, body) => service.setSynthMix(synthId, { muted: body.muted, solo: body.solo }));
 const mixed = (muted: boolean, solo: boolean) => ({ answer: { synthId: 1, muted, solo } });
 const soloed = (service: LocalProjectService) => { assert.ok(service.setSynthMix(1, { solo: true }).ok); };
+const named = laneCase('synth.name', 'synthName', (service, synthId, body) => service.setSynthName(synthId, body.name));
 const swung = laneCase('synth.swing', 'synthSwing', (service, synthId, body) => service.setSynthSwing(synthId, body.swing));
 const prefs = laneCase('synth.prefs', '', (service, synthId, body) => service.setSynthPrefs(synthId, { octaveShift: body.octaveShift, keyboardMode: body.keyboardMode }));
 // A lane as the store answers it: the whole of it, with its pattern's id as its place among the ids.
@@ -411,6 +412,9 @@ const laneCases: Case[] = [
   mix('what is not a number at all, infinity, null and a number are not a mute or a solo', { muted: Number.NaN, solo: Number.POSITIVE_INFINITY }, mixed(false, true), soloed),
   mix('null and a number are not either', { muted: 1, solo: null }, mixed(false, true), soloed),
   mix('a mix for a lane that does not exist is refused', { muted: true }, { status: 404, error: NO_SYNTH }, soloed, 3),
+  named('a lane is named', { name: 'Pad' }, { answer: { synthId: 1, name: 'Pad' } }),
+  named('and named no more', { name: '' }, { answer: { synthId: 1, name: '' } }, service => { assert.ok(service.setSynthName(1, 'Pad').ok); }),
+  named('naming a lane that does not exist is refused', { name: 'Pad' }, { status: 404, error: NO_SYNTH }, undefined, 3),
   swung('a lane is swung', { swing: true }, { answer: { synthId: 1, swing: true } }),
   swung('and is swung no more', { swing: false }, { answer: { synthId: 1, swing: false } }, service => { assert.ok(service.setSynthSwing(1, true).ok); }),
   swung('swing for a lane that does not exist is refused', { swing: true }, { status: 404, error: NO_SYNTH }, undefined, 3),
@@ -532,6 +536,7 @@ const makeLane = (title: string, sent: unknown, result: ReturnType<typeof madeLa
   ...('answer' in result ? { event: 'synthCreated', ...result } : result), check,
 });
 const withLanes = async (service: LocalProjectService) => { assert.ok(service.createLane(2).ok); assert.ok(service.createLane(3).ok); };
+const withAllLanes = async (service: LocalProjectService) => { for (const id of [2, 3, 4, 5]) assert.ok(service.createLane(id).ok); };
 const removeCase = (title: string, synthId: number, result: { answer: unknown } | { status: 400 | 404 | 409; error: string }, arrange?: Case['arrange'], check?: Case['check']): Case => ({
   op: 'synth.remove', title, arrange, run: service => service.removeLane(synthId),
   ...('answer' in result ? { event: 'synthRemoved', ...result } : result), check,
@@ -562,8 +567,8 @@ const comingAndGoingCases: Case[] = [
   makeLane('a new lane takes the project\'s tempo', 2, madeLane(2, { pattern: { id: 'id-1', name: 'Synth 2', tempo: 150, steps: BLANK() }, patterns: [{ id: 'id-1', name: 'Synth 2', tempo: 150, steps: BLANK() }] }), service => { assert.ok(service.setTempo(150).ok); }),
   makeLane('creating a lane that exists answers with it as it is, and still emits and saves', 1,
     madeLane(1, { muted: true, solo: true }), service => { assert.ok(service.setSynthMix(1, { muted: true, solo: true }).ok); }, laneIds(1)),
-  ...([4, -1, 1.5, '2'] as const).map(synthId => makeLane(`lane ${JSON.stringify(synthId)} is refused`, synthId, { status: 400, error: 'Three synths maximum' })),
-  makeLane('with all three lanes there, no lane named is refused', undefined, { status: 400, error: 'Three synths maximum' }, withLanes),
+  ...([6, -1, 1.5, '2'] as const).map(synthId => makeLane(`lane ${JSON.stringify(synthId)} is refused`, synthId, { status: 400, error: '5 synths maximum' })),
+  makeLane('with all five lanes there, no lane named is refused', undefined, { status: 400, error: '5 synths maximum' }, withAllLanes),
 
   removeCase('lane 1 cannot be removed', 1, { status: 400, error: 'Synth 1 cannot be removed' }),
   removeCase('a lane is removed and the others stay in their order', 2, { answer: { synthId: 2 } }, withLanes, laneIds(1, 3)),

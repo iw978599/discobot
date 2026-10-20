@@ -19,6 +19,7 @@ import { automatedKeys } from '../services/automation';
 import { usePlayhead } from '../hooks/usePlayhead';
 import { tracked } from '../studio/tracked';
 import UnitHelp, { UNIT_HELP } from './UnitHelp';
+import { laneName } from '../services/lanes';
 
 // Where a middle click puts a lane's knobs back to.
 const SOUND_DEFAULTS = createDefaultSynthParameters();
@@ -121,7 +122,7 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
         >
           Synth {synthId} +
         </button>
-        <span className="rack-hint">Empty slot. Add a third voice to the arrangement.</span>
+        <span className="rack-hint">Empty slot. Add another voice to the arrangement.</span>
       </section>
     );
   }
@@ -137,12 +138,12 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
         <div className="rack-plate-box">
           <button
             className="rack-plate"
-            aria-label={`Synth ${synthId}`}
+            aria-label={laneName(synthId, synth.name)}
             aria-pressed={selected}
             onClick={() => studio.setSelectedSynthId(synthId)}
             title={selected ? 'This lane is open for editing' : 'Open this lane for editing'}
           >
-            <b>Synth {synthId}</b>
+            <b>{laneName(synthId, synth.name)}</b>
             <span data-handed={handedTo ? 'true' : undefined} title={handedTo ? `Sent to the guest ${handedTo}, and heard through it` : undefined}>{handedTo ? `→ ${handedTo}` : model.name}</span>
           </button>
           {onHelp && <UnitHelp about={`Synth ${synthId}`} section={UNIT_HELP.synth} onHelp={onHelp} />}
@@ -313,6 +314,9 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
           sampleStoreVersion={studio.sampleStoreVersion}
           onSampleError={studio.setStorageError}
           onRemove={synthId !== 1 ? () => { void studio.handleRemoveSynth(synthId); } : undefined}
+          laneId={synthId}
+          laneName={synth.name ?? ''}
+          onRename={name => studio.handleSynthRename(synthId, name)}
           notes={synth.pattern && (
             <div className="synth-notes">
               <div className="step-tools">

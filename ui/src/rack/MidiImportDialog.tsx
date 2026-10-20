@@ -1,5 +1,6 @@
 import type { Studio } from '../studio/useStudio';
 import Dialog from './Dialog';
+import { LANE_IDS } from '../services/lanes';
 
 export default function MidiImportDialog({ studio }: { studio: Studio }) {
   const { midiImportData, midiImportAssignments, setMidiImportAssignments, setMidiImportData, handleMidiImportApplyAll } = studio;
@@ -27,7 +28,7 @@ export default function MidiImportDialog({ studio }: { studio: Studio }) {
             <option value="">Skip</option>
             {track.drums
               ? <option value="drums">Drum Machine</option>
-              : [1, 2, 3].map(id => <option key={id} value={id}>Synth {id}</option>)}
+              : LANE_IDS.map(id => <option key={id} value={id}>Synth {id}</option>)}
           </select>
         </div>
       ))}

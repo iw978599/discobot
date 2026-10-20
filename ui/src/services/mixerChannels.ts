@@ -2,13 +2,14 @@ import type { AuxBus, DrumInstrument, DrumState, EffectsLoopState, SynthModelId,
 import { auxBuses } from './auxSettings';
 import { getSynthModelDefinition } from '../synthModels';
 import { DRUM_ROWS } from './drumKits';
+import { laneName } from './lanes';
 import { guestOrigin, type Guest } from './guests';
 
 // What the mixer shows: every level the project already has, gathered into one plain list. It
 // holds nothing of its own. Each number is read from where it is kept (a lane's sound, a drum's
 // settings, a guest, the effects) and each is changed by the handler its own knob calls.
 
-export interface MixerLane { id: number; model: string; level: number; pan: number; muted: boolean; solo: boolean }
+export interface MixerLane { id: number; name: string; model: string; level: number; pan: number; muted: boolean; solo: boolean }
 export interface MixerDrum { id: DrumInstrument; volume: number; pan: number; muted: boolean; solo: boolean }
 export interface MixerGuest { id: string; name: string; volume: number; muted: boolean }
 export interface MixerChannels {
@@ -24,7 +25,7 @@ export interface MixerChannels {
 }
 
 export interface MixerSource {
-  synths: Array<{ id: number; synthModelId: SynthModelId; synthParams: Pick<SynthParameters, 'gain' | 'pan'> | null; muted?: boolean; solo?: boolean }>;
+  synths: Array<{ id: number; name?: string; synthModelId: SynthModelId; synthParams: Pick<SynthParameters, 'gain' | 'pan'> | null; muted?: boolean; solo?: boolean }>;
   drumState: DrumState;
   drumMasterVolume: number;
   guests: Array<Pick<Guest, 'id' | 'url' | 'name' | 'volume' | 'muted'>>;
@@ -36,6 +37,7 @@ export function mixerChannels(source: MixerSource): MixerChannels {
   return {
     lanes: [...source.synths].sort((a, b) => a.id - b.id).map(synth => ({
       id: synth.id,
+      name: laneName(synth.id, synth.name),
       model: getSynthModelDefinition(synth.synthModelId).name,
       level: synth.synthParams?.gain ?? 1,
       pan: synth.synthParams?.pan ?? 0,
