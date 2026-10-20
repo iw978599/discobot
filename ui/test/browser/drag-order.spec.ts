@@ -16,7 +16,10 @@ const block = (page: Page, place: number, name: string) => page.getByRole('group
 const row = (page: Page, place: number, name: string) => page.getByRole('group', { name: `Song row ${place}: ${name}`, exact: true });
 
 // A mouse pressed on one thing, moved a little to pick it up, then over the other and let go.
+// The two are brought to the middle of the screen first: the mouse does not scroll, and on a phone
+// the bar of units along the bottom covers whatever is under it.
 async function drag(page: Page, from: Locator, to: Locator) {
+  await to.evaluate(element => element.scrollIntoView({ block: 'center' }));
   const a = (await from.boundingBox())!, b = (await to.boundingBox())!;
   await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
   await page.mouse.down();
