@@ -10,7 +10,7 @@ import { auxBuses, auxSeconds } from './auxSettings';
 import { rateHz } from './rateSync';
 import { expandDrumStep, seededRandom, swingLate } from './drumScheduling';
 import { createZip } from '../utils/zip';
-import { MASTER_LEVEL, SEND_GLIDE, chorusSweep, createWow, delayColorHz, configureLimiter, createAuxEffect, createChorus, createBuiltReverb, createMasterEq, driveCurve, eqGains, reverbImpulse, safetyCurve, scheduleDuck } from '../hooks/browserAudio';
+import { MASTER_LEVEL, SEND_GLIDE, chorusSweep, createWow, delayColorHz, configureLimiter, createAuxEffect, createChorus, createBuiltReverb, createMasterEq, driveCurve, eqGains, reverbImpulse, reverbLevel, safetyCurve, scheduleDuck } from '../hooks/browserAudio';
 import type { DrumInstrument, DrumSettings } from '../types';
 
 export interface ExportArrangement {
@@ -248,11 +248,11 @@ function connectEffects(ctx: OfflineAudioContext, input: AudioNode, master: Audi
   }
   if (state.reverb.enabled && peak.reverb > 0 && (state.reverb.kind === 'hall' || state.reverb.kind === 'spring')) {
     const built = createBuiltReverb(ctx, state.reverb.kind), level = ctx.createGain();
-    built.set(state.reverb); level.gain.value = state.reverb.mix;
+    built.set(state.reverb); level.gain.value = state.reverb.mix * reverbLevel(state.reverb.decay);
     send('reverb', own.reverb?.()).connect(built.input); built.output.connect(level).connect(wet);
   } else if (state.reverb.enabled && peak.reverb > 0) {
     const reverb = ctx.createConvolver(), level = ctx.createGain();
-    reverb.buffer = reverbImpulse(ctx, state.reverb.decay, seededRandom(3), state.reverb.preDelay, state.reverb.damping); level.gain.value = state.reverb.mix;
+    reverb.buffer = reverbImpulse(ctx, state.reverb.decay, seededRandom(3), state.reverb.preDelay, state.reverb.damping); level.gain.value = state.reverb.mix * reverbLevel(state.reverb.decay);
     send('reverb', own.reverb?.()).connect(reverb).connect(level).connect(wet);
   }
   if (state.drive.enabled && peak.drive > 0) {
