@@ -10,14 +10,16 @@ interface KitImportDialogProps {
   // How many audio files were picked in all.
   picked: number;
   lanes: Array<{ id: DrumInstrument; label: string }>;
+  // The file each lane starts with, when something better than the names knows (a SoundFont kit).
+  initial?: Partial<Record<DrumInstrument, number>>;
   onApply: (lane: DrumInstrument, sampleId: string) => Promise<void>;
   onClose: () => void;
 }
 
 // Several sample files at once: each drum lane is offered the file its name suggests, and
 // nothing is stored or changed until the choices are confirmed.
-export default function KitImportDialog({ files, picked, lanes, onApply, onClose }: KitImportDialogProps) {
-  const [choice, setChoice] = useState(() => matchKit(files.map(file => file.name)));
+export default function KitImportDialog({ files, picked, lanes, initial, onApply, onClose }: KitImportDialogProps) {
+  const [choice, setChoice] = useState(() => initial ?? matchKit(files.map(file => file.name)));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const chosen = lanes.filter(lane => choice[lane.id] !== undefined);
