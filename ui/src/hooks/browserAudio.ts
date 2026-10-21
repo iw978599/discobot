@@ -116,13 +116,30 @@ export function createWow(ctx: BaseAudioContext, time: AudioParam) {
   };
 }
 
+// A reverb longer than the default would grow louder with its length (a browser scales a Room's
+// impulse by its average level, so a longer one carries more in all, and the Hall and Spring are
+// set to match it), and a long Room with no damping is seconds of white noise behind every sound:
+// the owner heard one at a long Decay as static (2026-10-20). Past `REVERB_STEADY_DECAY` its level
+// is held steady (`reverbLevel`, on its mix, every kind) and a Room's tail darkens as it goes even
+// with Damping at 0 (`reverbAir`), as a large real room's does. At the default and below nothing
+// changes, so what was made with those decays sounds as it did. Not verified by ear.
+export const REVERB_STEADY_DECAY = 2.1;
+export const reverbLevel = (decay: number | undefined) => {
+  const seconds = limit(decay, 0.1, 8);
+  return seconds <= REVERB_STEADY_DECAY ? 1 : Math.sqrt(REVERB_STEADY_DECAY / seconds);
+};
+export const reverbAir = (decay: number | undefined) => {
+  const seconds = limit(decay, 0.1, 8);
+  return seconds <= REVERB_STEADY_DECAY ? 0 : 0.5 * (seconds - REVERB_STEADY_DECAY) / (8 - REVERB_STEADY_DECAY);
+};
+
 // `random` shapes the reverb's noise. Exports pass a seeded one, so the same song always renders the same file.
 // With no pre-delay and no damping this is the plain decaying noise older projects were made
 // with, sample for sample. Pre-delay is silence before the tail; damping closes a low-pass
 // filter over the noise as the tail goes on, the way a real room loses its highs first.
 export function reverbImpulse(ctx: BaseAudioContext, decay: number, random: () => number = Math.random, preDelay = 0, damping = 0): AudioBuffer {
   const rate = ctx.sampleRate, tail = Math.ceil(rate * limit(decay, 0.1, 8));
-  const start = Math.round(rate * limit(preDelay, 0, MAX_PRE_DELAY)), damp = limit(damping, 0, 1);
+  const start = Math.round(rate * limit(preDelay, 0, MAX_PRE_DELAY)), damp = Math.max(limit(damping, 0, 1), reverbAir(decay));
   const buffer = ctx.createBuffer(2, start + tail, rate);
   for (let c = 0; c < 2; c++) {
     const data = buffer.getChannelData(c);
@@ -621,7 +638,7 @@ export class AudioEngine {
     smooth(bus.wet.delay.gain, state.delay.enabled ? limit(state.delay.mix, 0, 1) : 0, ctx);
     smooth(bus.color.frequency, state.delay.color ? delayColorHz(state.delay.color) : Math.min(20000, ctx.sampleRate / 2 - 100), ctx);
     bus.wow.set(state.delay.wow ?? 0, ctx.currentTime);
-    smooth(bus.wet.reverb.gain, state.reverb.enabled ? limit(state.reverb.mix, 0, 1) : 0, ctx);
+    smooth(bus.wet.reverb.gain, state.reverb.enabled ? limit(state.reverb.mix, 0, 1) * reverbLevel(state.reverb.decay) : 0, ctx);
     const decay = limit(state.reverb.decay, 0.1, 8);
     const shape = `${(state.reverb.preDelay ?? 0).toFixed(3)}/${(state.reverb.damping ?? 0).toFixed(2)}`;
     if (state.reverb.kind === 'hall' || state.reverb.kind === 'spring') {

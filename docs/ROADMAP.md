@@ -140,7 +140,7 @@ directly, with no builder.
 
 Cheap for the agent but blocked until the owner does or says something.
 
-- **Listening** (sound 1): the Hall, the inserts and aux buses, the
+- **Listening** (sound 1): a long Room reverb, which the owner heard as static on 2026-10-20 and which now holds its level and darkens past 2.1 s; the Hall, the inserts and aux buses, the
   randomizer, the sample engine and the newer models are not heard yet.
 - **More sounds, a recorded drum kit, a china and a sizzle** (V2, V3, V4):
   each needs the owner's say-so and a licence read at its source.
