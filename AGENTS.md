@@ -356,7 +356,7 @@ npm run migrate --workspace=server  # Apply new database migrations to the live 
 
 ## Known Issues
 - The typed store is finished (`docs/TYPED_STORE_PLAN.md`). What it left open: an edit that changes nothing still saves and emits; one step of the drums still sends the whole drum state; `synth.create` and `scene.replace` make an id inside the reducer; the song scheduler does not collect the guests' settings before leaving a scene. The plan's account of pull request 8 lists them
-- The studio is split by concern (`ui/src/studio/`), but its state is still made in one place (`useStudioCore`) and every hook can reach all of it; handing the audio engine to the hooks (roadmap 13) is the next step
+- The studio is split by concern (`ui/src/studio/`), but its state is still made in one place (`useStudioCore`) and every hook can reach all of it. The audio engine is handed to the hooks (roadmap 13); dividing the state itself by concern is not done
 - Firefox/Safari lack Web MIDI API support
 
 ## Potential Next Steps

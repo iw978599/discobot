@@ -36,7 +36,7 @@ test('Randomize fills the lane with a line in the chosen key and scale, a second
   await expect.poll(() => tune(page)).toBe(mine);
   const drums = await drumSteps(page);
 
-  await expect(scale.locator('option')).toHaveText(['Major', 'Minor', 'Major pentatonic', 'Minor pentatonic']);
+  await expect(scale.locator('option')).toHaveText(['Major', 'Minor', 'Major pentatonic', 'Minor pentatonic', 'Dorian', 'Phrygian', 'Lydian', 'Mixolydian', 'Locrian', 'Harmonic minor', 'Melodic minor', 'Phrygian dominant', 'Hungarian minor', 'Blues', 'Whole tone', 'Hirajoshi']);
   await expect(key.locator('option')).toHaveCount(12);
   await key.selectOption('A');
   await scale.selectOption({ label: 'Minor pentatonic' });

@@ -52,3 +52,11 @@ test('the store is one for the whole studio: a change is seen by everyone readin
   stop();
   assert.deepEqual(seen, [true, true, true, false]);
 });
+
+test('a ninth in the key is five of its notes, every other one upwards', () => {
+  assert.deepEqual(chordNotes('C4', 'key-ninth', 0, C_MAJOR), ['C4', 'E4', 'G4', 'B4', 'D5']);
+  assert.deepEqual(keyChord('D4', { key: 'D', scale: 'dorian' }, 5), ['D4', 'F4', 'A4', 'C5', 'E5']);
+  assert.deepEqual(keyChord('A3', { key: 'A', scale: 'harmonic-minor' }, 4), ['A3', 'C4', 'E4', 'G#4']);
+  assert.equal(inScale('F#4', { key: 'C', scale: 'lydian' }), true);
+  assert.equal(inScale('F4', { key: 'C', scale: 'lydian' }), false);
+});
