@@ -556,6 +556,28 @@ const changed = () => listeners.forEach(listener => listener());
 export const liveStatus = (): LiveStatus => running?.session.status() ?? { state: 'closed', me: null, others: [], playing: null };
 export const subscribeLive = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
 
+export function liveSessionMessage(status: LiveStatus): string {
+  if (status.state === 'connecting') return 'Connecting to the live session…';
+  if (status.state === 'joining') return 'Joining the live session and receiving its project…';
+  if (status.state === 'closed') return 'Live connection unavailable or disconnected. Retrying automatically. Check your connection; this site’s server may not support live sessions yet.';
+  return status.others.length ? 'In this live session with' : 'Live session connected. Waiting for collaborators…';
+}
+
+export function liveUnavailableReason(accounts = accountsEnabled, sockets = typeof WebSocket !== 'undefined'): string {
+  if (!accounts) return 'Live sessions are not available in this build because accounts are not enabled. You can still work on this project locally.';
+  if (!sockets) return 'Live sessions are not available in this browser because WebSocket connections are not supported.';
+  return '';
+}
+
+export const liveSummary = () => liveUnavailableReason() || liveSessionMessage(liveStatus());
+
+// The setup can bring forward an automatic retry, but never replaces a running session.
+export function retryLiveSession() {
+  if (!watching || running) return;
+  if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
+  check();
+}
+
 // Between the studio's Play button and this page's session. Only the button (and Space) tells the
 // session anything: an export playing the song through, or a song ending, is this browser's own.
 let studioTransport: LiveTransportHandlers | null = null;

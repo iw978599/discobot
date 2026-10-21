@@ -22,6 +22,14 @@ for.
 
 ### 0. Finishing what is built
 
+Done 2026-10-21: **Project → Start Live Session** sets up the current project
+with sign-in, an explicit account upload when needed, the existing username
+sharing controls and joining instructions. The rack and setup show connecting,
+waiting alone, participants and connection failures; retry uses the existing
+automatic session. Share Link remains a listening/copy flow. Browser coverage
+is added for setup, invitation errors and success, retry and reopening.
+Live sound is still not verified by ear or on two real computers.
+
 Undo in the store (#192), insert effects for each lane (#191) and two aux
 sends (#194): built, waiting on their checks, merged as each is green.
 

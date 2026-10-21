@@ -4,9 +4,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { LocalProjectService } from '../src/services/localService.ts';
-import { readJam, BATCH_MS, CLOCK_PINGS, JOIN_WAIT_MS, LISTEN_WAIT_MS, createLiveSession, editKeys, overlap, type HeardJam, type LiveAnchor, type LivePlay } from '../src/services/liveSession.ts';
+import { readJam, BATCH_MS, CLOCK_PINGS, JOIN_WAIT_MS, LISTEN_WAIT_MS, createLiveSession, editKeys, overlap, liveSessionMessage, liveUnavailableReason, type HeardJam, type LiveAnchor, type LivePlay, type LiveStatus } from '../src/services/liveSession.ts';
 import { freeColour, joined, left, received, type Peer } from '../../server/src/live.ts';
 import { comparable, defaults, ok, setup, storage } from './helpers/store.ts';
+
+test('live setup distinguishes a build without accounts and a browser without WebSocket support', () => {
+  assert.match(liveUnavailableReason(false, true), /accounts are not enabled/);
+  assert.match(liveUnavailableReason(false, false), /accounts are not enabled/);
+  assert.match(liveUnavailableReason(true, false), /WebSocket connections are not supported/);
+  assert.equal(liveUnavailableReason(true, true), '');
+});
+
+test('live feedback distinguishes connecting, joining, waiting, participants and unavailability', () => {
+  const status: LiveStatus = { state: 'connecting', me: null, others: [], playing: null };
+  assert.match(liveSessionMessage(status), /Connecting/);
+  assert.match(liveSessionMessage({ ...status, state: 'joining' }), /receiving its project/);
+  assert.match(liveSessionMessage({ ...status, state: 'live' }), /Waiting for collaborators/);
+  assert.equal(liveSessionMessage({ ...status, state: 'live', others: [{ id: 'peer', user: 'collaborator', colour: 1, since: 1 }] }), 'In this live session with');
+  assert.match(liveSessionMessage({ ...status, state: 'closed' }), /unavailable or disconnected/);
+  assert.match(liveSessionMessage({ ...status, state: 'closed' }), /may not support live sessions/);
+});
 
 function room() {
   const peers: Peer[] = [];

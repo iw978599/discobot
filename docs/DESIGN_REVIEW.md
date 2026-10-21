@@ -879,6 +879,7 @@ on the owner's laptop.
 | `dialog-projects` | Projects, with that row being renamed |
 | `dialog-versions` | Version history, one version |
 | `dialog-share-signed-out` | Share, signed out |
+| `dialog-live-session-signed-out`, `dialog-live-session-signed-in` | Start Live Session for the current project, before and after sign-in |
 | `dialog-preset-import` | The report after importing another synth's preset |
 | `dialog-kit-import` | Import Kit, three files matched to lanes |
 | `dialog-add-guest`, `dialog-add-guest-error` | Add a guest instrument, empty and with a refused address |

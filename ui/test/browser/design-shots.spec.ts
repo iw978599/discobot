@@ -450,6 +450,12 @@ test('design shots: menus, dialogs, the walkthrough and a guest', async ({ page 
     await shot(walk, 'dialog-share-signed-out');
     await page.keyboard.press('Escape');
   });
+  await attempt(walk, 'dialog-live-session-signed-out', async () => {
+    await menu(page, 'Project', 'Start Live Session');
+    await expect(page.getByRole('dialog', { name: 'Start Live Session', exact: true })).toBeVisible();
+    await shot(walk, 'dialog-live-session-signed-out');
+    await page.keyboard.press('Escape');
+  });
   await attempt(walk, 'dialog-preset-import', async () => {
     await level(page, 'Sound');
     await page.locator('.synth-module').first().getByLabel('Import synth preset', { exact: true }).setInputFiles({
@@ -742,6 +748,12 @@ test('design shots: an account, sharing, a published song and a person\'s page',
     await projects.getByLabel('Project name', { exact: true }).press('Enter');
     await expect(projects.getByRole('group', { name: 'Project Friday Night', exact: true })).toBeVisible();
     await shot(walk, 'dialog-projects-signed-in');
+    await page.keyboard.press('Escape');
+  });
+  await attempt(walk, 'dialog-live-session-signed-in', async () => {
+    await menu(page, 'Project', 'Start Live Session');
+    await expect(page.getByRole('dialog', { name: 'Start Live Session', exact: true })).toBeVisible();
+    await shot(walk, 'dialog-live-session-signed-in');
     await page.keyboard.press('Escape');
   });
   await attempt(walk, 'dialog-share', async () => {

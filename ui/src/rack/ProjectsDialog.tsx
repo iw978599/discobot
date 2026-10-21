@@ -12,10 +12,10 @@ import { useNarrow } from '../hooks/useNarrow';
 const when = (time: number) => new Date(time).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 
 // Who else may open and save one of the account's projects. Only its owner sees this.
-function Sharing({ projectId, name }: { projectId: string; name: string }) {
+export function Sharing({ projectId, name, beforeShare }: { projectId: string; name: string; beforeShare?: () => Promise<void> }) {
   const [members, setMembers] = useState<string[] | null>(null);
   const [username, setUsername] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
   const run = async (work: () => Promise<void>) => {
     setBusy(true);
@@ -37,9 +37,11 @@ function Sharing({ projectId, name }: { projectId: string; name: string }) {
   return (
     <div className="rack-share" role="group" aria-label={`Share ${name}`}>
       <p>
-        People you add can open this project and save changes to it. You take turns: if two of you change it at the same time,
+        People you add can open this project and save changes to it, including after this session.
+        While connected live, you can edit and play together. Otherwise, if two of you change it at the same time,
         both versions are kept and nothing is overwritten. Imported samples and guest instruments stay in each person's own browser.
       </p>
+      {busy && <p role="status">Updating project access…</p>}
       {members?.length === 0 && <p className="rack-empty">Not shared with anyone yet.</p>}
       {members?.map(member => (
         <div key={member} className="rack-list-row" role="group" aria-label={`Shared with ${member}`}>
@@ -51,13 +53,13 @@ function Sharing({ projectId, name }: { projectId: string; name: string }) {
         onSubmit={(event: FormEvent) => {
           event.preventDefault();
           const wanted = username.trim();
-          if (wanted) void run(async () => { await sharingApi.share(projectId, wanted); setUsername(''); });
+          if (wanted && !busy) void run(async () => { await beforeShare?.(); await sharingApi.share(projectId, wanted); setUsername(''); });
         }}
       >
         <input aria-label="Username to share with" placeholder="Their username" autoCapitalize="none" spellCheck={false} maxLength={40} value={username} onChange={(event) => setUsername(event.target.value)} />
         <button className="rack-btn go" type="submit" disabled={busy || !username.trim()}>Share</button>
       </form>
-      {error && <p role="alert">{error}</p>}
+      {error && <><p role="alert">{error}</p><button className="rack-btn" disabled={busy} onClick={() => { void run(async () => {}); }}>Refresh access</button></>}
     </div>
   );
 }
