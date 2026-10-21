@@ -6,7 +6,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 
 const stored = (page: Page) => page.evaluate(() => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem('discobot_browser_project_v1') || '{}')));
 const rackOrder = (page: Page) => page.locator('section.synth-module').evaluateAll(units => units.map(unit => unit.getAttribute('data-unit')));
-const mixerOrder = (page: Page) => page.locator('.mixer-desk [role="group"][aria-label^="Mixer Synth "]').evaluateAll(strips => strips.map(strip => strip.getAttribute('aria-label')));
+const mixerOrder = (page: Page) => page.locator('.mixer-desk [aria-label="Mixer Synths"] .mixer-strip').evaluateAll(strips => strips.map(strip => strip.getAttribute('aria-label')));
 const plate = (page: Page, id: number) => page.locator(`[data-unit="synth-${id}"] .rack-plate`);
 
 async function drag(page: Page, from: Locator, to: Locator) {
