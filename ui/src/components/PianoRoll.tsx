@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import { Pattern } from '../types';
 import { MAX_STEP_NOTES, noteLengths, stepNotes, stepOffset } from '../services/noteScheduling';
-import { CHORD_SHAPES, INVERSIONS, KEY_CHORD_SHAPES, chordNotes, type ChordShapeId } from '../services/chords';
+import { CHORD_GROUPS, CHORD_SHAPES, INVERSIONS, KEY_CHORD_SHAPES, chordNotes, type ChordShapeId } from '../services/chords';
 import { inScale, scaleLock } from '../services/scaleLock';
 import { usePlayheadMark } from '../hooks/usePlayhead';
 import { useNarrow } from '../hooks/useNarrow';
@@ -326,8 +326,14 @@ export default function PianoRoll({
           Chord
           <select aria-label="Chord shape" value={chord} onChange={(event) => setChord(event.target.value as ChordShapeId | 'off')}>
             <option value="off">Off</option>
-            {CHORD_SHAPES.map(shape => <option key={shape.id} value={shape.id}>{shape.name}</option>)}
-            {KEY_CHORD_SHAPES.map(shape => <option key={shape.id} value={shape.id}>{`${shape.name} (${lock.key})`}</option>)}
+            {CHORD_GROUPS.map(group => (
+              <optgroup key={group} label={group}>
+                {CHORD_SHAPES.filter(shape => shape.group === group).map(shape => <option key={shape.id} value={shape.id}>{shape.name}</option>)}
+              </optgroup>
+            ))}
+            <optgroup label="In the key">
+              {KEY_CHORD_SHAPES.map(shape => <option key={shape.id} value={shape.id}>{`${shape.name} (${lock.key})`}</option>)}
+            </optgroup>
           </select>
         </label>
         <label className="piano-roll-chord" title="Which note of the chord is lowest. The note you put in stays where it is, and the notes above it go down an octave">

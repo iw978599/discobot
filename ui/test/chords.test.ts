@@ -42,3 +42,15 @@ test('an inversion keeps the root where it was put and takes the notes above it 
   assert.deepEqual(chordNotes('C4', null, 2), ['C4'], 'no shape is the root alone, whatever the inversion');
   assert.deepEqual(chordNotes('C-1', 'major', 1), ['C-1'], 'a note below what MIDI can name is left out');
 });
+
+test('the chords added on 2026-10-20 are built as named, and each is in one of the menu groups', async () => {
+  const { CHORD_GROUPS } = await import('../src/services/chords.ts');
+  assert.deepEqual(chordNotes('C3', 'augmented'), ['C3', 'E3', 'G#3']);
+  assert.deepEqual(chordNotes('B3', 'half-diminished'), ['B3', 'D4', 'F4', 'A4']);
+  assert.deepEqual(chordNotes('C3', 'diminished7'), ['C3', 'D#3', 'F#3', 'A3']);
+  assert.deepEqual(chordNotes('C3', 'ninth'), ['C3', 'E3', 'G3', 'A#3', 'D4']);
+  assert.deepEqual(chordNotes('D3', 'minor9'), ['D3', 'F3', 'A3', 'C4', 'E4']);
+  assert.deepEqual(chordNotes('C3', 'six-nine'), ['C3', 'E3', 'G3', 'A3', 'D4']);
+  assert.deepEqual(chordNotes('C3', 'ninth', 4), ['C3', 'E3', 'G3', 'A#3', 'D3'], 'the fourth inversion takes the ninth down');
+  for (const shape of CHORD_SHAPES) assert.ok((CHORD_GROUPS as readonly string[]).includes(shape.group), shape.id);
+});

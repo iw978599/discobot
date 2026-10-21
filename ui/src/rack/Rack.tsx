@@ -14,9 +14,10 @@ import StarterUnit from './StarterUnit';
 import Dialog from './Dialog';
 import ProjectsDialog from './ProjectsDialog';
 import ShareDialog from './ShareDialog';
+import LiveSessionDialog from './LiveSessionDialog';
 import AccountDialog, { useAccountUser, useSyncStatus } from './AccountDialog';
 import { projectSync } from '../services/projectSync';
-import { liveJam, livePlace, liveStatus, subscribeLive } from '../services/liveSession';
+import { liveJam, livePlace, liveStatus, liveSummary, subscribeLive } from '../services/liveSession';
 import { markWalkthroughSeen } from '../services/walkthrough';
 import Walkthrough from './Walkthrough';
 import MidiImportDialog from './MidiImportDialog';
@@ -57,6 +58,7 @@ export default function Rack({ studio }: { studio: Studio }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [liveOpen, setLiveOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [guestOpen, setGuestOpen] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
@@ -100,6 +102,7 @@ export default function Rack({ studio }: { studio: Studio }) {
   const peopleText = useSyncExternalStore(subscribeLive, livePeople);
   const people = useMemo(() => JSON.parse(peopleText) as Person[], [peopleText]);
   const snap = useSyncExternalStore(subscribeLive, liveJam.snap);
+  const liveMessage = useSyncExternalStore(subscribeLive, liveSummary);
 
   // The mixer is handed the levels it shows, already gathered, and the same object for as long as
   // none of them changes: the lanes and the drums are new objects after every note and step.
@@ -167,6 +170,7 @@ export default function Rack({ studio }: { studio: Studio }) {
   const openSettings = useCallback(() => setSettingsOpen(true), []);
   const openProjects = useCallback(() => setProjectsOpen(true), []);
   const openShare = useCallback(() => setShareOpen(true), []);
+  const openLive = useCallback(() => setLiveOpen(true), []);
   const openAccount = useCallback(() => setAccountOpen(true), []);
   const openGuest = useCallback(() => setGuestOpen(true), []);
   const openVersions = useCallback(() => setVersionsOpen(true), []);
@@ -223,6 +227,7 @@ export default function Rack({ studio }: { studio: Studio }) {
           onOpenSettings={openSettings}
           onOpenProjects={openProjects}
           onShare={openShare}
+          onStartLive={openLive}
           onOpenAccount={openAccount}
           onAddGuest={openGuest}
           onOpenVersions={openVersions}
@@ -254,9 +259,9 @@ export default function Rack({ studio }: { studio: Studio }) {
             <button className="rack-btn" onClick={projectSync.dismissShared} aria-label="Dismiss sharing message">✕</button>
           </div>
         )}
-        {people.length > 0 && (
+        {user && (sync.shared[studio.projectId] || sync.sharedByMe[studio.projectId]) && (
           <div role="status" className="live-people">
-            <span>In this live session with</span>
+            <span>{liveMessage}</span>
             {/* The spaces and commas are in the text, so it reads as words and not only as it looks. */}
             {people.map(([user, colour], at) => (
               <Fragment key={user}>
@@ -265,14 +270,15 @@ export default function Rack({ studio }: { studio: Studio }) {
                 {at < people.length - 1 ? ',' : ''}
               </Fragment>
             ))}
-            <button
+            {people.length > 0 && <button
               className={`rack-btn live-snap ${snap ? 'on' : ''}`}
               aria-pressed={snap}
               onClick={() => liveJam.setSnap(!snap)}
               title="While the music plays, the notes the others play start on the next step here, so the time they take to arrive is not heard"
             >
               Snap their notes to the beat
-            </button>
+            </button>}
+            <button className="rack-btn" onClick={openLive}>Session Setup</button>
           </div>
         )}
         {playingBy && !studio.isAnyPlaying && (
@@ -333,6 +339,7 @@ export default function Rack({ studio }: { studio: Studio }) {
       <MidiImportDialog studio={studio} />
       {projectsOpen && <ProjectsDialog studio={studio} onClose={() => setProjectsOpen(false)} />}
       {shareOpen && <ShareDialog onClose={() => setShareOpen(false)} />}
+      {liveOpen && <LiveSessionDialog key={studio.projectId} studio={studio} onClose={() => setLiveOpen(false)} onSignIn={openAccount} />}
       {accountOpen && <AccountDialog onClose={() => setAccountOpen(false)} onWalkthrough={startTour} />}
       {tourOpen && <Walkthrough onClose={endTour} signedIn={user !== null} narrow={narrow} unit={paged ? shown : undefined} onUnit={paged ? setUnit : undefined} />}
       {guestOpen && <AddGuestDialog studio={studio} onClose={() => setGuestOpen(false)} onAdded={() => setUnit(current => (current === 'all' ? current : 'guests'))} />}

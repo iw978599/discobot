@@ -59,13 +59,13 @@ export function toScale(note: string, choice: RandomChoice): string {
 }
 
 // A chord of the scale's own notes on `root` (moved into the scale first): every other note of the
-// scale upwards, three of them or four. In a pentatonic scale that is wider than a plain triad.
-export function keyChord(root: string, choice: RandomChoice, size: 3 | 4): string[] {
+// scale upwards, three to five of them. In a pentatonic scale that is wider than a plain triad.
+export function keyChord(root: string, choice: RandomChoice, size: number): string[] {
   const start = toScale(root, choice);
   const midi = noteNameToMidi(start);
   if (midi === null) return [root];
   const ladder: string[] = [];
-  for (let up = 0; ladder.length < size * 2 && up < 48; up++) {
+  for (let up = 0; ladder.length < size * 2 && up < 60; up++) {
     const note = transposeNote(start, up);
     if (note && inScale(note, choice)) ladder.push(note);
   }

@@ -5,12 +5,25 @@ import { barSteps, beatPosition, laneBars } from './patternLength';
 export const RANDOM_KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
 export type RandomKey = typeof RANDOM_KEYS[number];
 
-// Each scale as the semitones above its root.
+// Each scale as the semitones above its root. A scale is kept by its id, so an id is never renamed;
+// new ones are added after the first four (the owner asked for more on 2026-10-20).
 export const RANDOM_SCALES = {
   major: { name: 'Major', notes: [0, 2, 4, 5, 7, 9, 11] },
   minor: { name: 'Minor', notes: [0, 2, 3, 5, 7, 8, 10] },
   'major-pentatonic': { name: 'Major pentatonic', notes: [0, 2, 4, 7, 9] },
   'minor-pentatonic': { name: 'Minor pentatonic', notes: [0, 3, 5, 7, 10] },
+  dorian: { name: 'Dorian', notes: [0, 2, 3, 5, 7, 9, 10] },
+  phrygian: { name: 'Phrygian', notes: [0, 1, 3, 5, 7, 8, 10] },
+  lydian: { name: 'Lydian', notes: [0, 2, 4, 6, 7, 9, 11] },
+  mixolydian: { name: 'Mixolydian', notes: [0, 2, 4, 5, 7, 9, 10] },
+  locrian: { name: 'Locrian', notes: [0, 1, 3, 5, 6, 8, 10] },
+  'harmonic-minor': { name: 'Harmonic minor', notes: [0, 2, 3, 5, 7, 8, 11] },
+  'melodic-minor': { name: 'Melodic minor', notes: [0, 2, 3, 5, 7, 9, 11] },
+  'phrygian-dominant': { name: 'Phrygian dominant', notes: [0, 1, 4, 5, 7, 8, 10] },
+  'hungarian-minor': { name: 'Hungarian minor', notes: [0, 2, 3, 6, 7, 8, 11] },
+  blues: { name: 'Blues', notes: [0, 3, 5, 6, 7, 10] },
+  'whole-tone': { name: 'Whole tone', notes: [0, 2, 4, 6, 8, 10] },
+  hirajoshi: { name: 'Hirajoshi', notes: [0, 2, 3, 7, 8] },
 } as const;
 export type RandomScale = keyof typeof RANDOM_SCALES;
 

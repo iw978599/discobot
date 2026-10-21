@@ -22,6 +22,14 @@ for.
 
 ### 0. Finishing what is built
 
+Done 2026-10-21: **Project → Start Live Session** sets up the current project
+with sign-in, an explicit account upload when needed, the existing username
+sharing controls and joining instructions. The rack and setup show connecting,
+waiting alone, participants and connection failures; retry uses the existing
+automatic session. Share Link remains a listening/copy flow. Browser coverage
+is added for setup, invitation errors and success, retry and reopening.
+Live sound is still not verified by ear or on two real computers.
+
 Undo in the store (#192), insert effects for each lane (#191) and two aux
 sends (#194): built, waiting on their checks, merged as each is green.
 
@@ -82,8 +90,8 @@ directly, with no builder.
 16. **A scale lock** (V7). Done: Randomize's key and scale are the studio's
     one, with a Lock switch; locked, keys played land in the scale, the
     keyboard and roll mark the notes outside it and the roll takes none there,
-    and the chord menu has chords in the key. The details are the builder's
-    choice, for the owner to confirm (`docs/agents/editing.md`).
+    and the chord menu has chords in the key. The owner confirmed the details
+    on 2026-10-20 and asked for more scales and chords, which were added.
 17. **A tempo for each scene** (V10). Done: a Tempo field beside the scene's
     time signature; the transport, the song's length, WAV and MIDI export
     follow it. Synced effects, swing and the arpeggiator still follow the
@@ -101,9 +109,8 @@ directly, with no builder.
     features 14), with a keyboard way as well. Done for the scenes (drag, or
     Alt and an arrow, a `scene.move` edit), the song's blocks and the
     playlist's rows (drag; their arrow buttons were already the keyboard way).
-    A finger holds before it drags. Lanes are not done: a lane's number is its
-    MIDI channel and its place on the rack, so moving one is the owner's call
-    (see the questions).
+    A finger holds before it drags. Lanes are next: the owner decided on
+    2026-10-20 that moving one changes only where it is shown.
 21. **A picture of the sound** (V12): a small scope or spectrum on a lane
     and on the master. Done: a Wave or Spectrum picture at the top of the open
     lane's Sound level and beside the main volume on the mixer, drawn outside
@@ -1106,18 +1113,6 @@ for new accounts.
 
 ## Questions waiting on the owner
 
-- **The scale lock** (plan item 16). Built with the builder's choices: the
-  key and scale are this browser's, not the project's; a key played outside
-  the scale sounds as the nearest note in it; the piano roll will not take a
-  note outside it; the chord menu offers the key's own chords. Is each of
-  these what the owner wants, and should the lock be saved with the project?
-
-- **Moving lanes** (plan item 20). Scenes, blocks and playlist rows can be
-  dragged. Lanes cannot yet, because a lane's number is also its MIDI
-  channel, its MIDI place and its fixed place on the rack. Should moving a
-  lane change only where it is shown (Synth 3 above Synth 1, still channel
-  3), or renumber it, so its channel changes too?
-
 - **Firefox guests.** The owner said on 2026-10-13 that the timing "still
   seems off" on Firefox after PRs #76 and #77. Still to ask: what is
   heard (a guest early, late, drifting further out as it plays, or
@@ -1133,6 +1128,19 @@ for new accounts.
   drums' Reverb knobs go down. Is that the right way round? And: should
   Apply Kit put the shares back to 100% (it leaves them), and should the
   two knobs be with a drum's other knobs rather than under Sends?
+
+## Decided by the owner on 2026-10-20
+
+- **The scale lock**: the builder's choices stand (the key and scale are
+  this browser's; a key outside the scale sounds as the nearest note in it;
+  the roll takes no note outside it; the chord menu has the key's chords).
+  More scales and chords were asked for, and added: twelve more scales
+  (the modes, harmonic and melodic minor, Phrygian dominant, Hungarian
+  minor, Blues, Whole tone, Hirajoshi), fourteen more chord shapes in three
+  groups, and a ninth in the key.
+- **Moving lanes**: only where they are shown. A lane keeps its number, its
+  MIDI channel and its name; moving it changes its place on the rack, the
+  bar of units and the mixer.
 
 ## Decided by the owner on 2026-10-13
 
