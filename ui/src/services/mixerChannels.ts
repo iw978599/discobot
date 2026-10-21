@@ -2,7 +2,7 @@ import type { AuxBus, DrumInstrument, DrumState, EffectsLoopState, SynthModelId,
 import { auxBuses } from './auxSettings';
 import { getSynthModelDefinition } from '../synthModels';
 import { DRUM_ROWS } from './drumKits';
-import { laneName, laneSound } from './lanes';
+import { LANE_IDS, laneName, laneSound } from './lanes';
 import { guestOrigin, type Guest } from './guests';
 
 // What the mixer shows: every level the project already has, gathered into one plain list. It
@@ -25,6 +25,8 @@ export interface MixerChannels {
 }
 
 export interface MixerSource {
+  // The order the lanes are shown in, when the project has one.
+  laneOrder?: number[];
   synths: Array<{ id: number; name?: string; preset?: string; synthModelId: SynthModelId; synthParams: Pick<SynthParameters, 'gain' | 'pan'> | null; muted?: boolean; solo?: boolean }>;
   drumState: DrumState;
   drumMasterVolume: number;
@@ -35,7 +37,7 @@ export interface MixerSource {
 
 export function mixerChannels(source: MixerSource): MixerChannels {
   return {
-    lanes: [...source.synths].sort((a, b) => a.id - b.id).map(synth => ({
+    lanes: [...source.synths].sort((a, b) => (source.laneOrder ?? LANE_IDS).indexOf(a.id) - (source.laneOrder ?? LANE_IDS).indexOf(b.id)).map(synth => ({
       id: synth.id,
       name: laneName(synth.id, synth.name),
       model: laneSound(synth.synthModelId, getSynthModelDefinition(synth.synthModelId).name, synth.preset),

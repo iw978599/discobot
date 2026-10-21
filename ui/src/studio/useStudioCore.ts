@@ -39,6 +39,8 @@ export function useStudioCore(engine: AudioEngine = audioEngine) {
   const [selectedDrumKitId, setSelectedDrumKitId] = useState<DrumKitId>(DEFAULT_DRUM_KIT_ID);
   const [drumMasterVolume, setDrumMasterVolume] = useState(1.0);
   const [drumSwing, setDrumSwing] = useState(0);
+  // The order the lanes are shown in, when the project has one (roadmap 20).
+  const [laneOrder, setLaneOrder] = useState<number[] | undefined>(undefined);
   const [drumFx, setDrumFx] = useState(DEFAULT_DRUM_FX);
   const [effectsLoop, setEffectsLoop] = useState(DEFAULT_EFFECTS_LOOP);
   const [browserMuted, setBrowserMuted] = useState(false);
@@ -216,6 +218,8 @@ export function useStudioCore(engine: AudioEngine = audioEngine) {
     setDrumMasterVolume,
     drumSwing,
     setDrumSwing,
+    laneOrder,
+    setLaneOrder,
     drumFx,
     setDrumFx,
     effectsLoop,

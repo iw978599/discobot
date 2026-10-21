@@ -12,6 +12,7 @@ import { useHandOvers } from '../hooks/useHandedTo';
 import Knob from '../components/Knob';
 import UnitHelp, { UNIT_HELP } from './UnitHelp';
 import Scope from '../components/Scope';
+import { dragClass, useDragOrder } from './useDragOrder';
 import type { DrumInstrument } from '../types';
 
 const SOUND_DEFAULTS = createDefaultSynthParameters();
@@ -102,6 +103,8 @@ function MixerModule({ studio, channels, onHelp }: { studio: Studio; channels: M
     setHidden(!hidden);
   };
   const { lanes, drums, guests, returns } = channels;
+  // A lane's strip dragged to another's place moves the lane there on the rack too (roadmap 20).
+  const laneOrder = useDragOrder('mixer-lanes', (from, to) => { void studio.handleLaneMove(lanes[from].id, lanes[to].id); }, false, '.mixer-name');
 
   return (
     <section className="rack-unit mixer-unit" aria-label="Mixer module" data-unit="mixer">
@@ -118,7 +121,8 @@ function MixerModule({ studio, channels, onHelp }: { studio: Studio; channels: M
       {!hidden && (
         <div className="mixer-desk">
           <Group name="Synths">
-            {lanes.map(lane => (
+            {lanes.map((lane, index) => (
+              <div key={lane.id} className={`mixer-slot ${dragClass(laneOrder.dragging, index)}`} {...laneOrder.item(index, lanes.length)}>
               <Strip
                 key={lane.id}
                 about={`Synth ${lane.id}`}
@@ -132,6 +136,7 @@ function MixerModule({ studio, channels, onHelp }: { studio: Studio; channels: M
                 onMute={() => { void studio.handleSynthMixChange(lane.id, { muted: !lane.muted }); }}
                 onSolo={() => { void studio.handleSynthMixChange(lane.id, { solo: !lane.solo }); }}
               />
+              </div>
             ))}
           </Group>
           {guests.length > 0 && (

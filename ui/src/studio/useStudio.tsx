@@ -17,7 +17,7 @@ import { storeMidiTies, withoutTie } from '../services/midiTies';
 import { storeMetronome, type MetronomeSettings } from '../services/metronome';
 import { LiveArp, type LiveArpLane } from '../services/liveArp';
 import { auxBuses } from '../services/auxSettings';
-import { isLaneId } from '../services/lanes';
+import { isLaneId, laneOrderOf } from '../services/lanes';
 import { noteNameToMidi } from '../utils/midiExport';
 import { DEFAULT_SYNTH_MODEL_ID, createDefaultSynthModelParams, getSynthModelDefinition, normalizeSynthModelId, normalizeSynthModelParams } from '../synthModels';
 import { guestInputs, inputSources } from '../services/guestInput';
@@ -55,6 +55,8 @@ export function useStudio(engine?: AudioEngine) {
     setDrumMasterVolume,
     drumSwing,
     setDrumSwing,
+    laneOrder,
+    setLaneOrder,
     drumFx,
     setDrumFx,
     effectsLoop,
@@ -457,6 +459,7 @@ export function useStudio(engine?: AudioEngine) {
         autoPassRef.current.clear();
         localService.holdUndo('auto', false);
         setGuests(message.data.guests ?? []);
+        setLaneOrder(laneOrderOf(message.data.laneOrder));
         if (message.data.restored) initializedSynthLanesRef.current = true;
         if (message.data.synths) {
           setSynths(message.data.synths.map((s: any) => ({
@@ -522,6 +525,7 @@ export function useStudio(engine?: AudioEngine) {
         const data = message.data;
         autoPassRef.current.clear();
         localService.holdUndo('auto', false);
+        setLaneOrder(laneOrderOf(data.laneOrder));
         const previous = synthsRef.current, loop = normalizeEffectsLoop(data.effectsLoop);
         const nextLanes: SynthState[] = data.synths.map((s: any) => {
           const was = previous.find(lane => lane.id === s.synthId);
@@ -670,6 +674,10 @@ export function useStudio(engine?: AudioEngine) {
         const { synthId, preset } = message.data;
         synthsRef.current = synthsRef.current.map(s => s.id === synthId ? { ...s, preset: preset || undefined } : s);
         setSynths(prev => prev.map(s => s.id === synthId ? { ...s, preset: preset || undefined } : s));
+        break;
+      }
+      case 'laneOrder': {
+        setLaneOrder(laneOrderOf(message.data.order));
         break;
       }
       case 'synthName': {
@@ -847,7 +855,7 @@ export function useStudio(engine?: AudioEngine) {
   const { handleGlobalPlayStop } = useStudioTransport(core, { sceneLength, signatureOf, triggerStep, endRecordedHolds });
 
   const midiState = useMidiInput({ onMessage: handleMidiMessage });
-  const { handleStepChange, handleStepSelect, handleKeyboardModeChange, handlePianoRollNoteAssign, handleClearPatternNotes, handleTransposeLane, handleRandomizeLane, handleParameterChange, handleAutomationDraw, handleAutomationClear, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange, handleLaneBarsChange, handleDrumBarsChange, handleCopyDrumBar, handleCopyLaneBar, handleSynthMixChange, handleSynthSwingChange, handleSynthRename, handleSaveSynthPreset, handleLoadSynthPreset, handleImportSynthPreset, handleExportSynthPreset, handleDeleteSynthPreset } = useStudioLanes(core, { recordedStep });
+  const { handleStepChange, handleStepSelect, handleKeyboardModeChange, handlePianoRollNoteAssign, handleClearPatternNotes, handleTransposeLane, handleRandomizeLane, handleParameterChange, handleAutomationDraw, handleAutomationClear, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange, handleLaneBarsChange, handleDrumBarsChange, handleCopyDrumBar, handleCopyLaneBar, handleSynthMixChange, handleSynthSwingChange, handleSynthRename, handleLaneMove, handleLaneStep, handleSaveSynthPreset, handleLoadSynthPreset, handleImportSynthPreset, handleExportSynthPreset, handleDeleteSynthPreset } = useStudioLanes(core, { recordedStep });
 
   const { handleExportMidi, currentArrangement, handleExportSongMidi, handleExportWav, dismissExportStatus, reportExportError } = useStudioExport(core, { songArrangement });
   // What a picture of the sound reads (roadmap 21): a lane's, or the whole mix's.
@@ -959,7 +967,7 @@ export function useStudio(engine?: AudioEngine) {
     ensureSynthExists, handleOctaveShift, handleTempoChange, handleGlobalPlayStop, handleStepChange, handleStepSelect, handleKeyboardModeChange,
     handlePianoRollNoteAssign, handleClearPatternNotes, handleCopyLaneBar, handleCopyDrumBar, handleTransposeLane, handleRandomizeLane, handleNotePlay, handleNoteRelease, computerKeyNotes, midiState,
     handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange, guests, handleAddGuest, handleRemoveGuest, handleGuestChange, guestRecording, handleExportWav, exportStatus, dismissExportStatus, soundAnalyser, missingDrumSamples, sampleStoreVersion, handleDrumSampleChange, handleLaneBarsChange, handleDrumBarsChange, sceneLength,
-    handleSynthMixChange, handleSynthSwingChange, handleSynthRename, handleSaveSynthPreset, handleLoadSynthPreset, handleDeleteSynthPreset,
+    handleSynthMixChange, handleSynthSwingChange, handleSynthRename, handleLaneMove, handleLaneStep, laneOrder, handleSaveSynthPreset, handleLoadSynthPreset, handleDeleteSynthPreset,
     handleExportMidi, currentArrangement, reportExportError, handleExportProject, projectImportFileRef, handleImportProjectFile, handleImportProject,
     handleNewProject, handleOpenProject, handleCopyProject, handleRenameProject, handleDeleteProject, handleRestoreVersion, handleCopyVersion, handleImportSynthPreset, handleExportSynthPreset, presetImportReport, setPresetImportReport, handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail,
     handleDrumSettingsChange, handleDrumMixChange, handleDrumReset, handleDrumMasterVolumeChange, handleDrumSwingChange,

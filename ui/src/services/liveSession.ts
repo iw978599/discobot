@@ -132,6 +132,7 @@ export function editKeys(op: Operation, scene: string): string[] {
     case 'synth.mix': return [`${here}/synth/${op.synthId}/mix`];
     case 'synth.swing': return [`synth/${op.synthId}/swing`];
     case 'synth.name': return [`synth/${op.synthId}/name`];
+    case 'lanes.order': return ['laneOrder'];
     case 'synth.preset': return [`synth/${op.synthId}/preset`];
     case 'pattern.write': return patchKeys(`${here}/synth/${op.synthId}/pattern`, Object.fromEntries(Object.keys(op.patch ?? {}).map(key => [key, true])));
     case 'scene.create': case 'scene.delete': return ['scenes', 'song'];

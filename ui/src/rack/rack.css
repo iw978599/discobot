@@ -707,6 +707,10 @@
 .mixer-group-name { display: flex; align-items: baseline; gap: 8px; color: var(--text-faint); font-size: var(--type-caption); white-space: nowrap; }
 .mixer-group-name b { color: var(--text-label); font-size: var(--type-label); font-weight: 700; }
 .mixer-strips { display: flex; justify-content: center; gap: 2px; }
+/* A lane's strip can be dragged to another lane's place: the slot carries the drag, the strip the look. */
+.mixer-slot { display: contents; }
+.mixer-slot.drag-from > .mixer-strip { opacity: 0.45; }
+.mixer-slot.drag-over > .mixer-strip { box-shadow: inset 0 0 0 2px var(--hover); }
 /* The whole mix's picture beside the main volume: taller, with its switch underneath. */
 .mixer-picture { flex: none; width: 180px; display: flex; flex-direction: column; justify-content: center; padding-top: 5px; border-top: 3px solid var(--edge); }
 .mixer-picture .scope { flex-direction: column; }

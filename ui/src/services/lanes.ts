@@ -10,9 +10,29 @@ export const MAX_LANE_NAME = 24;
 
 export const isLaneId = (id: unknown): id is number => Number.isInteger(id) && (id as number) >= 1 && (id as number) <= MAX_LANES;
 
-// The lanes the rack shows, in order: the standing three (each a lane or an empty place), then any more there are.
-export function shownLanes(existing: number[]): number[] {
-  return [...STANDING_LANES, ...existing.filter(id => id > STANDING_LANES.length).sort((a, b) => a - b)];
+// The order the lanes are shown in (`laneOrder` on the project, roadmap 20): every lane once. The
+// owner decided on 2026-10-20 that moving a lane changes only where it is shown, never its number,
+// its MIDI channel or its name. Anything else, or 1 to 5 in order, is none: the order as before.
+export function laneOrderOf(value: unknown): number[] | undefined {
+  if (!Array.isArray(value) || value.length !== MAX_LANES || !value.every(isLaneId) || new Set(value).size !== MAX_LANES) return undefined;
+  return value.every((id, index) => id === LANE_IDS[index]) ? undefined : [...value];
+}
+
+// The lanes the rack shows, in order: the standing three (each a lane or an empty place), then any
+// more there are, all in the project's order when it has one.
+export function shownLanes(existing: number[], order?: number[]): number[] {
+  const place = (id: number) => (order ?? LANE_IDS).indexOf(id);
+  return [...STANDING_LANES, ...existing.filter(id => id > STANDING_LANES.length)].sort((a, b) => place(a) - place(b));
+}
+
+// The order after a lane is moved to `to` among the lanes on show. The lanes not on show keep their
+// order after them, so a lane added later comes in after the ones there are.
+export function movedLaneOrder(order: number[] | undefined, shown: number[], id: number, to: number): number[] {
+  const from = shown.indexOf(id);
+  if (from < 0) return order ?? LANE_IDS;
+  const next = [...shown];
+  next.splice(Math.max(0, Math.min(shown.length - 1, to)), 0, ...next.splice(from, 1));
+  return [...next, ...(order ?? LANE_IDS).filter(lane => !next.includes(lane))];
 }
 
 // The lane the Add Lane unit would make next, or null when every lane past the standing three exists.

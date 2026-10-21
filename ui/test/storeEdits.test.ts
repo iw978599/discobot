@@ -562,6 +562,15 @@ const cases: Case[] = [
       assert.equal(service.snapshot().synths[0].name, 'Bass line');
     },
   }, ['synthName']),
+  changed('the lanes are shown in another order, and only where they are shown changes', {
+    type: 'lanes.order', body: { order: [2, 1, 3, 4, 5] },
+    check: (result, service, _ctx, before) => {
+      assert.deepEqual(result.events[0].data, { order: [2, 1, 3, 4, 5] });
+      assert.deepEqual(service.snapshot().laneOrder, [2, 1, 3, 4, 5]);
+      assert.deepEqual(service.snapshot().synths, before.synths, 'each lane is as it was, number and all');
+    },
+  }, ['laneOrder']),
+  { type: 'lanes.order', title: 'an order that is not every lane once is refused', body: { order: [5, 4, 3] }, status: 400, error: 'A lane order names every lane once' },
   changed('a name of nothing but spaces gives the lane back its number', {
     type: 'synth.name', body: { synthId: 1, name: '   ' }, arrange: service => ok(service.setSynthName(1, 'x'.repeat(40))),
     check: (result, service) => {

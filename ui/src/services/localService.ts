@@ -4,7 +4,7 @@ import { createIndexedDbLibrary, createMemoryLibrary, hasIndexedDb, type Project
 import { COPY_SUFFIX, DEFAULT_PROJECT_NAME, EARLIER_SUFFIX } from './projectFamilies';
 import { DRUM_KITS } from './drumKits';
 import { barSteps } from './patternLength';
-import { LANE_IDS, isLaneId, storedLaneName, storedPresetName } from './lanes';
+import { LANE_IDS, isLaneId, laneOrderOf, storedLaneName, storedPresetName } from './lanes';
 import { normalizeSynthModelId } from '../synthModels';
 import { NEW_PROJECT_REVERB } from './effectSettings';
 import { record, number, clone, matchesShape, sanitizePattern, sanitizeSynthParams, sanitizeDrums, sanitizeEffects, sanitizeSends, sanitizeSaved, sanitizeModelParams, sanitizeKit, sanitizeScenes, sanitizeSong } from './projectSanitization';
@@ -32,6 +32,8 @@ type LocalSynth = {
 type State = Defaults & {
   version: 1; schema: typeof SCHEMA; synths: LocalSynth[]; tempo: number; selectedDrumKitId: string;
   drumMasterVolume: number; drumSwing: number; savedPatterns: SavedPatternFull[];
+  // The order the lanes are shown in (`laneOrderOf`). Absent: 1 to 5.
+  laneOrder?: number[];
   // The lanes' patterns and the drum grid above are the scene being edited. Its entry in
   // `scenes` is only brought up to date when it is needed: see commitScene.
   scenes: Scene[]; currentSceneId: string; song: Song;
@@ -191,6 +193,8 @@ export class LocalProjectService {
       createdAt: number(parsed.createdAt, Date.now(), 0, 1e15), updatedAt: number(parsed.updatedAt, Date.now(), 0, 1e15),
       guests: sanitizeGuests(parsed.guests, ownOrigin()),
     };
+    const laneOrder = laneOrderOf(parsed.laneOrder);
+    if (laneOrder) state.laneOrder = laneOrder;
     if (scenes) {
       state.scenes = scenes;
       state.currentSceneId = currentSceneId;
@@ -781,6 +785,8 @@ export class LocalProjectService {
         return { ...rest, ...(now.guests ? { guests: now.guests } : {}), ...(now.guestMix ? { guestMix: now.guestMix } : {}) };
       }),
     });
+    // A key the earlier project did not have is taken away, not left as it is now.
+    if (!('laneOrder' in content)) delete state.laneOrder;
     this.persist();
     this.emit('restored', this.snapshot());
   }
@@ -845,6 +851,7 @@ export class LocalProjectService {
   setSynthMix(synthId: number, mix: { muted?: boolean; solo?: boolean }) { return this.apply({ type: 'synth.mix', synthId, muted: mix.muted, solo: mix.solo }); }
   setSynthPreset(synthId: number, preset: string) { return this.apply({ type: 'synth.preset', synthId, preset }); }
   setSynthName(synthId: number, name: string) { return this.apply({ type: 'synth.name', synthId, name }); }
+  setLaneOrder(order: number[]) { return this.apply({ type: 'lanes.order', order }); }
   setSynthSwing(synthId: number, swing: boolean) { return this.apply({ type: 'synth.swing', synthId, swing }); }
   setSynthPrefs(synthId: number, prefs: { octaveShift?: number; keyboardMode?: 'keyboard' | 'piano-roll' }) { return this.apply({ type: 'synth.prefs', synthId, octaveShift: prefs.octaveShift, keyboardMode: prefs.keyboardMode }); }
   writePattern(synthId: number, patternId: string, patch: Partial<Pattern>) { return this.apply({ type: 'pattern.write', synthId, patternId, patch }); }

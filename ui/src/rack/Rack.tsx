@@ -103,10 +103,10 @@ export default function Rack({ studio }: { studio: Studio }) {
 
   // The mixer is handed the levels it shows, already gathered, and the same object for as long as
   // none of them changes: the lanes and the drums are new objects after every note and step.
-  const { synths, drumState, drumMasterVolume, guests, effectsLoop, browserVolume } = studio;
+  const { synths, drumState, drumMasterVolume, guests, effectsLoop, browserVolume, laneOrder } = studio;
   const levels = useMemo(
-    () => mixerChannels({ synths, drumState, drumMasterVolume, guests, effectsLoop, browserVolume }),
-    [synths, drumState, drumMasterVolume, guests, effectsLoop, browserVolume],
+    () => mixerChannels({ synths, drumState, drumMasterVolume, guests, effectsLoop, browserVolume, laneOrder }),
+    [synths, drumState, drumMasterVolume, guests, effectsLoop, browserVolume, laneOrder],
   );
   const mixer = useRef(levels);
   if (!sameMixer(mixer.current, levels)) mixer.current = levels;
@@ -306,7 +306,7 @@ export default function Rack({ studio }: { studio: Studio }) {
         )}
         <StarterUnit studio={studio} />
         <SongModule studio={studio} onHelp={openHelpAt} />
-        {shownLanes(studio.synths.map(entry => entry.id)).map(id => <SynthModule key={id} studio={studio} synthId={id} synth={studio.synths.find(entry => entry.id === id)} onHelp={openHelpAt} />)}
+        {shownLanes(studio.synths.map(entry => entry.id), studio.laneOrder).map(id => <SynthModule key={id} studio={studio} synthId={id} synth={studio.synths.find(entry => entry.id === id)} onHelp={openHelpAt} />)}
         <AddLaneUnit studio={studio} />
         {studio.guests.map(guest => <GuestModule key={guest.id} studio={studio} guest={guest} onHelp={openHelpAt} />)}
         <DrumModule studio={studio} onHelp={openHelpAt} />
@@ -319,6 +319,7 @@ export default function Rack({ studio }: { studio: Studio }) {
         <UnitBar
           shown={shown}
           synths={studio.synths}
+          laneOrder={studio.laneOrder}
           drums={studio.drumState}
           playing={studio.isAnyPlaying}
           guests={hasGuests}

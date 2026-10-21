@@ -10,6 +10,8 @@ interface UnitBarProps {
   shown: RackUnit;
   // The synth lanes that have been added; the other slots are still offered, to add one.
   synths: ActivityLane[];
+  // The order the lanes are shown in, when the project has one.
+  laneOrder?: number[];
   drums: DrumState;
   playing: boolean;
   guests: boolean;
@@ -34,12 +36,12 @@ interface Tab {
 // lights on each step that unit sounds, so the whole rack's playing can be seen from any unit;
 // holding a switch mutes its unit without going to it. The units themselves are the same ones
 // a wide screen stacks.
-export default function UnitBar({ shown, synths, drums, playing, guests, onShow, onMuteLane, onMuteDrums }: UnitBarProps) {
+export default function UnitBar({ shown, synths, laneOrder, drums, playing, guests, onShow, onMuteLane, onMuteDrums }: UnitBarProps) {
   const barRef = useRef<HTMLElement>(null);
   const allDrumsMuted = drumsMuted(drums);
   const units: Tab[] = [
     { id: 'song', label: 'Song', name: 'Show Song' },
-    ...shownLanes(synths.map(synth => synth.id)).map((id): Tab => {
+    ...shownLanes(synths.map(synth => synth.id), laneOrder).map((id): Tab => {
       const lane = synths.find(synth => synth.id === id);
       if (!lane) return { id: laneUnit(id), label: `Synth ${id}`, empty: true, name: `Show Synth ${id}, an empty slot` };
       return {

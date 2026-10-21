@@ -1,6 +1,7 @@
 // Editing a synth lane: its steps and chords, the piano roll, Transpose and Randomize, its sound
 // and model, automation and Auto, bars and Copy bar, mix, swing, name and presets (and the drums'
 // bars, which go with the lanes'). Split out of useStudio.tsx.
+import { movedLaneOrder, shownLanes } from '../services/lanes';
 import { useCallback } from 'react';
 import { Pattern, SynthParameters, SynthModelId, SynthModelParams } from '../types';
 import { localService } from '../services/localService';
@@ -356,6 +357,17 @@ export function useStudioLanes(core: StudioCore, needs: StudioLanesNeeds) {
   const handleSynthRename = useCallback((synthId: number, name: string) => {
     localService.setSynthName(synthId, name);
   }, []);
+  // A lane to the place another has among those on show (roadmap 20), or a place up or down from
+  // its own (`step`): only where it is shown moves, never its number or MIDI channel.
+  const moveLaneTo = (synthId: number, place: (shown: number[]) => number) => {
+    const order = localService.snapshot().laneOrder;
+    const shown = shownLanes(synthsRef.current.map(synth => synth.id), order);
+    const to = place(shown);
+    if (to < 0 || to >= shown.length || shown[to] === synthId) return;
+    localService.setLaneOrder(movedLaneOrder(order, shown, synthId, to));
+  };
+  const handleLaneMove = useCallback((synthId: number, targetId: number) => moveLaneTo(synthId, shown => shown.indexOf(targetId)), []);
+  const handleLaneStep = useCallback((synthId: number, step: number) => moveLaneTo(synthId, shown => shown.indexOf(synthId) + step), []);
   const handleSaveSynthPreset = useCallback((synthId: number, name: string) => {
     const synth = synthsRef.current.find((entry) => entry.id === synthId);
     if (!synth?.synthParams) return;
@@ -411,5 +423,5 @@ export function useStudioLanes(core: StudioCore, needs: StudioLanesNeeds) {
   const handleDeleteSynthPreset = useCallback((presetId: string) => {
     setSynthPresets((prev) => prev.filter((preset) => preset.id !== presetId || preset.builtIn));
   }, []);
-  return { handleStepChange, handleStepSelect, handleKeyboardModeChange, handlePianoRollNoteAssign, handleClearPatternNotes, handleTransposeLane, handleRandomizeLane, handleParameterChange, handleAutomationDraw, handleAutomationClear, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange, handleLaneBarsChange, handleDrumBarsChange, handleCopyDrumBar, handleCopyLaneBar, handleSynthMixChange, handleSynthSwingChange, handleSynthRename, handleSaveSynthPreset, handleLoadSynthPreset, handleImportSynthPreset, handleExportSynthPreset, handleDeleteSynthPreset };
+  return { handleStepChange, handleStepSelect, handleKeyboardModeChange, handlePianoRollNoteAssign, handleClearPatternNotes, handleTransposeLane, handleRandomizeLane, handleParameterChange, handleAutomationDraw, handleAutomationClear, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange, handleLaneBarsChange, handleDrumBarsChange, handleCopyDrumBar, handleCopyLaneBar, handleSynthMixChange, handleSynthSwingChange, handleSynthRename, handleLaneMove, handleLaneStep, handleSaveSynthPreset, handleLoadSynthPreset, handleImportSynthPreset, handleExportSynthPreset, handleDeleteSynthPreset };
 }
