@@ -4,7 +4,7 @@
 import { MAX_SCENES, clone, merge, number, sanitizeDrums, sanitizeEffects, sanitizeModelParams, sanitizePattern, sanitizeScenes, sanitizeSends, sanitizeSong, sanitizeSynthParams, sceneTempoOf } from './projectSanitization';
 import { MAX_GUESTS, guestUrl, patchGuest, sanitizeGuests } from './guests';
 import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
-import { LANE_IDS, MAX_LANES, storedLaneName, storedPresetName } from './lanes';
+import { LANE_IDS, MAX_LANES, laneOrderOf, storedLaneName, storedPresetName } from './lanes';
 import { BAR_CHOICES, TIME_SIGNATURES, barSteps, barTargets, clampLengths, copyBar, drumBars, laneBars, layAlong, resizeBars, resizeEachBar, stepsPerBar, storedSignature } from './patternLength';
 import { emptySteps } from './songPlayback';
 import { layAutomationAlong, resizeAutomationEachBar } from './automation';
@@ -374,6 +374,16 @@ export const reducers: Reducers = {
     if (name) synth.name = name;
     else delete synth.name;
     return update('synthName', { synthId: synth.synthId, name: synth.name ?? '' });
+  },
+  // The order the lanes are shown in: every lane once. In plain order it is stored as nothing, so a
+  // project whose lanes were never moved is as it was.
+  'lanes.order': ({ state }, op) => {
+    const order = sentValue(op.order);
+    const valid = Array.isArray(order) && order.length === MAX_LANES && new Set(order).size === MAX_LANES && order.every(id => LANE_IDS.includes(id as number));
+    if (!valid) return refuse(400, 'A lane order names every lane once');
+    const kept = laneOrderOf(order);
+    if (kept) state.laneOrder = kept; else delete state.laneOrder;
+    return update('laneOrder', { order: kept ?? [...LANE_IDS] });
   },
   // Kept only while on, so a lane that never swung is stored as it was.
   'synth.swing': ({ state }, op) => {

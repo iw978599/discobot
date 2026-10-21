@@ -109,8 +109,9 @@ directly, with no builder.
     features 14), with a keyboard way as well. Done for the scenes (drag, or
     Alt and an arrow, a `scene.move` edit), the song's blocks and the
     playlist's rows (drag; their arrow buttons were already the keyboard way).
-    A finger holds before it drags. Lanes are next: the owner decided on
-    2026-10-20 that moving one changes only where it is shown.
+    A finger holds before it drags. Lanes too, as the owner decided on
+    2026-10-20: moving one changes only where it is shown (Alt and an arrow
+    on its name plate, or dragging its strip in the mixer).
 21. **A picture of the sound** (V12): a small scope or spectrum on a lane
     and on the master. Done: a Wave or Spectrum picture at the top of the open
     lane's Sound level and beside the main volume on the mixer, drawn outside

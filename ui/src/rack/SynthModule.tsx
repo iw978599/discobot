@@ -141,8 +141,17 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
             className="rack-plate"
             aria-label={laneName(synthId, synth.name)}
             aria-pressed={selected}
+            aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
             onClick={() => studio.setSelectedSynthId(synthId)}
-            title={selected ? 'This lane is open for editing' : 'Open this lane for editing'}
+            onKeyDown={(event) => {
+              // Alt and an arrow move the lane up or down the rack; only where it is shown changes.
+              if (!event.altKey || event.ctrlKey || event.metaKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return;
+              event.preventDefault();
+              const plate = event.currentTarget;
+              studio.handleLaneStep(synthId, event.key === 'ArrowUp' ? -1 : 1);
+              requestAnimationFrame(() => plate.focus({ preventScroll: false }));
+            }}
+            title={`${selected ? 'This lane is open for editing' : 'Open this lane for editing'}. Alt and an arrow key move it up or down the rack`}
           >
             <b>{laneName(synthId, synth.name)}</b>
             <span data-handed={handedTo ? 'true' : undefined} title={handedTo ? `Sent to the guest ${handedTo}, and heard through it` : undefined}>{handedTo ? `→ ${handedTo}` : laneSound(synth.synthModelId, model.name, synth.preset)}</span>

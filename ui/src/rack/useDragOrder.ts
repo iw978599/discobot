@@ -14,7 +14,8 @@ export interface DragOrder {
 
 interface Press { from: number; pointer: number; x: number; y: number; touch: boolean; moving: boolean; over: number; timer?: ReturnType<typeof setTimeout> }
 
-export function useDragOrder(list: string, onMove: (from: number, to: number) => void, keys = false) {
+// With `handle`, a drag starts only from inside an element it selects (a strip's name, not its fader).
+export function useDragOrder(list: string, onMove: (from: number, to: number) => void, keys = false, handle?: string) {
   const press = useRef<Press | null>(null);
   const swallow = useRef(false);
   const moveRef = useRef(onMove);
@@ -97,6 +98,7 @@ export function useDragOrder(list: string, onMove: (from: number, to: number) =>
     'data-order': index,
     onPointerDown(event: PointerEvent<HTMLElement>) {
       if (event.button !== 0 || press.current) return;
+      if (handle && !(event.target as Element).closest?.(handle)) return;
       const held: Press = { from: index, pointer: event.pointerId, x: event.clientX, y: event.clientY, touch: event.pointerType === 'touch', moving: false, over: index };
       if (held.touch) held.timer = setTimeout(() => { if (press.current === held) { held.moving = true; setDragging({ from: index, over: index }); } }, TAP_HOLD_MS);
       press.current = held;
