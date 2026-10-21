@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 // At phone width the top bar is one line, and the rest of it is in the sheet its last button
 // raises. `more` raises the sheet before something in it is used, and does nothing on a wide
@@ -28,8 +28,8 @@ async function openAccount(page: Page) {
   await page.getByRole('button', { name: /^(Sign in|Account: .+)$/ }).click();
   return page.getByRole('dialog', { name: 'Account', exact: true });
 }
-async function signUp(page: Page, username: string, invite: string) {
-  const dialog = await openAccount(page);
+async function signUp(page: Page, username: string, invite: string, opened?: Locator) {
+  const dialog = opened ?? await openAccount(page);
   await dialog.getByRole('tab', { name: 'Create Account', exact: true }).click();
   await dialog.getByLabel('Username', { exact: true }).fill(username);
   await dialog.getByLabel('Password', { exact: true }).fill(PASSWORD);
@@ -51,6 +51,13 @@ async function projects(page: Page) {
   await page.getByRole('button', { name: /^Project: / }).click();
   return page.getByRole('dialog', { name: 'Projects', exact: true });
 }
+async function liveSetup(page: Page) {
+  await more(page);
+  await page.getByRole('button', { name: 'Project ▾', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Start Live Session', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'More controls', exact: true })).toHaveCount(0);
+  return page.getByRole('dialog', { name: 'Start Live Session', exact: true });
+}
 async function setTempo(page: Page, bpm: string) {
   await page.locator('.tempo-led').click();
   await page.locator('.tempo-led-input').fill(bpm);
@@ -62,6 +69,39 @@ test.beforeEach(async ({ page, request }, testInfo) => {
   await page.addInitScript(seen);
   await page.goto('./');
   await ready(page);
+});
+
+test('live setup explains sign-in, returns from Account and restores menu focus', async ({ page }) => {
+  const setup = await liveSetup(page);
+  await expect(setup).toContainText('Untitled');
+  await expect(setup).toContainText('Everyone needs an account');
+  await expect(setup.getByLabel('Username to share with', { exact: true })).toHaveCount(0);
+  await setup.getByRole('button', { name: 'Sign In', exact: true }).click();
+  const account = page.getByRole('dialog', { name: 'Account', exact: true });
+  await expect(account).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(account).toHaveCount(0);
+  await expect(setup).toBeVisible();
+  await expect(setup.getByRole('button', { name: 'Sign In', exact: true })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(setup).toHaveCount(0);
+  await expect(page.getByRole('button', { name: onPhone(page) ? 'More controls' : 'Project ▾', exact: true })).toBeFocused();
+  await liveSetup(page);
+  await setup.getByRole('button', { name: 'Sign In', exact: true }).click();
+  await signUp(page, 'Host', 'browser-test-owner', account);
+  await page.keyboard.press('Escape');
+  await expect(setup.getByRole('button', { name: 'Account', exact: true })).toBeFocused();
+  await expect(setup.getByRole('button', { name: 'Add to Account and Continue', exact: true })).toBeVisible();
+});
+
+test('live setup explains a browser without WebSocket support without offering upload or invitations', async ({ page }) => {
+  await page.addInitScript(() => { Object.defineProperty(window, 'WebSocket', { configurable: true, value: undefined }); });
+  await page.reload();
+  await ready(page);
+  const setup = await liveSetup(page);
+  await expect(setup).toContainText('WebSocket connections are not supported');
+  await expect(setup.getByRole('button', { name: 'Sign In', exact: true })).toHaveCount(0);
+  await expect(setup.getByLabel('Username to share with', { exact: true })).toHaveCount(0);
 });
 
 test('two people work on one project together or in turns, and it ends when the owner says so', async ({ page, browser }, testInfo) => {
@@ -83,32 +123,52 @@ test('two people work on one project together or in turns, and it ends when the 
   await dana.keyboard.press('Escape');
 
   // Ian makes a song and shares it. A username nobody has is refused, and says so.
-  await more(page);
-  await page.getByRole('button', { name: 'Project ▾', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'New Project', exact: true }).click();
   let list = await projects(page);
   await list.getByRole('group').filter({ hasText: 'Open now' }).getByRole('button', { name: 'Rename', exact: true }).click();
   await list.getByLabel('Project name', { exact: true }).fill('Night Drive');
   await list.getByLabel('Project name', { exact: true }).press('Enter');
   await page.keyboard.press('Escape');
   await setTempo(page, '133');
-  await syncNow(page);
-  list = await projects(page);
-  const mine = list.getByRole('group', { name: 'Project Night Drive', exact: true });
-  await mine.getByRole('button', { name: 'Share', exact: true }).click();
-  const sharing = list.getByRole('group', { name: 'Share Night Drive', exact: true });
+  let refuseLive = true;
+  let connections = 0;
+  await page.routeWebSocket(/\/live\//, socket => {
+    connections++;
+    if (refuseLive) socket.close();
+    else socket.connectToServer();
+  });
+  let setup = await liveSetup(page);
+  await expect(setup).toContainText('Night Drive');
+  await expect(setup).toContainText('First save this project to your account');
+  const projectsUrl = `${apiUrl(baseURL)}/projects`;
+  await page.route(projectsUrl, route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Temporarily unavailable.' }) }));
+  await setup.getByRole('button', { name: 'Add to Account and Continue', exact: true }).click();
+  await expect(setup.getByRole('alert')).toBeVisible();
+  await expect(setup.getByLabel('Username to share with', { exact: true })).toHaveCount(0);
+  await page.unroute(projectsUrl);
+  await setup.getByRole('button', { name: 'Add to Account and Continue', exact: true }).click();
+  const sharing = setup.getByRole('group', { name: 'Share Night Drive', exact: true });
   await expect(sharing).toContainText('Not shared with anyone yet');
   await expect(sharing).toContainText('both versions are kept');
+  await expect(page.locator('.tempo-led-value'), 'saving to the account preserves current edits').toHaveText('133');
   await sharing.getByLabel('Username to share with', { exact: true }).fill('nobody-here');
   await sharing.getByRole('button', { name: 'Share', exact: true }).click();
   await expect(sharing.getByRole('alert')).toContainText('No account has that username');
   await sharing.getByLabel('Username to share with', { exact: true }).fill('dana');
   await sharing.getByLabel('Username to share with', { exact: true }).press('Enter');
   await expect(sharing.getByRole('group', { name: 'Shared with Dana', exact: true })).toBeVisible();
-  await expect(mine).toContainText('Shared with 1');
+  await expect(setup).toContainText('Shared with you');
+  await expect(setup.getByRole('status').first()).toContainText('unavailable or disconnected', { timeout: 10_000 });
+  refuseLive = false;
+  await setup.getByRole('button', { name: 'Retry Connection', exact: true }).click();
+  await expect(setup).toContainText('Waiting for collaborators', { timeout: 10_000 });
+  const connected = connections;
   await page.keyboard.press('Escape');
-  // Ian's browser learns from the account that the project is shared, and opens its live session.
-  await syncNow(page);
+  await expect(page.locator('.live-people')).toContainText('Waiting for collaborators');
+  setup = await liveSetup(page);
+  await expect(setup.getByRole('group', { name: 'Shared with Dana', exact: true })).toBeVisible();
+  await expect(setup).toContainText('Waiting for collaborators');
+  expect(connections).toBe(connected);
+  await page.keyboard.press('Escape');
 
   // Dana is offered it. It is not in her browser until she opens it.
   await syncNow(dana);
@@ -135,6 +195,11 @@ test('two people work on one project together or in turns, and it ends when the 
   // Each sees who else is in the session, and where on the rack they last were.
   await expect(page.locator('.live-people')).toContainText('In this live session with Dana');
   await expect(dana.locator('.live-people')).toContainText('Ian');
+  setup = await liveSetup(dana);
+  await expect(setup).toContainText('Shared by Ian');
+  await expect(setup.getByLabel('Username to share with', { exact: true })).toHaveCount(0);
+  await expect(setup.getByRole('status')).toContainText('Ian');
+  await dana.keyboard.press('Escape');
   await dana.locator('[data-unit="drums"] button').first().focus();
   await expect(page.locator('.rack > [data-unit="drums"]')).toHaveAttribute('data-present-names', 'Dana', { timeout: 10_000 });
   // What the others play is heard here, snapped to the next step while the music plays unless this

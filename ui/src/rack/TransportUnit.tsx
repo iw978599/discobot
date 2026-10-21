@@ -19,6 +19,7 @@ interface TransportUnitProps {
   onOpenSettings: () => void;
   onOpenProjects: () => void;
   onShare: () => void;
+  onStartLive: () => void;
   onOpenAccount: () => void;
   onAddGuest: () => void;
   onOpenVersions: () => void;
@@ -28,7 +29,7 @@ interface TransportUnitProps {
 // everything you do once per session instead of once per bar. A narrow screen has room for one
 // line of it, the tempo, Play and (where they fit) Undo and Redo; the rest is in a sheet that
 // the last button on that line raises from the bottom edge.
-function TransportUnit({ studio, onOpenSettings, onOpenProjects, onShare, onOpenAccount, onAddGuest, onOpenVersions }: TransportUnitProps) {
+function TransportUnit({ studio, onOpenSettings, onOpenProjects, onShare, onStartLive, onOpenAccount, onAddGuest, onOpenVersions }: TransportUnitProps) {
   const { midiState } = studio;
   const [exporting, setExporting] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -124,6 +125,7 @@ function TransportUnit({ studio, onOpenSettings, onOpenProjects, onShare, onOpen
         { label: 'Save a Copy', title: 'Keep a copy of this project as it is now, to go back to', onSelect: leaving(() => { void studio.handleCopyProject(studio.projectId); }) },
         { label: 'Version History', title: 'Go back to an earlier version of this project', onSelect: leaving(onOpenVersions) },
       ], [
+        { label: 'Start Live Session', title: 'Invite people with accounts to edit and play this project together', onSelect: leaving(onStartLive) },
         { label: 'Share Link', title: 'Make a link that plays this song for anyone who opens it', onSelect: leaving(onShare) },
         { label: 'Export Project', title: 'Download the whole project as a file', onSelect: leaving(studio.handleExportProject) },
         { label: 'Import Project', title: 'Add a project file to your projects and open it', onSelect: leaving(() => studio.projectImportFileRef.current?.click()) },

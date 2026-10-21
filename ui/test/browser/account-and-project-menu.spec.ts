@@ -42,10 +42,10 @@ test('the Project menu is in three groups with Reset All apart, and Export is a 
   await more(page);
   await page.getByRole('button', { name: 'Project ▾', exact: true }).click();
   const menu = page.getByRole('menu', { name: 'Project', exact: true });
-  await expect(menu.getByRole('menuitem')).toHaveCount(11);
+  await expect(menu.getByRole('menuitem')).toHaveCount(12);
   expect(await rows(menu)).toEqual([
     'New Project', 'All Projects', 'Save a Copy', 'Version History',
-    '|', 'Share Link', 'Export Project', 'Import Project', 'Import MIDI',
+    '|', 'Start Live Session', 'Share Link', 'Export Project', 'Import Project', 'Import MIDI',
     '|', 'Add Guest Instrument', 'Kids Mode',
     '|', 'Reset All',
   ]);
@@ -62,7 +62,7 @@ test('the Project menu is in three groups with Reset All apart, and Export is a 
   // Tab walks the rows and passes the lines without stopping on them.
   await menu.getByRole('menuitem', { name: 'Version History', exact: true }).focus();
   await page.keyboard.press('Tab');
-  await expect(menu.getByRole('menuitem', { name: 'Share Link', exact: true })).toBeFocused();
+  await expect(menu.getByRole('menuitem', { name: 'Start Live Session', exact: true })).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(menu).toHaveCount(0);
   await more(page);
