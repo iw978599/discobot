@@ -2,6 +2,9 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { isAudioFile, listSamples, saveSample } from '../services/sampleStore';
 import { MAX_KIT_FILES } from '../services/kitImport';
 import KitImportDialog from './KitImportDialog';
+import SoundFontDialog from '../components/SoundFontDialog';
+import { readSoundFont, type SoundFontFile, type SoundFontPreset } from '../services/soundFont';
+import { isKit, soundFontKit } from '../services/soundFontKit';
 import { usePlayhead, usePlayheadMark } from '../hooks/usePlayhead';
 import { useHandOvers } from '../hooks/useHandedTo';
 import { tracked } from '../studio/tracked';
@@ -118,8 +121,17 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
   };
   useEffect(() => { void refreshSamples(); }, [laneSamples, studio.sampleStoreVersion]);
   // Several files picked at once, waiting in the kit import dialog to be given lanes.
-  const [kitFiles, setKitFiles] = useState<{ files: File[]; picked: number } | null>(null);
+  const [kitFiles, setKitFiles] = useState<{ files: File[]; picked: number; initial?: Partial<Record<DrumInstrument, number>> } | null>(null);
   const kitFileRef = useRef<HTMLInputElement>(null);
+  // A drum kit from a SoundFont: which of its presets first, when it has several, then the same
+  // dialog as Import Kit, with each lane on the drum General MIDI has for it (`soundFontKit.ts`).
+  const fontKitRef = useRef<HTMLInputElement>(null);
+  const [fontKit, setFontKit] = useState<{ buffer: ArrayBuffer; file: SoundFontFile } | null>(null);
+  const openFontKit = (buffer: ArrayBuffer, preset: SoundFontPreset) => {
+    const kit = soundFontKit(buffer, preset);
+    if (!kit.ok) { studio.setStorageError(kit.error); return; }
+    setKitFiles({ files: kit.files, picked: kit.files.length, initial: kit.choice });
+  };
 
   const anySolo = INSTRUMENTS.some((instrument) => Boolean(drumState[instrument].solo));
   const allMuted = INSTRUMENTS.every((instrument) => Boolean(drumState[instrument].muted));
@@ -400,6 +412,27 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
             setKitFiles({ files: audio.slice(0, MAX_KIT_FILES), picked: audio.length });
           }}
         />
+        <button className="rack-btn" onClick={() => fontKitRef.current?.click()} title="Choose a SoundFont (.sf2) drum kit. Each lane is offered the drum General MIDI has for it, and you can change them before they are used">
+          SoundFont Kit
+        </button>
+        <input
+          ref={fontKitRef}
+          type="file"
+          hidden
+          accept=".sf2"
+          aria-label="Import SoundFont drum kit"
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            event.currentTarget.value = '';
+            if (!file) return;
+            void file.arrayBuffer().then((buffer) => {
+              const font = readSoundFont(buffer);
+              if (!font || font.presets.length === 0) { studio.setStorageError(`“${file.name}” is not a SoundFont this app can read.`); return; }
+              if (font.presets.length === 1) openFontKit(buffer, font.presets[0]);
+              else setFontKit({ buffer, file: font });
+            });
+          }}
+        />
         {studio.missingDrumSamples.includes(selected) && (
           <span className="rack-hint" role="status">This lane's sample is not on this device, so its built-in sound is playing.</span>
         )}
@@ -568,10 +601,21 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
         </div>
       </div>
 
+      {fontKit && (
+        <SoundFontDialog
+          font={fontKit.file}
+          title="Import a SoundFont drum kit"
+          noun="the drum lanes"
+          prefer={isKit}
+          onClose={() => setFontKit(null)}
+          onImport={(preset) => { setFontKit(null); openFontKit(fontKit.buffer, preset); }}
+        />
+      )}
       {kitFiles && (
         <KitImportDialog
           files={kitFiles.files}
           picked={kitFiles.picked}
+          initial={kitFiles.initial}
           lanes={INSTRUMENTS.map(instrument => ({ id: instrument, label: LABELS[instrument] }))}
           onApply={(lane, sampleId) => studio.handleDrumSampleChange(lane, sampleId)}
           onClose={() => { setKitFiles(null); void refreshSamples(); }}

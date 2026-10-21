@@ -115,6 +115,9 @@ directly, with no builder.
     and on the master. Done: a Wave or Spectrum picture at the top of the open
     lane's Sound level and beside the main volume on the mixer, drawn outside
     React from an analyser made only when a picture asks.
+22a. **A SoundFont drum kit on the drum lanes.** Asked for by the owner on
+    2026-10-20. Done: SoundFont Kit in the drum strip offers each lane the drum
+    General MIDI has for it, through Import Kit's dialog.
 22. **Several recordings across the keyboard for an imported sample** (V1).
     Done: Import several recordings… on the Osc page, each file's note read
     from its name and shown to be changed, kept as one instrument.
