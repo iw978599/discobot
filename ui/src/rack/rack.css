@@ -1129,7 +1129,9 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
   .drum-top { grid-template-columns: minmax(0, 1fr); }
   .drum-top .rack-plate { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; }
   .drum-top .drum-kit-select { width: auto; flex: 1; min-width: 0; font-size: var(--type-label); }
-  .drum-top > .rack-knobs { justify-content: flex-start; }
+  .drum-top > .rack-knobs { justify-content: flex-start; flex-wrap: wrap; }
+  /* The tools beside a drum, and the knob row with its swing template, wrap rather than widen the unit. */
+  .drum-tools { flex-wrap: wrap; }
   .drum-grid { gap: 6px; }
   .drum-grid-row { grid-template-columns: 52px 64px minmax(0, 1fr); align-items: stretch; }
   .drum-grid-row .rack-ms { align-items: center; }
