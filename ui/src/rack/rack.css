@@ -927,7 +927,7 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
 .account-button { flex: none; max-width: 14ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The top bar is one line where it fits. Where it does not (a desktop of the rack's least width) it
    goes on to a second line rather than squeeze a button; a phone sets its own bar, below. */
-.transport > .rack-row { flex-wrap: wrap; gap: 8px; }
+.transport > .rack-row { flex-wrap: wrap; gap: 5px; }
 .account-tabs, .account-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .account-form { display: flex; flex-direction: column; gap: 10px; }
 .account-field { display: flex; flex-direction: column; gap: 3px; }
