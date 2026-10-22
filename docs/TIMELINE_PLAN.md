@@ -63,3 +63,4 @@ trimmed, moved and faded, as other web music apps have. This is the plan and how
   as slopes with a handle at each on the chosen clip, and a line on the share page when a song's
   tracks cannot be heard there. Left for what the owner finds in use: the walkthrough has no stop
   for the timeline, and nothing has been tried on a real phone or heard.
+- 2026-10-22: Record Session (roadmap V24) puts what this browser hears onto a new track.

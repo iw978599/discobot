@@ -744,6 +744,16 @@ export class AudioEngine {
     return live.analyser;
   }
 
+  // The whole mix as it leaves, as a stream a MediaRecorder can take (roadmap V24, recording a
+  // session). Joined only while asked for: `release` takes it away again. It feeds nothing that is
+  // heard, so the sound is as it was.
+  recordingStream(): { stream: MediaStream; release: () => void } {
+    const live = this.open();
+    const tap = live.context.createMediaStreamDestination();
+    live.safety.connect(tap);
+    return { stream: tap.stream, release: () => { try { live.safety.disconnect(tap); } catch { /* the context has closed */ } } };
+  }
+
   // `ownMix` names the effects this lane feeds with a mix of its own (the drums, whose every drum
   // has its own share of the delay and the reverb) in place of the signal at `input`. Each gets an
   // input in `taps` with the lane's volume and ducking, and the lane's send to that effect is fed
