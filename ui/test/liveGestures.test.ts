@@ -90,3 +90,30 @@ test('a MIDI pitch bend message is read as -1 to 1 with the centre at rest', () 
   assert.deepEqual(read(0, 0, 0xe2), { type: 'pitchBend', value: -1, channel: 3 });
   assert.deepEqual(parseMessage({ data: new Uint8Array([0xb0, 1, 100]) }), { type: 'controlChange', controller: 1, value: 100, channel: 1 });
 });
+
+test('aftertouch is a route source like the wheel: it moves what is routed and nothing else', () => {
+  const press = (patch: Partial<SynthParameters>, pressure: number) => {
+    const core = new SynthCore(SR);
+    core.setParams(toVoiceParams({ ...createDefaultSynthParameters(), oscillator: { type: 'sawtooth', detune: 0, pulseWidth: 0.5 }, envelope: { attack: 0.002, decay: 0.1, sustain: 1, release: 0.1 }, ...patch }));
+    core.setPressure(pressure);
+    core.noteOn({ note: 'A2', velocity: 1 });
+    const left = new Float32Array(SR / 2), right = new Float32Array(SR / 2);
+    core.process(left, right);
+    return left;
+  };
+  assert.equal(MOD_SOURCES.indexOf('pressure'), 8);
+  const routed = { modMatrix: [route('pressure', 'pitch', 0.5)] };
+  assert.ok(same(press(routed, 0), play(routed, {}, 0.5)), 'no pressure, no change');
+  assert.ok(pitch(press(routed, 1).subarray(6000)) / pitch(press(routed, 0).subarray(6000)) > 1.3, 'full pressure lifts the pitch half an octave');
+  assert.ok(same(press({}, 1), play({}, {}, 0.5)), 'unrouted is bit-identical');
+});
+
+test('MIDI aftertouch, of the channel or of one key, is read as 0 to 1, and a clock\'s real-time messages by kind', () => {
+  assert.deepEqual(parseMessage({ data: new Uint8Array([0xd2, 127]) }), { type: 'pressure', value: 1, channel: 3 });
+  assert.deepEqual(parseMessage({ data: new Uint8Array([0xa0, 60, 0]) }), { type: 'pressure', value: 0, channel: 1 });
+  for (const [byte, type] of [[0xf8, 'clock'], [0xfa, 'start'], [0xfb, 'continue'], [0xfc, 'stop']] as const) {
+    assert.deepEqual(parseMessage({ data: new Uint8Array([byte]), timeStamp: 12.5 }), { type, at: 12.5 });
+  }
+  assert.equal(parseMessage({ data: new Uint8Array([0xf9]) }), null, 'an undefined real-time byte is nothing');
+  assert.equal(parseMessage({ data: new Uint8Array([]) }), null);
+});

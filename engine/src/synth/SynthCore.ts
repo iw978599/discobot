@@ -94,7 +94,7 @@ const SECOND_STAGE_DAMPING = Math.SQRT2;
 // the instrument's feedback does: with the peak down it is the clean two-pole, and pushed, the peak stops
 // growing and flattens, which is the distortion it is known for. This is how fast the holding back comes on.
 const MS20_HOLD = 0.1;
-const MOD_SOURCES = ['lfo1', 'lfo2', 'ampEnv', 'filterEnv', 'velocity', 'key', 'random', 'modWheel'];
+const MOD_SOURCES = ['lfo1', 'lfo2', 'ampEnv', 'filterEnv', 'velocity', 'key', 'random', 'modWheel', 'pressure'];
 const MOD_DESTINATIONS = ['pitch', 'osc2Pitch', 'filter', 'amp', 'pulseWidth', 'pan', 'fmIndex'];
 const MOD_ROUTES = 4;
 const BEND_SEMITONES = 2;
@@ -130,6 +130,9 @@ export class SynthCore {
   private bend = 0;
   private wheelTarget = 0;
   private wheel = 0;
+  // A controller's aftertouch (0 to 1), how hard the keys are pressed once down: a route source like the wheel.
+  private pressureTarget = 0;
+  private pressure = 0;
   private sample: SynthSample | null = null;
   // Each recording's copies at half, a quarter and an eighth of its rate, for notes played two,
   // four and eight times faster than it was recorded: read as it is, a recording played that
@@ -281,6 +284,10 @@ export class SynthCore {
 
   setWheel(value: number): void {
     this.wheelTarget = clamp(value, 0, 1, 0);
+  }
+
+  setPressure(value: number): void {
+    this.pressureTarget = clamp(value, 0, 1, 0);
   }
 
   noteOn(message: NoteOnMessage): void {
@@ -499,6 +506,7 @@ export class SynthCore {
       s.pulseWidth += (clamp(p.pulseWidth, 0.05, 0.95, s.pulseWidth) - s.pulseWidth) * k;
       if (this.bend !== this.bendTarget) this.bend = Math.abs(this.bendTarget - this.bend) < 1e-5 ? this.bendTarget : this.bend + (this.bendTarget - this.bend) * k;
       if (this.wheel !== this.wheelTarget) this.wheel = Math.abs(this.wheelTarget - this.wheel) < 1e-5 ? this.wheelTarget : this.wheel + (this.wheelTarget - this.wheel) * k;
+      if (this.pressure !== this.pressureTarget) this.pressure = Math.abs(this.pressureTarget - this.pressure) < 1e-5 ? this.pressureTarget : this.pressure + (this.pressureTarget - this.pressure) * k;
       const bendOctaves = this.bend * BEND_SEMITONES / 12;
       this.globalLfoPhase[0] = (this.globalLfoPhase[0] + lfoRates[0]) % 1;
       this.globalLfoPhase[1] = (this.globalLfoPhase[1] + lfoRates[1]) % 1;
@@ -543,6 +551,7 @@ export class SynthCore {
             else if (source === 4) { amount = v.velocity; swing = v.velocity; }
             else if (source === 5) { swing = clamp(v.keyOctaves * 0.5, -1, 1); amount = (swing + 1) * 0.5; }
             else if (source === 7) { swing = this.wheel; amount = this.wheel; }
+            else if (source === 8) { swing = this.pressure; amount = this.pressure; }
             else {
               // Random: a new value each time the first LFO comes round, held until the next.
               const phase = lfoRetrigger[0] ? v.lfoPhase[0] : this.globalLfoPhase[0];

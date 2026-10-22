@@ -2,7 +2,7 @@
 // MIDI out, automation), the step lights, Play and Stop, and the music of a live session. Split out
 // of useStudio.tsx.
 import { useCallback, useRef, useEffect } from 'react';
-import { MIDI_DRUM_CHANNEL, midiOut } from '../services/midiOutput';
+import { midiOut } from '../services/midiOutput';
 import { SequencerStep, SynthParameters, DrumInstrument, Scene, TimeSignature } from '../types';
 import { audibleLanes, entryStartTick, sceneAtTick, sceneDrumState, songLengthTicks } from '../services/songPlayback';
 import { localService } from '../services/localService';
@@ -33,7 +33,7 @@ export interface StudioTransportNeeds {
 }
 
 export function useStudioTransport(core: StudioCore, needs: StudioTransportNeeds) {
-  const { engine, transportRef, scheduleTickRef, countInRef, metronomeRef, playModeRef, songRef, songStartTickRef, songEndingRef, stopPlaybackRef, setSongPosition, currentSceneIdRef, scenesRef, barAnchorRef, exportingRef, handedByBarRef, synthsRef, autoPassRef, synthAudio, globalTempoRef, drumSwingRef, drumSwingGridRef, drumStateRef, audioTracksRef, drumAudio, synths, liveStartRef, songStartEntryRef, signatureOfRef, announceRef, sceneLengthRef, setStorageError, endAutoPassesRef, setSynths, handleGlobalPlayStopRef, setPlayMode, setSongStartEntry } = core;
+  const { engine, transportRef, scheduleTickRef, countInRef, metronomeRef, playModeRef, songRef, songStartTickRef, songEndingRef, stopPlaybackRef, setSongPosition, currentSceneIdRef, scenesRef, barAnchorRef, exportingRef, handedByBarRef, synthsRef, autoPassRef, synthAudio, globalTempoRef, drumSwingRef, drumSwingGridRef, drumStateRef, audioTracksRef, externalTempoRef, midiFollowClockRef, drumAudio, synths, liveStartRef, songStartEntryRef, signatureOfRef, announceRef, sceneLengthRef, setStorageError, endAutoPassesRef, setSynths, handleGlobalPlayStopRef, setPlayMode, setSongStartEntry } = core;
   const { sceneLength, signatureOf, triggerStep, endRecordedHolds } = needs;
   const showStep = (lane: number | 'drums', step: number, time: number) => {
     const ahead = time - engine.getContext().currentTime;
@@ -152,7 +152,7 @@ export function useStudioTransport(core: StudioCore, needs: StudioTransportNeeds
         const hitTime = time + swingOffset + offset * duration * 2;
         const early = guestInputs.leadSeconds('drums') || guestInputs.leadSeconds(`drum:${instrument}`);
         void drumAudio.playDrumHit(instrument, track.settings, velocity, hitTime - early);
-        if (midiOut.active) midiOut.note(MIDI_DRUM_CHANNEL, DRUM_NOTE_MAP[instrument], velocity, midiTime(hitTime), midiTime(hitTime + 0.06));
+        if (midiOut.active) midiOut.note(midiOut.channelOf('drums'), DRUM_NOTE_MAP[instrument], velocity, midiTime(hitTime), midiTime(hitTime + 0.06));
         if (instrument !== 'kick') continue;
         for (const synth of lanes) {
           const amount = synth.synthParams?.duck ?? 0;
@@ -166,6 +166,8 @@ export function useStudioTransport(core: StudioCore, needs: StudioTransportNeeds
   // the open scene's in scene mode and the song's scene there in song mode, or the project's for a
   // scene with none of its own. The count-in is at the tempo of the scene the music starts with.
   const tempoAt = (counted: number) => {
+    // Following another device's clock, its tempo is the only one.
+    if (externalTempoRef.current !== null) return externalTempoRef.current;
     const own = (sceneId: string | undefined) => (sceneId ? scenesRef.current.find(scene => scene.id === sceneId)?.tempo : undefined) ?? globalTempoRef.current;
     if (playModeRef.current !== 'song') return own(currentSceneIdRef.current);
     const tick = Math.max(0, counted - countInRef.current.ticks);
@@ -205,7 +207,8 @@ export function useStudioTransport(core: StudioCore, needs: StudioTransportNeeds
     // Music someone else in a live session started begins when they said, with their count-in.
     const remote = liveStartRef.current;
     liveStartRef.current = null;
-    const countIn = metronomeRef.current.countIn && !exportingRef.current ? countInBars(metronomeRef.current) : 0;
+    // Nor for music started by another device's clock, whose start is the first beat.
+    const countIn = metronomeRef.current.countIn && !exportingRef.current && !midiFollowClockRef.current ? countInBars(metronomeRef.current) : 0;
     // The count-in is a bar of the scene that plays first.
     const firstScene = playModeRef.current === 'song' ? songRef.current.entries[songStartEntryRef.current]?.sceneId : undefined;
     const counted = signatureOfRef.current(firstScene ?? currentSceneIdRef.current);

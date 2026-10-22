@@ -130,3 +130,48 @@ test('a MIDI file of several bars imports at its full length', async ({ page }, 
   expect(after.drumState.kick.steps).toEqual(before.drumState.kick.steps);
   expect(after.drumState.kick.steps.length).toBe(32);
 });
+
+test('notes played by hand go out on the channel chosen for their lane, and another device\'s clock starts, sets the tempo of and stops the music', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.addInitScript(() => {
+    const log: Array<{ data: number[]; at?: number }> = [];
+    (window as unknown as { midiSent: typeof log }).midiSent = log;
+    const output = { id: 'test-synth', name: 'Test synth', state: 'connected', send: (data: number[], at?: number) => { log.push({ data: Array.from(data), at }); } };
+    const input = { id: 'test-clock', name: 'Test clock', state: 'connected', onmidimessage: null as null | ((event: { data: Uint8Array; timeStamp: number }) => void) };
+    (window as unknown as { emitMidi: (data: number[], at?: number) => void }).emitMidi = (data, at) => input.onmidimessage?.({ data: new Uint8Array(data), timeStamp: at ?? performance.now() });
+    const access = { inputs: new Map([[input.id, input]]), outputs: new Map([[output.id, output]]), onstatechange: null };
+    Object.defineProperty(navigator, 'requestMIDIAccess', { configurable: true, value: async () => access });
+  });
+  await page.goto('./');
+  await expect(page.getByRole('heading', { name: 'Discobot', exact: true })).toBeVisible();
+  const emit = (data: number[], at?: number) => page.evaluate(([bytes, time]) => (window as unknown as { emitMidi: (data: number[], at?: number) => void }).emitMidi(bytes as number[], time as number | undefined), [data, at] as const);
+
+  await openMidi(page);
+  await page.getByLabel('MIDI output device', { exact: true }).selectOption('test-synth');
+  await expect(page.getByLabel('Synth 1 MIDI output channel', { exact: true })).toHaveValue('1');
+  await expect(page.getByLabel('Drums MIDI output channel', { exact: true })).toHaveValue('10');
+  await page.getByLabel('Synth 1 MIDI output channel', { exact: true }).selectOption('7');
+  await page.getByLabel('Send played notes to MIDI output', { exact: true }).check();
+  await closeMidi(page);
+
+  // A key on the controller, sent to Synth 1, goes out on channel 7 at once.
+  await emit([0x90, 60, 100]);
+  await emit([0x80, 60, 0]);
+  await expect.poll(async () => (await sent(page)).map(entry => entry.data)).toEqual([[0x96, 60, 100], [0x86, 60, 0]]);
+
+  // Following the controller's clock: Start plays, its pulses set the tempo, Stop stops.
+  await openMidi(page);
+  await page.getByLabel('Follow MIDI clock', { exact: true }).check();
+  await closeMidi(page);
+  await emit([0xfa]);
+  await expect(page.getByRole('button', { name: /Stop All/ })).toBeVisible();
+  const start = await page.evaluate(() => performance.now());
+  for (let pulse = 0; pulse <= 24; pulse++) await emit([0xf8], start + pulse * 60000 / 140 / 24);
+  await expect(page.locator('.tempo-led-value')).toHaveText('140');
+  await expect(page.locator('.tempo-led-label')).toHaveText('CLOCK');
+  expect((await stored(page)).tempo, 'the clock\'s tempo is not put in the project').toBe(120);
+  await emit([0xfc]);
+  await expect(page.getByRole('button', { name: /Play All/ })).toBeVisible();
+  expect(errors).toEqual([]);
+});

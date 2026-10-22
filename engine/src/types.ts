@@ -103,7 +103,7 @@ export interface EffectsLoopState {
 // 'pitch' is up to an octave either way; 'vibrato' is the same movement scaled to one semitone.
 export type LfoTarget = 'pitch' | 'filter' | 'amp' | 'pulseWidth' | 'vibrato';
 // Something that moves, and something it can move. A route sends one to the other by an amount.
-export type ModSource = 'lfo1' | 'lfo2' | 'ampEnv' | 'filterEnv' | 'velocity' | 'key' | 'random' | 'modWheel';
+export type ModSource = 'lfo1' | 'lfo2' | 'ampEnv' | 'filterEnv' | 'velocity' | 'key' | 'random' | 'modWheel' | 'pressure';
 export type ModDestination = 'pitch' | 'osc2Pitch' | 'filter' | 'amp' | 'pulseWidth' | 'pan' | 'fmIndex';
 export interface ModRoute {
   source: ModSource;
@@ -113,7 +113,7 @@ export interface ModRoute {
   depth: number;
 }
 export const MAX_MOD_ROUTES = 4;
-export const MOD_SOURCES: ModSource[] = ['lfo1', 'lfo2', 'ampEnv', 'filterEnv', 'velocity', 'key', 'random', 'modWheel'];
+export const MOD_SOURCES: ModSource[] = ['lfo1', 'lfo2', 'ampEnv', 'filterEnv', 'velocity', 'key', 'random', 'modWheel', 'pressure'];
 export const MOD_DESTINATIONS: ModDestination[] = ['pitch', 'osc2Pitch', 'filter', 'amp', 'pulseWidth', 'pan', 'fmIndex'];
 
 export type FilterModel = 'svf' | 'ladder' | 'ms20';

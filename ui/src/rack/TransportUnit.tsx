@@ -68,7 +68,7 @@ function TransportUnit({ studio, onOpenSettings, onOpenProjects, onShare, onStar
     </button>
   );
   const tempo = (
-    <TempoDisplay tempo={studio.globalTempo} onChange={(bpm) => { void studio.handleTempoChange(bpm); }} flash={tapTempo.flash} onTap={narrow ? undefined : tapTempo.tap} />
+    <TempoDisplay tempo={studio.externalTempo ?? studio.globalTempo} clock={studio.externalTempo !== null} onChange={(bpm) => { void studio.handleTempoChange(bpm); }} flash={tapTempo.flash} onTap={narrow ? undefined : tapTempo.tap} />
   );
   const metronome = (
     <div className="metronome-switches" role="group" aria-label="Metronome">

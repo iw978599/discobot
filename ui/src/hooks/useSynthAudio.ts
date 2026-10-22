@@ -19,7 +19,7 @@ interface SynthLane {
   // The recording the lane's sample engine plays, kept for a node that does not exist yet.
   sample?: SynthSample | null;
   // The controller's bend and wheel as last sent, for a node that does not exist yet.
-  live?: { bend: number; wheel: number };
+  live?: { bend: number; wheel: number; pressure: number };
   // Where the lane is handed to a guest (services/guestInput), for audio that does not exist yet.
   handedTo?: AudioNode | null;
   bpm: number;
@@ -173,10 +173,10 @@ export function useSynthAudio(engine: AudioEngine = audioEngine) {
   const duck = useCallback((synthId: number, time: number, amount: number) => {
     lanesRef.current.get(synthId)?.audio?.duck(time, amount);
   }, []);
-  // A controller's bend (-1 to 1) and mod wheel (0 to 1) for a lane; either left out stays where it was.
-  const setLive = useCallback((synthId: number, live: { bend?: number; wheel?: number }) => {
+  // A controller's bend (-1 to 1), mod wheel and aftertouch (0 to 1) for a lane; any left out stays where it was.
+  const setLive = useCallback((synthId: number, live: { bend?: number; wheel?: number; pressure?: number }) => {
     const lane = laneFor(synthId);
-    lane.live = { bend: 0, wheel: 0, ...lane.live, ...live };
+    lane.live = { bend: 0, wheel: 0, pressure: 0, ...lane.live, ...live };
     send(lane.node, { type: 'live', ...live });
   }, []);
   // Stopping lets go of the bend, as the wheel springs back; the mod wheel stays where the hand left it.

@@ -140,6 +140,16 @@ export function useStudio(engine?: AudioEngine) {
     midiDrumChannelRef,
     midiOutNotes,
     setMidiOutNotes,
+    midiOutPlayed,
+    setMidiOutPlayed,
+    midiOutChannels,
+    setMidiOutChannels,
+    midiFollowClock,
+    setMidiFollowClock,
+    externalTempo,
+    setExternalTempo,
+    midiFollowClockRef,
+    externalTempoRef,
     midiOutClock,
     setMidiOutClock,
     midiTargetSynthId,
@@ -220,7 +230,14 @@ export function useStudio(engine?: AudioEngine) {
     setAutoRecordingValue(on);
   }, []);
   midiDrumChannelRef.current = midiDrumChannel;
-  useEffect(() => { midiOut.configure({ notes: midiOutNotes, clock: midiOutClock }); }, [midiOutNotes, midiOutClock]);
+  useEffect(() => { midiOut.configure({ notes: midiOutNotes, clock: midiOutClock, played: midiOutPlayed, channels: midiOutChannels }); }, [midiOutNotes, midiOutClock, midiOutPlayed, midiOutChannels]);
+  // Following a clock ends with its tempo: the project's own is heard again.
+  midiFollowClockRef.current = midiFollowClock;
+  useEffect(() => {
+    if (midiFollowClock) return;
+    externalTempoRef.current = null;
+    setExternalTempo(null);
+  }, [midiFollowClock]);
   synthPresetsRef.current = synthPresets;
   browserMutedRef.current = browserMuted;
   synthsRef.current = synths;
@@ -425,10 +442,10 @@ export function useStudio(engine?: AudioEngine) {
     for (const scheduled of expandStepNotes(step, synthParams, windowSeconds, globalTempoRef.current)) {
       void synthAudio.playNote(scheduled.note, synthParams, scheduled.duration, velocity,
         browserMutedRef.current, effectsLoopRef.current, globalTempoRef.current, synthId, scheduledTime + scheduled.offset);
-      // Lane 1 goes out on MIDI channel 1, and so on.
+      // Lane 1 goes out on MIDI channel 1, and so on, unless another channel is chosen for it.
       if (midiOut.active) {
         const start = scheduledTime + scheduled.offset, midi = noteNameToMidi(scheduled.note);
-        if (midi !== null) midiOut.note(synthId, midi, velocity, midiTime(start), midiTime(start + scheduled.duration));
+        if (midi !== null) midiOut.note(midiOut.channelOf(synthId), midi, velocity, midiTime(start), midiTime(start + scheduled.duration));
       }
     }
   }, [synthAudio]);
@@ -997,7 +1014,7 @@ export function useStudio(engine?: AudioEngine) {
     synths, selectedSynthId, setSelectedSynthId, drumState: memoizedDrumState, drumKits,
     selectedDrumKitId, drumMasterVolume, drumSwing, drumSwingGrid, drumFx, effectsLoop, browserMuted, setBrowserMuted,
     browserVolume, setBrowserVolume, globalTempo, storageError, setStorageError, changedElsewhere, loadOtherTabVersion, keepThisTabVersion, helpOpen, setHelpOpen, midiMode, setMidiMode,
-    recording, setRecording, autoRecording, setAutoRecording, handleAutomationDraw, handleAutomationClear, quantize, setQuantize, midiChannel, setMidiChannel, midiDrumChannel, setMidiDrumChannel, midiOutNotes, setMidiOutNotes, midiOutClock, setMidiOutClock, midiTargetSynthId, setMidiTargetSynthId, projectId, projectName, projects, synthPresets, drumAudio,
+    recording, setRecording, autoRecording, setAutoRecording, handleAutomationDraw, handleAutomationClear, quantize, setQuantize, midiChannel, setMidiChannel, midiDrumChannel, setMidiDrumChannel, midiOutNotes, setMidiOutNotes, midiOutClock, setMidiOutClock, midiOutPlayed, setMidiOutPlayed, midiOutChannels, setMidiOutChannels, midiFollowClock, setMidiFollowClock, externalTempo, midiTargetSynthId, setMidiTargetSynthId, projectId, projectName, projects, synthPresets, drumAudio,
     handleUndo, handleRedo, midiImportData, setMidiImportData, midiImportAssignments, setMidiImportAssignments,
     handleMidiImportClick, handleMidiImportFile, handleMidiImportApplyAll, midiImportFileRef, handleRemoveSynth,
     ensureSynthExists, handleOctaveShift, handleTempoChange, handleGlobalPlayStop, handleStepChange, handleStepSelect, handleKeyboardModeChange,

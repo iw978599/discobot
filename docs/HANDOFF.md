@@ -41,7 +41,7 @@ Start Live Session setup, was the owner's own).
    in its order. Item 23, the share page's song strip, is done.
 3. Questions still waiting on the owner are at the end of `docs/ROADMAP.md`
    ("Questions waiting on the owner"). Waiting on the owner and not to be
-   started: listening, MIDI hardware, a screen reader trial, licences for new
+   started: listening, the newest MIDI parts on hardware (the controller has worked so far), a screen reader trial, licences for new
    bundled audio, the ladder filter's level.
 
 ## 3. How the owner wants the work run

@@ -46,7 +46,17 @@ interface MidiPanelProps {
   onSendNotesChange: (send: boolean) => void;
   sendClock: boolean;
   onSendClockChange: (send: boolean) => void;
+  sendPlayed: boolean;
+  onSendPlayedChange: (send: boolean) => void;
+  outChannels: MidiOutChannels;
+  onOutChannelsChange: (channels: MidiOutChannels) => void;
+  followClock: boolean;
+  onFollowClockChange: (follow: boolean) => void;
+  // The tempo the followed clock gives, once it has been heard.
+  clockTempo: number | null;
 }
+
+import { outChannel, type MidiOutChannels } from '../services/midiOutput';
 
 export default function MidiPanel({
   supported,
@@ -82,6 +92,13 @@ export default function MidiPanel({
   sendNotes,
   onSendNotesChange,
   sendClock,
+  sendPlayed,
+  onSendPlayedChange,
+  outChannels,
+  onOutChannelsChange,
+  followClock,
+  onFollowClockChange,
+  clockTempo,
   onSendClockChange,
 }: MidiPanelProps) {
   const [chosen, setChosen] = useState('lane:open:cutoff');
@@ -136,6 +153,10 @@ export default function MidiPanel({
                 <option key={value} value={value}>Ch{value}</option>
               ))}
             </select>
+          </label>
+          <label className="midi-check" title="Start and stop with another device's MIDI clock, and play at its tempo. Its tempo is not saved: the project's own comes back when this is off">
+            <input type="checkbox" aria-label="Follow MIDI clock" checked={followClock} onChange={(e) => onFollowClockChange(e.target.checked)} />
+            Follow clock{followClock && clockTempo !== null ? ` (${clockTempo} BPM)` : ''}
           </label>
           <select
             value={targetSynthId ?? synthIds[0] ?? 1}
@@ -254,10 +275,25 @@ export default function MidiPanel({
               <input type="checkbox" aria-label="Send clock to MIDI output" checked={sendClock} disabled={!selectedOutputId} onChange={(e) => onSendClockChange(e.target.checked)} />
               Clock
             </label>
+            <label className="midi-check" title="Also send notes played by hand: the keys on screen, the computer keyboard, a controller's keys and pads, each on its lane's channel">
+              <input type="checkbox" aria-label="Send played notes to MIDI output" checked={sendPlayed} disabled={!selectedOutputId} onChange={(e) => onSendPlayedChange(e.target.checked)} />
+              Played
+            </label>
+          </div>
+          <div className="midi-panel midi-out-channels" role="group" aria-label="MIDI output channels">
+            {[...synthIds.map(id => ({ part: id as number | 'drums', name: `Synth ${id}` })), { part: 'drums' as const, name: 'Drums' }].map(({ part, name }) => (
+              <label key={part} className="midi-drum-channel">
+                {name}
+                <select aria-label={`${name} MIDI output channel`} value={outChannel(outChannels, part)} disabled={!selectedOutputId}
+                  onChange={(e) => onOutChannelsChange({ ...outChannels, [String(part)]: Number(e.target.value) })}>
+                  {Array.from({ length: 16 }, (_, i) => i + 1).map((value) => <option key={value} value={value}>Ch{value}</option>)}
+                </select>
+              </label>
+            ))}
           </div>
           <p className="midi-note">
-            The sequencer plays the device while Discobot plays: each synth lane on the channel of its number (Synth 1 on channel 1, up to Synth 5 on 5), drums on channel 10. Mute a lane here to hear only the hardware.
-            This setting is not saved with the project.
+            The sequencer plays the device while Discobot plays, each synth lane and the drums on the channel chosen above (at first, each lane on the channel of its number and the drums on 10). Mute a lane here to hear only the hardware. With Played on, what you play by hand goes to the device too; a controller that listens to its own output may then play each note twice.
+            These settings are not saved with the project.
           </p>
         </>
       )}
