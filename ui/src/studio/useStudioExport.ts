@@ -18,7 +18,7 @@ export interface StudioExportNeeds {
 }
 
 export function useStudioExport(core: StudioCore, needs: StudioExportNeeds) {
-  const { synthsRef, globalTempo, drumStateRef, drumSwing, drumMasterVolume, liveSceneRef, globalTempoRef, selectedDrumKitIdRef, drumFxRef, effectsLoopRef, drumSamplesRef, synthSamplesRef, cymbalsRef, currentArrangementRef, guestsRef, handedByBarRef, playModeRef, songStartEntryRef, handleGlobalPlayStopRef, setGuestRecording, setPlayMode, setSongStartEntry, exportingRef, doneTimerRef, setExportStatus, setStorageError } = core;
+  const { synthsRef, globalTempo, drumStateRef, drumSwing, drumSwingGrid, drumMasterVolume, liveSceneRef, globalTempoRef, selectedDrumKitIdRef, drumFxRef, effectsLoopRef, drumSamplesRef, synthSamplesRef, cymbalsRef, currentArrangementRef, guestsRef, handedByBarRef, playModeRef, songStartEntryRef, handleGlobalPlayStopRef, setGuestRecording, setPlayMode, setSongStartEntry, exportingRef, doneTimerRef, setExportStatus, setStorageError } = core;
   const { songArrangement } = needs;
   const handleExportMidi = useCallback(() => {
     const synthLanes = synthsRef.current
@@ -29,7 +29,7 @@ export function useStudioExport(core: StudioCore, needs: StudioExportNeeds) {
         tempo: liveSceneRef.current().tempo ?? globalTempo,
         synthLanes,
         drumState: cloneDrumState(drumStateRef.current),
-        drumSwing,
+        drumSwing, drumSwingGrid,
         drumMasterVolume,
         signature: liveSceneRef.current().signature,
         ...(sceneBars(liveSceneRef.current()) > 1 ? {
@@ -38,30 +38,30 @@ export function useStudioExport(core: StudioCore, needs: StudioExportNeeds) {
       },
       `discobot-${Date.now()}.mid`
     );
-  }, [globalTempo, drumSwing, drumMasterVolume]);
+  }, [globalTempo, drumSwing, drumSwingGrid, drumMasterVolume]);
   const currentArrangement = useCallback((): ExportArrangement => ({
     // The open scene at its own tempo, when it has one (roadmap 17).
     tempo: liveSceneRef.current().tempo ?? globalTempoRef.current, synths: synthsRef.current, drumState: drumStateRef.current,
-    drumKitId: selectedDrumKitIdRef.current, drumMasterVolume, drumSwing,
+    drumKitId: selectedDrumKitIdRef.current, drumMasterVolume, drumSwing, drumSwingGrid,
     drumFx: drumFxRef.current, effectsLoop: effectsLoopRef.current, drumSamples: { ...drumSamplesRef.current },
     synthSamples: { ...synthSamplesRef.current }, drumCymbals: cymbalsRef.current,
     ...(liveSceneRef.current().signature ? { signature: liveSceneRef.current().signature } : {}),
     // A scene longer than one bar is rendered a bar at a time, each lane looping at its own length.
     ...(sceneBars(liveSceneRef.current()) > 1 ? { bars: sceneAsBars(liveSceneRef.current()) } : {}),
-  }), [drumMasterVolume, drumSwing]);
+  }), [drumMasterVolume, drumSwing, drumSwingGrid]);
   currentArrangementRef.current = currentArrangement;
   const handleExportSongMidi = useCallback(async () => {
     const { bars } = await songArrangement();
     const kit = cloneDrumState(drumStateRef.current);
     downloadMidiFile(
       {
-        tempo: globalTempoRef.current, drumSwing, drumMasterVolume, drumState: kit,
+        tempo: globalTempoRef.current, drumSwing, drumSwingGrid, drumMasterVolume, drumState: kit,
         synthLanes: synthsRef.current.filter((entry) => entry.pattern).map((entry) => ({ id: entry.id, pattern: clonePattern(entry.pattern!), muted: false, solo: false, swing: entry.swing })),
         bars: bars.map(scene => ({ name: scene.name, signature: scene.signature, tempo: scene.tempo, lanes: scene.lanes, drumState: sceneDrumState(scene, kit) })),
       },
       `discobot-song-${Date.now()}.mid`
     );
-  }, [songArrangement, drumSwing, drumMasterVolume]);
+  }, [songArrangement, drumSwing, drumSwingGrid, drumMasterVolume]);
   // Every audio export. With guests in the project the arrangement is first played through in
   // real time so their sound can be recorded; then the export is rendered as usual. A loop is
   // played through twice and the second pass kept: by then what rings on from the end of the

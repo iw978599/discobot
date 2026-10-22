@@ -42,11 +42,11 @@ test('the Project menu is in three groups with Reset All apart, and Export is a 
   await more(page);
   await page.getByRole('button', { name: 'Project ▾', exact: true }).click();
   const menu = page.getByRole('menu', { name: 'Project', exact: true });
-  await expect(menu.getByRole('menuitem')).toHaveCount(12);
+  await expect(menu.getByRole('menuitem')).toHaveCount(13);
   expect(await rows(menu)).toEqual([
     'New Project', 'All Projects', 'Save a Copy', 'Version History',
     '|', 'Start Live Session', 'Share Link', 'Export Project', 'Import Project', 'Import MIDI',
-    '|', 'Add Guest Instrument', 'Kids Mode',
+    '|', 'Add Guest Instrument', 'Colour Scheme', 'Kids Mode',
     '|', 'Reset All',
   ]);
   expect(await isReddish(menu.getByRole('menuitem', { name: 'Reset All', exact: true }))).toBe(true);

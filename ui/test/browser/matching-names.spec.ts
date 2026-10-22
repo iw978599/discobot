@@ -36,7 +36,7 @@ test('a drum has one name: the same word on the grid, in its hint, to a screen r
 
 test('every pattern button has a word, not only an arrow', async ({ page }) => {
   const tools = page.locator('.drum-machine .drum-tools').first();
-  await expect(tools.getByRole('button')).toHaveText(['Fill', '→ Shift', '⇄ Reverse', '⇈ Repeat Half']);
+  await expect(tools.getByRole('button')).toHaveText(['Fill', 'Spread ▾', '→ Shift', '⇄ Reverse', '⇈ Repeat Half']);
   for (const [name, hint] of [['Shift right', 'Shift pattern right'], ['Reverse', 'Reverse pattern'], ['Repeat first half', 'Duplicate first 8 steps to last 8']]) {
     await expect(tools.getByRole('button', { name, exact: true })).toHaveAttribute('title', hint);
   }

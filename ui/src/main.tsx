@@ -2,6 +2,10 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
+import { startColourScheme } from './services/colourScheme';
+
+// This browser's colour scheme is put on the page before anything is drawn.
+startColourScheme();
 
 // The service worker caches the built app so it opens with no connection. It is only
 // produced by a production build, so there is nothing to register in development.

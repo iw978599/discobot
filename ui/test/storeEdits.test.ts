@@ -913,18 +913,20 @@ const cases: Case[] = [
     ['drum.swing', 'drumSwing', 'swing', 'drumSwing', .75, .3],
   ] as const).flatMap(([type, event, field, stateKey, max, value]): Case[] => {
     const set = (service: LocalProjectService, to: number) => ok(type === 'drum.swing' ? service.setDrumSwing(to) : service.setDrumMasterVolume(to));
+    // The swing's event also says which steps it moves.
+    const data = (to: number) => (type === 'drum.swing' ? { [field]: to, grid: 16 } : { [field]: to });
     return [
       changed(`sets ${field} and emits ${event}`, {
         type, body: { [field]: value },
-        check: (result, service) => { assert.deepEqual(result.events[0].data, { [field]: value }); assert.equal(service.snapshot()[stateKey], value); },
+        check: (result, service) => { assert.deepEqual(result.events[0].data, data(value)); assert.equal(service.snapshot()[stateKey], value); },
       }, [event]),
       changed(`${field} is held to 0..${max}`, {
         type, body: { [field]: 5 }, arrange: service => set(service, -5),
-        check: (result, _service, _ctx, before) => { assert.equal(before[stateKey], 0); assert.deepEqual(result.events[0].data, { [field]: max }); },
+        check: (result, _service, _ctx, before) => { assert.equal(before[stateKey], 0); assert.deepEqual(result.events[0].data, data(max)); },
       }, [event]),
       changed(`a ${field} that is not a number changes nothing but still emits and saves`, {
         type, body: { [field]: '0.5' }, arrange: service => set(service, value),
-        check: (result, service, _ctx, before) => { assert.deepEqual(result.events[0].data, { [field]: value }); unchanged(result, service, null, before); },
+        check: (result, service, _ctx, before) => { assert.deepEqual(result.events[0].data, data(value)); unchanged(result, service, null, before); },
       }, [event]),
     ];
   }),

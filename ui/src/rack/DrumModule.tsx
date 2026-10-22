@@ -19,6 +19,9 @@ import { DRUM_NAMES, DRUM_ROWS, DRUM_SETTINGS_DEFAULT } from '../services/drumKi
 import { DRUM_FX_DEFAULT } from '../services/effectSettings';
 import { DrumInstrument, DrumKitId, DrumState, CymbalType, PercType } from '../types';
 import DrumKnob from '../components/DrumKnob';
+import Menu from './Menu';
+import { SWING_GROUPS, currentTemplate } from '../services/grooves';
+import { euclid, euclidCounts } from '../services/euclid';
 
 const INSTRUMENTS = DRUM_ROWS;
 
@@ -320,6 +323,13 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
             onChange={studio.handleDrumSwingChange}
             title="Swing amount - delays off-beat steps for groove"
           />
+          <Menu
+            label={currentTemplate(drumSwing, studio.drumSwingGrid)?.name ?? (studio.drumSwingGrid === 8 ? '8ths, own' : '16ths, own')}
+            name="Swing template"
+            groups={SWING_GROUPS.map(group => group.templates.map(template => ({
+              label: template.name, title: template.hint, onSelect: () => studio.handleSwingTemplate(template),
+            })))}
+          />
           <DrumKnob
             label="Master"
             value={drumMasterVolume}
@@ -478,6 +488,19 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
           >
             Fill
           </button>
+          {/* A Euclidean rhythm: so many hits spread as evenly as the bar allows. Shift then turns it. */}
+          <Menu
+            label="Spread"
+            name={`Spread hits along ${LABELS[selected]}`}
+            groups={[euclidCounts(perBar).filter(count => count <= perBar / 2), euclidCounts(perBar).filter(count => count > perBar / 2)].map(counts => counts.map(count => ({
+              label: `${count} hits`,
+              title: `${count} ${LABELS[selected]} hits spread as evenly as the bar allows, in place of what is on this bar`,
+              onSelect: () => {
+                const spread = euclid(count, perBar);
+                STEPS.forEach((column) => { if (spread[column] !== track.steps[base + column]) onStepToggle(selected, base + column, spread[column]); });
+              },
+            })))}
+          />
           <button className="rack-btn" title="Shift pattern right" aria-label="Shift right" onClick={() => rearrange((step) => (step + perBar - 1) % perBar)}>→ Shift</button>
           <button className="rack-btn" title="Reverse pattern" aria-label="Reverse" onClick={() => rearrange((step) => perBar - 1 - step)}>⇄ Reverse</button>
           <button className="rack-btn" title={`Duplicate first ${perBar / 2} steps to last ${perBar / 2}`} aria-label="Repeat first half" onClick={() => rearrange((step) => (step >= perBar / 2 ? step - perBar / 2 : step))}>⇈ Repeat Half</button>

@@ -23,13 +23,14 @@ interface TransportUnitProps {
   onOpenAccount: () => void;
   onAddGuest: () => void;
   onOpenVersions: () => void;
+  onOpenColours: () => void;
 }
 
 // The top rack unit: tempo, transport, save and load, and the two menus that hold
 // everything you do once per session instead of once per bar. A narrow screen has room for one
 // line of it, the tempo, Play and (where they fit) Undo and Redo; the rest is in a sheet that
 // the last button on that line raises from the bottom edge.
-function TransportUnit({ studio, onOpenSettings, onOpenProjects, onShare, onStartLive, onOpenAccount, onAddGuest, onOpenVersions }: TransportUnitProps) {
+function TransportUnit({ studio, onOpenSettings, onOpenProjects, onShare, onStartLive, onOpenAccount, onAddGuest, onOpenVersions, onOpenColours }: TransportUnitProps) {
   const { midiState } = studio;
   const [exporting, setExporting] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -132,6 +133,7 @@ function TransportUnit({ studio, onOpenSettings, onOpenProjects, onShare, onStar
         { label: 'Import MIDI', title: 'Bring notes in from a .mid file', onSelect: leaving(studio.handleMidiImportClick) },
       ], [
         { label: 'Add Guest Instrument', title: "Host another creator's web instrument in this project, by its address", onSelect: leaving(onAddGuest) },
+        { label: 'Colour Scheme', title: 'Light, dark, high contrast or blue colours for the rack, kept in this browser', onSelect: leaving(onOpenColours) },
         { label: 'Kids Mode', title: 'Big pads, a beat grid of pictures and one play button for a small child. It keeps its own tune and cannot change your projects', onSelect: leaving(enterKidsMode) },
       ], [
         { label: 'Reset All', title: 'Clear every lane, the drums and the effects of this project', danger: true, onSelect: leaving(() => { void studio.handleReset(); }) },

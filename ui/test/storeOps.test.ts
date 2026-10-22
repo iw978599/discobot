@@ -46,7 +46,7 @@ interface Case {
 }
 
 const swing = (title: string, sent: unknown, answer: number, arrange?: Case['arrange']): Case[] => [
-  { op: 'drum.swing', title, arrange, run: service => service.setDrumSwing(wrong(sent)), answer: { swing: answer }, event: 'drumSwing', check: project => assert.equal(project.drumSwing, answer) },
+  { op: 'drum.swing', title, arrange, run: service => service.setDrumSwing(wrong(sent)), answer: { swing: answer, grid: 16 }, event: 'drumSwing', check: project => assert.equal(project.drumSwing, answer) },
 ];
 const volume = (title: string, sent: unknown, answer: number, arrange?: Case['arrange']): Case[] => [
   { op: 'drum.masterVolume', title, arrange, run: service => service.setDrumMasterVolume(wrong(sent)), answer: { volume: answer }, event: 'drumMasterVolume', check: project => assert.equal(project.drumMasterVolume, answer) },
@@ -976,8 +976,8 @@ test('apply is synchronous: the event has arrived and the store has changed befo
   service.subscribe(message => seen.push(message));
   seen.length = 0;
   const result = service.apply({ type: 'drum.swing', swing: .3 });
-  assert.deepEqual(seen, [{ type: 'drumSwing', data: { swing: .3 } }]);
-  assert.deepEqual(result, { ok: true, value: { swing: .3 } });
+  assert.deepEqual(seen, [{ type: 'drumSwing', data: { swing: .3, grid: 16 } }]);
+  assert.deepEqual(result, { ok: true, value: { swing: .3, grid: 16 } });
   assert.equal(service.snapshot().drumSwing, .3);
   for (const method of [
     'apply', 'applyAll', 'setDrumSwing', 'setDrumMasterVolume', 'setDrumKit', 'setDrumState', 'resetDrums', 'setDrumBars', 'setDrumStep', 'setDrumStepVelocity', 'setDrumStepDetail',
@@ -1393,11 +1393,11 @@ test('applyAll applies in order, each delivered before the next, and saves once'
   let writes = 0;
   service.subscribeWrites(() => { writes++; });
   const results = service.applyAll([{ type: 'drum.swing', swing: .2 }, { type: 'drum.masterVolume', volume: 2 }, { type: 'drum.swing', swing: .5 }], 'history');
-  assert.deepEqual(results, [{ ok: true, value: { swing: .2 } }, { ok: true, value: { volume: 1 } }, { ok: true, value: { swing: .5 } }]);
+  assert.deepEqual(results, [{ ok: true, value: { swing: .2, grid: 16 } }, { ok: true, value: { volume: 1 } }, { ok: true, value: { swing: .5, grid: 16 } }]);
   assert.deepEqual(order, [
-    'event drumSwing {"swing":0.2}', 'op drum.swing history',
+    'event drumSwing {"swing":0.2,"grid":16}', 'op drum.swing history',
     'event drumMasterVolume {"volume":1}', 'op drum.masterVolume history',
-    'event drumSwing {"swing":0.5}', 'op drum.swing history',
+    'event drumSwing {"swing":0.5,"grid":16}', 'op drum.swing history',
   ]);
   assert.equal(writes, 0);
   service.flush();

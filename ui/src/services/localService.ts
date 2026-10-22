@@ -10,6 +10,7 @@ import { NEW_PROJECT_REVERB } from './effectSettings';
 import { record, number, clone, matchesShape, sanitizePattern, sanitizeSynthParams, sanitizeDrums, sanitizeEffects, sanitizeSends, sanitizeSaved, sanitizeModelParams, sanitizeKit, sanitizeScenes, sanitizeSong } from './projectSanitization';
 import type { Applied, DeepPartial, DrumFxState, GuestPatch, OpNotice, OpResult, Operation, Origin, Outcome } from './projectOps';
 import { UndoHistory } from './undoHistory';
+import { swingGridOf, type SwingGrid } from './grooves';
 import { commitScene, ensureScenes, newLane, openSignature, reducers, sceneMessage, type ReducerContext } from './projectReducers';
 
 type Message = { type: string; data: any };
@@ -32,6 +33,8 @@ type LocalSynth = {
 type State = Defaults & {
   version: 1; schema: typeof SCHEMA; synths: LocalSynth[]; tempo: number; selectedDrumKitId: string;
   drumMasterVolume: number; drumSwing: number; savedPatterns: SavedPatternFull[];
+  // Which steps the drums' swing moves (`swingSteps`). Absent: sixteenths; stored only as 8.
+  drumSwingGrid?: 8;
   // The order the lanes are shown in (`laneOrderOf`). Absent: 1 to 5.
   laneOrder?: number[];
   // The lanes' patterns and the drum grid above are the scene being edited. Its entry in
@@ -195,6 +198,7 @@ export class LocalProjectService {
     };
     const laneOrder = laneOrderOf(parsed.laneOrder);
     if (laneOrder) state.laneOrder = laneOrder;
+    if (swingGridOf(parsed.drumSwingGrid) === 8) state.drumSwingGrid = 8;
     if (scenes) {
       state.scenes = scenes;
       state.currentSceneId = currentSceneId;
@@ -804,6 +808,7 @@ export class LocalProjectService {
     });
     // A key the earlier project did not have is taken away, not left as it is now.
     if (!('laneOrder' in content)) delete state.laneOrder;
+    if (!('drumSwingGrid' in content)) delete state.drumSwingGrid;
     this.persist();
     this.emit('restored', this.snapshot());
   }
@@ -847,7 +852,7 @@ export class LocalProjectService {
     return () => { this.opListeners.delete(listener); };
   }
 
-  setDrumSwing(swing: number) { return this.apply({ type: 'drum.swing', swing }); }
+  setDrumSwing(swing: number, grid?: SwingGrid) { return this.apply({ type: 'drum.swing', swing, ...(grid ? { grid } : {}) }); }
   setDrumMasterVolume(volume: number) { return this.apply({ type: 'drum.masterVolume', volume }); }
   setDrumKit(kitId: string, applyDefaults?: boolean) { return this.apply({ type: 'drum.kit', kitId, applyDefaults }); }
   setDrumState(state: DrumState) { return this.apply({ type: 'drum.state', state }); }

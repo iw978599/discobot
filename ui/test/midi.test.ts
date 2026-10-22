@@ -157,3 +157,15 @@ test('the sequencer sends notes, clock, start and stop to a MIDI output', async 
   out.configure({ notes: true });
   assert.doesNotThrow(() => { out.note(1, 60, 1, 0, 10); out.tick(0, 30, true); out.stop(); });
 });
+
+test('a swing on eighths moves the second eighth of a beat in the file, and on sixteenths leaves it', () => {
+  const { Midi } = createRequire(import.meta.url)('@tonejs/midi') as typeof import('@tonejs/midi');
+  const ticks = (drumSwingGrid?: 8) => {
+    const drums = drumState();
+    [1, 2].forEach(step => { drums.closedHH.steps[step] = true; });
+    const bytes = createMidiFile({ tempo: 120, drumState: drums, drumSwing: .25, drumSwingGrid, drumMasterVolume: 1, synthLanes: [] });
+    return new Midi(bytes).tracks.flatMap(track => track.notes.map(note => note.ticks)).sort((a, b) => a - b);
+  };
+  assert.deepEqual(ticks(), [150, 240], 'sixteenths: the second step is late by a quarter of a step, the third is on time');
+  assert.deepEqual(ticks(8), [150, 300], 'eighths: the third step is late by half a step');
+});

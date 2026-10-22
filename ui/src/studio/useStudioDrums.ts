@@ -10,6 +10,7 @@ import { SAMPLE_SONGS } from '../services/sampleSongs';
 import { sentAutomation } from '../services/automation';
 import { normalizeDrumFx, normalizeEffectsLoop } from './studioState';
 import type { StudioCore } from './useStudioCore';
+import type { SwingTemplate } from '../services/grooves';
 
 // What this part of the studio uses from the rest of it.
 export interface StudioDrumsNeeds {
@@ -79,6 +80,10 @@ export function useStudioDrums(core: StudioCore, needs: StudioDrumsNeeds) {
   const handleDrumMasterVolumeChange = useCallback((volume: number) => {
     localService.setDrumMasterVolume(volume);
     }, []);
+  // A swing template sets the amount and the grid together, as one step of undo.
+  const handleSwingTemplate = useCallback((template: SwingTemplate) => {
+    localService.setDrumSwing(template.swing, template.grid);
+  }, []);
   const handleDrumSwingChange = useCallback((swing: number) => {
     localService.setDrumSwing(swing);
   }, []);
@@ -116,5 +121,5 @@ export function useStudioDrums(core: StudioCore, needs: StudioDrumsNeeds) {
     ) as DrumState;
     localService.setDrumState(nextState);
   }, []);
-  return { handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail, handleDrumSettingsChange, handleDrumMixChange, handleDrumReset, handleStarter, handleCopyPartToScene, handleSampleSong, dismissStarters, handleDrumMasterVolumeChange, handleDrumSwingChange, handleDrumFxChange, handleEffectsLoopChange, handleDrumMuteAll, handleDrumSoloAll };
+  return { handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail, handleDrumSettingsChange, handleDrumMixChange, handleDrumReset, handleStarter, handleCopyPartToScene, handleSampleSong, dismissStarters, handleDrumMasterVolumeChange, handleDrumSwingChange, handleSwingTemplate, handleDrumFxChange, handleEffectsLoopChange, handleDrumMuteAll, handleDrumSoloAll };
 }

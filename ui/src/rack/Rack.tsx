@@ -25,6 +25,9 @@ import GuestModule from './GuestModule';
 import AddGuestDialog from './AddGuestDialog';
 import VersionsDialog from './VersionsDialog';
 import { HelpModal } from './HeaderParts';
+import ShortcutsDialog from './ShortcutsDialog';
+import ColourSchemeDialog from './ColourSchemeDialog';
+import { opensShortcuts } from '../services/shortcuts';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { useNarrow } from '../hooks/useNarrow';
 import { laneUnit, storeRackUnit, storedRackUnit, unitLane, type RackUnit } from '../services/rackView';
@@ -67,6 +70,17 @@ export default function Rack({ studio }: { studio: Studio }) {
   // reached, so it is kept here; whether Help is open is the studio's, and when that says it has
   // closed (by its button, Escape or the walkthrough) the section is forgotten.
   const [helpAt, setHelpAt] = useState<string | null>(null);
+  // The list of keyboard shortcuts: view state, opened with Shift + ? or from Help.
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!opensShortcuts(event, event.target) || document.querySelector('[aria-modal="true"]')) return;
+      event.preventDefault();
+      setShortcutsOpen(true);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   const { helpOpen, setHelpOpen } = studio;
   const openHelpAt = useCallback((section: string) => {
     setHelpAt(section);
@@ -174,6 +188,8 @@ export default function Rack({ studio }: { studio: Studio }) {
   const openAccount = useCallback(() => setAccountOpen(true), []);
   const openGuest = useCallback(() => setGuestOpen(true), []);
   const openVersions = useCallback(() => setVersionsOpen(true), []);
+  const [coloursOpen, setColoursOpen] = useState(false);
+  const openColours = useCallback(() => setColoursOpen(true), []);
   // A live session: the unit this person is at is the one they last pressed or moved the keyboard
   // into, and the units the others are at carry their colour and names. The marks are attributes set
   // here, as `data-shown` is, so no unit renders for them.
@@ -231,6 +247,7 @@ export default function Rack({ studio }: { studio: Studio }) {
           onOpenAccount={openAccount}
           onAddGuest={openGuest}
           onOpenVersions={openVersions}
+          onOpenColours={openColours}
         />
         {studio.changedElsewhere && (
           <div role="alert" className="app-alert">
@@ -335,7 +352,9 @@ export default function Rack({ studio }: { studio: Studio }) {
         />
       )}
 
-      <HelpModal open={studio.helpOpen} at={helpAt} onClose={() => studio.setHelpOpen(false)} onWalkthrough={startTour} />
+      <HelpModal open={studio.helpOpen} at={helpAt} onClose={() => studio.setHelpOpen(false)} onWalkthrough={startTour} onShortcuts={() => { studio.setHelpOpen(false); setShortcutsOpen(true); }} />
+      {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
+      {coloursOpen && <ColourSchemeDialog onClose={() => setColoursOpen(false)} />}
       <MidiImportDialog studio={studio} />
       {projectsOpen && <ProjectsDialog studio={studio} onClose={() => setProjectsOpen(false)} />}
       {shareOpen && <ShareDialog onClose={() => setShareOpen(false)} />}

@@ -1,4 +1,5 @@
 import type { DrumTrack } from '../types';
+import { swingSteps, type SwingGrid } from './grooves';
 
 export const MAX_RATCHET = 4;
 
@@ -26,7 +27,7 @@ export function expandDrumStep(track: DrumTrack, step: number, random: () => num
 }
 
 // How late a lane that swings plays what falls `into` its bar, in the unit `sixteenth` is in:
-// every second sixteenth of the bar by the drums' swing, as the drums themselves are swung.
-export function swingLate(into: number, sixteenth: number, swing: number): number {
-  return swing > 0 && Math.floor(into / sixteenth + 1e-6) % 2 === 1 ? swing * sixteenth : 0;
+// the drums' swing on its grid (`swingSteps`), as the drums themselves are swung.
+export function swingLate(into: number, sixteenth: number, swing: number, grid: SwingGrid = 16): number {
+  return swingSteps(into / sixteenth, swing, grid) * sixteenth;
 }

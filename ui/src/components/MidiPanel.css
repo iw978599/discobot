@@ -30,7 +30,7 @@
   height: 7px;
   border-radius: 50%;
   background: var(--lamp-off);
-  border: 1px solid #000;
+  border: 1px solid var(--edge-deep);
   flex-shrink: 0;
 }
 

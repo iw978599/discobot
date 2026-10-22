@@ -1,6 +1,9 @@
 /* The Rack: every part of the instrument is a module in a 19-inch-style rack, stacked top
    to bottom. Synth step rows and the drum grid share the same column layout so steps line up. */
-.rack-page {
+/* Studio's colours, and every name the rack is drawn with. A colour scheme's sample (in the
+   Colour Scheme dialog) takes the same names, so it shows its scheme whatever the page shows. */
+.rack-page,
+.rack-page [data-sample="studio"] {
   /* Colours are named by the job they do, and a new control picks from these names instead of
      writing a colour out. AGENTS.md has the table of which name is for what. */
   /* What things lie on, from the back forward. */
@@ -21,6 +24,8 @@
   --edge-faint: #3c3f42;
   --edge-beat: #8f9396;
   --edge-control: #55585b;
+  --edge-deep: #000000;
+  --edge-rail: #232527;
   /* Words. */
   --text: #f1f1ee;
   --text-plain: #dcdedf;
@@ -32,14 +37,21 @@
   --on-bright: #ffcf66;
   --on-glow: rgba(255, 176, 0, 0.45);
   --lamp-off: #3a2a10;
+  --on-deep: #8a6a1f;
+  --lit: #ffffff;
   --value: #ffb000;
   --value-glow: rgba(255, 176, 0, 0.6);
   --action: #f1f1ee;
+  --action-text: #111111;
+  --action-hover: #ffffff;
   --focus: #ffffff;
   --select: #f1f1ee;
   --gap: #0b0c0d;
   --hover: #d9dbdc;
   --danger: #e35d3a;
+  --danger-surface: #2a1a12;
+  --danger-ink: #ffd9cc;
+  --danger-word: #ff8f80;
   /* Each drum lane's own colour. */
   --drum-kick: #ef4444;
   --drum-snare: #f59e0b;
@@ -91,6 +103,11 @@
   --plate: 124px;
   --side: 120px;
   --knobs: 256px;
+  /* Native controls (scroll bars, a select's list) drawn to match. */
+  color-scheme: dark;
+}
+
+.rack-page {
   /* The page itself is the scrolling area, so the transport can stay put at its top. */
   height: 100vh;
   height: 100dvh;
@@ -107,6 +124,146 @@
   font-size: var(--type-label);
   /* A phone browser's own mark on whatever is tapped. Every control here shows its own state. */
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Colour schemes (services/colourScheme.ts): each gives the same names other values, and the
+   whole rack follows. The block above is Studio, the scheme there was before. A scheme names a
+   value for every colour above except the drums', the scenes' and the people's, which keep
+   their colours everywhere. colourSchemes.test.ts checks each one's contrast. */
+:root[data-scheme="daylight"] .rack-page,
+.rack-page [data-sample="daylight"] {
+  --surface-page: #c4c8cb;
+  --surface-rail: #b3b7ba;
+  --surface-panel-top: #eef0f1;
+  --surface-panel-bottom: #e1e4e6;
+  --surface-inset: #f7f8f8;
+  --surface-control: #f8f9fa;
+  --surface-hover: #eceef0;
+  --surface-well: #ffffff;
+  --surface-field: #ffffff;
+  --surface-display: #e9e3cf;
+  --edge: #9ea3a7;
+  --edge-strong: #757a7e;
+  --edge-faint: #c4c8cb;
+  --edge-beat: #585d61;
+  --edge-control: #9a9fa3;
+  --edge-deep: #6b7074;
+  --edge-rail: #c4c8cb;
+  --text: #121416;
+  --text-plain: #212427;
+  --text-label: #2f3336;
+  --text-faint: #53585c;
+  --text-on: #111111;
+  --on: #cc7a00;
+  --on-bright: #e8961a;
+  --on-glow: rgba(204, 122, 0, 0.4);
+  --lamp-off: #dccca6;
+  --on-deep: #8f5600;
+  --lit: #16181a;
+  --value: #8a5200;
+  --value-glow: rgba(138, 82, 0, 0.3);
+  --action: #202326;
+  --action-text: #f6f6f4;
+  --action-hover: #000000;
+  --focus: #111111;
+  --select: #16181a;
+  --gap: #ffffff;
+  --hover: #3a3e42;
+  --danger: #b7361a;
+  --danger-surface: #fbe3db;
+  --danger-ink: #6b1a07;
+  --danger-word: #a3290f;
+  --shadow-control: 0 1px 2px rgba(0, 0, 0, 0.18);
+  --shadow-float: 0 10px 24px rgba(0, 0, 0, 0.25);
+  color-scheme: light;
+}
+:root[data-scheme="contrast"] .rack-page,
+.rack-page [data-sample="contrast"] {
+  --surface-page: #000000;
+  --surface-rail: #000000;
+  --surface-panel-top: #0d0d0d;
+  --surface-panel-bottom: #0d0d0d;
+  --surface-inset: #000000;
+  --surface-control: #000000;
+  --surface-hover: #1c1c1c;
+  --surface-well: #141414;
+  --surface-field: #000000;
+  --surface-display: #000000;
+  --edge: #bdbdbd;
+  --edge-strong: #ffffff;
+  --edge-faint: #8c8c8c;
+  --edge-beat: #ffffff;
+  --edge-control: #d4d4d4;
+  --edge-deep: #8c8c8c;
+  --edge-rail: #8c8c8c;
+  --text: #ffffff;
+  --text-plain: #ffffff;
+  --text-label: #f2f2f2;
+  --text-faint: #d9d9d9;
+  --text-on: #000000;
+  --on: #ffd400;
+  --on-bright: #ffe866;
+  --on-glow: rgba(255, 212, 0, 0.5);
+  --lamp-off: #3d3300;
+  --on-deep: #b39500;
+  --lit: #ffffff;
+  --value: #ffd400;
+  --value-glow: rgba(255, 212, 0, 0.6);
+  --action: #ffffff;
+  --action-text: #000000;
+  --action-hover: #ffd400;
+  --focus: #00e5ff;
+  --select: #ffffff;
+  --gap: #000000;
+  --hover: #ffffff;
+  --danger: #ff6a4d;
+  --danger-surface: #2b0a03;
+  --danger-ink: #ffe2da;
+  --danger-word: #ffa08c;
+}
+:root[data-scheme="midnight"] .rack-page,
+.rack-page [data-sample="midnight"] {
+  --surface-page: #060a13;
+  --surface-rail: #0b111e;
+  --surface-panel-top: #1c2740;
+  --surface-panel-bottom: #162036;
+  --surface-inset: #111a2d;
+  --surface-control: #0e1626;
+  --surface-hover: #1e2b46;
+  --surface-well: #0c1321;
+  --surface-field: #09101c;
+  --surface-display: #050913;
+  --edge: #34446a;
+  --edge-strong: #5a6e97;
+  --edge-faint: #27344f;
+  --edge-beat: #7f92b8;
+  --edge-control: #3d4f78;
+  --edge-deep: #02050b;
+  --edge-rail: #18223a;
+  --text: #eef2fb;
+  --text-plain: #d7deed;
+  --text-label: #c4cde1;
+  --text-faint: #9ca8c3;
+  --text-on: #04121c;
+  --on: #4cc3ff;
+  --on-bright: #8fdbff;
+  --on-glow: rgba(76, 195, 255, 0.45);
+  --lamp-off: #0f2b3d;
+  --on-deep: #1f6b8f;
+  --lit: #ffffff;
+  --value: #4cc3ff;
+  --value-glow: rgba(76, 195, 255, 0.55);
+  --action: #eef2fb;
+  --action-text: #04121c;
+  --action-hover: #ffffff;
+  --focus: #ffffff;
+  --select: #eef2fb;
+  --gap: #060a13;
+  --hover: #c9d4ea;
+  --danger: #ff7a5c;
+  --danger-surface: #2a1210;
+  --danger-ink: #ffdcd2;
+  --danger-word: #ff9c85;
 }
 
 .rack {
@@ -201,8 +358,8 @@
 .rack-btn:disabled, .rack-btn.go:disabled, .rack-btn.on:disabled { background: var(--surface-well); border-color: var(--edge-faint); color: var(--text-faint); cursor: not-allowed; }
 .rack-btn.on { background: var(--on); color: var(--text-on); border-color: var(--on); }
 /* The one main button of a bar or a dialog is the lightest thing on it. Play is lit, like anything that is on, while it plays. */
-.rack-btn.go { background: var(--action); border-color: var(--action); color: var(--text-on); font-size: var(--type-body); padding: 7px 16px; }
-.rack-btn.go:hover:not(:disabled) { background: #fff; border-color: #fff; color: var(--text-on); }
+.rack-btn.go { background: var(--action); border-color: var(--action); color: var(--action-text); font-size: var(--type-body); padding: 7px 16px; }
+.rack-btn.go:hover:not(:disabled) { background: var(--action-hover); border-color: var(--action-hover); color: var(--action-text); }
 .rack-btn.go.playing, .rack-btn.go.playing:hover:not(:disabled) { background: var(--on); border-color: var(--on); color: var(--text-on); }
 /* Something lit gets lighter under a pointer. Only where there is a pointer: on a touch screen a
    hover stays after the tap, and a lit thing would go on looking different from its neighbours. */
@@ -226,7 +383,7 @@
 }
 .rack .synth-toggle input:focus-visible + .synth-toggle-slider { outline: 2px solid var(--focus); outline-offset: 2px; box-shadow: 0 0 0 2px var(--gap); }
 
-.rack-led { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--lamp-off); border: 1px solid #000; margin-right: 4px; vertical-align: middle; }
+.rack-led { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--lamp-off); border: 1px solid var(--edge-deep); margin-right: 4px; vertical-align: middle; }
 .rack-led.on { background: var(--on); box-shadow: var(--shadow-lamp); }
 
 .rack-ms { display: flex; gap: 3px; flex: none; }
@@ -307,7 +464,7 @@
 .metronome-switches { display: flex; align-items: center; gap: 4px; }
 .tempo-led {
   display: flex; align-items: baseline; gap: 8px; cursor: text;
-  background: var(--surface-display); border: 1px solid #000; border-radius: var(--corner-panel); padding: 3px 10px;
+  background: var(--surface-display); border: 1px solid var(--edge-deep); border-radius: var(--corner-panel); padding: 3px 10px;
   font-family: var(--led-font); letter-spacing: 0.04em;
 }
 .tempo-led-label { font-size: var(--type-caption); color: var(--text-faint); }
@@ -322,8 +479,8 @@
 
 .app-alert {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  background: #2a1a12; border: 1px solid var(--danger); border-radius: var(--corner-panel); padding: 8px 14px;
-  color: #ffd9cc; font-family: var(--sentence-font); text-transform: none; letter-spacing: 0; font-weight: 400; font-size: var(--type-body);
+  background: var(--danger-surface); border: 1px solid var(--danger); border-radius: var(--corner-panel); padding: 8px 14px;
+  color: var(--danger-ink); font-family: var(--sentence-font); text-transform: none; letter-spacing: 0; font-weight: 400; font-size: var(--type-body);
 }
 
 /* A live session: who else is in it, each name in their colour, and on each unit (and its switch on
@@ -452,8 +609,8 @@
 .step-cell.beat { border-color: var(--edge-beat); }
 .step-cell:hover { border-color: var(--hover); }
 .step-cell.has-note { background: var(--on); border-color: var(--on-bright); box-shadow: var(--shadow-lit); }
-.step-cell.has-slide.has-note { background: linear-gradient(90deg, var(--on) 70%, #ffe09a); }
-.step-cell.held { background: linear-gradient(var(--on-glow), var(--on-glow)), var(--surface-well); border-color: #8a6a1f; }
+.step-cell.has-slide.has-note { background: linear-gradient(90deg, var(--on) 70%, var(--on-bright)); }
+.step-cell.held { background: linear-gradient(var(--on-glow), var(--on-glow)), var(--surface-well); border-color: var(--on-deep); }
 .step-cell.chance { border-style: dashed; border-color: var(--text-on); }
 .step-note sup { font-size: 0.75em; margin-left: 1px; }
 /* The selected step is framed inside its own edge: a white band with a dark line either side, so
@@ -466,7 +623,7 @@
 .rack-page .step-cell:focus-visible, .rack-page .drum-step-btn:focus-visible { z-index: 2; }
 .steps-32 .step-cell, .step-row.fine .step-cell { font-size: var(--type-caption); }
 .step-light { position: absolute; top: 2px; left: 50%; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: transparent; }
-.step-light.on { background: #fff; box-shadow: 0 0 6px #fff; }
+.step-light.on { background: var(--lit); box-shadow: 0 0 6px var(--lit); }
 .step-cell:not(.has-note) .step-light.on { background: var(--on); box-shadow: var(--shadow-lamp); }
 .step-velocity-bar { position: absolute; left: 0; bottom: 0; height: 3px; background: rgba(0, 0, 0, 0.45); }
 
@@ -541,7 +698,7 @@
 .drum-step-btn.beat { border-color: var(--edge-beat); }
 .drum-step-btn:hover { border-color: var(--hover); }
 .drum-step-btn.active { background: var(--drum-color); border-color: var(--drum-color); }
-.drum-step-btn.chance { border-style: dashed; border-color: #fff; }
+.drum-step-btn.chance { border-style: dashed; border-color: var(--lit); }
 .drum-step-btn.current { box-shadow: 0 0 0 1px var(--text); }
 .drum-step-btn.picked { box-shadow: inset 0 0 0 1px var(--gap), inset 0 0 0 3px var(--select), inset 0 0 0 4px var(--gap); }
 .drum-step-btn.picked.current { box-shadow: inset 0 0 0 1px var(--gap), inset 0 0 0 3px var(--select), inset 0 0 0 4px var(--gap), 0 0 0 1px var(--text); }
@@ -637,14 +794,14 @@
 .rack-dialog-overlay.sheet .rack-dialog-body { flex: none; gap: 14px; padding: 14px 12px 16px; }
 .knob-sheet-value {
   align-self: center; min-width: 6ch; padding: 4px 16px; text-align: center; white-space: pre;
-  background: var(--surface-display); border: 1px solid #000; border-radius: var(--corner-panel);
+  background: var(--surface-display); border: 1px solid var(--edge-deep); border-radius: var(--corner-panel);
   font-family: var(--led-font); font-size: var(--type-display); line-height: 1.2; color: var(--value); text-shadow: 0 0 8px var(--value-glow);
 }
 .knob-sheet-row { display: flex; align-items: center; gap: 10px; }
 .rack-dialog .knob-sheet-row .rack-btn { flex: none; width: 48px; height: 48px; padding: 0; font-size: var(--type-display); }
 .knob-sheet-row input[type="range"] { flex: 1; min-width: 0; height: 48px; margin: 0; background: none; appearance: none; -webkit-appearance: none; cursor: pointer; touch-action: none; }
-.knob-sheet-row input[type="range"]::-webkit-slider-runnable-track { height: 10px; background: var(--surface-well); border: 1px solid #000; border-radius: var(--corner-control); }
-.knob-sheet-row input[type="range"]::-moz-range-track { height: 10px; background: var(--surface-well); border: 1px solid #000; border-radius: var(--corner-control); }
+.knob-sheet-row input[type="range"]::-webkit-slider-runnable-track { height: 10px; background: var(--surface-well); border: 1px solid var(--edge-deep); border-radius: var(--corner-control); }
+.knob-sheet-row input[type="range"]::-moz-range-track { height: 10px; background: var(--surface-well); border: 1px solid var(--edge-deep); border-radius: var(--corner-control); }
 .knob-sheet-row input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none; width: 38px; height: 38px; margin-top: -15px; border-radius: 50%;
   background: linear-gradient(var(--value), var(--value)) center 5px / 3px 11px no-repeat, radial-gradient(circle, #1a1a1a 0 58%, #2a2a2a 60%);
@@ -741,7 +898,7 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
 .account-mono { font-family: var(--led-font); letter-spacing: 0.04em; }
 .account-check { display: flex; align-items: flex-start; gap: 8px; }
 .account-check input { margin-top: 4px; }
-.rack-dialog-body [role="alert"] { color: #ff8f80; }
+.rack-dialog-body [role="alert"] { color: var(--danger-word); }
 .rack-dialog-body [role="status"] { color: var(--text-label); }
 .rack-list-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: var(--surface-inset); border: 1px solid var(--edge-faint); border-radius: var(--corner-panel); }
 .rack-list-row > span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -754,6 +911,31 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
 .help-contents { display: flex; flex-wrap: wrap; gap: 6px; }
 .help-list { margin: 4px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
 .help-list-plain { list-style: none; padding-left: 0; }
+/* The Colour Scheme dialog: a row for each scheme, with a sample of its panel, its light and its lettering. */
+.scheme-choices { margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 6px; }
+.scheme-choices legend { margin-bottom: 8px; }
+.scheme-choice { display: flex; align-items: center; gap: 12px; padding: 8px 10px; background: var(--surface-inset); border: 1px solid var(--edge-faint); border-radius: var(--corner-panel); cursor: pointer; }
+.scheme-choice:has(input:checked) { border-color: var(--on); }
+.scheme-choice input { accent-color: var(--on); }
+.scheme-sample { flex: none; display: flex; width: 66px; height: 34px; border: 1px solid var(--edge-strong); border-radius: var(--corner-control); overflow: hidden; background: var(--surface-panel-top); }
+.scheme-sample i { flex: 1; }
+.scheme-sample i:nth-child(1) { background: var(--surface-control); }
+.scheme-sample i:nth-child(2) { background: var(--on); }
+.scheme-sample i:nth-child(3) { margin: 9px 6px; border-radius: var(--corner-control); background: var(--text); }
+.scheme-words { display: flex; flex-direction: column; gap: 2px; }
+.scheme-words strong { color: var(--text); }
+.scheme-words span { color: var(--text-plain); }
+/* The list of shortcuts: the keys on the left, what they do on the right; stacked on a phone. */
+.shortcut-groups { display: flex; flex-direction: column; gap: 14px; }
+.shortcut-groups h3 { margin: 0 0 6px; }
+.shortcut-list { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.shortcut-row { display: grid; grid-template-columns: minmax(150px, 38%) 1fr; gap: 10px; align-items: baseline; padding: 6px 8px; background: var(--surface-inset); border: 1px solid var(--edge-faint); border-radius: var(--corner-panel); }
+.shortcut-row dt { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.shortcut-row dd { margin: 0; color: var(--text-plain); }
+.shortcut-keys { display: inline-flex; align-items: center; gap: 3px; color: var(--text-faint); }
+.shortcut-keys > span { display: inline-flex; align-items: center; gap: 3px; }
+.shortcut-or { margin-right: 5px; font-size: var(--type-caption); }
+.shortcut-row kbd { font-family: var(--panel-font); font-size: var(--type-label); font-weight: 600; letter-spacing: 0.04em; color: var(--text); background: var(--surface-control); border: 1px solid var(--edge-control); border-bottom-width: 2px; border-radius: var(--corner-control); padding: 1px 6px; min-width: 1.4em; text-align: center; }
 
 /* The walkthrough: everything but one part of the rack is dimmed, and a card explains that part.
    The dimming is the spot's shadow; the shade under it only keeps clicks off the rack. */
@@ -782,6 +964,7 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
    arrangement (and a few rules of its own after this block). Nothing here applies to any
    other screen. useNarrow holds the same condition; keep the two the same. */
 @media (max-width: 720px), (max-width: 960px) and (max-height: 500px) and (orientation: landscape) {
+  .shortcut-row { grid-template-columns: 1fr; gap: 4px; }
   .rack-page { padding: 0 0 calc(24px + env(safe-area-inset-bottom)); }
   /* The scroll padding keeps whatever is scrolled to, or tabbed to, clear of the bar along the bottom. */
   .rack-page.has-unit-bar {
@@ -926,7 +1109,7 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
   .piano-roll-pager { display: flex; align-items: center; gap: 4px; }
   .piano-roll-pager .rack-btn, .rack .piano-roll-action { min-width: 44px; min-height: 44px; padding: 0 10px; font-size: var(--type-body); }
   .piano-roll-window {
-    min-width: 6ch; padding: 5px 6px; text-align: center; background: var(--surface-display); border: 1px solid #000; border-radius: var(--corner-panel);
+    min-width: 6ch; padding: 5px 6px; text-align: center; background: var(--surface-display); border: 1px solid var(--edge-deep); border-radius: var(--corner-panel);
     font-family: var(--led-font); font-size: var(--type-large); letter-spacing: 0; color: var(--value);
   }
   .piano-roll-grid {
@@ -946,7 +1129,9 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
   .drum-top { grid-template-columns: minmax(0, 1fr); }
   .drum-top .rack-plate { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; }
   .drum-top .drum-kit-select { width: auto; flex: 1; min-width: 0; font-size: var(--type-label); }
-  .drum-top > .rack-knobs { justify-content: flex-start; }
+  .drum-top > .rack-knobs { justify-content: flex-start; flex-wrap: wrap; }
+  /* The tools beside a drum, and the knob row with its swing template, wrap rather than widen the unit. */
+  .drum-tools { flex-wrap: wrap; }
   .drum-grid { gap: 6px; }
   .drum-grid-row { grid-template-columns: 52px 64px minmax(0, 1fr); align-items: stretch; }
   .drum-grid-row .rack-ms { align-items: center; }
@@ -1002,7 +1187,7 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
   .unit-tab {
     flex: 1 1 0; min-width: 0; height: var(--unit-bar); padding: 0 2px;
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px;
-    background: none; border: 0; border-right: 1px solid #232527; border-radius: 0;
+    background: none; border: 0; border-right: 1px solid var(--edge-rail); border-radius: 0;
     color: var(--text-faint); font: inherit; font-size: var(--type-label); text-transform: inherit; letter-spacing: 0.04em; white-space: nowrap; cursor: pointer;
     user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: manipulation;
   }
@@ -1011,7 +1196,7 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
   @media (max-width: 400px) {
     .unit-tab { font-size: var(--type-caption); letter-spacing: 0; }
   }
-  .unit-tab-led { width: 7px; height: 7px; border-radius: 50%; background: var(--lamp-off); border: 1px solid #000; }
+  .unit-tab-led { width: 7px; height: 7px; border-radius: 50%; background: var(--lamp-off); border: 1px solid var(--edge-deep); }
   .unit-tab.empty .unit-tab-name { font-style: italic; }
   .unit-tab[aria-current] { background: var(--surface-well); color: var(--text); box-shadow: inset 0 2px 0 var(--on); }
   .unit-tab-led:not([data-lamp]) { visibility: hidden; }
@@ -1072,4 +1257,4 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
 }
 
 .guest-confirm { display: inline-flex; gap: 4px; }
-.guest-trouble { margin: 0; padding: 6px 10px; border: 1px solid var(--danger); border-radius: var(--corner-panel); color: #ffb4a6; font-family: var(--sentence-font); text-transform: none; letter-spacing: 0; font-weight: 400; font-size: var(--type-label); }
+.guest-trouble { margin: 0; padding: 6px 10px; border: 1px solid var(--danger); border-radius: var(--corner-panel); color: var(--danger-word); font-family: var(--sentence-font); text-transform: none; letter-spacing: 0; font-weight: 400; font-size: var(--type-label); }
