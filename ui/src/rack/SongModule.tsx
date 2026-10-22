@@ -7,6 +7,7 @@ import { TIME_SIGNATURES } from '../services/patternLength';
 import { storeSongView, storedSongView, type SongView } from '../services/songView';
 import ConfirmDialog from './ConfirmDialog';
 import SongPlaylist from './SongPlaylist';
+import TrackTimeline from './TrackTimeline';
 import { SCENE_COLORS, SCENE_COLOR_NAMES } from '../services/sceneColors';
 import UnitHelp, { UNIT_HELP } from './UnitHelp';
 import { tracked } from '../studio/tracked';
@@ -169,7 +170,7 @@ function SongModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
             Song
           </button>
         </div>
-        {view === 'playlist' ? <div className="rack-grow" /> : <div className="song-chain" role="group" aria-label="Song order">
+        {view !== 'blocks' ? <div className="rack-grow" /> : <div className="song-chain" role="group" aria-label="Song order">
           {song.entries.map((entry, index) => {
             const playing = songPosition?.entryIndex === index;
             const move = (to: number) => {
@@ -234,6 +235,14 @@ function SongModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
           >
             Playlist
           </button>
+          <button
+            className={`rack-btn ${view === 'timeline' ? 'on' : ''}`}
+            aria-pressed={view === 'timeline'}
+            onClick={() => showAs('timeline')}
+            title="Show the song along a timeline, with its audio tracks of recordings under it"
+          >
+            Timeline
+          </button>
         </div>
         <label className="song-loop" title="When the song reaches the end, start it again">
           <input type="checkbox" aria-label="Loop the song" checked={song.loop} onChange={(event) => studio.handleSongChange({ loop: event.target.checked })} />
@@ -241,6 +250,7 @@ function SongModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
         </label>
       </div>
       {view === 'playlist' && <SongPlaylist studio={studio} />}
+      {view === 'timeline' && <TrackTimeline studio={studio} />}
       {deleting && (() => {
         const scene = scenes.find(entry => entry.id === deleting);
         if (!scene) return null;

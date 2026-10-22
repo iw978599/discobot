@@ -896,7 +896,7 @@ export function useStudio(engine?: AudioEngine) {
   // What a picture of the sound reads (roadmap 21): a lane's, or the whole mix's.
   const soundAnalyser = useCallback((source: number | 'master') => (source === 'master' ? audio.analyser() : synthAudio.analyser(source)), [audio, synthAudio]);
   const { handleAddGuest, handleRemoveGuest, handleGuestChange, handleDrumSampleChange } = useStudioGuests(core);
-  const { handleTrackChange } = useStudioTracks();
+  const { handleTrackChange, handleAddTrack, handleRemoveTrack, handleAddRecording, handleClipChange, handleClipRemove } = useStudioTracks(core);
 
   const { handleExportProject, handleNewProject, handleOpenProject, handleCopyProject, handleRestoreVersion, handleCopyVersion, handleRenameProject, handleDeleteProject, handleImportProject, handleImportProjectFile, handleMidiImportClick, handleMidiImportFile, handleMidiImportApplyAll } = useStudioProjects(core, { ensureSynthExists });
 
@@ -1002,7 +1002,7 @@ export function useStudio(engine?: AudioEngine) {
     handleMidiImportClick, handleMidiImportFile, handleMidiImportApplyAll, midiImportFileRef, handleRemoveSynth,
     ensureSynthExists, handleOctaveShift, handleTempoChange, handleGlobalPlayStop, handleStepChange, handleStepSelect, handleKeyboardModeChange,
     handlePianoRollNoteAssign, handleClearPatternNotes, handleCopyLaneBar, handleCopyDrumBar, handleTransposeLane, handleRandomizeLane, handleNotePlay, handleNoteRelease, computerKeyNotes, midiState,
-    handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange, guests, audioTracks, handleTrackChange, handleAddGuest, handleRemoveGuest, handleGuestChange, guestRecording, handleExportWav, exportStatus, dismissExportStatus, soundAnalyser, missingDrumSamples, sampleStoreVersion, handleDrumSampleChange, handleLaneBarsChange, handleDrumBarsChange, sceneLength,
+    handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange, guests, audioTracks, handleTrackChange, handleAddTrack, handleRemoveTrack, handleAddRecording, handleClipChange, handleClipRemove, handleAddGuest, handleRemoveGuest, handleGuestChange, guestRecording, handleExportWav, exportStatus, dismissExportStatus, soundAnalyser, missingDrumSamples, sampleStoreVersion, handleDrumSampleChange, handleLaneBarsChange, handleDrumBarsChange, sceneLength,
     handleSynthMixChange, handleSynthSwingChange, handleSynthRename, handleLaneMove, handleLaneStep, laneOrder, handleSaveSynthPreset, handleLoadSynthPreset, handleDeleteSynthPreset,
     handleExportMidi, currentArrangement, reportExportError, handleExportProject, projectImportFileRef, handleImportProjectFile, handleImportProject,
     handleNewProject, handleOpenProject, handleCopyProject, handleRenameProject, handleDeleteProject, handleRestoreVersion, handleCopyVersion, handleImportSynthPreset, handleExportSynthPreset, presetImportReport, setPresetImportReport, handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail,

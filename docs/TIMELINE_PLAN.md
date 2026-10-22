@@ -52,5 +52,11 @@ trimmed, moved and faded, as other web music apps have. This is the plan and how
 - 2026-10-22: stage 2 built: each track a channel of the engine's with a pan, on the mixer
   (level, pan, mute, solo); recordings decoded once (`clipRecordings.ts`); the scheduler plays the
   clips in Song mode (`playClips` in `useStudioTransport`), Stop stops them; a Song WAV lays each
-  track out as a take (`trackRender.ts`) mixed as a guest's is. Not verified by ear. Stage 3
-  (the timeline unit) next.
+  track out as a take (`trackRender.ts`) mixed as a guest's is. Not verified by ear.
+- 2026-10-22: stage 3 built, as the song unit's third view rather than a unit of its own (the
+  phone's bar of units has no room for another switch, and the timeline is a way of showing the
+  song): the song's blocks along the top with the playing bar lit and a mark where new
+  recordings go; tracks with name, mute, solo and remove (asking when it holds clips); Add
+  Recording; clips moved and trimmed by pointer, finger and keyboard; a chosen clip's track,
+  trim, length, level and fades as figures. Stage 4 next: fade handles drawn on the clip, zoom,
+  the walkthrough, and whatever the owner finds.
