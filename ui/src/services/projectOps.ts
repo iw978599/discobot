@@ -4,6 +4,7 @@ import type {
   DrumInstrument, DrumKitId, DrumSettings, DrumState, EffectsLoopState, FxSendLevels, Pattern, Scene, Song,
   SynthModelId, SynthModelParams, SynthParameters,
 } from '../types';
+import type { SwingGrid } from './grooves';
 import type { Guest } from './guests';
 import type { ProjectLane } from './localService';
 
@@ -19,7 +20,7 @@ export type Origin = 'local' | 'remote' | 'history';
 // same operation applied to the same project gives the same project anywhere.
 export type Operation =
   | { type: 'tempo.set'; tempo: number }
-  | { type: 'drum.swing'; swing: number }
+  | { type: 'drum.swing'; swing: number; grid?: SwingGrid }
   | { type: 'drum.masterVolume'; volume: number }
   | { type: 'drum.kit'; kitId: string; applyDefaults?: boolean }
   | { type: 'drum.state'; state: unknown }
@@ -78,7 +79,7 @@ type Total<T extends Record<OpType, unknown>> = T;
 // What each operation answers when it is accepted: exactly what its route answered.
 type OpResults = Total<{
   'tempo.set': { tempo: number };
-  'drum.swing': { swing: number };
+  'drum.swing': { swing: number; grid: SwingGrid };
   'drum.masterVolume': { volume: number };
   'drum.kit': { selectedDrumKitId: DrumKitId; drumState: DrumState };
   'drum.state': DrumAnswer;

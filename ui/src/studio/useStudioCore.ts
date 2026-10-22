@@ -24,6 +24,7 @@ import { LiveArp } from '../services/liveArp';
 import { MidiImportResult } from '../utils/midiImport';
 import { DEFAULT_DRUM_FX, DEFAULT_EFFECTS_LOOP, DEFAULT_DRUM_KIT_ID, createDefaultDrumState } from './studioState';
 import type { SynthPreset, PlayMode, SynthState, ExportStatus } from './studioState';
+import type { SwingGrid } from '../services/grooves';
 export type { PlayMode } from './studioState';
 
 // `engine` is the one that plays everything: the app's, unless another is given (a test's, say).
@@ -39,6 +40,8 @@ export function useStudioCore(engine: AudioEngine = audioEngine) {
   const [selectedDrumKitId, setSelectedDrumKitId] = useState<DrumKitId>(DEFAULT_DRUM_KIT_ID);
   const [drumMasterVolume, setDrumMasterVolume] = useState(1.0);
   const [drumSwing, setDrumSwing] = useState(0);
+  // Which steps the swing moves (services/grooves.ts): sixteenths unless the project says eighths.
+  const [drumSwingGrid, setDrumSwingGrid] = useState<SwingGrid>(16);
   // The order the lanes are shown in, when the project has one (roadmap 20).
   const [laneOrder, setLaneOrder] = useState<number[] | undefined>(undefined);
   const [drumFx, setDrumFx] = useState(DEFAULT_DRUM_FX);
@@ -152,6 +155,7 @@ export function useStudioCore(engine: AudioEngine = audioEngine) {
   const midiChordRef = useRef<{ synthId: number; stepIndex: number; at: number } | null>(null);
   const globalTempoRef = useRef(globalTempo);
   const drumSwingRef = useRef(drumSwing);
+  const drumSwingGridRef = useRef(drumSwingGrid);
   const projectIdRef = useRef(projectId);
   const scenesRef = useRef(scenes);
   const currentSceneIdRef = useRef(currentSceneId);
@@ -218,6 +222,8 @@ export function useStudioCore(engine: AudioEngine = audioEngine) {
     setDrumMasterVolume,
     drumSwing,
     setDrumSwing,
+    drumSwingGrid,
+    setDrumSwingGrid,
     laneOrder,
     setLaneOrder,
     drumFx,
@@ -335,6 +341,7 @@ export function useStudioCore(engine: AudioEngine = audioEngine) {
     midiChordRef,
     globalTempoRef,
     drumSwingRef,
+    drumSwingGridRef,
     projectIdRef,
     scenesRef,
     currentSceneIdRef,

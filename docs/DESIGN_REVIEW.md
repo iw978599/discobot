@@ -874,6 +874,9 @@ on the owner's laptop.
 | `walkthrough-step-1`, `-4`, `-9` | The walkthrough at its first, fourth and last stop |
 | `dialog-midi-samples` | MIDI and samples, with no MIDI available |
 | `dialog-midi-devices`, `dialog-midi-pads` | MIDI and samples with two controllers connected: each device sent somewhere of its own, and the pads' notes with one drum waiting for a pad |
+| `dialog-shortcuts` | Every keyboard shortcut in one list, with its search (Shift + ?) |
+| `dialog-colour-scheme`, `dialog-colour-scheme-daylight` | The colour schemes, each with a sample of its colours; the second with Daylight chosen |
+| `rack-scheme-daylight`, `rack-scheme-high-contrast`, `rack-scheme-midnight` | The rack in each colour scheme other than Studio |
 | `dialog-projects-one` | Projects, with one project |
 | `dialog-projects-family` | Projects, with two that share a name in one row |
 | `dialog-projects` | Projects, with that row being renamed |

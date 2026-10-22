@@ -1327,3 +1327,28 @@ V18. **Importing SoundFonts.** (M) Asked for by the owner on 2026-10-19. A
     (SF2, 9.5 MB), both CC0 (freepats.zenvoid.org); its MuldjordKit drum kit (SF2,
     53 MB, CC BY 4.0); and MuseScore's MS_General, a General MIDI set under MIT, for
     a file of many instruments.
+
+### From comparing other web music apps (2026-10-21)
+
+The owner asked what similar apps have that Discobot lacks. On 2026-10-22 they asked for
+V19 to V22 in one pull request, and then V23.
+
+V19. **Colour schemes, a light one among them.** Done: Studio (as before, the
+    default), Daylight, High Contrast and Midnight, and Match This Device, in the
+    Project menu's Colour Scheme, kept in this browser.
+V20. **A searchable list of keyboard shortcuts.** Done: Shift + ? or Help's
+    Keyboard Shortcuts button.
+V21. **Pattern generation.** Done for the drums: Spread puts so many hits along a
+    drum's bar as evenly as it allows (Euclidean rhythms). Not built: the same
+    for a synth lane, which would need a note for each hit.
+V22. **Swing templates.** Done: the menu beside the drums' Swing knob, swing
+    counted as drum machines count it (54% to 75%, and a triplet), on sixteenths
+    or, new, on eighths. Not built: templates that also set each step's strength
+    (a groove's accents).
+V23. **Audio tracks on a timeline.** (L) Recordings and loops placed on tracks along
+    the song, trimmed, moved and faded: next, after V19 to V22.
+- Not asked for yet: recording from a microphone, cutting a sample into slices,
+  changing a recording's speed or pitch on its own, MP3 export, one-button
+  mastering, a compressor per lane, comments or "remix this" on published songs,
+  a vocoder, granular sound and pitch correction. Ableton Link cannot be done
+  from a web page; turning a recording into notes well needs a paid server.

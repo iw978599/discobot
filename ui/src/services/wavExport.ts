@@ -9,6 +9,7 @@ import { delaySeconds } from './delayTime';
 import { auxBuses, auxSeconds } from './auxSettings';
 import { rateHz } from './rateSync';
 import { expandDrumStep, seededRandom, swingLate } from './drumScheduling';
+import { swingSteps, type SwingGrid } from './grooves';
 import { createZip } from '../utils/zip';
 import { MASTER_LEVEL, SEND_GLIDE, chorusSweep, createWow, delayColorHz, configureLimiter, createAuxEffect, createChorus, createBuiltReverb, createMasterEq, driveCurve, eqGains, reverbImpulse, reverbLevel, safetyCurve, scheduleDuck } from '../hooks/browserAudio';
 import type { DrumInstrument, DrumSettings } from '../types';
@@ -20,6 +21,8 @@ export interface ExportArrangement {
   drumKitId: string;
   drumMasterVolume: number;
   drumSwing: number;
+  // Which steps the swing moves; absent is sixteenths.
+  drumSwingGrid?: SwingGrid;
   drumFx: { sends: FxSendLevels; returnLevel: number };
   effectsLoop: EffectsLoopState;
   // A whole song, one scene per bar. When present these are rendered end to end and each
@@ -115,7 +118,7 @@ const evenBars = (count: number, barDuration: number): BarTime[] => Array.from({
 export function renderSynthBars(
   bars: SequencerStep[][], params: SynthParameters, tempo: number, frames: number, sampleRate: number,
   barDuration = 240 / tempo, sample?: SynthSample | null, times: BarTime[] = evenBars(bars.length, barDuration),
-  automation: Array<Automation | undefined> = [], swing = 0,
+  automation: Array<Automation | undefined> = [], swing = 0, grid: SwingGrid = 16,
 ): Stereo {
   const core = new SynthCore(sampleRate), sound = toVoiceParams(params, tempo);
   core.setParams(sound);
@@ -129,7 +132,7 @@ export function renderSynthBars(
       const now = stepVoiceParams(params, automation[bar], index, tempo), moved = automationChange(automated, now, sound);
       if (moved) core.setParams(moved, start + index * stepDuration);
       automated = now;
-      const late = swingLate(index * stepDuration, 15 / tempo, swing);
+      const late = swingLate(index * stepDuration, 15 / tempo, swing, grid);
       for (const scheduled of expandStepNotes(step, params, stepDuration, tempo, random)) {
         core.noteOn({
           note: scheduled.note, velocity: step.velocity, duration: scheduled.duration,
@@ -141,7 +144,7 @@ export function renderSynthBars(
   return renderCore(core, frames);
 }
 
-type DrumArrangement = Pick<ExportArrangement, 'tempo' | 'drumState' | 'drumKitId' | 'drumMasterVolume' | 'drumSwing' | 'bars' | 'signature' | 'drumSamples' | 'drumCymbals'>;
+type DrumArrangement = Pick<ExportArrangement, 'tempo' | 'drumState' | 'drumKitId' | 'drumMasterVolume' | 'drumSwing' | 'drumSwingGrid' | 'bars' | 'signature' | 'drumSamples' | 'drumCymbals'>;
 // The time signature of each bar a render plays.
 const barSignatures = (arrangement: Pick<ExportArrangement, 'bars' | 'signature'>, bars: number): unknown[] =>
   (arrangement.bars ? arrangement.bars.map(scene => scene.signature) : Array.from({ length: bars }, () => arrangement.signature));
@@ -172,7 +175,7 @@ export function drumHits(arrangement: DrumArrangement, bars = 1, barDuration = 2
           hits.push({
             instrument, velocity: track.stepVelocities?.[step] ?? 1,
             settings: { ...track.settings, volume: track.settings.volume * arrangement.drumMasterVolume },
-            time: start + (step + (step % 2 ? arrangement.drumSwing : 0) + offset) * stepDuration,
+            time: start + (step + swingSteps(step, arrangement.drumSwing, arrangement.drumSwingGrid) + offset) * stepDuration,
           });
         }
       }
@@ -422,7 +425,7 @@ export async function renderArrangement(arrangement: ExportArrangement, options:
     if (!lane.pattern || !lane.synthParams) continue;
     const laneBars = song ? song.map(scene => scene.lanes[lane.id] ?? []) : Array.from({ length: bars }, () => lane.pattern!.steps);
     const laneAutomation = song ? song.map(scene => scene.laneAutomation?.[lane.id]) : Array.from({ length: bars }, () => lane.pattern!.automation);
-    play(renderSynthBars(laneBars, lane.synthParams, arrangement.tempo, frames, sampleRate, barDuration, arrangement.synthSamples?.[lane.id], times, laneAutomation, lane.swing ? arrangement.drumSwing : 0),
+    play(renderSynthBars(laneBars, lane.synthParams, arrangement.tempo, frames, sampleRate, barDuration, arrangement.synthSamples?.[lane.id], times, laneAutomation, lane.swing ? arrangement.drumSwing : 0, arrangement.drumSwingGrid),
       lane.synthParams.fxSends, lane.synthParams.fxReturn, 'synth', lane.synthParams.duck ?? 0, {}, sendTimeline(laneBars, lane.synthParams, laneAutomation, times));
     await partDone();
   }

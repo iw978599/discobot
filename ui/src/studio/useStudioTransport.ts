@@ -14,6 +14,7 @@ import { stepSends, stepVoiceParams } from '../services/automation';
 import { CLICK_LEVEL, clickAt, clickLevel, countInBars } from '../services/metronome';
 import { BrowserTransport } from '../services/browserTransport';
 import { expandDrumStep, swingLate } from '../services/drumScheduling';
+import { swingSteps } from '../services/grooves';
 import { DRUM_NOTE_MAP } from '../utils/midiExport';
 import { guestInputs } from '../services/guestInput';
 import { STEP_LIGHT_AHEAD, midiTime, resetMidiClock } from './studioState';
@@ -29,7 +30,7 @@ export interface StudioTransportNeeds {
 }
 
 export function useStudioTransport(core: StudioCore, needs: StudioTransportNeeds) {
-  const { engine, transportRef, scheduleTickRef, countInRef, metronomeRef, playModeRef, songRef, songStartTickRef, songEndingRef, stopPlaybackRef, setSongPosition, currentSceneIdRef, scenesRef, barAnchorRef, exportingRef, handedByBarRef, synthsRef, autoPassRef, synthAudio, globalTempoRef, drumSwingRef, drumStateRef, drumAudio, synths, liveStartRef, songStartEntryRef, signatureOfRef, announceRef, sceneLengthRef, setStorageError, endAutoPassesRef, setSynths, handleGlobalPlayStopRef, setPlayMode, setSongStartEntry } = core;
+  const { engine, transportRef, scheduleTickRef, countInRef, metronomeRef, playModeRef, songRef, songStartTickRef, songEndingRef, stopPlaybackRef, setSongPosition, currentSceneIdRef, scenesRef, barAnchorRef, exportingRef, handedByBarRef, synthsRef, autoPassRef, synthAudio, globalTempoRef, drumSwingRef, drumSwingGridRef, drumStateRef, drumAudio, synths, liveStartRef, songStartEntryRef, signatureOfRef, announceRef, sceneLengthRef, setStorageError, endAutoPassesRef, setSynths, handleGlobalPlayStopRef, setPlayMode, setSongStartEntry } = core;
   const { sceneLength, signatureOf, triggerStep, endRecordedHolds } = needs;
   const showStep = (lane: number | 'drums', step: number, time: number) => {
     const ahead = time - engine.getContext().currentTime;
@@ -124,8 +125,8 @@ export function useStudioTransport(core: StudioCore, needs: StudioTransportNeeds
       const automation = scene ? scene.laneAutomation?.[synth.id] : synth.pattern.automation, held = scene ? undefined : autoPassRef.current.get(synth.id)?.held;
       synthAudio.automate(synth.id, synth.synthParams, globalTempoRef.current,
         stepVoiceParams(synth.synthParams, automation, index, globalTempoRef.current, held), time - early, stepSends(synth.synthParams, automation, index, held));
-      // A lane that swings plays every second sixteenth late by the drums' swing. Its automation stays on the step.
-      const late = synth.swing ? swingLate(step * duration, duration * 2, drumSwingRef.current) : 0;
+      // A lane that swings plays late as the drums' swing moves their steps. Its automation stays on the step.
+      const late = synth.swing ? swingLate(step * duration, duration * 2, drumSwingRef.current, drumSwingGridRef.current) : 0;
       if (heard.has(synth.id) && note?.active && note.note) {
         triggerStep(synth.synthParams, note, duration * divisor, synth.id, time + late - early);
       }
@@ -138,7 +139,7 @@ export function useStudioTransport(core: StudioCore, needs: StudioTransportNeeds
     const drumStep = (passBar % drumBars(state, signature)) * barSteps(signature) + stepInBar;
     showStep('drums', drumStep, time);
     const drumSolo = (Object.keys(state) as DrumInstrument[]).some(i => state[i].solo);
-    const swingOffset = stepInBar % 2 ? drumSwingRef.current * duration * 2 : 0;
+    const swingOffset = swingSteps(stepInBar, drumSwingRef.current, drumSwingGridRef.current) * duration * 2;
     for (const instrument of Object.keys(state) as DrumInstrument[]) {
       const track = state[instrument];
       if (track.muted || (drumSolo && !track.solo)) continue;

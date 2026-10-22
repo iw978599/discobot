@@ -539,6 +539,29 @@ test('design shots: menus, dialogs, the walkthrough and a guest', async ({ page 
     await shot(walk, 'dialog-midi-pads');
     await page.keyboard.press('Escape');
   });
+  await attempt(walk, 'dialog-shortcuts', async () => {
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.keyboard.press('Shift+?');
+    await expect(page.getByRole('dialog', { name: 'Keyboard Shortcuts', exact: true })).toBeVisible();
+    await shot(walk, 'dialog-shortcuts');
+    await page.keyboard.press('Escape');
+  });
+  // The colour schemes: the dialog, then the rack in each, and back to Studio.
+  await attempt(walk, 'dialog-colour-scheme and the rack in each scheme', async () => {
+    await menu(page, 'Project', 'Colour Scheme');
+    const dialog = page.getByRole('dialog', { name: 'Colour Scheme', exact: true });
+    await expect(dialog).toBeVisible();
+    await shot(walk, 'dialog-colour-scheme');
+    for (const name of ['Daylight', 'High Contrast', 'Midnight']) {
+      await dialog.getByRole('radio', { name: new RegExp(`^${name}`) }).check();
+      if (name === 'Daylight') await shot(walk, 'dialog-colour-scheme-daylight');
+      await page.keyboard.press('Escape');
+      await shot(walk, `rack-scheme-${name.toLowerCase().replace(' ', '-')}`);
+      await menu(page, 'Project', 'Colour Scheme');
+    }
+    await dialog.getByRole('radio', { name: /^Studio/ }).check();
+    await page.keyboard.press('Escape');
+  });
   finish(walk);
 });
 

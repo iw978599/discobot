@@ -13,6 +13,7 @@ import { normalizeSynthModelId } from '../synthModels';
 import type { DrumState, Pattern, Scene, TimeSignature } from '../types';
 import type { ProjectDefaults, ProjectLane, ProjectState } from './localService';
 import type { Operation, OpResult, OpType, Outcome, Rejected } from './projectOps';
+import { MAX_SWING, swingGridOf } from './grooves';
 
 // `origin` is this machine's own address, which a guest may not be loaded from.
 export interface ReducerContext { state: ProjectState; defaults: ProjectDefaults; origin: string | undefined }
@@ -287,8 +288,9 @@ export const reducers: Reducers = {
     track.stepVelocities![op.step] = number(op.velocity, 1, 0, 1);
   }),
   'drum.swing': ({ state }, op) => {
-    state.drumSwing = number(op.swing, state.drumSwing, 0, .75);
-    return update('drumSwing', { swing: state.drumSwing });
+    state.drumSwing = number(op.swing, state.drumSwing, 0, MAX_SWING);
+    if (op.grid !== undefined) { if (swingGridOf(op.grid) === 8) state.drumSwingGrid = 8; else delete state.drumSwingGrid; }
+    return update('drumSwing', { swing: state.drumSwing, grid: swingGridOf(state.drumSwingGrid) });
   },
   'effects.set': ({ state, defaults }, op) => {
     const patch = sent(op.patch);

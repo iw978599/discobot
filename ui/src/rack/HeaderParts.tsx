@@ -115,12 +115,12 @@ export function TempoDisplay({ tempo, onChange, flash, onTap }: { tempo: number;
 }
 
 // `at` is the id of the section to open at, for Help asked for from one unit of the rack.
-export function HelpModal({ open, at, onClose, onWalkthrough }: { open: boolean; at?: string | null; onClose: () => void; onWalkthrough: () => void }) {
+export function HelpModal({ open, at, onClose, onWalkthrough, onShortcuts }: { open: boolean; at?: string | null; onClose: () => void; onWalkthrough: () => void; onShortcuts: () => void }) {
   if (!open) return null;
-  return <HelpContent at={at ?? null} onClose={onClose} onWalkthrough={onWalkthrough} />;
+  return <HelpContent at={at ?? null} onClose={onClose} onWalkthrough={onWalkthrough} onShortcuts={onShortcuts} />;
 }
 
-function HelpContent({ at, onClose, onWalkthrough }: { at: string | null; onClose: () => void; onWalkthrough: () => void }) {
+function HelpContent({ at, onClose, onWalkthrough, onShortcuts }: { at: string | null; onClose: () => void; onWalkthrough: () => void; onShortcuts: () => void }) {
   const [query, setQuery] = useState('');
   const [sections, setSections] = useState<HelpSection[]>([]);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -169,6 +169,7 @@ function HelpContent({ at, onClose, onWalkthrough }: { at: string | null; onClos
     <Dialog title="How to use Discobot" closeLabel="Close help" onClose={onClose}>
       <div className="rack-dialog-actions start">
         <button className="rack-btn go" title="A short tour of the rack, one part at a time" onClick={onWalkthrough}>Show the Walkthrough</button>
+        <button className="rack-btn" title="Every keyboard shortcut, with a search (Shift + ?)" onClick={onShortcuts}>Keyboard Shortcuts</button>
       </div>
       <div className="account-field help-search">
         <label htmlFor="help-search">Search Help</label>
@@ -227,7 +228,7 @@ function HelpContent({ at, onClose, onWalkthrough }: { at: string | null; onClos
             <li><strong>Longer patterns:</strong> each lane's Notes tab and the drum strip have a Bars menu (1, 2, 4 or 8). A longer pattern is shown a bar at a time; pick the bar with the numbered buttons, or turn on Follow to watch the one that is playing. Lanes of different lengths loop against each other.</li>
             <li><strong>Moving a lane:</strong> press Alt and the up or down arrow on a lane's name to move it up or down the rack, or drag its strip in the mixer by its name. Only where it is shown changes: it keeps its number, its MIDI channel and its sound.</li>
             <li><strong>Lanes:</strong> a project starts with three synth lanes; Add Lane, after the third, adds a fourth and a fifth. Type a name in the field on a lane's top line to call it something other than Synth 1; clear it to give the number back.</li>
-            <li><strong>Swing:</strong> the Swing button beside Bars swings that lane by the drums' Swing knob, so the bass and the beat share one groove. Every second sixteenth plays late; turn the drums' knob to set how much. It is in audio exports, MIDI files and shared songs.</li>
+            <li><strong>Swing:</strong> the Swing button beside Bars swings that lane by the drums' Swing knob, so the bass and the beat share one groove. Whatever the drums' swing moves plays late with them; turn the drums' knob to set how much, or choose a swing template beside it. It is in audio exports, MIDI files and shared songs.</li>
             <li><strong>Recording:</strong> with Rec on in a lane's keyboard panel, a key played while the music runs is written where it was played, and lasts as long as the key was held, to the nearest step. Keys held together, or overlapping, are one Undo.</li>
             <li><strong>Notes and Sound:</strong> the open lane's editor has two levels. Notes is what the lane plays: the keyboard or piano roll, and each step's velocity, slide, chance, repeats, timing, strum and note length (in the piano roll, click several notes in one column for a chord, or choose a Chord shape and an Inversion and click its root, and drag a note's right edge to lengthen it; Strum starts each note of a chord a little after the one below it). Sound is what it sounds like: the model, the presets, and under them a page each for Osc, Filter, Amp, LFO, Arp, Inserts and Sends. Sound opens on the page it was last on, and at its top is a picture of the lane's sound as it plays, a <strong>Wave</strong> or a <strong>Spectrum</strong>, so a knob can be seen as well as heard. With Arp on, a key held on the keyboard or a MIDI controller is arpeggiated for as long as it is down, through every key held; Hold keeps it going after the keys come up. With the keyboard on either row of tabs, the arrow keys move along it.</li>
             <li><strong>Inserts:</strong> effects that belong to one lane and that no other lane hears: drive, a tone control (dark to the left, thin to the right), a chorus and a delay, in that order, before the lane's level reaches the mixer. The chorus and the delay can follow the tempo. They start at nothing, so a sound without them is just as it was. The Polysix model's Ensemble knob is the mix of its chorus.</li>
@@ -241,6 +242,8 @@ function HelpContent({ at, onClose, onWalkthrough }: { at: string | null; onClos
         <section id="help-drums" hidden={off('help-drums')}>
           <h3 tabIndex={-1} onKeyDown={(event) => back(event, 'help-drums')}>Drums</h3>
           <ul className="help-list help-list-plain">
+            <li><strong>Swing templates:</strong> the menu beside the Swing knob sets the swing as drum machines count it: how far the late note falls between its neighbours, from 54% to 75%, and Triplet. <strong>16ths</strong> swing every second sixteenth; <strong>8ths</strong> swing the second eighth of each beat, for a shuffle. Turning the knob afterwards keeps the 16ths or 8ths and shows the amount as your own.</li>
+            <li><strong>Spread:</strong> beside Fill, it puts so many hits along the selected drum's bar as evenly as the bar allows (a Euclidean rhythm: 3 in 8 is the tresillo), in place of what was on that bar. Shift then turns it to start elsewhere. One Undo takes it back.</li>
             <li><strong>Step details:</strong> each hit has a velocity, a chance of playing, and a repeat count that packs 2 to 4 hits into the step. Shift+click a hit to step through velocities.</li>
             <li><strong>More / Sends:</strong> More shows the humanize and pan knobs. Sends shows the kit's effect sends, and before them the selected drum's own two, <strong>Delay</strong> and <strong>Reverb</strong>.</li>
             <li><strong>A drum's own sends:</strong> each is that drum's share of what the kit sends to the delay or the reverb, so the kit's Dly Send and Rev Send are the master over all eight drums. Every drum starts at 100%, sent like the rest of the kit. Turn one down to keep that drum out: a dry kick under a snare with reverb on it. Drive, phaser and chorus are sent for the whole kit only. Choosing another kit leaves these where they are; Reset puts them back.</li>
@@ -291,6 +294,7 @@ function HelpContent({ at, onClose, onWalkthrough }: { at: string | null; onClos
             <li><strong>Move along the steps:</strong> with a step selected, the left and right arrow keys select the one before or after it.</li>
             <li><strong>Without a mouse:</strong> Tab stops once on a row of steps, on the drum grid, on the piano roll and on the on-screen keys. From there the arrow keys move from one to the next, Home and End go to the ends, and Space or Enter presses the one you are on. On the on-screen keys, up and down always move a key at a time; left and right do too, unless a step is selected.</li>
             <li><strong>Play and stop:</strong> Space, as the Play All button does. When a button has the keyboard, Space presses that button instead; in a text field it types a space.</li>
+            <li><strong>Every shortcut:</strong> Shift + ? shows them all in one list, with a search; so does Keyboard Shortcuts at the top of Help.</li>
             <li><strong>Tap tempo:</strong> Shift + T</li>
             <li><strong>Undo:</strong> Ctrl/Cmd + Z. <strong>Redo:</strong> Ctrl/Cmd + Shift + Z or Ctrl/Cmd + Y. They step back through note, sound, drum, tempo and effects edits in the order you made them.</li>
           </ul>

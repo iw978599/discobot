@@ -7,6 +7,7 @@ import { localService } from '../services/localService';
 import { startProjectSync } from '../services/projectSync';
 import { startLiveSessions } from '../services/liveSession';
 import { tidyGuestFiles } from '../services/guestFiles';
+import { swingGridOf } from '../services/grooves';
 import { laneBars, sceneBars, storedSignature, timeSignature } from '../services/patternLength';
 import { loadStoredPresets, presetStore } from '../services/presetStore';
 import { expandStepNotes, withStepNotes } from '../services/noteScheduling';
@@ -56,6 +57,8 @@ export function useStudio(engine?: AudioEngine) {
     setDrumMasterVolume,
     drumSwing,
     setDrumSwing,
+    drumSwingGrid,
+    setDrumSwingGrid,
     laneOrder,
     setLaneOrder,
     drumFx,
@@ -157,6 +160,7 @@ export function useStudio(engine?: AudioEngine) {
     effectsLoopRef,
     globalTempoRef,
     drumSwingRef,
+    drumSwingGridRef,
     projectIdRef,
     scenesRef,
     currentSceneIdRef,
@@ -223,6 +227,7 @@ export function useStudio(engine?: AudioEngine) {
   effectsLoopRef.current = effectsLoop;
   globalTempoRef.current = globalTempo;
   drumSwingRef.current = drumSwing;
+  drumSwingGridRef.current = drumSwingGrid;
   projectIdRef.current = projectId;
   scenesRef.current = scenes;
   currentSceneIdRef.current = currentSceneId;
@@ -505,6 +510,7 @@ export function useStudio(engine?: AudioEngine) {
         if (message.data.tempo) setGlobalTempo(message.data.tempo);
         if (typeof message.data.drumMasterVolume === 'number') setDrumMasterVolume(message.data.drumMasterVolume);
         if (typeof message.data.drumSwing === 'number') setDrumSwing(message.data.drumSwing);
+        setDrumSwingGrid(swingGridOf(message.data.drumSwingGrid));
         if (typeof message.data.projectId === 'string') {
           setProjectId(message.data.projectId);
           setProjectName(message.data.name);
@@ -564,6 +570,7 @@ export function useStudio(engine?: AudioEngine) {
         setGlobalTempo(data.tempo);
         setDrumMasterVolume(data.drumMasterVolume);
         setDrumSwing(data.drumSwing);
+        setDrumSwingGrid(swingGridOf(data.drumSwingGrid));
         setScenes(data.scenes);
         setCurrentSceneId(data.currentSceneId);
         setSong(data.song);
@@ -738,6 +745,7 @@ export function useStudio(engine?: AudioEngine) {
       }
       case 'drumSwing': {
         if (typeof message.data.swing === 'number') setDrumSwing(message.data.swing);
+        setDrumSwingGrid(swingGridOf(message.data.grid));
         break;
       }
       case 'drumKitChanged': {
@@ -876,7 +884,7 @@ export function useStudio(engine?: AudioEngine) {
     const hasSelected = data.kits.some((kit) => kit.id === selectedDrumKitIdRef.current);
     if (!hasSelected) setSelectedDrumKitId(data.defaultKitId);
   }, []);
-  const { handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail, handleDrumSettingsChange, handleDrumMixChange, handleDrumReset, handleStarter, handleCopyPartToScene, handleSampleSong, dismissStarters, handleDrumMasterVolumeChange, handleDrumSwingChange, handleDrumFxChange, handleEffectsLoopChange, handleDrumMuteAll, handleDrumSoloAll } = useStudioDrums(core, { handleImportProject });
+  const { handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail, handleDrumSettingsChange, handleDrumMixChange, handleDrumReset, handleStarter, handleCopyPartToScene, handleSampleSong, dismissStarters, handleDrumMasterVolumeChange, handleDrumSwingChange, handleSwingTemplate, handleDrumFxChange, handleEffectsLoopChange, handleDrumMuteAll, handleDrumSoloAll } = useStudioDrums(core, { handleImportProject });
 
   // Everything back to a new project's, as one undo step.
   const handleReset = useCallback(async () => {
@@ -965,7 +973,7 @@ export function useStudio(engine?: AudioEngine) {
     midiPads, midiPadLearn, handleMidiPadLearn, handleMidiPadsReset, midiDestinations, handleMidiDestinationChange,
     handleCopyPartToScene, handleStarter, handleSampleSong, dismissStarters, showStarters, metronome, handleMetronomeChange,
     synths, selectedSynthId, setSelectedSynthId, drumState: memoizedDrumState, drumKits,
-    selectedDrumKitId, drumMasterVolume, drumSwing, drumFx, effectsLoop, browserMuted, setBrowserMuted,
+    selectedDrumKitId, drumMasterVolume, drumSwing, drumSwingGrid, drumFx, effectsLoop, browserMuted, setBrowserMuted,
     browserVolume, setBrowserVolume, globalTempo, storageError, setStorageError, changedElsewhere, loadOtherTabVersion, keepThisTabVersion, helpOpen, setHelpOpen, midiMode, setMidiMode,
     recording, setRecording, autoRecording, setAutoRecording, handleAutomationDraw, handleAutomationClear, quantize, setQuantize, midiChannel, setMidiChannel, midiDrumChannel, setMidiDrumChannel, midiOutNotes, setMidiOutNotes, midiOutClock, setMidiOutClock, midiTargetSynthId, setMidiTargetSynthId, projectId, projectName, projects, synthPresets, drumAudio,
     handleUndo, handleRedo, midiImportData, setMidiImportData, midiImportAssignments, setMidiImportAssignments,
@@ -976,7 +984,7 @@ export function useStudio(engine?: AudioEngine) {
     handleSynthMixChange, handleSynthSwingChange, handleSynthRename, handleLaneMove, handleLaneStep, laneOrder, handleSaveSynthPreset, handleLoadSynthPreset, handleDeleteSynthPreset,
     handleExportMidi, currentArrangement, reportExportError, handleExportProject, projectImportFileRef, handleImportProjectFile, handleImportProject,
     handleNewProject, handleOpenProject, handleCopyProject, handleRenameProject, handleDeleteProject, handleRestoreVersion, handleCopyVersion, handleImportSynthPreset, handleExportSynthPreset, presetImportReport, setPresetImportReport, handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail,
-    handleDrumSettingsChange, handleDrumMixChange, handleDrumReset, handleDrumMasterVolumeChange, handleDrumSwingChange,
+    handleDrumSettingsChange, handleDrumMixChange, handleDrumReset, handleDrumMasterVolumeChange, handleDrumSwingChange, handleSwingTemplate,
     handleDrumFxChange, handleEffectsLoopChange, handleDrumMuteAll, handleDrumSoloAll, handleReset,
     scenes, currentSceneId, song, playMode, setPlayMode, songStartEntry, setSongStartEntry, songPosition,
     handleSceneSelect, handleSceneAdd, handleSceneRename, handleSceneColor, handleSceneTempo, handleSceneMove, handleSceneSignature, handleSceneDelete, handleSongChange, songArrangement, handleExportSongMidi,
