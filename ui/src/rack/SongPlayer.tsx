@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const clock = (seconds: number) => {
   const whole = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
@@ -7,11 +7,17 @@ const clock = (seconds: number) => {
 
 // The rack's own player for a rendered song: play and pause, a bar to move along it, and the
 // time. The sound is an ordinary audio element, kept out of sight; this only drives it.
-export default function SongPlayer({ src, label }: { src: string; label: string }) {
+// `onAudio` hands that element to whatever else follows the song (the share page's timeline).
+export default function SongPlayer({ src, label, onAudio }: { src: string; label: string; onAudio?: (audio: HTMLAudioElement | null) => void }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
   const [length, setLength] = useState(0);
+
+  useEffect(() => {
+    onAudio?.(audioRef.current);
+    return () => onAudio?.(null);
+  }, [onAudio]);
 
   const toggle = () => {
     const audio = audioRef.current;

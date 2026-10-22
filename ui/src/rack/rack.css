@@ -221,7 +221,7 @@
 .rack-page :is(button, select, input, textarea, a, summary, [role="slider"], [tabindex="0"], .help-sections h3):focus-visible {
   outline: 2px solid var(--focus); outline-offset: 2px; box-shadow: 0 0 0 2px var(--gap);
 }
-.rack-page :is(.rack-menu-list button, .song-block button, .piano-roll-cell, .key):focus-visible {
+.rack-page :is(.rack-menu-list button, .song-block button, .song-timeline-entry, .piano-roll-cell, .key):focus-visible {
   outline-offset: -2px; box-shadow: inset 0 0 0 4px var(--gap);
 }
 .rack .synth-toggle input:focus-visible + .synth-toggle-slider { outline: 2px solid var(--focus); outline-offset: 2px; box-shadow: 0 0 0 2px var(--gap); }
@@ -377,7 +377,7 @@
 [data-color="teal"] { --scene-color: var(--scene-teal); }
 [data-color="violet"] { --scene-color: var(--scene-violet); }
 [data-color="pink"] { --scene-color: var(--scene-pink); }
-.scene-strip .scene-chip[data-color], .song-chain .song-block[data-color], .shared-song-order span[data-color] { border-left: 5px solid var(--scene-color); }
+.scene-strip .scene-chip[data-color], .song-chain .song-block[data-color] { border-left: 5px solid var(--scene-color); }
 .scene-color, .scene-time { display: flex; align-items: center; gap: 6px; color: var(--text-label); }
 /* Dragging a scene, a block or a row: the one picked up is faint, and the place it would go has a
    lighter edge. Nothing in them is selected as text while they are dragged. */
@@ -672,8 +672,13 @@
 .shared-card h1 { margin: 0; font-size: var(--type-hero); line-height: 1.05; letter-spacing: 0.02em; color: var(--text); text-transform: uppercase; overflow-wrap: anywhere; }
 .shared-eyebrow { font-size: var(--type-label); letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-label); font-weight: 600; }
 .shared-facts { margin: 0; font-family: var(--led-font); color: var(--text-label); font-size: var(--type-label); }
-.shared-song-order { display: flex; flex-wrap: wrap; gap: 4px; }
-.shared-song-order span { border: 1px solid var(--edge-control); border-radius: var(--corner-control); padding: 4px 9px; font-size: var(--type-label); letter-spacing: 0.06em; text-transform: uppercase; background: var(--surface-control); }
+/* The song as a strip: each entry as wide as it lasts, the playing one lit, a line on the beat. */
+.song-timeline { position: relative; display: flex; gap: 3px; width: 100%; box-sizing: border-box; overflow-x: auto; padding-bottom: 2px; }
+.song-timeline-entry { flex: 1 0 0; min-width: 56px; box-sizing: border-box; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; border: 1px solid var(--edge-control); border-left: 5px solid var(--scene-color, var(--edge-control)); border-radius: var(--corner-control); padding: 10px 8px; font: inherit; font-size: var(--type-label); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-plain); background: var(--surface-control); }
+button.song-timeline-entry { cursor: pointer; }
+button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-color: var(--hover); border-bottom-color: var(--hover); }
+.song-timeline-entry.playing { background: var(--on); color: var(--text-on); }
+.song-timeline-line { position: absolute; top: 0; bottom: 2px; width: 2px; margin-left: -1px; background: var(--text); pointer-events: none; }
 .song-player { display: flex; align-items: center; gap: 12px; width: 100%; box-sizing: border-box; padding: 10px 12px; background: var(--surface-inset); border: 1px solid var(--edge-faint); border-radius: var(--corner-panel); }
 .song-player input[type="range"] { flex: 1; min-width: 0; accent-color: var(--value); }
 .song-player-time { flex: none; font-family: var(--led-font); font-size: var(--type-large); letter-spacing: 0; color: var(--value); white-space: nowrap; }

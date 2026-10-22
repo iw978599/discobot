@@ -69,6 +69,7 @@ test('a share link opens a page that plays the song, and a visitor can keep a co
   await expect(shared).toContainText('2 bars');
   await expect(shared).toContainText('2 scenes');
   await expect(shared.getByLabel('Song order')).toContainText('Scene 2 ×1');
+  await expect(shared.getByLabel('Song order').getByRole('button'), 'nothing to press before the song is ready').toHaveCount(0);
   await expect(visitor.locator('.rack')).toHaveCount(0);
 
   await shared.getByRole('button', { name: /Listen/ }).click();
@@ -78,6 +79,18 @@ test('a share link opens a page that plays the song, and a visitor can keep a co
   await expect(player.getByRole('button', { name: /Pause/ }), 'the player is the rack\'s own and shows that it is playing').toBeVisible();
   await expect.poll(() => audio.evaluate((element: HTMLAudioElement) => element.duration), { message: 'two bars at 140 BPM plus a tail' }).toBeGreaterThan(3.4);
   await expect.poll(() => audio.evaluate((element: HTMLAudioElement) => element.currentTime), { message: 'it is actually playing' }).toBeGreaterThan(0);
+
+  // The song order is a strip that follows the music: the playing scene is lit, and pressing one
+  // plays from it.
+  const order = shared.getByRole('group', { name: 'Song order', exact: true });
+  const first = order.getByRole('button', { name: 'Scene 1 ×1', exact: true });
+  const second = order.getByRole('button', { name: 'Scene 2 ×1', exact: true });
+  await expect(second, 'the song moves on to its second scene').toHaveAttribute('aria-current', 'true', { timeout: 10_000 });
+  await expect(first).not.toHaveAttribute('aria-current', 'true');
+  await expect(order.locator('.song-timeline-line')).toBeAttached();
+  await first.click();
+  await expect(first, 'pressing a scene plays from it').toHaveAttribute('aria-current', 'true');
+  await expect.poll(() => audio.evaluate((element: HTMLAudioElement) => !element.paused)).toBe(true);
   expect((await project(visitor)).name, 'listening does not save anything into the visitor\'s projects').toBe('Untitled');
 
   await shared.getByRole('button', { name: 'Open a Copy to Edit', exact: true }).click();
