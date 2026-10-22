@@ -143,13 +143,13 @@ test('the song\'s Timeline view adds a recording at a bar, and moves, fades and 
   await page.keyboard.press('ArrowDown');
   await expect(timeline.getByRole('group', { name: 'Audio track Audio 2', exact: true }).getByRole('button', { name: /^Tone, / })).toBeFocused();
 
-  // A drag of one bar to the right, snapped to the beat.
+  // A drag of one bar to the right, snapped to the beat, from the middle: the chosen clip's ends trim it.
   await clip.scrollIntoViewIfNeeded();
   const box = (await clip.boundingBox())!;
-  await page.mouse.move(box.x + 6, box.y + box.height / 2);
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
-  await page.mouse.move(box.x + 30, box.y + box.height / 2, { steps: 3 });
-  await page.mouse.move(box.x + 6 + 64, box.y + box.height / 2, { steps: 3 });
+  await page.mouse.move(box.x + box.width / 2 + 24, box.y + box.height / 2, { steps: 3 });
+  await page.mouse.move(box.x + box.width / 2 + 64, box.y + box.height / 2, { steps: 3 });
   await page.mouse.up();
   await expect.poll(clipAt).toEqual([72]);
   await expect(clip).toHaveAccessibleName('Tone, Audio 2, bar 3 beat 2, 1 s');
