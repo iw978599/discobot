@@ -609,10 +609,10 @@ export default function SynthControls({
                 className="synth-select"
                 disabled={isFm || isSample}
               >
-                <option value="sine">~</option>
-                <option value="square">⎍</option>
-                <option value="sawtooth">/|</option>
-                <option value="triangle">/\</option>
+                <option value="sine">Sine</option>
+                <option value="square">Square</option>
+                <option value="sawtooth">Saw</option>
+                <option value="triangle">Triangle</option>
               </select>
             </div>
             <Knob
@@ -963,10 +963,10 @@ export default function SynthControls({
                     className="synth-select"
                     disabled={!osc2.enabled}
                   >
-                    <option value="sine">~</option>
-                    <option value="square">⎍</option>
-                    <option value="sawtooth">/|</option>
-                    <option value="triangle">/\</option>
+                    <option value="sine">Sine</option>
+                    <option value="square">Square</option>
+                    <option value="sawtooth">Saw</option>
+                    <option value="triangle">Triangle</option>
                   </select>
                 </div>
                 <Knob
@@ -1467,10 +1467,10 @@ export default function SynthControls({
                 className="synth-select"
                 disabled={!parameters.lfo1.enabled}
               >
-                <option value="sine">~</option>
-                <option value="square">⎍</option>
-                <option value="sawtooth">/|</option>
-                <option value="triangle">/\</option>
+                <option value="sine">Sine</option>
+                <option value="square">Square</option>
+                <option value="sawtooth">Saw</option>
+                <option value="triangle">Triangle</option>
               </select>
             </div>
             <div className="synth-waveform-selector">
@@ -1551,10 +1551,10 @@ export default function SynthControls({
                 className="synth-select"
                 disabled={!parameters.lfo2.enabled}
               >
-                <option value="sine">~</option>
-                <option value="square">⎍</option>
-                <option value="sawtooth">/|</option>
-                <option value="triangle">/\</option>
+                <option value="sine">Sine</option>
+                <option value="square">Square</option>
+                <option value="sawtooth">Saw</option>
+                <option value="triangle">Triangle</option>
               </select>
             </div>
             <div className="synth-waveform-selector">

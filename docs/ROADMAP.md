@@ -142,7 +142,7 @@ directly, with no builder.
     folded into them (sound 4). Done: up to eight routes, the list showing
     those in use and one more; each LFO's own target and depth are the first
     rows of the routing list, still the LFO's own setting, so no sound changed.
-26. **The design review's screens not looked at** (improvements 9).
+26. **The design review's screens not looked at** (improvements 9). Done: looked at, five faults fixed, two questions for the owner (`docs/DESIGN_REVIEW.md`, part 7).
 27. **Published songs** (features 9): a description or picture, the list's
     order, playing from the list.
 

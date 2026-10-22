@@ -940,3 +940,49 @@ on the owner's laptop.
 | `phone-unit-all` | "All": the whole rack on one page |
 | `phone-landscape-synth`, `phone-landscape-keyboard`, `phone-landscape-drums` | A phone on its side, 740 by 360 |
 | `kids-pads-landscape`, `kids-beat-landscape` | Kids mode on a phone on its side |
+| `lane-two-bars-follow`, `lane-32-steps`, `lane-model-knobs`, `lane-tab-amp`, `lane-tab-arp` | A lane of two bars on its second, a lane of 32 steps, a lane on the Juno-106, the Amp and Arp pages |
+| `song-mode-playing` | Song mode while the song plays |
+| `rack-width-900`, `rack-width-1600` | The rack 900 pixels wide (a tablet upright) and 1,600 wide (desktop only) |
+
+## 7. The screens not looked at, looked at (roadmap 26, 2026-10-22)
+
+Pictures from pull request 262's run: the screens part 5 lists as not captured that could be
+reached (above, at the end of the table), and the newest screens (the colour schemes, the
+timeline, the shortcuts). Looked at by the agent, not by the owner.
+
+Fixed in pull request 262:
+
+- **The top bar cut Sign In to "SI"** at 1,280 pixels wide, the common laptop width: the row
+  never wrapped and the account button was the one thing allowed to shrink. It now keeps its
+  width, the row's gaps are a little narrower, and where the row still does not fit (the rack's
+  least width, 1,060) it goes on to a second line. A phone's bar is unchanged.
+- **The wave menus showed a box** for Square: `⎍` is in no common typeface, and a screen reader
+  read the others as punctuation ("tilde", "slash bar"). Every wave menu now names its shapes:
+  Sine, Square, Saw, Triangle.
+- **The piano roll's header had no gap**: the Chord menu touched the word Inversion.
+- **The Arp page** put its one row of controls at the far right of an otherwise empty page; it
+  now starts at the left like every other page.
+- **A track's name on the timeline, on a phone,** was squeezed to a sliver by its three buttons;
+  it now has a line of its own above them.
+
+For the owner to decide:
+
+- **Between a phone and the desktop (721 to 1,059 pixels wide), the rack is cut off on the
+  right**: at 900 pixels, Export, Sign In, MIDI, Help, Mute and the main volume are off screen,
+  and so are a lane's knobs; the page scrolls sideways to reach them. A tablet upright, and a
+  narrow window, are in this range. Two ways out: give that range the phone's arrangement (one
+  unit at a time, the bar of units) as the Kindle already has; or let the desktop rack fold its
+  rows below 1,060. The first is small and reuses what is tested; the second keeps the whole rack
+  on one page but touches every unit's layout.
+- **32 steps keeps a tune's steps where they were and adds empty ones after**, so a lane of
+  sixteenths switched to 32 steps plays its tune twice as fast in the first half of the bar. It is
+  written that way on purpose (`handleStepCountChange`), but it surprises; spreading the notes so
+  the tune keeps its timing may be what a person expects.
+
+Looked at and fine: a lane of two bars with its bar buttons and Follow, a lane on a synth model
+with its four macros, the Amp page, song mode playing (the block lit with its pass, 1/2), the
+timeline and the shortcuts at both widths, the colour schemes Daylight, High Contrast and
+Midnight, and the rack at 1,600 wide (centred, the frame at its greatest width). Still not
+captured: the browser's own menus opened, MIDI import's dialog, the account's password forms,
+the banners, a guest that fails to load. Still not seen: a real phone or tablet, Safari or
+Firefox, a screen reader.
