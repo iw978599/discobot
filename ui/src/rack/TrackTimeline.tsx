@@ -6,6 +6,7 @@ import { songSecondsAt, songTickAt } from '../services/clipTiming';
 import { recordingNow } from '../services/clipRecordings';
 import { MAX_TRACKS, MAX_CLIP_GAIN, type AudioClip, type AudioTrack } from '../services/audioTracks';
 import ConfirmDialog from './ConfirmDialog';
+import SessionRecordButton from './SessionRecordButton';
 
 // The song's timeline (docs/TIMELINE_PLAN.md, stage 3), shown as the song unit's third view: the
 // song's blocks along the top, bar by bar, and the audio tracks under them with their clips. A
@@ -189,6 +190,7 @@ export default function TrackTimeline({ studio }: { studio: Studio }) {
       <div className="timeline-tools">
         <button className="rack-btn" disabled={audioTracks.length >= MAX_TRACKS} onClick={() => { const id = studio.handleAddTrack(); if (id) setChosenTrack(id); }} title={`Add an audio track (up to ${MAX_TRACKS})`}>+ Track</button>
         <button className="rack-btn" onClick={() => fileRef.current?.click()} title="Put a recording from a file on the chosen track, at the mark">Add Recording…</button>
+        <SessionRecordButton onToggle={() => { void studio.handleRecordSession().then(id => { if (id) setSelected(id); }); }} />
         <input ref={fileRef} type="file" accept="audio/*,.wav,.mp3,.ogg,.flac,.m4a" hidden aria-label="Recording file" onChange={(event) => { void addRecording(event.target.files?.[0]); event.target.value = ''; }} />
         <label className="timeline-place">
           At bar

@@ -198,3 +198,28 @@ test('the timeline zooms, and a chosen clip\'s fade is dragged by its handle', a
   expect((await project()).audioTracks[0].clips[0].at, 'the clip did not move').toBe(0);
   await expect(clip.locator('.timeline-fade.in')).toBeVisible();
 });
+
+test('Record Session puts what this browser heard on a new Session track', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const project = () => page.evaluate(() => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem('discobot_browser_project_v1') || '{}')));
+  for (const step of [1, 5, 9, 13]) await page.getByRole('button', { name: `Kick step ${step}`, exact: true }).click();
+  await page.getByRole('group', { name: 'Song layout', exact: true }).getByRole('button', { name: 'Timeline', exact: true }).click();
+  const timeline = page.getByRole('group', { name: 'Timeline', exact: true });
+
+  await page.getByRole('button', { name: /Play All/ }).click();
+  await timeline.getByRole('button', { name: '● Record Session', exact: true }).click();
+  const stop = timeline.getByRole('button', { name: 'Stop Recording', exact: true });
+  await expect(stop).toHaveAttribute('aria-pressed', 'true');
+  await page.waitForTimeout(1600);
+  await stop.click();
+
+  const session = timeline.getByRole('group', { name: 'Audio track Session', exact: true });
+  await expect(session, 'the take is on a track of its own').toBeVisible({ timeout: 15_000 });
+  const clip = session.getByRole('button', { name: /^Session \d{4}-\d{2}-\d{2} \d{2}\.\d{2}, Session, bar 1 beat 1, / });
+  await expect(clip).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(async () => (await project()).audioTracks?.[0]?.clips?.[0]?.length ?? 0, { message: 'about as long as it was recording' }).toBeGreaterThan(1);
+  expect((await project()).audioTracks[0].clips[0].length).toBeLessThan(4);
+  await expect(timeline.getByRole('button', { name: '● Record Session', exact: true })).toBeVisible();
+  expect(errors).toEqual([]);
+});

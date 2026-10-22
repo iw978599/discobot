@@ -26,6 +26,7 @@ import AddGuestDialog from './AddGuestDialog';
 import VersionsDialog from './VersionsDialog';
 import { HelpModal } from './HeaderParts';
 import ShortcutsDialog from './ShortcutsDialog';
+import SessionRecordButton from './SessionRecordButton';
 import ColourSchemeDialog from './ColourSchemeDialog';
 import { opensShortcuts } from '../services/shortcuts';
 import { useWakeLock } from '../hooks/useWakeLock';
@@ -295,6 +296,7 @@ export default function Rack({ studio }: { studio: Studio }) {
             >
               Snap their notes to the beat
             </button>}
+            {people.length > 0 && <SessionRecordButton onToggle={() => { void studio.handleRecordSession(); }} />}
             <button className="rack-btn" onClick={openLive}>Session Setup</button>
           </div>
         )}
