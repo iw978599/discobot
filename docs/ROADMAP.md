@@ -1345,7 +1345,7 @@ V22. **Swing templates.** Done: the menu beside the drums' Swing knob, swing
     counted as drum machines count it (54% to 75%, and a triplet), on sixteenths
     or, new, on eighths. Not built: templates that also set each step's strength
     (a groove's accents).
-V23. **Audio tracks on a timeline.** (L) In progress, in four stages (`docs/TIMELINE_PLAN.md`); stage 1, the stored data, done. Recordings and loops placed on tracks along
+V23. **Audio tracks on a timeline.** (L) In progress, in four stages (`docs/TIMELINE_PLAN.md`); stages 1 and 2, the stored data and the sound, done. Recordings and loops placed on tracks along
     the song, trimmed, moved and faded: next, after V19 to V22.
 - Not asked for yet: recording from a microphone, cutting a sample into slices,
   changing a recording's speed or pitch on its own, MP3 export, one-button

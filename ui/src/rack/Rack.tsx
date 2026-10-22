@@ -120,10 +120,10 @@ export default function Rack({ studio }: { studio: Studio }) {
 
   // The mixer is handed the levels it shows, already gathered, and the same object for as long as
   // none of them changes: the lanes and the drums are new objects after every note and step.
-  const { synths, drumState, drumMasterVolume, guests, effectsLoop, browserVolume, laneOrder } = studio;
+  const { synths, drumState, drumMasterVolume, guests, audioTracks, effectsLoop, browserVolume, laneOrder } = studio;
   const levels = useMemo(
-    () => mixerChannels({ synths, drumState, drumMasterVolume, guests, effectsLoop, browserVolume, laneOrder }),
-    [synths, drumState, drumMasterVolume, guests, effectsLoop, browserVolume, laneOrder],
+    () => mixerChannels({ synths, drumState, drumMasterVolume, guests, audioTracks, effectsLoop, browserVolume, laneOrder }),
+    [synths, drumState, drumMasterVolume, guests, audioTracks, effectsLoop, browserVolume, laneOrder],
   );
   const mixer = useRef(levels);
   if (!sameMixer(mixer.current, levels)) mixer.current = levels;

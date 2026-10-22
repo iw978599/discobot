@@ -14,6 +14,7 @@ import UnitHelp, { UNIT_HELP } from './UnitHelp';
 import Scope from '../components/Scope';
 import { dragClass, useDragOrder } from './useDragOrder';
 import type { DrumInstrument } from '../types';
+import { TRACK_VOLUME } from '../services/audioTracks';
 
 const SOUND_DEFAULTS = createDefaultSynthParameters();
 const laneParsePan = (input: string) => parsePan(input, 'lane');
@@ -102,7 +103,7 @@ function MixerModule({ studio, channels, onHelp }: { studio: Studio; channels: M
     storeMixerHidden(!hidden);
     setHidden(!hidden);
   };
-  const { lanes, drums, guests, returns } = channels;
+  const { lanes, drums, guests, tracks, returns } = channels;
   // A lane's strip dragged to another's place moves the lane there on the rack too (roadmap 20).
   const laneOrder = useDragOrder('mixer-lanes', (from, to) => { void studio.handleLaneMove(lanes[from].id, lanes[to].id); }, false, '.mixer-name');
 
@@ -150,6 +151,24 @@ function MixerModule({ studio, channels, onHelp }: { studio: Studio; channels: M
                   level={{ word: 'level', value: guest.volume, home: 0.8, hint: 'How loud this guest is in the open scene. A guest has a level and a mute for each scene', onChange: (value) => { void studio.handleGuestChange(guest.id, { volume: value }); } }}
                   muted={guest.muted}
                   onMute={() => { void studio.handleGuestChange(guest.id, { muted: !guest.muted }); }}
+                />
+              ))}
+            </Group>
+          )}
+          {tracks.length > 0 && (
+            <Group name="Audio" note="Tracks on the timeline">
+              {tracks.map(track => (
+                <Strip
+                  key={track.id}
+                  about={`audio ${track.name}`}
+                  name="Audio"
+                  under={track.name}
+                  level={{ word: 'level', value: track.volume, home: TRACK_VOLUME, hint: 'How loud this audio track is', onChange: (value) => studio.handleTrackChange(track.id, { volume: value }) }}
+                  pan={{ value: track.pan, kind: 'lane', onChange: (value) => studio.handleTrackChange(track.id, { pan: value }) }}
+                  muted={track.muted}
+                  solo={track.solo}
+                  onMute={() => studio.handleTrackChange(track.id, { muted: !track.muted })}
+                  onSolo={() => studio.handleTrackChange(track.id, { solo: !track.solo })}
                 />
               ))}
             </Group>
