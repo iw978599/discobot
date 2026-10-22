@@ -232,7 +232,8 @@ slow down every later change.
    `AudioEngine` in `browserAudio.ts`, which can be disposed of and made
    again, and tests make their own. Still open: every caller still goes
    through the module's functions, which call the app's one engine. Passing
-   the engine to the hooks explicitly is the next step.
+   the engine to the hooks explicitly was done on 2026-10-20 (pull request
+   231, plan item 13).
 
 5. **Accessibility pass on custom controls.** (M)
    Steps are labelled and dialogs trap focus. The phone's bar of units is a
