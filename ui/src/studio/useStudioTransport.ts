@@ -4,7 +4,7 @@
 import { useCallback, useRef, useEffect } from 'react';
 import { MIDI_DRUM_CHANNEL, midiOut } from '../services/midiOutput';
 import { SequencerStep, SynthParameters, DrumInstrument, Scene, TimeSignature } from '../types';
-import { audibleLanes, entryStartTick, sceneAtTick, sceneDrumState } from '../services/songPlayback';
+import { audibleLanes, entryStartTick, sceneAtTick, sceneDrumState, songLengthTicks } from '../services/songPlayback';
 import { localService } from '../services/localService';
 import { LIVE_LEAD_SECONDS, liveTransport } from '../services/liveSession';
 import { barSteps, barTicks, drumBars, laneBars } from '../services/patternLength';
@@ -15,6 +15,9 @@ import { CLICK_LEVEL, clickAt, clickLevel, countInBars } from '../services/metro
 import { BrowserTransport } from '../services/browserTransport';
 import { expandDrumStep, swingLate } from '../services/drumScheduling';
 import { swingSteps } from '../services/grooves';
+import { trackPlayer } from '../hooks/trackAudio';
+import { recordingNow } from '../services/clipRecordings';
+import { clipsSounding, clipsStarting, songSecondsAt } from '../services/clipTiming';
 import { DRUM_NOTE_MAP } from '../utils/midiExport';
 import { guestInputs } from '../services/guestInput';
 import { STEP_LIGHT_AHEAD, midiTime, resetMidiClock } from './studioState';
@@ -30,7 +33,7 @@ export interface StudioTransportNeeds {
 }
 
 export function useStudioTransport(core: StudioCore, needs: StudioTransportNeeds) {
-  const { engine, transportRef, scheduleTickRef, countInRef, metronomeRef, playModeRef, songRef, songStartTickRef, songEndingRef, stopPlaybackRef, setSongPosition, currentSceneIdRef, scenesRef, barAnchorRef, exportingRef, handedByBarRef, synthsRef, autoPassRef, synthAudio, globalTempoRef, drumSwingRef, drumSwingGridRef, drumStateRef, drumAudio, synths, liveStartRef, songStartEntryRef, signatureOfRef, announceRef, sceneLengthRef, setStorageError, endAutoPassesRef, setSynths, handleGlobalPlayStopRef, setPlayMode, setSongStartEntry } = core;
+  const { engine, transportRef, scheduleTickRef, countInRef, metronomeRef, playModeRef, songRef, songStartTickRef, songEndingRef, stopPlaybackRef, setSongPosition, currentSceneIdRef, scenesRef, barAnchorRef, exportingRef, handedByBarRef, synthsRef, autoPassRef, synthAudio, globalTempoRef, drumSwingRef, drumSwingGridRef, drumStateRef, audioTracksRef, drumAudio, synths, liveStartRef, songStartEntryRef, signatureOfRef, announceRef, sceneLengthRef, setStorageError, endAutoPassesRef, setSynths, handleGlobalPlayStopRef, setPlayMode, setSongStartEntry } = core;
   const { sceneLength, signatureOf, triggerStep, endRecordedHolds } = needs;
   const showStep = (lane: number | 'drums', step: number, time: number) => {
     const ahead = time - engine.getContext().currentTime;
@@ -71,6 +74,7 @@ export function useStudioTransport(core: StudioCore, needs: StudioTransportNeeds
       passBar = position.bar;
       step = position.tick;
       signature = signatureOf(position.sceneId);
+      playClips(songStartTickRef.current + tick, time);
       if (step === 0) {
         setSongPosition(position);
         // Open the playing scene in the editor. This updates the live pattern at once: selectScene
@@ -167,7 +171,28 @@ export function useStudioTransport(core: StudioCore, needs: StudioTransportNeeds
     const tick = Math.max(0, counted - countInRef.current.ticks);
     return own(sceneAtTick(songRef.current, songStartTickRef.current + tick, sceneLengthRef.current, signatureOfRef.current)?.sceneId);
   };
+  // The audio tracks' clips (docs/TIMELINE_PLAN.md), in song mode only. The first tick played starts
+  // whatever is under way part through; after it, each clip starts on its own tick. Its recording
+  // must be decoded already (loadRecordings, as the project opens): one that is not is skipped.
+  const clipsPrimedRef = useRef(false);
+  const playClips = (counted: number, time: number) => {
+    const tracks = audioTracksRef.current;
+    if (tracks.length === 0) { clipsPrimedRef.current = true; return; }
+    const length = songLengthTicks(songRef.current, sceneLengthRef.current, signatureOfRef.current);
+    if (length <= 0) return;
+    const songTick = counted % length;
+    const tempoOf = (sceneId: string) => scenesRef.current.find(scene => scene.id === sceneId)?.tempo;
+    const secondsAt = (at: number) => songSecondsAt(songRef.current, at, sceneLengthRef.current, signatureOfRef.current, globalTempoRef.current, tempoOf);
+    const cues = clipsPrimedRef.current ? clipsStarting(tracks, songTick) : clipsSounding(tracks, secondsAt(songTick), secondsAt);
+    clipsPrimedRef.current = true;
+    for (const cue of cues) {
+      const recording = recordingNow(cue.clip.sampleId);
+      if (recording) trackPlayer.play(cue.track, cue.clip, recording, time, cue.into);
+    }
+  };
   const startTransport = () => {
+    trackPlayer.stop();
+    clipsPrimedRef.current = false;
     transportRef.current ??= new BrowserTransport(
       () => engine.getContext().currentTime,
       tick => tempoAt(tick),
@@ -228,6 +253,7 @@ export function useStudioTransport(core: StudioCore, needs: StudioTransportNeeds
       // A key still held (or latched) when the transport stops keeps the length it was given.
       endRecordedHolds();
       drumAudio.stopAllNotes();
+      trackPlayer.stop();
     }
   }, [transportPlaying]);
   const playStop = useCallback(async () => {

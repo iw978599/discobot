@@ -6,7 +6,10 @@ import { guestBarGains, sceneDrumState } from '../services/songPlayback';
 import { sceneAsBars, sceneBars } from '../services/patternLength';
 import { guestCapture, guestLink, wallNow } from '../services/guests';
 import { downloadArrangementWav, downloadStemsZip } from '../services/wavExport';
-import { arrangementWholes, ExportArrangement, loopPass } from '../services/wavExport';
+import { arrangementWholes, EXPORT_RATE, ExportArrangement, loopPass } from '../services/wavExport';
+import { loadRecordings } from '../services/clipRecordings';
+import { songSecondsAt } from '../services/clipTiming';
+import { renderTrackTakes } from '../services/trackRender';
 import { downloadMidiFile } from '../utils/midiExport';
 import { guestInputs, leaveOutHanded } from '../services/guestInput';
 import { clonePattern, cloneDrumState } from './studioState';
@@ -18,7 +21,7 @@ export interface StudioExportNeeds {
 }
 
 export function useStudioExport(core: StudioCore, needs: StudioExportNeeds) {
-  const { synthsRef, globalTempo, drumStateRef, drumSwing, drumSwingGrid, drumMasterVolume, liveSceneRef, globalTempoRef, selectedDrumKitIdRef, drumFxRef, effectsLoopRef, drumSamplesRef, synthSamplesRef, cymbalsRef, currentArrangementRef, guestsRef, handedByBarRef, playModeRef, songStartEntryRef, handleGlobalPlayStopRef, setGuestRecording, setPlayMode, setSongStartEntry, exportingRef, doneTimerRef, setExportStatus, setStorageError } = core;
+  const { synthsRef, globalTempo, drumStateRef, audioTracksRef, scenesRef, songRef, sceneLengthRef, signatureOfRef, drumSwing, drumSwingGrid, drumMasterVolume, liveSceneRef, globalTempoRef, selectedDrumKitIdRef, drumFxRef, effectsLoopRef, drumSamplesRef, synthSamplesRef, cymbalsRef, currentArrangementRef, guestsRef, handedByBarRef, playModeRef, songStartEntryRef, handleGlobalPlayStopRef, setGuestRecording, setPlayMode, setSongStartEntry, exportingRef, doneTimerRef, setExportStatus, setStorageError } = core;
   const { songArrangement } = needs;
   const handleExportMidi = useCallback(() => {
     const synthLanes = synthsRef.current
@@ -119,6 +122,16 @@ export function useStudioExport(core: StudioCore, needs: StudioExportNeeds) {
         setPlayMode(mode);
         setSongStartEntry(startEntry);
       }
+    }
+    // A song's audio tracks, each clip where it falls in the song (docs/TIMELINE_PLAN.md).
+    if (wholeSong && audioTracksRef.current.length > 0) {
+      const tracks = audioTracksRef.current;
+      const recordings = await loadRecordings(tracks.flatMap(track => track.clips.map(clip => clip.sampleId)));
+      const tempoOf = (sceneId: string) => scenesRef.current.find(scene => scene.id === sceneId)?.tempo;
+      const secondsOf = (tick: number) => songSecondsAt(songRef.current, tick, sceneLengthRef.current, signatureOfRef.current, globalTempoRef.current, tempoOf);
+      const end = tracks.reduce((last, track) => track.clips.reduce((latest, clip) => Math.max(latest, secondsOf(clip.at) + clip.length), last), 0);
+      const trackTakes = renderTrackTakes(tracks, recordings, secondsOf, Math.ceil(end * EXPORT_RATE), EXPORT_RATE);
+      if (trackTakes.length > 0) arrangement = { ...arrangement, trackTakes };
     }
     arrangement = leaveOutHanded(arrangement, handedByBarRef.current);
     if (kind === 'stems') await downloadStemsZip(arrangement, (done, total, fraction) => onProgress(fraction, `file ${done + 1} of ${total}`));

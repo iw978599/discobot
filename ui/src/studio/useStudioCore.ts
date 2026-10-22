@@ -159,6 +159,7 @@ export function useStudioCore(engine: AudioEngine = audioEngine) {
   const globalTempoRef = useRef(globalTempo);
   const drumSwingRef = useRef(drumSwing);
   const drumSwingGridRef = useRef(drumSwingGrid);
+  const audioTracksRef = useRef(audioTracks);
   const projectIdRef = useRef(projectId);
   const scenesRef = useRef(scenes);
   const currentSceneIdRef = useRef(currentSceneId);
@@ -347,6 +348,7 @@ export function useStudioCore(engine: AudioEngine = audioEngine) {
     globalTempoRef,
     drumSwingRef,
     drumSwingGridRef,
+    audioTracksRef,
     projectIdRef,
     scenesRef,
     currentSceneIdRef,

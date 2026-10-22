@@ -42,6 +42,9 @@ export interface ExportArrangement {
   // take is exactly one pass of the pattern, recorded once it had already been round once.
   // In a song `gains` is the guest's level in each bar, and is used instead of `gain`.
   guestTakes?: Array<{ left: Float32Array; right: Float32Array; gain: number; gains?: number[]; name?: string; sends?: FxSendLevels }>;
+  // The audio tracks of a song, each laid out as one take (trackRender.ts) and mixed as a guest's
+  // is. Only a Song WAV has them: a clip belongs to the song, not to a scene.
+  trackTakes?: Array<{ left: Float32Array; right: Float32Array; gain: number; name?: string; sends?: FxSendLevels }>;
 }
 
 // How long a guest's level takes to move when it changes at a bar line, in seconds.
@@ -313,7 +316,7 @@ export function effectsTail(arrangement: ExportArrangement): number {
   const automated = (synth: ExportArrangement['synths'][number], key: string) => [synth.pattern?.automation, ...(arrangement.bars ?? []).map(bar => bar.laneAutomation?.[synth.id])]
     .some(automation => automation?.[key]?.some(value => (value ?? 0) > 0));
   const sent = (name: typeof AUX_SENDS[number]) => arrangement.synths.some(synth => (synth.synthParams?.fxSends?.[name] ?? 0) > 0 || automated(synth, `${name}Send`))
-    || (arrangement.drumFx.sends[name] ?? 0) > 0 || (arrangement.guestTakes ?? []).some(take => (take.sends?.[name] ?? 0) > 0);
+    || (arrangement.drumFx.sends[name] ?? 0) > 0 || [...(arrangement.guestTakes ?? []), ...(arrangement.trackTakes ?? [])].some(take => (take.sends?.[name] ?? 0) > 0);
   const aux = auxBuses(arrangement.effectsLoop.aux).map((bus, slot) => {
     if (bus.level <= 0 || !sent(AUX_SENDS[slot])) return 0;
     return bus.kind === 'hall' ? bus.main + 0.5 : bus.kind === 'echo' ? Math.min(4, auxSeconds(bus, arrangement.tempo) * 6) : 0.2;
@@ -359,7 +362,7 @@ export const arrangementWholes = (arrangement: Pick<ExportArrangement, 'bars' | 
 };
 
 export async function renderArrangement(arrangement: ExportArrangement, options: RenderOptions = {}): Promise<{ channels: Stereo; sampleRate: number }> {
-  const sampleRate = 44100;
+  const sampleRate = EXPORT_RATE;
   const reverb = arrangement.effectsLoop.reverb;
   const tail = Math.min(8.25, Math.max(1, reverb.enabled ? reverb.decay + (reverb.preDelay ?? 0) : 0, effectsTail(arrangement),
     ...arrangement.synths.map(s => s.synthParams?.envelope.release || 0)));
@@ -439,7 +442,9 @@ export async function renderArrangement(arrangement: ExportArrangement, options:
   // Guests are finished audio: their level and their effect sends, no ducking. In a loop the
   // take is one pass of the pattern and is laid end to end like everything else, so what it
   // sends to the reverb and delay wraps round too.
-  (arrangement.guestTakes ?? []).forEach((take, index) => {
+  // The audio tracks' takes follow the guests' and are never a stem of their own.
+  const takes: Array<{ left: Float32Array; right: Float32Array; gain: number; gains?: number[]; sends?: FxSendLevels }> = [...(arrangement.guestTakes ?? []), ...(only === undefined ? arrangement.trackTakes ?? [] : [])];
+  takes.forEach((take, index) => {
     if (only !== undefined && !(typeof only === 'object' && only.guest === index)) return;
     const buffer = ctx.createBuffer(2, frames, sampleRate);
     [take.left, take.right].forEach((recorded, channel) => {
@@ -473,6 +478,9 @@ export async function renderArrangement(arrangement: ExportArrangement, options:
   onProgress?.(1);
   return { channels: [output.getChannelData(0).subarray(start), output.getChannelData(1).subarray(start)], sampleRate };
 }
+
+// The rate every export is rendered at.
+export const EXPORT_RATE = 44100;
 
 export async function renderArrangementWav(arrangement: ExportArrangement, options: RenderOptions = {}): Promise<ArrayBuffer> {
   const { channels, sampleRate } = await renderArrangement(arrangement, options);

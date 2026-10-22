@@ -4,6 +4,7 @@ import { getSynthModelDefinition } from '../synthModels';
 import { DRUM_ROWS } from './drumKits';
 import { LANE_IDS, laneName, laneSound } from './lanes';
 import { guestOrigin, type Guest } from './guests';
+import type { AudioTrack } from './audioTracks';
 
 // What the mixer shows: every level the project already has, gathered into one plain list. It
 // holds nothing of its own. Each number is read from where it is kept (a lane's sound, a drum's
@@ -12,11 +13,14 @@ import { guestOrigin, type Guest } from './guests';
 export interface MixerLane { id: number; name: string; model: string; level: number; pan: number; muted: boolean; solo: boolean }
 export interface MixerDrum { id: DrumInstrument; volume: number; pan: number; muted: boolean; solo: boolean }
 export interface MixerGuest { id: string; name: string; volume: number; muted: boolean }
+export interface MixerTrack { id: string; name: string; volume: number; pan: number; muted: boolean; solo: boolean }
 export interface MixerChannels {
   lanes: MixerLane[];
   drums: MixerDrum[];
   drumMaster: number;
   guests: MixerGuest[];
+  // The audio tracks on the timeline.
+  tracks: MixerTrack[];
   returns: { synth: number; drums: number };
   // The two aux buses as they are stored, A then B: the mixer shows their return levels and kinds.
   aux: AuxBus[];
@@ -31,6 +35,7 @@ export interface MixerSource {
   drumState: DrumState;
   drumMasterVolume: number;
   guests: Array<Pick<Guest, 'id' | 'url' | 'name' | 'volume' | 'muted'>>;
+  audioTracks?: Array<Pick<AudioTrack, 'id' | 'name' | 'volume' | 'pan' | 'muted' | 'solo'>>;
   effectsLoop: Pick<EffectsLoopState, 'returns' | 'aux'>;
   browserVolume: number;
 }
@@ -52,6 +57,7 @@ export function mixerChannels(source: MixerSource): MixerChannels {
     }),
     drumMaster: source.drumMasterVolume,
     guests: source.guests.map(guest => ({ id: guest.id, name: guest.name || guestOrigin(guest.url) || 'Guest', volume: guest.volume, muted: Boolean(guest.muted) })),
+    tracks: (source.audioTracks ?? []).map(track => ({ id: track.id, name: track.name, volume: track.volume, pan: track.pan ?? 0, muted: Boolean(track.muted), solo: Boolean(track.solo) })),
     returns: { synth: source.effectsLoop.returns.synth, drums: source.effectsLoop.returns.drums },
     aux: auxBuses(source.effectsLoop.aux),
     main: source.browserVolume,
