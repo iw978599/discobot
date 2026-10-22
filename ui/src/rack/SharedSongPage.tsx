@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { localService } from '../services/localService';
-import { applySceneMutes, songBars, songLengthBars, songSeconds } from '../services/songPlayback';
+import { applySceneMutes, songBars, songLengthBars, songRows, songSeconds } from '../services/songPlayback';
 import { sceneBars } from '../services/patternLength';
 import { renderArrangementWav } from '../services/wavExport';
 import { loadCymbals, loadLaneSamples } from '../services/builtInWaves';
 import { USER_PREFIX, userName } from '../services/shareLink';
 import SongPlayer from './SongPlayer';
+import SongTimeline, { type TimelineEntry } from './SongTimeline';
 import './rack.css';
 
 const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, '0')}`;
@@ -27,6 +28,15 @@ export default function SharedSongPage({ file, author, error: fetchError, onOpen
   const [audioUrl, setAudioUrl] = useState('');
   const [status, setStatus] = useState<'idle' | 'rendering' | 'failed'>('idle');
   const [error, setError] = useState('');
+  const [audio, setAudio] = useState<HTMLAudioElement | null>(null);
+  // Each entry of the song, where it starts and how long it lasts, for the timeline.
+  const timeline = useMemo<TimelineEntry[]>(() => {
+    if (!read.ok) return [];
+    const { scenes, song, tempo } = read.project;
+    const sceneOf = (sceneId: string) => scenes.find(scene => scene.id === sceneId);
+    return songRows(song, sceneId => { const scene = sceneOf(sceneId); return scene ? sceneBars(scene) : 1; }, tempo, sceneId => sceneOf(sceneId)?.signature, sceneId => sceneOf(sceneId)?.tempo)
+      .map(row => ({ ...row, name: sceneOf(row.sceneId)?.name ?? '?', color: sceneOf(row.sceneId)?.color }));
+  }, [read]);
 
   useEffect(() => () => { if (audioUrl) URL.revokeObjectURL(audioUrl); }, [audioUrl]);
 
@@ -87,13 +97,9 @@ export default function SharedSongPage({ file, author, error: fetchError, onOpen
           {' · '}{project.scenes.length} {project.scenes.length === 1 ? 'scene' : 'scenes'}
           {' · '}{laneCount === 0 ? 'drums' : `${laneCount} synth ${laneCount === 1 ? 'lane' : 'lanes'} and drums`}
         </p>
-        <div className="shared-song-order" aria-label="Song order">
-          {project.song.entries.map((entry, index) => (
-            <span key={index} data-color={project.scenes.find(scene => scene.id === entry.sceneId)?.color}>{project.scenes.find(scene => scene.id === entry.sceneId)?.name ?? '?'} ×{entry.repeats}</span>
-          ))}
-        </div>
+        <SongTimeline entries={timeline} audio={audio} />
         {audioUrl
-          ? <SongPlayer src={audioUrl} label={`${project.name}, audio`} />
+          ? <SongPlayer src={audioUrl} label={`${project.name}, audio`} onAudio={setAudio} />
           : (
             <button className="rack-btn go shared-play" disabled={status === 'rendering'} onClick={() => { void listen(); }}>
               {status === 'rendering' ? 'Preparing the song…' : '▶ Listen'}

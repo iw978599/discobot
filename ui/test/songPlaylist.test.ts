@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_REPEATS, MAX_SONG_ENTRIES, insertSongEntry, moveSongEntry, removeSongEntry, repeatSongEntry, songClock, songLengthBars, songRows } from '../src/services/songPlayback.ts';
+import { MAX_REPEATS, MAX_SONG_ENTRIES, insertSongEntry, moveSongEntry, removeSongEntry, repeatSongEntry, songClock, rowAtSeconds, songLengthBars, songRows } from '../src/services/songPlayback.ts';
 import { SONG_VIEWS, asSongView, storedSongView } from '../src/services/songView.ts';
 import type { Song } from '../src/types.ts';
 
@@ -78,4 +78,11 @@ test('only the blocks or the playlist is a way of showing the song, and the bloc
   for (const view of SONG_VIEWS) assert.equal(asSongView(view), view);
   for (const bad of ['', 'list', 'Playlist', null, undefined, 1, {}]) assert.equal(asSongView(bad), null);
   assert.equal(storedSongView(), 'blocks', 'with no storage to read');
+});
+
+test('the row playing at a time is the last to have started, and none outside the song', () => {
+  const rows = songRows(song(entry('a', 2), entry('b'), entry('c')), id => (id === 'c' ? 2 : 1), 120);
+  assert.deepEqual([0, 3.99, 4, 5.5, 6, 9.99].map(time => rowAtSeconds(rows, time)), [0, 0, 1, 1, 2, 2]);
+  assert.deepEqual([-1, 10, 12, NaN].map(time => rowAtSeconds(rows, time)), [-1, -1, -1, -1], 'the tail after the last bar belongs to no row');
+  assert.equal(rowAtSeconds([], 0), -1);
 });

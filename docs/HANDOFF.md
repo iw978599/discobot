@@ -37,8 +37,8 @@ Start Live Session setup, was the owner's own).
    (FreePats' Upright Piano KW is CC0); an instrument made of several
    recordings; the spring reverb; portamento; dragging and the hold on a real
    phone; a live session with someone.
-2. Then `docs/ROADMAP.md`, "The plan from here", from item 23 (a listener's
-   page that shows the song moving), in its order.
+2. Then `docs/ROADMAP.md`, "The plan from here", from item 24 (more MIDI),
+   in its order. Item 23, the share page's song strip, is done.
 3. Questions still waiting on the owner are at the end of `docs/ROADMAP.md`
    ("Questions waiting on the owner"). Waiting on the owner and not to be
    started: listening, MIDI hardware, a screen reader trial, licences for new

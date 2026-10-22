@@ -122,7 +122,10 @@ directly, with no builder.
 22. **Several recordings across the keyboard for an imported sample** (V1).
     Done: Import several recordings… on the Osc page, each file's note read
     from its name and shown to be changed, kept as one instrument.
-23. **A listener's page that shows the song moving** (V16).
+23. **A listener's page that shows the song moving** (V16). Done: the song
+    order on a share page is a strip of its scenes in their colours, each as
+    wide as it lasts; while the song plays the playing scene is lit and a line
+    moves through it, and pressing a scene plays from there.
 24. **More MIDI** (features 6): following an external clock, sending notes
     played by hand, choosing the output channels, aftertouch. Each part is
     tested by the owner on their controller.

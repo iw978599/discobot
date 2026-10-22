@@ -68,7 +68,7 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 | `ui/src/rack/AccountDialog.tsx` | Sign in, create account, recovery code, and the owner's invite codes and member list |
 | `ui/src/rack/Walkthrough.tsx` / `ui/src/services/walkthrough.ts` | The tour of the rack shown after a new account's recovery code, and whether this browser has had it |
 | `ui/src/services/shareLink.ts` | Share links: a project deflated into the URL after `#song=`, short links (`#s=code`) to a song published on the server, and the link to one person's page of published songs (`#u=name`) |
-| `ui/src/rack/SharedSongPage.tsx` | The page a share link opens: renders the song to audio, plays it, offers a copy |
+| `ui/src/rack/SharedSongPage.tsx` / `SongTimeline.tsx` | The page a share link opens: renders the song to audio, plays it, offers a copy. `SongTimeline` is its song order, a strip of entries as wide as each lasts and in its scene's colour; with the audio ready it lights the playing entry (`rowAtSeconds`), moves a line through it outside React, and plays from an entry when it is pressed |
 | `ui/src/rack/UserSongsPage.tsx` | The page a person's link (`#u=name`) opens: the songs they have published, each a link to its own page |
 | `ui/src/kids/KidsPage.tsx` / `ui/src/services/kids.ts` | Kids mode (`#kids`): twelve big pads and a beat grid of pictures on two screens, sounds chosen by picture and one play button, on a page that never opens the projects |
 | `ui/src/services/wavExport.ts` | Offline arrangement render and WAV encoding: full mix, seamless loop, and per-lane stems zipped by `utils/zip.ts` |

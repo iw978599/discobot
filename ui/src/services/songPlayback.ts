@@ -120,6 +120,16 @@ export function songRows(song: Song, lengthOf: SceneLength = oneBar, tempo = 120
   });
 }
 
+// Which of `songRows` is playing at a time in the song: the last to have started, or -1 before
+// the start, after the end, or for a time that is not a number (a tail after the last bar).
+export function rowAtSeconds(rows: Array<Pick<SongRow, 'startSeconds' | 'seconds'>>, seconds: number): number {
+  const last = rows[rows.length - 1];
+  if (!last || !(seconds >= 0) || seconds >= last.startSeconds + last.seconds) return -1;
+  let found = 0;
+  rows.forEach((row, index) => { if (row.startSeconds <= seconds) found = index; });
+  return found;
+}
+
 // How long a song lasts, in seconds: its quarter notes, each scene's at its own tempo or the song's.
 export function songSeconds(song: Song, lengthOf: SceneLength = oneBar, tempo = 120, signatureOf: SceneSignature = fourFour, tempoOf?: SceneTempo): number {
   return song.entries.reduce((total, entry) => total + entry.repeats * passBars(lengthOf, entry.sceneId) * barQuarters(signatureOf(entry.sceneId)) * beatSecondsOf(tempo, tempoOf, entry.sceneId), 0);
