@@ -33,6 +33,13 @@ Live sound is still not verified by ear or on two real computers.
 Undo in the store (#192), insert effects for each lane (#191) and two aux
 sends (#194): built, waiting on their checks, merged as each is green.
 
+Done 2026-10-21: **Tape Loop Deck is back on the Add Guest list**, and a guest
+can keep files with a project (the protocol's optional `files`), so its tapes
+can come back with the project. They stay in this browser and travel in
+project files, as samples do. The deck's side is its creator's, from
+`docs/GUEST_PROMPT_FOR_TAPE_LOOP_DECK.md`; until then it keeps its settings
+but not its tapes.
+
 Also asked for on 2026-10-19 and in progress: handing a voice of Discobot's to a guest
 instrument (the protocol's optional `input`), for Axis Stack; and recorded drums and seven
 more instruments from the VCSL library (a builder).
@@ -1183,7 +1190,9 @@ again.
 - **The Polysix model and the chorus.** When a lane can have effects of
   its own, the Polysix's Ensemble moves from the lane's send on the shared
   chorus to an effect of its own.
-- **Tape Loop Deck.** Stays off the Add Guest list.
+- **Tape Loop Deck.** Was: stays off the Add Guest list. Changed on 2026-10-21:
+  the owner put it back, since what held it was its tapes not being kept, and
+  guests can now keep files with a project.
 
 ## Suggested order
 

@@ -38,7 +38,7 @@ with `discobotGuest: 1` and a `type`. Ignore anything else.
 
 | `type` | Fields | When |
 |---|---|---|
-| `ready` | `name` (string), `features` (array of `'transport'`, `'state'`, `'audio'`, and optionally `'input'`) | Once, when the page has loaded. |
+| `ready` | `name` (string), `features` (array of `'transport'`, `'state'`, `'audio'`, and optionally `'input'` and `'files'`) | Once, when the page has loaded. |
 | `state` | `id` (echoed), `state` (any JSON, up to 100,000 characters) | In answer to `getState`. |
 | `stateChanged` | none | Optional. After the user changes a setting, so the host asks sooner. Do not send it for every step of a drag. |
 | `audio` | `wall` (number), `sampleRate` (number), `left`, `right` (`Float32Array`, same length, at most 16,384 frames) | Continuously, while audio is on. Pass both buffers in the transfer list. |
@@ -186,6 +186,51 @@ the lead.
 leaves the handed voice out of Discobot's own render, so it is heard once. In a song, a voice is
 left out in the bars it was handed over.
 
+## Files (optional): recordings kept with the project
+
+A guest that lists `'files'` in `ready.features` can hand Discobot files to keep with the project:
+recordings, loaded samples, anything too large for its settings. Discobot keeps each one in the
+user's browser and gives back an id. The guest puts that id in its `state`, and when it is given
+that state again (after a reload, on another scene, from a project file) it asks for the file by
+its id. A guest that does not list `files` sees none of this.
+
+**Guest to host**
+
+| `type` | Fields | Meaning |
+|---|---|---|
+| `putFile` | `id` (string, echoed), `mime` (string, such as `'audio/wav'`), `data` (`ArrayBuffer`, 1 byte to 8 MB, transferred) | Keep this file. |
+| `getFile` | `id` (string, echoed), `file` (a file id) | Send this file back. |
+
+**Host to guest**
+
+| `type` | Fields | When |
+|---|---|---|
+| `fileStored` | `id`, and `file` (the file id) or `error` (`'too-large'`, `'full'` or `'unavailable'`) | In answer to `putFile`. |
+| `file` | `id`, `file`, and `mime` and `data` (`ArrayBuffer`, transferred) or `error` (`'missing'`) | In answer to `getFile`. |
+
+**The id** is `'discobot-file:'` and the file's SHA-256 in hex. The same bytes always get the same
+id and are kept once. Put it in `state` as a whole string value, anywhere (`{ tapes: [{ name,
+file: 'discobot-file:…' }] }`): Discobot finds the files a project uses by looking for whole
+strings of that form in its guests' settings, every scene's included. A file is kept for as long
+as some project or kept version in the browser names it; one that nothing names is cleared away a
+week after it was stored. So send `stateChanged` once you have the id, and keep naming it for as
+long as the file is wanted.
+
+**A guest may only have back** a file its own settings in the open project name, or one it stored
+since it last loaded. Anything else is answered `missing`, as is a file this browser does not
+have. **Always handle `missing`**: a file is not in a project shared by link, published, synced to
+another device or opened in a live session, because those carry the project without its audio.
+It travels only in a project file saved with Export Project. Show the user that the recording is
+missing (keep its name and place), and do not throw the rest of the settings away.
+
+**Sizes.** One file is at most 8 MB, and all guests' files in a browser together at most 256 MB.
+A project file holds about 12 MB of audio in all, samples included, so a project whose files are
+larger is saved without some of them, and the user is told. Store audio compactly: 16-bit WAV at
+the context's rate is fine for a few bars; a long recording is better compressed.
+
+**Order.** Answers can arrive in any order and may take a moment: match them by `id`. Do not
+block audio on them: a tape whose file has not arrived yet is silent until it does.
+
 ## Settings
 
 `state` is whatever the guest needs to put itself back exactly: every
@@ -240,8 +285,8 @@ browser may still slow a page it judges to be out of sight.
   guest that does not send audio is not in the file. A loop is played twice and the second
   pass kept. Guests are not in MIDI.
 - **Large settings.** `state` is limited to 100,000 characters, which is not enough for
-  recorded audio. A guest that holds audio of its own (loaded samples, tape loops) can save
-  its settings but not that audio.
+  recorded audio. A guest that holds audio of its own (loaded samples, tape loops) keeps it as
+  files (see Files, above), which stay in the browser and travel only in project files.
 - **Key and scale.** Discobot has no key setting to send.
 - **Notes.** The host does not send notes to a guest; a guest makes its own
   music in time with the host. (A voice handed over with `input` is audio, not notes.)

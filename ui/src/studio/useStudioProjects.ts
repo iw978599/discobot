@@ -5,6 +5,7 @@ import { Pattern, SequencerStep, DrumInstrument } from '../types';
 import { localService } from '../services/localService';
 import { projectSync } from '../services/projectSync';
 import { MAX_EMBEDDED_TOTAL_BYTES, MAX_PROJECT_FILE_BYTES, adoptSamples, embedSamples } from '../services/projectSamples';
+import { adoptGuestFiles, browserGuestFiles, embedGuestFiles, guestFileIds } from '../services/guestFiles';
 import { barSteps, clampLengths, relayBars } from '../services/patternLength';
 import { sentAutomation } from '../services/automation';
 import { downloadFile } from '../services/wavExport';
@@ -31,9 +32,15 @@ export function useStudioProjects(core: StudioCore, needs: StudioProjectsNeeds) 
     // What base64 audio still fits under the size an import accepts, as bytes of audio.
     const room = Math.floor((MAX_PROJECT_FILE_BYTES - new Blob([plain]).size - 65536) * 3 / 4);
     const audio = await embedSamples(file.project, undefined, Math.max(0, Math.min(MAX_EMBEDDED_TOTAL_BYTES, room))).catch(() => null);
-    downloadFile(audio?.samples.length ? JSON.stringify({ ...file, samples: audio.samples }) : plain, 'application/json', `discobot-project-${new Date().toISOString().slice(0, 10)}.json`);
+    const withSamples = audio?.samples.length ? JSON.stringify({ ...file, samples: audio.samples }) : plain;
+    // A guest's own files (its recordings) go in what room is left after the samples.
+    const left = Math.floor((MAX_PROJECT_FILE_BYTES - new Blob([withSamples]).size - 65536) * 3 / 4);
+    const kept = guestFileIds(file.project).length > 0 ? await embedGuestFiles(file.project, browserGuestFiles(), Math.max(0, left)).catch(() => null) : { files: [], skipped: 0 };
+    downloadFile(kept?.files.length ? JSON.stringify({ ...file, ...(audio?.samples.length ? { samples: audio.samples } : {}), guestFiles: kept.files }) : withSamples, 'application/json', `discobot-project-${new Date().toISOString().slice(0, 10)}.json`);
     if (!audio) setStorageError('The project file was saved without its samples: sample storage could not be read.');
     else if (audio.skipped.length > 0) setStorageError(`The project file was saved without ${audio.skipped.join(', ')}: too large to put in a project file. Shorter samples are included.`);
+    else if (!kept) setStorageError('The project file was saved without its guests\' recordings: their storage could not be read.');
+    else if (kept.skipped > 0) setStorageError(`The project file was saved without ${kept.skipped === 1 ? 'one of its guests\' recordings' : `${kept.skipped} of its guests' recordings`}: too large to fit in a project file.`);
   }, [synthPresets]);
   // Before the open project is swapped for another: stop sound, and forget undo steps that belong to it.
   const leaveProject = useCallback(() => {
@@ -97,11 +104,16 @@ export function useStudioProjects(core: StudioCore, needs: StudioProjectsNeeds) 
       return;
     }
     // Only a file brings audio, and only one that will open: a link or a published song never does.
-    const adopted = localService.readProjectFile(parsed).ok ? await adoptSamples(parsed) : { file: parsed, added: 0, dropped: 0 };
-    const opened = await handleImportProject(adopted.file);
+    const opens = localService.readProjectFile(parsed).ok;
+    const adopted = opens ? await adoptSamples(parsed) : { file: parsed, added: 0, dropped: 0 };
+    // Before the project opens, so its guests find their recordings when they ask for them.
+    const recordings = opens ? await adoptGuestFiles(adopted.file, browserGuestFiles()) : { file: adopted.file, added: 0, dropped: 0 };
+    const opened = await handleImportProject(recordings.file);
     if (adopted.added > 0) setSampleStoreVersion(version => version + 1);
     if (opened && adopted.dropped > 0) {
       setStorageError(`The project was opened, but ${adopted.dropped === 1 ? 'one of its samples' : `${adopted.dropped} of its samples`} could not be read from the file. Those lanes play their built-in sound.`);
+    } else if (opened && recordings.dropped > 0) {
+      setStorageError(`The project was opened, but ${recordings.dropped === 1 ? 'one of its guests\' recordings' : `${recordings.dropped} of its guests' recordings`} could not be kept in this browser.`);
     }
   }, [handleImportProject]);
   const handleMidiImportClick = useCallback(() => {

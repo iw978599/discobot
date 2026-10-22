@@ -6,6 +6,7 @@ import { audibleLanes } from '../services/songPlayback';
 import { localService } from '../services/localService';
 import { startProjectSync } from '../services/projectSync';
 import { startLiveSessions } from '../services/liveSession';
+import { tidyGuestFiles } from '../services/guestFiles';
 import { laneBars, sceneBars, storedSignature, timeSignature } from '../services/patternLength';
 import { loadStoredPresets, presetStore } from '../services/presetStore';
 import { expandStepNotes, withStepNotes } from '../services/noteScheduling';
@@ -782,7 +783,12 @@ export function useStudio(engine?: AudioEngine) {
       effectsLoop: DEFAULT_EFFECTS_LOOP, drumFx: DEFAULT_DRUM_FX,
     });
     const unsubscribe = localService.subscribe(message => messageHandlerRef.current(message));
-    void localService.openLibrary().then(() => { startProjectSync(); startLiveSessions(); });
+    void localService.openLibrary().then(() => {
+      startProjectSync();
+      startLiveSessions();
+      // Guests' recordings that no project here uses any more are cleared away, out of the way of start-up.
+      setTimeout(() => { void tidyGuestFiles(visit => localService.visitStoredProjects(visit)).catch(() => {}); }, 30_000);
+    });
     return unsubscribe;
   }, []);
 

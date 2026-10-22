@@ -204,8 +204,8 @@ permission they are offered by name in the Add Guest dialog (all but Tape
 Loop Deck, which the owner put on hold on 2026-10-10). Scene WAV and
 Song WAV now record guests by playing through once. A guest's settings are kept per scene and follow a song from scene to scene.
 Guests are in Loop WAV and stems too, and each has sends to the shared effects.
-Not built: a way for
-a guest to save audio of its own (Tape Loop Deck's loops) with the project.
+Since 2026-10-21 a guest can keep files with the project (the protocol's
+"Files"), for Tape Loop Deck's tapes; it is back on the list.
 
 ## How creators would link an instrument
 

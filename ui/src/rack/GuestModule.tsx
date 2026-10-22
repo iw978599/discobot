@@ -4,6 +4,8 @@ import { tracked } from '../studio/tracked';
 import { createGuestPlayer, createGuestTap, type GuestPlayer } from '../hooks/guestAudio';
 import { getAudioContext } from '../hooks/browserAudio';
 import { guestInputs } from '../services/guestInput';
+import { browserGuestFiles, guestFileIds, isGuestFileId, storeGuestFile } from '../services/guestFiles';
+import { localService } from '../services/localService';
 import {
   GUEST_LATENCY_MS, GUEST_PROTOCOL, guestCapture, guestLink, guestOrigin, isTrustedOrigin, trustOrigin, wallAtContextTime,
   type Guest, type GuestTransport,
@@ -104,6 +106,21 @@ function GuestModule({ studio, guest, onHelp }: { studio: Studio; guest: Guest; 
     };
     const stopInput = guestInputs.subscribe(tellInput);
 
+    // A guest that lists 'files' may keep files with the project (services/guestFiles). It may
+    // have back only a file its own settings in this project name, or one it stored since it loaded.
+    let keepsFiles = false;
+    const storedHere = new Set<string>();
+    const answerFile = (id: string, file: string, message: Record<string, unknown>, transfer: Transferable[] = []) => {
+      frameRef.current?.contentWindow?.postMessage({ discobotGuest: GUEST_PROTOCOL, type: 'file', id, file, ...message }, origin, transfer);
+    };
+    const getFile = async (id: string, file: unknown) => {
+      if (!isGuestFileId(file)) { answerFile(id, String(file).slice(0, 100), { error: 'missing' }); return; }
+      const named = storedHere.has(file) || guestFileIds(localService.exportProject().project, guestRef.current.id).includes(file);
+      const kept = named ? await browserGuestFiles().get(file).catch(() => undefined) : undefined;
+      if (kept) answerFile(id, file, { mime: kept.type, data: kept.data }, [kept.data]);
+      else answerFile(id, file, { error: 'missing' });
+    };
+
     const onMessage = (event: MessageEvent) => {
       // Only this guest's own frame, at the address it was loaded from, is listened to.
       if (event.source !== frameRef.current?.contentWindow || event.origin !== origin) return;
@@ -114,6 +131,7 @@ function GuestModule({ studio, guest, onHelp }: { studio: Studio; guest: Guest; 
         guestInputs.release(id);
         toldSources = ''; toldSelection = null;
         takesInput = Array.isArray(data.features) && data.features.includes('input');
+        keepsFiles = Array.isArray(data.features) && data.features.includes('files');
         ready = true;
         link.current = { ready: true, send };
         setStatus('ready');
@@ -137,6 +155,14 @@ function GuestModule({ studio, guest, onHelp }: { studio: Studio; guest: Guest; 
         // Answered every time, even when nothing changed.
         toldSelection = now;
         send({ type: 'inputSelected', source: now });
+      } else if (data.type === 'putFile' && keepsFiles) {
+        const id = String(data.id).slice(0, 100);
+        void storeGuestFile(browserGuestFiles(), data.data, data.mime).then((answer) => {
+          if (answer.ok) storedHere.add(answer.file);
+          send(answer.ok ? { type: 'fileStored', id, file: answer.file } : { type: 'fileStored', id, error: answer.error });
+        });
+      } else if (data.type === 'getFile' && keepsFiles) {
+        void getFile(String(data.id).slice(0, 100), data.file);
       } else if (data.type === 'inputLate') {
         guestInputs.late(id, data.ms);
       } else if (data.type === 'state') {
