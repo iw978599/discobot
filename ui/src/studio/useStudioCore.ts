@@ -25,6 +25,7 @@ import { MidiImportResult } from '../utils/midiImport';
 import { DEFAULT_DRUM_FX, DEFAULT_EFFECTS_LOOP, DEFAULT_DRUM_KIT_ID, createDefaultDrumState } from './studioState';
 import type { SynthPreset, PlayMode, SynthState, ExportStatus } from './studioState';
 import type { SwingGrid } from '../services/grooves';
+import type { AudioTrack } from '../services/audioTracks';
 export type { PlayMode } from './studioState';
 
 // `engine` is the one that plays everything: the app's, unless another is given (a test's, say).
@@ -62,6 +63,8 @@ export function useStudioCore(engine: AudioEngine = audioEngine) {
   // What an imported preset was, and what did not carry over, shown once after importing.
   const [presetImportReport, setPresetImportReport] = useState<Pick<ImportedPreset, 'name' | 'source' | 'notes'> | null>(null);
   const [guests, setGuests] = useState<Guest[]>([]);
+  // Audio tracks on the timeline (services/audioTracks.ts), as the store holds them.
+  const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([]);
   // Set while an export is playing the arrangement through to record its guests: how long it will take.
   const [guestRecording, setGuestRecording] = useState<number | null>(null);
   // An audio export in progress, or just finished. handleExportWav refuses a second while one is working.
@@ -248,6 +251,8 @@ export function useStudioCore(engine: AudioEngine = audioEngine) {
     presetImportReport,
     setPresetImportReport,
     guests,
+    audioTracks,
+    setAudioTracks,
     setGuests,
     guestRecording,
     setGuestRecording,

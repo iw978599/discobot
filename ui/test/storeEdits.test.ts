@@ -907,6 +907,77 @@ const cases: Case[] = [
     },
   }, ['guestsChanged']),
 
+  // --- Audio tracks and clips
+  changed('a track is added with its name tidied, and the project holds tracks from then on', {
+    type: 'track.add', body: () => ({ trackId: fresh(), name: '  Lead   vocal  ' }),
+    check: (result, service) => {
+      assert.deepEqual(keys(result.data), ['audioTracks']);
+      assert.deepEqual({ ...result.data.audioTracks[0], id: 0 }, { id: 0, name: 'Lead vocal', volume: .8, clips: [] });
+      assert.deepEqual(service.snapshot().audioTracks, result.data.audioTracks);
+    },
+  }, ['audioTracksChanged']),
+  changed('a track without a name is called by its place', {
+    type: 'track.add', body: () => ({ trackId: fresh() }), arrange: service => ok(service.addTrack()),
+    check: result => assert.deepEqual(result.data.audioTracks.map((track: any) => track.name), ['Audio 1', 'Audio 2']),
+  }, ['audioTracksChanged']),
+  { type: 'track.add', title: 'a track id that is not one is refused', body: { trackId: 'abc' }, status: 400, error: 'That is not an id a track can have.' },
+  { type: 'track.add', title: 'a ninth track is refused', body: () => ({ trackId: fresh() }), arrange: service => { for (let count = 0; count < 8; count++) ok(service.addTrack()); }, status: 409, error: 'A project can hold 8 audio tracks.' },
+  { type: 'track.add', title: 'a track id that is taken is refused', arrange: service => ok(service.addTrack()).audioTracks[0].id, body: (id: string) => ({ trackId: id }), status: 409, error: 'That track is already in the project.' },
+  changed('a track\'s level, pan, mute and sends are held to their ranges, and an empty name gives its place back', {
+    type: 'track.patch', arrange: service => ok(service.addTrack('Keys')).audioTracks[0].id,
+    body: (id: string) => ({ trackId: id, patch: { name: ' ', volume: 5, pan: -.5, muted: true, solo: 'yes', sends: { reverb: .3, delay: 0, bogus: 1 } } }),
+    check: result => assert.deepEqual({ ...result.data.audioTracks[0], id: 0 }, { id: 0, name: 'Audio 1', volume: 1, pan: -.5, muted: true, sends: { reverb: .3 }, clips: [] }),
+  }, ['audioTracksChanged']),
+  { type: 'track.patch', title: 'a track that does not exist cannot be changed', body: { trackId: NO_GUEST, patch: { volume: .5 } }, status: 404, error: 'Track not found' },
+  changed('removing the last track leaves the project holding none', {
+    type: 'track.remove', arrange: service => ok(service.addTrack()).audioTracks[0].id, body: (id: string) => ({ trackId: id }),
+    check: (result, service) => { assert.deepEqual(result.data, { audioTracks: [] }); assert.equal('audioTracks' in service.snapshot(), false); },
+  }, ['audioTracksChanged']),
+  { type: 'track.remove', title: 'a track that does not exist cannot be removed', body: { trackId: NO_GUEST }, status: 404, error: 'Track not found' },
+  changed('a clip is placed on a whole tick, its fades fit inside it, and what is as it would be anyway is not stored', {
+    type: 'clip.add', arrange: service => ok(service.addTrack()).audioTracks[0].id,
+    body: (id: string) => ({ trackId: id, clip: { id: NO_GUEST, sampleId: SAMPLE, at: 96.4, length: 2.5, offset: -1, gain: 1, fadeIn: 9, fadeOut: 1, name: '  take  ' } }),
+    check: result => assert.deepEqual(result.data.audioTracks[0].clips, [{ id: NO_GUEST, sampleId: SAMPLE, at: 96, length: 2.5, fadeIn: 2.5, name: 'take' }]),
+  }, ['audioTracksChanged']),
+  ...([[{ sampleId: SAMPLE, at: 0, length: 0 }, 'nothing to play'], [{ sampleId: 'beep', at: 0, length: 1 }, 'no recording'], [{ sampleId: SAMPLE, length: 1 }, 'no id']] as const).map(([clip, why]): Case => ({
+    type: 'clip.add', title: `a clip with ${why} is refused`, arrange: service => ok(service.addTrack()).audioTracks[0].id,
+    body: (id: string) => ({ trackId: id, clip: why === 'no id' ? clip : { id: fresh(), ...clip } }), status: 400, error: 'That is not a clip a track can hold.',
+  })),
+  { type: 'clip.add', title: 'a clip cannot go on a track that does not exist', body: () => ({ trackId: NO_GUEST, clip: { id: fresh(), sampleId: SAMPLE, at: 0, length: 1 } }), status: 404, error: 'Track not found' },
+  {
+    type: 'clip.add', title: 'a clip id that is taken is refused',
+    arrange: service => { const track = ok(service.addTrack()).audioTracks[0].id; ok(service.addClip(track, { id: NO_GUEST, sampleId: SAMPLE, at: 0, length: 1 })); return track; },
+    body: (id: string) => ({ trackId: id, clip: { id: NO_GUEST, sampleId: SAMPLE, at: 8, length: 1 } }), status: 409, error: 'That clip is already in the project.',
+  },
+  changed('a clip is moved along and to another track, and kept in order there', {
+    type: 'clip.patch',
+    arrange: service => {
+      const first = ok(service.addTrack()).audioTracks[0].id, second = ok(service.addTrack()).audioTracks[1].id;
+      ok(service.addClip(first, { id: NO_GUEST, sampleId: SAMPLE, at: 0, length: 1 }));
+      ok(service.addClip(second, { sampleId: SAMPLE, at: 64, length: 1 }));
+      return second;
+    },
+    body: (second: string) => ({ clipId: NO_GUEST, patch: { trackId: second, at: 128, length: 99999, sampleId: 'swapped' } }),
+    check: result => {
+      assert.deepEqual(result.data.audioTracks[0].clips, []);
+      assert.deepEqual(result.data.audioTracks[1].clips.map((clip: any) => clip.at), [64, 128]);
+      assert.deepEqual(result.data.audioTracks[1].clips[1], { id: NO_GUEST, sampleId: SAMPLE, at: 128, length: 3600 }, 'its recording is not changed by a patch');
+    },
+  }, ['audioTracksChanged']),
+  { type: 'clip.patch', title: 'a clip that does not exist cannot be changed', body: { clipId: NO_GUEST, patch: { at: 4 } }, status: 404, error: 'Clip not found' },
+  {
+    type: 'clip.patch', title: 'a clip cannot move to a track that does not exist',
+    arrange: service => { const track = ok(service.addTrack()).audioTracks[0].id; ok(service.addClip(track, { id: NO_GUEST, sampleId: SAMPLE, at: 0, length: 1 })); },
+    body: { clipId: NO_GUEST, patch: { trackId: fresh() } }, status: 404, error: 'Track not found',
+  },
+  changed('a clip is removed and its track stays', {
+    type: 'clip.remove',
+    arrange: service => { const track = ok(service.addTrack()).audioTracks[0].id; ok(service.addClip(track, { id: NO_GUEST, sampleId: SAMPLE, at: 0, length: 1 })); },
+    body: { clipId: NO_GUEST },
+    check: result => assert.deepEqual(result.data.audioTracks[0].clips, []),
+  }, ['audioTracksChanged']),
+  { type: 'clip.remove', title: 'a clip that does not exist cannot be removed', body: { clipId: NO_GUEST }, status: 404, error: 'Clip not found' },
+
   // --- Drums: levels, effects, length
   ...([
     ['drum.masterVolume', 'drumMasterVolume', 'volume', 'drumMasterVolume', 1, .6],

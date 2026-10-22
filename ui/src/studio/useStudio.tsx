@@ -78,6 +78,8 @@ export function useStudio(engine?: AudioEngine) {
     presetImportReport,
     setPresetImportReport,
     guests,
+    audioTracks,
+    setAudioTracks,
     setGuests,
     guestRecording,
     exportStatus,
@@ -457,6 +459,10 @@ export function useStudio(engine?: AudioEngine) {
 
   const handleMessage = useCallback((message: any) => {
     switch (message.type) {
+      case 'audioTracksChanged': {
+        setAudioTracks(message.data.audioTracks ?? []);
+        break;
+      }
       case 'guestsChanged': {
         setGuests(message.data.guests ?? []);
         break;
@@ -466,6 +472,7 @@ export function useStudio(engine?: AudioEngine) {
         localService.holdUndo('auto', false);
         setGuests(message.data.guests ?? []);
         setLaneOrder(laneOrderOf(message.data.laneOrder));
+        setAudioTracks(message.data.audioTracks ?? []);
         if (message.data.restored) initializedSynthLanesRef.current = true;
         if (message.data.synths) {
           setSynths(message.data.synths.map((s: any) => ({
@@ -563,6 +570,7 @@ export function useStudio(engine?: AudioEngine) {
         songRef.current = data.song;
         setSynths(nextLanes);
         setGuests(data.guests ?? []);
+        setAudioTracks(data.audioTracks ?? []);
         setDrumState(data.drumState);
         setSelectedDrumKitId(data.selectedDrumKitId as DrumKitId);
         setDrumFx(normalizeDrumFx(data.drumFx));
@@ -980,7 +988,7 @@ export function useStudio(engine?: AudioEngine) {
     handleMidiImportClick, handleMidiImportFile, handleMidiImportApplyAll, midiImportFileRef, handleRemoveSynth,
     ensureSynthExists, handleOctaveShift, handleTempoChange, handleGlobalPlayStop, handleStepChange, handleStepSelect, handleKeyboardModeChange,
     handlePianoRollNoteAssign, handleClearPatternNotes, handleCopyLaneBar, handleCopyDrumBar, handleTransposeLane, handleRandomizeLane, handleNotePlay, handleNoteRelease, computerKeyNotes, midiState,
-    handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange, guests, handleAddGuest, handleRemoveGuest, handleGuestChange, guestRecording, handleExportWav, exportStatus, dismissExportStatus, soundAnalyser, missingDrumSamples, sampleStoreVersion, handleDrumSampleChange, handleLaneBarsChange, handleDrumBarsChange, sceneLength,
+    handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange, guests, audioTracks, handleAddGuest, handleRemoveGuest, handleGuestChange, guestRecording, handleExportWav, exportStatus, dismissExportStatus, soundAnalyser, missingDrumSamples, sampleStoreVersion, handleDrumSampleChange, handleLaneBarsChange, handleDrumBarsChange, sceneLength,
     handleSynthMixChange, handleSynthSwingChange, handleSynthRename, handleLaneMove, handleLaneStep, laneOrder, handleSaveSynthPreset, handleLoadSynthPreset, handleDeleteSynthPreset,
     handleExportMidi, currentArrangement, reportExportError, handleExportProject, projectImportFileRef, handleImportProjectFile, handleImportProject,
     handleNewProject, handleOpenProject, handleCopyProject, handleRenameProject, handleDeleteProject, handleRestoreVersion, handleCopyVersion, handleImportSynthPreset, handleExportSynthPreset, presetImportReport, setPresetImportReport, handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail,

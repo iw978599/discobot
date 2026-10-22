@@ -6,6 +6,7 @@ import type {
 } from '../types';
 import type { SwingGrid } from './grooves';
 import type { Guest } from './guests';
+import type { AudioClip, AudioTrack, ClipPatch, TrackPatch } from './audioTracks';
 import type { ProjectLane } from './localService';
 
 export type DeepPartial<T> = T extends readonly unknown[] ? T : T extends object ? { [K in keyof T]?: DeepPartial<T[K]> } : T;
@@ -64,12 +65,20 @@ export type Operation =
   | { type: 'song.set'; entries?: unknown; loop?: boolean }
   | { type: 'guest.add'; guestId: string; url: string; name?: string }
   | { type: 'guest.patch'; guestId: string; patch: GuestPatch }
-  | { type: 'guest.remove'; guestId: string };
+  | { type: 'guest.remove'; guestId: string }
+  // Audio tracks on the timeline (services/audioTracks.ts). A clip is named by its id alone, which is unique in the project.
+  | { type: 'track.add'; trackId: string; name?: string }
+  | { type: 'track.patch'; trackId: string; patch: TrackPatch }
+  | { type: 'track.remove'; trackId: string }
+  | { type: 'clip.add'; trackId: string; clip: AudioClip }
+  | { type: 'clip.patch'; clipId: string; patch: ClipPatch & { trackId?: string } }
+  | { type: 'clip.remove'; clipId: string };
 
 export type OpType = Operation['type'];
 
 type DrumAnswer = { drumState: DrumState };
 type GuestAnswer = { guests: Guest[] };
+type TrackAnswer = { audioTracks: AudioTrack[] };
 type SceneAnswer = {
   scenes: Scene[]; song: Song; currentSceneId: string;
   synths: Array<{ synthId: number; pattern: Pattern; muted: boolean; solo: boolean }>;
@@ -121,6 +130,12 @@ type OpResults = Total<{
   'guest.add': GuestAnswer;
   'guest.patch': GuestAnswer;
   'guest.remove': GuestAnswer;
+  'track.add': TrackAnswer;
+  'track.patch': TrackAnswer;
+  'track.remove': TrackAnswer;
+  'clip.add': TrackAnswer;
+  'clip.patch': TrackAnswer;
+  'clip.remove': TrackAnswer;
 }>;
 export type OpResult<T extends OpType> = OpResults[T];
 
@@ -184,4 +199,10 @@ export const OP_META: Record<OpType, { save: boolean; undoable: boolean; share: 
   'guest.add': { save: true, undoable: false, share: true },
   'guest.patch': { save: true, undoable: false, share: true },
   'guest.remove': { save: true, undoable: false, share: true },
+  'track.add': { save: true, undoable: true, share: true },
+  'track.patch': { save: true, undoable: true, share: true },
+  'track.remove': { save: true, undoable: true, share: true },
+  'clip.add': { save: true, undoable: true, share: true },
+  'clip.patch': { save: true, undoable: true, share: true },
+  'clip.remove': { save: true, undoable: true, share: true },
 };

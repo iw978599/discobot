@@ -1,5 +1,6 @@
 import { getSample, isAudioFile, listSamples, putSample, type SampleRecord } from './sampleStore';
 import { record } from './projectSanitization';
+import { clipSampleIds } from './audioTracks';
 
 // A saved project file carries the audio of the samples its drum lanes use, as base64 in a
 // `samples` list beside `project`. It is beside the project and not in it on purpose: the
@@ -17,6 +18,8 @@ export const browserSampleStore: SampleStore = { list: listSamples, get: getSamp
 
 // A drum hit is small. A file dropped on a lane by mistake (a whole song) is left out.
 export const MAX_EMBEDDED_SAMPLE_BYTES = 4 * 1024 * 1024;
+// A clip's recording on an audio track is longer, and may take all the room a file has.
+const sampleLimit = (project: unknown, id: string) => (clipSampleIds(record(project).audioTracks).includes(id) ? MAX_EMBEDDED_TOTAL_BYTES : MAX_EMBEDDED_SAMPLE_BYTES);
 // The largest file an import accepts, here and in every version before this.
 export const MAX_PROJECT_FILE_BYTES = 20 * 1024 * 1024;
 // With base64 a third larger, this keeps a project file under that limit,
@@ -62,13 +65,14 @@ export async function fromBase64(text: string, limit: number): Promise<Uint8Arra
 const synthLanes = (project: unknown): unknown[] => { const lanes = record(project).synths; return Array.isArray(lanes) ? lanes : []; };
 const laneSample = (lane: unknown) => record(record(record(lane).synthParams).sample);
 
-// The samples a project plays: its drum lanes', and its synth lanes' whether or not the lane is
-// set to the sample engine just now. A lane's sample belongs to the whole project, not to a scene,
-// so a lane that is silent in the open scene still counts.
+// The samples a project plays: its drum lanes', its synth lanes' whether or not the lane is set
+// to the sample engine just now, and the recordings its audio tracks' clips play. A lane's sample
+// belongs to the whole project, not to a scene, so a lane that is silent in the open scene still counts.
 export function usedSampleIds(project: unknown): string[] {
   const ids = [
     ...Object.values(record(record(project).drumState)).map(track => record(track).sampleId),
     ...synthLanes(project).map(lane => laneSample(lane).id),
+    ...clipSampleIds(record(project).audioTracks),
   ];
   return [...new Set(ids.filter((id): id is string => typeof id === 'string' && SAMPLE_ID.test(id)))];
 }
@@ -82,7 +86,7 @@ export async function embedSamples(project: unknown, store: SampleStore = browse
     const stored = await store.get(id);
     if (!stored) continue;
     const size = stored.data.byteLength;
-    if (size < 1 || size > MAX_EMBEDDED_SAMPLE_BYTES || size > room) { skipped.push(stored.name); continue; }
+    if (size < 1 || size > sampleLimit(project, id) || size > room) { skipped.push(stored.name); continue; }
     room -= size;
     samples.push({ id, name: stored.name, type: stored.type, data: await toBase64(new Uint8Array(stored.data)) });
   }
@@ -103,7 +107,7 @@ export async function readEmbeddedSamples(file: unknown): Promise<{ samples: Sam
     const name = typeof entry.name === 'string' ? entry.name.trim().slice(0, 200) : '';
     const type = typeof entry.type === 'string' && /^audio\/[\w.+-]{1,60}$/.test(entry.type) ? entry.type : '';
     const bytes = name && isAudioFile({ name, type }) && typeof entry.data === 'string'
-      ? await fromBase64(entry.data, Math.min(MAX_EMBEDDED_SAMPLE_BYTES, room)) : null;
+      ? await fromBase64(entry.data, Math.min(sampleLimit(input.project, id), room)) : null;
     if (!bytes) { dropped++; continue; }
     room -= bytes.length;
     samples.push({ id, name, type, data: bytes.buffer });
@@ -157,5 +161,12 @@ export async function adoptSamples(file: unknown, store: SampleStore = browserSa
     const to = renamed.get(laneSample(lane).id);
     return to ? { ...record(lane), synthParams: { ...record(record(lane).synthParams), sample: { ...laneSample(lane), id: to } } } : lane;
   });
-  return { file: { ...rest, project: { ...project, drumState, ...(Array.isArray(project.synths) ? { synths } : {}) } }, added, dropped };
+  const audioTracks = Array.isArray(project.audioTracks) ? project.audioTracks.map((track) => ({
+    ...record(track),
+    clips: (Array.isArray(record(track).clips) ? record(track).clips as unknown[] : []).map((clip) => {
+      const to = renamed.get(record(clip).sampleId as string);
+      return to ? { ...record(clip), sampleId: to } : clip;
+    }),
+  })) : undefined;
+  return { file: { ...rest, project: { ...project, drumState, ...(Array.isArray(project.synths) ? { synths } : {}), ...(audioTracks ? { audioTracks } : {}) } }, added, dropped };
 }

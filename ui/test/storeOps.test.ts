@@ -87,6 +87,29 @@ const guestRemove = (title: string, result: Outcome, arrange: Case['arrange'], c
 
 // An id a sample can have that `comparable` does not take for one of the store's own.
 const SAMPLE = 'a'.repeat(36);
+
+// Audio tracks and their clips, through the typed helpers, which make each new id.
+const tracked = (answer: unknown) => ({ answer: { audioTracks: answer }, event: 'audioTracksChanged' });
+const oneTrack = (service: LocalProjectService) => { const result = service.addTrack(); assert.ok(result.ok); return result.value.audioTracks[0].id; };
+const withClip = (service: LocalProjectService) => {
+  const track = oneTrack(service), result = service.addClip(track, { sampleId: SAMPLE, at: 32, length: 2 });
+  assert.ok(result.ok);
+  return { track, clip: result.value.audioTracks[0].clips[0].id };
+};
+const trackCases: Case[] = [
+  { op: 'track.add', title: 'a track is added, with an id made for it', run: service => service.addTrack('Vox'), ...tracked([{ id: 'id-1', name: 'Vox', volume: .8, clips: [] }]) },
+  { op: 'track.add', title: 'a ninth track is refused', arrange: service => { for (let count = 0; count < 8; count++) oneTrack(service); }, run: service => service.addTrack(), status: 409, error: 'A project can hold 8 audio tracks.' },
+  { op: 'track.patch', title: 'a track is changed', arrange: oneTrack, run: (service, id) => service.changeTrack(id, wrong({ volume: .5, pan: 2, solo: true })), ...tracked([{ id: 'id-1', name: 'Audio 1', volume: .5, pan: 1, solo: true, clips: [] }]) },
+  { op: 'track.patch', title: 'a track that does not exist cannot be changed', run: service => service.changeTrack(NO_GUEST, { volume: .5 }), status: 404, error: 'Track not found' },
+  { op: 'track.remove', title: 'a track is removed with its clips', arrange: service => withClip(service).track, run: (service, id) => service.removeTrack(id), ...tracked([]), check: project => assert.equal('audioTracks' in project, false) },
+  { op: 'track.remove', title: 'a track that does not exist cannot be removed', run: service => service.removeTrack(NO_GUEST), status: 404, error: 'Track not found' },
+  { op: 'clip.add', title: 'a clip is added, with an id made for it', arrange: oneTrack, run: (service, id) => service.addClip(id, { sampleId: SAMPLE, at: 16, length: 1.5, fadeOut: .25 }), ...tracked([{ id: 'id-1', name: 'Audio 1', volume: .8, clips: [{ id: 'id-2', sampleId: SAMPLE, at: 16, length: 1.5, fadeOut: .25 }] }]) },
+  { op: 'clip.add', title: 'a clip with nothing to play is refused', arrange: oneTrack, run: (service, id) => service.addClip(id, { sampleId: SAMPLE, at: 0, length: wrong('long') }), status: 400, error: 'That is not a clip a track can hold.' },
+  { op: 'clip.patch', title: 'a clip is trimmed and given a level', arrange: withClip, run: (service, ctx) => service.changeClip(ctx.clip, { offset: .5, length: 1, gain: 1.5 }), ...tracked([{ id: 'id-1', name: 'Audio 1', volume: .8, clips: [{ id: 'id-2', sampleId: SAMPLE, at: 32, length: 1, offset: .5, gain: 1.5 }] }]) },
+  { op: 'clip.patch', title: 'a clip that does not exist cannot be changed', run: service => service.changeClip(NO_GUEST, { at: 0 }), status: 404, error: 'Clip not found' },
+  { op: 'clip.remove', title: 'a clip is removed', arrange: withClip, run: (service, ctx) => service.removeClip(ctx.clip), ...tracked([{ id: 'id-1', name: 'Audio 1', volume: .8, clips: [] }]) },
+  { op: 'clip.remove', title: 'a clip that does not exist cannot be removed', run: service => service.removeClip(NO_GUEST), status: 404, error: 'Clip not found' },
+];
 const NO_STEP = 'Invalid drum step', NO_LANE = 'Unknown local operation', NO_BARS = 'A drum pattern is 1, 2, 4 or 8 bars long';
 const LANE_SETTINGS = { volume: .5, tone: .5, extra: .5, tune: 0, humanize: .35, pan: 0 };
 type LaneChange = { on?: number[]; settings?: object; [key: string]: unknown };
@@ -930,6 +953,7 @@ const cases: Case[] = [
     project => { for (const scene of project.scenes) assert.deepEqual(Object.keys(scene).filter(key => key !== 'color').sort(), ['drums', 'id', 'lanes', 'mutes', 'name']); }),
   guestRemove('a guest that does not exist cannot be removed', { status: 404, error: 'Guest not found' }, service => { addGuest(service); return NO_GUEST; }),
 
+  ...trackCases,
   ...drumCases,
   ...effectCases,
   ...laneCases,
@@ -981,7 +1005,7 @@ test('apply is synchronous: the event has arrived and the store has changed befo
   assert.equal(service.snapshot().drumSwing, .3);
   for (const method of [
     'apply', 'applyAll', 'setDrumSwing', 'setDrumMasterVolume', 'setDrumKit', 'setDrumState', 'resetDrums', 'setDrumBars', 'setDrumStep', 'setDrumStepVelocity', 'setDrumStepDetail',
-    'setDrumSettings', 'setDrumSample', 'setDrumMix', 'setDrumFx', 'setEffectsLoop', 'setTempo', 'setSynthParams', 'setSynthModel', 'setSynthMix', 'setSynthPrefs', 'writePattern', 'createLane', 'removeLane', 'playLane', 'stopLane', 'addGuest', 'changeGuest', 'removeGuest', 'selectScene', 'createScene', 'renameScene', 'deleteScene', 'replaceScenes', 'setSong', 'getScenes', 'getTempo', 'getDrumKits',
+    'setDrumSettings', 'setDrumSample', 'setDrumMix', 'setDrumFx', 'setEffectsLoop', 'setTempo', 'setSynthParams', 'setSynthModel', 'setSynthMix', 'setSynthPrefs', 'writePattern', 'createLane', 'removeLane', 'playLane', 'stopLane', 'addGuest', 'changeGuest', 'removeGuest', 'addTrack', 'changeTrack', 'removeTrack', 'addClip', 'changeClip', 'removeClip', 'selectScene', 'createScene', 'renameScene', 'deleteScene', 'replaceScenes', 'setSong', 'getScenes', 'getTempo', 'getDrumKits',
   ] as const) {
     assert.equal(LocalProjectService.prototype[method].constructor.name, 'Function', `${method} is not async`);
   }

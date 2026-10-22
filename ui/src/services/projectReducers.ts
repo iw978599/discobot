@@ -14,6 +14,7 @@ import type { DrumState, Pattern, Scene, TimeSignature } from '../types';
 import type { ProjectDefaults, ProjectLane, ProjectState } from './localService';
 import type { Operation, OpResult, OpType, Outcome, Rejected } from './projectOps';
 import { MAX_SWING, swingGridOf } from './grooves';
+import { MAX_CLIPS, MAX_TRACKS, TRACK_VOLUME, isTrackId, patchClip, patchTrack, sanitizeAudioTracks, sanitizeClip, sortClips } from './audioTracks';
 
 // `origin` is this machine's own address, which a guest may not be loaded from.
 export interface ReducerContext { state: ProjectState; defaults: ProjectDefaults; origin: string | undefined }
@@ -25,6 +26,16 @@ const update = <V>(type: string, data: V): Outcome<V> => ({ ok: true, value: dat
 const refuse = (status: Rejected['status'], error: string): Rejected => ({ ok: false, status, error });
 const BAD_DATA = 'Invalid local operation data';
 const NO_SYNTH = 'Synth not found';
+const NO_TRACK = 'Track not found';
+const NO_CLIP = 'Clip not found';
+// The clip with this id, and the track it is on.
+const clipOf = (state: ProjectState, clipId: unknown) => {
+  for (const track of state.audioTracks ?? []) {
+    const clip = track.clips.find(entry => entry.id === clipId);
+    if (clip) return { track, clip };
+  }
+  return null;
+};
 // The parts a patch carries only when it is a whole sound and not one knob's change.
 export const WHOLE_SOUND = ['oscillator', 'filter', 'envelope', 'lfo1', 'lfo2', 'fxSends', 'gain'];
 const BAD_ADDRESS = 'That is not an address a guest instrument can be loaded from. It must start with https:// and be on another site.';
@@ -334,6 +345,64 @@ export const reducers: Reducers = {
       if (Object.keys(scene.guestMix).length === 0) delete scene.guestMix;
     }
     return update('guestsChanged', { guests: state.guests });
+  },
+  // Audio tracks on the timeline. The project holds none until one is added, and none again once
+  // the last is removed, so a project without them is stored as it always was.
+  'track.add': ({ state }, op) => {
+    const tracks = state.audioTracks ?? [];
+    if (!isTrackId(op.trackId)) return refuse(400, 'That is not an id a track can have.');
+    if (tracks.length >= MAX_TRACKS) return refuse(409, `A project can hold ${MAX_TRACKS} audio tracks.`);
+    if (tracks.some(track => track.id === op.trackId) || clipOf(state, op.trackId)) return refuse(409, 'That track is already in the project.');
+    state.audioTracks = sanitizeAudioTracks([...tracks, { id: op.trackId, name: op.name, volume: TRACK_VOLUME, clips: [] }]);
+    return update('audioTracksChanged', { audioTracks: state.audioTracks ?? [] });
+  },
+  'track.patch': ({ state }, op) => {
+    const patch = sent(op.patch);
+    if (!patch) return refuse(400, BAD_DATA);
+    const tracks = state.audioTracks ?? [];
+    const index = tracks.findIndex(track => track.id === op.trackId);
+    if (index < 0) return refuse(404, NO_TRACK);
+    state.audioTracks = tracks.map((track, at) => (at === index ? patchTrack(track, patch, at) : track));
+    return update('audioTracksChanged', { audioTracks: state.audioTracks });
+  },
+  'track.remove': ({ state }, op) => {
+    const tracks = state.audioTracks ?? [];
+    if (!tracks.some(track => track.id === op.trackId)) return refuse(404, NO_TRACK);
+    const left = tracks.filter(track => track.id !== op.trackId);
+    if (left.length) state.audioTracks = sanitizeAudioTracks(left); else delete state.audioTracks;
+    return update('audioTracksChanged', { audioTracks: state.audioTracks ?? [] });
+  },
+  'clip.add': ({ state }, op) => {
+    const tracks = state.audioTracks ?? [];
+    const track = tracks.find(entry => entry.id === op.trackId);
+    if (!track) return refuse(404, NO_TRACK);
+    const clip = sanitizeClip(sent(op.clip));
+    if (!clip) return refuse(400, 'That is not a clip a track can hold.');
+    if (clipOf(state, clip.id) || tracks.some(entry => entry.id === clip.id)) return refuse(409, 'That clip is already in the project.');
+    if (track.clips.length >= MAX_CLIPS) return refuse(409, `A track can hold ${MAX_CLIPS} clips.`);
+    track.clips = sortClips([...track.clips, clip]);
+    return update('audioTracksChanged', { audioTracks: tracks });
+  },
+  // A clip moves to another track by naming it in the patch.
+  'clip.patch': ({ state }, op) => {
+    const patch = sent(op.patch);
+    if (!patch) return refuse(400, BAD_DATA);
+    const found = clipOf(state, op.clipId);
+    if (!found) return refuse(404, NO_CLIP);
+    const tracks = state.audioTracks!;
+    const to = 'trackId' in patch ? tracks.find(track => track.id === patch.trackId) : found.track;
+    if (!to) return refuse(404, NO_TRACK);
+    if (to !== found.track && to.clips.length >= MAX_CLIPS) return refuse(409, `A track can hold ${MAX_CLIPS} clips.`);
+    const clip = patchClip(found.clip, patch);
+    found.track.clips = found.track.clips.filter(entry => entry.id !== op.clipId);
+    to.clips = sortClips([...to.clips, clip]);
+    return update('audioTracksChanged', { audioTracks: tracks });
+  },
+  'clip.remove': ({ state }, op) => {
+    const found = clipOf(state, op.clipId);
+    if (!found) return refuse(404, NO_CLIP);
+    found.track.clips = found.track.clips.filter(entry => entry.id !== op.clipId);
+    return update('audioTracksChanged', { audioTracks: state.audioTracks! });
   },
   // The pattern written becomes the lane's open one. The id is the operation's own: the route
   // took it from the path, then from the body, then made one. An id that is not text, or is
