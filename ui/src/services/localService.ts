@@ -339,6 +339,23 @@ export class LocalProjectService {
 
   listVersions(projectId = this.state!.projectId): Promise<VersionInfo[]> { return this.library.listVersions(projectId); }
 
+  // Hands every project in this browser to `visit`, one at a time: the open one, each in the
+  // library and each kept version. Rejects if any cannot be read, so that whatever is cleared away
+  // because no project uses it (a guest's files) is never cleared on a guess.
+  async visitStoredProjects(visit: (project: unknown) => void): Promise<void> {
+    if (this.state) visit(this.currentRecord().project);
+    for (const info of await this.library.list()) {
+      const stored = await this.library.get(info.id);
+      if (!stored) throw new Error('A project could not be read');
+      visit(stored.project);
+      for (const version of await this.library.listVersions(info.id)) {
+        const kept = await this.library.getVersion(version.id);
+        if (!kept) throw new Error('A version could not be read');
+        visit(kept.project);
+      }
+    }
+  }
+
   // Puts a project back to an earlier version. The state it had just before is kept as a
   // version too, so restoring can itself be taken back.
   async restoreVersion(versionId: string): Promise<ProjectResult> {

@@ -29,6 +29,7 @@ export const FEATURED_GUESTS: Array<{ name: string; by: string; about: string; u
   { name: 'Choir', by: 'Aaron Van Dorn', about: 'A generative choral synthesizer: a melody that slowly mutates, sung in vowels', url: 'https://aaronvandorn.github.io/Choir/' },
   { name: 'Logic Rhythm', by: 'Aaron Van Dorn', about: 'A drum machine sequenced by logic gates', url: 'https://aaronvandorn.github.io/Logic-Rhythm/' },
   { name: 'Boolean Melody Machine', by: 'Aaron Van Dorn', about: 'Melody and harmony from Boolean logic and Euclidean clocks', url: 'https://aaronvandorn.github.io/Boolean-Melody-Machine/' },
+  { name: 'Tape Loop Deck', by: 'Aaron Van Dorn', about: 'A tape loop simulator with a mixing deck and effects', url: 'https://aaronvandorn.github.io/Tape-Loop-Deck/' },
   { name: 'Pocket Mouse', by: 'Aaron Van Dorn', about: 'An instrument played on a grid with one finger, after Music Mouse', url: 'https://aaronvandorn.github.io/Pocket-Mouse/' },
   { name: 'Axis Stack', by: 'Aaron Van Dorn', about: 'An XY effects pad in the manner of a Kaoss Pad: each axis drives a stack of effects', url: 'https://aaronvandorn.github.io/Axis-Stack/' },
 ];

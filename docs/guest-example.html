@@ -18,6 +18,7 @@
 <label>Note <select id="note" aria-label="Note"></select></label>
 <label>Sound <select id="wave" aria-label="Sound"><option>triangle</option><option>sine</option><option>square</option></select></label>
 <label id="voice-control" hidden>Voice <select id="voice" aria-label="Voice"><option value="">None</option></select></label>
+<button id="keep" hidden>Keep a Recording</button>
 <button id="start">Start</button>
 <div id="status" role="status"></div>
 
@@ -29,11 +30,15 @@
   // ?input=1 makes this a guest that takes one of the host's voices (the optional "input" feature)
   // and plays it back, as an effect would after doing something to it. It then rings no bell.
   var TAKES_INPUT = new URLSearchParams(location.search).get('input') === '1';
+  // ?files=1 makes this a guest that keeps a file with the host's project (the optional "files"
+  // feature): a short recording, made by a button, whose id is kept in the settings.
+  var KEEPS_FILES = new URLSearchParams(location.search).get('files') === '1';
   var NOTES = ['C4', 'D4', 'E4', 'G4', 'A4', 'C5'], MIDI = [60, 62, 64, 67, 69, 72];
 
   // ---- the instrument itself: a note on every beat
   var state = { note: 'C4', wave: 'triangle' };
   if (TAKES_INPUT) state.input = null;
+  if (KEEPS_FILES) state.recording = null;
   var ctx = null, output = null, monitor = null;
   var transport = { playing: false };   // { playing, bpm, anchorWall, anchorBeat }
   var nextBeat = 0, scheduled = 0, timer = null;
@@ -172,6 +177,33 @@
   }
   voiceSelect.addEventListener('change', function () { state.input = voiceSelect.value || null; send({ type: 'selectInput', source: state.input }); send({ type: 'stateChanged' }); });
 
+  // ---- a file kept with the host's project: here a quarter second of the bell, as a WAV.
+  // The host answers `putFile` with the file's id, which goes in the settings like any other
+  // value; given settings with an id, the guest asks for the file back with `getFile`.
+  var recordingBytes = 0, recordingNote = 'none', asked = 0;
+  function bellWav() {
+    var rate = 8000, frames = rate / 4, bytes = new DataView(new ArrayBuffer(44 + frames * 2));
+    var text = function (at, value) { for (var i = 0; i < value.length; i++) bytes.setUint8(at + i, value.charCodeAt(i)); };
+    var hz = 440 * Math.pow(2, (MIDI[NOTES.indexOf(state.note)] - 69) / 12);
+    text(0, 'RIFF'); bytes.setUint32(4, 36 + frames * 2, true); text(8, 'WAVEfmt ');
+    bytes.setUint32(16, 16, true); bytes.setUint16(20, 1, true); bytes.setUint16(22, 1, true);
+    bytes.setUint32(24, rate, true); bytes.setUint32(28, rate * 2, true); bytes.setUint16(32, 2, true); bytes.setUint16(34, 16, true);
+    text(36, 'data'); bytes.setUint32(40, frames * 2, true);
+    for (var f = 0; f < frames; f++) bytes.setInt16(44 + f * 2, Math.round(Math.sin(2 * Math.PI * hz * f / rate) * (1 - f / frames) * 12000), true);
+    return bytes.buffer;
+  }
+  document.getElementById('keep').addEventListener('click', function () {
+    var data = bellWav();
+    recordingNote = 'keeping…';
+    send({ type: 'putFile', id: 'keep-' + (++asked), mime: 'audio/wav', data: data }, [data]);
+    show();
+  });
+  function fetchRecording() {
+    recordingBytes = 0;
+    recordingNote = state.recording ? 'loading…' : 'none';
+    if (state.recording) send({ type: 'getFile', id: 'get-' + (++asked), file: state.recording });
+  }
+
   // ---- messages
   function send(message, transfer) {
     if (!hosted) return;
@@ -197,6 +229,14 @@
     }
     else if (TAKES_INPUT && m.type === 'inputSelected') selected = typeof m.source === 'string' ? m.source : null;
     else if (TAKES_INPUT && m.type === 'input') { ensureAudio(); playInput(m); }
+    else if (KEEPS_FILES && m.type === 'fileStored') {
+      if (typeof m.file === 'string') { state.recording = m.file; recordingBytes = 0; recordingNote = 'kept'; send({ type: 'stateChanged' }); fetchRecording(); }
+      else recordingNote = 'not kept: ' + String(m.error);
+    }
+    else if (KEEPS_FILES && m.type === 'file' && m.file === state.recording) {
+      if (m.data instanceof ArrayBuffer) { recordingBytes = m.data.byteLength; recordingNote = 'loaded, ' + m.mime; }
+      else recordingNote = 'missing';
+    }
     show();
   });
 
@@ -206,6 +246,10 @@
     if (NOTES.indexOf(next.note) >= 0) state.note = next.note;
     if (['triangle', 'sine', 'square'].indexOf(next.wave) >= 0) state.wave = next.wave;
     noteSelect.value = state.note; waveSelect.value = state.wave;
+    if (KEEPS_FILES) {
+      var recording = typeof next.recording === 'string' ? next.recording : null;
+      if (recording !== state.recording || (recording && !recordingBytes)) { state.recording = recording; fetchRecording(); }
+    }
     if (TAKES_INPUT) {
       var wanted = typeof next.input === 'string' ? next.input : null;
       if (wanted !== state.input) { state.input = wanted; showSources(); if (sources.length) send({ type: 'selectInput', source: wanted }); }
@@ -230,11 +274,14 @@
       '\nBeats played: ' + scheduled +
       '\nAudio blocks sent: ' + blocksSent +
       (TAKES_INPUT ? '\nVoice: ' + (selected || 'none') + ', blocks received: ' + inputBlocks : '') +
+      (KEEPS_FILES ? '\nRecording: ' + recordingNote + (recordingBytes ? ', ' + recordingBytes + ' bytes' : '') : '') +
       (ctx && ctx.state !== 'running' ? '\nAudio is waiting for a click on this page' : '');
   }
   show();
   document.getElementById('voice-control').hidden = !TAKES_INPUT;
-  send({ type: 'ready', name: 'Beat Bell', features: TAKES_INPUT ? ['transport', 'state', 'audio', 'input'] : ['transport', 'state', 'audio'] });
+  // Kept only while hosted: a page on its own has nowhere to keep a file.
+  document.getElementById('keep').hidden = !KEEPS_FILES || !hosted;
+  send({ type: 'ready', name: 'Beat Bell', features: ['transport', 'state', 'audio'].concat(TAKES_INPUT ? ['input'] : [], KEEPS_FILES ? ['files'] : []) });
 })();
 </script>
 </body>
