@@ -1474,22 +1474,6 @@ export default function SynthControls({
               </select>
             </div>
             <div className="synth-waveform-selector">
-              <label>TARGET</label>
-              <select
-                value={parameters.lfo1.target}
-                aria-label="LFO 1 target"
-                onChange={(e) => updateLfo('lfo1', { target: e.target.value as SynthParameters['lfo1']['target'] })}
-                className="synth-select"
-                disabled={!parameters.lfo1.enabled}
-              >
-                <option value="pitch">Pitch</option>
-                <option value="vibrato">Vibrato</option>
-                <option value="filter">Filter</option>
-                <option value="amp">Amp</option>
-                <option value="pulseWidth">Pulse W</option>
-              </select>
-            </div>
-            <div className="synth-waveform-selector">
               <label>PHASE</label>
               <select
                 value={parameters.lfo1.retrigger === false ? 'free' : 'retrigger'}
@@ -1541,21 +1525,6 @@ export default function SynthControls({
                 tooltip={parameters.lfo1.sync ? 'Following the tempo: the knob steps through note values' : 'How fast the LFO sweeps'}
               />
             </div>
-            <Knob
-              label="Depth"
-              param="lfo1Depth"
-              value={parameters.lfo1.depth}
-              defaultValue={DEFAULTS.lfo1.depth}
-              min={0}
-              max={1}
-              step={0.01}
-              displayValue={`${(parameters.lfo1.depth * 100).toFixed(0)}%`}
-              onChange={(v) => updateLfo('lfo1', { depth: v })}
-              parseInputValue={parsePercent(0, 1)}
-              disabled={!parameters.lfo1.enabled}
-              color="#06b6d4"
-              tooltip={TOOLTIPS.lfoDepth}
-            />
           </div>
         </div>
 
@@ -1586,22 +1555,6 @@ export default function SynthControls({
                 <option value="square">⎍</option>
                 <option value="sawtooth">/|</option>
                 <option value="triangle">/\</option>
-              </select>
-            </div>
-            <div className="synth-waveform-selector">
-              <label>TARGET</label>
-              <select
-                value={parameters.lfo2.target}
-                aria-label="LFO 2 target"
-                onChange={(e) => updateLfo('lfo2', { target: e.target.value as SynthParameters['lfo1']['target'] })}
-                className="synth-select"
-                disabled={!parameters.lfo2.enabled}
-              >
-                <option value="pitch">Pitch</option>
-                <option value="vibrato">Vibrato</option>
-                <option value="filter">Filter</option>
-                <option value="amp">Amp</option>
-                <option value="pulseWidth">Pulse W</option>
               </select>
             </div>
             <div className="synth-waveform-selector">
@@ -1656,28 +1609,53 @@ export default function SynthControls({
                 tooltip={parameters.lfo2.sync ? 'Following the tempo: the knob steps through note values' : 'How fast the LFO sweeps'}
               />
             </div>
-            <Knob
-              label="Depth"
-              param="lfo2Depth"
-              value={parameters.lfo2.depth}
-              defaultValue={DEFAULTS.lfo2.depth}
-              min={0}
-              max={1}
-              step={0.01}
-              displayValue={`${(parameters.lfo2.depth * 100).toFixed(0)}%`}
-              onChange={(v) => updateLfo('lfo2', { depth: v })}
-              parseInputValue={parsePercent(0, 1)}
-              disabled={!parameters.lfo2.enabled}
-              color="#0891b2"
-              tooltip={TOOLTIPS.lfoDepth}
-            />
           </div>
         </div>
 
         <div className="synth-column synth-routing" data-tab={COLUMN_TABS['ROUTING']}>
           <h3>ROUTING</h3>
           <div className="synth-routes">
-            {Array.from({ length: MAX_MOD_ROUTES }, (_, index) => {
+            {/* Each LFO's own target and depth, set here with the routes so everything that moves the
+                sound is in one list. It is the LFO's own setting, with its own targets (vibrato among
+                them) and scale, so a sound keeps what it had. */}
+            {(['lfo1', 'lfo2'] as const).map((lfo, place) => (
+              <div className="synth-route synth-route-lfo" key={lfo} role="group" aria-label={`LFO ${place + 1}'s own route`}>
+                <span className="synth-route-source">LFO {place + 1}</span>
+                <span aria-hidden="true">→</span>
+                <select
+                  value={parameters[lfo].target}
+                  aria-label={`LFO ${place + 1} target`}
+                  onChange={(e) => updateLfo(lfo, { target: e.target.value as SynthParameters['lfo1']['target'] })}
+                  className="synth-select"
+                  disabled={!parameters[lfo].enabled}
+                  title={parameters[lfo].enabled ? 'Where this LFO is sent when it is on' : 'Switch the LFO on, on its own page, to send it'}
+                >
+                  <option value="pitch">Pitch</option>
+                  <option value="vibrato">Vibrato</option>
+                  <option value="filter">Filter</option>
+                  <option value="amp">Amp</option>
+                  <option value="pulseWidth">Pulse W</option>
+                </select>
+                <Knob
+                  size="small"
+                  label="Depth"
+                  param={`${lfo}Depth`}
+                  value={parameters[lfo].depth}
+                  defaultValue={DEFAULTS[lfo].depth}
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  displayValue={`${(parameters[lfo].depth * 100).toFixed(0)}%`}
+                  onChange={(v) => updateLfo(lfo, { depth: v })}
+                  parseInputValue={parsePercent(0, 1)}
+                  disabled={!parameters[lfo].enabled}
+                  color={place === 0 ? '#06b6d4' : '#0891b2'}
+                  tooltip={TOOLTIPS.lfoDepth}
+                />
+              </div>
+            ))}
+            {/* The routes in use, and one more row for the next, up to MAX_MOD_ROUTES. */}
+            {Array.from({ length: Math.min(MAX_MOD_ROUTES, (parameters.modMatrix ?? []).length + 1) }, (_, index) => {
               const routes = parameters.modMatrix ?? [];
               const route: ModRoute | undefined = routes[index];
               // A row past the last route is the place the next one goes; the rows after it wait.

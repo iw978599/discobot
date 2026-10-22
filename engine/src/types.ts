@@ -112,7 +112,7 @@ export interface ModRoute {
   // the filter four octaves, the level from nothing to full, the pan from side to side.
   depth: number;
 }
-export const MAX_MOD_ROUTES = 4;
+export const MAX_MOD_ROUTES = 8;
 export const MOD_SOURCES: ModSource[] = ['lfo1', 'lfo2', 'ampEnv', 'filterEnv', 'velocity', 'key', 'random', 'modWheel', 'pressure'];
 export const MOD_DESTINATIONS: ModDestination[] = ['pitch', 'osc2Pitch', 'filter', 'amp', 'pulseWidth', 'pan', 'fmIndex'];
 

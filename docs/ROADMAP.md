@@ -139,7 +139,9 @@ directly, with no builder.
     aftertouch as a route source (Pressure). Each part waits to be tried by
     the owner on their controller.
 25. **More than four modulation routes**, with the LFO tab's own menus
-    folded into them (sound 4).
+    folded into them (sound 4). Done: up to eight routes, the list showing
+    those in use and one more; each LFO's own target and depth are the first
+    rows of the routing list, still the LFO's own setting, so no sound changed.
 26. **The design review's screens not looked at** (improvements 9).
 27. **Published songs** (features 9): a description or picture, the list's
     order, playing from the list.
@@ -425,8 +427,8 @@ target; removal of the AI review workflow.
    by ear: up to four routes a sound, on the LFO tab under Routing. Sources
    are the two LFOs, both envelopes, velocity, key and a stepped random;
    destinations are pitch, the second oscillator's pitch, the filter, the
-   level, pulse width, pan and FM amount. The mod wheel is now a source (features 6); open: more than four routes; and the LFO tab's own
-   target menus are still there beside the routes, not replaced by them.
+   level, pulse width, pan and FM amount. The mod wheel is now a source (features 6), and aftertouch (Pressure, item 24). Up to eight
+   routes since item 25, with each LFO's own target and depth as the routing list's first rows.
 
 5. **A true ladder filter.** (M) Done on 2026-10-12, not verified by ear.
    The voice has a four-pole ladder beside the state-variable filter, as a

@@ -3,7 +3,7 @@ import type { InsertSettings } from './inserts';
 
 // The flat parameter set a SynthCore runs on. Live playback posts it to the worklet;
 // offline export hands it to the same core directly.
-export interface VoiceParams extends InsertSettings {
+export interface VoiceParams extends InsertSettings, FlatRoutes {
   engine: string;
   voiceMode: string;
   oscType: string;
@@ -78,12 +78,13 @@ export interface VoiceParams extends InsertSettings {
   lfo2Rate: number;
   lfo2Depth: number;
   lfo2Retrigger: boolean;
-  // The routes, flattened: an empty source means the place is not used.
-  mod1Source: string; mod1Destination: string; mod1Depth: number;
-  mod2Source: string; mod2Destination: string; mod2Depth: number;
-  mod3Source: string; mod3Destination: string; mod3Depth: number;
-  mod4Source: string; mod4Destination: string; mod4Depth: number;
 }
+
+// The routes, flattened for the voice, which takes plain values: an empty source means the place
+// is not used. There are MAX_MOD_ROUTES places.
+type RouteNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+type FlatRoutes = { [N in RouteNumber as `mod${N}Source`]: string } & { [N in RouteNumber as `mod${N}Destination`]: string } & { [N in RouteNumber as `mod${N}Depth`]: number };
+export type VoiceRouteParams = FlatRoutes;
 
 export function createDefaultSynthParameters(): SynthParameters {
   return {
@@ -143,18 +144,15 @@ function glideSeconds(portamento: Partial<SynthParameters['portamento']> | undef
   return beats === undefined ? portamento?.glide ?? 0 : beats * 60 / Math.max(20, Math.min(400, bpm));
 }
 
-type FlatRoutes = Pick<VoiceParams,
-  'mod1Source' | 'mod1Destination' | 'mod1Depth' | 'mod2Source' | 'mod2Destination' | 'mod2Depth' |
-  'mod3Source' | 'mod3Destination' | 'mod3Depth' | 'mod4Source' | 'mod4Destination' | 'mod4Depth'>;
-
 function flatRoutes(routes: SynthParameters['modMatrix']): FlatRoutes {
-  const at = (index: number) => routes?.[index];
-  return {
-    mod1Source: at(0)?.source ?? '', mod1Destination: at(0)?.destination ?? '', mod1Depth: at(0)?.depth ?? 0,
-    mod2Source: at(1)?.source ?? '', mod2Destination: at(1)?.destination ?? '', mod2Depth: at(1)?.depth ?? 0,
-    mod3Source: at(2)?.source ?? '', mod3Destination: at(2)?.destination ?? '', mod3Depth: at(2)?.depth ?? 0,
-    mod4Source: at(3)?.source ?? '', mod4Destination: at(3)?.destination ?? '', mod4Depth: at(3)?.depth ?? 0,
-  };
+  const flat: Record<string, string | number> = {};
+  for (let n = 1; n <= 8; n++) {
+    const route = routes?.[n - 1];
+    flat[`mod${n}Source`] = route?.source ?? '';
+    flat[`mod${n}Destination`] = route?.destination ?? '';
+    flat[`mod${n}Depth`] = route?.depth ?? 0;
+  }
+  return flat as FlatRoutes;
 }
 
 function flatInserts(inserts: SynthParameters['inserts'], bpm: number): InsertSettings {
