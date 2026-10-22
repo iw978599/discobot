@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { barSecondsAt, clipEnvelope, clipsSounding, clipsStarting, songSecondsAt, tickSeconds } from '../src/services/clipTiming.ts';
+import { barSecondsAt, clipEnvelope, clipsSounding, clipsStarting, songSecondsAt, songTickAt, tickSeconds } from '../src/services/clipTiming.ts';
 import { clipLevel, panFrame, renderTrackTakes } from '../src/services/trackRender.ts';
 import { mixerChannels } from '../src/services/mixerChannels.ts';
 import type { AudioClip, AudioTrack } from '../src/services/audioTracks.ts';
@@ -88,4 +88,12 @@ test('the mixer has a strip for each audio track, and none without', () => {
   assert.deepEqual(mixerChannels(base).tracks, []);
   const [one] = mixerChannels({ ...base, audioTracks: [track({ name: 'Vox', pan: .5, solo: true })] }).tracks;
   assert.deepEqual({ ...one, id: 0 }, { id: 0, name: 'Vox', volume: .8, pan: .5, muted: false, solo: true });
+});
+
+test('a time in the song turns back into the tick it fell on', () => {
+  const song: Song = { entries: [{ sceneId: 'a', repeats: 2 }, { sceneId: 'b', repeats: 1 }], loop: false };
+  const lengthOf = () => 1, signatureOf = (id: string) => (id === 'b' ? '3/4' as const : undefined), tempoOf = (id: string) => (id === 'b' ? 60 : undefined);
+  for (const tick of [0, 5, 32, 64, 70, 88, 120.5]) {
+    close(songTickAt(song, songSecondsAt(song, tick, lengthOf, signatureOf, 120, tempoOf), lengthOf, signatureOf, 120, tempoOf), tick, `tick ${tick}`);
+  }
 });

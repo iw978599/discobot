@@ -31,6 +31,22 @@ export function songSecondsAt(song: Song, tick: number, lengthOf: Length, signat
   return seconds + left * tickSeconds(last);
 }
 
+// The tick of the song `seconds` after its first beat, as a fraction: the other way from
+// songSecondsAt. The timeline draws a clip as wide as the ticks its recording lasts.
+export function songTickAt(song: Song, seconds: number, lengthOf: Length, signatureOf: Signature, tempo: number, tempoOf?: Tempo): number {
+  let left = Math.max(0, seconds), ticks = 0, last = tempo;
+  for (const entry of song.entries) {
+    const at = tempoOf?.(entry.sceneId) ?? tempo;
+    last = at;
+    const count = entry.repeats * Math.max(1, lengthOf(entry.sceneId)) * barTicks(signatureOf(entry.sceneId));
+    const lasts = count * tickSeconds(at);
+    if (left <= lasts) return ticks + left / tickSeconds(at);
+    ticks += count;
+    left -= lasts;
+  }
+  return ticks + left / tickSeconds(last);
+}
+
 // The same for an export, whose bars are laid out already: each bar's signature, and when it
 // starts and how long it lasts in seconds.
 export function barSecondsAt(bars: Array<{ signature?: TimeSignature }>, times: Array<{ start: number; duration: number }>, tick: number): number {

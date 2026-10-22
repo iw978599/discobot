@@ -303,6 +303,12 @@ test('design shots: the rack, its units and the states of its controls', async (
     await page.getByRole('button', { name: 'Move row 2 earlier', exact: true }).focus();
     await tall(walk, () => page.locator('.song-module').screenshot({ path: info.outputPath('unit-song-playlist.png') }).then(() => {}));
   });
+  await attempt(walk, 'unit-song-timeline', async () => {
+    await page.getByRole('group', { name: 'Song layout', exact: true }).getByRole('button', { name: 'Timeline', exact: true }).click();
+    await page.getByRole('group', { name: 'Timeline', exact: true }).getByRole('button', { name: '+ Track', exact: true }).click();
+    await expect(page.locator('.timeline-row[role="group"]')).toHaveCount(1);
+    await tall(walk, () => page.locator('.song-module').screenshot({ path: info.outputPath('unit-song-timeline.png') }).then(() => {}));
+  });
   await attempt(walk, 'the song as blocks again', () => page.getByRole('group', { name: 'Song layout', exact: true }).getByRole('button', { name: 'Blocks', exact: true }).click());
   await attempt(walk, 'states-drum-grid', async () => {
     await page.getByRole('button', { name: 'Closed Hat step 2', exact: true }).click();

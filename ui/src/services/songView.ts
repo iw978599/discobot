@@ -1,7 +1,7 @@
-// How the song's order is shown: the row of blocks, or the playlist, one row for each entry with
-// its length and times. The choice is kept per browser, not with the project: it is about how a
+// How the song's order is shown: the row of blocks, the playlist, one row for each entry with
+// its length and times, or the timeline, the song's bars with the audio tracks under them. The choice is kept per browser, not with the project: it is about how a
 // person likes to read the song, and both show and edit the same entries.
-export const SONG_VIEWS = ['blocks', 'playlist'] as const;
+export const SONG_VIEWS = ['blocks', 'playlist', 'timeline'] as const;
 export type SongView = typeof SONG_VIEWS[number];
 
 const VIEW_KEY = 'discobot_song_view_v1';

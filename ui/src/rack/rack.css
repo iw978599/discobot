@@ -378,7 +378,7 @@
 .rack-page :is(button, select, input, textarea, a, summary, [role="slider"], [tabindex="0"], .help-sections h3):focus-visible {
   outline: 2px solid var(--focus); outline-offset: 2px; box-shadow: 0 0 0 2px var(--gap);
 }
-.rack-page :is(.rack-menu-list button, .song-block button, .song-timeline-entry, .piano-roll-cell, .key):focus-visible {
+.rack-page :is(.rack-menu-list button, .song-block button, .song-timeline-entry, .timeline-clip, .piano-roll-cell, .key):focus-visible {
   outline-offset: -2px; box-shadow: inset 0 0 0 4px var(--gap);
 }
 .rack .synth-toggle input:focus-visible + .synth-toggle-slider { outline: 2px solid var(--focus); outline-offset: 2px; box-shadow: 0 0 0 2px var(--gap); }
@@ -567,6 +567,34 @@
    one playing. Each row is the same fixed columns, so they line up down the list, and wraps where
    it must, so a narrow screen needs no rules of its own. */
 .song-view { display: flex; gap: 3px; flex: none; }
+/* The timeline (TrackTimeline): the song's bars along the top and the audio tracks under them,
+   each row's name sticking to the left while the bars scroll. A bar of 4/4 is 64px. */
+.timeline { --timeline-head: 190px; display: flex; flex-direction: column; gap: 8px; padding-top: 8px; }
+.timeline-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.timeline-place, .timeline-number, .timeline-clip-tools label { display: inline-flex; align-items: center; gap: 6px; color: var(--text-label); }
+.timeline-place input, .timeline-number input, .timeline-clip-tools select, .timeline-name { background: var(--surface-field); border: 1px solid var(--edge-control); border-radius: var(--corner-control); color: var(--text); padding: 4px 6px; font: inherit; }
+.timeline-place input, .timeline-number input { width: 7ch; }
+.timeline-scroll { overflow-x: auto; border: 1px solid var(--edge-faint); border-radius: var(--corner-panel); background: var(--surface-inset); }
+.timeline-grid { display: flex; flex-direction: column; min-width: 100%; }
+.timeline-row { display: flex; min-height: 44px; border-bottom: 1px solid var(--edge-faint); }
+.timeline-row:last-child { border-bottom: 0; }
+.timeline-row[data-chosen] .timeline-head { box-shadow: inset 3px 0 0 var(--on); }
+.timeline-head { position: sticky; left: 0; z-index: 2; flex: none; width: var(--timeline-head); box-sizing: border-box; display: flex; align-items: center; gap: 4px; padding: 4px 6px; background: var(--surface-panel-bottom); border-right: 1px solid var(--edge); }
+.timeline-name { flex: 1; min-width: 0; }
+.timeline-lane { position: relative; flex: 1; }
+.timeline-ruler { min-height: 32px; }
+.timeline-ruler .timeline-lane { cursor: pointer; }
+.timeline-block { position: absolute; top: 4px; bottom: 4px; box-sizing: border-box; padding: 3px 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: var(--type-caption); color: var(--text-plain); border-left: 4px solid var(--scene-color, var(--edge-strong)); background: linear-gradient(90deg, var(--edge) 1px, transparent 1px) left top / 64px 100% repeat-x, var(--surface-control); }
+.timeline-playing { position: absolute; top: 0; bottom: 0; background: var(--on-glow); pointer-events: none; }
+.timeline-mark { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--value); pointer-events: none; }
+.timeline-clip { position: absolute; top: 6px; bottom: 6px; box-sizing: border-box; display: flex; align-items: center; padding: 0 9px; overflow: hidden; border: 1px solid var(--edge-strong); border-radius: var(--corner-control); background: var(--surface-hover); color: var(--text); font-size: var(--type-caption); cursor: grab; touch-action: none; user-select: none; }
+.timeline-clip.on { background: var(--on); color: var(--text-on); border-color: var(--on-bright); }
+.timeline-clip.moving { cursor: grabbing; box-shadow: var(--shadow-float); z-index: 1; }
+.timeline-clip-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; pointer-events: none; }
+.timeline-trim { position: absolute; top: 0; bottom: 0; width: 8px; cursor: ew-resize; background: var(--on-deep); }
+.timeline-trim.start { left: 0; }
+.timeline-trim.end { right: 0; }
+.timeline-clip-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 8px 10px; background: var(--surface-inset); border: 1px solid var(--edge-faint); border-radius: var(--corner-panel); }
 .song-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
 .song-list-row { background: var(--surface-inset); border: 1px solid var(--edge-faint); border-left: 5px solid var(--scene-color, var(--edge-faint)); border-radius: var(--corner-panel); }
 .song-list-row.start { border-top-color: var(--text); border-right-color: var(--text); border-bottom-color: var(--text); }
@@ -965,6 +993,7 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
    other screen. useNarrow holds the same condition; keep the two the same. */
 @media (max-width: 720px), (max-width: 960px) and (max-height: 500px) and (orientation: landscape) {
   .shortcut-row { grid-template-columns: 1fr; gap: 4px; }
+  .timeline { --timeline-head: 132px; }
   .rack-page { padding: 0 0 calc(24px + env(safe-area-inset-bottom)); }
   /* The scroll padding keeps whatever is scrolled to, or tabbed to, clear of the bar along the bottom. */
   .rack-page.has-unit-bar {

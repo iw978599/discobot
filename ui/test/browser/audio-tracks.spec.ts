@@ -108,3 +108,62 @@ test('a clip on an audio track is in a Song WAV where it falls, and its track is
   expect(muted(2.2, 2.8)).toBeLessThan(0.001);
   expect(errors).toEqual([]);
 });
+
+test('the song\'s Timeline view adds a recording at a bar, and moves, fades and removes its clip', async ({ page }, testInfo) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const { writeFile } = await import('node:fs/promises');
+  const tone = testInfo.outputPath('Tone.wav');
+  await writeFile(tone, toneWav());
+  const project = () => page.evaluate(() => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem('discobot_browser_project_v1') || '{}')));
+  const clipAt = async () => (await project()).audioTracks?.flatMap((track: { clips: Array<{ at: number }> }) => track.clips.map(clip => clip.at));
+
+  await page.getByRole('group', { name: 'Song layout', exact: true }).getByRole('button', { name: 'Timeline', exact: true }).click();
+  const timeline = page.getByRole('group', { name: 'Timeline', exact: true });
+  await expect(timeline).toContainText('No audio tracks yet');
+  await timeline.getByLabel('Bar new recordings go in at', { exact: true }).fill('2');
+  await timeline.locator('input[type="file"]').setInputFiles(tone);
+
+  const first = timeline.getByRole('group', { name: 'Audio track Audio 1', exact: true });
+  const clip = timeline.getByRole('button', { name: /^Tone, / });
+  await expect(clip).toHaveAccessibleName('Tone, Audio 1, bar 2 beat 1, 1 s');
+  await expect(first.getByRole('button', { name: /^Tone, / })).toHaveCount(1);
+  await expect(page.getByRole('group', { name: 'Mixer audio Audio 1', exact: true }), 'its track is on the mixer').toBeVisible();
+  await expect.poll(clipAt).toEqual([32]);
+
+  // The keyboard: a beat, then a step with Alt, then down to a new track.
+  await clip.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(clip).toHaveAccessibleName('Tone, Audio 1, bar 2 beat 2, 1 s');
+  await page.keyboard.press('Alt+ArrowRight');
+  await expect.poll(clipAt).toEqual([42]);
+  await timeline.getByRole('button', { name: '+ Track', exact: true }).click();
+  await expect(timeline.getByRole('group', { name: 'Audio track Audio 2', exact: true })).toBeVisible();
+  await clip.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(timeline.getByRole('group', { name: 'Audio track Audio 2', exact: true }).getByRole('button', { name: /^Tone, / })).toBeFocused();
+
+  // A drag of one bar to the right, snapped to the beat.
+  await clip.scrollIntoViewIfNeeded();
+  const box = (await clip.boundingBox())!;
+  await page.mouse.move(box.x + 6, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 30, box.y + box.height / 2, { steps: 3 });
+  await page.mouse.move(box.x + 6 + 64, box.y + box.height / 2, { steps: 3 });
+  await page.mouse.up();
+  await expect.poll(clipAt).toEqual([72]);
+  await expect(clip).toHaveAccessibleName('Tone, Audio 2, bar 3 beat 2, 1 s');
+
+  // The selected clip's own settings.
+  const tools = timeline.getByRole('group', { name: 'Clip Tone', exact: true });
+  await tools.getByLabel('Clip fade in in seconds', { exact: true }).fill('0.25');
+  await tools.getByLabel('Clip fade in in seconds', { exact: true }).press('Enter');
+  await expect.poll(async () => (await project()).audioTracks[1].clips[0].fadeIn).toBe(0.25);
+
+  await clip.focus();
+  await page.keyboard.press('Delete');
+  await expect(clip).toHaveCount(0);
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(clip, 'one Undo puts it back').toHaveCount(1);
+  expect(errors).toEqual([]);
+});
