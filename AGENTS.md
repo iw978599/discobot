@@ -96,6 +96,12 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 | `ui/src/utils/midiExport.ts` / `midiImport.ts` | Standard MIDI File export (PPQ 480, drums on channel 10) and import |
 | `ui/src/synthModels.ts` | Synth model definitions and macro mapping |
 | `ui/src/components/` | Controls used inside rack modules: `SynthControls` (the open lane's editor, in two levels: Notes and Sound), `KeyboardPanel`, `Keyboard`, `PianoRoll`, `EffectsPanel`, `MidiPanel`, `SamplePanel`, `Knob`, `DrumKnob`, and `Scope`, the picture of a lane's sound or the whole mix |
+| `ui/src/services/soundFont.ts` / `soundFontImport.ts` / `soundFontKit.ts` | SoundFont files: the reader (untrusted and bounded), one instrument as a lane's sample, and a drum kit for the drum lanes through Import Kit's dialog |
+| `ui/src/services/multiSample.ts` / `ui/src/components/RecordingsDialog.tsx` | Several recordings, each a note, made into one instrument for a lane |
+| `ui/src/services/scaleLock.ts` / `randomize.ts` / `chords.ts` | The key and scale (one store, this browser's), the scales, Randomize, and the piano roll's chord shapes |
+| `ui/src/services/lanes.ts` | The lanes a project can have, their names and the order they are shown in (`shownLanes`, `laneOrderOf`, `movedLaneOrder`) |
+| `ui/src/rack/useDragOrder.ts` | Dragging a list into another order (scenes, song blocks, playlist rows, mixer strips), with a hold for a finger and Alt and an arrow for the keyboard |
+| `ui/src/components/Scope.tsx` | The picture of the sound: a wave or a spectrum, drawn outside React from an analyser the engine makes only when asked |
 | `engine/src/types.ts` | Type definitions (single source of truth; `ui/src/types.ts` re-exports them) |
 | `engine/src/synth/SynthCore.ts` | The synth voice implementation: 8 voices, 2 oscillators + sub + noise, SVF filter, amp and filter envelopes, LFOs, FM, mono/legato |
 | `engine/src/synth/voiceParams.ts` | Default `SynthParameters`, and `toVoiceParams` which flattens them for the core |
@@ -365,7 +371,7 @@ npm run migrate --workspace=server  # Apply new database migrations to the live 
 - Sync samples (project files already carry them)
 
 ## Working Rules for Agents
-- Skills for this repository are in `.claude/skills/`: `add-project-field` (anything stored), `ship-change` (checks, commits, pull requests) and `scripted-edits` (editing on Windows). Read the one that fits before starting.
+- Skills for this repository are in `.claude/skills/`: `add-project-field` (anything stored), `ship-change` (checks, commits, pull requests), `scripted-edits` (editing on Windows), `sample-songs` (the songs offered on an empty project) and `live-sessions` (editing together). Read the one that fits before starting.
 - Keep this file under 100,000 characters: Claude Code loads it into every session through `CLAUDE.md` and warns past 150,000. A behaviour that belongs to one area goes in that area's file under `docs/agents/` (listed at the top of Behaviour Worth Knowing); only what any change could break belongs here. An area that outgrows its file gets a new one, added to that list.
 - `docs/HANDOFF.md`, when it exists, says where unfinished work stopped. Read it first and delete it when that work is merged. Questions it leaves for the owner go to the end of `docs/ROADMAP.md` first.
 - Reproduce a reported bug before fixing it, and see it fixed the same way afterwards. If it cannot be reproduced, say so; do not report a guess as a fix.
