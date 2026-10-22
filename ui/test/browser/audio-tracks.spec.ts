@@ -167,3 +167,34 @@ test('the song\'s Timeline view adds a recording at a bar, and moves, fades and 
   await expect(clip, 'one Undo puts it back').toHaveCount(1);
   expect(errors).toEqual([]);
 });
+
+test('the timeline zooms, and a chosen clip\'s fade is dragged by its handle', async ({ page }, testInfo) => {
+  const { writeFile } = await import('node:fs/promises');
+  const tone = testInfo.outputPath('Tone.wav');
+  await writeFile(tone, toneWav());
+  const project = () => page.evaluate(() => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem('discobot_browser_project_v1') || '{}')));
+
+  await page.getByRole('group', { name: 'Song layout', exact: true }).getByRole('button', { name: 'Timeline', exact: true }).click();
+  const timeline = page.getByRole('group', { name: 'Timeline', exact: true });
+  await timeline.locator('input[type="file"]').setInputFiles(tone);
+  const clip = timeline.getByRole('button', { name: /^Tone, / });
+  await expect(clip).toBeVisible();
+  const before = (await clip.boundingBox())!.width;
+  await timeline.getByRole('button', { name: 'Zoom in', exact: true }).click();
+  await expect(timeline.getByRole('button', { name: 'Zoom in', exact: true }), 'the widest zoom').toBeDisabled();
+  await expect.poll(async () => (await clip.boundingBox())!.width).toBeCloseTo(before * 2, 0);
+
+  // Half way across the clip is half its second.
+  await clip.scrollIntoViewIfNeeded();
+  const handle = clip.locator('.timeline-fade-handle.in');
+  const box = (await handle.boundingBox())!, width = (await clip.boundingBox())!.width;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + width / 4, box.y + box.height / 2, { steps: 3 });
+  await page.mouse.move(box.x + box.width / 2 + width / 2, box.y + box.height / 2, { steps: 3 });
+  await page.mouse.up();
+  await expect.poll(async () => (await project()).audioTracks[0].clips[0].fadeIn ?? 0).toBeGreaterThan(0.4);
+  expect((await project()).audioTracks[0].clips[0].fadeIn).toBeLessThan(0.6);
+  expect((await project()).audioTracks[0].clips[0].at, 'the clip did not move').toBe(0);
+  await expect(clip.locator('.timeline-fade.in')).toBeVisible();
+});

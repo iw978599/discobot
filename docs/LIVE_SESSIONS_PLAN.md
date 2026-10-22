@@ -118,7 +118,8 @@ and are heard on the same lane in each browser, with its own sound and mutes, ne
 Snap on (each browser's choice, starting on) and the music playing, someone else's note starts on the
 next sixteenth here, which hides the 50 to 150 ms the room takes; with it off, or while stopped, it
 plays as it arrives. Known limits: two people playing one lane with its arpeggiator on share one
-arpeggio; a pitch bend or the mod wheel is not sent; snap ignores swing. Not verified by ear.
+arpeggio; a pitch bend or the mod wheel is not sent; snap ignores swing. The owner tried jamming
+live on the site with someone on 2026-10-22 and said it "worked pretty great".
 
 ## Deploying
 

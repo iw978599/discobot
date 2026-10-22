@@ -106,6 +106,9 @@ export default function SharedSongPage({ file, author, error: fetchError, onOpen
             </button>
           )}
         {error && <p role="alert">{error}</p>}
+        {(project.audioTracks ?? []).some(track => track.clips.length > 0) && (
+          <p className="rack-hint">This song has audio tracks of recordings. A link carries no recordings, so they are not heard here; a copy opened to edit has the tracks without their sound.</p>
+        )}
         <div className="shared-actions">
           <button className="rack-btn" onClick={onOpenCopy} title="Add this song to your projects in this browser and open it for editing">Open a Copy to Edit</button>
           <button className="rack-btn" onClick={onLeave}>Go to My Projects</button>

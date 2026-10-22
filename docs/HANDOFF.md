@@ -25,9 +25,9 @@ Start Live Session setup, was the owner's own).
     it goes. The owner heard a Room at a long Decay as static.
   - 250: a SoundFont drum kit on the drum lanes (SoundFont Kit, beside Import
     Kit), each lane offered its General MIDI drum.
-- Live sessions are built and wait to be tried by two people on the site
-  (`docs/LIVE_SESSIONS_PLAN.md`). The accounts API with the relay was
-  deployed on 2026-10-20 (version `2fa154e0`).
+- Live sessions are built, and the owner tried jamming live with someone on
+  2026-10-22: "it worked pretty great" (`docs/LIVE_SESSIONS_PLAN.md`). The
+  accounts API with the relay was deployed on 2026-10-20 (version `2fa154e0`).
 
 ## 2. Next, in order
 
@@ -36,7 +36,7 @@ Start Live Session setup, was the owner's own).
    reverb; a SoundFont drum kit and a SoundFont instrument with real files
    (FreePats' Upright Piano KW is CC0); an instrument made of several
    recordings; the spring reverb; portamento; dragging and the hold on a real
-   phone; a live session with someone.
+   phone.
 2. Then `docs/ROADMAP.md`, "The plan from here", from item 24 (more MIDI),
    in its order. Item 23, the share page's song strip, is done.
 3. Questions still waiting on the owner are at the end of `docs/ROADMAP.md`

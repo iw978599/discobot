@@ -163,7 +163,7 @@ Cheap for the agent but blocked until the owner does or says something.
 - **MIDI hardware**: nothing MIDI has been tried with a real controller.
 - **A screen reader trial** (improvements 5).
 - **Firefox and guest instruments**: what the owner sees there.
-- **Live collaboration** (features 7): the owner lifted the rule on 2026-10-20 and it is being built in stages (`docs/LIVE_SESSIONS_PLAN.md`): all four stages are built (the relay, edits, the transport, presence), and playing together with a snap to the beat, and wait to be tried by two people on the site. Was: needs the rule against a held-open
+- **Live collaboration** (features 7): the owner lifted the rule on 2026-10-20 and it is being built in stages (`docs/LIVE_SESSIONS_PLAN.md`): all four stages are built (the relay, edits, the transport, presence), and playing together with a snap to the beat. The owner tried jamming live with someone on 2026-10-22 and it "worked pretty great". Was: needs the rule against a held-open
   connection changed on purpose. L.
 - **Samples that sync** (sound 2): not planned; the storage asks for a card.
 
@@ -1345,8 +1345,16 @@ V22. **Swing templates.** Done: the menu beside the drums' Swing knob, swing
     counted as drum machines count it (54% to 75%, and a triplet), on sixteenths
     or, new, on eighths. Not built: templates that also set each step's strength
     (a groove's accents).
-V23. **Audio tracks on a timeline.** (L) In progress, in four stages (`docs/TIMELINE_PLAN.md`); stages 1 to 3, the stored data, the sound and the Timeline view of the song, done. Recordings and loops placed on tracks along
+V23. **Audio tracks on a timeline.** (L) In progress, in four stages (`docs/TIMELINE_PLAN.md`); all four stages done: the stored data, the sound, the Timeline view of the song, and zoom and fades on the clip. Recordings and loops placed on tracks along
     the song, trimmed, moved and faded: next, after V19 to V22.
+V24. **Recording a live session as audio.** (M) Asked for by the owner on 2026-10-22, after
+    trying live jamming (option 1 of two offered). A Record Session button records what this
+    browser hears (the music, everyone's notes and any guests, from the engine's output) and, when
+    stopped, puts the take on an audio track as a clip at the bar where recording began. Local and
+    free (the browser's own recorder). It is what this browser heard, close to but not exactly what
+    the others did, and like any recording it stays in this browser and travels in a project file.
+    Next after the timeline's stage 4. Not chosen: recording each person's playing as notes into the
+    lanes (option 2), which is harder and uses more of the relay's free allowance.
 - Not asked for yet: recording from a microphone, cutting a sample into slices,
   changing a recording's speed or pitch on its own, MP3 export, one-button
   mastering, a compressor per lane, comments or "remix this" on published songs,
