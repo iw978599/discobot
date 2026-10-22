@@ -15,6 +15,11 @@ export type MidiMessage =
   | { type: 'controlChange'; controller: number; value: number; channel: number }
   // -1 to 1, 0 at the wheel's rest
   | { type: 'pitchBend'; value: number; channel: number }
+  // Aftertouch, 0 to 1: the whole channel's, or one key's (polyphonic), which a lane takes as its own
+  | { type: 'pressure'; value: number; channel: number }
+  // The real-time messages another device's clock sends: 24 pulses a quarter note, and start,
+  // continue and stop. `at` is when it arrived, on the performance.now() clock.
+  | { type: 'clock'; at: number } | { type: 'start'; at: number } | { type: 'continue'; at: number } | { type: 'stop'; at: number }
   // the device went away: its bend and wheel should be let go
   | { type: 'deviceGone' };
 
@@ -30,11 +35,16 @@ interface UseMidiInputOptions {
 
 const ALL_DEVICES_ID = '__all__';
 
+const REAL_TIME: Record<number, 'clock' | 'start' | 'continue' | 'stop'> = { 0xf8: 'clock', 0xfa: 'start', 0xfb: 'continue', 0xfc: 'stop' };
+
 export function parseMessage(event: any): MidiMessage | null {
   const data: Uint8Array | undefined = event?.data;
-  if (!data || data.length < 2) return null;
-
+  if (!data || data.length < 1) return null;
   const status = data[0];
+  const realTime = REAL_TIME[status];
+  if (realTime) return { type: realTime, at: typeof event.timeStamp === 'number' ? event.timeStamp : performance.now() };
+  if (data.length < 2) return null;
+
   const type = status & 0xf0;
   const channel = (status & 0x0f) + 1;
   const data1 = data[1] ?? 0;
@@ -50,6 +60,8 @@ export function parseMessage(event: any): MidiMessage | null {
   if (type === 0xb0) {
     return { type: 'controlChange', controller: data1, value: data2, channel };
   }
+  if (type === 0xd0) return { type: 'pressure', value: Math.min(1, data1 / 127), channel };
+  if (type === 0xa0) return { type: 'pressure', value: Math.min(1, data2 / 127), channel };
   if (type === 0xe0) {
     const raw = (data1 & 0x7f) | ((data2 & 0x7f) << 7);
     return { type: 'pitchBend', value: Math.max(-1, Math.min(1, (raw - 8192) / (raw >= 8192 ? 8191 : 8192))), channel };
@@ -108,7 +120,12 @@ export function useMidiInput({ onMessage }: UseMidiInputOptions) {
       } else if (parsed.type === 'controlChange') {
         setLastMessage(`Ch ${parsed.channel} CC ${parsed.controller} (${parsed.value})`);
         if (parsed.controller === 1) gestured.add(inputId);
+      } else if (parsed.type === 'pressure') {
+        gestured.add(inputId);
+      } else if (parsed.type === 'start' || parsed.type === 'continue' || parsed.type === 'stop') {
+        setLastMessage(`Clock ${parsed.type}`);
       }
+      // A clock pulse, 24 to a beat, is handed on and shows nothing: it must not draw the page.
       onMessageRef.current(parsed, sourceOf(inputId));
     };
 

@@ -69,7 +69,8 @@ export function TapButton({ onTap }: { onTap: () => void }) {
 }
 
 // `onTap` puts the Tap button beside the display; without it the display stands alone.
-export function TempoDisplay({ tempo, onChange, flash, onTap }: { tempo: number; onChange: (bpm: number) => void; flash: boolean; onTap?: () => void }) {
+// `clock`: the tempo is another device's MIDI clock's, followed; it is shown, and cannot be typed.
+export function TempoDisplay({ tempo, onChange, flash, onTap, clock = false }: { tempo: number; onChange: (bpm: number) => void; flash: boolean; onTap?: () => void; clock?: boolean }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(String(tempo));
   const inputRef = useRef<HTMLInputElement>(null);
@@ -105,8 +106,8 @@ export function TempoDisplay({ tempo, onChange, flash, onTap }: { tempo: number;
 
   return (
     <div className="tempo-display-group">
-      <div className={`tempo-led ${flash ? 'tap-flash' : ''}`} onClick={() => setEditing(true)}>
-        <span className="tempo-led-label">BPM</span>
+      <div className={`tempo-led ${flash ? 'tap-flash' : ''}`} onClick={() => { if (!clock) setEditing(true); }} title={clock ? 'Following another device\'s MIDI clock' : undefined}>
+        <span className="tempo-led-label">{clock ? 'CLOCK' : 'BPM'}</span>
         <span className="tempo-led-value">{String(tempo).padStart(3, ' ')}</span>
       </div>
       {onTap && <TapButton onTap={onTap} />}
@@ -208,7 +209,7 @@ function HelpContent({ at, onClose, onWalkthrough, onShortcuts }: { at: string |
             <li><strong>Working together:</strong> choose <strong>Project → Start Live Session</strong> for the open project. Sign in, add it to your account if asked, and share with a collaborator’s username. They sign in, choose <strong>Project → All Projects → Shared with you → Open</strong> (or Sync Now in Account if it is not listed yet). Shared open projects connect automatically so you can edit and play together; the setup shows who is connected or waiting. Share also grants access after the session; remove a person there to end their access. When disconnected, simultaneous edits keep both versions.</li>
             <li><strong>Share Link:</strong> makes a link with the whole song inside it. Whoever opens it can listen and keep their own copy. Nothing is uploaded, and no account is needed.</li>
             <li><strong>Export:</strong> choose the open scene or the whole song, and audio, a seamless loop, stems or MIDI; it says how long the file will be and shows it being made. The kinds are Scene WAV (one bar with its effect tail), Loop WAV (exactly one bar that repeats seamlessly), Stems (a zip with one WAV per synth lane and one for the drums) and Scene MIDI are of the open scene. Song WAV and Song MIDI are the whole song. A WAV export can take a while for a long song: a message at the top says it is being made, with a bar for how far it has got, and when it is done, and the other WAV exports wait until it is.</li>
-            <li><strong>MIDI:</strong> choose a controller, channel, target lane and live/record/step mode. With more than one controller connected, each can be sent somewhere of its own under Devices: a lane, the drums, or nowhere. Under Pads, press Learn beside a drum and hit a pad on the controller to make that pad play it; Reset pads puts the usual notes back. Under Controller knobs, choose a parameter, press Learn and turn a knob to tie the two. A controller's pitch bend bends the lane its keys play by two semitones, and its mod wheel (CC 1) drives any route whose source is Mod wheel unless that wheel is tied to a knob; both are played live and are not saved, recorded or exported. All of this is kept in this browser, for every project. Imported samples are kept there too.</li>
+            <li><strong>MIDI:</strong> Follow clock starts and stops the music with another device's MIDI clock and plays at its tempo, which is shown as CLOCK and not saved. Under MIDI output, each lane and the drums can go out on a channel of your choice, and Played sends what you play by hand as well. A controller's aftertouch is Pressure among a lane's modulation sources. Choose a controller, channel, target lane and live/record/step mode. With more than one controller connected, each can be sent somewhere of its own under Devices: a lane, the drums, or nowhere. Under Pads, press Learn beside a drum and hit a pad on the controller to make that pad play it; Reset pads puts the usual notes back. Under Controller knobs, choose a parameter, press Learn and turn a knob to tie the two. A controller's pitch bend bends the lane its keys play by two semitones, and its mod wheel (CC 1) drives any route whose source is Mod wheel unless that wheel is tied to a knob; both are played live and are not saved, recorded or exported. All of this is kept in this browser, for every project. Imported samples are kept there too.</li>
             <li><strong>On a phone:</strong> the top row is one line: the tempo, Play, and Undo and Redo where they fit. The button with three lines at its end opens the rest of this row. On the bar along the bottom, a tap shows a unit; a lane's lamp, and the drums', lights as it plays. Hold a lane's switch or the drums' to mute it without going to it: its name is then struck through.</li>
           </ul>
         </section>

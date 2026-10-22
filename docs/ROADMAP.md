@@ -133,9 +133,11 @@ directly, with no builder.
     order on a share page is a strip of its scenes in their colours, each as
     wide as it lasts; while the song plays the playing scene is lit and a line
     moves through it, and pressing a scene plays from there.
-24. **More MIDI** (features 6): following an external clock, sending notes
-    played by hand, choosing the output channels, aftertouch. Each part is
-    tested by the owner on their controller.
+24. **More MIDI** (features 6). Done: following an external clock (its
+    start, stop and tempo, the tempo held outside the project), sending notes
+    played by hand, choosing each lane's and the drums' output channel, and
+    aftertouch as a route source (Pressure). Each part waits to be tried by
+    the owner on their controller.
 25. **More than four modulation routes**, with the LFO tab's own menus
     folded into them (sound 4).
 26. **The design review's screens not looked at** (improvements 9).
@@ -160,7 +162,7 @@ Cheap for the agent but blocked until the owner does or says something.
   each needs the owner's say-so and a licence read at its source.
 - **A second sample song and more starting beats** (V6): made, then heard.
 - **The ladder filter's level** (sound 5): an ear decision.
-- **MIDI hardware**: nothing MIDI has been tried with a real controller.
+- **MIDI hardware**: the owner said on 2026-10-22 that their controller "has worked thus far". The clock, the output channels, played notes and aftertouch (item 24) are newer and not tried with it yet.
 - **A screen reader trial** (improvements 5).
 - **Firefox and guest instruments**: what the owner sees there.
 - **Live collaboration** (features 7): the owner lifted the rule on 2026-10-20 and it is being built in stages (`docs/LIVE_SESSIONS_PLAN.md`): all four stages are built (the relay, edits, the transport, presence), and playing together with a snap to the beat. The owner tried jamming live with someone on 2026-10-22 and it "worked pretty great". Was: needs the rule against a held-open

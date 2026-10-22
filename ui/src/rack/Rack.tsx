@@ -419,6 +419,13 @@ export default function Rack({ studio }: { studio: Studio }) {
             onSendNotesChange={studio.setMidiOutNotes}
             sendClock={studio.midiOutClock}
             onSendClockChange={studio.setMidiOutClock}
+            sendPlayed={studio.midiOutPlayed}
+            onSendPlayedChange={studio.setMidiOutPlayed}
+            outChannels={studio.midiOutChannels}
+            onOutChannelsChange={studio.setMidiOutChannels}
+            followClock={studio.midiFollowClock}
+            onFollowClockChange={studio.setMidiFollowClock}
+            clockTempo={studio.externalTempo}
           />
           <SamplePanel onPlay={sample => playSample(sample.data)} />
         </Dialog>

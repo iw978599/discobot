@@ -26,6 +26,7 @@ import { DEFAULT_DRUM_FX, DEFAULT_EFFECTS_LOOP, DEFAULT_DRUM_KIT_ID, createDefau
 import type { SynthPreset, PlayMode, SynthState, ExportStatus } from './studioState';
 import type { SwingGrid } from '../services/grooves';
 import type { AudioTrack } from '../services/audioTracks';
+import type { MidiOutChannels } from '../services/midiOutput';
 export type { PlayMode } from './studioState';
 
 // `engine` is the one that plays everything: the app's, unless another is given (a test's, say).
@@ -129,6 +130,15 @@ export function useStudioCore(engine: AudioEngine = audioEngine) {
   // What the sequencer sends to the chosen MIDI output. Kept for the session only.
   const [midiOutNotes, setMidiOutNotes] = useState(true);
   const [midiOutClock, setMidiOutClock] = useState(false);
+  // Sending notes played by hand to the MIDI output, and the channel each part goes out on (session settings).
+  const [midiOutPlayed, setMidiOutPlayed] = useState(false);
+  const [midiOutChannels, setMidiOutChannels] = useState<MidiOutChannels>({});
+  // Following another device's MIDI clock: its start and stop, and its tempo, which is held here
+  // and never put in the project.
+  const [midiFollowClock, setMidiFollowClock] = useState(false);
+  const [externalTempo, setExternalTempo] = useState<number | null>(null);
+  const midiFollowClockRef = useRef(false);
+  const externalTempoRef = useRef<number | null>(null);
   const [midiTargetSynthId, setMidiTargetSynthId] = useState<number | null>(1);
   const [projectId, setProjectId] = useState('');
   // Goes up each time a project is put on the rack: the page loading, a project opened or restored.
@@ -319,6 +329,16 @@ export function useStudioCore(engine: AudioEngine = audioEngine) {
     midiDrumChannelRef,
     midiOutNotes,
     setMidiOutNotes,
+    midiOutPlayed,
+    setMidiOutPlayed,
+    midiOutChannels,
+    setMidiOutChannels,
+    midiFollowClock,
+    setMidiFollowClock,
+    externalTempo,
+    setExternalTempo,
+    midiFollowClockRef,
+    externalTempoRef,
     midiOutClock,
     setMidiOutClock,
     midiTargetSynthId,

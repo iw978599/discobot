@@ -85,7 +85,7 @@ const COLUMN_TABS: Record<string, SynthTab> = {
 };
 
 const MOD_SOURCE_NAMES: Record<ModSource, string> = {
-  lfo1: 'LFO 1', lfo2: 'LFO 2', ampEnv: 'Level envelope', filterEnv: 'Filter envelope', velocity: 'Velocity', key: 'Key', random: 'Random', modWheel: 'Mod wheel',
+  lfo1: 'LFO 1', lfo2: 'LFO 2', ampEnv: 'Level envelope', filterEnv: 'Filter envelope', velocity: 'Velocity', key: 'Key', random: 'Random', modWheel: 'Mod wheel', pressure: 'Pressure (aftertouch)',
 };
 const MOD_DESTINATION_NAMES: Record<ModDestination, string> = {
   pitch: 'Pitch', osc2Pitch: 'Osc 2 pitch', filter: 'Filter', amp: 'Level', pulseWidth: 'Pulse width', pan: 'Pan', fmIndex: 'FM amount',

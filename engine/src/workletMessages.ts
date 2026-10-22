@@ -16,8 +16,8 @@ export type SynthWorkletMessage =
   | { type: 'sample'; sample: SynthSample | null }
   | ({ type: 'noteOn' } & NoteOnMessage)
   | { type: 'noteOff'; note: string; id?: number }
-  // A controller's pitch bend (-1 to 1) and mod wheel (0 to 1): live gestures, never part of the sound
-  | { type: 'live'; bend?: number; wheel?: number }
+  // A controller's pitch bend (-1 to 1), mod wheel and aftertouch (0 to 1): live gestures, never part of the sound
+  | { type: 'live'; bend?: number; wheel?: number; pressure?: number }
   | { type: 'allNotesOff'; release?: number };
 
 export type DrumWorkletMessage =
