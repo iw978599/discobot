@@ -158,3 +158,26 @@ test('every source to every destination stays finite and inside full scale', () 
     }
   }
 });
+
+test('a sound has up to eight routes, and the eighth is heard as the first is', () => {
+  assert.equal(MAX_MOD_ROUTES, 8);
+  const idle = Array.from({ length: 7 }, () => route('velocity', 'pan', 0));
+  const plain = play({ modMatrix: idle }).left;
+  const eighth = play({ modMatrix: [...idle, route('velocity', 'pitch', 0.5)] }).left;
+  const first = play({ modMatrix: [route('velocity', 'pitch', 0.5)] }).left;
+  assert.ok(same(eighth, first), 'the eighth place sounds as the first');
+  assert.ok(pitch(eighth.subarray(6000)) / pitch(plain.subarray(6000)) > 1.3);
+  const nine = Array.from({ length: 9 }, (_, index) => route('velocity', 'pitch', index === 8 ? 1 : 0.1));
+  assert.equal(sanitizeModMatrix(nine).length, 8);
+  assert.equal(sanitizeModMatrix(nine).some(entry => entry.depth === 1), false, 'a ninth is left out');
+});
+
+test('a sound of four routes or fewer plays exactly as it did, and each LFO\'s own setting is still its own', () => {
+  const four = [route('lfo1', 'filter', 0.3), route('key', 'pan', -0.2), route('velocity', 'amp', 0.4), route('random', 'pulseWidth', 0.5)];
+  const voice = toVoiceParams({ ...createDefaultSynthParameters(), modMatrix: four }) as unknown as Record<string, unknown>;
+  for (let n = 5; n <= 8; n++) assert.deepEqual([voice[`mod${n}Source`], voice[`mod${n}Destination`], voice[`mod${n}Depth`]], ['', '', 0], `place ${n} is empty`);
+  assert.deepEqual([voice.mod4Source, voice.mod4Destination, voice.mod4Depth], ['random', 'pulseWidth', 0.5]);
+  const params = createDefaultSynthParameters();
+  const lfo = sanitizeSynthParams({ ...params, lfo1: { ...params.lfo1, enabled: true, target: 'vibrato', depth: 0.7 } }, params);
+  assert.deepEqual([lfo.lfo1.target, lfo.lfo1.depth, (lfo.modMatrix ?? []).length], ['vibrato', 0.7, 0], 'not turned into a route');
+});

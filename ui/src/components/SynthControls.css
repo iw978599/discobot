@@ -308,6 +308,9 @@
 .synth-routes { display: flex; flex-direction: column; gap: 6px; }
 .synth-route { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; color: var(--text-faint); }
 .synth-route .synth-select { min-width: 0; text-transform: none; text-align: left; }
+/* An LFO's own route names its LFO where a route has its source menu, and is set apart from the routes under it. */
+.synth-route-source { min-width: 9ch; color: var(--text-label); }
+.synth-route-lfo + .synth-route:not(.synth-route-lfo) { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--edge-faint); }
 
 .synth-env-viz .synth-column-controls {
   padding: 4px 0;

@@ -96,7 +96,7 @@ const SECOND_STAGE_DAMPING = Math.SQRT2;
 const MS20_HOLD = 0.1;
 const MOD_SOURCES = ['lfo1', 'lfo2', 'ampEnv', 'filterEnv', 'velocity', 'key', 'random', 'modWheel', 'pressure'];
 const MOD_DESTINATIONS = ['pitch', 'osc2Pitch', 'filter', 'amp', 'pulseWidth', 'pan', 'fmIndex'];
-const MOD_ROUTES = 4;
+const MOD_ROUTES = 8;
 const BEND_SEMITONES = 2;
 
 // The one synth voice implementation. The AudioWorklet runs it block by block for live

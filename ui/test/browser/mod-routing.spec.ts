@@ -22,11 +22,11 @@ test('a route sends a source to a destination by an amount, is saved, and can be
   const destination = (row: number) => synth.getByLabel(`Route ${row} destination`, { exact: true });
   const amount = (row: number) => synth.getByLabel(`Route ${row} amount value`, { exact: true });
 
-  // Nothing is routed to begin with. Only the first row can be used; the rest wait their turn.
+  // Nothing is routed to begin with. There is one row, for the first route; the next comes once it is used.
   await expect(source(1)).toHaveValue('');
   await expect(source(1)).toBeEnabled();
   await expect(destination(1)).toBeDisabled();
-  await expect(source(2)).toBeDisabled();
+  await expect(source(2)).toHaveCount(0);
   expect(await routes(page)).toEqual([]);
 
   await source(1).selectOption('velocity');
@@ -57,4 +57,21 @@ test('a route sends a source to a destination by an amount, is saved, and can be
   await expect.poll(() => routes(page)).toEqual([{ source: 'random', destination: 'osc2Pitch', depth: 0.5 }]);
   await expect(source(1)).toHaveValue('random');
   await expect(source(2)).toHaveValue('');
+});
+
+test('each LFO\'s own target and depth are in the routing list, and a sound has up to eight routes', async ({ page }) => {
+  const synth = page.locator('.synth-controls-panel').first();
+  await page.getByRole('tab', { name: 'Sound', exact: true }).first().click();
+  await page.getByRole('tab', { name: 'LFO', exact: true }).first().click();
+  const own = synth.getByRole('group', { name: 'LFO 1\'s own route', exact: true });
+  await expect(own.getByLabel('LFO 1 target', { exact: true })).toBeVisible();
+  await expect(synth.getByRole('group', { name: 'LFO 2\'s own route', exact: true }).getByLabel('LFO 2 target', { exact: true })).toBeVisible();
+
+  const source = (row: number) => synth.getByLabel(`Route ${row} source`, { exact: true });
+  for (let row = 1; row <= 8; row++) {
+    await source(row).selectOption(row % 2 ? 'velocity' : 'key');
+    await expect.poll(async () => (await routes(page)).length).toBe(row);
+  }
+  await expect(source(9), 'no ninth').toHaveCount(0);
+  await expect(synth.locator('.synth-route:not(.synth-route-lfo)')).toHaveCount(8);
 });
