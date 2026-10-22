@@ -341,3 +341,24 @@ test('audio is in a saved file and nowhere else: not the working copy, the libra
   assert.equal(await content(second), await content(third), 'the content hash does not see the audio');
   assert.equal(before.project.drumState.kick.sampleId, undefined);
 });
+
+test('a clip\'s recording travels in a project file, larger than a drum\'s sample may be, and follows a renamed sample', async () => {
+  const first = await browser();
+  const recording = noise(MAX_EMBEDDED_SAMPLE_BYTES + 1000);
+  const id = first.keep(recording, 'Vocal take.wav');
+  const track = first.service.addTrack();
+  assert.ok(track.ok);
+  assert.ok(first.service.addClip(track.value.audioTracks[0].id, { sampleId: id, at: 0, length: 4 }).ok);
+  const { file, skipped } = await first.save();
+  assert.deepEqual(skipped, []);
+  assert.deepEqual(file.samples.map((sample: { id: string }) => sample.id), [id]);
+
+  // The other browser already holds different audio under that id: the recording gets a new id and the clip follows it.
+  const second = await browser();
+  second.keep(noise(300, 7), 'Something else.wav', id);
+  const opened = await second.open(file);
+  assert.equal(opened.added, 1);
+  const clipSample = second.service.snapshot().audioTracks[0].clips[0].sampleId;
+  assert.notEqual(clipSample, id);
+  assert.deepEqual(bytesOf(second.held.get(clipSample)), Array.from(recording));
+});

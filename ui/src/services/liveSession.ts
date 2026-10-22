@@ -146,6 +146,9 @@ export function editKeys(op: Operation, scene: string): string[] {
     case 'song.set': return ['song'];
     case 'guest.add': case 'guest.remove': return [`guests/${op.guestId}`];
     case 'guest.patch': return patchKeys(`guests/${op.guestId}`, Object.fromEntries(Object.keys(op.patch ?? {}).map(key => [key, true])));
+    // Which track holds a clip is not in a clip's operation, so every clip edit covers all the tracks.
+    case 'track.add': case 'track.remove': case 'clip.add': case 'clip.patch': case 'clip.remove': return ['tracks'];
+    case 'track.patch': return patchKeys(`tracks/${op.trackId}`, Object.fromEntries(Object.keys(op.patch ?? {}).map(key => [key, true])));
     case 'synth.prefs': case 'transport.play': case 'transport.stop': case 'scene.select': return [];
   }
 }

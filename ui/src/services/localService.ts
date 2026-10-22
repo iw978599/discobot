@@ -11,6 +11,7 @@ import { record, number, clone, matchesShape, sanitizePattern, sanitizeSynthPara
 import type { Applied, DeepPartial, DrumFxState, GuestPatch, OpNotice, OpResult, Operation, Origin, Outcome } from './projectOps';
 import { UndoHistory } from './undoHistory';
 import { swingGridOf, type SwingGrid } from './grooves';
+import { sanitizeAudioTracks, type AudioClip, type AudioTrack, type ClipPatch, type TrackPatch } from './audioTracks';
 import { commitScene, ensureScenes, newLane, openSignature, reducers, sceneMessage, type ReducerContext } from './projectReducers';
 
 type Message = { type: string; data: any };
@@ -35,6 +36,8 @@ type State = Defaults & {
   drumMasterVolume: number; drumSwing: number; savedPatterns: SavedPatternFull[];
   // Which steps the drums' swing moves (`swingSteps`). Absent: sixteenths; stored only as 8.
   drumSwingGrid?: 8;
+  // Audio tracks on the timeline (`services/audioTracks.ts`). Absent: none.
+  audioTracks?: AudioTrack[];
   // The order the lanes are shown in (`laneOrderOf`). Absent: 1 to 5.
   laneOrder?: number[];
   // The lanes' patterns and the drum grid above are the scene being edited. Its entry in
@@ -199,6 +202,8 @@ export class LocalProjectService {
     const laneOrder = laneOrderOf(parsed.laneOrder);
     if (laneOrder) state.laneOrder = laneOrder;
     if (swingGridOf(parsed.drumSwingGrid) === 8) state.drumSwingGrid = 8;
+    const audioTracks = sanitizeAudioTracks(parsed.audioTracks);
+    if (audioTracks) state.audioTracks = audioTracks;
     if (scenes) {
       state.scenes = scenes;
       state.currentSceneId = currentSceneId;
@@ -809,6 +814,7 @@ export class LocalProjectService {
     // A key the earlier project did not have is taken away, not left as it is now.
     if (!('laneOrder' in content)) delete state.laneOrder;
     if (!('drumSwingGrid' in content)) delete state.drumSwingGrid;
+    if (!('audioTracks' in content)) delete state.audioTracks;
     this.persist();
     this.emit('restored', this.snapshot());
   }
@@ -885,6 +891,14 @@ export class LocalProjectService {
   addGuest(url: string, name?: string) { return this.apply({ type: 'guest.add', guestId: crypto.randomUUID(), url, name }); }
   changeGuest(guestId: string, patch: GuestPatch) { return this.apply({ type: 'guest.patch', guestId, patch }); }
   removeGuest(guestId: string) { return this.apply({ type: 'guest.remove', guestId }); }
+  // Audio tracks and their clips. A new one's id is made here, before it is applied, so every
+  // browser in a live session makes the same one.
+  addTrack(name?: string) { return this.apply({ type: 'track.add', trackId: crypto.randomUUID(), ...(name !== undefined ? { name } : {}) }); }
+  changeTrack(trackId: string, patch: TrackPatch) { return this.apply({ type: 'track.patch', trackId, patch }); }
+  removeTrack(trackId: string) { return this.apply({ type: 'track.remove', trackId }); }
+  addClip(trackId: string, clip: Omit<AudioClip, 'id'> & { id?: string }) { return this.apply({ type: 'clip.add', trackId, clip: { ...clip, id: clip.id ?? crypto.randomUUID() } }); }
+  changeClip(clipId: string, patch: ClipPatch & { trackId?: string }) { return this.apply({ type: 'clip.patch', clipId, patch }); }
+  removeClip(clipId: string) { return this.apply({ type: 'clip.remove', clipId }); }
   // Synchronous end to end: the sceneChanged event has been delivered, and the listeners have
   // written what they keep, before this returns. Song playback opens the playing scene with it
   // and reads the lanes on the next line.
