@@ -12,15 +12,15 @@ import ConfirmDialog from './ConfirmDialog';
 // clip starts on a tick of the song and is as wide as its recording lasts at the tempo where it
 // plays. Everything here is view state but what the store holds.
 
-// Pixels a tick takes: a bar of 4/4 is 64.
-const PX = 2;
+// Pixels a tick takes, at each zoom: a bar of 4/4 is 32, 64 or 128. The middle one to begin with.
+const ZOOMS = [1, 2, 4];
 // A beat is eight ticks and a step two: what a move snaps to, Alt choosing the finer.
 const BEAT = 8, STEP = 2;
 const MIN_SECONDS = 0.05;
 
 const seconds = (value: number) => `${Math.round(value * 100) / 100} s`;
 
-interface Drag { clipId: string; kind: 'move' | 'start' | 'end'; x: number; clip: AudioClip; trackId: string; moved: boolean }
+interface Drag { clipId: string; kind: 'move' | 'start' | 'end' | 'fadeIn' | 'fadeOut'; x: number; clip: AudioClip; trackId: string; moved: boolean }
 type Preview = { clipId: string; trackId: string; patch: Partial<AudioClip> } | null;
 
 export default function TrackTimeline({ studio }: { studio: Studio }) {
@@ -34,6 +34,8 @@ export default function TrackTimeline({ studio }: { studio: Studio }) {
   const [chosenTrack, setChosenTrack] = useState<string | null>(null);
   const [removing, setRemoving] = useState<AudioTrack | null>(null);
   const [preview, setPreview] = useState<Preview>(null);
+  const [zoom, setZoom] = useState(1);
+  const PX = ZOOMS[zoom];
   const drag = useRef<Drag | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
@@ -107,6 +109,12 @@ export default function TrackTimeline({ studio }: { studio: Studio }) {
     const snap = alt ? STEP : BEAT, delta = (x - state.x) / PX, { clip } = state;
     const snapped = (tick: number) => Math.round(tick / snap) * snap;
     if (state.kind === 'move') return { at: Math.max(0, snapped(clip.at + delta)) };
+    // A fade's handle moves through the clip's own seconds, as far as the pointer goes, unsnapped.
+    if (state.kind === 'fadeIn' || state.kind === 'fadeOut') {
+      const perPixel = clip.length / Math.max(1, (endOf(clip) - clip.at) * PX), by = (x - state.x) * perPixel;
+      if (state.kind === 'fadeIn') return { fadeIn: Math.max(0, Math.min(clip.length - (clip.fadeOut ?? 0), (clip.fadeIn ?? 0) + by)) };
+      return { fadeOut: Math.max(0, Math.min(clip.length - (clip.fadeIn ?? 0), (clip.fadeOut ?? 0) - by)) };
+    }
     if (state.kind === 'end') {
       const end = Math.max(clip.at + 1, snapped(endOf(clip) + delta));
       const most = recordingSeconds(clip) - (clip.offset ?? 0);
@@ -187,6 +195,11 @@ export default function TrackTimeline({ studio }: { studio: Studio }) {
           <input type="number" min={1} max={9999} value={barOf(place).bar + 1} aria-label="Bar new recordings go in at" onChange={(event) => { const bar = Math.max(1, Math.floor(Number(event.target.value) || 1)); setPlace(barStart(bar - 1)); }} />
         </label>
         {target && <span className="rack-hint">On {target.name}</span>}
+        <div className="rack-grow" />
+        <span className="timeline-zoom" role="group" aria-label="Timeline zoom">
+          <button className="rack-btn" aria-label="Zoom out" disabled={zoom === 0} onClick={() => setZoom(zoom - 1)} title="Show more of the song">−</button>
+          <button className="rack-btn" aria-label="Zoom in" disabled={zoom === ZOOMS.length - 1} onClick={() => setZoom(zoom + 1)} title="Show the bars wider">+</button>
+        </span>
       </div>
       <div className="timeline-scroll">
         <div ref={gridRef} className="timeline-grid" style={{ width: `calc(var(--timeline-head) + ${width}px)` }}>
@@ -229,7 +242,7 @@ export default function TrackTimeline({ studio }: { studio: Studio }) {
                       tabIndex={0}
                       aria-pressed={on}
                       aria-label={`${clip.name || 'Clip'}, ${track.name}, ${where(clip.at)}, ${seconds(clip.length)}`}
-                      title="Drag to move (Alt: by a step); drag an end to trim. Arrow keys move it, Delete takes it out"
+                      title="Drag to move (Alt: by a step); drag an end to trim, a corner to fade. Arrow keys move it, Delete takes it out"
                       onPointerDown={(event) => startDrag(event, track, clip, 'move')}
                       onPointerMove={moveDrag}
                       onPointerUp={endDrag}
@@ -237,7 +250,12 @@ export default function TrackTimeline({ studio }: { studio: Studio }) {
                       onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelected(clip.id); } else clipKey(event, track, clip); }}
                       onFocus={() => setChosenTrack(track.id)}
                     >
+                      {/* The fades, drawn as slopes over the clip; on the chosen one each has a handle to drag. */}
+                      {(clip.fadeIn ?? 0) > 0 && <span className="timeline-fade in" style={{ width: `${(100 * (clip.fadeIn ?? 0)) / clip.length}%` }} aria-hidden="true" />}
+                      {(clip.fadeOut ?? 0) > 0 && <span className="timeline-fade out" style={{ width: `${(100 * (clip.fadeOut ?? 0)) / clip.length}%` }} aria-hidden="true" />}
                       <span className="timeline-clip-name">{clip.name || 'Clip'}</span>
+                      {on && <span className="timeline-fade-handle in" style={{ left: `${(100 * (clip.fadeIn ?? 0)) / clip.length}%` }} aria-hidden="true" title="Drag to fade in" onPointerDown={(event) => startDrag(event, track, clip, 'fadeIn')} onPointerMove={moveDrag} onPointerUp={endDrag} />}
+                      {on && <span className="timeline-fade-handle out" style={{ right: `${(100 * (clip.fadeOut ?? 0)) / clip.length}%` }} aria-hidden="true" title="Drag to fade out" onPointerDown={(event) => startDrag(event, track, clip, 'fadeOut')} onPointerMove={moveDrag} onPointerUp={endDrag} />}
                       {on && <span className="timeline-trim start" aria-hidden="true" onPointerDown={(event) => startDrag(event, track, clip, 'start')} onPointerMove={moveDrag} onPointerUp={endDrag} />}
                       {on && <span className="timeline-trim end" aria-hidden="true" onPointerDown={(event) => startDrag(event, track, clip, 'end')} onPointerMove={moveDrag} onPointerUp={endDrag} />}
                     </div>

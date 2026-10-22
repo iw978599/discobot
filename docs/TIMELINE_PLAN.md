@@ -58,5 +58,8 @@ trimmed, moved and faded, as other web music apps have. This is the plan and how
   song): the song's blocks along the top with the playing bar lit and a mark where new
   recordings go; tracks with name, mute, solo and remove (asking when it holds clips); Add
   Recording; clips moved and trimmed by pointer, finger and keyboard; a chosen clip's track,
-  trim, length, level and fades as figures. Stage 4 next: fade handles drawn on the clip, zoom,
-  the walkthrough, and whatever the owner finds.
+  trim, length, level and fades as figures.
+- 2026-10-22: stage 4 built: three zooms (a 4/4 bar 32, 64 or 128 pixels), fades drawn on each clip
+  as slopes with a handle at each on the chosen clip, and a line on the share page when a song's
+  tracks cannot be heard there. Left for what the owner finds in use: the walkthrough has no stop
+  for the timeline, and nothing has been tried on a real phone or heard.

@@ -594,6 +594,13 @@
 .timeline-trim { position: absolute; top: 0; bottom: 0; width: 8px; cursor: ew-resize; background: var(--on-deep); }
 .timeline-trim.start { left: 0; }
 .timeline-trim.end { right: 0; }
+.timeline-zoom { display: inline-flex; gap: 3px; }
+/* A fade is a slope from the clip's corner to its full height, drawn over it; its handle sits on top. */
+.timeline-fade { position: absolute; top: 0; bottom: 0; pointer-events: none; background: var(--surface-well); }
+.timeline-fade.in { left: 0; clip-path: polygon(0 0, 100% 0, 0 100%); }
+.timeline-fade.out { right: 0; clip-path: polygon(0 0, 100% 0, 100% 100%); }
+/* Each handle sits inside the clip on its side of where the fade ends, so the clip never cuts it off. */
+.timeline-fade-handle { position: absolute; top: 0; width: 12px; height: 12px; border-radius: 50%; background: var(--lit); border: 1px solid var(--edge-deep); cursor: ew-resize; z-index: 1; }
 .timeline-clip-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 8px 10px; background: var(--surface-inset); border: 1px solid var(--edge-faint); border-radius: var(--corner-panel); }
 .song-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
 .song-list-row { background: var(--surface-inset); border: 1px solid var(--edge-faint); border-left: 5px solid var(--scene-color, var(--edge-faint)); border-radius: var(--corner-panel); }
