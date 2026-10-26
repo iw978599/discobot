@@ -1156,6 +1156,10 @@ for new accounts.
   lane to 32 steps keeps its notes on the same step numbers, so the tune
   plays twice as fast in the first half of the bar. Should the notes be
   spread instead, so the tune keeps its timing?
+- **A cover of Opus** (sample songs, 2026-10-26). Opus's tune is Eric
+  Prydz's, and a song bundled with the app must be ours to redistribute, so
+  Long Ascent is built the way Opus is built on a figure and chords of its
+  own. Is that enough, or is a real cover wanted (which needs a licence)?
 
 ## Decided by the owner on 2026-10-20
 
@@ -1265,6 +1269,11 @@ V6. **A second sample song, and more starting beats.** (S each) One song in
    app and for a five-minute space disco song: done, not verified by ear (scene
    tempos, scene mutes, chance, shorter lanes, glide, vibrato, layers, unison,
    modulation routes and per-drum sends among them, and Silver Satellite).
+   Later that day the owner asked for every song to be rewritten on all five
+   lanes and at least two minutes long, the jazz to be after Mingus, and a cover
+   of Opus: done, not verified by ear. Sixth Street Shout replaced Blue Waltz;
+   Long Ascent is built the way Opus is built on a tune of its own, since
+   Opus's tune is not ours to bundle.
 
 ### Playing and writing
 

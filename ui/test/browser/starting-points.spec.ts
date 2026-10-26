@@ -92,15 +92,16 @@ test('the songs on offer are in many styles, and one in another time signature o
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   const songs = offer(page).getByRole('group', { name: 'A song to hear', exact: true }).getByRole('button');
-  await expect(songs).toHaveText([/Night Circuit/, /Blue Waltz/, /Late Study/, /Seven Lights/, /Market Day/, /Cathedral/, /Lanterns Over Dark Water/, /Silver Satellite/]);
+  await expect(songs).toHaveText([/Night Circuit/, /Sixth Street Shout/, /Late Study/, /Seven Lights/, /Market Day/, /Cathedral/, /Lanterns Over Dark Water/, /Silver Satellite/, /Long Ascent/]);
   await expect(offer(page).getByRole('group', { name: 'A beat to start from', exact: true }).getByRole('button')).not.toHaveCount(0);
 
   const stored = () => page.evaluate(() => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem('discobot_browser_project_v1') || '{}')));
-  await songs.filter({ hasText: 'Blue Waltz' }).click();
-  await expect.poll(async () => (await stored()).name).toBe('Blue Waltz');
+  await songs.filter({ hasText: 'Sixth Street Shout' }).click();
+  await expect.poll(async () => (await stored()).name).toBe('Sixth Street Shout');
   const project = await stored();
-  expect(project.scenes.map((scene: { signature?: string }) => scene.signature)).toEqual(['3/4', '3/4', '3/4']);
-  expect(project.synths[1].pattern.steps.length, 'eight bars of twelve steps').toBe(96);
+  expect(project.scenes.map((scene: { signature?: string }) => scene.signature)).toEqual([undefined, '6/8', '6/8', '6/8', undefined, '6/8', '6/8', undefined]);
+  expect(project.synths[1].pattern.steps.length, 'it opens on eight bars of 4/4').toBe(128);
+  expect(project.scenes[1].lanes['1'].length, 'and a scene in 6/8 eight bars of twelve').toBe(96);
   await page.getByRole('button', { name: /Play All/ }).click();
   await page.waitForTimeout(1500);
   await page.getByRole('button', { name: /Stop All/ }).click();
