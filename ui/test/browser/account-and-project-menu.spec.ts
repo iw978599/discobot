@@ -5,7 +5,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 // screen; `less` puts it away again after something that leaves it up.
 const onPhone = (page: Page) => {
   const size = page.viewportSize();
-  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+  return size !== null && (size.width <= 1059 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
 };
 const more = async (page: Page) => {
   if (!onPhone(page) || await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) return;
@@ -17,7 +17,7 @@ const less = async (page: Page) => {
 
 const PASSWORD = 'correct horse battery';
 const apiUrl = (baseURL: string) => `http://127.0.0.1:${Number(new URL(baseURL).port) + 1000}`;
-const narrow = (page: Page) => (page.viewportSize()?.width ?? 1280) <= 720;
+const narrow = (page: Page) => (page.viewportSize()?.width ?? 1280) <= 1059;
 
 // "Red" without naming the shade, so the colours can be renamed or tuned without this test.
 const isReddish = async (locator: Locator) => {

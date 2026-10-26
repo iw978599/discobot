@@ -5,7 +5,7 @@ import { expect, test, type Page } from '@playwright/test';
 // screen; `less` puts it away again after something that leaves it up.
 const onPhone = (page: Page) => {
   const size = page.viewportSize();
-  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+  return size !== null && (size.width <= 1059 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
 };
 const more = async (page: Page) => {
   if (!onPhone(page) || await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) return;
@@ -18,7 +18,7 @@ const less = async (page: Page) => {
 const PASSWORD = 'correct horse battery';
 const apiUrl = (baseURL: string) => `http://127.0.0.1:${Number(new URL(baseURL).port) + 1000}`;
 const ready = (page: Page) => expect(page.getByRole('heading', { name: 'Discobot', exact: true })).toBeVisible();
-const narrow = (page: Page) => (page.viewportSize()?.width ?? 1280) <= 720;
+const narrow = (page: Page) => (page.viewportSize()?.width ?? 1280) <= 1059;
 const PROJECT_KEY = 'discobot_browser_project_v1';
 const stored = (page: Page) => page.evaluate(key => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem(key) || '{}')), PROJECT_KEY);
 
