@@ -91,9 +91,7 @@ test('on a desktop the things a pointer hits are big enough to hit', async ({ pa
   const remove = await size(page.getByRole('button', { name: 'Remove block 1 from the song', exact: true }));
   expect(remove.x - (later.x + later.width), 'remove is set apart from move later').toBeGreaterThanOrEqual(8);
 
-  const box = page.getByLabel('Delay enabled', { exact: true });
-  await atLeast(box, 18, 18, 'the delay\'s tick box');
-  await atLeast(box.locator('xpath=ancestor::label'), 30, 24, 'the delay\'s tick box with its label');
+  await atLeast(page.getByRole('switch', { name: 'Delay enabled', exact: true }), 30, 24, 'the delay\'s On button');
 });
 
 const edge = (page: Page, selector: string) => page.locator(selector).first().evaluate(element => getComputedStyle(element).borderTopColor);
