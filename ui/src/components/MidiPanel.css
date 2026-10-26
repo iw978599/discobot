@@ -59,13 +59,6 @@
   text-overflow: ellipsis;
 }
 
-.midi-check {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-plain);
-}
-
 .midi-note {
   margin: 0;
   font-size: var(--type-label);

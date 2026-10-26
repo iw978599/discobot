@@ -21,6 +21,7 @@ import { tracked } from '../studio/tracked';
 import Scope from '../components/Scope';
 import UnitHelp, { UNIT_HELP } from './UnitHelp';
 import { laneName, laneSound } from '../services/lanes';
+import Toggle from '../components/Toggle';
 
 // Where a middle click puts a lane's knobs back to.
 const SOUND_DEFAULTS = createDefaultSynthParameters();
@@ -404,15 +405,7 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
                       />
                       <span className="rack-readout">{Math.round((synth.pattern.steps[toolStep]?.velocity ?? 0.7) * 127)}</span>
                     </label>
-                    <label title="Hold this note into the next step. On a mono synth the pitch glides instead of retriggering.">
-                      <input
-                        type="checkbox"
-                        aria-label={`Step ${toolStep + 1} slide`}
-                        checked={Boolean(synth.pattern.steps[toolStep]?.slide)}
-                        onChange={(event) => { void studio.handleStepSlideChange(synthId, toolStep, event.target.checked); }}
-                      />
-                      Slide
-                    </label>
+                    <Toggle label={`Step ${toolStep + 1} slide`} title="Hold this note into the next step. On a mono synth the pitch glides instead of retriggering." checked={Boolean(synth.pattern.steps[toolStep]?.slide)} onChange={(on) => { void studio.handleStepSlideChange(synthId, toolStep, on); }}>Slide</Toggle>
                     <label title="How often this step plays each time the pattern comes round">
                       Chance
                       <input

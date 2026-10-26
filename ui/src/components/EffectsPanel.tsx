@@ -1,10 +1,11 @@
-import { memo } from 'react';
+import { memo, type CSSProperties } from 'react';
 import { AuxBus, AuxKind, DelaySync, EffectsLoopState, RateSync } from '../types';
 import { AUX_KIND_DEFAULT, AUX_KIND_LABELS, AUX_LIMITS, AUX_NAMES, auxBuses } from '../services/auxSettings';
 import { RATE_SYNCS, RATE_SYNC_LABELS } from '../services/rateSync';
 import { DELAY_SYNCS, DELAY_SYNC_LABELS } from '../services/delayTime';
 import { CHORUS_DEFAULT, EFFECTS_DEFAULT, EQ_DEFAULT, EQ_RANGE_DB, MAX_PRE_DELAY, REVERB_KINDS, REVERB_KIND_LABELS, type ReverbKind } from '../services/effectSettings';
 import Knob from './Knob';
+import Toggle from './Toggle';
 import Menu from '../rack/Menu';
 import { CHORUS_PRESETS, DELAY_PRESETS, DRIVE_PRESETS, PHASER_PRESETS, REVERB_PRESETS } from '../services/effectPresets';
 import { DRIVE_KINDS } from '@discobot/engine';
@@ -49,10 +50,7 @@ function EffectsPanel({ effectsLoop, onChange, onHelp }: EffectsPanelProps) {
       <div className="effects-panel-header">
         <h3>Effects</h3>
         {onHelp && <UnitHelp about="the effects" section={UNIT_HELP.effects} onHelp={onHelp} />}
-        <label className="effects-toggle">
-          <input type="checkbox" aria-label="Effects loop enabled" checked={effectsLoop.enabled} onChange={(event) => onChange({ enabled: event.target.checked })} />
-          <span>Enabled</span>
-        </label>
+        <Toggle label="Effects loop enabled" checked={effectsLoop.enabled} onChange={(on) => onChange({ enabled: on })}>Enabled</Toggle>
         <div className="effects-returns">
           <Knob
             label="Synth Return"
@@ -80,18 +78,10 @@ function EffectsPanel({ effectsLoop, onChange, onHelp }: EffectsPanelProps) {
       </div>
 
       <div className="effects-grid">
-        <div className="effects-block">
+        <div className="effects-block" style={{ '--span': 3 } as CSSProperties}>
           <h4>Drive</h4>
           <div className="effects-row-head">
-            <label className="effects-toggle">
-              <input
-                type="checkbox"
-                checked={effectsLoop.drive.enabled}
-                aria-label="Drive enabled"
-                onChange={(e) => onChange({ drive: { ...effectsLoop.drive, enabled: e.target.checked } })}
-              />
-              <span>On</span>
-            </label>
+            <Toggle label="Drive enabled" checked={effectsLoop.drive.enabled} onChange={(on) => onChange({ drive: { ...effectsLoop.drive, enabled: on } })}>On</Toggle>
             <label className="effects-toggle" title="How it clips: Classic is smooth, Overdrive soft and warm, Distortion hard, Fuzz hardest of all">
               <span>Kind</span>
               <select
@@ -133,18 +123,10 @@ function EffectsPanel({ effectsLoop, onChange, onHelp }: EffectsPanelProps) {
           </div>
         </div>
 
-        <div className="effects-block">
+        <div className="effects-block" style={{ '--span': 4 } as CSSProperties}>
           <h4>Phaser</h4>
           <div className="effects-row-head">
-            <label className="effects-toggle">
-              <input
-                type="checkbox"
-                checked={effectsLoop.phaser.enabled}
-                aria-label="Phaser enabled"
-                onChange={(e) => onChange({ phaser: { ...effectsLoop.phaser, enabled: e.target.checked } })}
-              />
-              <span>On</span>
-            </label>
+            <Toggle label="Phaser enabled" checked={effectsLoop.phaser.enabled} onChange={(on) => onChange({ phaser: { ...effectsLoop.phaser, enabled: on } })}>On</Toggle>
             <label className="effects-toggle" title="Set the sweep to a note value so it stays in time when the tempo changes">
               <span>Sync</span>
               <select
@@ -210,18 +192,10 @@ function EffectsPanel({ effectsLoop, onChange, onHelp }: EffectsPanelProps) {
           </div>
         </div>
 
-        <div className="effects-block">
+        <div className="effects-block" style={{ '--span': 5 } as CSSProperties}>
           <h4>Delay</h4>
           <div className="effects-row-head">
-            <label className="effects-toggle">
-              <input
-                type="checkbox"
-                checked={effectsLoop.delay.enabled}
-                aria-label="Delay enabled"
-                onChange={(e) => onChange({ delay: { ...effectsLoop.delay, enabled: e.target.checked } })}
-              />
-              <span>On</span>
-            </label>
+            <Toggle label="Delay enabled" checked={effectsLoop.delay.enabled} onChange={(on) => onChange({ delay: { ...effectsLoop.delay, enabled: on } })}>On</Toggle>
             <label className="effects-toggle" title="Set the echo to a note value so it stays in time when the tempo changes">
               <span>Sync</span>
               <select
@@ -302,18 +276,10 @@ function EffectsPanel({ effectsLoop, onChange, onHelp }: EffectsPanelProps) {
           </div>
         </div>
 
-        <div className="effects-block">
+        <div className="effects-block" style={{ '--span': 4 } as CSSProperties}>
           <h4>Chorus</h4>
           <div className="effects-row-head">
-            <label className="effects-toggle">
-              <input
-                type="checkbox"
-                checked={chorus.enabled}
-                aria-label="Chorus enabled"
-                onChange={(e) => onChange({ chorus: { ...chorus, enabled: e.target.checked } })}
-              />
-              <span>On</span>
-            </label>
+            <Toggle label="Chorus enabled" checked={chorus.enabled} onChange={(on) => onChange({ chorus: { ...chorus, enabled: on } })}>On</Toggle>
             <label className="effects-toggle" title="Set the sweep to a note value so it stays in time when the tempo changes">
               <span>Sync</span>
               <select
@@ -371,18 +337,10 @@ function EffectsPanel({ effectsLoop, onChange, onHelp }: EffectsPanelProps) {
           </div>
         </div>
 
-        <div className="effects-block">
+        <div className="effects-block" style={{ '--span': 4 } as CSSProperties}>
           <h4>Reverb</h4>
           <div className="effects-row-head">
-            <label className="effects-toggle">
-              <input
-                type="checkbox"
-                checked={effectsLoop.reverb.enabled}
-                aria-label="Reverb enabled"
-                onChange={(e) => onChange({ reverb: { ...effectsLoop.reverb, enabled: e.target.checked } })}
-              />
-              <span>On</span>
-            </label>
+            <Toggle label="Reverb enabled" checked={effectsLoop.reverb.enabled} onChange={(on) => onChange({ reverb: { ...effectsLoop.reverb, enabled: on } })}>On</Toggle>
             <label className="effects-toggle" title="Room is close and grainy; Hall is a smoother, denser tail">
               <span>Kind</span>
               <select
@@ -451,12 +409,38 @@ function EffectsPanel({ effectsLoop, onChange, onHelp }: EffectsPanelProps) {
           </div>
         </div>
 
+        <div className="effects-block" style={{ '--span': 4 } as CSSProperties}>
+          <h4>Master EQ</h4>
+          <div className="effects-row-head">
+            <Toggle label="Master EQ enabled" title="Shapes the whole mix, including the dry sound. Works whether or not the effects are enabled" checked={eq.enabled} onChange={(on) => onChange({ eq: { ...eq, enabled: on } })}>On</Toggle>
+          </div>
+          <div className="effects-knobs">
+            {([['low', 'Low', 'Bass, below about 120 Hz'], ['mid', 'Mid', 'The middle, around 1 kHz'], ['high', 'High', 'Treble, above about 6 kHz']] as const).map(([band, label, tooltip]) => (
+              <Knob
+                key={band}
+                label={label}
+                ariaLabel={`EQ ${band}`}
+                value={eq[band]}
+                defaultValue={EQ_DEFAULT[band]}
+                min={-EQ_RANGE_DB}
+                max={EQ_RANGE_DB}
+                step={0.5}
+                displayValue={decibels(eq[band])}
+                parseInputValue={parseNumber}
+                onChange={(value) => onChange({ eq: { ...eq, [band]: value } })}
+                tooltip={tooltip}
+                color="#eab308"
+              />
+            ))}
+          </div>
+        </div>
+
         {buses.map((bus, slot) => {
           const name = AUX_NAMES[slot], limits = AUX_LIMITS[bus.kind], start = AUX_KIND_DEFAULT[bus.kind];
           const synced = Boolean(bus.sync && bus.sync !== 'off');
           const mainText = synced ? RATE_SYNC_LABELS[bus.sync!] : bus.kind === 'echo' ? `${Math.round(bus.main * 1000)}ms` : bus.kind === 'hall' ? `${bus.main.toFixed(1)}s` : `${bus.main.toFixed(2)}Hz`;
           return (
-            <div className="effects-block" key={name} data-aux={name}>
+            <div className="effects-block" key={name} data-aux={name} style={{ '--span': 6 } as CSSProperties}>
               <h4>Aux {name}</h4>
               <div className="effects-row-head">
                 <label className="effects-toggle" title="What this bus is pointed at. Lanes, the drums and guests each have a send to it">
@@ -528,39 +512,6 @@ function EffectsPanel({ effectsLoop, onChange, onHelp }: EffectsPanelProps) {
           );
         })}
 
-        <div className="effects-block">
-          <h4>Master EQ</h4>
-          <div className="effects-row-head">
-            <label className="effects-toggle" title="Shapes the whole mix, including the dry sound. Works whether or not the effects are enabled">
-              <input
-                type="checkbox"
-                checked={eq.enabled}
-                aria-label="Master EQ enabled"
-                onChange={(e) => onChange({ eq: { ...eq, enabled: e.target.checked } })}
-              />
-              <span>On</span>
-            </label>
-          </div>
-          <div className="effects-knobs">
-            {([['low', 'Low', 'Bass, below about 120 Hz'], ['mid', 'Mid', 'The middle, around 1 kHz'], ['high', 'High', 'Treble, above about 6 kHz']] as const).map(([band, label, tooltip]) => (
-              <Knob
-                key={band}
-                label={label}
-                ariaLabel={`EQ ${band}`}
-                value={eq[band]}
-                defaultValue={EQ_DEFAULT[band]}
-                min={-EQ_RANGE_DB}
-                max={EQ_RANGE_DB}
-                step={0.5}
-                displayValue={decibels(eq[band])}
-                parseInputValue={parseNumber}
-                onChange={(value) => onChange({ eq: { ...eq, [band]: value } })}
-                tooltip={tooltip}
-                color="#eab308"
-              />
-            ))}
-          </div>
-        </div>
       </div>
     </section>
   );

@@ -27,28 +27,26 @@
 .effects-returns { display: flex; gap: 2px; }
 .effects-returns .knob-label { max-width: 96px; }
 
-/* Two rows of ten: drive, phaser, delay; then chorus, reverb, master EQ. */
+/* Three rows of twelve, each box as wide as its knobs need (`--span`): drive, phaser and delay;
+   chorus, reverb and the master EQ; the two aux buses. */
 .effects-grid {
   display: grid;
-  grid-template-columns: repeat(10, minmax(0, 1fr));
+  grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 6px;
 }
 
+/* Every box's top line is in the same order: its name, On, what it is set to, and Presets at the end. */
 .effects-block {
-  grid-column: span 3;
+  grid-column: span var(--span, 4);
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 2px 8px;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 4px 10px;
   border: 1px solid var(--edge-faint);
   border-radius: var(--corner-panel);
   background: var(--surface-inset);
   padding: 6px 8px;
   min-width: 0;
-}
-
-.effects-block:nth-child(2),
-.effects-block:nth-child(5) {
-  grid-column: span 4;
 }
 
 .effects-block h4 {
@@ -62,9 +60,11 @@
 
 .effects-row-head {
   display: flex;
-  justify-content: flex-end;
-  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
 }
+.effects-row-head > .rack-menu { margin-left: auto; }
 
 .effects-knobs {
   grid-column: 1 / -1;
@@ -82,11 +82,6 @@
   min-height: 24px;
   font-size: var(--type-caption);
   color: var(--text-label);
-}
-
-.effects-toggle input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
 }
 
 /* The Presets menu opens under its button, along the box's right edge. */

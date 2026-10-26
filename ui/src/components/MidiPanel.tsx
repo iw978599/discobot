@@ -6,6 +6,7 @@ import { MIDI_DESTINATIONS, destinationFor, type MidiDestination, type MidiDesti
 import { DRUM_NAMES, listTargets, targetLabel } from '../services/paramTargets';
 import type { DrumInstrument } from '../types';
 import './MidiPanel.css';
+import Toggle from './Toggle';
 
 interface MidiPanelProps {
   supported: boolean;
@@ -154,10 +155,7 @@ export default function MidiPanel({
               ))}
             </select>
           </label>
-          <label className="midi-check" title="Start and stop with another device's MIDI clock, and play at its tempo. Its tempo is not saved: the project's own comes back when this is off">
-            <input type="checkbox" aria-label="Follow MIDI clock" checked={followClock} onChange={(e) => onFollowClockChange(e.target.checked)} />
-            Follow clock{followClock && clockTempo !== null ? ` (${clockTempo} BPM)` : ''}
-          </label>
+          <Toggle className="midi-check" label="Follow MIDI clock" title="Start and stop with another device's MIDI clock, and play at its tempo. Its tempo is not saved: the project's own comes back when this is off" checked={followClock} onChange={(on) => onFollowClockChange(on)}>Follow clock{followClock && clockTempo !== null ? ` (${clockTempo} BPM)` : ''}</Toggle>
           <select
             value={targetSynthId ?? synthIds[0] ?? 1}
             aria-label="MIDI target synth"
@@ -267,18 +265,9 @@ export default function MidiPanel({
                 <option key={device.id} value={device.id}>{device.name}</option>
               ))}
             </select>
-            <label className="midi-check" title="Send each lane's notes: Synth 1 on channel 1, Synth 2 on 2, Synth 3 on 3, drums on channel 10">
-              <input type="checkbox" aria-label="Send notes to MIDI output" checked={sendNotes} disabled={!selectedOutputId} onChange={(e) => onSendNotesChange(e.target.checked)} />
-              Notes
-            </label>
-            <label className="midi-check" title="Send MIDI clock with start and stop, so the device's own sequencer or arpeggiator follows the tempo">
-              <input type="checkbox" aria-label="Send clock to MIDI output" checked={sendClock} disabled={!selectedOutputId} onChange={(e) => onSendClockChange(e.target.checked)} />
-              Clock
-            </label>
-            <label className="midi-check" title="Also send notes played by hand: the keys on screen, the computer keyboard, a controller's keys and pads, each on its lane's channel">
-              <input type="checkbox" aria-label="Send played notes to MIDI output" checked={sendPlayed} disabled={!selectedOutputId} onChange={(e) => onSendPlayedChange(e.target.checked)} />
-              Played
-            </label>
+            <Toggle className="midi-check" label="Send notes to MIDI output" title="Send each lane's notes: Synth 1 on channel 1, Synth 2 on 2, Synth 3 on 3, drums on channel 10" checked={sendNotes} disabled={!selectedOutputId} onChange={(on) => onSendNotesChange(on)}>Notes</Toggle>
+            <Toggle className="midi-check" label="Send clock to MIDI output" title="Send MIDI clock with start and stop, so the device's own sequencer or arpeggiator follows the tempo" checked={sendClock} disabled={!selectedOutputId} onChange={(on) => onSendClockChange(on)}>Clock</Toggle>
+            <Toggle className="midi-check" label="Send played notes to MIDI output" title="Also send notes played by hand: the keys on screen, the computer keyboard, a controller's keys and pads, each on its lane's channel" checked={sendPlayed} disabled={!selectedOutputId} onChange={(on) => onSendPlayedChange(on)}>Played</Toggle>
           </div>
           <div className="midi-panel midi-out-channels" role="group" aria-label="MIDI output channels">
             {[...synthIds.map(id => ({ part: id as number | 'drums', name: `Synth ${id}` })), { part: 'drums' as const, name: 'Drums' }].map(({ part, name }) => (
