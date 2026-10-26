@@ -1161,9 +1161,14 @@ for new accounts.
   of one processor core (measured by rendering them in Node), all on the
   browser's one audio thread, and the app asks for the smallest output
   buffer (`latencyHint: 'interactive'`). Running short of time there sounds
-  like crackle, but this is not confirmed: does a downloaded Song WAV of the
-  same song have the static too? If not, the fix is a larger buffer (more
-  delay between a key and its sound) or cheaper voices.
+  like crackle. The owner answered the same day: a Song WAV is clean, the
+  static is only live in the browser (Chrome 155), and the quick response is
+  to be kept, so the buffer stays as it is and the voices are to be made
+  cheaper. A first pass, changing nothing in the sound, took 5 to 10% off the
+  heaviest lanes (each voice keeps its last pitch, cutoff and pan answers,
+  and phases wrap without a remainder). Most of the cost is the voices
+  themselves (oscillators, the twice-run filter, the per-voice drive): the
+  owner is to say whether the static is still there.
 - **A cover of Opus** (sample songs, 2026-10-26). Opus's tune is Eric
   Prydz's, and a song bundled with the app must be ours to redistribute, so
   Long Ascent is built the way Opus is built on a figure and chords of its
@@ -1284,7 +1289,9 @@ V6. **A second sample song, and more starting beats.** (S each) One song in
    Opus's tune is not ours to bundle.
    The owner then asked to jump ahead in a playing song: pressing a block or a
    playlist row now goes there at once. The same day they heard a lot of
-   static playing the songs; not yet reproduced (see the questions).
+   static playing the songs; not yet reproduced (see the questions). Then the
+   electronic song became drum and bass (Fracture Line) and the jazz acid jazz
+   after On the Corner (Downtown Wah): done, not verified by ear.
 
 ### Playing and writing
 
