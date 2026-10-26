@@ -1,8 +1,10 @@
 // Recording a session as audio (roadmap V24): what this browser hears (the music, everyone's notes
 // in a live session, guests), taken from the engine's output by the browser's own MediaRecorder and
 // compressed as it goes. When it stops the take is a file, which the studio keeps as a recording and
-// puts on an audio track. Nothing leaves the browser. One recording at a time; its state is kept
-// here, outside React, and read with useSyncExternalStore.
+// puts on an audio track, and which stays here as the last take, to be downloaded as a WAV
+// (`takeWav`). Nothing leaves the browser. One recording at a time; its state is kept here, outside
+// React, and read with useSyncExternalStore.
+import { encodeWav } from './wavExport';
 
 // Formats the browser may record in, best first: each is one the same browser can decode again.
 export const RECORDING_TYPES = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/webm'];
@@ -21,8 +23,9 @@ export function takeName(started: Date): string {
   return `Session ${started.getFullYear()}-${two(started.getMonth() + 1)}-${two(started.getDate())} ${two(started.getHours())}.${two(started.getMinutes())}`;
 }
 
-export interface RecordingState { recording: boolean; startedAt: number }
-const IDLE: RecordingState = { recording: false, startedAt: 0 };
+// `take` is the last recording finished in this visit, until the next begins.
+export interface RecordingState { recording: boolean; startedAt: number; take: File | null }
+const IDLE: RecordingState = { recording: false, startedAt: 0, take: null };
 
 let state: RecordingState = IDLE;
 const listeners = new Set<() => void>();
@@ -51,7 +54,7 @@ export const sessionRecorder = {
     };
     recorder.start(1000);
     current = { recorder, chunks, release: source.release, type, limit: setTimeout(onLimit, MAX_RECORDING_MS), done, finish };
-    tell({ recording: true, startedAt: started.getTime() });
+    tell({ recording: true, startedAt: started.getTime(), take: null });
     return true;
   },
   // Stops, and answers the take as a file, or null when nothing was recorded.
@@ -63,9 +66,17 @@ export const sessionRecorder = {
     tell(IDLE);
     if (recording.recorder.state !== 'inactive') recording.recorder.stop();
     else { recording.release(); recording.finish(null); }
-    return recording.done;
+    const take = await recording.done;
+    if (take && !current) tell({ ...state, take });
+    return take;
   },
 };
+
+// The take as a WAV file, from the take decoded (at most two channels), named as the take is.
+export function takeWav(take: File, decoded: Pick<AudioBuffer, 'numberOfChannels' | 'sampleRate' | 'getChannelData'>): File {
+  const channels = Array.from({ length: Math.min(2, decoded.numberOfChannels) }, (_, channel) => decoded.getChannelData(channel));
+  return new File([encodeWav(channels, decoded.sampleRate)], `${take.name.replace(/\.[^.]+$/, '')}.wav`, { type: 'audio/wav' });
+}
 
 // Minutes and seconds since a time, for the running clock on the button.
 export function elapsed(since: number, now = Date.now()): string {

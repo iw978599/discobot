@@ -221,5 +221,16 @@ test('Record Session puts what this browser heard on a new Session track', async
   await expect.poll(async () => (await project()).audioTracks?.[0]?.clips?.[0]?.length ?? 0, { message: 'about as long as it was recording' }).toBeGreaterThan(1);
   expect((await project()).audioTracks[0].clips[0].length).toBeLessThan(4);
   await expect(timeline.getByRole('button', { name: '● Record Session', exact: true })).toBeVisible();
+
+  // The same take, downloaded as a WAV.
+  const saved = page.waitForEvent('download');
+  await timeline.getByRole('button', { name: 'Download Session WAV', exact: true }).click();
+  const download = await saved;
+  expect(download.suggestedFilename()).toMatch(/^Session \d{4}-\d{2}-\d{2} \d{2}\.\d{2}\.wav$/);
+  const wav = await readFile(await download.path());
+  expect(wav.subarray(0, 4).toString('latin1')).toBe('RIFF');
+  const seconds = (wav.length - 44) / (wav.readUInt16LE(22) * 2 * wav.readUInt32LE(24));
+  expect(seconds, 'about as long as it was recording').toBeGreaterThan(1);
+  expect(seconds).toBeLessThan(4);
   expect(errors).toEqual([]);
 });

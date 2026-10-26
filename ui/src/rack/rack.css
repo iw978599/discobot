@@ -597,6 +597,7 @@
 .timeline-zoom { display: inline-flex; gap: 3px; }
 .record-session { display: inline-flex; align-items: center; gap: 8px; }
 .record-session-time { font-family: var(--led-font); }
+.record-session-error { color: var(--danger-word); font-family: var(--sentence-font); font-size: var(--type-label); }
 /* A fade is a slope from the clip's corner to its full height, drawn over it; its handle sits on top. */
 .timeline-fade { position: absolute; top: 0; bottom: 0; pointer-events: none; background: var(--surface-well); }
 .timeline-fade.in { left: 0; clip-path: polygon(0 0, 100% 0, 0 100%); }
