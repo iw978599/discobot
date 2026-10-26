@@ -520,10 +520,7 @@
 }
 
 /* the offer on an empty project */
-.starter-options { display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; min-width: 0; }
-.starter-choices { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
-.starter-label { color: var(--text-label); font-size: var(--type-label); min-width: 16ch; }
-.starter-song small { display: block; color: var(--text-faint); font-size: var(--type-caption); font-family: var(--sentence-font); text-transform: none; }
+.starter-options { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; flex: 1 1 auto; min-width: 0; }
 .starter-hint { flex: 0 1 auto; min-width: 0; }
 
 /* scenes and song */
@@ -1316,7 +1313,9 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
 /* A wide screen (design review 27): the lanes, the song and the drums on the left as they always
    are, and the mixer and the effects in a column of their own on the right, held in view just under
    the transport (its height is --transport-height, from Rack) while the lanes scroll past, and
-   scrolling inside itself when it is taller than the screen. The left keeps the desktop rack's
+   scrolling inside itself when it is taller than the screen. Its height leaves room for the page's
+   and the rack's padding below it (60px), or at the bottom of the page the end of its row would
+   push it up under the transport. The left keeps the desktop rack's
    widths, so its steps line up as they always have; the right takes what is left. */
 @media (min-width: 1800px) {
   .rack { max-width: 2400px; display: grid; grid-template-columns: minmax(1060px, 1400px) minmax(600px, 1fr); column-gap: 5px; align-items: start; }
@@ -1325,7 +1324,7 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
   .rack-main { grid-column: 1; }
   .rack-side {
     grid-column: 2; position: sticky; top: calc(var(--transport-height, 100px) + 5px);
-    max-height: calc(100vh - var(--transport-height, 100px) - 10px); max-height: calc(100dvh - var(--transport-height, 100px) - 10px);
+    max-height: calc(100vh - var(--transport-height, 100px) - 60px); max-height: calc(100dvh - var(--transport-height, 100px) - 60px);
     overflow-y: auto; overscroll-behavior: contain;
   }
 }
