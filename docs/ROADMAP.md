@@ -1360,7 +1360,7 @@ V22. **Swing templates.** Done: the menu beside the drums' Swing knob, swing
     (a groove's accents).
 V23. **Audio tracks on a timeline.** (L) In progress, in four stages (`docs/TIMELINE_PLAN.md`); all four stages done: the stored data, the sound, the Timeline view of the song, and zoom and fades on the clip. Recordings and loops placed on tracks along
     the song, trimmed, moved and faded: next, after V19 to V22.
-V24. **Recording a live session as audio.** Done: Record Session in the timeline's tools and a live session's line. (M) Asked for by the owner on 2026-10-22, after
+V24. **Recording a live session as audio.** Done: Record Session in the timeline's tools and a live session's line; once stopped, the take is on the timeline and Download Session WAV saves it as a WAV (asked for by the owner on 2026-10-26). (M) Asked for by the owner on 2026-10-22, after
     trying live jamming (option 1 of two offered). A Record Session button records what this
     browser hears (the music, everyone's notes and any guests, from the engine's output) and, when
     stopped, puts the take on an audio track as a clip at the bar where recording began. Local and
