@@ -517,6 +517,6 @@ test('a starting beat in a shorter bar takes as much as fits, and a sample song 
   const built = buildSampleSong(fresh().exportProject(), createBuiltInPresets(), SAMPLE_SONGS[0]) as any;
   assert.ok(built.project.scenes.length > 1);
   for (const scene of built.project.scenes) assert.equal('signature' in scene, false, 'Neon Drive is in 4/4, which is stored as nothing');
-  const seven = buildSampleSong(fresh().exportProject(), createBuiltInPresets(), SAMPLE_SONGS.find(song => song.id === 'seven-lights')!) as any;
-  for (const scene of seven.project.scenes) assert.equal(scene.signature, '7/8');
+  const market = buildSampleSong(fresh().exportProject(), createBuiltInPresets(), SAMPLE_SONGS.find(song => song.id === 'market-day')!) as any;
+  for (const scene of market.project.scenes) assert.equal(scene.signature, '12/8');
 });

@@ -92,16 +92,16 @@ test('the songs on offer are in many styles, and one in another time signature o
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   const songs = offer(page).getByRole('group', { name: 'A song to hear', exact: true }).getByRole('button');
-  await expect(songs).toHaveText([/Night Circuit/, /Sixth Street Shout/, /Late Study/, /Seven Lights/, /Market Day/, /Cathedral/, /Lanterns Over Dark Water/, /Silver Satellite/, /Long Ascent/]);
+  await expect(songs).toHaveText([/Night Circuit/, /Downtown Wah/, /Late Study/, /Fracture Line/, /Market Day/, /Cathedral/, /Lanterns Over Dark Water/, /Silver Satellite/, /Long Ascent/]);
   await expect(offer(page).getByRole('group', { name: 'A beat to start from', exact: true }).getByRole('button')).not.toHaveCount(0);
 
   const stored = () => page.evaluate(() => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem('discobot_browser_project_v1') || '{}')));
-  await songs.filter({ hasText: 'Sixth Street Shout' }).click();
-  await expect.poll(async () => (await stored()).name).toBe('Sixth Street Shout');
+  await songs.filter({ hasText: 'Fracture Line' }).click();
+  await expect.poll(async () => (await stored()).name).toBe('Fracture Line');
   const project = await stored();
-  expect(project.scenes.map((scene: { signature?: string }) => scene.signature)).toEqual([undefined, '6/8', '6/8', '6/8', undefined, '6/8', '6/8', undefined]);
+  expect(project.scenes.map((scene: { signature?: string }) => scene.signature)).toEqual([undefined, undefined, undefined, undefined, '7/8', undefined, undefined]);
   expect(project.synths[1].pattern.steps.length, 'it opens on eight bars of 4/4').toBe(128);
-  expect(project.scenes[1].lanes['1'].length, 'and a scene in 6/8 eight bars of twelve').toBe(96);
+  expect(project.scenes[4].lanes['1'].length, 'and its Meltdown is eight bars of fourteen').toBe(112);
   await page.getByRole('button', { name: /Play All/ }).click();
   await page.waitForTimeout(1500);
   await page.getByRole('button', { name: /Stop All/ }).click();
