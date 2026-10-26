@@ -6,7 +6,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 const PROJECT_KEY = 'discobot_browser_project_v1';
 const PAGES = ['Osc', 'Filter', 'Amp', 'LFO', 'Arp', 'Inserts', 'Sends'];
 const sound = (page: Page) => page.evaluate(key => (window.dispatchEvent(new Event('pagehide')), JSON.stringify(JSON.parse(localStorage.getItem(key) || '{}').synths?.[0]?.synthParams ?? null)), PROJECT_KEY);
-const phone = (page: Page) => page.viewportSize()!.width <= 720;
+const phone = (page: Page) => page.viewportSize()!.width <= 1059;
 
 const lane = (page: Page, id = 1) => page.getByRole('region', { name: `Synth ${id} module`, exact: true });
 const levels = (scope: Locator) => scope.getByRole('tablist', { name: 'Synth editor', exact: true });

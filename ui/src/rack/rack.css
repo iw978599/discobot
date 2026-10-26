@@ -286,6 +286,10 @@
   background-repeat: repeat-y;
 }
 
+/* The units' two groups (Rack.tsx): no box of their own, so the units are the rack's column, until a
+   wide screen makes the second a column beside the first (below). */
+.rack-main, .rack-side { display: contents; }
+
 .rack-unit {
   background: var(--surface-panel);
   border: 1px solid var(--edge);
@@ -336,6 +340,14 @@
 .rack-plate-box { width: var(--plate); min-width: 0; flex: none; display: flex; }
 .rack-plate-box .rack-plate { width: 100%; }
 .rack-btn.unit-help { position: absolute; top: 0; right: 6px; width: 20px; height: 20px; padding: 0; font-size: var(--type-caption); line-height: 1; color: var(--text-faint); }
+/* Hide and Show for a unit (UnitFold): under the "?", with the line beside it kept clear. A unit put
+   away shows its name plate and no more; its arrow turns to point at the name. */
+.rack-btn.unit-fold { position: absolute; top: 24px; right: 6px; width: 20px; height: 20px; padding: 0; font-size: var(--type-caption); line-height: 1; color: var(--text-faint); }
+.unit-fold > span { display: inline-block; }
+.unit-fold[aria-expanded="false"] > span { transform: rotate(-90deg); }
+.rack-plate:has(.unit-fold) > span, .rack-plate-box:has(.unit-fold) .rack-plate > span { padding-right: 26px; box-sizing: border-box; }
+.rack-plate:has(.unit-fold) > select { max-width: calc(100% - 26px); }
+.rack-unit[data-folded] { padding-block: 6px; }
 
 /* buttons */
 .rack-btn {
@@ -495,8 +507,8 @@
 .live-person { display: inline-flex; align-items: center; gap: 6px; color: var(--text); }
 .live-person::before { content: ''; width: 10px; height: 10px; border-radius: 50%; background: var(--present); }
 /* A guests unit off screen keeps `position: fixed`: its rule in the phone block is more specific. */
-.rack > [data-present] { position: relative; box-shadow: inset 0 3px 0 var(--present); }
-.rack > [data-present]::after {
+.rack [data-unit][data-present] { position: relative; box-shadow: inset 0 3px 0 var(--present); }
+.rack [data-unit][data-present]::after {
   content: attr(data-present-names); position: absolute; top: 0; right: 0; pointer-events: none;
   background: var(--present); color: var(--text-on); border-radius: 0 0 0 var(--corner-control);
   padding: 1px 8px; font-family: var(--panel-font); font-size: var(--type-caption); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
@@ -998,13 +1010,15 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
 .tour-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 4px; }
 .tour-skip { margin-right: auto; }
 
-/* Narrow screens: a phone held upright. The rack keeps its order and everything in it, but is
+/* Narrow screens: anything narrower than the desktop rack's 1,060 pixels (a phone held upright, a
+   tablet, a narrow window; design review 27 gave this the phone's arrangement, where it had been
+   cut off on the right). The rack keeps its order and everything in it, but is
    no longer one wide panel scrolled sideways. Each unit stacks its parts, the step grids go
    eight to a row, controls are big enough for a finger, menus rise from the bottom and dialogs
    fill the screen. A phone on its side is wider than that and very short, and gets the same
    arrangement (and a few rules of its own after this block). Nothing here applies to any
    other screen. useNarrow holds the same condition; keep the two the same. */
-@media (max-width: 720px), (max-width: 960px) and (max-height: 500px) and (orientation: landscape) {
+@media (max-width: 1059px), (max-width: 960px) and (max-height: 500px) and (orientation: landscape) {
   .shortcut-row { grid-template-columns: 1fr; gap: 4px; }
   /* A track's name has a line of its own over its buttons, which keep their size for a finger. */
   .timeline { --timeline-head: 160px; }
@@ -1028,6 +1042,9 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
   .rack-plate-box { width: auto; }
   .rack-plate.helped, .rack-plate-box, .effects-unit .effects-panel-header { padding-right: 44px; }
   .rack-btn.unit-help { right: 0; width: 36px; height: 36px; font-size: var(--type-label); }
+  .rack-btn.unit-fold { top: 0; right: 40px; width: 36px; height: 36px; font-size: var(--type-label); }
+  .rack-plate.helped:has(.unit-fold), .rack-plate-box:has(.unit-fold), .effects-unit .effects-panel-header { padding-right: 84px; }
+  .rack-plate:has(.unit-fold) > span, .rack-plate-box:has(.unit-fold) .rack-plate > span { padding-right: 0; }
   .app-alert { flex-wrap: wrap; }
 
   /* big enough for a finger */
@@ -1199,24 +1216,24 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
      unit is hidden here, not taken out of the page: a hidden lane keeps its step lights and a
      hidden guest keeps its frame, so both are right the moment they are shown again. With
      "all" on show the attribute is absent and the rack is the one long page above. */
-  .rack[data-shown="song"] > [data-unit]:not([data-unit="song"]):not([data-unit="guests"]),
-  .rack[data-shown="synth-1"] > [data-unit]:not([data-unit="synth-1"]):not([data-unit="guests"]),
-  .rack[data-shown="synth-2"] > [data-unit]:not([data-unit="synth-2"]):not([data-unit="guests"]),
-  .rack[data-shown="synth-3"] > [data-unit]:not([data-unit="synth-3"]):not([data-unit="add-lane"]):not([data-unit="guests"]),
-  .rack[data-shown="synth-4"] > [data-unit]:not([data-unit="synth-4"]):not([data-unit="guests"]),
-  .rack[data-shown="synth-5"] > [data-unit]:not([data-unit="synth-5"]):not([data-unit="guests"]),
-  .rack[data-shown="guests"] > [data-unit]:not([data-unit="guests"]),
-  .rack[data-shown="drums"] > [data-unit]:not([data-unit="drums"]):not([data-unit="guests"]),
-  .rack[data-shown="mixer"] > [data-unit]:not([data-unit="mixer"]):not([data-unit="guests"]),
-  .rack[data-shown="effects"] > [data-unit]:not([data-unit="effects"]):not([data-unit="guests"]) { display: none; }
+  .rack[data-shown="song"] [data-unit]:not([data-unit="song"]):not([data-unit="guests"]),
+  .rack[data-shown="synth-1"] [data-unit]:not([data-unit="synth-1"]):not([data-unit="guests"]),
+  .rack[data-shown="synth-2"] [data-unit]:not([data-unit="synth-2"]):not([data-unit="guests"]),
+  .rack[data-shown="synth-3"] [data-unit]:not([data-unit="synth-3"]):not([data-unit="add-lane"]):not([data-unit="guests"]),
+  .rack[data-shown="synth-4"] [data-unit]:not([data-unit="synth-4"]):not([data-unit="guests"]),
+  .rack[data-shown="synth-5"] [data-unit]:not([data-unit="synth-5"]):not([data-unit="guests"]),
+  .rack[data-shown="guests"] [data-unit]:not([data-unit="guests"]),
+  .rack[data-shown="drums"] [data-unit]:not([data-unit="drums"]):not([data-unit="guests"]),
+  .rack[data-shown="mixer"] [data-unit]:not([data-unit="mixer"]):not([data-unit="guests"]),
+  .rack[data-shown="effects"] [data-unit]:not([data-unit="effects"]):not([data-unit="guests"]) { display: none; }
   /* A guest is another site's page, and a page that is not rendered is not run in full: a
      browser stops its animation frames and may slow its timers. So a guest that is not on show
      is not hidden like the others. It keeps its size and its place on the screen, clipped to
      nothing and out of reach of a pointer; Rack also makes it inert. */
-  .rack[data-shown]:not([data-shown="guests"]) > [data-unit="guests"] {
+  .rack[data-shown]:not([data-shown="guests"]) [data-unit="guests"] {
     position: fixed; top: 0; left: 0; right: 0; clip-path: inset(50%); pointer-events: none;
   }
-  .rack > [data-unit]:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+  .rack [data-unit]:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
   /* The bar that moves between them: a strip of selector switches along the bottom edge. The
      one on show has a lit line along its top. A unit that makes sound has a lamp over its
      legend, which UnitBar lights on each step the unit sounds; a muted unit has a hollow lamp
@@ -1295,6 +1312,25 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
 }
 @media (min-width: 700px) and (max-width: 960px) and (max-height: 500px) and (orientation: landscape) {
   .step-row, .auto-strip { grid-template-columns: repeat(var(--bar, 16), minmax(0, 1fr)) !important; }
+}
+
+/* A wide screen (design review 27): the lanes, the song and the drums on the left as they always
+   are, and the mixer and the effects in a column of their own on the right, held in view just under
+   the transport (its height is --transport-height, from Rack) while the lanes scroll past, and
+   scrolling inside itself when it is taller than the screen. Its height leaves room for the page's
+   and the rack's padding below it (60px), or at the bottom of the page the end of its row would
+   push it up under the transport. The left keeps the desktop rack's
+   widths, so its steps line up as they always have; the right takes what is left. */
+@media (min-width: 1800px) {
+  .rack { max-width: 2400px; display: grid; grid-template-columns: minmax(1060px, 1400px) minmax(600px, 1fr); column-gap: 5px; align-items: start; }
+  .rack > :not(.rack-main):not(.rack-side) { grid-column: 1 / -1; }
+  .rack-main, .rack-side { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .rack-main { grid-column: 1; }
+  .rack-side {
+    grid-column: 2; position: sticky; top: calc(var(--transport-height, 100px) + 5px);
+    max-height: calc(100vh - var(--transport-height, 100px) - 60px); max-height: calc(100dvh - var(--transport-height, 100px) - 60px);
+    overflow-y: auto; overscroll-behavior: contain;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -5,7 +5,7 @@ const ties = (page: Page) => page.evaluate(() => JSON.parse(localStorage.getItem
 const emit = (page: Page, data: number[]) => page.evaluate(bytes => (window as unknown as { emitMidi: (data: number[]) => void }).emitMidi(bytes), data);
 const onPhone = (page: Page) => {
   const size = page.viewportSize();
-  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+  return size !== null && (size.width <= 1059 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
 };
 // On a phone the MIDI button is in the top bar's sheet.
 const openMidi = async (page: Page) => {

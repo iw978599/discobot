@@ -5,7 +5,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 // screen; `less` puts it away again after something that leaves it up.
 const onPhone = (page: Page) => {
   const size = page.viewportSize();
-  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+  return size !== null && (size.width <= 1059 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
 };
 const more = async (page: Page) => {
   if (!onPhone(page) || await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) return;
@@ -201,7 +201,7 @@ test('two people work on one project together or in turns, and it ends when the 
   await expect(setup.getByRole('status')).toContainText('Ian');
   await dana.keyboard.press('Escape');
   await dana.locator('[data-unit="drums"] button').first().focus();
-  await expect(page.locator('.rack > [data-unit="drums"]')).toHaveAttribute('data-present-names', 'Dana', { timeout: 10_000 });
+  await expect(page.locator('.rack [data-unit="drums"]')).toHaveAttribute('data-present-names', 'Dana', { timeout: 10_000 });
   // What the others play is heard here, snapped to the next step while the music plays unless this
   // browser turns that off. It starts on.
   const snap = page.getByRole('button', { name: 'Snap their notes to the beat', exact: true });

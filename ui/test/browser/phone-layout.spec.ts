@@ -50,7 +50,7 @@ const ALL = 'Show all units on one page';
 // raises. `more` raises the sheet before something in it is used, and does nothing on a wide screen.
 const onPhone = (page: Page) => {
   const size = page.viewportSize();
-  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+  return size !== null && (size.width <= 1059 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
 };
 const moreSheet = (page: Page) => page.getByRole('dialog', { name: 'More controls', exact: true });
 const moreButton = (page: Page) => page.getByRole('button', { name: 'More controls', exact: true });
@@ -209,6 +209,17 @@ test('on a phone showing the whole rack it fits the screen, with steps eight to 
   expect(errors).toEqual([]);
 });
 
+test('a tablet upright, or a window narrower than the desktop rack, has the phone arrangement instead of a rack cut off on the right', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium', 'this starts from the desktop width');
+  for (const [width, height] of [[900, 1200], [1059, 800]]) {
+    await page.setViewportSize({ width, height });
+    await expect(page.getByRole('navigation', { name: 'Rack units', exact: true }), `${width}: the bar of units`).toBeVisible();
+    expect(await page.locator('.rack-page').evaluate(element => element.scrollWidth - element.clientWidth), `${width}: no sideways scrolling`).toBeLessThanOrEqual(1);
+  }
+  await page.setViewportSize({ width: 1060, height: 800 });
+  await expect(page.getByRole('navigation', { name: 'Rack units', exact: true }), 'at the desktop rack\'s width, the desktop rack').toHaveCount(0);
+});
+
 test('a wide screen keeps the rack as one panel', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'chromium', 'this is the wide layout');
   const lane = page.getByRole('region', { name: 'Synth 1 module', exact: true });
@@ -229,11 +240,37 @@ test('a wide screen keeps the rack as one panel', async ({ page }, testInfo) => 
   await expect(top.locator('.save-state')).toBeVisible();
   await expect(top.getByRole('slider', { name: 'Volume', exact: true })).toBeVisible();
   await expect(top.getByRole('button', { name: 'Undo', exact: true }), 'Undo is the word, not a drawing').toHaveText('Undo');
-  await expect(page.locator('.rack > [data-unit]:visible'), 'every unit is on the page, the Add Lane unit among them').toHaveCount(8);
+  await expect(page.locator('.rack [data-unit]:visible'), 'every unit is on the page, the Add Lane unit among them').toHaveCount(8);
   await page.getByRole('slider', { name: 'Synth 1 level', exact: true }).click();
   await expect(page.getByRole('dialog'), 'a mouse click on a knob opens nothing').toHaveCount(0);
   await page.getByRole('button', { name: 'Help', exact: true }).click();
   expect((await box(page.getByRole('dialog', { name: 'How to use Discobot', exact: true }))).width, 'a dialog is a panel, not the whole screen').toBeLessThanOrEqual(680);
+});
+
+test('a widescreen puts the mixer and the effects in a column beside the lanes, held in view as the lanes scroll', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium', 'this is the wide layout');
+  const lane = page.getByRole('region', { name: 'Synth 1 module', exact: true });
+  const mixer = page.getByRole('region', { name: 'Mixer module', exact: true });
+  const drums = page.getByRole('region', { name: 'Drums module', exact: true });
+  const effects = page.locator('.rack [data-unit="effects"]');
+
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  expect((await box(mixer)).y, 'at 1,600 pixels the mixer is under the drums, as on any desktop').toBeGreaterThan((await box(drums)).y);
+
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  const [laneBox, mixerBox, effectsBox] = [await box(lane), await box(mixer), await box(effects)];
+  expect(mixerBox.x, 'the mixer is to the right of the lanes').toBeGreaterThanOrEqual(laneBox.x + laneBox.width);
+  expect(effectsBox.x, 'and the effects under it, in the same column').toBeCloseTo(mixerBox.x, 0);
+  expect(effectsBox.y).toBeGreaterThan(mixerBox.y);
+  expect(mixerBox.y, 'beside the top of the lanes, not below them').toBeLessThan(laneBox.y + laneBox.height);
+
+  const scroller = page.locator('.rack-page'), transport = page.locator('.rack-unit.transport');
+  await scroller.evaluate(element => element.scrollTo(0, element.scrollHeight));
+  const top = (await box(transport)).y + (await box(transport)).height;
+  const held = await box(mixer);
+  expect(held.y, 'scrolled to the bottom, the mixer is still in view, just under the transport').toBeGreaterThanOrEqual(top - 1);
+  expect(held.y).toBeLessThan(top + 40);
+  expect(await scroller.evaluate(element => element.scrollWidth - element.clientWidth), 'no sideways scrolling').toBeLessThanOrEqual(1);
 });
 
 test('on a phone one unit is on screen at a time, and a bar along the bottom moves between them', async ({ page }, testInfo) => {
@@ -248,7 +285,7 @@ test('on a phone one unit is on screen at a time, and a bar along the bottom mov
   const drums = page.getByRole('region', { name: 'Drums module', exact: true });
   const mixer = page.getByRole('region', { name: 'Mixer module', exact: true });
   const effects = page.locator('.effects-unit');
-  const onShow = page.locator('.rack > [data-unit]:visible');
+  const onShow = page.locator('.rack [data-unit]:visible');
   const play = page.getByRole('button', { name: /Play All/ });
 
   // It opens on the lane that is open for editing, with its editor, and nothing else.
@@ -449,7 +486,7 @@ test('on a phone the walkthrough turns to the unit each stop is about', async ({
   await expect(tour).toHaveCount(0);
   await expect(tab(page, 'Show Drums'), 'the unit the tour started from is put back').toHaveAttribute('aria-current', 'true');
   await expect(page.getByRole('region', { name: 'Drums module', exact: true })).toBeVisible();
-  await expect(page.locator('.rack > [data-unit]:visible')).toHaveCount(1);
+  await expect(page.locator('.rack [data-unit]:visible')).toHaveCount(1);
 });
 
 test('the lane on show is the lane that is open for editing, after a reload and when it is removed', async ({ page }, testInfo) => {
@@ -481,7 +518,7 @@ test('the lane on show is the lane that is open for editing, after a reload and 
   await third.getByRole('button', { name: 'Remove', exact: true }).click();
   await expect(tab(page, 'Show Synth 1')).toHaveAttribute('aria-current', 'true');
   await open(first, 1);
-  await expect(page.locator('.rack > [data-unit]:visible')).toHaveCount(1);
+  await expect(page.locator('.rack [data-unit]:visible')).toHaveCount(1);
   await expect(tab(page, 'Show Synth 3, an empty slot')).toBeVisible();
   expect(errors).toEqual([]);
 });
@@ -925,7 +962,7 @@ test('a phone on its side has the phone arrangement, with the width used and the
 
   // One unit at a time, the bar along the bottom, nothing off the side.
   await expect(tab(page, 'Show Synth 1')).toHaveAttribute('aria-current', 'true');
-  await expect(page.locator('.rack > [data-unit]:visible')).toHaveCount(1);
+  await expect(page.locator('.rack [data-unit]:visible')).toHaveCount(1);
   expect(await scroller.evaluate(element => element.scrollWidth - element.clientWidth), 'no sideways scrolling').toBeLessThanOrEqual(1);
   const strip = await box(bar(page));
   expect(strip.y + strip.height).toBeCloseTo(view.height, 0);

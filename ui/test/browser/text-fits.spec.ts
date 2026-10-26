@@ -4,7 +4,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 // raises. `more` raises the sheet before something in it is used, and does nothing on a wide screen.
 const onPhone = (page: Page) => {
   const size = page.viewportSize();
-  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+  return size !== null && (size.width <= 1059 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
 };
 const more = async (page: Page) => {
   if (!onPhone(page) || await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) return;
@@ -101,7 +101,7 @@ test('in the signed-in Projects list a name is not squeezed, and the words under
   const row = projects.getByRole('group', { name: 'Project Friday Night', exact: true });
   await expect(row).toBeVisible();
 
-  const narrow = (page.viewportSize()?.width ?? 0) <= 720;
+  const narrow = (page.viewportSize()?.width ?? 0) <= 1059;
   await expect.poll(() => row.evaluate((element, below) => {
     const name = element.querySelector('strong')!.getBoundingClientRect(), text = element.firstElementChild!;
     const range = document.createRange();

@@ -26,13 +26,36 @@ export function storeRackUnit(unit: RackUnit) {
   try { localStorage.setItem(UNIT_KEY, unit); } catch { /* the next visit starts on the open lane */ }
 }
 
-// Whether the mixer's strips are put away behind its Hide button. Shown unless that was pressed.
+// Which units are folded down to their name plate by their Hide button (design review 27), kept per
+// browser like the unit on show. The mixer's Hide came first, under a key of its own: a browser that
+// has only that one starts with the mixer folded and nothing else. Guests never fold, since their
+// page would be closed and their sound stopped.
+const FOLDED_KEY = 'discobot_folded_units_v1';
 const MIXER_KEY = 'discobot_mixer_hidden_v1';
+export const FOLDING_UNITS: readonly RackUnit[] = RACK_UNITS.filter(unit => unit !== 'guests' && unit !== 'all');
 
-export function storedMixerHidden(): boolean {
-  try { return localStorage.getItem(MIXER_KEY) === '1'; } catch { return false; }
+export function readFolded(stored: { getItem(key: string): string | null }): ReadonlySet<RackUnit> {
+  const raw = stored.getItem(FOLDED_KEY);
+  if (raw === null) return new Set<RackUnit>(stored.getItem(MIXER_KEY) === '1' ? ['mixer'] : []);
+  let list: unknown;
+  try { list = JSON.parse(raw); } catch { return new Set(); }
+  return new Set(Array.isArray(list) ? list.filter((unit): unit is RackUnit => FOLDING_UNITS.includes(unit as RackUnit)) : []);
 }
 
-export function storeMixerHidden(hidden: boolean) {
-  try { if (hidden) localStorage.setItem(MIXER_KEY, '1'); else localStorage.removeItem(MIXER_KEY); } catch { /* the next visit starts with the mixer shown */ }
-}
+let folded: ReadonlySet<RackUnit> | null = null;
+const foldListeners = new Set<() => void>();
+export const foldedUnits = {
+  get(): ReadonlySet<RackUnit> {
+    if (!folded) { try { folded = readFolded(localStorage); } catch { folded = new Set(); } }
+    return folded;
+  },
+  set(unit: RackUnit, fold: boolean) {
+    if (!FOLDING_UNITS.includes(unit) || foldedUnits.get().has(unit) === fold) return;
+    const next = new Set(foldedUnits.get());
+    if (fold) next.add(unit); else next.delete(unit);
+    folded = next;
+    try { localStorage.setItem(FOLDED_KEY, JSON.stringify([...next])); localStorage.removeItem(MIXER_KEY); } catch { /* folded for this visit only */ }
+    foldListeners.forEach(listener => listener());
+  },
+  subscribe(listener: () => void) { foldListeners.add(listener); return () => { foldListeners.delete(listener); }; },
+};

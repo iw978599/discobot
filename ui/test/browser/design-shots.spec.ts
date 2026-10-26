@@ -6,7 +6,7 @@ import { writeFileSync } from 'node:fs';
 // screen; `less` puts it away again after something that leaves it up.
 const onPhone = (page: Page) => {
   const size = page.viewportSize();
-  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+  return size !== null && (size.width <= 1059 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
 };
 const more = async (page: Page) => {
   if (!onPhone(page) || await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) return;
@@ -950,7 +950,7 @@ test('design shots: screens not captured before', async ({ page }, info) => {
   });
   // Widths between a phone and the desktop rack's least, and wider than any taken before.
   if (info.project.name === 'chromium') {
-    for (const [width, height] of [[900, 900], [1600, 1000]]) {
+    for (const [width, height] of [[900, 900], [1600, 1000], [1920, 1080], [2560, 1440]]) {
       await attempt(walk, `rack-width-${width}`, async () => {
         await page.setViewportSize({ width, height });
         await page.waitForTimeout(300);

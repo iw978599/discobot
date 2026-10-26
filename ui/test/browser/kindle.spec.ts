@@ -5,8 +5,7 @@ const SILK_DESKTOP = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML,
 const CHROME = 'Mozilla/5.0 (Linux; Android 13; SM-X700) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 // isMobile makes Chromium honour the viewport tag as a phone or tablet does; without it the tag
-// is ignored and nothing here would be tested. 800 wide is a Fire HD 10 held upright, wide
-// enough for the desktop rack unless the page asks for a narrower layout.
+// is ignored and nothing here would be tested. 800 wide is a Fire HD 10 held upright.
 test.beforeEach(({}, testInfo) => {
   test.skip(testInfo.project.name !== 'chromium', 'sets its own device');
 });
@@ -35,10 +34,12 @@ test.describe('Silk in desktop view, on its side', () => {
 test.describe('another tablet of the same size', () => {
   test.use({ userAgent: CHROME, viewport: { width: 800, height: 1280 }, isMobile: true, hasTouch: true });
 
-  test('keeps the desktop rack', async ({ page }) => {
+  // Narrower than the desktop rack, so it has the phone arrangement too (design review 27), but at
+  // its own width: only a Kindle is made to report a narrower one.
+  test('has the phone arrangement at its own width', async ({ page }) => {
     await page.goto('./');
     await expect(page.getByRole('heading', { name: 'Discobot', exact: true })).toBeVisible();
-    await expect(page.locator('.unit-bar')).toHaveCount(0);
+    await expect(page.locator('.unit-bar')).toBeVisible();
     await expect.poll(() => page.evaluate(() => window.innerWidth)).toBeGreaterThan(720);
   });
 });
