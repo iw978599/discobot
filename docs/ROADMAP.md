@@ -1149,6 +1149,9 @@ for new accounts.
   two knobs be with a drum's other knobs rather than under Sends?
 - **The rack between a phone and the desktop** (design review, part 7). Answered
   on 2026-10-26: that range has the phone's arrangement (design review 27).
+  The owner also chose, the same day, one look for on and off, the effect boxes
+  laid out alike, a widescreen layout and units that fold: all built in design
+  review 27 (pull requests 269 to 272).
   From 721 to 1,059 pixels wide the rack is cut off on the right and the
   page scrolls sideways. Give that range the phone's arrangement (one unit
   at a time; small, and already tested), or let the desktop rack fold its

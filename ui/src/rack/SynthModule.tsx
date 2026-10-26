@@ -22,6 +22,8 @@ import Scope from '../components/Scope';
 import UnitHelp, { UNIT_HELP } from './UnitHelp';
 import { laneName, laneSound } from '../services/lanes';
 import Toggle from '../components/Toggle';
+import UnitFold, { useFolded } from './UnitFold';
+import { laneUnit } from '../services/rackView';
 
 // Where a middle click puts a lane's knobs back to.
 const SOUND_DEFAULTS = createDefaultSynthParameters();
@@ -64,6 +66,7 @@ const STRUMS: Array<[number, string]> = [[0, 'Off'], [1 / 16, '1/16 step'], [1 /
 
 function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
   const [tab, setTab] = useState<SynthTab>('notes');
+  const folded = useFolded(laneUnit(synthId));
   const selected = studio.selectedSynthId === synthId;
   const sectionRef = useRef<HTMLElement>(null);
   const selectedStep = synth?.selectedStep ?? null;
@@ -134,7 +137,7 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
   const change = studio.handleParameterChange;
 
   return (
-    <section ref={sectionRef} className={`rack-unit synth-module ${selected ? 'selected' : ''}`} aria-label={`Synth ${synthId} module`} data-unit={`synth-${synthId}`}>
+    <section ref={sectionRef} className={`rack-unit synth-module ${selected ? 'selected' : ''}`} aria-label={`Synth ${synthId} module`} data-unit={`synth-${synthId}`} data-folded={folded ? 'true' : undefined}>
       <AutomatedParams.Provider value={automated}>
       <div className="rack-row">
         <div className="rack-plate-box">
@@ -158,6 +161,7 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
             <span data-handed={handedTo ? 'true' : undefined} title={handedTo ? `Sent to the guest ${handedTo}, and heard through it` : undefined}>{handedTo ? `→ ${handedTo}` : laneSound(synth.synthModelId, model.name, synth.preset)}</span>
           </button>
           {onHelp && <UnitHelp about={`Synth ${synthId}`} section={UNIT_HELP.synth} onHelp={onHelp} />}
+          <UnitFold unit={laneUnit(synthId)} about={`Synth ${synthId}`} />
         </div>
         <div className="rack-ms">
           <button
@@ -177,7 +181,7 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
             S
           </button>
         </div>
-        {synth.pattern && (
+        {!folded && synth.pattern && (
           <StepRow
             pattern={synth.pattern}
             isPlaying={synth.isPlaying}
@@ -193,7 +197,7 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
             }}
           />
         )}
-        {params && (
+        {!folded && params && (
           <div className="rack-knobs">
             {model.macros.length > 0 ? (
               <div className="synth-model-macro-grid" title={model.subtitle}>
@@ -292,7 +296,7 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
         )}
       </div>
 
-      {selected && params && synth.pattern && (
+      {!folded && selected && params && synth.pattern && (
         <AutomationRow
           synthId={synthId}
           pattern={synth.pattern}
@@ -308,7 +312,7 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
         />
       )}
 
-      {selected && params && (
+      {!folded && selected && params && (
         <SynthControls
           picture={<Scope label={`Synth ${synthId}`} source={() => studio.soundAnalyser(synthId)} />}
           parameters={params}
