@@ -13,13 +13,19 @@ const offer = (page: Page) => page.getByRole('region', { name: 'Starting points'
 const tempo = (page: Page) => page.locator('.tempo-led-value');
 const kick = (page: Page, step: number) => page.getByRole('button', { name: `Kick step ${step}`, exact: true });
 const lane = (page: Page) => page.getByRole('region', { name: 'Synth 1 module', exact: true });
+// The songs and the beats are each a menu on the offer: open it, and choose one.
+const menu = (page: Page, name: string) => page.getByRole('menu', { name, exact: true });
+const pick = async (page: Page, name: string, item: string) => {
+  await offer(page).getByRole('button', { name, exact: true }).click();
+  await menu(page, name).getByRole('menuitem', { name: item, exact: true }).click();
+};
 
 test('an empty project offers beats to start from, and one press fills it in', async ({ page }) => {
   await expect(offer(page)).toBeVisible();
   await expect(tempo(page)).toHaveText('120');
   await expect(kick(page, 1)).toHaveAttribute('aria-pressed', 'false');
 
-  await offer(page).getByRole('button', { name: 'House Beat', exact: true }).click();
+  await pick(page, 'A beat to start from', 'House Beat');
   await expect(tempo(page)).toHaveText('124');
   for (const step of [1, 5, 9, 13]) await expect(kick(page, step)).toHaveAttribute('aria-pressed', 'true');
   await expect(kick(page, 2)).toHaveAttribute('aria-pressed', 'false');
@@ -28,7 +34,7 @@ test('an empty project offers beats to start from, and one press fills it in', a
   await expect(offer(page), 'the offer stays, so another can be tried').toBeVisible();
 
   // Another replaces the first, and each is one edit: one undo brings the first back, a second empties the project.
-  await offer(page).getByRole('button', { name: 'Slow Groove', exact: true }).click();
+  await pick(page, 'A beat to start from', 'Slow Groove');
   await expect(tempo(page)).toHaveText('88');
   await expect(kick(page, 5)).toHaveAttribute('aria-pressed', 'false');
   await expect(lane(page).getByRole('button', { name: 'Select step 1 E3', exact: true })).toBeVisible();
@@ -70,7 +76,7 @@ test('a sample song opens as a new project, ready to play as a song', async ({ p
   page.on('pageerror', error => errors.push(error.message));
   const stored = () => page.evaluate(() => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem('discobot_browser_project_v1') || '{}')));
   const first = (await stored()).projectId;
-  await offer(page).getByRole('group', { name: 'A song to hear', exact: true }).getByRole('button', { name: 'Night Circuit', exact: true }).click();
+  await pick(page, 'A song to hear', 'Night Circuit');
 
   await expect(tempo(page)).toHaveText('104');
   await expect.poll(async () => (await stored()).name).toBe('Night Circuit');
@@ -91,9 +97,12 @@ test('a sample song opens as a new project, ready to play as a song', async ({ p
 test('the songs on offer are in many styles, and one in another time signature opens in it', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
-  const songs = offer(page).getByRole('group', { name: 'A song to hear', exact: true }).getByRole('button');
+  await offer(page).getByRole('button', { name: 'A beat to start from', exact: true }).click();
+  await expect(menu(page, 'A beat to start from').getByRole('menuitem')).not.toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await offer(page).getByRole('button', { name: 'A song to hear', exact: true }).click();
+  const songs = menu(page, 'A song to hear').getByRole('menuitem');
   await expect(songs).toHaveText([/Night Circuit/, /Downtown Wah/, /Late Study/, /Fracture Line/, /Market Day/, /Cathedral/, /Lanterns Over Dark Water/, /Silver Satellite/, /Long Ascent/]);
-  await expect(offer(page).getByRole('group', { name: 'A beat to start from', exact: true }).getByRole('button')).not.toHaveCount(0);
 
   const stored = () => page.evaluate(() => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem('discobot_browser_project_v1') || '{}')));
   await songs.filter({ hasText: 'Fracture Line' }).click();
