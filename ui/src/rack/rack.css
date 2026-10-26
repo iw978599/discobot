@@ -509,10 +509,7 @@
 }
 
 /* the offer on an empty project */
-.starter-options { display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; min-width: 0; }
-.starter-choices { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
-.starter-label { color: var(--text-label); font-size: var(--type-label); min-width: 16ch; }
-.starter-song small { display: block; color: var(--text-faint); font-size: var(--type-caption); font-family: var(--sentence-font); text-transform: none; }
+.starter-options { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; flex: 1 1 auto; min-width: 0; }
 .starter-hint { flex: 0 1 auto; min-width: 0; }
 
 /* scenes and song */
