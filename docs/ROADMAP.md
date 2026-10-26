@@ -1261,7 +1261,10 @@ V5. **Effects presets, among them clones of well-known units.** (M) The
    Chrome is a known issue to settle first.
 V6. **A second sample song, and more starting beats.** (S each) One song in
    one style shows one side of the app. Each is made, heard by the owner,
-   and changed.
+   and changed. On 2026-10-26 the owner asked for the songs to use more of the
+   app and for a five-minute space disco song: done, not verified by ear (scene
+   tempos, scene mutes, chance, shorter lanes, glide, vibrato, layers, unison,
+   modulation routes and per-drum sends among them, and Silver Satellite).
 
 ### Playing and writing
 

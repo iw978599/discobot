@@ -35,7 +35,8 @@ for (const song of SAMPLE_SONGS) {
   let loudest = 0;
   for (const scene of project.scenes) {
     const bars = sceneAsBars(scene);
-    const barSeconds = (barSteps(scene.signature) / 16) * 240 / project.tempo;
+    const tempo = scene.tempo ?? project.tempo;
+    const barSeconds = (barSteps(scene.signature) / 16) * 240 / tempo;
     const frames = Math.round(SR * barSeconds * bars.length);
     const mix = [new Float32Array(frames), new Float32Array(frames)];
     const parts: string[] = [];
@@ -45,10 +46,10 @@ for (const song of SAMPLE_SONGS) {
       if (!steps.some(bar => bar.some(step => step.active))) continue;
       const params = lane.synthParams;
       const sample = params.engine === 'sample' && params.sample?.wave ? waves.get(params.sample.wave) ?? null : undefined;
-      const peak = add(renderSynthBars(steps, params, project.tempo, frames, SR, barSeconds, sample, undefined, bars.map(bar => bar.laneAutomation?.[lane.synthId])));
+      const peak = add(renderSynthBars(steps, params, tempo, frames, SR, barSeconds, sample, undefined, bars.map(bar => bar.laneAutomation?.[lane.synthId])));
       parts.push(`${lane.name ?? `Synth ${lane.synthId}`} ${peak.toFixed(2)}`);
     }
-    const drums = add(renderDrums({ tempo: project.tempo, drumState: project.drumState, drumKitId: project.selectedDrumKitId, drumMasterVolume: project.drumMasterVolume, drumSwing: project.drumSwing, bars, signature: scene.signature, drumCymbals: recordings }, frames, SR, bars.length, 240 / project.tempo));
+    const drums = add(renderDrums({ tempo, drumState: project.drumState, drumKitId: project.selectedDrumKitId, drumMasterVolume: project.drumMasterVolume, drumSwing: project.drumSwing, bars, signature: scene.signature, drumCymbals: recordings }, frames, SR, bars.length, 240 / tempo));
     let peak = 0;
     for (let c = 0; c < 2; c++) for (let i = 0; i < frames; i++) peak = Math.max(peak, Math.abs(mix[c][i]));
     loudest = Math.max(loudest, peak);

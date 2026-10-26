@@ -12,9 +12,9 @@ import { EFFECTS_DEFAULT } from './effectSettings';
 // A note or a chord put on a step: the step in its bar (sixteenths from 0), the notes, how many
 // steps they last, how hard, and anything else the step has (a strum, a slide, a late start).
 export type Placed = [step: number, notes: string | string[], length?: number, velocity?: number, extra?: Partial<SequencerStep>];
-// A bar of drums: for each drum, the steps it hits, with a strength and a number of repeats where
-// they are not full and one.
-export type Hits = Partial<Record<DrumInstrument, Array<number | [step: number, velocity: number, repeats?: number]>>>;
+// A bar of drums: for each drum, the steps it hits, with a strength, a number of repeats and a
+// chance of playing where they are not full, one and always.
+export type Hits = Partial<Record<DrumInstrument, Array<number | [step: number, velocity: number, repeats?: number, chance?: number]>>>;
 // A lane by its number, 1 to 5.
 type Lanes = number;
 
@@ -26,10 +26,17 @@ export interface SongScene {
   signature?: TimeSignature;
   // 1, 2, 4 or 8
   bars: number;
+  // the scene's own tempo; absent is the song's
+  tempo?: number;
   // each lane's notes, a list of them for each bar; a lane left out is silent in the scene
   lanes: Partial<Record<Lanes, Placed[][]>>;
-  // a lane's automation, a value or nothing for every step of the scene
+  // a lane shorter than the scene (1, 2 or 4 bars), which loops against the rest; absent is the
+  // scene's length. Its notes and automation are that many bars long.
+  laneBars?: Partial<Record<Lanes, number>>;
+  // a lane's automation, a value or nothing for every step of the lane
   automation?: Partial<Record<Lanes, Automation>>;
+  // lanes and drums that keep their notes in the scene but are muted in it, to be unmuted
+  mutes?: { lanes?: Lanes[]; drums?: DrumInstrument[] };
   drums: Hits[];
 }
 
@@ -79,9 +86,11 @@ export function layOver<T>(base: T, patch: unknown): T {
   return out as T;
 }
 
-function lane(blank: SequencerStep, scene: SongScene, bars: Placed[][]): SequencerStep[] {
-  const per = barSteps(scene.signature);
-  const steps = Array.from({ length: scene.bars * per }, () => ({ ...blank }));
+const barsOf = (scene: SongScene, id: Lanes) => scene.laneBars?.[id] ?? scene.bars;
+
+function lane(blank: SequencerStep, scene: SongScene, id: Lanes): SequencerStep[] {
+  const per = barSteps(scene.signature), bars = scene.lanes[id] ?? [];
+  const steps = Array.from({ length: barsOf(scene, id) * per }, () => ({ ...blank }));
   bars.forEach((bar, index) => {
     for (const [step, notes, length = 1, velocity = 0.9, extra = {}] of bar) {
       steps[index * per + step] = { ...withStepNotes(blank, Array.isArray(notes) ? notes : [notes]), velocity, ...(length > 1 ? { length } : {}), ...extra };
@@ -94,15 +103,20 @@ function grid(scene: SongScene): Scene['drums'] {
   const per = barSteps(scene.signature), length = scene.bars * per;
   return Object.fromEntries(DRUMS.map((instrument) => {
     const steps = Array<boolean>(length).fill(false), stepVelocities = Array<number>(length).fill(1), stepRatchets = Array<number>(length).fill(1);
+    const stepProbabilities = Array<number>(length).fill(1);
     scene.drums.forEach((bar, index) => {
       for (const hit of bar[instrument] ?? []) {
-        const [step, velocity, repeats = 1] = Array.isArray(hit) ? hit : [hit, 1];
+        const [step, velocity, repeats = 1, chance = 1] = Array.isArray(hit) ? hit : [hit, 1];
         steps[index * per + step] = true;
         stepVelocities[index * per + step] = velocity;
         stepRatchets[index * per + step] = repeats;
+        stepProbabilities[index * per + step] = chance;
       }
     });
-    return [instrument, { steps, stepVelocities, ...(stepRatchets.some(count => count > 1) ? { stepRatchets } : {}) }];
+    return [instrument, {
+      steps, stepVelocities, ...(stepProbabilities.some(chance => chance < 1) ? { stepProbabilities } : {}),
+      ...(stepRatchets.some(count => count > 1) ? { stepRatchets } : {}),
+    }];
   })) as Scene['drums'];
 }
 
@@ -125,12 +139,19 @@ export function buildSampleSong(file: unknown, sounds: Sound[], song: SampleSong
   const blank = withStepNotes(first.pattern.steps[0] as SequencerStep, []);
   const ids = song.lanes.map((_, index) => index + 1);
 
+  const muted = (scene: SongScene) => ({
+    lanes: Object.fromEntries(ids.map(id => [id, { muted: Boolean(scene.mutes?.lanes?.includes(id)), solo: false }])),
+    drums: Object.fromEntries(DRUMS.map(instrument => [instrument, { muted: Boolean(scene.mutes?.drums?.includes(instrument)), solo: false }])),
+  });
   const scenes: Scene[] = song.scenes.map(scene => ({
     id: scene.id, name: scene.name, color: scene.color,
     ...(scene.signature && scene.signature !== '4/4' ? { signature: scene.signature } : {}),
-    lanes: Object.fromEntries(ids.map(id => [id, lane(blank, scene, scene.lanes[id] ?? [])])),
-    laneBars: Object.fromEntries(ids.map(id => [id, scene.bars])),
+    ...(scene.tempo !== undefined ? { tempo: scene.tempo } : {}),
+    lanes: Object.fromEntries(ids.map(id => [id, lane(blank, scene, id)])),
+    laneBars: Object.fromEntries(ids.map(id => [id, barsOf(scene, id)])),
     ...(scene.automation ? { laneAutomation: scaled(scene.automation as Record<number, Automation>, song.level ?? 1) } : {}),
+    // Every scene says its mutes, or one after a scene that mutes a lane would keep it muted.
+    mutes: muted(scene),
     drums: grid(scene),
   }));
   const order: Song = { entries: song.order.map(([sceneId, repeats]) => ({ sceneId, repeats })), loop: false };
@@ -142,9 +163,9 @@ export function buildSampleSong(file: unknown, sounds: Sound[], song: SampleSong
     const sound = chosen[index]!, spec = song.lanes[index];
     const automation = openScene.automation?.[synthId] && scaled({ [synthId]: openScene.automation[synthId]! }, song.level ?? 1)[synthId];
     const { automation: _old, ...rest } = from.pattern;
-    const pattern = { ...rest, id: `sample-lane-${synthId}`, steps: open.lanes[synthId], bars: openScene.bars, ...(automation ? { automation } : {}) };
+    const pattern = { ...rest, id: `sample-lane-${synthId}`, steps: open.lanes[synthId], bars: barsOf(openScene, synthId), ...(automation ? { automation } : {}) };
     return {
-      ...from, synthId, pattern, patterns: [pattern], muted: false, solo: false, isPlaying: false,
+      ...from, synthId, pattern, patterns: [pattern], muted: Boolean(openScene.mutes?.lanes?.includes(synthId)), solo: false, isPlaying: false,
       synthParams: levelled(layOver(structuredClone(sound.params), spec.sound), song.level ?? 1), synthModelId: sound.modelId, synthModelParams: { ...sound.modelParams },
       octaveShift: spec.octaveShift ?? 0, ...(spec.swing ? { swing: true } : {}), name: spec.name, preset: sound.name,
     };
@@ -153,14 +174,13 @@ export function buildSampleSong(file: unknown, sounds: Sound[], song: SampleSong
     const was = project.drumState[instrument];
     const { stepProbabilities: _p, stepRatchets: _r, sampleId: _s, ...kept } = was;
     project.drumState[instrument] = {
-      ...kept, ...open.drums[instrument], muted: false, solo: false,
+      ...kept, ...open.drums[instrument], muted: Boolean(openScene.mutes?.drums?.includes(instrument)), solo: false,
       settings: { ...was.settings, ...(song.drums?.[instrument] ?? {}) },
     };
   }
   const effects: EffectsLoopState = layOver(structuredClone(EFFECTS_DEFAULT), song.effects ?? {});
   Object.assign(project, {
-    name: song.name, tempo: song.tempo, drumSwing: song.drumSwing ?? 0, selectedDrumKitId: song.kit,
-    ...(song.drumVolume !== undefined ? { drumMasterVolume: song.drumVolume } : {}),
+    name: song.name, tempo: song.tempo, drumSwing: song.drumSwing ?? 0, selectedDrumKitId: song.kit,    ...(song.drumVolume !== undefined ? { drumMasterVolume: song.drumVolume } : {}),
     effectsLoop: effects, drumFx: { ...project.drumFx, sends: { ...project.drumFx?.sends, ...song.drumSends } },
     scenes, currentSceneId: open.id, song: order, guests: [],
   });
