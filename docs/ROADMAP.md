@@ -142,7 +142,7 @@ directly, with no builder.
     folded into them (sound 4). Done: up to eight routes, the list showing
     those in use and one more; each LFO's own target and depth are the first
     rows of the routing list, still the LFO's own setting, so no sound changed.
-26. **The design review's screens not looked at** (improvements 9).
+26. **The design review's screens not looked at** (improvements 9). Done: looked at, five faults fixed, two questions for the owner (`docs/DESIGN_REVIEW.md`, part 7).
 27. **Published songs** (features 9): a description or picture, the list's
     order, playing from the list.
 
@@ -1147,6 +1147,15 @@ for new accounts.
   drums' Reverb knobs go down. Is that the right way round? And: should
   Apply Kit put the shares back to 100% (it leaves them), and should the
   two knobs be with a drum's other knobs rather than under Sends?
+- **The rack between a phone and the desktop** (design review, part 7).
+  From 721 to 1,059 pixels wide the rack is cut off on the right and the
+  page scrolls sideways. Give that range the phone's arrangement (one unit
+  at a time; small, and already tested), or let the desktop rack fold its
+  rows (keeps the whole rack on one page, touches every unit)?
+- **32 steps and a tune's timing** (design review, part 7). Switching a
+  lane to 32 steps keeps its notes on the same step numbers, so the tune
+  plays twice as fast in the first half of the bar. Should the notes be
+  spread instead, so the tune keeps its timing?
 
 ## Decided by the owner on 2026-10-20
 

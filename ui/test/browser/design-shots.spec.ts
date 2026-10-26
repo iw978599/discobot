@@ -907,3 +907,56 @@ test('design shots: automation under a lane\'s steps', async ({ page }, info) =>
   });
   finish(walk);
 });
+
+// Screens the first review could not see (DESIGN_REVIEW.md, part 5), added for roadmap 26.
+test('design shots: screens not captured before', async ({ page }, info) => {
+  const walk = begin(page, info);
+  await open(page);
+  await ready(page);
+  await seed(walk);
+  const one = lane(page, 1);
+  await attempt(walk, 'lane-two-bars-follow', async () => {
+    await one.getByLabel('Synth 1 bars', { exact: true }).selectOption('2');
+    await one.getByRole('button', { name: 'Synth 1 bar 2', exact: true }).click();
+    await near(walk, one, 'lane-two-bars-follow', 40);
+    await one.getByLabel('Synth 1 bars', { exact: true }).selectOption('1');
+  });
+  await attempt(walk, 'lane-32-steps', async () => {
+    await one.getByLabel('Sequence length', { exact: true }).selectOption({ index: 1 });
+    await near(walk, one, 'lane-32-steps', 40);
+    await one.getByLabel('Sequence length', { exact: true }).selectOption({ index: 0 });
+  });
+  await attempt(walk, 'lane-model-knobs', async () => {
+    await level(page, 'Sound');
+    await one.getByRole('button', { name: /^Synth model: / }).click();
+    await one.locator('[role="menuitem"][data-group="Poly"]').click();
+    await one.getByRole('menuitem', { name: 'Juno-106', exact: true }).click();
+    await expect(one.getByRole('button', { name: /^Synth model: / })).toHaveAccessibleName('Synth model: Juno-106');
+    await near(walk, one, 'lane-model-knobs', 40);
+  });
+  for (const name of ['Amp', 'Arp']) {
+    await attempt(walk, `lane-tab-${name.toLowerCase()}`, async () => {
+      await page.locator('.synth-controls-panel').getByRole('tab', { name, exact: true }).click();
+      await near(walk, page.locator('.synth-controls-panel'), `lane-tab-${name.toLowerCase()}`, 20);
+    });
+  }
+  await attempt(walk, 'back to the notes level', () => level(page, 'Notes'));
+  await attempt(walk, 'song-mode-playing', async () => {
+    await page.getByRole('button', { name: 'Song', exact: true }).click();
+    await page.getByRole('button', { name: /Play All/ }).click();
+    await page.waitForTimeout(1200);
+    await shot(walk, 'song-mode-playing');
+    await page.getByRole('button', { name: /Stop All/ }).click();
+  });
+  // Widths between a phone and the desktop rack's least, and wider than any taken before.
+  if (info.project.name === 'chromium') {
+    for (const [width, height] of [[900, 900], [1600, 1000]]) {
+      await attempt(walk, `rack-width-${width}`, async () => {
+        await page.setViewportSize({ width, height });
+        await page.waitForTimeout(300);
+        await shot(walk, `rack-width-${width}`);
+      });
+    }
+  }
+  finish(walk);
+});
