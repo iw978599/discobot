@@ -2,7 +2,7 @@ import { DrumCore, type DrumRecordings, type DrumSample, SynthCore, type SynthSa
 import type { Automation, DrumState, EffectsLoopState, FxSendLevels, Pattern, Scene, SequencerStep, SynthParameters, TimeSignature } from '../types';
 import { type BarTime, barSteps, barTimes, wholeNotes } from './patternLength';
 import { sceneDrumState } from './songPlayback';
-import { DRUM_INSTRUMENTS } from './drumKits';
+import { drumRowsOf } from './drumKits';
 import { expandStepNotes } from './noteScheduling';
 import { SEND_PARAMS, automationChange, stepSends, stepVoiceParams } from './automation';
 import { delaySeconds } from './delayTime';
@@ -12,7 +12,7 @@ import { expandDrumStep, seededRandom, swingLate } from './drumScheduling';
 import { swingSteps, type SwingGrid } from './grooves';
 import { createZip } from '../utils/zip';
 import { MASTER_LEVEL, SEND_GLIDE, chorusSweep, createWow, delayColorHz, configureLimiter, createAuxEffect, createChorus, createBuiltReverb, createMasterEq, driveCurve, eqGains, reverbImpulse, reverbLevel, safetyCurve, scheduleDuck } from '../hooks/browserAudio';
-import type { DrumInstrument, DrumSettings } from '../types';
+import type { DrumRow, DrumSettings } from '../types';
 
 export interface ExportArrangement {
   tempo: number;
@@ -32,7 +32,7 @@ export interface ExportArrangement {
   // The time signature of the one bar that is rendered when there are no `bars`. Absent means 4/4.
   signature?: TimeSignature;
   // Decoded samples for the drum lanes that use one. A lane without an entry is synthesized.
-  drumSamples?: Partial<Record<DrumInstrument, DrumSample>>;
+  drumSamples?: Partial<Record<DrumRow, DrumSample>>;
   // The app's cymbal recordings, by kind. Without them the cymbal lane is synthesized.
   drumCymbals?: DrumRecordings;
   // Decoded recordings for the synth lanes set to the sample engine, by lane id. A lane without
@@ -155,7 +155,7 @@ const barSignatures = (arrangement: Pick<ExportArrangement, 'bars' | 'signature'
 // it (roadmap 17). None at all for an arrangement whose scenes have none.
 const barScales = (arrangement: Pick<ExportArrangement, 'bars' | 'tempo'>): number[] =>
   (arrangement.bars?.some(scene => scene.tempo) ? arrangement.bars.map(scene => (scene.tempo ? arrangement.tempo / scene.tempo : 1)) : []);
-interface DrumHit { instrument: DrumInstrument; time: number; velocity: number; settings: DrumSettings }
+interface DrumHit { instrument: DrumRow; time: number; velocity: number; settings: DrumSettings }
 
 // Every drum hit the export plays, with its start time. Worked out once so the drum render
 // and the kick ducking on the synth lanes agree on which chance steps played. `barDuration` is
@@ -169,9 +169,10 @@ export function drumHits(arrangement: DrumArrangement, bars = 1, barDuration = 2
     const steps = barSteps(signatures[bar]), start = times[bar].start, stepDuration = barDuration / 16 * (scales[bar] ?? 1);
     const state = arrangement.bars ? sceneDrumState(arrangement.bars[bar], arrangement.drumState) : arrangement.drumState;
     // Mutes and solos can differ from scene to scene.
-    const solo = DRUM_INSTRUMENTS.some(instrument => state[instrument].solo);
-    for (const instrument of DRUM_INSTRUMENTS) {
-      const track = state[instrument];
+    const rows = drumRowsOf(state);
+    const solo = rows.some(instrument => state[instrument]!.solo);
+    for (const instrument of rows) {
+      const track = state[instrument]!;
       if (track.muted || (solo && !track.solo)) continue;
       for (let step = 0; step < steps; step++) {
         for (const offset of expandDrumStep(track, step, random)) {
@@ -199,7 +200,7 @@ export function renderDrumMixes(
 ): { kit: Stereo } & Partial<Record<OwnMix, Stereo>> {
   const core = new DrumCore(sampleRate);
   core.setCymbals(arrangement.drumCymbals);
-  for (const [instrument, sample] of Object.entries(arrangement.drumSamples ?? {})) core.setSample(instrument as DrumInstrument, sample);
+  for (const [instrument, sample] of Object.entries(arrangement.drumSamples ?? {})) core.setSample(instrument as DrumRow, sample);
   const hits = drumHits(arrangement, bars, barDuration);
   for (const hit of hits) core.trigger({ ...hit, kitId: arrangement.drumKitId });
   const own = (name: OwnMix): Stereo | undefined =>
@@ -492,7 +493,7 @@ export function stemParts(arrangement: ExportArrangement): Array<{ only: StemPar
   const parts: Array<{ only: StemPart; name: string }> = arrangement.synths
     .filter(lane => lane.synthParams && lane.pattern?.steps.some(step => step.active && step.note))
     .map(lane => ({ only: lane.id, name: `synth-${lane.id}.wav` }));
-  if (DRUM_INSTRUMENTS.some(instrument => arrangement.drumState[instrument].steps.some(Boolean))) {
+  if (drumRowsOf(arrangement.drumState).some(instrument => arrangement.drumState[instrument]!.steps.some(Boolean))) {
     parts.push({ only: 'drums', name: 'drums.wav' });
   }
   (arrangement.guestTakes ?? []).forEach((take, guest) => {

@@ -1,5 +1,5 @@
 import { useRef, useEffect, useMemo } from 'react';
-import type { DrumInstrument, DrumSettings, DrumKitId, EffectsLoopState, FxSendLevels } from '../types';
+import type { DrumInstrument, DrumRow, DrumSettings, DrumKitId, EffectsLoopState, FxSendLevels } from '../types';
 import type { DrumRecordings, DrumSample } from '../../../engine/src/drums/DrumCore';
 import type { DrumWorkletMessage } from '@discobot/engine';
 import { audioEngine, type AudioEngine } from './browserAudio';
@@ -17,7 +17,7 @@ interface Player {
   loading: Promise<AudioWorkletNode> | null;
   handedTo: AudioNode | null;
 }
-type PlayerKey = 'kit' | DrumInstrument;
+type PlayerKey = 'kit' | DrumRow;
 
 // `engine` is the app's unless another is given (a test's, say).
 export function useDrumAudio(engine: AudioEngine = audioEngine) {
@@ -27,10 +27,10 @@ export function useDrumAudio(engine: AudioEngine = audioEngine) {
   const returnRef = useRef(1);
   const kitRef = useRef<DrumKitId>('clean-analog');
   const generationRef = useRef(0);
-  const samplesRef = useRef<Partial<Record<DrumInstrument, DrumSample>>>({});
+  const samplesRef = useRef<Partial<Record<DrumRow, DrumSample>>>({});
   const cymbalsRef = useRef<DrumRecordings>({});
   // The drums handed to a guest on their own: their hits go to a player of their own.
-  const ownPlayersRef = useRef(new Set<DrumInstrument>());
+  const ownPlayersRef = useRef(new Set<DrumRow>());
 
   // Everything below only reads refs, so one instance serves every render.
   const api = useMemo(() => {
@@ -55,7 +55,7 @@ export function useDrumAudio(engine: AudioEngine = audioEngine) {
         DRUM_SEND_MIXES.forEach((name, index) => node.connect(lane.taps[name]!, index + 1));
         send(node, { type: 'cymbals', cymbals: cymbalsRef.current });
         // Samples chosen before the node existed.
-        for (const [instrument, sample] of Object.entries(samplesRef.current)) send(node, { type: 'sample', instrument: instrument as DrumInstrument, sample });
+        for (const [instrument, sample] of Object.entries(samplesRef.current)) send(node, { type: 'sample', instrument: instrument as DrumRow, sample });
         if (player.handedTo) lane.handOver(player.handedTo);
         player.lane = lane;
         player.node = node;
@@ -78,7 +78,7 @@ export function useDrumAudio(engine: AudioEngine = audioEngine) {
       nodes().forEach(node => send(node, { type: 'cymbals', cymbals }));
     }
     // A lane's sample, or null for its synthesized voice. Each worklet gets its own copy.
-    function setSample(instrument: DrumInstrument, sample: DrumSample | null) {
+    function setSample(instrument: DrumRow, sample: DrumSample | null) {
       if (sample) samplesRef.current[instrument] = sample; else delete samplesRef.current[instrument];
       nodes().forEach(node => send(node, { type: 'sample', instrument, sample }));
     }
@@ -94,7 +94,7 @@ export function useDrumAudio(engine: AudioEngine = audioEngine) {
       player.lane?.handOver(tap);
     }
 
-    async function playDrumHit(instrument: DrumInstrument, settings: DrumSettings, mutedOrVelocity: boolean | number = false, scheduledTime?: number) {
+    async function playDrumHit(instrument: DrumRow, settings: DrumSettings, mutedOrVelocity: boolean | number = false, scheduledTime?: number) {
       if (mutedOrVelocity === true) return;
       const generation = generationRef.current;
       try {

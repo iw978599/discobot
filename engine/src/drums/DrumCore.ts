@@ -1,9 +1,9 @@
 import { Noise, Svf, finiteClamp as clamp, oscillator, svfCoefficient } from '../dsp';
-import { PERC_CHOICES } from '../types';
-import type { DrumInstrument, DrumSettings } from '../types';
+import { EXTRA_DRUMS, PERC_CHOICES } from '../types';
+import type { DrumInstrument, DrumRow, DrumSettings } from '../types';
 
 export interface DrumHitMessage {
-  instrument: DrumInstrument;
+  instrument: DrumRow;
   settings: DrumSettings;
   velocity?: number;
   kitId?: string;
@@ -34,7 +34,11 @@ const KIT_CHARACTERS: Record<string, KitCharacter> = {
 
 // The six detuned square oscillators the TR-808 uses for its hats and cymbal.
 const METAL_HZ = [205.3, 304.4, 369.6, 522.7, 540, 800];
-const INSTRUMENTS: DrumInstrument[] = ['kick', 'snare', 'openHH', 'closedHH', 'ride', 'crash', 'snare2', 'clap'];
+// The eight drums, then the rows that can be added after them, which play samples only. The added
+// rows come last, so each drum keeps its own noise and its place in the mix as before.
+const DRUMS: DrumInstrument[] = ['kick', 'snare', 'openHH', 'closedHH', 'ride', 'crash', 'snare2', 'clap'];
+const INSTRUMENTS: DrumRow[] = [...DRUMS, ...EXTRA_DRUMS];
+const isDrum = (row: DrumRow): row is DrumInstrument => (DRUMS as DrumRow[]).includes(row);
 // The kit whose drums are all recordings (the cymbal lane's always are).
 const RECORDED_KIT = 'recorded';
 // Brings every voice to a similar peak before the kit's drive, so drive colours all drums
@@ -53,7 +57,7 @@ export type DrumRecordings = Partial<Record<string, DrumSample>>;
 export type DrumSendMix = ArrayLike<Float32Array>;
 
 interface DrumVoice {
-  instrument: DrumInstrument;
+  instrument: DrumRow;
   active: boolean;
   startFrame: number;
   age: number;
@@ -106,10 +110,10 @@ interface DrumVoice {
 // saturation, so simultaneous hits keep the levels their volume and velocity ask for.
 export class DrumCore {
   frame = 0;
-  private voices: Record<DrumInstrument, DrumVoice>;
+  private voices: Record<DrumRow, DrumVoice>;
   private pending: Array<DrumHitMessage & { frame: number }> = [];
   private humanizer = new Noise(0x51ed270b);
-  private samples: Partial<Record<DrumInstrument, DrumSample>> = {};
+  private samples: Partial<Record<DrumRow, DrumSample>> = {};
   private cymbals: Record<string, DrumSample> = {};
   private readonly fadeLength: number;
   private readonly attackLength: number;
@@ -128,7 +132,7 @@ export class DrumCore {
       // Each drum has its own noise source, so one hit never changes how another sounds.
       noise: new Noise(0x1f123bb5 + index * 0x9e3779b1),
       sample: null, position: 0, advance: 1, shaped: false, fade: 1, fadeLevel: 1, toned: false,
-    }])) as Record<DrumInstrument, DrumVoice>;
+    }])) as Record<DrumRow, DrumVoice>;
   }
 
   // The app's own recordings: one for each kind of cymbal, and one for each drum of the recorded
@@ -142,7 +146,7 @@ export class DrumCore {
 
   // Gives a lane a sample to play, or with null hands it back to its synthesized voice.
   // Takes effect from the next hit.
-  setSample(instrument: DrumInstrument, sample: DrumSample | null): void {
+  setSample(instrument: DrumRow, sample: DrumSample | null): void {
     if (sample && sample.data.length > 1 && sample.rate > 0) this.samples[instrument] = sample;
     else delete this.samples[instrument];
   }
@@ -210,7 +214,7 @@ export class DrumCore {
     voice.age = 0;
     voice.machine = character.machine;
     voice.ride = message.instrument === 'crash' && settings.cymbalType === 'ride';
-    voice.trim = VOICE_TRIM[message.instrument];
+    voice.trim = isDrum(message.instrument) ? VOICE_TRIM[message.instrument] : 1;
     voice.gain = volume * velocity * HIT_LEVEL;
     const angle = (clamp(settings.pan ?? 0, -1, 1) + 1) * Math.PI / 4;
     voice.panL = Math.cos(angle);
@@ -235,7 +239,9 @@ export class DrumCore {
     // chosen, or, in the recorded kit, the app's recording of that drum.
     const imported = this.samples[message.instrument] ?? null;
     const perc = settings.percType && PERC_CHOICES[message.instrument]?.includes(settings.percType) ? `perc-${settings.percType}` : '';
-    const recordingName = perc && this.cymbals[perc] ? perc : message.instrument === 'crash' ? settings.cymbalType ?? 'crash' : message.kitId === RECORDED_KIT ? `kit-${message.instrument}` : '';
+    // An added row's recording, without an imported sample, is the percussion or the cymbal its settings name.
+    const extraRecording = !isDrum(message.instrument) && settings.cymbalType ? settings.cymbalType : '';
+    const recordingName = perc && this.cymbals[perc] ? perc : extraRecording || (message.instrument === 'crash' ? settings.cymbalType ?? 'crash' : message.kitId === RECORDED_KIT && isDrum(message.instrument) ? `kit-${message.instrument}` : '');
     const cymbal = !imported && recordingName ? this.cymbals[recordingName] ?? null : null;
     voice.sample = imported ?? cymbal;
     voice.shaped = cymbal !== null;
@@ -262,6 +268,8 @@ export class DrumCore {
       voice.level = 1;
       return;
     }
+    // An added row has no voice of its own: with nothing to play it is silent.
+    if (!isDrum(message.instrument)) { voice.active = false; return; }
 
     switch (message.instrument) {
       case 'kick': {

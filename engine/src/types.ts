@@ -358,6 +358,12 @@ export interface Pattern {
 export type Automation = Record<string, Array<number | null>>;
 
 export type DrumInstrument = 'kick' | 'snare' | 'openHH' | 'closedHH' | 'ride' | 'crash' | 'snare2' | 'clap';
+// A row added to the drum machine after the eight drums (docs/DRUM_ROWS_PLAN.md): it plays a
+// sample only, an imported one or one of the app's recordings, and is stored only once added.
+export type ExtraDrum = 'extra1' | 'extra2' | 'extra3' | 'extra4' | 'extra5' | 'extra6' | 'extra7' | 'extra8';
+export const EXTRA_DRUMS: ExtraDrum[] = ['extra1', 'extra2', 'extra3', 'extra4', 'extra5', 'extra6', 'extra7', 'extra8'];
+// A row of the drum machine of either kind.
+export type DrumRow = DrumInstrument | ExtraDrum;
 export type DrumKitId = 'clean-analog' | 'punchy-modern' | 'lofi-dirty' | 'tr-808' | 'tr-909' | 'linndrum' | 'oberheim-dmx' | 'tr-707' | 'recorded';
 export type DrumKitModelVariant = 'analog' | 'modern' | 'dirty';
 
@@ -366,8 +372,10 @@ export const CYMBAL_TYPES: CymbalType[] = ['crash', 'ride', 'bell', 'splash'];
 
 // Other percussion a lane can be instead of its own drum, in any kit. A choice is stored only when it is not the lane's own drum.
 export type PercType = 'tambourine' | 'shaker' | 'cowbell' | 'sidestick' | 'conga' | 'bongo';
-export const PERC_CHOICES: Partial<Record<DrumInstrument, PercType[]>> = {
+// An added row may be any of them.
+export const PERC_CHOICES: Partial<Record<DrumRow, PercType[]>> = {
   clap: ['tambourine', 'shaker', 'cowbell'], snare: ['sidestick'], snare2: ['conga'], ride: ['bongo'],
+  ...Object.fromEntries(EXTRA_DRUMS.map(row => [row, ['tambourine', 'shaker', 'cowbell', 'sidestick', 'conga', 'bongo']])),
 };
 
 export interface DrumSettings {
@@ -416,7 +424,8 @@ export interface DrumTrack {
   sampleId?: string;
 }
 
-export type DrumState = Record<DrumInstrument, DrumTrack>;
+// The eight drums always; an added row only once it has been added.
+export type DrumState = Record<DrumInstrument, DrumTrack> & Partial<Record<ExtraDrum, DrumTrack>>;
 
 // The step data of one drum lane, without the kit's sound settings.
 export interface DrumLanePattern {
@@ -448,7 +457,8 @@ export interface Scene {
   tempo?: number;
   // steps per synth lane id; a missing lane is silent in this scene
   lanes: Record<number, SequencerStep[]>;
-  drums: Record<DrumInstrument, DrumLanePattern>;
+  // an added row is absent in a scene saved before it was added, and silent there
+  drums: Record<DrumInstrument, DrumLanePattern> & Partial<Record<ExtraDrum, DrumLanePattern>>;
   // bars per synth lane id, for lanes longer than one bar
   laneBars?: Record<number, number>;
   // automation per synth lane id, for lanes that have any
@@ -465,7 +475,7 @@ export interface Scene {
 export interface MuteFlags { muted: boolean; solo: boolean }
 export interface SceneMutes {
   lanes?: Record<number, MuteFlags>;
-  drums?: Partial<Record<DrumInstrument, MuteFlags>>;
+  drums?: Partial<Record<DrumRow, MuteFlags>>;
 }
 
 // The order scenes play in when the transport is in song mode.

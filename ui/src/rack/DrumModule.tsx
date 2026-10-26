@@ -15,18 +15,20 @@ import { BAR_CHOICES, barSteps, drumBars, onBeat, stepsAcross } from '../service
 import CopyToScene from './CopyToScene';
 import CopyBar from './CopyBar';
 import type { Studio } from '../studio/useStudio';
-import { CYMBAL_TYPES, PERC_CHOICES } from '@discobot/engine';
-import { DRUM_NAMES, DRUM_ROWS, DRUM_SETTINGS_DEFAULT } from '../services/drumKits';
+import { CYMBAL_TYPES, EXTRA_DRUMS, PERC_CHOICES } from '@discobot/engine';
+import { DRUM_NAMES, DRUM_ROWS, DRUM_SETTINGS_DEFAULT, EXTRA_ROW_SETTINGS } from '../services/drumKits';
 import { DRUM_FX_DEFAULT } from '../services/effectSettings';
-import { DrumInstrument, DrumKitId, DrumState, CymbalType, PercType } from '../types';
+import { DrumInstrument, DrumKitId, DrumRow, DrumTrack, CymbalType, ExtraDrum, PercType } from '../types';
 import DrumKnob from '../components/DrumKnob';
 import Menu from './Menu';
 import { SWING_GROUPS, currentTemplate } from '../services/grooves';
 import { euclid, euclidCounts } from '../services/euclid';
 
-const INSTRUMENTS = DRUM_ROWS;
-
-const LABELS = DRUM_NAMES;
+// Each row's name for its controls: a drum's own, and an added row its number on the grid, which
+// stays when the row plays a recording that the grid shows instead (docs/DRUM_ROWS_PLAN.md).
+const LABELS = { ...DRUM_NAMES, ...Object.fromEntries(EXTRA_DRUMS.map((row, index) => [row, `Row ${9 + index}`])) } as Record<DrumRow, string>;
+const isAdded = (row: DrumRow): row is ExtraDrum => (EXTRA_DRUMS as DrumRow[]).includes(row);
+type Rows = Record<DrumRow, DrumTrack>;
 
 // The cymbals the Cymbal lane can be. A crash is the lane's own name; the others show theirs.
 const PERC_NAMES: Record<PercType, string> = { tambourine: 'Tambourine', shaker: 'Shaker', cowbell: 'Cowbell', sidestick: 'Cross-stick', conga: 'Conga', bongo: 'Bongo' };
@@ -82,11 +84,17 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
   // The kit or a drum handed to a guest says so: it is heard through the guest, not the mix.
   const handed = useHandOvers();
   const {
-    drumState, drumAudio, drumKits, selectedDrumKitId, drumFx, drumMasterVolume, drumSwing,
+    drumState: kit, drumAudio, drumKits, selectedDrumKitId, drumFx, drumMasterVolume, drumSwing,
     handleDrumStepToggle: onStepToggle, handleDrumStepVelocity: onStepVelocity, handleDrumStepDetail: onStepDetail,
     handleDrumSettingsChange: onSettings, handleDrumMixChange: onMix, handleDrumFxChange: onFx,
   } = studio;
-  const [selected, setSelected] = useState<DrumInstrument>('kick');
+  // Every row is looked up only by a row the grid lists, so the kit is read as having each of them.
+  const drumState = kit as Rows;
+  // The eight in their order on the grid, then the added rows.
+  const INSTRUMENTS: DrumRow[] = [...DRUM_ROWS, ...EXTRA_DRUMS.filter(row => drumState[row])];
+  const [chosen, setSelected] = useState<DrumRow>('kick');
+  // A row removed (here, by undo or by someone else) leaves the kick chosen.
+  const selected: DrumRow = drumState[chosen] ? chosen : 'kick';
   const [selectedStep, setSelectedStep] = useState(0);
   const folded = useFolded('drums');
   const [showMore, setShowMore] = useState(false);
@@ -107,7 +115,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
   const shownBar = Math.min(bars - 1, follow && playingBar !== null ? playingBar : viewBar);
   const base = shownBar * perBar;
   // The grid's steps are one stop for the Tab key, on the step the keyboard was last on.
-  const [gridCursor, setGridCursor] = useState<{ instrument: DrumInstrument; step: number } | null>(null);
+  const [gridCursor, setGridCursor] = useState<{ instrument: DrumRow; step: number } | null>(null);
   const gridStop = gridCursor && gridCursor.step >= base && gridCursor.step < base + perBar ? gridCursor : { instrument: selected, step: selectedStep >= base && selectedStep < base + perBar ? selectedStep : base };
   // A pattern made shorter can leave the selected step past its end.
   useEffect(() => { if (selectedStep >= bars * perBar) setSelectedStep(0); }, [bars, perBar, selectedStep]);
@@ -119,14 +127,16 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
   const laneSamples = INSTRUMENTS.map(instrument => drumState[instrument].sampleId ?? '').join('|');
   // What a lane is shown as: the sample it plays, where it plays one that is on this device; the
   // kind of cymbal; or the drum. Its controls keep the drum's name, as a screen reader and the tests know them.
-  const shownName = (instrument: DrumInstrument): string => {
+  const shownName = (instrument: DrumRow): string => {
     const track = drumState[instrument], sample = track.sampleId ? samples.find(entry => entry.id === track.sampleId) : undefined;
     if (sample) return sampleTitle(sample.name);
+    // An added row is the recording it plays, or its number while it plays nothing.
+    if (isAdded(instrument)) return track.settings.percType ? PERC_NAMES[track.settings.percType] : track.settings.cymbalType ? CYMBAL_NAMES[track.settings.cymbalType] : LABELS[instrument];
     return instrument === 'crash' ? cymbalName(track.settings.cymbalType) : LABELS[instrument];
   };
   useEffect(() => { void refreshSamples(); }, [laneSamples, studio.sampleStoreVersion]);
   // Several files picked at once, waiting in the kit import dialog to be given lanes.
-  const [kitFiles, setKitFiles] = useState<{ files: File[]; picked: number; initial?: Partial<Record<DrumInstrument, number>> } | null>(null);
+  const [kitFiles, setKitFiles] = useState<{ files: File[]; picked: number; initial?: Partial<Record<DrumRow, number>> } | null>(null);
   const kitFileRef = useRef<HTMLInputElement>(null);
   // A drum kit from a SoundFont: which of its presets first, when it has several, then the same
   // dialog as Import Kit, with each lane on the drum General MIDI has for it (`soundFontKit.ts`).
@@ -140,17 +150,19 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
 
   const anySolo = INSTRUMENTS.some((instrument) => Boolean(drumState[instrument].solo));
   const allMuted = INSTRUMENTS.every((instrument) => Boolean(drumState[instrument].muted));
-  const audible = (state: DrumState, instrument: DrumInstrument) =>
+  const audible = (state: Rows, instrument: DrumRow) =>
     !state[instrument].muted && (!INSTRUMENTS.some((other) => state[other].solo) || state[instrument].solo);
-  const preview = (instrument: DrumInstrument, state: DrumState = drumState, velocity?: number) => {
+  const preview = (instrument: DrumRow, state: Rows = drumState, velocity?: number) => {
     if (audible(state, instrument)) void drumAudio.playDrumHit(instrument, state[instrument].settings, velocity ?? false);
   };
 
   const track = drumState[selected];
-  const extra = selectedDrumKitId === 'recorded' && !track.sampleId ? RECORDING_EXTRA : EXTRA[selected];
+  // An added row is always a recording, as every drum of the recorded kit is.
+  const extra = isAdded(selected) || (selectedDrumKitId === 'recorded' && !track.sampleId) ? RECORDING_EXTRA : EXTRA[selected];
+  const rowDefaults = isAdded(selected) ? EXTRA_ROW_SETTINGS : DRUM_SETTINGS_DEFAULT[selected];
   const stepLabel = `${LABELS[selected]} step ${selectedStep + 1}`;
 
-  const handleStepClick = (instrument: DrumInstrument, step: number, shiftKey: boolean) => {
+  const handleStepClick = (instrument: DrumRow, step: number, shiftKey: boolean) => {
     setSelected(instrument);
     setSelectedStep(step);
     // Editing a bar holds the view on it.
@@ -187,7 +199,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
 
   const selectKit = async (kitId: DrumKitId) => {
     const next = await studio.handleDrumKitChange(kitId, true);
-    preview(selected, next || drumState);
+    preview(selected, (next as Rows | undefined) || drumState);
   };
 
   return (
@@ -313,6 +325,17 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
               </div>
             );
           })}
+          {INSTRUMENTS.length < DRUM_ROWS.length + EXTRA_DRUMS.length && (
+            <div className="drum-grid-row drum-add-row">
+              <button
+                className="rack-btn"
+                title="Add a row for another sound: a recording of percussion or a cymbal, or an imported sample. Up to eight more"
+                onClick={() => { const row = studio.handleAddDrumRow(); if (row) setSelected(row); }}
+              >
+                + Row
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="rack-knobs">
@@ -365,7 +388,37 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
             </label>
           )}
         </div>
-        {PERC_CHOICES[selected] && (
+        {isAdded(selected) && (
+          <label className="drum-sound" title="Which recording this row plays: any of the percussion or the cymbals, each a recording of a real one. An imported sample, chosen beside it, comes first">
+            Voice
+            <select
+              aria-label={`${LABELS[selected]} voice`}
+              value={track.settings.percType ?? (track.settings.cymbalType ? `cymbal:${track.settings.cymbalType}` : 'none')}
+              onChange={(event) => {
+                const value = event.target.value;
+                // What is not chosen is sent as a word the checks do not keep, which takes it off: an
+                // operation's settings cross as JSON, which leaves out anything undefined.
+                onSettings(selected, value.startsWith('cymbal:')
+                  ? { percType: 'none' as PercType, cymbalType: value.slice(7) as CymbalType }
+                  : { percType: value as PercType, cymbalType: 'none' as CymbalType });
+              }}
+            >
+              <option value="none">Nothing</option>
+              <optgroup label="Percussion">
+                {PERC_CHOICES[selected]!.map(type => <option key={type} value={type}>{PERC_NAMES[type]}</option>)}
+              </optgroup>
+              <optgroup label="Cymbals">
+                {CYMBAL_TYPES.map(type => <option key={type} value={`cymbal:${type}`}>{CYMBAL_NAMES[type]}</option>)}
+              </optgroup>
+            </select>
+          </label>
+        )}
+        {isAdded(selected) && (
+          <button className="rack-btn danger" title="Take this row out of the drums and every scene. Undo brings it back" onClick={() => { studio.handleRemoveDrumRow(selected); setSelected('kick'); }}>
+            Remove Row
+          </button>
+        )}
+        {!isAdded(selected) && PERC_CHOICES[selected] && (
           <label className="drum-sound" title="Which drum or percussion instrument this lane plays. Each is a recording of a real one, the same in every kit">
             Voice
             <select
@@ -555,7 +608,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
             label="Volume"
             ariaLabel={`${LABELS[selected]} volume`}
             value={track.settings.volume}
-            defaultValue={DRUM_SETTINGS_DEFAULT[selected].volume}
+            defaultValue={rowDefaults.volume}
             displayValue={percentText(track.settings.volume)}
             parseInputValue={parsePercent}
             onChange={(value) => onSettings(selected, { volume: value })}
@@ -565,7 +618,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
             label="Tone"
             ariaLabel={`${LABELS[selected]} tone`}
             value={track.settings.tone}
-            defaultValue={DRUM_SETTINGS_DEFAULT[selected].tone}
+            defaultValue={rowDefaults.tone}
             displayValue={track.settings.tone.toFixed(2)}
             parseInputValue={parseNumber}
             onChange={(value) => onSettings(selected, { tone: value })}
@@ -575,7 +628,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
             label="Tune"
             ariaLabel={`${LABELS[selected]} tune`}
             value={track.settings.tune ?? 0}
-            defaultValue={DRUM_SETTINGS_DEFAULT[selected].tune}
+            defaultValue={rowDefaults.tune}
             min={-1}
             max={1}
             displayValue={`${((track.settings.tune ?? 0) * 12).toFixed(1)} st`}
@@ -587,7 +640,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
             label={extra.knob}
             ariaLabel={`${LABELS[selected]} ${extra.knob}`}
             value={track.settings.extra}
-            defaultValue={DRUM_SETTINGS_DEFAULT[selected].extra}
+            defaultValue={rowDefaults.extra}
             displayValue={extra.display(track.settings.extra)}
             parseInputValue={(input) => { const n = parseNumber(input); return n === null ? null : extra.parse(n); }}
             onChange={(value) => onSettings(selected, { extra: value })}
@@ -599,7 +652,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
                 label="Human"
                 ariaLabel={`${LABELS[selected]} humanize`}
                 value={track.settings.humanize ?? 0.35}
-                defaultValue={DRUM_SETTINGS_DEFAULT[selected].humanize}
+                defaultValue={rowDefaults.humanize}
                 displayValue={percentText(track.settings.humanize ?? 0.35)}
                 parseInputValue={parsePercent}
                 onChange={(value) => onSettings(selected, { humanize: value })}
@@ -645,7 +698,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
           files={kitFiles.files}
           picked={kitFiles.picked}
           initial={kitFiles.initial}
-          lanes={INSTRUMENTS.map(instrument => ({ id: instrument, label: LABELS[instrument] }))}
+          lanes={DRUM_ROWS.map(instrument => ({ id: instrument, label: LABELS[instrument] }))}
           onApply={(lane, sampleId) => studio.handleDrumSampleChange(lane, sampleId)}
           onClose={() => { setKitFiles(null); void refreshSamples(); }}
         />

@@ -3,14 +3,15 @@
 // emits, saves or reads the clock itself, which is `apply`'s work in localService.ts.
 import { MAX_SCENES, clone, merge, number, sanitizeDrums, sanitizeEffects, sanitizeModelParams, sanitizePattern, sanitizeScenes, sanitizeSends, sanitizeSong, sanitizeSynthParams, sceneTempoOf } from './projectSanitization';
 import { MAX_GUESTS, guestUrl, patchGuest, sanitizeGuests } from './guests';
-import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
+import { DRUM_INSTRUMENTS, DRUM_KITS, EXTRA_ROW_SETTINGS, drumRowsOf } from './drumKits';
+import { EXTRA_DRUMS } from '@discobot/engine';
 import { LANE_IDS, MAX_LANES, laneOrderOf, storedLaneName, storedPresetName } from './lanes';
 import { BAR_CHOICES, TIME_SIGNATURES, barSteps, barTargets, clampLengths, copyBar, drumBars, laneBars, layAlong, resizeBars, resizeEachBar, stepsPerBar, storedSignature } from './patternLength';
 import { emptySteps } from './songPlayback';
 import { layAutomationAlong, resizeAutomationEachBar } from './automation';
 import { nextSceneColor, sceneColor } from './sceneColors';
 import { normalizeSynthModelId } from '../synthModels';
-import type { DrumState, Pattern, Scene, TimeSignature } from '../types';
+import type { DrumLanePattern, DrumState, DrumTrack, Pattern, Scene, TimeSignature } from '../types';
 import type { ProjectDefaults, ProjectLane, ProjectState } from './localService';
 import type { Operation, OpResult, OpType, Outcome, Rejected } from './projectOps';
 import { MAX_SWING, swingGridOf } from './grooves';
@@ -62,7 +63,7 @@ const DRUM_DETAILS = [['stepVelocities', 1], ['stepProbabilities', 1], ['stepRat
 // Only a lane's own number finds it; an operation can name anything.
 const laneOf = (state: ProjectState, synthId: unknown) => state.synths.find(s => s.synthId === synthId);
 
-type DrumLane = DrumState[keyof DrumState];
+type DrumLane = DrumTrack;
 // The six edits to one drum lane: find the lane, change it, put the whole drum state through the
 // checks, and send all of it. Only a lane the drum state has of its own is found: an instrument
 // named after a property every object has (`constructor`, `toString`, `__proto__`) used to find
@@ -129,10 +130,10 @@ export const captureScene = (state: ProjectState, id: string, name: string, colo
   ...(state.guests?.length ? { guestMix: Object.fromEntries(state.guests.map(guest => [guest.id, { volume: guest.volume, muted: guest.muted }])) } : {}),
   mutes: {
     lanes: Object.fromEntries(state.synths.map(synth => [synth.synthId, { muted: synth.muted, solo: synth.solo }])),
-    drums: Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => [instrument, { muted: state.drumState[instrument].muted, solo: state.drumState[instrument].solo }])),
+    drums: Object.fromEntries(drumRowsOf(state.drumState).map(instrument => [instrument, { muted: state.drumState[instrument]!.muted, solo: state.drumState[instrument]!.solo }])),
   },
-  drums: Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => {
-    const { steps, stepVelocities, stepProbabilities, stepRatchets } = state.drumState[instrument];
+  drums: Object.fromEntries(drumRowsOf(state.drumState).map(instrument => {
+    const { steps, stepVelocities, stepProbabilities, stepRatchets } = state.drumState[instrument]!;
     return [instrument, clone({
       steps, ...(stepVelocities ? { stepVelocities } : {}), ...(stepProbabilities ? { stepProbabilities } : {}),
       ...(stepRatchets ? { stepRatchets } : {}),
@@ -180,8 +181,9 @@ const applyScene = (state: ProjectState, scene: Scene) => {
       ...(scene.guestMix?.[guest.id] ?? {}),
     }));
   }
-  for (const instrument of DRUM_INSTRUMENTS) {
-    const track = state.drumState[instrument], pattern = scene.drums[instrument];
+  for (const instrument of drumRowsOf(state.drumState)) {
+    // A scene saved before a row was added has none of its steps: there it is silent.
+    const track = state.drumState[instrument]!, pattern: DrumLanePattern = scene.drums[instrument] ?? { steps: Array(scene.drums.kick.steps.length).fill(false) };
     const flags = scene.mutes?.drums?.[instrument];
     if (flags) { track.muted = flags.muted; track.solo = flags.solo; }
     track.steps = clone(pattern.steps);
@@ -211,8 +213,8 @@ export const reducers: Reducers = {
     const bars = BAR_CHOICES.find(choice => choice === op.bars);
     if (!bars) return refuse(400, 'A drum pattern is 1, 2, 4 or 8 bars long');
     const signature = openSignature(state), perBar = barSteps(signature);
-    for (const instrument of DRUM_INSTRUMENTS) {
-      const lane = state.drumState[instrument];
+    for (const instrument of drumRowsOf(state.drumState)) {
+      const lane = state.drumState[instrument]!;
       lane.steps = resizeBars(lane.steps, perBar, bars, () => false);
       for (const [key, blank] of DRUM_DETAILS) if (lane[key]) lane[key] = resizeBars(lane[key]!, perBar, bars, () => blank);
     }
@@ -224,8 +226,8 @@ export const reducers: Reducers = {
     const signature = openSignature(state), perBar = barSteps(signature);
     const to = barTargets(drumBars(state.drumState, signature), op.from, op.to);
     if (!to) return refuse(400, 'There is no such bar to copy');
-    for (const instrument of DRUM_INSTRUMENTS) {
-      const lane = state.drumState[instrument];
+    for (const instrument of drumRowsOf(state.drumState)) {
+      const lane = state.drumState[instrument]!;
       lane.steps = copyBar(lane.steps, perBar, op.from, to);
       for (const [key] of DRUM_DETAILS) if (lane[key]) lane[key] = copyBar(lane[key]!, perBar, op.from, to);
     }
@@ -258,10 +260,33 @@ export const reducers: Reducers = {
     if (typeof op.solo === 'boolean') track.solo = op.solo;
   }),
   // The grid goes back to one empty bar, of the open scene's length.
+  // An added row keeps its sound, the reason it was added, and loses its steps like the rest.
   'drum.reset': ({ state, defaults }) => {
+    const added = EXTRA_DRUMS.flatMap(row => { const track = state.drumState[row]; return track ? [[row, track] as const] : []; });
     state.drumState = clone(defaults.drumState);
-    for (const instrument of DRUM_INSTRUMENTS) state.drumState[instrument].steps = resizeEachBar(state.drumState[instrument].steps, barSteps(), barSteps(openSignature(state)), () => false);
+    for (const [row, track] of added) state.drumState[row] = { settings: track.settings, muted: false, solo: false, ...(track.sampleId ? { sampleId: track.sampleId } : {}), steps: Array(barSteps()).fill(false) };
+    for (const instrument of drumRowsOf(state.drumState)) state.drumState[instrument]!.steps = resizeEachBar(state.drumState[instrument]!.steps, barSteps(), barSteps(openSignature(state)), () => false);
     return update('drumFullState', { drumState: state.drumState });
+  },
+  // A row after the eight (docs/DRUM_ROWS_PLAN.md): empty, on its own settings, in every scene,
+  // and silent until it is given something to play. Removing it takes it out of every scene.
+  'drum.addRow': ({ state }, op) => {
+    if (!EXTRA_DRUMS.includes(op.row)) return refuse(400, 'A kit has eight rows to add at most');
+    if (state.drumState[op.row]) return refuse(409, 'That row is there already');
+    commitScene(state);
+    state.drumState[op.row] = { steps: Array(state.drumState.kick.steps.length).fill(false), settings: { ...EXTRA_ROW_SETTINGS }, muted: false, solo: false };
+    for (const scene of state.scenes) scene.drums[op.row] = { steps: Array(scene.drums.kick.steps.length).fill(false) };
+    return sceneChanged(state);
+  },
+  'drum.removeRow': ({ state }, op) => {
+    if (!EXTRA_DRUMS.includes(op.row) || !state.drumState[op.row]) return refuse(404, 'There is no such row');
+    commitScene(state);
+    delete state.drumState[op.row];
+    for (const scene of state.scenes) {
+      delete scene.drums[op.row];
+      if (scene.mutes?.drums) delete scene.mutes.drums[op.row];
+    }
+    return sceneChanged(state);
   },
   'drum.sample': (ctx, op) => drumLaneEdit(ctx, op.instrument, track => {
     if (typeof op.sampleId === 'string') track.sampleId = op.sampleId; else delete track.sampleId;
@@ -542,7 +567,7 @@ export const reducers: Reducers = {
       for (const id of Object.keys(scene.lanes)) scene.lanes[Number(id)] = emptySteps(scene.lanes[Number(id)].length);
       delete scene.laneAutomation;
       // An empty scene keeps the lengths of the one it was made from.
-      for (const instrument of DRUM_INSTRUMENTS) scene.drums[instrument] = { steps: Array(scene.drums[instrument].steps.length).fill(false) };
+      for (const instrument of drumRowsOf(scene.drums)) scene.drums[instrument] = { steps: Array(scene.drums[instrument]!.steps.length).fill(false) };
     }
     const index = state.scenes.findIndex(entry => entry.id === state.currentSceneId);
     state.scenes.splice(index + 1, 0, scene);
@@ -607,7 +632,7 @@ export const reducers: Reducers = {
       if (automation) to.laneAutomation = { ...to.laneAutomation, [op.synthId]: structuredClone(automation) };
       else if (to.laneAutomation) { delete to.laneAutomation[op.synthId]; if (Object.keys(to.laneAutomation).length === 0) delete to.laneAutomation; }
     } else if (typeof op.drum === 'string' && from.drums[op.drum] && to.drums[op.drum]) {
-      const row = from.drums[op.drum], length = to.drums[op.drum].steps.length;
+      const row = from.drums[op.drum]!, length = to.drums[op.drum]!.steps.length;
       const along = <T,>(values: T[] | undefined) => (values?.length ? Array.from({ length }, (_, step) => values[step % values.length]) : undefined);
       const velocities = along(row.stepVelocities), probabilities = along(row.stepProbabilities), ratchets = along(row.stepRatchets);
       to.drums[op.drum] = {
@@ -662,8 +687,8 @@ export const reducers: Reducers = {
       const automation = resizeAutomationEachBar(synth.pattern.automation, perBar, perBar > from ? to * 2 : to);
       if (automation) synth.pattern.automation = automation; else delete synth.pattern.automation;
     }
-    for (const instrument of DRUM_INSTRUMENTS) {
-      const lane = state.drumState[instrument];
+    for (const instrument of drumRowsOf(state.drumState)) {
+      const lane = state.drumState[instrument]!;
       lane.steps = resizeEachBar(lane.steps, from, to, () => false);
       for (const [key, blank] of DRUM_DETAILS) if (lane[key]) lane[key] = resizeEachBar(lane[key]!, from, to, () => blank);
     }

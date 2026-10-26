@@ -657,6 +657,10 @@ const sceneMove = sceneChange('scene.move', (service, body) => service.moveScene
 const sceneMoveRefused = sceneRefused('scene.move', (service, body) => service.moveScene(body.sceneId, body.to));
 const signature = sceneChange('scene.signature', (service, body) => service.setSceneSignature(body.signature));
 const signatureRefused = sceneRefused('scene.signature', (service, body) => service.setSceneSignature(body.signature));
+const addRow = sceneChange('drum.addRow', (service, body) => service.addDrumRow(body.row));
+const addRowRefused = sceneRefused('drum.addRow', (service, body) => service.addDrumRow(body.row));
+const removeRow = sceneChange('drum.removeRow', (service, body) => service.removeDrumRow(body.row));
+const removeRowRefused = sceneRefused('drum.removeRow', (service, body) => service.removeDrumRow(body.row));
 const copyPart = sceneChange('scene.copyPart', (service, body) => service.copyPartToScene(body.toSceneId, body.part));
 const copyPartRefused = sceneRefused('scene.copyPart', (service, body) => service.copyPartToScene(body.toSceneId, body.part));
 const remove = sceneChange('scene.delete', (service, body) => service.deleteScene(body.sceneId));
@@ -780,6 +784,15 @@ const sceneCases: Case[] = [
   }),
   signatureRefused('a signature that is not one of the six', { signature: '2/2' }, 400, 'A scene is in 4/4, 3/4, 6/8, 5/4, 7/8, 12/8'),
   signatureRefused('no signature at all', {}, 400, 'A scene is in 4/4, 3/4, 6/8, 5/4, 7/8, 12/8'),
+  addRow('a row is added after the eight drums, in every scene', { row: 'extra1' }, twoScenes, project => {
+    assert.ok(project.drumState.extra1 && project.scenes.every((scene: any) => scene.drums.extra1));
+  }),
+  addRowRefused('a ninth row is refused', { row: 'extra9' }, 400, 'A kit has eight rows to add at most'),
+  addRowRefused('a row that is there already is refused', { row: 'extra1' }, 409, 'That row is there already', service => { service.addDrumRow('extra1'); }),
+  removeRow('an added row is taken away again', { row: 'extra1' }, service => { service.addDrumRow('extra1'); }, project => {
+    assert.equal('extra1' in project.drumState, false);
+  }),
+  removeRowRefused('a row that is not there is refused', { row: 'extra2' }, 404, 'There is no such row'),
 
   // The open scene is the second, which is empty: copying its kick row empties the first scene's.
   copyPart('one drum row of the open scene goes into another scene', (ids: Ids) => ({ toSceneId: ids.first, part: { drum: 'kick' } }), twoScenes, project => {

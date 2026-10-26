@@ -26,6 +26,8 @@ export type {
 
   // Drum types
   DrumInstrument,
+  DrumRow,
+  ExtraDrum,
   DrumKitId,
   DrumKitModelVariant,
   DrumKitMetadata,

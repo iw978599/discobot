@@ -1,7 +1,7 @@
 // The edits a project accepts, as data. `LocalProjectService.apply` is the one way in; the
 // reducers that carry them out are in projectReducers.ts. See docs/TYPED_STORE_PLAN.md.
 import type {
-  DrumInstrument, DrumKitId, DrumSettings, DrumState, EffectsLoopState, FxSendLevels, Pattern, Scene, Song,
+  DrumRow, ExtraDrum, DrumKitId, DrumSettings, DrumState, EffectsLoopState, FxSendLevels, Pattern, Scene, Song,
   SynthModelId, SynthModelParams, SynthParameters,
 } from '../types';
 import type { SwingGrid } from './grooves';
@@ -28,12 +28,15 @@ export type Operation =
   | { type: 'drum.reset' }
   | { type: 'drum.bars'; bars: number }
   | { type: 'drum.copyBar'; from: number; to: number[] }
-  | { type: 'drum.step'; instrument: DrumInstrument; step: number; active: boolean }
-  | { type: 'drum.stepVelocity'; instrument: DrumInstrument; step: number; velocity: number }
-  | { type: 'drum.stepDetail'; instrument: DrumInstrument; step: number; probability?: number; ratchet?: number }
-  | { type: 'drum.settings'; instrument: DrumInstrument; settings: Partial<DrumSettings> }
-  | { type: 'drum.sample'; instrument: DrumInstrument; sampleId?: string }
-  | { type: 'drum.mix'; instrument: DrumInstrument; muted?: boolean; solo?: boolean }
+  | { type: 'drum.step'; instrument: DrumRow; step: number; active: boolean }
+  | { type: 'drum.stepVelocity'; instrument: DrumRow; step: number; velocity: number }
+  | { type: 'drum.stepDetail'; instrument: DrumRow; step: number; probability?: number; ratchet?: number }
+  | { type: 'drum.settings'; instrument: DrumRow; settings: Partial<DrumSettings> }
+  | { type: 'drum.sample'; instrument: DrumRow; sampleId?: string }
+  | { type: 'drum.mix'; instrument: DrumRow; muted?: boolean; solo?: boolean }
+  // A row after the eight drums, by its id (made by the caller, as live sessions need), and its removal.
+  | { type: 'drum.addRow'; row: ExtraDrum }
+  | { type: 'drum.removeRow'; row: ExtraDrum }
   | { type: 'drum.fx'; patch: DeepPartial<DrumFxState> }
   | { type: 'effects.set'; patch: DeepPartial<EffectsLoopState> }
   | { type: 'synth.create'; synthId?: number }
@@ -60,7 +63,7 @@ export type Operation =
   // The open scene's time signature: one of the six, with every lane and the drum grid resized to it.
   | { type: 'scene.signature'; signature: string }
   // One part of the open scene, a lane's notes or one drum's row, put into another scene.
-  | { type: 'scene.copyPart'; toSceneId: string; synthId?: number; drum?: DrumInstrument }
+  | { type: 'scene.copyPart'; toSceneId: string; synthId?: number; drum?: DrumRow }
   | { type: 'scene.replace'; scenes?: unknown; currentSceneId?: string; song?: unknown }
   | { type: 'song.set'; entries?: unknown; loop?: boolean }
   | { type: 'guest.add'; guestId: string; url: string; name?: string }
@@ -124,6 +127,8 @@ type OpResults = Total<{
   'scene.tempo': SceneAnswer;
   'scene.move': SceneAnswer;
   'scene.signature': SceneAnswer;
+  'drum.addRow': SceneAnswer;
+  'drum.removeRow': SceneAnswer;
   'scene.copyPart': SceneAnswer;
   'scene.replace': SceneAnswer;
   'song.set': SceneAnswer;
@@ -170,6 +175,8 @@ export const OP_META: Record<OpType, { save: boolean; undoable: boolean; share: 
   'drum.settings': { save: true, undoable: true, share: true },
   'drum.sample': { save: true, undoable: true, share: true },
   'drum.mix': { save: true, undoable: true, share: true },
+  'drum.addRow': { save: true, undoable: true, share: true },
+  'drum.removeRow': { save: true, undoable: true, share: true },
   'drum.fx': { save: true, undoable: true, share: true },
   'effects.set': { save: true, undoable: true, share: true },
   'synth.create': { save: true, undoable: false, share: true },
