@@ -147,6 +147,15 @@ export default function Rack({ studio }: { studio: Studio }) {
     storeRackUnit(next);
     setMoves(count => count + 1);
   };
+  // How tall the transport is, for the column beside the lanes on a wide screen, which is held in
+  // view just under it.
+  useLayoutEffect(() => {
+    const page = pageRef.current, transport = page?.querySelector<HTMLElement>('.rack > .transport');
+    if (!page || !transport || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => page.style.setProperty('--transport-height', `${transport.offsetHeight}px`));
+    observer.observe(transport);
+    return () => observer.disconnect();
+  }, []);
   useLayoutEffect(() => {
     const page = pageRef.current;
     if (!page || moves === 0) return;
@@ -155,7 +164,7 @@ export default function Rack({ studio }: { studio: Studio }) {
     // Focus goes into the unit that was asked for, so the next Tab is inside it and a screen
     // reader says where it is. The whole rack has no one place to go, and focus stays on the bar.
     if (shown === 'all') return;
-    const target = page.querySelector<HTMLElement>(`.rack > [data-unit="${shown}"]`);
+    const target = page.querySelector<HTMLElement>(`.rack [data-unit="${shown}"]`);
     if (!target) return;
     target.tabIndex = -1;
     target.focus({ preventScroll: true });
@@ -198,7 +207,7 @@ export default function Rack({ studio }: { studio: Studio }) {
     const page = pageRef.current;
     if (!page) return;
     const note = (event: Event) => {
-      const at = (event.target as Element | null)?.closest?.('.rack > [data-unit]')?.getAttribute('data-unit');
+      const at = (event.target as Element | null)?.closest?.('.rack [data-unit]')?.getAttribute('data-unit');
       if (at) livePlace(at);
     };
     page.addEventListener('pointerdown', note, true);
@@ -219,7 +228,7 @@ export default function Rack({ studio }: { studio: Studio }) {
     const byUnit = new Map<string, Person[]>();
     for (const person of people) if (person[2]) byUnit.set(person[2], [...(byUnit.get(person[2]) ?? []), person]);
     for (const [at, here] of byUnit) {
-      page.querySelectorAll<HTMLElement>(`.rack > [data-unit="${at}"], .unit-bar [data-tab="${at}"]`).forEach((marked) => {
+      page.querySelectorAll<HTMLElement>(`.rack [data-unit="${at}"], .unit-bar [data-tab="${at}"]`).forEach((marked) => {
         marked.setAttribute('data-present', String(here[0][1]));
         marked.setAttribute('data-present-names', here.map(person => person[0]).join(', '));
         marked.style.setProperty('--present', `var(--person-${here[0][1]})`);
@@ -230,7 +239,7 @@ export default function Rack({ studio }: { studio: Studio }) {
   // running. They are also put out of reach of the keyboard and of a screen reader.
   useLayoutEffect(() => {
     const away = paged && shown !== 'guests';
-    pageRef.current?.querySelectorAll<HTMLElement>('.rack > [data-unit="guests"]').forEach((guest) => {
+    pageRef.current?.querySelectorAll<HTMLElement>('.rack [data-unit="guests"]').forEach((guest) => {
       guest.inert = away;
       if (away) guest.setAttribute('aria-hidden', 'true'); else guest.removeAttribute('aria-hidden');
     });
@@ -329,15 +338,21 @@ export default function Rack({ studio }: { studio: Studio }) {
             <button className="rack-btn" onClick={() => studio.setStorageError(null)} aria-label="Dismiss message">✕</button>
           </div>
         )}
+        {/* The units, in two groups: on a wide screen the second is a column of its own beside the
+            first, and otherwise neither makes a box of its own (rack.css). */}
+        <div className="rack-main">
         <StarterUnit studio={studio} />
         <SongModule studio={studio} onHelp={openHelpAt} />
         {shownLanes(studio.synths.map(entry => entry.id), studio.laneOrder).map(id => <SynthModule key={id} studio={studio} synthId={id} synth={studio.synths.find(entry => entry.id === id)} onHelp={openHelpAt} />)}
         <AddLaneUnit studio={studio} />
         {studio.guests.map(guest => <GuestModule key={guest.id} studio={studio} guest={guest} onHelp={openHelpAt} />)}
         <DrumModule studio={studio} onHelp={openHelpAt} />
+        </div>
+        <div className="rack-side">
         <MixerModule studio={studio} channels={mixer.current} onHelp={openHelpAt} />
         <div className="rack-unit effects-unit" data-unit="effects">
           <EffectsPanel effectsLoop={studio.effectsLoop} onChange={studio.handleEffectsLoopChange} onHelp={openHelpAt} />
+        </div>
         </div>
       </div>
       {narrow && (

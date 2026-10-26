@@ -86,3 +86,16 @@
 
 /* The Presets menu opens under its button, along the box's right edge. */
 .effects-block .rack-menu-list { left: auto; right: 0; }
+
+/* Narrower than the rack (the column beside the lanes on a wide screen), the boxes are two to a row
+   and then one, every box the same width, so the eight of them leave no hole. */
+.effects-unit { container-type: inline-size; }
+@container (max-width: 900px) {
+  .effects-panel { grid-template-columns: minmax(0, 1fr); }
+  .effects-panel-header { flex-direction: row; align-items: center; flex-wrap: wrap; }
+  .effects-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .effects-block { grid-column: span 1; }
+}
+@container (max-width: 560px) {
+  .effects-grid { grid-template-columns: minmax(0, 1fr); }
+}

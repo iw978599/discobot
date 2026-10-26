@@ -950,7 +950,7 @@ test('design shots: screens not captured before', async ({ page }, info) => {
   });
   // Widths between a phone and the desktop rack's least, and wider than any taken before.
   if (info.project.name === 'chromium') {
-    for (const [width, height] of [[900, 900], [1600, 1000]]) {
+    for (const [width, height] of [[900, 900], [1600, 1000], [1920, 1080], [2560, 1440]]) {
       await attempt(walk, `rack-width-${width}`, async () => {
         await page.setViewportSize({ width, height });
         await page.waitForTimeout(300);
