@@ -51,8 +51,8 @@ test('knob figures show all of their unit, in the effects and the drums', async 
   await expect.poll(() => clipped(figures)).toEqual([]);
 });
 
-test('the delay\'s On box and its Sync menu have a gap between their labels', async ({ page }) => {
-  const on = page.getByLabel('Delay enabled', { exact: true }).locator('xpath=ancestor::label');
+test('the delay\'s On button and its Sync menu have a gap between them', async ({ page }) => {
+  const on = page.getByRole('switch', { name: 'Delay enabled', exact: true });
   const sync = page.getByLabel('Delay sync', { exact: true }).locator('xpath=ancestor::label');
   await expect(on).toBeVisible();
   const [first, second] = [(await on.boundingBox())!, (await sync.boundingBox())!];
