@@ -235,74 +235,8 @@
   grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
 }
 
-/* A sliding switch: dark when off, lit when on. */
-.synth-toggle {
-  position: relative;
-  display: inline-block;
-  width: 40px;
-  height: 20px;
-}
-
-.synth-toggle input {
-  opacity: 0;
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  z-index: 1;
-  cursor: pointer;
-}
-
-.synth-toggle input:disabled + .synth-toggle-slider {
-  opacity: 0.4;
-}
-
-.synth-toggle-slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--edge);
-  transition: 0.3s;
-  border-radius: 20px;
-  box-shadow: inset var(--shadow-control);
-}
-
-.synth-toggle-slider:before {
-  position: absolute;
-  content: "";
-  height: 14px;
-  width: 14px;
-  left: 3px;
-  bottom: 3px;
-  background-color: var(--surface-control);
-  transition: 0.3s;
-  border-radius: 50%;
-  box-shadow: var(--shadow-control);
-}
-
-.synth-toggle input:checked + .synth-toggle-slider {
-  background-color: var(--on);
-  box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, 0.2),
-    0 0 8px var(--on-glow);
-}
-
-.synth-toggle input:checked + .synth-toggle-slider:before {
-  transform: translateX(20px);
-  background-color: var(--text);
-}
-
-.synth-toggle:hover .synth-toggle-slider {
-  opacity: 0.9;
-}
-
 .synth-sample-select { max-width: 18ch; text-transform: none; text-align: left; }
 .synth-sample-note { max-width: 24ch; margin: 0; color: var(--text-faint); font-size: var(--type-caption); }
-.synth-sync { display: flex; align-items: center; gap: 6px; color: var(--text-label); font-size: var(--type-caption); }
 
 /* Routes: each a source, an arrow, a destination and how far, one to a row. */
 .synth-routes { display: flex; flex-direction: column; gap: 6px; }

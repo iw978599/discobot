@@ -23,6 +23,7 @@ import { INSERT_DEFAULT } from '../services/effectSettings';
 import Knob from './Knob';
 import './SynthControls.css';
 import { MAX_LANE_NAME } from '../services/lanes';
+import Toggle from './Toggle';
 
 interface SynthControlsProps {
   parameters: SynthParameters;
@@ -386,16 +387,7 @@ export default function SynthControls({
         </div>
         <div className="synth-header-tools">
           {onRename && laneId !== undefined && <LaneNameField id={laneId} name={laneName ?? ''} onRename={onRename} />}
-          <label className="synth-toggle" title={TOOLTIPS.hold}>
-            <input
-              type="checkbox"
-              aria-label="Hold notes"
-              checked={Boolean(parameters.hold)}
-              onChange={(e) => onParameterChange({ hold: e.target.checked })}
-            />
-            <span className="synth-toggle-slider" />
-          </label>
-          <span className="octave-shift-value">HOLD</span>
+          <Toggle className="synth-toggle" label="Hold notes" title={TOOLTIPS.hold} checked={Boolean(parameters.hold)} onChange={(on) => onParameterChange({ hold: on })}>Hold</Toggle>
           {onRemove && (
             <button className="rack-btn" onClick={onRemove} title="Remove this synth lane">Remove</button>
           )}
@@ -520,15 +512,7 @@ export default function SynthControls({
       {tab === 'arp' && (
         <div className="synth-arp-panel">
         <div className="arp-controls">
-          <label className="synth-toggle" title="Enable arpeggiator for this synth">
-            <input
-              type="checkbox"
-              aria-label="Arpeggiator enabled"
-              checked={parameters.arpeggiator.enabled}
-              onChange={(e) => updateArpeggiator({ enabled: e.target.checked })}
-            />
-            <span className="synth-toggle-slider" />
-          </label>
+          <Toggle className="synth-toggle" label="Arpeggiator enabled" title="Enable arpeggiator for this synth" checked={parameters.arpeggiator.enabled} onChange={(on) => updateArpeggiator({ enabled: on })}>On</Toggle>
           <span className="octave-shift-value">ARP</span>
           <select
             className="synth-select arp-select"
@@ -870,16 +854,7 @@ export default function SynthControls({
                   />
                 </>
               )}
-              <label className="synth-sync" title="Go round again while the note is held, instead of playing once">
-                <input
-                  type="checkbox"
-                  aria-label="Loop the sample"
-                  disabled={Boolean(builtIn?.steps)}
-                  checked={sample.loop}
-                  onChange={(e) => updateSample({ loop: e.target.checked })}
-                />
-                Loop
-              </label>
+              <Toggle label="Loop the sample" title="Go round again while the note is held, instead of playing once" checked={sample.loop} disabled={Boolean(builtIn?.steps)} onChange={(on) => updateSample({ loop: on })}>Loop</Toggle>
               {!builtIn?.steps && (
                 <>
                 <Knob
@@ -943,15 +918,7 @@ export default function SynthControls({
             <div className="synth-column" data-tab={COLUMN_TABS['OSC 2']}>
               <div className="synth-section-header">
                 <h3>OSC 2</h3>
-                <label className="synth-toggle">
-                  <input
-                    type="checkbox"
-                    checked={osc2.enabled}
-                    aria-label="Oscillator 2 enabled"
-                    onChange={(e) => updateOscillator2({ enabled: e.target.checked })}
-                  />
-                  <span className="synth-toggle-slider" />
-                </label>
+                <Toggle className="synth-toggle" label="Oscillator 2 enabled" checked={osc2.enabled} onChange={(on) => updateOscillator2({ enabled: on })}>On</Toggle>
               </div>
               <div className="synth-column-controls">
                 <div className="synth-waveform-selector">
@@ -995,16 +962,7 @@ export default function SynthControls({
                   color="#6366f1"
                   tooltip={TOOLTIPS.osc2Detune}
                 />
-                <label className="synth-sync" title="Hard sync: oscillator 2 starts its wave again each time oscillator 1 does. It takes oscillator 1's pitch, and its own tuning becomes its tone">
-                  <input
-                    type="checkbox"
-                    aria-label="Sync oscillator 2 to oscillator 1"
-                    checked={osc2.sync ?? false}
-                    disabled={!osc2.enabled}
-                    onChange={(e) => updateOscillator2({ sync: e.target.checked })}
-                  />
-                  Sync
-                </label>
+                <Toggle label="Sync oscillator 2 to oscillator 1" title="Hard sync: oscillator 2 starts its wave again each time oscillator 1 does. It takes oscillator 1's pitch, and its own tuning becomes its tone" checked={osc2.sync ?? false} disabled={!osc2.enabled} onChange={(on) => updateOscillator2({ sync: on })}>Sync</Toggle>
               </div>
             </div>
 
@@ -1134,15 +1092,7 @@ export default function SynthControls({
         <div className="synth-column" data-tab="osc">
           <div className="synth-section-header">
             <h3>LAYER</h3>
-            <label className="synth-toggle" title="Play every note twice: a second layer of the same sound, tuned, filtered, faded in and placed differently. Half as many notes can sound at once">
-              <input
-                type="checkbox"
-                checked={layer.enabled}
-                aria-label="Second layer enabled"
-                onChange={(e) => updateLayer({ enabled: e.target.checked })}
-              />
-              <span className="synth-toggle-slider" />
-            </label>
+            <Toggle className="synth-toggle" label="Second layer enabled" title="Play every note twice: a second layer of the same sound, tuned, filtered, faded in and placed differently. Half as many notes can sound at once" checked={layer.enabled} onChange={(on) => updateLayer({ enabled: on })}>On</Toggle>
           </div>
           <div className="synth-column-controls">
             <Knob
@@ -1447,15 +1397,7 @@ export default function SynthControls({
         <div className="synth-column" data-tab={COLUMN_TABS['LFO 1']}>
           <div className="synth-section-header">
             <h3>LFO 1</h3>
-            <label className="synth-toggle">
-              <input
-                type="checkbox"
-                checked={parameters.lfo1.enabled}
-                aria-label="LFO 1 enabled"
-                onChange={(e) => updateLfo('lfo1', { enabled: e.target.checked })}
-              />
-              <span className="synth-toggle-slider" />
-            </label>
+            <Toggle className="synth-toggle" label="LFO 1 enabled" checked={parameters.lfo1.enabled} onChange={(on) => updateLfo('lfo1', { enabled: on })}>On</Toggle>
           </div>
           <div className="synth-column-controls">
             <div className="synth-waveform-selector">
@@ -1531,15 +1473,7 @@ export default function SynthControls({
         <div className="synth-column" data-tab={COLUMN_TABS['LFO 2']}>
           <div className="synth-section-header">
             <h3>LFO 2</h3>
-            <label className="synth-toggle">
-              <input
-                type="checkbox"
-                checked={parameters.lfo2.enabled}
-                aria-label="LFO 2 enabled"
-                onChange={(e) => updateLfo('lfo2', { enabled: e.target.checked })}
-              />
-              <span className="synth-toggle-slider" />
-            </label>
+            <Toggle className="synth-toggle" label="LFO 2 enabled" checked={parameters.lfo2.enabled} onChange={(on) => updateLfo('lfo2', { enabled: on })}>On</Toggle>
           </div>
           <div className="synth-column-controls">
             <div className="synth-waveform-selector">
@@ -2116,15 +2050,7 @@ export default function SynthControls({
             />
             <div className="synth-section-header">
               <h3 style={{ fontSize: '10px' }}>GLIDE</h3>
-              <label className="synth-toggle" title={TOOLTIPS.portamentoEnable}>
-                <input
-                  type="checkbox"
-                  checked={parameters.portamento.enabled}
-                  aria-label="Portamento enabled"
-                  onChange={(e) => updatePortamento({ enabled: e.target.checked })}
-                />
-                <span className="synth-toggle-slider" />
-              </label>
+              <Toggle className="synth-toggle" label="Portamento enabled" title={TOOLTIPS.portamentoEnable} checked={parameters.portamento.enabled} onChange={(on) => updatePortamento({ enabled: on })}>On</Toggle>
             </div>
             <Knob
               label="Glide"
@@ -2156,14 +2082,8 @@ export default function SynthControls({
                   {RATE_SYNCS.map(sync => <option key={sync} value={sync}>{RATE_SYNC_LABELS[sync]}</option>)}
                 </select>
               </label>
-              <label title="Glide only into a note played while another key is still held, as a mono synth does. A mono lane always glides this way">
-                <input type="checkbox" aria-label="Glide only from held keys" checked={Boolean(parameters.portamento.fingered)} disabled={!parameters.portamento.enabled} onChange={(event) => updatePortamento({ fingered: event.target.checked })} />
-                Held keys only
-              </label>
-              <label title="Glide at the same speed for any distance, so a wide leap takes longer than a small one. The knob is then the time an octave takes">
-                <input type="checkbox" aria-label="Glide at the same speed" checked={Boolean(parameters.portamento.speed)} disabled={!parameters.portamento.enabled} onChange={(event) => updatePortamento({ speed: event.target.checked })} />
-                Same speed
-              </label>
+              <Toggle label="Glide only from held keys" title="Glide only into a note played while another key is still held, as a mono synth does. A mono lane always glides this way" checked={Boolean(parameters.portamento.fingered)} disabled={!parameters.portamento.enabled} onChange={(on) => updatePortamento({ fingered: on })}>Held keys only</Toggle>
+              <Toggle label="Glide at the same speed" title="Glide at the same speed for any distance, so a wide leap takes longer than a small one. The knob is then the time an octave takes" checked={Boolean(parameters.portamento.speed)} disabled={!parameters.portamento.enabled} onChange={(on) => updatePortamento({ speed: on })}>Same speed</Toggle>
             </div>
           </div>
         </div>

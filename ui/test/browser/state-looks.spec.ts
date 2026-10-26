@@ -172,9 +172,7 @@ const wrongRings = (scope: Locator) => scope.first().evaluate((root, [focus, gap
     element.focus({ preventScroll: true });
     if (document.activeElement !== element) continue;
     seen += 1;
-    // A switch in the sound editor is a hidden tick box, and its ring is drawn on the slider beside it.
-    const drawn = element.matches('.synth-toggle input') && element.nextElementSibling ? element.nextElementSibling : element;
-    const style = getComputedStyle(drawn);
+    const style = getComputedStyle(element);
     const right = style.outlineStyle === 'solid' && style.outlineColor === focus && parseFloat(style.outlineWidth) >= 2 && style.boxShadow.includes(gap);
     if (!right) wrong.push(`${element.tagName.toLowerCase()}.${element.className} "${element.getAttribute('aria-label') || element.textContent?.trim().slice(0, 30) || ''}": ${style.outlineStyle} ${style.outlineColor} ${style.outlineWidth}, shadow ${style.boxShadow}`);
   }

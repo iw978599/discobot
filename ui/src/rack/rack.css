@@ -381,7 +381,6 @@
 .rack-page :is(.rack-menu-list button, .song-block button, .song-timeline-entry, .timeline-clip, .piano-roll-cell, .key):focus-visible {
   outline-offset: -2px; box-shadow: inset 0 0 0 4px var(--gap);
 }
-.rack .synth-toggle input:focus-visible + .synth-toggle-slider { outline: 2px solid var(--focus); outline-offset: 2px; box-shadow: 0 0 0 2px var(--gap); }
 
 .rack-led { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--lamp-off); border: 1px solid var(--edge-deep); margin-right: 4px; vertical-align: middle; }
 .rack-led.on { background: var(--on); box-shadow: var(--shadow-lamp); }
@@ -562,7 +561,7 @@
 .song-block-tools button:last-child { margin-left: 10px; border-left: 1px solid var(--edge); }
 .song-block-tools button:hover:not(:disabled) { background: var(--surface-hover); color: var(--text); }
 .song-block-tools button:disabled { color: var(--text-faint); cursor: not-allowed; }
-.song-loop { display: flex; align-items: center; gap: 5px; flex: none; }
+.song-loop { flex: none; }
 /* The song as a playlist: a row for each entry in playing order, with a lamp that is lit on the
    one playing. Each row is the same fixed columns, so they line up down the list, and wraps where
    it must, so a narrow screen needs no rules of its own. */
@@ -895,11 +894,11 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
 .guest-frame { width: 100%; height: 560px; border: 1px solid var(--edge-strong); border-radius: var(--corner-panel); background: #fff; }
 .guest-ask { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; font-family: var(--sentence-font); text-transform: none; letter-spacing: 0; font-weight: 400; font-size: var(--type-body); color: var(--text-plain); }
 .guest-ask p { margin: 0; max-width: 70ch; }
-/* The mixer: a desk of channel strips, in groups, that slides sideways when the rack is too
-   narrow for all of them. A strip is its name, a pan knob, the fader, then mute and solo; a part
+/* The mixer: a desk of channel strips, in groups. On a desktop a group that does not fit goes on to
+   a second row; on a phone the desk slides sideways instead. A strip is its name, a pan knob, the fader, then mute and solo; a part
    a channel does not have keeps its room, so the faders stand in one line. A drum's strip has
    its drum's colour along the top, as the drum grid's rows have it. */
-.mixer-desk { --mixer-pan: 72px; display: flex; align-items: stretch; gap: 10px; min-width: 0; overflow-x: auto; padding-bottom: 6px; }
+.mixer-desk { --mixer-pan: 72px; display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px; min-width: 0; overflow-x: auto; padding-bottom: 6px; }
 .mixer-group {
   flex: none; display: flex; flex-direction: column; gap: 6px; padding: 5px 6px 8px;
   background: var(--surface-inset); border: 1px solid var(--edge-faint); border-radius: var(--corner-panel);
@@ -1192,7 +1191,7 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
   .effects-unit .effects-panel { grid-template-columns: minmax(0, 1fr); }
   .effects-unit .effects-panel-header { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 12px; }
   .effects-unit .effects-grid { grid-template-columns: minmax(0, 1fr); }
-  .effects-unit .effects-block, .effects-unit .effects-block:nth-child(2), .effects-unit .effects-block:nth-child(5) { grid-column: 1 / -1; }
+  .effects-unit .effects-block { grid-column: 1 / -1; }
   .effects-unit .effects-knobs { flex-wrap: wrap; }
 
   /* One unit on screen at a time. Rack puts the unit on show in data-shown, and every other
@@ -1257,7 +1256,7 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
   /* The mixer's strips are wide enough for a fader a finger can hold, with mute over solo, each a
      finger square. The desk slides sideways by its names and the room between its faders: a finger
      on a fader or a knob is turning it. */
-  .mixer-desk { --mixer-pan: 90px; }
+  .mixer-desk { --mixer-pan: 90px; flex-wrap: nowrap; }
   .mixer-strip { width: 68px; }
   .rack .fader-slot { width: 44px; }
   .mixer-ms { flex-direction: column; gap: 6px; min-height: 94px; }

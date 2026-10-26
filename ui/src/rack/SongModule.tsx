@@ -12,6 +12,7 @@ import { SCENE_COLORS, SCENE_COLOR_NAMES } from '../services/sceneColors';
 import UnitHelp, { UNIT_HELP } from './UnitHelp';
 import { tracked } from '../studio/tracked';
 import { sceneLengthIn, sceneSignatureIn, sceneTempoIn } from '../studio/studioState';
+import Toggle from '../components/Toggle';
 
 // Scenes are one-bar sections of the whole arrangement; the song is the order they play in.
 // Everything below this module in the rack shows, and edits, the selected scene.
@@ -244,10 +245,7 @@ function SongModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
             Timeline
           </button>
         </div>
-        <label className="song-loop" title="When the song reaches the end, start it again">
-          <input type="checkbox" aria-label="Loop the song" checked={song.loop} onChange={(event) => studio.handleSongChange({ loop: event.target.checked })} />
-          Loop
-        </label>
+        <Toggle className="song-loop" label="Loop the song" title="When the song reaches the end, start it again" checked={song.loop} onChange={(on) => studio.handleSongChange({ loop: on })}>Loop</Toggle>
       </div>
       {view === 'playlist' && <SongPlaylist studio={studio} />}
       {view === 'timeline' && <TrackTimeline studio={studio} />}
