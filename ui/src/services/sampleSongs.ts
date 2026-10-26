@@ -187,7 +187,7 @@ const congaGuitar: Placed[] = [2, 4, 8, 10].map((step): Placed => [step, WAH_CHO
 const wah = (rate: number, depth: number) => ({ lfo1: { enabled: true, target: 'filter', waveform: 'triangle', rate, depth, sync: false, retrigger: true }, modMatrix: [{ source: 'filterEnv', destination: 'filter', depth: 0.3 }] });
 
 const DOWNTOWN_WAH: SampleSong = {
-  id: 'downtown-wah', name: 'Downtown Wah', genre: 'Acid jazz, after On the Corner',
+  id: 'downtown-wah', name: 'Downtown Wah', genre: 'Acid jazz',
   hint: 'Acid jazz after Miles Davis\'s electric records of the early seventies, at 112 BPM: one G minor vamp, an electric bass going round its riff, a guitar and a Rhodes chopping through wahs swept by an LFO, a Hammond, a trumpet through a wah leaving a lot of room, busy funk drums with ghost notes left to chance, congas, bongos and a tambourine, a fill every other bar and a bigger one every fourth, a 6/8 conga break and a bridge to C',
   tempo: 112, kit: 'recorded', drumVolume: 0.6, level: 0.52,
   lanes: [
