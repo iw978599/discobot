@@ -1,6 +1,11 @@
 export const finiteClamp = (value: number, min: number, max: number, fallback = min): number =>
   Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
 
+// A phase taken back into 0..1: the same number as phase % 1 for any phase that is not below
+// -1, bit for bit (taking a whole number off leaves a fraction that is exactly representable), but
+// without the remainder, which is slow and is asked for by every voice on every sample.
+export const wrap = (phase: number): number => (phase >= 1 ? phase - Math.floor(phase) : phase);
+
 export function polyBlep(phase: number, step: number): number {
   if (phase < step) {
     const t = phase / step;

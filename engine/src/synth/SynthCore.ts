@@ -1,4 +1,4 @@
-import { Adsr, Ladder, Noise, Svf, approachCoefficient, finiteClamp as clamp, halve, ladderFeedback, lfoShape, noteFrequency, oscillator, svfCoefficient } from '../dsp';
+import { Adsr, Ladder, Noise, Svf, approachCoefficient, wrap, finiteClamp as clamp, halve, ladderFeedback, lfoShape, noteFrequency, oscillator, svfCoefficient } from '../dsp';
 import { InsertChain } from './inserts';
 import { VoiceParams, createDefaultSynthParameters, toVoiceParams } from './voiceParams';
 
@@ -36,6 +36,8 @@ export interface SynthSample {
 
 export interface SampleZone { data: Float32Array; rate: number; root: number; loopStart?: number; loopEnd?: number; keyLow?: number; keyHigh?: number }
 
+const MEMO_PITCH = 0, MEMO_CUTOFF = 2, MEMO_ANGLE = 4, MEMO_SIZE = 7;
+
 interface Voice {
   active: boolean;
   note: string;
@@ -59,6 +61,10 @@ interface Voice {
   ladder: Ladder;
   highpass: Svf;
   previousInput: number;
+  // The last pitch exponent, filter cutoff and pan angle this voice worked out, each with its answer
+  // (MEMO_*). Most samples ask the same as the one before, and the answer is then the same number
+  // without a power, a tangent, a cosine and a sine for every voice on every sample.
+  memo: Float64Array;
   last: number;
   transition: number;
   transitionSamples: number;
@@ -152,7 +158,7 @@ export class SynthCore {
       phase1: new Float64Array(MAX_UNISON), phase2: new Float64Array(MAX_UNISON), phaseSub: 0,
       fmPhase: [0, 0, 0, 0], fmFeedback: 0, fmEnv: 0, lfoPhase: [0, 0],
       amp: new Adsr(), filterEnv: new Adsr(), filter: new Svf(), filter2: new Svf(), ladder: new Ladder(), highpass: new Svf(), previousInput: 0,
-      last: 0, transition: 0, transitionSamples: 0, age: 0, remaining: Infinity, releaseOverride: 0,
+      memo: new Float64Array(MEMO_SIZE).fill(Number.NaN), last: 0, transition: 0, transitionSamples: 0, age: 0, remaining: Infinity, releaseOverride: 0,
       random: 0, randomPhase: 0, layer: 0, samplePosition: 0, sampleData: null, sampleScale: 0, sampleLoopFrames: null, sampleLevel: -1,
     }));
     this.refreshDerived();
@@ -508,8 +514,8 @@ export class SynthCore {
       if (this.wheel !== this.wheelTarget) this.wheel = Math.abs(this.wheelTarget - this.wheel) < 1e-5 ? this.wheelTarget : this.wheel + (this.wheelTarget - this.wheel) * k;
       if (this.pressure !== this.pressureTarget) this.pressure = Math.abs(this.pressureTarget - this.pressure) < 1e-5 ? this.pressureTarget : this.pressure + (this.pressureTarget - this.pressure) * k;
       const bendOctaves = this.bend * BEND_SEMITONES / 12;
-      this.globalLfoPhase[0] = (this.globalLfoPhase[0] + lfoRates[0]) % 1;
-      this.globalLfoPhase[1] = (this.globalLfoPhase[1] + lfoRates[1]) % 1;
+      this.globalLfoPhase[0] = wrap(this.globalLfoPhase[0] + lfoRates[0]);
+      this.globalLfoPhase[1] = wrap(this.globalLfoPhase[1] + lfoRates[1]);
 
       let l = 0, r = 0;
       for (let index = 0; index < this.voices.length; index++) {
@@ -525,7 +531,7 @@ export class SynthCore {
 
         let pitchMod = 0, filterMod = 0, ampMod = 1, pulseMod = 0;
         for (let n = 0; n < 2; n++) {
-          if (lfoRetrigger[n]) v.lfoPhase[n] = (v.lfoPhase[n] + lfoRates[n]) % 1;
+          if (lfoRetrigger[n]) v.lfoPhase[n] = wrap(v.lfoPhase[n] + lfoRates[n]);
           if (lfoDepths[n] === 0) continue;
           const value = lfoShape(lfoWaves[n], lfoRetrigger[n] ? v.lfoPhase[n] : this.globalLfoPhase[n]) * lfoDepths[n];
           if (lfoTargets[n] === 'pitch') pitchMod += value;
@@ -572,16 +578,18 @@ export class SynthCore {
           if (osc2Octaves !== 0) osc2Mod = 2 ** osc2Octaves;
         }
 
-        const step = clamp((second ? v.frequency * d.layerRatio : v.frequency) * 2 ** (s.detune / 1200 + pitchMod + bendOctaves) / sr, 0.000001, 0.45);
+        const memo = v.memo, exponent = s.detune / 1200 + pitchMod + bendOctaves;
+        if (exponent !== memo[MEMO_PITCH]) { memo[MEMO_PITCH] = exponent; memo[MEMO_PITCH + 1] = 2 ** exponent; }
+        const step = clamp((second ? v.frequency * d.layerRatio : v.frequency) * memo[MEMO_PITCH + 1] / sr, 0.000001, 0.45);
         let source: number;
         if (fm) {
           v.fmEnv += (0.2 - v.fmEnv) * d.fmDecay;
           const depth = (fmMod === 0 ? fmIndex : clamp(fmIndex + fmMod, 0, 1)) * v.fmEnv * (0.4 + 0.6 * v.velocity);
           const ph = v.fmPhase;
-          ph[0] = (ph[0] + step) % 1;
-          ph[1] = (ph[1] + step * fmRatio) % 1;
-          ph[2] = (ph[2] + step * 1.003) % 1;
-          ph[3] = (ph[3] + step * fmRatio) % 1;
+          ph[0] = wrap(ph[0] + step);
+          ph[1] = wrap(ph[1] + step * fmRatio);
+          ph[2] = wrap(ph[2] + step * 1.003);
+          ph[3] = wrap(ph[3] + step * fmRatio);
           const opD = Math.sin(TWO_PI * ph[3] + v.fmFeedback * fmFeedback * 2.5);
           v.fmFeedback = opD;
           if (algorithm === 0) {
@@ -600,7 +608,7 @@ export class SynthCore {
         } else if (sample) {
           if (tableFrames > 0) {
             const data = sample.data;
-            v.phase1[0] = (v.phase1[0] + step) % 1;
+            v.phase1[0] = wrap(v.phase1[0] + step);
             const place = v.phase1[0] * tableFrame, index = Math.floor(place), next = (index + 1) % tableFrame, part = place - index;
             const position = v.samplePosition, cycle = Math.floor(position) % tableFrames, first = cycle * tableFrame;
             source = data[first + index] + (data[first + next] - data[first + index]) * part;
@@ -659,7 +667,7 @@ export class SynthCore {
           source *= oscLevel;
           if (secondRuns) {
             const step2 = clamp(step * d.osc2Ratio * osc2Mod, 0.000001, 0.45);
-            v.phase2[0] = (v.phase2[0] + step2) % 1;
+            v.phase2[0] = wrap(v.phase2[0] + step2);
             source += oscillator(p.osc2Type, v.phase2[0], step2) * osc2Level;
           }
         } else {
@@ -667,7 +675,7 @@ export class SynthCore {
           source = 0;
           for (let u = 0; u < d.unisonCount; u++) {
             const step1 = clamp(step * d.unisonRatios[u], 0.000001, 0.45);
-            v.phase1[u] = (v.phase1[u] + step1) % 1;
+            v.phase1[u] = wrap(v.phase1[u] + step1);
             const level = d.unisonLevels[u];
             const first = oscillator(p.oscType, v.phase1[u], step1, pulseWidth);
             source += first * oscLevel * level;
@@ -675,14 +683,14 @@ export class SynthCore {
               const step2 = clamp(step1 * d.osc2Ratio * osc2Mod, 0.000001, 0.45);
               // Synced, it starts again when the first has just come round, as far into its wave as the
               // first is past the start of its own, so the restart does not jitter from sample to sample.
-              v.phase2[u] = sync && v.phase1[u] < step1 ? (v.phase1[u] / step1 * step2) % 1 : (v.phase2[u] + step2) % 1;
+              v.phase2[u] = sync && v.phase1[u] < step1 ? (v.phase1[u] / step1 * step2) % 1 : wrap(v.phase2[u] + step2);
               const second = oscillator(p.osc2Type, v.phase2[u], step2);
               source += second * osc2Level * level;
               if (ringLevel > 0) source += first * second * ringLevel * level;
             }
           }
           if (subLevel > 0) {
-            v.phaseSub = (v.phaseSub + step * 0.5) % 1;
+            v.phaseSub = wrap(v.phaseSub + step * 0.5);
             source += oscillator('square', v.phaseSub, step * 0.5) * subLevel;
           }
           if (noiseLevel > 0) source += this.noise.next() * noiseLevel;
@@ -694,7 +702,9 @@ export class SynthCore {
           + keyTracking * v.keyOctaves + velocityFilter * 3 * (v.velocity - 0.5) + routedFilter;
         if (second) octaves += layerBrightness;
         // Run the filter twice per sample: cheap 2x oversampling keeps resonance clean near Nyquist.
-        const g = svfCoefficient(clamp(s.filterFreq * 2 ** octaves, 20, maxCutoff, 1000), sr * 2);
+        const cutoff = clamp(s.filterFreq * 2 ** octaves, 20, maxCutoff, 1000);
+        if (cutoff !== memo[MEMO_CUTOFF]) { memo[MEMO_CUTOFF] = cutoff; memo[MEMO_CUTOFF + 1] = svfCoefficient(cutoff, sr * 2); }
+        const g = memo[MEMO_CUTOFF + 1];
         const damping = 1 / s.filterQ;
         if (highpassG > 0) {
           // The MS-20's high-pass has the same peak as its low-pass and distorts the same way; any other is plain.
@@ -739,8 +749,9 @@ export class SynthCore {
         }
         v.last = value;
         const angle = (clamp(s.pan + clamp(v.keyOctaves / 3 - 0.25, -1, 1) * s.spread + place, -1, 1) + 1) * Math.PI / 4;
-        l += value * Math.cos(angle);
-        r += value * Math.sin(angle);
+        if (angle !== memo[MEMO_ANGLE]) { memo[MEMO_ANGLE] = angle; memo[MEMO_ANGLE + 1] = Math.cos(angle); memo[MEMO_ANGLE + 2] = Math.sin(angle); }
+        l += value * memo[MEMO_ANGLE + 1];
+        r += value * memo[MEMO_ANGLE + 2];
       }
       left[i] = Math.tanh(l);
       right[i] = Math.tanh(r);
