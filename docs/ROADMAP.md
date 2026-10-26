@@ -1156,6 +1156,14 @@ for new accounts.
   lane to 32 steps keeps its notes on the same step numbers, so the tune
   plays twice as fast in the first half of the bar. Should the notes be
   spread instead, so the tune keeps its timing?
+- **Static in the songs** (2026-10-26). The owner hears a lot of static
+  playing the sample songs. The songs' lanes and drums alone take 30 to 46%
+  of one processor core (measured by rendering them in Node), all on the
+  browser's one audio thread, and the app asks for the smallest output
+  buffer (`latencyHint: 'interactive'`). Running short of time there sounds
+  like crackle, but this is not confirmed: does a downloaded Song WAV of the
+  same song have the static too? If not, the fix is a larger buffer (more
+  delay between a key and its sound) or cheaper voices.
 - **A cover of Opus** (sample songs, 2026-10-26). Opus's tune is Eric
   Prydz's, and a song bundled with the app must be ours to redistribute, so
   Long Ascent is built the way Opus is built on a figure and chords of its
@@ -1274,6 +1282,9 @@ V6. **A second sample song, and more starting beats.** (S each) One song in
    of Opus: done, not verified by ear. Sixth Street Shout replaced Blue Waltz;
    Long Ascent is built the way Opus is built on a tune of its own, since
    Opus's tune is not ours to bundle.
+   The owner then asked to jump ahead in a playing song: pressing a block or a
+   playlist row now goes there at once. The same day they heard a lot of
+   static playing the songs; not yet reproduced (see the questions).
 
 ### Playing and writing
 

@@ -191,8 +191,8 @@ function SongModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
                 <button
                   className="song-block-name"
                   aria-pressed={songStartEntry === index}
-                  title="Start the song from here and open this scene"
-                  onClick={() => { studio.setSongStartEntry(index); void studio.handleSceneSelect(entry.sceneId); }}
+                  title="Play the song from here (at once, if it is playing) and open this scene"
+                  onClick={() => studio.handleSongJump(index, entry.sceneId)}
                 >
                   {nameOf(entry.sceneId)}
                   <span className="song-block-count">

@@ -904,7 +904,7 @@ export function useStudio(engine?: AudioEngine) {
     if (localService.resumeSaving()) setChangedElsewhere(false);
   }, []);
   const { recordedStep, endRecordedHolds, handleNotePlay, handleNoteRelease, computerKeyNotes, handleMidiDestinationChange, handleMidiMessage } = useStudioNotes(core, { arpLane, handleOctaveShift });
-  const { handleGlobalPlayStop } = useStudioTransport(core, { sceneLength, signatureOf, triggerStep, endRecordedHolds });
+  const { handleGlobalPlayStop, jumpToEntry } = useStudioTransport(core, { sceneLength, signatureOf, triggerStep, endRecordedHolds });
 
   const midiState = useMidiInput({ onMessage: handleMidiMessage });
   const { handleStepChange, handleStepSelect, handleKeyboardModeChange, handlePianoRollNoteAssign, handleClearPatternNotes, handleTransposeLane, handleRandomizeLane, handleParameterChange, handleAutomationDraw, handleAutomationClear, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange, handleLaneBarsChange, handleDrumBarsChange, handleCopyDrumBar, handleCopyLaneBar, handleSynthMixChange, handleSynthSwingChange, handleSynthRename, handleLaneMove, handleLaneStep, handleSaveSynthPreset, handleLoadSynthPreset, handleImportSynthPreset, handleExportSynthPreset, handleDeleteSynthPreset } = useStudioLanes(core, { recordedStep });
@@ -1007,6 +1007,9 @@ export function useStudio(engine?: AudioEngine) {
     }
   };
 
+  // A block or a row of the song pressed: the song plays from there (at once, if it is playing), and its scene opens.
+  const handleSongJump = (index: number, sceneId: string) => { jumpToEntry(index); void handleSceneSelect(sceneId); };
+
   return {
     midiTies, midiLearn, handleMidiLearn, handleMidiTieRemove,
     midiPads, midiPadLearn, handleMidiPadLearn, handleMidiPadsReset, midiDestinations, handleMidiDestinationChange,
@@ -1025,7 +1028,7 @@ export function useStudio(engine?: AudioEngine) {
     handleNewProject, handleOpenProject, handleCopyProject, handleRenameProject, handleDeleteProject, handleRestoreVersion, handleCopyVersion, handleImportSynthPreset, handleExportSynthPreset, presetImportReport, setPresetImportReport, handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail,
     handleDrumSettingsChange, handleDrumMixChange, handleDrumReset, handleDrumMasterVolumeChange, handleDrumSwingChange, handleSwingTemplate,
     handleDrumFxChange, handleEffectsLoopChange, handleDrumMuteAll, handleDrumSoloAll, handleReset,
-    scenes, currentSceneId, song, playMode, setPlayMode, songStartEntry, setSongStartEntry, songPosition,
+    scenes, currentSceneId, song, playMode, setPlayMode, songStartEntry, setSongStartEntry, handleSongJump, songPosition,
     handleSceneSelect, handleSceneAdd, handleSceneRename, handleSceneColor, handleSceneTempo, handleSceneMove, handleSceneSignature, handleSceneDelete, handleSongChange, songArrangement, handleExportSongMidi,
     // The open scene's time signature, and any scene's by its id.
     signature: timeSignature(scenes.find(scene => scene.id === currentSceneId)?.signature), sceneSignature, sceneInfo,
