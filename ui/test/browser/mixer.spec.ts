@@ -50,7 +50,7 @@ test('the mixer has a strip for every lane, every drum and every guest, and a re
   const strip = (name: string) => mixer(page).getByRole('group', { name: `Mixer ${name}`, exact: true });
 
   // It stands between the drums and the effects.
-  expect(await page.locator('.rack > [data-unit]').evaluateAll(units => units.map(unit => unit.getAttribute('data-unit')).slice(-3))).toEqual(['drums', 'mixer', 'effects']);
+  expect(await page.locator('.rack [data-unit]').evaluateAll(units => units.map(unit => unit.getAttribute('data-unit')).slice(-3))).toEqual(['drums', 'mixer', 'effects']);
 
   for (const id of [1, 2, 3]) {
     await expect(strip(`Synth ${id}`)).toHaveCount(1);
@@ -300,7 +300,7 @@ test('on a phone the mixer is a unit of its own on the bar, slid sideways, with 
   await expect(tab).toHaveAttribute('aria-current', 'true');
   await expect(mixer(page)).toBeVisible();
   await expect(mixer(page), 'focus goes into the unit').toBeFocused();
-  await expect(page.locator('.rack > [data-unit]:visible'), 'and it is the only unit on show').toHaveCount(1);
+  await expect(page.locator('.rack [data-unit]:visible'), 'and it is the only unit on show').toHaveCount(1);
   await expect(page.getByRole('region', { name: 'Synth 1 module', exact: true })).toBeHidden();
 
   // The page does not slide sideways; the desk does, inside the unit.
