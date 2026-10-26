@@ -60,8 +60,8 @@ test('Night Circuit opens as a new project of its own: dark synthwave in F minor
 
   const scenes = made.getScenes().scenes as Scene[];
   assert.deepEqual(scenes.map(scene => scene.name), ['Ignition', 'Pulse', 'Run', 'Undertow', 'Overdrive', 'Shutdown']);
-  // F minor, sharps for flats: everything but the bridge keeps to its seven notes.
-  const F_MINOR = new Set(['F', 'G', 'G#', 'A#', 'C', 'C#', 'D#']);
+  // F harmonic minor, sharps for flats: everything but the bridge keeps to its seven notes.
+  const F_MINOR = new Set(['F', 'G', 'G#', 'A#', 'C', 'C#', 'D#', 'E']);
   for (const scene of scenes.filter(entry => entry.name !== 'Undertow')) {
     const notes = [1, 2, 3, 4, 5].flatMap(lane => played(scene.lanes[lane] ?? []));
     assert.ok(notes.length > 0 && notes.every(note => F_MINOR.has(note.replace(/\d+$/, ''))), `${scene.name} is in F minor`);
@@ -134,6 +134,49 @@ test('every sample song opens sound and whole: its time signatures, sounds, swin
     const aux = (song.effects as { aux?: unknown[] } | undefined)?.aux;
     if (aux) assert.deepEqual(auxBuses(state.effectsLoop.aux), aux, `${song.name} keeps its aux buses`);
   }
+});
+
+test('every sample song plays all five lanes and lasts at least two minutes', async () => {
+  for (const song of SAMPLE_SONGS) {
+    const made = await service();
+    await made.importProject(build(made, song));
+    const state = made.snapshot(), scenes = made.getScenes().scenes as Scene[];
+    const byId = (id: string) => scenes.find(scene => scene.id === id)!;
+    assert.equal(state.synths.length, 5, `${song.name} has five lanes`);
+    const heard = song.order.map(([id]) => byId(id));
+    for (const lane of [1, 2, 3, 4, 5]) assert.ok(heard.some(scene => played(scene.lanes[lane]).length > 0 && !scene.mutes?.lanes?.[lane]?.muted), `${song.name} plays lane ${lane}`);
+    const seconds = songSeconds(state.song, id => sceneBars(byId(id)), song.tempo, id => byId(id).signature ?? '4/4', id => byId(id).tempo);
+    assert.ok(seconds >= 120, `${song.name} lasts two minutes: ${Math.round(seconds)} seconds`);
+  }
+});
+
+test('the jazz song after Mingus starts with the bass alone, shouts in 6/8, slows to a 4/4 dirge, and gets faster', async () => {
+  const song = SAMPLE_SONGS.find(entry => entry.id === 'sixth-street-shout')!;
+  const made = await service();
+  await made.importProject(build(made, song));
+  const state = made.snapshot(), scenes = made.getScenes().scenes as Scene[];
+  const byId = (id: string) => scenes.find(scene => scene.id === id)!;
+  assert.deepEqual(state.synths.map(lane => lane.name), ['Upright', 'Piano', 'Baritone', 'Tenor Sax', 'Trombone']);
+  const intro = byId('shout-bass');
+  assert.ok(played(intro.lanes[1]).length > 8 && [3, 4, 5].every(lane => played(intro.lanes[lane]).length === 0), 'the bass begins alone');
+  assert.equal(byId('shout-riff').signature, '6/8');
+  assert.equal(byId('shout-dirge').signature ?? '4/4', '4/4');
+  assert.deepEqual(['shout-dirge', 'shout-riff', 'shout-faster', 'shout-collective'].map(id => byId(id).tempo ?? song.tempo), [66, 150, 168, 184], 'and it speeds up after the dirge');
+  assert.ok(state.synths[4].synthParams.portamento?.enabled, 'the trombone slides between its notes');
+});
+
+test('the long build plays one figure that gains notes and opens its filter, section by section', async () => {
+  const song = SAMPLE_SONGS.find(entry => entry.id === 'long-ascent')!;
+  const made = await service();
+  await made.importProject(build(made, song));
+  const scenes = made.getScenes().scenes as Scene[];
+  const byId = (id: string) => scenes.find(scene => scene.id === id)!;
+  const notes = ['ascent-seed', 'ascent-sprout', 'ascent-pulse'].map(id => played(byId(id).lanes[2]).length);
+  assert.deepEqual(notes, [32, 64, 128], 'four notes a bar, then eight, then sixteen');
+  const cutoffs = ['ascent-seed', 'ascent-sprout', 'ascent-pulse', 'ascent-growth', 'ascent-canopy'].map(id => byId(id).laneAutomation![2].cutoff);
+  cutoffs.forEach((cutoff, index) => assert.ok(cutoff.at(-1)! > cutoff[0]! && (index === 0 || cutoff[0]! >= cutoffs[index - 1].at(-1)!), 'each section opens the filter further'));
+  assert.equal(byId('ascent-seed').drums.kick.steps.some(Boolean), false, 'it begins without the kick');
+  assert.ok(played(byId('ascent-summit').lanes[4]).length > 0, 'and the supersaw takes the chords at the summit');
 });
 
 test('the post-rock song is seven minutes long on all five lanes, and builds by its automation', async () => {

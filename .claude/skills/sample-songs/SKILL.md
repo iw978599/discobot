@@ -39,6 +39,10 @@ new project. The strip on an empty project lists them all (`StarterUnit.tsx`).
 - **Show the app off**: the songs should use the newer features (time
   signatures, strum, swing, the arpeggiator, inserts, aux buses, automation,
   effect clones, percussion, recorded instruments, five lanes).
+- **Every song plays all five lanes and lasts at least two minutes**
+  (2026-10-26). `sampleSong.test.ts` checks both.
+- **No one else's tune.** A song "after" someone borrows a style or a way of
+  building, never a melody: anything bundled must be ours to redistribute.
 - They are written by reasoning and have not been heard: say "not verified by
   ear", and change them when the owner says how they sound.
 
