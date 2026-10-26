@@ -164,6 +164,14 @@ test('song mode plays the chain in order, follows it in the editor, and stops at
   await page.evaluate(() => { (window as unknown as { drumHits: unknown[] }).drumHits.length = 0; });
   await page.getByRole('button', { name: /Play All/ }).click();
   await expect.poll(async () => (await hits(page)).map(hit => hit.instrument).slice(0, 2), { timeout: 10_000 }).toEqual(['snare', 'kick']);
+
+  // Pressing a block while the song plays goes there at once: in the first of Scene 1's two bars,
+  // the Break comes next instead of Scene 1's second bar.
+  await expect(page.getByRole('group', { name: 'Song block 1: Scene 1', exact: true })).toContainText('1/2', { timeout: 10_000 });
+  await page.evaluate(() => { (window as unknown as { drumHits: unknown[] }).drumHits.length = 0; });
+  await page.getByRole('group', { name: 'Song block 2: Break', exact: true }).getByRole('button', { name: /Break/ }).click();
+  await expect.poll(async () => (await hits(page)).map(hit => hit.instrument).slice(0, 1), { timeout: 5000 }).toEqual(['snare']);
+  await expect(page.getByRole('group', { name: 'Song block 2: Break', exact: true })).toHaveClass(/playing/);
   await page.getByRole('button', { name: /Stop All/ }).click();
   expect((await project(page)).song).toMatchObject({ loop: true, entries: [{ repeats: 2 }, { repeats: 1 }] });
 });

@@ -91,7 +91,7 @@ export default function SongPlaylist({ studio }: { studio: Studio }) {
                   aria-pressed={start}
                   aria-label={`Open ${name} from row ${place} and start the song here`}
                   title="Start the song from here and open this scene"
-                  onClick={() => { studio.setSongStartEntry(index); void studio.handleSceneSelect(row.sceneId); }}
+                  onClick={() => studio.handleSongJump(index, row.sceneId)}
                 >
                   <span className="song-list-scene">{name}</span>
                   {start && <span className="song-list-start">Start</span>}

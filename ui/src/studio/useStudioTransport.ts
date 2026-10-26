@@ -192,7 +192,7 @@ export function useStudioTransport(core: StudioCore, needs: StudioTransportNeeds
       if (recording) trackPlayer.play(cue.track, cue.clip, recording, time, cue.into);
     }
   };
-  const startTransport = () => {
+  const startTransport = (options: { countIn?: boolean } = {}) => {
     trackPlayer.stop();
     clipsPrimedRef.current = false;
     transportRef.current ??= new BrowserTransport(
@@ -208,7 +208,7 @@ export function useStudioTransport(core: StudioCore, needs: StudioTransportNeeds
     const remote = liveStartRef.current;
     liveStartRef.current = null;
     // Nor for music started by another device's clock, whose start is the first beat.
-    const countIn = metronomeRef.current.countIn && !exportingRef.current && !midiFollowClockRef.current ? countInBars(metronomeRef.current) : 0;
+    const countIn = metronomeRef.current.countIn && options.countIn !== false && !exportingRef.current && !midiFollowClockRef.current ? countInBars(metronomeRef.current) : 0;
     // The count-in is a bar of the scene that plays first.
     const firstScene = playModeRef.current === 'song' ? songRef.current.entries[songStartEntryRef.current]?.sceneId : undefined;
     const counted = signatureOfRef.current(firstScene ?? currentSceneIdRef.current);
@@ -319,6 +319,21 @@ export function useStudioTransport(core: StudioCore, needs: StudioTransportNeeds
     announceRef.current = Date.now();
     await playStop();
   }, [playStop, synthAudio, drumAudio]);
+  // A block or a row of the song pressed: the song starts from there next time, and if it is playing
+  // it goes there now, with no count-in. In a live session everyone goes with it.
+  const jumpToEntry = useCallback((entry: number) => {
+    songStartEntryRef.current = entry;
+    setSongStartEntry(entry);
+    const transport = transportRef.current;
+    if (playModeRef.current !== 'song' || !transport?.running || exportingRef.current) return;
+    transport.stop();
+    synthAudio.stopAllNotes();
+    drumAudio.stopAllNotes();
+    songEndingRef.current = false;
+    songStartTickRef.current = entryStartTick(songRef.current, entry, sceneLengthRef.current, signatureOfRef.current);
+    announceRef.current = Date.now();
+    startTransportRef.current({ countIn: false });
+  }, [synthAudio, drumAudio]);
   // A live session's music: started here at the moment someone else chose (from where it is, if it
   // has begun), stopped when they stop it, and where it is now, for someone joining. Nothing starts
   // before this page has been touched, since a browser keeps its audio off until then.
@@ -350,5 +365,5 @@ export function useStudioTransport(core: StudioCore, needs: StudioTransportNeeds
       return { wall: wallAtContextTime(context, time), tick: Math.max(0, transport.ticksAt(time)), mode: playModeRef.current, entry: songStartEntryRef.current, countIn: countInRef.current.ticks };
     },
   }), [playStop, synthAudio, drumAudio]);
-  return { handleGlobalPlayStop };
+  return { handleGlobalPlayStop, jumpToEntry };
 }
