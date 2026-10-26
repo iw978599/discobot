@@ -9,7 +9,7 @@ const played = async (page: Page, lane: number) => ((await stored(page)).synths[
 const hits = async (page: Page, drum: string) => ((await stored(page)).drumState[drum].steps as boolean[]).filter(Boolean).length;
 const onPhone = (page: Page) => {
   const size = page.viewportSize();
-  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+  return size !== null && (size.width <= 1059 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
 };
 // On a phone the MIDI button is in the top bar's sheet.
 const openMidi = async (page: Page) => {

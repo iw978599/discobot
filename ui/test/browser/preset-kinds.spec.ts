@@ -12,7 +12,7 @@ const groupList = (page: Page, group: string) => lane(page).getByRole('menu', { 
 const choices = (page: Page, group: string) => groupList(page, group).locator('[role="menuitem"]:not([data-back])');
 const spoken = (rows: Locator) => rows.evaluateAll(found => found.map(row => row.getAttribute('aria-label')));
 const groupNames = (page: Page) => spoken(lane(page).locator('[role="menuitem"][data-group]'));
-const phone = (page: Page) => page.viewportSize()!.width <= 720;
+const phone = (page: Page) => page.viewportSize()!.width <= 1059;
 const search = (page: Page) => lane(page).getByRole('searchbox', { name: 'Search presets', exact: true });
 
 test.beforeEach(async ({ page }) => {

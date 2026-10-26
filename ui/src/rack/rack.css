@@ -998,13 +998,15 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
 .tour-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 4px; }
 .tour-skip { margin-right: auto; }
 
-/* Narrow screens: a phone held upright. The rack keeps its order and everything in it, but is
+/* Narrow screens: anything narrower than the desktop rack's 1,060 pixels (a phone held upright, a
+   tablet, a narrow window; design review 27 gave this the phone's arrangement, where it had been
+   cut off on the right). The rack keeps its order and everything in it, but is
    no longer one wide panel scrolled sideways. Each unit stacks its parts, the step grids go
    eight to a row, controls are big enough for a finger, menus rise from the bottom and dialogs
    fill the screen. A phone on its side is wider than that and very short, and gets the same
    arrangement (and a few rules of its own after this block). Nothing here applies to any
    other screen. useNarrow holds the same condition; keep the two the same. */
-@media (max-width: 720px), (max-width: 960px) and (max-height: 500px) and (orientation: landscape) {
+@media (max-width: 1059px), (max-width: 960px) and (max-height: 500px) and (orientation: landscape) {
   .shortcut-row { grid-template-columns: 1fr; gap: 4px; }
   /* A track's name has a line of its own over its buttons, which keep their size for a finger. */
   .timeline { --timeline-head: 160px; }

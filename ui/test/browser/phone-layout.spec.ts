@@ -50,7 +50,7 @@ const ALL = 'Show all units on one page';
 // raises. `more` raises the sheet before something in it is used, and does nothing on a wide screen.
 const onPhone = (page: Page) => {
   const size = page.viewportSize();
-  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+  return size !== null && (size.width <= 1059 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
 };
 const moreSheet = (page: Page) => page.getByRole('dialog', { name: 'More controls', exact: true });
 const moreButton = (page: Page) => page.getByRole('button', { name: 'More controls', exact: true });
@@ -207,6 +207,17 @@ test('on a phone showing the whole rack it fits the screen, with steps eight to 
   await page.keyboard.press('a');
   await expect(lane.getByRole('button', { name: /^Select step 9 C/ })).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+test('a tablet upright, or a window narrower than the desktop rack, has the phone arrangement instead of a rack cut off on the right', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium', 'this starts from the desktop width');
+  for (const [width, height] of [[900, 1200], [1059, 800]]) {
+    await page.setViewportSize({ width, height });
+    await expect(page.getByRole('navigation', { name: 'Rack units', exact: true }), `${width}: the bar of units`).toBeVisible();
+    expect(await page.locator('.rack-page').evaluate(element => element.scrollWidth - element.clientWidth), `${width}: no sideways scrolling`).toBeLessThanOrEqual(1);
+  }
+  await page.setViewportSize({ width: 1060, height: 800 });
+  await expect(page.getByRole('navigation', { name: 'Rack units', exact: true }), 'at the desktop rack\'s width, the desktop rack').toHaveCount(0);
 });
 
 test('a wide screen keeps the rack as one panel', async ({ page }, testInfo) => {

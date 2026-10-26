@@ -5,7 +5,7 @@ import { expect, test, type Page } from '@playwright/test';
 // A unit's own Help button is on the unit, not in the sheet, and needs no such step.
 const onPhone = (page: Page) => {
   const size = page.viewportSize();
-  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+  return size !== null && (size.width <= 1059 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
 };
 const more = async (page: Page) => {
   if (!onPhone(page) || await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) return;

@@ -4,7 +4,7 @@ const stored = (page: Page) => page.evaluate(() => (window.dispatchEvent(new Eve
 const emit = (page: Page, data: number[]) => page.evaluate(bytes => (window as unknown as { emitMidi: (data: number[]) => void }).emitMidi(bytes), data);
 const onPhone = (page: Page) => {
   const size = page.viewportSize();
-  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+  return size !== null && (size.width <= 1059 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
 };
 const openMidi = async (page: Page) => {
   if (onPhone(page) && !await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) await page.getByRole('button', { name: 'More controls', exact: true }).click();

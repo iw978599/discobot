@@ -5,7 +5,7 @@ import { expect, test, type Page } from '@playwright/test';
 // screen; `less` puts it away again after something that leaves it up.
 const onPhone = (page: Page) => {
   const size = page.viewportSize();
-  return size !== null && (size.width <= 720 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+  return size !== null && (size.width <= 1059 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
 };
 const more = async (page: Page) => {
   if (!onPhone(page) || await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) return;
