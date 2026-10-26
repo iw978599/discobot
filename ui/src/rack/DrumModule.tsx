@@ -9,6 +9,7 @@ import { usePlayhead, usePlayheadMark } from '../hooks/usePlayhead';
 import { useHandOvers } from '../hooks/useHandedTo';
 import { tracked } from '../studio/tracked';
 import UnitHelp, { UNIT_HELP } from './UnitHelp';
+import UnitFold, { useFolded } from './UnitFold';
 import { gridKeyTarget } from './gridKeys';
 import { BAR_CHOICES, barSteps, drumBars, onBeat, stepsAcross } from '../services/patternLength';
 import CopyToScene from './CopyToScene';
@@ -87,6 +88,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
   } = studio;
   const [selected, setSelected] = useState<DrumInstrument>('kick');
   const [selectedStep, setSelectedStep] = useState(0);
+  const folded = useFolded('drums');
   const [showMore, setShowMore] = useState(false);
   const [showSends, setShowSends] = useState(false);
   // A drum pattern longer than one bar is shown a bar at a time. `base` is the first step on show.
@@ -189,12 +191,13 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
   };
 
   return (
-    <section className="rack-unit drum-machine" aria-label="Drums module" data-unit="drums">
+    <section className="rack-unit drum-machine" aria-label="Drums module" data-unit="drums" data-folded={folded ? 'true' : undefined}>
       <div className="rack-row drum-top">
         <div className={onHelp ? 'rack-plate static helped' : 'rack-plate static'}>
           <b>Drums</b>
           {handed.drums && <span className="handed-to" title={`The kit is sent to the guest ${handed.drums}, and heard through it`}>→ {handed.drums}</span>}
           {onHelp && <UnitHelp about="the drums" section={UNIT_HELP.drums} onHelp={onHelp} />}
+          <UnitFold unit="drums" about="the drums" />
           <select
             className="drum-kit-select"
             aria-label="Drum kit"
@@ -218,6 +221,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
           </div>
         </div>
 
+        {!folded && (<>
         <div
           className="drum-grid"
           ref={gridRef}
@@ -340,7 +344,9 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
             title="Level of the whole drum kit"
           />
         </div>
+        </>)}
       </div>
+      {!folded && (<>
 
       <div className="rack-row drum-strip" data-drum={selected}>
         <div className="drum-strip-name">
@@ -707,6 +713,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
           </div>
         </div>
       )}
+      </>)}
     </section>
   );
 }

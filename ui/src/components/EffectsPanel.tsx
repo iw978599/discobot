@@ -12,6 +12,7 @@ import { DRIVE_KINDS } from '@discobot/engine';
 
 const DRIVE_KIND_LABELS: Record<string, string> = { classic: 'Classic', overdrive: 'Overdrive', distortion: 'Distortion', fuzz: 'Fuzz' };
 import UnitHelp, { UNIT_HELP } from '../rack/UnitHelp';
+import UnitFold, { useFolded } from '../rack/UnitFold';
 import './EffectsPanel.css';
 
 interface EffectsPanelProps {
@@ -38,6 +39,7 @@ const parseMs = (input: string): number | null => {
 };
 
 function EffectsPanel({ effectsLoop, onChange, onHelp }: EffectsPanelProps) {
+  const folded = useFolded('effects');
   const synced = Boolean(effectsLoop.delay.sync && effectsLoop.delay.sync !== 'off');
   const chorusSynced = Boolean(effectsLoop.chorus?.sync && effectsLoop.chorus.sync !== 'off');
   const phaserSynced = Boolean(effectsLoop.phaser.sync && effectsLoop.phaser.sync !== 'off');
@@ -50,6 +52,8 @@ function EffectsPanel({ effectsLoop, onChange, onHelp }: EffectsPanelProps) {
       <div className="effects-panel-header">
         <h3>Effects</h3>
         {onHelp && <UnitHelp about="the effects" section={UNIT_HELP.effects} onHelp={onHelp} />}
+        <UnitFold unit="effects" about="the effects" />
+        {!folded && (<>
         <Toggle label="Effects loop enabled" checked={effectsLoop.enabled} onChange={(on) => onChange({ enabled: on })}>Enabled</Toggle>
         <div className="effects-returns">
           <Knob
@@ -75,9 +79,10 @@ function EffectsPanel({ effectsLoop, onChange, onHelp }: EffectsPanelProps) {
             tooltip="How much of the shared effects the drums get back"
           />
         </div>
+        </>)}
       </div>
 
-      <div className="effects-grid">
+      {!folded && <div className="effects-grid">
         <div className="effects-block" style={{ '--span': 3 } as CSSProperties}>
           <h4>Drive</h4>
           <div className="effects-row-head">
@@ -512,7 +517,7 @@ function EffectsPanel({ effectsLoop, onChange, onHelp }: EffectsPanelProps) {
           );
         })}
 
-      </div>
+      </div>}
     </section>
   );
 }

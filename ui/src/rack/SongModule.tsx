@@ -10,6 +10,7 @@ import SongPlaylist from './SongPlaylist';
 import TrackTimeline from './TrackTimeline';
 import { SCENE_COLORS, SCENE_COLOR_NAMES } from '../services/sceneColors';
 import UnitHelp, { UNIT_HELP } from './UnitHelp';
+import UnitFold, { useFolded } from './UnitFold';
 import { tracked } from '../studio/tracked';
 import { sceneLengthIn, sceneSignatureIn, sceneTempoIn } from '../studio/studioState';
 import Toggle from '../components/Toggle';
@@ -19,6 +20,7 @@ import Toggle from '../components/Toggle';
 function SongModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: string) => void }) {
   const { scenes, currentSceneId, song, playMode, songPosition, songStartEntry } = studio;
   const [view, setView] = useState<SongView>(storedSongView);
+  const folded = useFolded('song');
   const showAs = (next: SongView) => { setView(next); storeSongView(next); };
   const [renaming, setRenaming] = useState<string | null>(null);
   const [draftName, setDraftName] = useState('');
@@ -44,13 +46,15 @@ function SongModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
   };
 
   return (
-    <section className="rack-unit song-module" aria-label="Song module" data-unit="song">
+    <section className="rack-unit song-module" aria-label="Song module" data-unit="song" data-folded={folded ? 'true' : undefined}>
       <div className="rack-row">
         <div className={onHelp ? 'rack-plate static helped' : 'rack-plate static'}>
           <b>Scenes</b>
           <span>Sections of the song</span>
           {onHelp && <UnitHelp about="scenes and the song" section={UNIT_HELP.song} onHelp={onHelp} />}
+          <UnitFold unit="song" about="the song" />
         </div>
+        {!folded && (<>
         <div className="scene-strip" role="group" aria-label="Scenes">
           {scenes.map((scene, index) => (renaming === scene.id ? (
             <input
@@ -146,8 +150,10 @@ function SongModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
         >
           Delete
         </button>
+        </>)}
       </div>
 
+      {!folded && (<>
       <div className="rack-row song-row">
         <div className="rack-plate static">
           <b>Song</b>
@@ -249,6 +255,7 @@ function SongModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
       </div>
       {view === 'playlist' && <SongPlaylist studio={studio} />}
       {view === 'timeline' && <TrackTimeline studio={studio} />}
+      </>)}
       {deleting && (() => {
         const scene = scenes.find(entry => entry.id === deleting);
         if (!scene) return null;

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { createDefaultSynthParameters } from '@discobot/engine';
 import type { Studio } from '../studio/useStudio';
 import { tracked } from '../studio/tracked';
@@ -6,7 +6,7 @@ import { DRUM_NAMES, DRUM_SETTINGS_DEFAULT } from '../services/drumKits';
 import { EFFECTS_DEFAULT } from '../services/effectSettings';
 import { AUX_KIND_DEFAULT, AUX_KIND_LABELS, AUX_NAMES } from '../services/auxSettings';
 import { panText, parsePan, parsePercent, percentText, type MixerChannels } from '../services/mixerChannels';
-import { storeMixerHidden, storedMixerHidden } from '../services/rackView';
+import UnitFold, { useFolded } from './UnitFold';
 import Fader from '../components/Fader';
 import { useHandOvers } from '../hooks/useHandedTo';
 import Knob from '../components/Knob';
@@ -97,27 +97,22 @@ function Group({ name, note, children }: { name: string; note?: string; children
 // `channels` is handed in already gathered (mixerChannels) and stays the same object while none of
 // those levels change, so the mixer is not drawn again for a note or a step.
 function MixerModule({ studio, channels, onHelp }: { studio: Studio; channels: MixerChannels; onHelp?: (section: string) => void }) {
-  const [hidden, setHidden] = useState(storedMixerHidden);
+  const hidden = useFolded('mixer');
   const handed = useHandOvers();
-  const toggle = () => {
-    storeMixerHidden(!hidden);
-    setHidden(!hidden);
-  };
   const { lanes, drums, guests, tracks, returns } = channels;
   // A lane's strip dragged to another's place moves the lane there on the rack too (roadmap 20).
   const laneOrder = useDragOrder('mixer-lanes', (from, to) => { void studio.handleLaneMove(lanes[from].id, lanes[to].id); }, false, '.mixer-name');
 
   return (
-    <section className="rack-unit mixer-unit" aria-label="Mixer module" data-unit="mixer">
+    <section className="rack-unit mixer-unit" aria-label="Mixer module" data-unit="mixer" data-folded={hidden ? 'true' : undefined}>
       <div className="rack-row">
         <div className={onHelp ? 'rack-plate static helped' : 'rack-plate static'}>
           <b>Mixer</b>
           <span>Every level</span>
           {onHelp && <UnitHelp about="the mixer" section={UNIT_HELP.mixer} onHelp={onHelp} />}
+          <UnitFold unit="mixer" about="the mixer" />
         </div>
-        <span className="rack-hint">Each fader is the same control as the knob in its own unit: move either and both move.</span>
-        <div className="rack-grow" />
-        <button className="rack-btn" aria-expanded={!hidden} aria-label={hidden ? 'Show the mixer' : 'Hide the mixer'} onClick={toggle}>{hidden ? 'Show' : 'Hide'}</button>
+        {!hidden && <span className="rack-hint">Each fader is the same control as the knob in its own unit: move either and both move.</span>}
       </div>
       {!hidden && (
         <div className="mixer-desk">
