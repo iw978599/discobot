@@ -10,7 +10,6 @@ import type { Hits, Placed, SampleSong } from './sampleSong';
 
 const up = (note: string, semitones: number) => transposeNote(note, semitones) ?? note;
 const strum = (amount: number) => ({ strum: amount });
-const late = (amount: number) => ({ offset: amount });
 // A value for every step of a scene, from one level to another, or held.
 const ramp = (steps: number, from: number, to: number): Array<number | null> => Array.from({ length: steps }, (_, index) => Number((from + (to - from) * index / Math.max(1, steps - 1)).toFixed(3)));
 const held = (steps: number, value: number): Array<number | null> => Array(steps).fill(value);
@@ -113,145 +112,118 @@ const NIGHT_CIRCUIT: SampleSong = {
   order: [['circuit-ignition', 1], ['circuit-pulse', 1], ['circuit-run', 2], ['circuit-undertow', 1], ['circuit-overdrive', 2], ['circuit-run', 1], ['circuit-shutdown', 1]],
 };
 
-// ---------------------------------------------------------------- Sixth Street Shout (jazz, after Mingus)
-// After Charles Mingus's gospel-blues records: the bass begins alone, slowly, with a blues line; then
-// a fast 6/8 church shout over F7, B flat 7, D7, G7 and C7, the horns coming in one at a time with
-// riffs that lock together (a baritone growling under the bass, a trombone smearing between notes
-// on its glide, a tenor answering), hand claps on the backbeat, the drums comping by chance. In the
-// middle the band drops to a 4/4 dirge in F minor for the trombone, then the shout comes back
-// faster and faster (each scene its own tempo) until every horn plays at once, and an amen.
+// ---------------------------------------------------------------- Downtown Wah (acid jazz, after On the Corner)
+// Acid jazz after Miles Davis's electric records of the early seventies: one G minor vamp nearly all
+// the way through, an electric bass going round the same syncopated riff, a guitar and a Rhodes
+// chopping through wahs (an LFO sweeping each one's filter), a Hammond holding the chords, and a
+// trumpet through its own wah that plays a few notes and leaves a lot of room. The drums are busy
+// funk: sixteenth hats with the quiet ones left to chance, ghost notes on the snare, congas, bongos
+// and a tambourine all the way through (the toms' and the clap's lanes), a fill every other bar and
+// a bigger one down the bongos and congas every fourth. Between, a 6/8 conga break, and a bridge up to C.
 
-const SHOUT_PROG = ['F7', 'F7', 'Bb7', 'Bb7', 'F7', 'D7', 'G7', 'C7'];
-// How far each chord's riff is moved from F's.
-const SHOUT_SHIFT: Record<string, number> = { F7: 0, Bb7: 5, D7: -3, G7: 2, C7: -5, Fm7: 0, Bbm7: 5, Db7: -4 };
-const SHOUT_VOICINGS: Record<string, string[]> = {
-  F7: ['A3', 'D#4', 'G4'], Bb7: ['G#3', 'D4', 'G4'], D7: ['F#3', 'C4', 'E4'], G7: ['F3', 'B3', 'E4'], C7: ['E3', 'A#3', 'D4'],
-  Fm7: ['G#3', 'C4', 'D#4'], Bbm7: ['G#3', 'C#4', 'F4'], Db7: ['F3', 'B3', 'D#4'],
-};
-// The blues line under the shout: the root, the minor third, the fourth, the sharp fourth, the fifth, the seventh.
-const BLUES_LINE = [0, 3, 5, 6, 7, 10];
-const BLUES_ACCENTS = [1, 0.7, 0.8, 0.75, 0.9, 0.7];
-const shoutBass = SHOUT_PROG.map((name): Placed[] => BLUES_LINE.map((semitones, eighth): Placed => [eighth * 2, up('F2', semitones + SHOUT_SHIFT[name]), 2, BLUES_ACCENTS[eighth]]));
-const riff = (a: Placed[], b: Placed[]) => SHOUT_PROG.map((name, bar) => moved(bar % 2 ? b : a, SHOUT_SHIFT[name]));
-const bari = riff([[0, 'F2', 3, 0.95], [4, 'G#2', 2, 0.8], [6, 'A2', 2, 0.85], [8, 'C3', 4, 0.9]], [[0, 'D#3', 2, 0.85], [2, 'C3', 2, 0.75], [4, 'A2', 2, 0.8], [6, 'F2', 6, 0.9]]);
-const tenorRiff = riff([[6, 'C5', 2, 0.85], [8, 'A4', 2, 0.75], [10, 'C5', 2, 0.85]], [[0, 'D#5', 4, 0.9], [4, 'D5', 2, 0.75], [6, 'C5', 6, 0.85]]);
-const boneRiff = riff([[0, 'A3', 6, 0.8], [6, 'C4', 6, 0.8]], [[0, 'D#4', 12, 0.85]]);
-// Gospel piano: the chord on the off-beats either side of the backbeat, rolled.
-const shoutPiano = SHOUT_PROG.map((name): Placed[] => {
-  const chord = SHOUT_VOICINGS[name];
-  return [[2, chord, 2, 0.5, strum(1 / 32)], [6, chord, 4, 0.7, strum(1 / 16)], [10, chord, 2, 0.5]];
+// How far each chord's riff is moved from G's.
+const WAH_SHIFT: Record<string, number> = { Gm: 0, C: 5, D: 7 };
+const WAH_KEYS: Record<string, string[]> = { Gm: ['A#3', 'D4', 'F4', 'A4'], C: ['A#3', 'E4', 'G4', 'D5'], D: ['F#3', 'C4', 'F4'] };
+const WAH_CHOPS: Record<string, string[]> = { Gm: ['G3', 'A#3', 'D4'], C: ['G3', 'C4', 'E4'], D: ['F#3', 'C4', 'D4'] };
+const WAH_VAMP = ['Gm', 'Gm', 'Gm', 'C', 'Gm', 'Gm', 'Gm', 'C'];
+const WAH_BRIDGE = ['C', 'C', 'C', 'D', 'C', 'C', 'D', 'D'];
+// The riff, two bars of it, the second answering the first.
+const RIFF_A: Placed[] = [[0, 'G1', 2, 1], [3, 'G2', 1, 0.8], [4, 'A#1', 2, 0.85], [6, 'C2', 1, 0.8], [7, 'C#2', 1, 0.7], [8, 'D2', 2, 0.95], [11, 'F2', 1, 0.75], [12, 'G2', 1, 0.85], [14, 'D2', 1, 0.7], [15, 'F1', 1, 0.75]];
+const RIFF_B: Placed[] = [[0, 'G1', 2, 1], [3, 'G2', 1, 0.8], [4, 'A#1', 2, 0.85], [6, 'C2', 2, 0.8], [10, 'D2', 1, 0.9], [11, 'F2', 1, 0.7], [12, 'G2', 2, 0.85], [14, 'A#2', 1, 0.75], [15, 'A2', 1, 0.7]];
+const wahBass = (chords: string[]) => chords.map((name, bar) => moved(bar % 2 ? RIFF_B : RIFF_A, WAH_SHIFT[name]));
+const wahKeys = (chords: string[]) => chords.map((name, bar): Placed[] => {
+  const chord = WAH_KEYS[name];
+  return [[0, chord, 3, 0.75], [6, chord, 2, 0.6], [10, chord, 2, bar % 2 ? 0.7 : 0.55], [14, chord, 2, 0.65]];
 });
-const TENOR_SOLO: Placed[][] = [
-  [[0, 'C5', 2], [2, 'D#5', 2], [4, 'F5', 4], [8, 'D#5', 2], [10, 'C5', 2]],
-  [[0, 'A4', 2], [2, 'C5', 2], [4, 'D#5', 2], [6, 'D5', 2], [8, 'C5', 4]],
-  [[0, 'F5', 6, 0.95], [6, 'G#5', 2], [8, 'F5', 2], [10, 'D5', 2]],
-  [[0, 'D#5', 2], [2, 'D5', 2], [4, 'C5', 2], [6, 'A#4', 6]],
-  [[0, 'F5', 2], [2, 'F5', 2], [4, 'G#5', 2], [6, 'A5', 6, 1]],
-  [[0, 'F#5', 4], [4, 'D5', 2], [6, 'C5', 2], [8, 'A4', 4]],
-  [[0, 'B4', 2], [2, 'D5', 2], [4, 'F5', 2], [6, 'E5', 2], [8, 'D5', 2], [10, 'A#4', 2]],
-  [[0, 'A4', 2], [2, 'G4', 2], [4, 'E4', 2], [6, 'F4', 6]],
+// The guitar's scratch: quiet chops between the beats, louder ones before them.
+const wahGuitar = (chords: string[]) => chords.map((name): Placed[] => [1, 2, 5, 6, 9, 10, 13, 14].map((step): Placed => [step, WAH_CHOPS[name], 1, step % 4 === 2 ? 0.8 : 0.4]));
+const wahOrgan = (chords: string[]) => chordBars(chords.map(name => WAH_KEYS[name].map(note => up(note, -12))), 16, 0.4);
+const TRUMPET: Placed[][] = [
+  [[4, 'D5', 2, 0.85], [6, 'D5', 1, 0.7], [8, 'F5', 4, 0.9]],
+  [[0, 'E5', 2, 0.8], [2, 'D5', 6, 0.85]],
+  [],
+  [[10, 'A#4', 2, 0.75], [12, 'C5', 2, 0.8], [14, 'D5', 2, 0.85]],
+  [[0, 'G5', 6, 0.95], [8, 'F5', 2, 0.8], [10, 'D5', 2, 0.75], [12, 'F5', 4, 0.85]],
+  [[0, 'E5', 3, 0.8], [4, 'D5', 4, 0.8], [12, 'A#4', 4, 0.75]],
+  [[2, 'G4', 2, 0.7], [4, 'A#4', 2, 0.75], [6, 'C5', 2, 0.8], [8, 'C#5', 2, 0.85], [10, 'D5', 6, 0.9]],
+  [],
 ];
-// The trombone's own line when everyone plays at once: long notes it glides between.
-const BONE_LINE: Placed[][] = [
-  [[0, 'F3', 4], [4, 'A3', 4], [8, 'C4', 4]], [[0, 'D#4', 6], [6, 'D4', 6]], [[0, 'D4', 4], [4, 'F4', 8]], [[0, 'G#4', 6], [6, 'F4', 6]],
-  [[0, 'A3', 2], [2, 'C4', 2], [4, 'D#4', 8]], [[0, 'F#4', 6], [6, 'D4', 6]], [[0, 'F4', 6], [6, 'B3', 6]], [[0, 'A#3', 6], [6, 'A3', 6]],
-];
-// The bass alone, slowly: the blues line climbing, then falling back.
-const BASS_INTRO: Placed[][] = [
-  ...Array.from({ length: 3 }, (): Placed[][] => [
-    [[0, 'F2', 4, 1], [4, 'G#2', 2, 0.8], [6, 'A#2', 2, 0.8], [8, 'B2', 2, 0.85], [10, 'C3', 4, 0.9], [14, 'D#2', 2, 0.7]],
-    [[0, 'F2', 6, 0.95], [6, 'C2', 2, 0.75], [8, 'D#2', 2, 0.8], [10, 'E2', 2, 0.85], [12, 'F2', 4, 0.9]],
-  ]).flat(),
-  [[0, 'F2', 4, 1], [4, 'G#2', 2, 0.8], [6, 'A#2', 2, 0.8], [8, 'B2', 2, 0.85], [10, 'C3', 4, 0.9], [14, 'D#2', 2, 0.7]],
-  [[0, 'F2', 8, 0.9], [10, 'C3', 2, 0.7], [12, 'B2', 2, 0.75], [14, 'C3', 2, 0.8]],
-];
-// The dirge, half as fast in 4/4 and in F minor: a walking bass, the baritone holding the roots.
-const DIRGE_PROG = ['Fm7', 'Fm7', 'Bbm7', 'Bbm7', 'Fm7', 'Db7', 'C7', 'C7'];
-const DIRGE_WALK = [['F2', 'G#2', 'A#2', 'B2'], ['C3', 'A#2', 'G#2', 'G2'], ['A#1', 'C#2', 'F2', 'G#2'], ['A2', 'A#2', 'G#2', 'F2'],
-  ['F2', 'C2', 'D#2', 'E2'], ['C#2', 'F2', 'G#2', 'B2'], ['C2', 'E2', 'G2', 'A#2'], ['C3', 'A#2', 'G2', 'E2']];
-const dirgeBass = DIRGE_WALK.map((bar): Placed[] => bar.map((note, beat): Placed => [beat * 4, note, 4, beat === 0 ? 0.95 : 0.8]));
-const dirgeBari = DIRGE_PROG.map((name): Placed[] => moved([[0, 'F2', 8, 0.7], [8, 'C3', 8, 0.6]], SHOUT_SHIFT[name]));
-// The piano on the beat, and a gospel tremolo (a chord struck four times in a step) on the fourth.
-const dirgePiano = DIRGE_PROG.map((name): Placed[] => [[0, SHOUT_VOICINGS[name], 8, 0.55, strum(1 / 16)], [12, SHOUT_VOICINGS[name].map(note => up(note, 12)), 4, 0.4, { ratchet: 4 }]]);
-const dirgeTenor = ['G#4', 'G4', 'G#4', 'G#4', 'G#4', 'B4', 'A#4', 'G4'].map((note): Placed[] => [[0, note, 16, 0.45]]);
-const DIRGE_BONE: Placed[][] = [
-  [[0, 'C4', 6, 0.85], [6, 'D#4', 2, 0.75, late(0.5)], [8, 'F4', 8, 0.9]],
-  [[0, 'G#4', 4, 0.85], [4, 'G4', 2, 0.7, late(0.67)], [6, 'F4', 2, 0.75], [8, 'D#4', 4, 0.8], [12, 'C4', 4, 0.75]],
-  [[0, 'C#4', 8, 0.85], [8, 'F4', 4, 0.8], [12, 'G#4', 4, 0.85]],
-  [[0, 'A#4', 12, 0.95], [12, 'G#4', 4, 0.75]],
-  [[0, 'C5', 4, 1], [4, 'B4', 2, 0.8, late(0.67)], [6, 'A#4', 2, 0.8], [8, 'G#4', 4, 0.85], [12, 'F4', 4, 0.8]],
-  [[0, 'F4', 8, 0.85], [8, 'G#4', 4, 0.8], [12, 'B4', 4, 0.85]],
-  [[0, 'A#4', 6, 0.9], [6, 'G4', 2, 0.75, late(0.5)], [8, 'E4', 8, 0.85]],
-  [[0, 'G4', 4, 0.8], [4, 'E4', 4, 0.75], [8, 'C4', 8, 0.8]],
-];
+const TRUMPET_BRIDGE: Placed[][] = twice([
+  [[0, 'G5', 8, 0.9], [8, 'E5', 4, 0.8], [12, 'A#4', 4, 0.75]],
+  [],
+  [[4, 'C5', 2, 0.75], [6, 'D5', 2, 0.8], [8, 'E5', 2, 0.85], [10, 'G5', 6, 0.9]],
+  [[0, 'F#5', 4, 0.85], [6, 'D5', 2, 0.75], [8, 'C5', 8, 0.8]],
+]);
 
-// 6/8: the ride on the two dotted beats and the eighths between, the hats' foot on the backbeat; the
-// kick, the snare's comping and the second clap are left to chance, as a drummer feels them.
-const SIX_RIDE: Hits = { crash: [[0, 0.75], [4, 0.5], [6, 0.7], [8, 0.35, 1, 0.5], [10, 0.5]], closedHH: [[6, 0.45]], kick: [[0, 0.5], [9, 0.3, 1, 0.4]] };
-const SIX_CLAPS: Hits = { ...SIX_RIDE, clap: [[6, 0.9], [10, 0.45, 1, 0.4]] };
-const SIX_SHOUT: Hits = { ...SIX_CLAPS, snare: [[4, 0.35, 1, 0.5], [6, 0.75], [11, 0.4, 1, 0.5]] };
-const SIX_FILL: Hits = { ...SIX_RIDE, snare: [[0, 0.5], [2, 0.6], [4, 0.7], [6, 0.8], [8, 0.9], [10, 1, 2]], snare2: [[9, 0.8], [11, 0.85]] };
-const phrase = (beat: Hits, last: Hits = SIX_FILL): Hits[] => [...Array<Hits>(7).fill(beat), last];
-const SLOW_RIDE: Hits = { crash: [[0, 0.55], [4, 0.5], [7, 0.3, 1, 0.6], [8, 0.5], [12, 0.5], [15, 0.3, 1, 0.6]], closedHH: [[4, 0.4], [12, 0.4]], kick: [[0, 0.3]], snare: [[12, 0.35, 1, 0.5]] };
-const SLOW_FILL: Hits = { ...SLOW_RIDE, snare: [[8, 0.4], [10, 0.5], [12, 0.6, 2], [14, 0.75, 3]], snare2: [[13, 0.7]], ride: [[11, 0.6]] };
+// The groove: the kick's syncopations and the ghost notes come and go by chance. The low tom's lane is a
+// conga, the high tom's a bongo and the clap's a tambourine.
+const FUNK_HATS: Array<[number, number, number?, number?]> = Array.from({ length: 16 }, (_, step): [number, number, number, number] => [step, step % 4 === 0 ? 0.5 : step % 2 === 0 ? 0.38 : 0.25, 1, step % 2 ? 0.75 : 1]).filter(([step]) => step !== 14);
+const FUNK: Hits = {
+  kick: [[0, 1], [3, 0.6, 1, 0.6], [6, 0.8], [10, 0.9], [11, 0.5, 1, 0.5]],
+  snare: [[2, 0.22, 1, 0.6], [4, 0.95], [7, 0.25, 1, 0.7], [9, 0.22, 1, 0.6], [12, 0.95], [15, 0.28, 1, 0.7]],
+  closedHH: FUNK_HATS, openHH: [[14, 0.45]],
+  snare2: [[1, 0.5], [3, 0.6], [8, 0.45], [11, 0.6], [13, 0.5], [14, 0.55, 1, 0.7]],
+  ride: [[6, 0.45, 1, 0.6], [9, 0.4, 1, 0.5]],
+  clap: [[2, 0.35, 1, 0.8], [4, 0.5], [6, 0.35, 1, 0.8], [10, 0.35, 1, 0.8], [12, 0.5], [14, 0.35, 1, 0.8]],
+};
+// A fill on the last beat, and a bigger one down the toms over the last two.
+const SHORT_FILL: Hits = { ...FUNK, snare: [[2, 0.22, 1, 0.6], [4, 0.95], [7, 0.25, 1, 0.7], [12, 0.9], [13, 0.5], [14, 0.7, 2], [15, 0.85, 2]], ride: [[13, 0.7]], openHH: [] };
+const BIG_FILL: Hits = {
+  kick: [[0, 1], [3, 0.6], [6, 0.8]], snare: [[4, 0.95], [7, 0.3], [11, 0.7], [15, 1, 3]], closedHH: FUNK_HATS.filter(([step]) => step < 8), clap: FUNK.clap?.filter(hit => (Array.isArray(hit) ? hit[0] : hit) < 8),
+  ride: [[8, 0.8], [9, 0.75], [10, 0.85, 2]], snare2: [[12, 0.85], [13, 0.8], [14, 0.9, 2]],
+};
+const funkBars = (crash = true): Hits[] => [crash ? { ...FUNK, crash: [0] } : FUNK, SHORT_FILL, FUNK, BIG_FILL, FUNK, SHORT_FILL, FUNK, BIG_FILL];
+// The conga break in 6/8: the congas, the bongos answering, a run down them at the end of every four bars.
+const CONGA_SIX: Hits = {
+  snare2: [[0, 0.8], [2, 0.5], [3, 0.6], [5, 0.5], [6, 0.8], [8, 0.5], [9, 0.6], [11, 0.5, 1, 0.7]],
+  ride: [[1, 0.4, 1, 0.5], [4, 0.6], [7, 0.45, 1, 0.5], [10, 0.7]], clap: [[0, 0.4], [3, 0.35], [6, 0.4], [9, 0.35]],
+  closedHH: [0, 2, 4, 6, 8, 10].map((step): [number, number] => [step, step % 6 === 0 ? 0.45 : 0.3]), kick: [[0, 0.9], [6, 0.7], [9, 0.4, 1, 0.5]],
+};
+const CONGA_RUN: Hits = { ...CONGA_SIX, ride: [[6, 0.8], [7, 0.8]], snare2: [[8, 0.85], [9, 0.85], [10, 0.9, 2]], snare: [[11, 1, 3]] };
+const congaBars: Hits[] = [{ ...CONGA_SIX, crash: [0] }, CONGA_SIX, CONGA_SIX, CONGA_RUN, CONGA_SIX, CONGA_SIX, CONGA_SIX, CONGA_RUN];
+const CONGA_BASS: Placed[] = [[0, 'G1', 3, 1], [3, 'G2', 1, 0.8], [4, 'A#1', 2, 0.85], [6, 'C2', 3, 0.9], [9, 'D2', 1, 0.8], [10, 'F2', 2, 0.85]];
+const congaGuitar: Placed[] = [2, 4, 8, 10].map((step): Placed => [step, WAH_CHOPS.Gm, 1, step % 6 === 4 ? 0.75 : 0.45]);
+// A wah: the first LFO sweeping the filter, and the filter's envelope opening it on each note.
+const wah = (rate: number, depth: number) => ({ lfo1: { enabled: true, target: 'filter', waveform: 'triangle', rate, depth, sync: false, retrigger: true }, modMatrix: [{ source: 'filterEnv', destination: 'filter', depth: 0.3 }] });
 
-const SIXTH_STREET: SampleSong = {
-  id: 'sixth-street-shout', name: 'Sixth Street Shout', genre: 'Jazz, after Mingus',
-  hint: 'Gospel-blues jazz after Charles Mingus: the upright bass alone at 76 BPM, then a 6/8 church shout at 150 with hand claps, the horns coming in one riff at a time (a baritone, a gliding trombone, a tenor sax), a Steinway rolling gospel chords, a 4/4 dirge in F minor at 66 for the trombone, and the shout again ever faster, at 168 and 184, until the horns all play at once',
-  tempo: 150, kit: 'recorded', drumVolume: 0.7, level: 0.66,
+const DOWNTOWN_WAH: SampleSong = {
+  id: 'downtown-wah', name: 'Downtown Wah', genre: 'Acid jazz, after On the Corner',
+  hint: 'Acid jazz after Miles Davis\'s electric records of the early seventies, at 112 BPM: one G minor vamp, an electric bass going round its riff, a guitar and a Rhodes chopping through wahs swept by an LFO, a Hammond, a trumpet through a wah leaving a lot of room, busy funk drums with ghost notes left to chance, congas, bongos and a tambourine, a fill every other bar and a bigger one every fourth, a 6/8 conga break and a bridge to C',
+  tempo: 112, kit: 'recorded', drumVolume: 0.6, level: 0.52,
   lanes: [
-    { preset: 'builtin-bass', name: 'Upright', octaveShift: -1, sound: { fxSends: { reverb: 0.15 } } },
-    { preset: 'builtin-keys-steinway-grand', name: 'Piano', sound: { fxSends: { reverb: 0.3, auxB: 0.15 } } },
-    // The tenor's recording played an octave and more lower, darker: a baritone.
-    { preset: 'builtin-lead-tenor-sax', name: 'Baritone', octaveShift: -1, sound: { gain: 1.0, pan: -0.3, inserts: { tone: -0.35, drive: 0.15 }, fxSends: { reverb: 0.2 } } },
-    { preset: 'builtin-lead-tenor-sax', name: 'Tenor Sax', sound: { gain: 2.2, ...vibrato(0.2, 5), pan: 0.25, fxSends: { reverb: 0.25, auxB: 0.3 } } },
-    // Brass that slides between its notes: a trombone.
-    { preset: 'builtin-lead-cs80', name: 'Trombone', octaveShift: -1, sound: { ...glide(0.09), ...vibrato(0.15, 4.5), pan: -0.1, inserts: { tone: -0.3 }, fxSends: { reverb: 0.3, auxB: 0.2 } } },
+    { preset: 'builtin-bass-rubber', name: 'Electric Bass', sound: { duck: 0.15, fxSends: { reverb: 0 } } },
+    { preset: 'builtin-grand-piano', name: 'Rhodes', sound: { gain: 0.7, ...wah(1.8, 0.4), inserts: { drive: 0.2, chorus: { mix: 0.3, depth: 0.4, rate: 0.6 } }, pan: 0.2, fxSends: { reverb: 0.25 } } },
+    { preset: 'builtin-keys-clav', name: 'Wah Guitar', sound: { ...wah(3.7, 0.55), pan: -0.35, fxSends: { reverb: 0.15, auxA: 0.15 } } },
+    { preset: 'builtin-lead-cs80', name: 'Wah Trumpet', sound: { gain: 1.7, ...wah(2.2, 0.35), ...glide(0.05), inserts: { tone: 0.15 }, fxSends: { reverb: 0.3, auxA: 0.35, auxB: 0.2 } } },
+    { preset: 'builtin-keys-organ', name: 'Hammond', sound: { gain: 0.7, inserts: { drive: 0.25 }, fxSends: { reverb: 0.2 } } },
   ],
-  // The ride is the cymbal lane; the hand claps ring out into the room, the kick not at all.
   drums: {
-    crash: { cymbalType: 'ride', volume: 0.55, reverbSend: 0.6 }, snare: { volume: 0.55 }, clap: { volume: 0.7 },
-    closedHH: { volume: 0.5, reverbSend: 0.6 }, kick: { volume: 0.6, reverbSend: 0 },
+    snare2: { percType: 'conga', volume: 0.75, pan: 0.3 }, ride: { percType: 'bongo', volume: 0.65, pan: -0.3 }, clap: { percType: 'tambourine', volume: 0.45, pan: 0.15 },
+    snare: { volume: 0.75 }, closedHH: { volume: 0.55, reverbSend: 0.4, pan: -0.15 }, kick: { reverbSend: 0 },
   },
-  drumSends: { reverb: 0.35 },
+  drumSends: { reverb: 0.25 },
   effects: {
-    reverb: { enabled: true, kind: 'room', decay: 1.1, mix: 0.28, preDelay: 0.01, damping: 0.4 },
-    aux: [{ kind: 'echo', level: 0.5, main: 0.4, shape: 0.5, sync: '1/8' }, { kind: 'hall', level: 0.75, main: 2.2, shape: 0.4 }],
+    reverb: { enabled: true, kind: 'room', decay: 1.2, mix: 0.25, preDelay: 0.01, damping: 0.45 },
+    aux: [{ kind: 'echo', level: 0.55, main: 0.402, shape: 0.5, sync: '1/8d' }, { kind: 'hall', level: 0.75, main: 2.5, shape: 0.4 }],
   },
   scenes: [
-    // The bass alone; the piano's low clusters and the ride come in at the end.
-    { id: 'shout-bass', name: 'Bass Alone', color: 'blue', bars: 8, tempo: 76,
-      lanes: { 1: BASS_INTRO, 2: [[], [], [], [], [], [], [[0, ['F2', 'C3', 'D#3', 'G#3'], 16, 0.45]], [[0, ['F2', 'B2', 'D#3', 'A3'], 8, 0.4]]] },
-      drums: [{}, {}, {}, {}, {}, {}, { crash: [[0, 0.4], [4, 0.4], [8, 0.45], [12, 0.5]] }, { crash: [[0, 0.5], [4, 0.5]], snare: [[8, 0.4], [10, 0.5], [12, 0.6, 2], [14, 0.75, 3]] }] },
-    // The shout begins: the blues line, the baritone under it, and the hand claps.
-    { id: 'shout-riff', name: 'Riff', color: 'violet', signature: '6/8', bars: 8, lanes: { 1: shoutBass, 3: bari }, drums: phrase(SIX_CLAPS) },
-    // The trombone and the tenor come in, each with its own riff, and the piano.
-    { id: 'shout-horns', name: 'Horns', color: 'red', signature: '6/8', bars: 8, lanes: { 1: shoutBass, 2: shoutPiano, 3: bari, 4: tenorRiff, 5: boneRiff }, drums: phrase(SIX_SHOUT) },
-    { id: 'shout-tenor', name: 'Tenor Shout', color: 'pink', signature: '6/8', bars: 8, lanes: { 1: shoutBass, 2: shoutPiano, 3: bari, 4: TENOR_SOLO, 5: boneRiff }, drums: phrase(SIX_SHOUT),
-      automation: { 4: { auxBSend: ramp(8 * 12, 0.2, 0.5) } } },
-    // Half as fast and in the minor: the trombone's turn.
-    { id: 'shout-dirge', name: 'Dirge', color: 'teal', bars: 8, tempo: 66, lanes: { 1: dirgeBass, 2: dirgePiano, 3: dirgeBari, 4: dirgeTenor, 5: DIRGE_BONE }, drums: [...Array<Hits>(7).fill(SLOW_RIDE), SLOW_FILL] },
-    { id: 'shout-faster', name: 'Faster', color: 'red', signature: '6/8', bars: 8, tempo: 168, lanes: { 1: shoutBass, 2: shoutPiano, 3: bari, 4: tenorRiff, 5: boneRiff }, drums: phrase(SIX_SHOUT) },
-    // Every horn at once, each with a line of its own.
-    { id: 'shout-collective', name: 'Everybody', color: 'pink', signature: '6/8', bars: 8, tempo: 184, lanes: { 1: shoutBass, 2: shoutPiano, 3: bari, 4: TENOR_SOLO, 5: BONE_LINE },
-      drums: phrase({ ...SIX_SHOUT, clap: [[6, 0.9], [10, 0.6]] }) },
-    // A last chord with the blue note in it, a roll on the ride, and its resolution.
-    { id: 'shout-amen', name: 'Amen', color: 'blue', bars: 4, tempo: 56,
-      lanes: {
-        1: [[[0, 'F2', 32, 0.9]], [], [[0, 'F1', 32, 0.85]], []],
-        2: [[[0, ['F3', 'A3', 'D#4', 'G#4'], 32, 0.65, strum(1 / 8)]], [], [[0, ['F3', 'A3', 'C4', 'D4'], 32, 0.6, strum(1 / 8)]], []],
-        3: [[[0, 'F2', 32, 0.8]], [], [[0, 'F2', 32, 0.7]], []],
-        4: [[[0, 'G#4', 32, 0.85]], [], [[0, 'A4', 32, 0.8]], []],
-        5: [[[0, 'D#4', 32, 0.8]], [], [[0, 'C4', 32, 0.75]], []],
-      },
-      drums: [
-        { crash: [[0, 0.3, 4], [4, 0.4, 4], [8, 0.5, 4], [12, 0.6, 4]] },
-        { crash: [[0, 0.7, 4], [4, 0.8, 4], [8, 0.9, 4], [12, 1, 4]], snare: [[8, 0.5, 4], [12, 0.7, 4]] },
-        { kick: [[0, 1]], snare: [[0, 0.9]], crash: [[0, 1]] }, {},
-      ] },
+    // The drums and the congas alone, the bass coming in halfway.
+    { id: 'wah-street', name: 'Street', color: 'blue', bars: 8, lanes: { 1: [[], [], [], [], ...wahBass(WAH_VAMP).slice(4)] }, drums: funkBars(false) },
+    { id: 'wah-vamp', name: 'Vamp', color: 'violet', bars: 8, lanes: { 1: wahBass(WAH_VAMP), 3: wahGuitar(WAH_VAMP) }, drums: funkBars() },
+    { id: 'wah-keys', name: 'Keys', color: 'green', bars: 8, lanes: { 1: wahBass(WAH_VAMP), 2: wahKeys(WAH_VAMP), 3: wahGuitar(WAH_VAMP), 5: wahOrgan(WAH_VAMP) }, drums: funkBars(),
+      automation: { 5: { level: ramp(BARS_8, 0.2, 0.7) } } },
+    { id: 'wah-trumpet', name: 'Trumpet', color: 'red', bars: 8, lanes: { 1: wahBass(WAH_VAMP), 2: wahKeys(WAH_VAMP), 3: wahGuitar(WAH_VAMP), 4: TRUMPET, 5: wahOrgan(WAH_VAMP) }, drums: funkBars() },
+    // In six: the congas and the toms, the bass and the guitar going round, the trumpet's few notes.
+    { id: 'wah-congas', name: 'Conga Break', color: 'pink', signature: '6/8', bars: 8,
+      lanes: { 1: Array<Placed[]>(8).fill(CONGA_BASS), 3: Array<Placed[]>(8).fill(congaGuitar), 4: [[], [], [[0, 'D5', 6, 0.8], [6, 'F5', 6, 0.85]], [], [], [], [[0, 'G5', 12, 0.9]], []] },
+      drums: congaBars, automation: { 4: { auxASend: held(8 * 12, 0.6) } } },
+    { id: 'wah-bridge', name: 'Bridge', color: 'teal', bars: 8, lanes: { 1: wahBass(WAH_BRIDGE), 2: wahKeys(WAH_BRIDGE), 3: wahGuitar(WAH_BRIDGE), 4: TRUMPET_BRIDGE, 5: wahOrgan(WAH_BRIDGE) }, drums: funkBars() },
+    // The keys and the trumpet go; the groove plays out and the drums have the last word.
+    { id: 'wah-out', name: 'Out', color: 'blue', bars: 8, lanes: { 1: wahBass(WAH_VAMP).slice(0, 6).concat([[], []]), 3: wahGuitar(WAH_VAMP).slice(0, 4).concat([[], [], [], []]), 5: [...wahOrgan(WAH_VAMP).slice(0, 2), [], [], [], [], [], []] },
+      drums: [...funkBars().slice(0, 6), BIG_FILL, { kick: [[0, 1]], crash: [0], snare: [[0, 0.9]] }] },
   ],
-  // About two minutes and 50 seconds, counting each scene at its own tempo.
-  order: [['shout-bass', 1], ['shout-riff', 2], ['shout-horns', 2], ['shout-tenor', 2], ['shout-dirge', 1], ['shout-riff', 1], ['shout-faster', 2], ['shout-collective', 2], ['shout-amen', 1]],
+  // 64 bars of 4/4 and 8 of 6/8 at 112 BPM: two minutes and 30 seconds.
+  order: [['wah-street', 1], ['wah-vamp', 1], ['wah-keys', 1], ['wah-trumpet', 2], ['wah-congas', 1], ['wah-bridge', 1], ['wah-trumpet', 1], ['wah-out', 1]],
 };
 
 // ---------------------------------------------------------------- Late Study (lo-fi hip hop, 4/4)
@@ -332,79 +304,113 @@ const LATE_STUDY: SampleSong = {
   order: [['lofi-intro', 1], ['lofi-loop', 1], ['lofi-tune', 1], ['lofi-bells', 1], ['lofi-bridge', 1], ['lofi-tune', 1], ['lofi-outro', 1]],
 };
 
-// ---------------------------------------------------------------- Seven Lights (electronic, 7/8)
-// E minor, seven eighths to the bar counted two, two, three (beats on steps 0, 4 and 8 of 14). An
-// acid bass whose filter is swept by automation, held chords run through the arpeggiator, a
-// supersaw pad, a Virus lead that glides, chord stabs on the off-beats, and hats rolled with repeats.
+// ---------------------------------------------------------------- Fracture Line (drum and bass, 4/4 and 7/8)
+// Drum and bass in F sharp minor at 174 BPM: a sub bass under a Reese (two detuned saws) whose filter
+// opens by automation, a dark pad, chord stabs on the off-beats, a glass lead into a dotted-eighth
+// echo, and an Amen-style break on the recorded kit, its ghost notes left to chance. Twice the
+// drums go mad: the Meltdown drops into 7/8 and every drum plays repeats of three and four in a
+// step, more of them and harder every bar, ending in a snare rolled on every step.
 
-const SEVEN_CHORDS = [['E4', 'G4', 'B4'], ['C4', 'E4', 'G4', 'B4'], ['C4', 'E4', 'G4', 'A4'], ['D4', 'F#4', 'A4', 'B4']];
-const SEVEN_PAD = [['E3', 'B3', 'G4'], ['C3', 'G3', 'E4'], ['A2', 'E3', 'C4'], ['B2', 'F#3', 'D4']];
-const SEVEN_ROOTS = ['E2', 'C2', 'A1', 'B1'];
-const acid = (root: string): Placed[] => [
-  [0, root, 1, 1], [2, root, 1, 0.6], [3, up(root, 12), 1, 0.9, { slide: true }], [4, root, 1, 0.6],
-  [6, up(root, 7), 1, 1], [8, root, 1, 0.6], [10, up(root, 10), 1, 0.9, { slide: true }], [11, up(root, 12), 1, 0.7], [12, root, 1, 1],
-];
-const sevenBass = twice(SEVEN_ROOTS.map(acid));
-const arpChords = twice(chordBars(SEVEN_CHORDS, 14, 0.8));
-const sevenPad = twice(chordBars(SEVEN_PAD, 14, 0.6));
-const SEVEN_TUNE: Placed[][] = [
-  [[0, 'B4', 4], [4, 'E5', 4], [8, 'D5', 2], [10, 'B4', 4]],
-  [[0, 'G5', 4], [4, 'E5', 4], [8, 'B4', 6]],
-  [[0, 'A4', 4], [4, 'C5', 4], [8, 'E5', 2], [10, 'G5', 4]],
-  [[0, 'F#5', 8], [8, 'D5', 2], [10, 'B4', 4]],
-];
-const SEVEN_TUNE_HIGH: Placed[][] = [
-  [[0, 'E5', 4], [4, 'G5', 4], [8, 'B5', 2], [10, 'A5', 4]],
-  [[0, 'G5', 4], [4, 'E5', 4], [8, 'C6', 6]],
-  [[0, 'A5', 4], [4, 'G5', 4], [8, 'E5', 2], [10, 'C5', 4]],
-  [[0, 'D5', 4], [4, 'F#5', 4], [8, 'B5', 6]],
-];
-const sevenStabs = twice(SEVEN_CHORDS.map((chord): Placed[] => [[2, chord, 1, 0.65], [6, chord, 1, 0.7], [10, chord, 2, 0.8]]));
-// A ghost hat before the bar comes round, there about half the time.
-const SEVEN_HATS: Array<number | [number, number, number?, number?]> = [...[0, 2, 4, 6, 8, 10, 12].map((step): [number, number] => [step, step === 0 || step === 4 || step === 8 ? 0.6 : 0.4]), [13, 0.25, 1, 0.5]];
-const SEVEN_BEAT: Hits = { kick: [0, 8, [11, 0.6]], clap: [4, 12], closedHH: SEVEN_HATS, openHH: [[6, 0.5]] };
-const SEVEN_ROLL: Hits = { ...SEVEN_BEAT, closedHH: [...SEVEN_HATS.filter(hit => (Array.isArray(hit) ? hit[0] : hit) < 10) as Array<[number, number]>, [10, 0.5, 3], [12, 0.6, 4]], snare: [[13, 0.7]] };
-const sevenDrums = (crashes: number[]): Hits[] => Array.from({ length: 8 }, (_, bar) => (bar % 4 === 3 ? SEVEN_ROLL : crashes.includes(bar) ? { ...SEVEN_BEAT, crash: [0] } : SEVEN_BEAT));
-const STEPS_7 = 8 * 14;
+const DNB_CHORDS: Record<string, string[]> = { 'F#m': ['F#3', 'A3', 'C#4'], D: ['F#3', 'A3', 'D4'], A: ['E3', 'A3', 'C#4'], E: ['E3', 'G#3', 'B3'] };
+const DNB_ROOTS: Record<string, string> = { 'F#m': 'F#1', D: 'D2', A: 'A1', E: 'E2' };
+const DNB = twice(['F#m', 'D', 'A', 'E']);
+const sub = DNB.map((name): Placed[] => [[0, DNB_ROOTS[name], 7, 1], [10, DNB_ROOTS[name], 6, 0.9]]);
+const reeseHeld = DNB.map((name): Placed[] => [[0, up(DNB_ROOTS[name], 12), 16, 0.8]]);
+const reese = DNB.map((name): Placed[] => {
+  const note = up(DNB_ROOTS[name], 12);
+  return [[0, note, 6, 0.9], [6, note, 2, 0.7], [10, note, 6, 0.85]];
+});
+const dnbPad = (velocity: number, steps = 16) => DNB.map((name): Placed[] => [[0, DNB_CHORDS[name].map(note => up(note, 12)), steps, velocity]]);
+const dnbStabs = DNB.map((name): Placed[] => {
+  const chord = DNB_CHORDS[name].map(note => up(note, 12));
+  return [[3, chord, 1, 0.6], [6, chord, 2, 0.8], [14, chord, 1, 0.7]];
+});
+const GLASS: Placed[][] = twice([
+  [[0, 'C#5', 4, 0.85], [4, 'A4', 2, 0.7], [6, 'B4', 2, 0.75], [8, 'C#5', 6, 0.85], [14, 'E5', 2, 0.8]],
+  [[0, 'F#5', 8, 0.9], [8, 'E5', 4, 0.8], [12, 'D5', 4, 0.75]],
+  [[0, 'E5', 4, 0.85], [4, 'C#5', 4, 0.8], [8, 'A4', 2, 0.7], [10, 'B4', 2, 0.75], [12, 'C#5', 4, 0.8]],
+  [[0, 'B4', 12, 0.85], [12, 'G#4', 4, 0.7]],
+]);
 
-const SEVEN_LIGHTS: SampleSong = {
-  id: 'seven-lights', name: 'Seven Lights', genre: 'Electronic in 7/8',
-  hint: 'Electronic music in 7/8 at 128 BPM: an acid bass with slides and accents whose filter is swept by automation, chords run through the arpeggiator, a supersaw pad, a Virus lead that glides, chord stabs and rolled hats on a TR-909, and a break made by muting the bass, the kick and the clap in its scene, their notes left in place',
-  tempo: 128, kit: 'tr-909', drumVolume: 0.8, level: 0.52,
+const DNB_HATS: Array<[number, number, number?, number?]> = Array.from({ length: 16 }, (_, step): [number, number, number, number] => [step, step % 4 === 2 ? 0.45 : step % 2 === 0 ? 0.3 : 0.2, 1, step % 2 ? 0.6 : 1]);
+const AMEN: Hits = {
+  kick: [[0, 1], [2, 0.8], [10, 1], [11, 0.7]],
+  snare: [[4, 1], [7, 0.4, 1, 0.7], [9, 0.45, 1, 0.7], [12, 1], [15, 0.4, 1, 0.6]],
+  closedHH: DNB_HATS,
+};
+const AMEN_B: Hits = { ...AMEN, kick: [[0, 1], [2, 0.8], [6, 0.6, 1, 0.6], [10, 1]], snare: [[4, 1], [7, 0.4], [12, 1], [13, 0.4, 1, 0.6], [15, 0.5]] };
+const AMEN_FILL: Hits = { ...AMEN, snare: [[4, 1], [7, 0.4], [12, 0.9, 2], [13, 0.8, 2], [14, 0.9, 3], [15, 1, 4]], ride: [[8, 0.7], [9, 0.7]], snare2: [[10, 0.8], [11, 0.8]] };
+const dnbBars: Hits[] = [{ ...AMEN, crash: [0] }, AMEN, AMEN, AMEN_B, AMEN, AMEN, AMEN_B, AMEN_FILL];
+const BUILD_BEATS: Hits[] = [
+  ...Array<Hits>(4).fill({ closedHH: DNB_HATS }),
+  { closedHH: DNB_HATS, kick: [[0, 0.8]] }, AMEN, AMEN_B,
+  { snare: Array.from({ length: 16 }, (_, step): [number, number, number] => [step, Number((0.4 + step * 0.035).toFixed(3)), step >= 12 ? 3 : step >= 8 ? 2 : 1]) },
+];
+// The Meltdown, seven sixteenths short of two beats a bar: every drum in repeats, more of them every bar.
+const MELTDOWN: Hits[] = Array.from({ length: 8 }, (_, bar): Hits => {
+  const heat = bar / 7, level = (value: number) => Number(Math.min(1, value).toFixed(3));
+  if (bar === 7) return { kick: [[0, 1]], crash: [[0, 1]], snare: Array.from({ length: 14 }, (_, step): [number, number, number] => [step, level(0.6 + step * 0.03), 4]) };
+  return {
+    kick: [0, 3, 6, 8, 11].map((step, index): [number, number, number, number] => [step, index === 0 ? 1 : 0.8, 1, index === 0 ? 1 : level(0.5 + heat * 0.5)]),
+    snare: Array.from({ length: 14 }, (_, step) => step).filter(step => step % 2 === 1 || bar >= 4)
+      .map((step): [number, number, number, number] => [step, level(0.45 + heat * 0.45 + (step % 7 === 3 ? 0.1 : 0)), 1 + ((step * 3 + bar) % 4), step % 7 === 3 ? 1 : level(0.45 + heat * 0.5)]),
+    snare2: [[2, 0.8, 2, 0.7], [9, 0.85, 3, 0.7], [12, 0.9, 2, level(0.6 + heat * 0.4)]],
+    ride: [[5, 0.8, 3, 0.6], [10, 0.85, 2, 0.7], [13, 0.9, 4, level(0.5 + heat * 0.5)]],
+    closedHH: Array.from({ length: 14 }, (_, step): [number, number, number, number] => [step, 0.35, step % 3 === 0 ? 3 : 1, 0.7]),
+    openHH: [[6, 0.5, 1, 0.5]], ...(bar % 2 === 0 ? { crash: [[0, 0.8]] as Array<[number, number]> } : {}),
+  };
+});
+const meltdownSub = DNB.map((name): Placed[] => [[0, DNB_ROOTS[name], 14, 0.9]]);
+const meltdownReese = DNB.map((name): Placed[] => {
+  const note = up(DNB_ROOTS[name], 12);
+  return [[0, note, 3, 0.9], [6, note, 2, 0.8], [10, note, 4, 0.85]];
+});
+
+const FRACTURE_LINE: SampleSong = {
+  id: 'fracture-line', name: 'Fracture Line', genre: 'Drum and bass',
+  hint: 'Drum and bass in F sharp minor at 174 BPM: a sub bass under a Reese whose filter opens by automation, a dark pad, chord stabs, a glass lead into an echo, an Amen-style break with ghost notes left to chance, and two Meltdowns in 7/8 where every drum plays repeats of three and four in a step, more of them and harder every bar',
+  tempo: 174, kit: 'recorded', drumVolume: 0.75, level: 0.6,
   lanes: [
-    { preset: 'builtin-bass-acid', name: 'Acid', octaveShift: -1, sound: { fxSends: { delay: 0.15 } } },
-    { preset: 'builtin-pad-jp', name: 'Supersaw Pad', sound: { duck: 0.3, fxSends: { reverb: 0.35 } } },
-    { preset: 'builtin-pluck-bell', name: 'Arp Bells', octaveShift: 1,
-      sound: { arpeggiator: { enabled: true, mode: 'updown', rate: '1/16', gate: 0.55, octaves: 2 }, fxSends: { delay: 0.25, auxA: 0.3 } } },
-    { preset: 'builtin-lead-virus', name: 'Lead', sound: { ...glide(0.05), ...vibrato(0.15, 6), fxSends: { reverb: 0.25, delay: 0.2 } } },
-    { preset: 'builtin-pluck-stab', name: 'Stabs', sound: { pan: 0.2, fxSends: { reverb: 0.2, auxA: 0.2 } } },
+    { preset: 'builtin-bass-sub', name: 'Sub', sound: { duck: 0.3, fxSends: { reverb: 0 } } },
+    { preset: 'builtin-bass-reese', name: 'Reese', sound: { duck: 0.25, inserts: { drive: 0.3 }, fxSends: { reverb: 0.05 } } },
+    { preset: 'builtin-pad-dark', name: 'Dark Pad', sound: { duck: 0.35, fxSends: { reverb: 0.45, auxB: 0.3 } } },
+    { preset: 'builtin-pluck-stab', name: 'Stabs', sound: { pan: -0.2, fxSends: { reverb: 0.25, auxA: 0.25 } } },
+    { preset: 'builtin-lead-glass', name: 'Glass Lead', sound: { pan: 0.15, fxSends: { reverb: 0.3, delay: 0.3 } } },
   ],
+  drums: { kick: { reverbSend: 0 }, snare: { volume: 0.85 }, closedHH: { reverbSend: 0.3 }, snare2: { pan: -0.3 }, ride: { pan: 0.3 } },
+  drumSends: { reverb: 0.2 },
   effects: {
-    delay: { enabled: true, time: 0.375, feedback: 0.45, mix: 0.25, sync: '1/8d' },
-    reverb: { enabled: true, kind: 'hall', decay: 3, mix: 0.3, preDelay: 0.02, damping: 0.3 },
-    aux: [{ kind: 'chorus', level: 0.7, main: 0.6, shape: 0.5 }, { kind: 'hall', level: 0.8, main: 2.5, shape: 0.4 }],
+    delay: { enabled: true, time: 0.259, feedback: 0.4, mix: 0.25, sync: '1/8d', color: 0.4 },
+    reverb: { enabled: true, kind: 'hall', decay: 3, mix: 0.28, preDelay: 0.02, damping: 0.35 },
+    aux: [{ kind: 'echo', level: 0.5, main: 0.259, shape: 0.45, sync: '1/8d' }, { kind: 'hall', level: 0.8, main: 4, shape: 0.3 }],
   },
   scenes: [
-    { id: 'seven-rise', name: 'Rise', color: 'violet', signature: '7/8', bars: 8, lanes: { 1: sevenBass, 2: sevenPad },
-      drums: [...Array<Hits>(4).fill({ closedHH: SEVEN_HATS }), ...Array<Hits>(3).fill({ closedHH: SEVEN_HATS, kick: [0, 8] }), SEVEN_ROLL],
-      automation: { 1: { cutoff: ramp(STEPS_7, 250, 1800) } } },
-    { id: 'seven-drive', name: 'Drive', color: 'red', signature: '7/8', bars: 8, lanes: { 1: sevenBass, 2: sevenPad, 3: arpChords, 5: [[], [], [], [], ...sevenStabs.slice(4)] }, drums: sevenDrums([0]),
-      automation: { 1: { cutoff: ramp(STEPS_7, 900, 3500) } } },
-    { id: 'seven-tune', name: 'Tune', color: 'pink', signature: '7/8', bars: 8, lanes: { 1: sevenBass, 2: sevenPad, 3: arpChords, 4: twice(SEVEN_TUNE), 5: sevenStabs }, drums: sevenDrums([0, 4]) },
-    // The Tune with the bass, the kick and the clap muted in this scene: unmute them to hear it whole.
-    { id: 'seven-break', name: 'Break', color: 'blue', signature: '7/8', bars: 8, lanes: { 1: sevenBass, 2: sevenPad, 3: arpChords, 4: [...SEVEN_TUNE.map(bar => bar.slice(0, 1)), ...SEVEN_TUNE] },
-      drums: [...sevenDrums([]).slice(0, 7), { ...SEVEN_BEAT, snare: [[8, 0.4], [10, 0.5], [12, 0.6, 2], [13, 0.8, 2]] }],
-      mutes: { lanes: [1], drums: ['kick', 'clap'] }, automation: { 4: { auxBSend: held(STEPS_7, 0.6) } } },
-    // Everything, the lead higher and the bass's filter wide open.
-    { id: 'seven-peak', name: 'Peak', color: 'red', signature: '7/8', bars: 8, lanes: { 1: sevenBass, 2: sevenPad, 3: arpChords, 4: [...SEVEN_TUNE, ...SEVEN_TUNE_HIGH], 5: sevenStabs }, drums: sevenDrums([0, 4]),
-      automation: { 1: { cutoff: held(STEPS_7, 4000) } } },
-    // The arpeggio's filter closes; the pad and the stabs fade.
-    { id: 'seven-outro', name: 'Outro', color: 'violet', signature: '7/8', bars: 8, lanes: { 2: sevenPad, 3: arpChords, 5: sevenStabs.slice(0, 4).concat([[], [], [], []]) },
-      drums: [{ closedHH: SEVEN_HATS, kick: [0, 8] }, { closedHH: SEVEN_HATS, kick: [0, 8] }, { closedHH: SEVEN_HATS }, { closedHH: SEVEN_HATS }, { closedHH: SEVEN_HATS.slice(0, 3) }, {}, {}, {}],
-      automation: { 3: { cutoff: ramp(STEPS_7, 6000, 300) }, 2: { level: ramp(STEPS_7, 0.8, 0.1) } } },
+    // The pad and the lead behind closed filters, then the hats.
+    { id: 'fracture-intro', name: 'Intro', color: 'blue', bars: 8, lanes: { 3: dnbPad(0.6), 5: GLASS },
+      drums: [{}, {}, {}, {}, ...Array<Hits>(4).fill({ closedHH: DNB_HATS })],
+      automation: { 3: { cutoff: ramp(BARS_8, 400, 3000) }, 5: { cutoff: ramp(BARS_8, 600, 6000), auxBSend: held(BARS_8, 0.5) } } },
+    // The Reese rising out of the dark, the break coming in, and a snare roll.
+    { id: 'fracture-build', name: 'Build', color: 'violet', bars: 8, lanes: { 2: reeseHeld, 3: dnbPad(0.55) }, drums: BUILD_BEATS,
+      automation: { 2: { cutoff: ramp(BARS_8, 200, 2500) } } },
+    { id: 'fracture-drop', name: 'Drop', color: 'red', bars: 8, lanes: { 1: sub, 2: reese, 3: dnbPad(0.4), 4: dnbStabs }, drums: dnbBars,
+      automation: { 2: { cutoff: held(BARS_8, 2500) } } },
+    { id: 'fracture-lead', name: 'Lead', color: 'pink', bars: 8, lanes: { 1: sub, 2: reese, 3: dnbPad(0.4), 4: dnbStabs, 5: GLASS }, drums: dnbBars,
+      automation: { 2: { cutoff: ramp(BARS_8, 1800, 4500) } } },
+    // The drums go mad, in seven.
+    { id: 'fracture-meltdown', name: 'Meltdown', color: 'red', signature: '7/8', bars: 8, lanes: { 1: meltdownSub, 2: meltdownReese, 3: dnbPad(0.35, 14) }, drums: MELTDOWN,
+      automation: { 2: { cutoff: ramp(8 * 14, 1500, 6000) } } },
+    // No drums: the pad, the lead deep in the hall, the Reese low and closed.
+    { id: 'fracture-breakdown', name: 'Breakdown', color: 'teal', bars: 8, lanes: { 2: reeseHeld, 3: dnbPad(0.6), 5: GLASS }, drums: Array<Hits>(8).fill({}),
+      automation: { 2: { cutoff: held(BARS_8, 400) }, 5: { auxBSend: held(BARS_8, 0.8) } } },
+    { id: 'fracture-outro', name: 'Outro', color: 'blue', bars: 8, lanes: { 1: [...sub.slice(0, 2), [], [], [], [], [], []], 3: dnbPad(0.5), 5: GLASS.map(bar => bar.slice(0, 1)) },
+      drums: [AMEN, AMEN_B, { closedHH: DNB_HATS }, { closedHH: DNB_HATS }, { closedHH: DNB_HATS.slice(0, 8) }, {}, {}, {}],
+      automation: { 3: { cutoff: ramp(BARS_8, 3000, 300) } } },
   ],
-  // 80 bars of seven eighths at 128 BPM: two minutes and eleven seconds.
-  order: [['seven-rise', 1], ['seven-drive', 1], ['seven-tune', 2], ['seven-break', 1], ['seven-drive', 1], ['seven-peak', 3], ['seven-outro', 1]],
+  // 88 bars of 4/4 and 16 of 7/8 at 174 BPM: two minutes and 21 seconds.
+  order: [
+    ['fracture-intro', 1], ['fracture-build', 1], ['fracture-drop', 2], ['fracture-lead', 1], ['fracture-meltdown', 1], ['fracture-breakdown', 1],
+    ['fracture-build', 1], ['fracture-lead', 2], ['fracture-meltdown', 1], ['fracture-drop', 1], ['fracture-outro', 1],
+  ],
 };
 
 // ---------------------------------------------------------------- Market Day (Afrobeat, 12/8)
@@ -905,4 +911,4 @@ const LONG_ASCENT: SampleSong = {
   ],
 };
 
-export const SAMPLE_SONGS: SampleSong[] = [NIGHT_CIRCUIT, SIXTH_STREET, LATE_STUDY, SEVEN_LIGHTS, MARKET_DAY, CATHEDRAL, LANTERNS, SILVER_SATELLITE, LONG_ASCENT];
+export const SAMPLE_SONGS: SampleSong[] = [NIGHT_CIRCUIT, DOWNTOWN_WAH, LATE_STUDY, FRACTURE_LINE, MARKET_DAY, CATHEDRAL, LANTERNS, SILVER_SATELLITE, LONG_ASCENT];

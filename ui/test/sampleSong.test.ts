@@ -150,19 +150,35 @@ test('every sample song plays all five lanes and lasts at least two minutes', as
   }
 });
 
-test('the jazz song after Mingus starts with the bass alone, shouts in 6/8, slows to a 4/4 dirge, and gets faster', async () => {
-  const song = SAMPLE_SONGS.find(entry => entry.id === 'sixth-street-shout')!;
+test('the acid jazz song vamps on one chord over busy drums: ghost notes, congas and a fill every other bar', async () => {
+  const song = SAMPLE_SONGS.find(entry => entry.id === 'downtown-wah')!;
   const made = await service();
   await made.importProject(build(made, song));
   const state = made.snapshot(), scenes = made.getScenes().scenes as Scene[];
   const byId = (id: string) => scenes.find(scene => scene.id === id)!;
-  assert.deepEqual(state.synths.map(lane => lane.name), ['Upright', 'Piano', 'Baritone', 'Tenor Sax', 'Trombone']);
-  const intro = byId('shout-bass');
-  assert.ok(played(intro.lanes[1]).length > 8 && [3, 4, 5].every(lane => played(intro.lanes[lane]).length === 0), 'the bass begins alone');
-  assert.equal(byId('shout-riff').signature, '6/8');
-  assert.equal(byId('shout-dirge').signature ?? '4/4', '4/4');
-  assert.deepEqual(['shout-dirge', 'shout-riff', 'shout-faster', 'shout-collective'].map(id => byId(id).tempo ?? song.tempo), [66, 150, 168, 184], 'and it speeds up after the dirge');
-  assert.ok(state.synths[4].synthParams.portamento?.enabled, 'the trombone slides between its notes');
+  assert.deepEqual(state.synths.map(lane => lane.name), ['Electric Bass', 'Rhodes', 'Wah Guitar', 'Wah Trumpet', 'Hammond']);
+  assert.ok([1, 2, 3].every(lane => state.synths[lane].synthParams.lfo1.enabled && state.synths[lane].synthParams.lfo1.target === 'filter'), 'the keys, guitar and trumpet go through wahs');
+  const drums = byId('wah-trumpet').drums, bar = (steps: boolean[], index: number) => steps.slice(index * 16, index * 16 + 16).filter(Boolean).length;
+  assert.ok(drums.snare.stepProbabilities?.some(chance => chance < 1), 'the ghost notes come and go');
+  assert.ok([1, 3, 5, 7].every(index => bar(drums.snare.steps, index) > bar(drums.snare.steps, index - 1) || bar(drums.ride.steps, index) > 0), 'a fill every other bar');
+  assert.ok([3, 7].every(index => bar(drums.snare2.steps, index) >= 3 && bar(drums.ride.steps, index) >= 3), 'and down the bongos and congas every fourth');
+  assert.deepEqual([state.drumState.snare2.settings.percType, state.drumState.ride.settings.percType, state.drumState.clap.settings.percType], ['conga', 'bongo', 'tambourine']);
+  assert.equal(byId('wah-congas').signature, '6/8');
+});
+
+test('the drum and bass song is at 174 BPM, and in its Meltdown the drums go mad in 7/8', async () => {
+  const song = SAMPLE_SONGS.find(entry => entry.id === 'fracture-line')!;
+  const made = await service();
+  await made.importProject(build(made, song));
+  const state = made.snapshot(), scenes = made.getScenes().scenes as Scene[];
+  assert.equal(state.tempo, 174);
+  const meltdown = scenes.find(scene => scene.id === 'fracture-meltdown')!;
+  assert.equal(meltdown.signature, '7/8');
+  const repeats = (instrument: 'snare' | 'ride' | 'snare2') => (meltdown.drums[instrument].stepRatchets ?? []).filter(count => count >= 3).length;
+  assert.ok(repeats('snare') >= 20 && repeats('ride') >= 8, 'every drum in repeats of three and four');
+  const hits = (bar: number) => meltdown.drums.snare.steps.slice(bar * 14, bar * 14 + 14).filter(Boolean).length;
+  assert.ok(hits(6) > hits(0) && hits(7) === 14, 'more of them every bar, and a snare rolled on every step at the end');
+  assert.equal(scenes.find(scene => scene.id === 'fracture-breakdown')!.drums.snare.steps.some(Boolean), false, 'and a breakdown without drums');
 });
 
 test('the long build plays one figure that gains notes and opens its filter, section by section', async () => {

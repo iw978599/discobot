@@ -1284,7 +1284,9 @@ V6. **A second sample song, and more starting beats.** (S each) One song in
    Opus's tune is not ours to bundle.
    The owner then asked to jump ahead in a playing song: pressing a block or a
    playlist row now goes there at once. The same day they heard a lot of
-   static playing the songs; not yet reproduced (see the questions).
+   static playing the songs; not yet reproduced (see the questions). Then the
+   electronic song became drum and bass (Fracture Line) and the jazz acid jazz
+   after On the Corner (Downtown Wah): done, not verified by ear.
 
 ### Playing and writing
 
