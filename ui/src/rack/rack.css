@@ -61,6 +61,8 @@
   --drum-low-tom: #14b8a6;
   --drum-high-tom: #8b5cf6;
   --drum-cymbal: #ec4899;
+  /* A row added after the eight (docs/DRUM_ROWS_PLAN.md): one colour for all of them, a cool grey. */
+  --drum-added: #94a3b8;
   /* The colours a scene can be marked with. None is the amber of "on". */
   --scene-red: #ef4444;
   --scene-green: #22c55e;
@@ -745,6 +747,8 @@
 [data-drum="snare2"] { --drum-color: var(--drum-low-tom); }
 [data-drum="ride"] { --drum-color: var(--drum-high-tom); }
 [data-drum="crash"] { --drum-color: var(--drum-cymbal); }
+[data-drum^="extra"] { --drum-color: var(--drum-added); }
+.drum-add-row { grid-template-columns: auto; justify-items: start; }
 .drum-top .drum-kit-select { width: 100%; font-size: var(--type-caption); }
 .drum-top .rack-plate { gap: 6px; }
 .drum-strip, .drum-sends { border-top: 1px solid var(--edge-faint); padding-top: 10px; flex-wrap: wrap; gap: 10px 18px; }

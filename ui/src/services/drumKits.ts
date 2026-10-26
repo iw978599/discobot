@@ -1,6 +1,13 @@
-import type { DrumInstrument, DrumKitDefinition, DrumKitId, DrumKitModelVariant } from '../types';
+import type { DrumInstrument, DrumKitDefinition, DrumKitId, DrumKitModelVariant, DrumRow, DrumSettings } from '../types';
+import { EXTRA_DRUMS } from '@discobot/engine';
+
+// An added row's settings before it is changed (docs/DRUM_ROWS_PLAN.md). It plays a recording, so
+// Tone and Decay leave it as recorded (Decay at its top is no fade) and it is not humanized.
+export const EXTRA_ROW_SETTINGS: DrumSettings = { volume: 0.8, tone: 0.5, extra: 1, tune: 0, humanize: 0, pan: 0 };
 
 export const DRUM_INSTRUMENTS: DrumInstrument[] = ['kick', 'snare', 'openHH', 'closedHH', 'ride', 'crash', 'snare2', 'clap'];
+// The rows a drum state (or a scene's drums) has, in their order: the eight, then the added ones.
+export const drumRowsOf = (drums: Partial<Record<DrumRow, unknown>>): DrumRow[] => [...DRUM_INSTRUMENTS, ...EXTRA_DRUMS.filter(row => drums[row] !== undefined)];
 
 // The one name each drum has, wherever it is shown. Low Tom and High Tom are the snare2 and ride ids.
 export const DRUM_NAMES: Record<DrumInstrument, string> = {

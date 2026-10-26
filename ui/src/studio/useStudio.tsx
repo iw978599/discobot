@@ -923,7 +923,7 @@ export function useStudio(engine?: AudioEngine) {
     const hasSelected = data.kits.some((kit) => kit.id === selectedDrumKitIdRef.current);
     if (!hasSelected) setSelectedDrumKitId(data.defaultKitId);
   }, []);
-  const { handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail, handleDrumSettingsChange, handleDrumMixChange, handleDrumReset, handleStarter, handleCopyPartToScene, handleSampleSong, dismissStarters, handleDrumMasterVolumeChange, handleDrumSwingChange, handleSwingTemplate, handleDrumFxChange, handleEffectsLoopChange, handleDrumMuteAll, handleDrumSoloAll } = useStudioDrums(core, { handleImportProject });
+  const { handleAddDrumRow, handleRemoveDrumRow, handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail, handleDrumSettingsChange, handleDrumMixChange, handleDrumReset, handleStarter, handleCopyPartToScene, handleSampleSong, dismissStarters, handleDrumMasterVolumeChange, handleDrumSwingChange, handleSwingTemplate, handleDrumFxChange, handleEffectsLoopChange, handleDrumMuteAll, handleDrumSoloAll } = useStudioDrums(core, { handleImportProject });
 
   // Everything back to a new project's, as one undo step.
   const handleReset = useCallback(async () => {
@@ -1027,7 +1027,7 @@ export function useStudio(engine?: AudioEngine) {
     handleExportMidi, currentArrangement, reportExportError, handleExportProject, projectImportFileRef, handleImportProjectFile, handleImportProject,
     handleNewProject, handleOpenProject, handleCopyProject, handleRenameProject, handleDeleteProject, handleRestoreVersion, handleCopyVersion, handleImportSynthPreset, handleExportSynthPreset, presetImportReport, setPresetImportReport, handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail,
     handleDrumSettingsChange, handleDrumMixChange, handleDrumReset, handleDrumMasterVolumeChange, handleDrumSwingChange, handleSwingTemplate,
-    handleDrumFxChange, handleEffectsLoopChange, handleDrumMuteAll, handleDrumSoloAll, handleReset,
+    handleDrumFxChange, handleEffectsLoopChange, handleDrumMuteAll, handleDrumSoloAll, handleReset, handleAddDrumRow, handleRemoveDrumRow,
     scenes, currentSceneId, song, playMode, setPlayMode, songStartEntry, setSongStartEntry, handleSongJump, songPosition,
     handleSceneSelect, handleSceneAdd, handleSceneRename, handleSceneColor, handleSceneTempo, handleSceneMove, handleSceneSignature, handleSceneDelete, handleSongChange, songArrangement, handleExportSongMidi,
     // The open scene's time signature, and any scene's by its id.

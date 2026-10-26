@@ -119,6 +119,7 @@ export function editKeys(op: Operation, scene: string): string[] {
     case 'drum.bars': case 'drum.copyBar': return [`${here}/drums`];
     case 'drum.step': case 'drum.stepVelocity': case 'drum.stepDetail': return [`${here}/drums/${op.instrument}/${op.step}`];
     case 'drum.mix': return [`${here}/drums/${op.instrument}/mix`];
+    case 'drum.addRow': case 'drum.removeRow': return ['drums', 'scenes'];
     case 'drum.settings': return [`drums/settings/${op.instrument}`];
     case 'drum.sample': return [`drums/sample/${op.instrument}`];
     case 'drum.fx': return patchKeys('drumfx', op.patch);

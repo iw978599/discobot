@@ -1,4 +1,4 @@
-import type { DrumInstrument, DrumKitDefinition, DrumKitId, DrumSettings, DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, Scene, Song, SynthParameters, SynthModelId, SynthModelParams } from '../types';
+import type { DrumKitDefinition, DrumRow, ExtraDrum, DrumKitId, DrumSettings, DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, Scene, Song, SynthParameters, SynthModelId, SynthModelParams } from '../types';
 import { sanitizeGuests, type Guest } from './guests';
 import { createIndexedDbLibrary, createMemoryLibrary, hasIndexedDb, type ProjectInfo, type ProjectLibrary, type ProjectRecord, type VersionInfo, type VersionReason } from './projectLibrary';
 import { COPY_SUFFIX, DEFAULT_PROJECT_NAME, EARLIER_SUFFIX } from './projectFamilies';
@@ -865,12 +865,14 @@ export class LocalProjectService {
   resetDrums() { return this.apply({ type: 'drum.reset' }); }
   setDrumBars(bars: number) { return this.apply({ type: 'drum.bars', bars }); }
   copyDrumBar(from: number, to: number[]) { return this.apply({ type: 'drum.copyBar', from, to }); }
-  setDrumStep(instrument: DrumInstrument, step: number, active: boolean) { return this.apply({ type: 'drum.step', instrument, step, active }); }
-  setDrumStepVelocity(instrument: DrumInstrument, step: number, velocity: number) { return this.apply({ type: 'drum.stepVelocity', instrument, step, velocity }); }
-  setDrumStepDetail(instrument: DrumInstrument, step: number, detail: { probability?: number; ratchet?: number }) { return this.apply({ type: 'drum.stepDetail', instrument, step, probability: detail.probability, ratchet: detail.ratchet }); }
-  setDrumSettings(instrument: DrumInstrument, settings: Partial<DrumSettings>) { return this.apply({ type: 'drum.settings', instrument, settings }); }
-  setDrumSample(instrument: DrumInstrument, sampleId?: string) { return this.apply({ type: 'drum.sample', instrument, sampleId }); }
-  setDrumMix(instrument: DrumInstrument, mix: { muted?: boolean; solo?: boolean }) { return this.apply({ type: 'drum.mix', instrument, muted: mix.muted, solo: mix.solo }); }
+  setDrumStep(instrument: DrumRow, step: number, active: boolean) { return this.apply({ type: 'drum.step', instrument, step, active }); }
+  setDrumStepVelocity(instrument: DrumRow, step: number, velocity: number) { return this.apply({ type: 'drum.stepVelocity', instrument, step, velocity }); }
+  setDrumStepDetail(instrument: DrumRow, step: number, detail: { probability?: number; ratchet?: number }) { return this.apply({ type: 'drum.stepDetail', instrument, step, probability: detail.probability, ratchet: detail.ratchet }); }
+  setDrumSettings(instrument: DrumRow, settings: Partial<DrumSettings>) { return this.apply({ type: 'drum.settings', instrument, settings }); }
+  setDrumSample(instrument: DrumRow, sampleId?: string) { return this.apply({ type: 'drum.sample', instrument, sampleId }); }
+  addDrumRow(row: ExtraDrum) { return this.apply({ type: 'drum.addRow', row }); }
+  removeDrumRow(row: ExtraDrum) { return this.apply({ type: 'drum.removeRow', row }); }
+  setDrumMix(instrument: DrumRow, mix: { muted?: boolean; solo?: boolean }) { return this.apply({ type: 'drum.mix', instrument, muted: mix.muted, solo: mix.solo }); }
   setDrumFx(patch: DeepPartial<DrumFxState>) { return this.apply({ type: 'drum.fx', patch }); }
   setEffectsLoop(patch: DeepPartial<EffectsLoopState>) { return this.apply({ type: 'effects.set', patch }); }
   setTempo(tempo: number) { return this.apply({ type: 'tempo.set', tempo }); }
@@ -909,7 +911,7 @@ export class LocalProjectService {
   setSceneTempo(sceneId: string, tempo?: number) { return this.apply({ type: 'scene.tempo', sceneId, tempo }); }
   moveScene(sceneId: string, to: number) { return this.apply({ type: 'scene.move', sceneId, to }); }
   setSceneSignature(signature: string) { return this.apply({ type: 'scene.signature', signature }); }
-  copyPartToScene(toSceneId: string, part: { synthId?: number; drum?: DrumInstrument }) { return this.apply({ type: 'scene.copyPart', toSceneId, ...part }); }
+  copyPartToScene(toSceneId: string, part: { synthId?: number; drum?: DrumRow }) { return this.apply({ type: 'scene.copyPart', toSceneId, ...part }); }
   deleteScene(sceneId: string) { return this.apply({ type: 'scene.delete', sceneId }); }
   replaceScenes(replacement: { scenes?: unknown; currentSceneId?: string; song?: unknown } = {}) { return this.apply({ type: 'scene.replace', scenes: replacement.scenes, currentSceneId: replacement.currentSceneId, song: replacement.song }); }
   setSong(song: { entries?: unknown; loop?: boolean }) { return this.apply({ type: 'song.set', entries: song.entries, loop: song.loop }); }

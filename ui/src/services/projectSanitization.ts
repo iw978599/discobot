@@ -1,5 +1,5 @@
-import type { DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, Scene, SceneMutes, Song, SynthParameters, SynthModelParams } from '../types';
-import { CYMBAL_TYPES, DRIVE_KINDS, PERC_CHOICES, MAX_MOD_ROUTES, MOD_DESTINATIONS, MOD_SOURCES, type DriveKind, type ModRoute } from '@discobot/engine';
+import type { DrumRow, DrumSettings, DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, Scene, SceneMutes, Song, SynthParameters, SynthModelParams } from '../types';
+import { CYMBAL_TYPES, DRIVE_KINDS, EXTRA_DRUMS, PERC_CHOICES, MAX_MOD_ROUTES, MOD_DESTINATIONS, MOD_SOURCES, type DriveKind, type ModRoute } from '@discobot/engine';
 import { DELAY_SYNCS } from './delayTime';
 import { storedRateSync } from './rateSync';
 import { CHORUS_DEFAULT, EQ_RANGE_DB, INSERT_DEFAULT, MAX_INSERT_DELAY_TIME, MAX_PRE_DELAY } from './effectSettings';
@@ -13,7 +13,7 @@ import { sanitizeAutomation } from './automation';
 import { sanitizeAux } from './auxSettings';
 import { normalizeSynthModelId } from '../synthModels';
 import { noteNameToMidi } from '../utils/midiExport';
-import { DRUM_INSTRUMENTS, DRUM_KITS } from './drumKits';
+import { DRUM_INSTRUMENTS, DRUM_KITS, EXTRA_ROW_SETTINGS, drumRowsOf } from './drumKits';
 import { MAX_RATCHET } from './drumScheduling';
 
 export const record = (value: unknown): Record<string, any> =>
@@ -247,8 +247,13 @@ export function sanitizeDrums(value: unknown, defaults: DrumState, signature?: u
   // Every drum lane is as long as the kick's.
   const kickSteps = record(input.kick).steps, perBar = barSteps(signature);
   const total = perBar * (BAR_CHOICES.find(choice => Array.isArray(kickSteps) && kickSteps.length === choice * perBar) ?? 1);
-  return Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => {
-    const track = record(input[instrument]), settings = record(track.settings), base = defaults[instrument];
+  // The eight drums always; an added row only where there is one, on its own defaults.
+  const rows: Array<[DrumRow, { settings: DrumSettings }]> = [
+    ...DRUM_INSTRUMENTS.map((instrument): [DrumRow, { settings: DrumSettings }] => [instrument, defaults[instrument]]),
+    ...EXTRA_DRUMS.filter(row => input[row] !== null && typeof input[row] === 'object' && !Array.isArray(input[row])).map((row): [DrumRow, { settings: DrumSettings }] => [row, { settings: EXTRA_ROW_SETTINGS }]),
+  ];
+  return Object.fromEntries(rows.map(([instrument, base]) => {
+    const track = record(input[instrument]), settings = record(track.settings);
     const state = {
       steps: Array.from({ length: total }, (_, i) => Array.isArray(track.steps) && track.steps[i] === true),
       muted: track.muted === true, solo: track.solo === true,
@@ -287,7 +292,7 @@ export function sanitizeSceneMutes(value: unknown): SceneMutes | undefined {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const input = record(value), flags = (entry: unknown) => ({ muted: record(entry).muted === true, solo: record(entry).solo === true });
   const lanes = Object.fromEntries(LANE_IDS.filter(id => record(input.lanes)[id] !== undefined).map(id => [id, flags(record(input.lanes)[id])]));
-  const drums = Object.fromEntries(DRUM_INSTRUMENTS.filter(instrument => record(input.drums)[instrument] !== undefined).map(instrument => [instrument, flags(record(input.drums)[instrument])]));
+  const drums = Object.fromEntries([...DRUM_INSTRUMENTS, ...EXTRA_DRUMS].filter(instrument => record(input.drums)[instrument] !== undefined).map(instrument => [instrument, flags(record(input.drums)[instrument])]));
   return { lanes, drums };
 }
 
@@ -324,8 +329,8 @@ export function sanitizeScenes(value: unknown, defaults: DrumState): Scene[] | n
       ...(sanitizeSceneGuests(input.guests) ? { guests: sanitizeSceneGuests(input.guests) } : {}),
       ...(sanitizeGuestMix(input.guestMix) ? { guestMix: sanitizeGuestMix(input.guestMix) } : {}),
       ...(sanitizeSceneMutes(input.mutes) ? { mutes: sanitizeSceneMutes(input.mutes) } : {}),
-      drums: Object.fromEntries(DRUM_INSTRUMENTS.map(instrument => {
-        const { steps, stepVelocities, stepProbabilities, stepRatchets } = drums[instrument];
+      drums: Object.fromEntries(drumRowsOf(drums).map(instrument => {
+        const { steps, stepVelocities, stepProbabilities, stepRatchets } = drums[instrument]!;
         return [instrument, {
           steps, ...(stepVelocities ? { stepVelocities } : {}), ...(stepProbabilities ? { stepProbabilities } : {}),
           ...(stepRatchets ? { stepRatchets } : {}),

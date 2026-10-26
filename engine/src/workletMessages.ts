@@ -1,7 +1,7 @@
 import type { NoteOnMessage, SynthSample } from './synth/SynthCore';
 import type { VoiceParams } from './synth/voiceParams';
 import type { DrumHitMessage, DrumRecordings, DrumSample } from './drums/DrumCore';
-import type { DrumInstrument } from './types';
+import type { DrumRow } from './types';
 
 // What the page sends to each audio processor. The hooks that send and the worklet that
 // receives both use these, so a field renamed on one side is a compile error, not a sound
@@ -23,7 +23,7 @@ export type SynthWorkletMessage =
 export type DrumWorkletMessage =
   | ({ type: 'hit' } & DrumHitMessage)
   // null puts the lane back on its synthesized voice
-  | { type: 'sample'; instrument: DrumInstrument; sample: DrumSample | null }
+  | { type: 'sample'; instrument: DrumRow; sample: DrumSample | null }
   // the recordings the cymbal lane plays, by kind of cymbal
   | { type: 'cymbals'; cymbals: DrumRecordings }
   | { type: 'stopAll' };

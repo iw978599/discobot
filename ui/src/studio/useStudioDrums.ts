@@ -1,7 +1,8 @@
 // The drums and the shared effects: the kit, steps, settings, mutes and sends, Reset, and the
 // starting points offered on an empty project (beats and sample songs). Split out of useStudio.tsx.
 import { useCallback, useEffect } from 'react';
-import { DrumState, DrumInstrument, DrumSettings, DrumKitId, EffectsLoopState, FxSendLevels } from '../types';
+import { DrumState, DrumRow, DrumSettings, DrumKitId, EffectsLoopState, ExtraDrum, FxSendLevels } from '../types';
+import { EXTRA_DRUMS } from '@discobot/engine';
 import { localService } from '../services/localService';
 import { createBuiltInPresets } from '../services/builtInPresets';
 import { STARTERS, projectIsEmpty, starterDrums, starterPattern } from '../services/starters';
@@ -26,22 +27,22 @@ export function useStudioDrums(core: StudioCore, needs: StudioDrumsNeeds) {
     const result = localService.setDrumKit(kitId, applyDefaults);
     return result.ok ? result.value.drumState : undefined;
   }, []);
-  const handleDrumStepToggle = useCallback((instrument: DrumInstrument, step: number, active: boolean) => {
+  const handleDrumStepToggle = useCallback((instrument: DrumRow, step: number, active: boolean) => {
     localService.setDrumStep(instrument, step, active);
   }, []);
-  const handleDrumStepVelocity = useCallback((instrument: DrumInstrument, step: number, velocity: number) => {
+  const handleDrumStepVelocity = useCallback((instrument: DrumRow, step: number, velocity: number) => {
     localService.setDrumStepVelocity(instrument, step, velocity);
   }, []);
-  const handleDrumStepDetail = useCallback((instrument: DrumInstrument, step: number, detail: { probability?: number; ratchet?: number }) => {
+  const handleDrumStepDetail = useCallback((instrument: DrumRow, step: number, detail: { probability?: number; ratchet?: number }) => {
     localService.setDrumStepDetail(instrument, step, detail);
   }, []);
-  const handleDrumSettingsChange = useCallback((instrument: DrumInstrument, settings: Partial<DrumSettings>) => {
+  const handleDrumSettingsChange = useCallback((instrument: DrumRow, settings: Partial<DrumSettings>) => {
     const synth = synthsRef.current[0];
     if (synth?.pattern) {
     }
     localService.setDrumSettings(instrument, settings);
   }, []);
-  const handleDrumMixChange = useCallback((instrument: DrumInstrument, mix: { muted?: boolean; solo?: boolean }) => {
+  const handleDrumMixChange = useCallback((instrument: DrumRow, mix: { muted?: boolean; solo?: boolean }) => {
     localService.setDrumMix(instrument, mix);
   }, []);
   const handleDrumReset = useCallback(() => {
@@ -61,7 +62,7 @@ export function useStudioDrums(core: StudioCore, needs: StudioDrumsNeeds) {
   }, []);
   // One part of the open scene into another scene. It is not an edit to the open scene, so it is not
   // in the undo history; the control that calls this asks first when it would replace something.
-  const handleCopyPartToScene = useCallback((toSceneId: string, part: { synthId?: number; drum?: DrumInstrument }) => {
+  const handleCopyPartToScene = useCallback((toSceneId: string, part: { synthId?: number; drum?: DrumRow }) => {
     const result = localService.copyPartToScene(toSceneId, part);
     if (!result.ok) setStorageError(result.error ?? 'That could not be copied.');
   }, []);
@@ -105,7 +106,7 @@ export function useStudioDrums(core: StudioCore, needs: StudioDrumsNeeds) {
   }, []);
   const handleDrumMuteAll = useCallback((muted: boolean) => {
     const nextState = Object.fromEntries(
-      (Object.keys(drumStateRef.current) as DrumInstrument[]).map(inst => [
+      (Object.keys(drumStateRef.current) as DrumRow[]).map(inst => [
         inst,
         { ...drumStateRef.current[inst], muted },
       ])
@@ -114,12 +115,19 @@ export function useStudioDrums(core: StudioCore, needs: StudioDrumsNeeds) {
   }, []);
   const handleDrumSoloAll = useCallback(() => {
     const nextState = Object.fromEntries(
-      (Object.keys(drumStateRef.current) as DrumInstrument[]).map(inst => [
+      (Object.keys(drumStateRef.current) as DrumRow[]).map(inst => [
         inst,
         { ...drumStateRef.current[inst], solo: false },
       ])
     ) as DrumState;
     localService.setDrumState(nextState);
   }, []);
-  return { handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail, handleDrumSettingsChange, handleDrumMixChange, handleDrumReset, handleStarter, handleCopyPartToScene, handleSampleSong, dismissStarters, handleDrumMasterVolumeChange, handleDrumSwingChange, handleSwingTemplate, handleDrumFxChange, handleEffectsLoopChange, handleDrumMuteAll, handleDrumSoloAll };
+  // A row after the eight drums, the first one free (docs/DRUM_ROWS_PLAN.md): its id, or null when
+  // all eight have been added. The id is chosen here, before the operation, as live sessions need.
+  const handleAddDrumRow = useCallback((): ExtraDrum | null => {
+    const row = EXTRA_DRUMS.find(id => !drumStateRef.current[id]);
+    return row && localService.addDrumRow(row).ok ? row : null;
+  }, []);
+  const handleRemoveDrumRow = useCallback((row: ExtraDrum) => { localService.removeDrumRow(row); }, []);
+  return { handleAddDrumRow, handleRemoveDrumRow, handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail, handleDrumSettingsChange, handleDrumMixChange, handleDrumReset, handleStarter, handleCopyPartToScene, handleSampleSong, dismissStarters, handleDrumMasterVolumeChange, handleDrumSwingChange, handleSwingTemplate, handleDrumFxChange, handleEffectsLoopChange, handleDrumMuteAll, handleDrumSoloAll };
 }

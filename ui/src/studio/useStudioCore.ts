@@ -5,7 +5,7 @@ import { audioEngine, type AudioEngine } from '../hooks/browserAudio';
 import { useSynthAudio } from '../hooks/useSynthAudio';
 import { useDrumAudio } from '../hooks/useDrumAudio';
 import { MidiMode } from '../hooks/useMidiInput';
-import { DrumState, DrumInstrument, DrumKitDefinition, DrumKitId, Scene, Song, TimeSignature } from '../types';
+import { DrumState, DrumInstrument, DrumRow, DrumKitDefinition, DrumKitId, Scene, Song, TimeSignature } from '../types';
 import { SongPosition } from '../services/songPlayback';
 import { loadCymbals } from '../services/builtInWaves';
 import { type ImportedPreset } from '../services/presetImport';
@@ -53,8 +53,8 @@ export function useStudioCore(engine: AudioEngine = audioEngine) {
   const [globalTempo, setGlobalTempo] = useState(120);
   const [storageError, setStorageError] = useState<string | null>(null);
   // Decoded samples for the drum lanes that use one, and the lanes whose sample is not on this device.
-  const drumSamplesRef = useRef<Partial<Record<DrumInstrument, DrumSample>>>({});
-  const [missingDrumSamples, setMissingDrumSamples] = useState<DrumInstrument[]>([]);
+  const drumSamplesRef = useRef<Partial<Record<DrumRow, DrumSample>>>({});
+  const [missingDrumSamples, setMissingDrumSamples] = useState<DrumRow[]>([]);
   // The app's cymbal recordings, for the worklet and for export. Empty until they have been fetched.
   const cymbalsRef = useRef<Awaited<ReturnType<typeof loadCymbals>>>({});
   // The decoded recording each synth lane's sample engine plays, by lane id.

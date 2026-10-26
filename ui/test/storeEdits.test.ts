@@ -1172,6 +1172,33 @@ const cases: Case[] = [
   drumChange('a drum mix request with neither changes nothing but still emits and saves', {
     type: 'drum.mix', body: { instrument: 'clap' }, arrange: service => ok(service.setDrumMix('clap', { solo: true })), check: unchanged,
   }),
+  // Rows after the eight drums (docs/DRUM_ROWS_PLAN.md).
+  sceneChange('a row is added after the eight drums, empty, in every scene, and silent until it has a sound', {
+    type: 'drum.addRow', arrange: service => { const ids = twoScenes(service); ok(service.setDrumBars(2)); return ids; }, body: { row: 'extra1' },
+    check: (result, service) => {
+      const { drumState, scenes } = result.events[0].data;
+      assert.equal(drumState.extra1.steps.length, 32, 'as long as the drums');
+      assert.equal(drumState.extra1.steps.some(Boolean), false);
+      assert.equal('sampleId' in drumState.extra1 || 'percType' in drumState.extra1.settings, false, 'nothing to play yet');
+      assert.deepEqual(scenes.map((scene: any) => scene.drums.extra1.steps.length), [16, 32], 'every scene has it, at its own length');
+      ok(service.setDrumStep('extra1', 3, true));
+      ok(service.setDrumSettings('extra1', { percType: 'cowbell' }));
+      assert.equal(service.snapshot().drumState.extra1.steps[3], true, 'and it is edited as any row is');
+      assert.equal(service.snapshot().drumState.extra1.settings.percType, 'cowbell', 'and plays any of the percussion');
+    },
+  }),
+  { type: 'drum.addRow', title: 'a row that cannot be added is refused', body: { row: 'extra9' }, status: 400, error: 'A kit has eight rows to add at most' },
+  { type: 'drum.addRow', title: 'nor one that is there already', arrange: service => ok(service.addDrumRow('extra2')), body: { row: 'extra2' }, status: 409, error: 'That row is there already' },
+  sceneChange('an added row is taken out of the drums and every scene', {
+    type: 'drum.removeRow', arrange: service => { twoScenes(service); ok(service.addDrumRow('extra3')); ok(service.setDrumMix('extra3', { muted: true })); }, body: { row: 'extra3' },
+    check: result => {
+      const { drumState, scenes } = result.events[0].data;
+      assert.equal('extra3' in drumState, false);
+      assert.equal(scenes.some((scene: any) => 'extra3' in scene.drums || 'extra3' in (scene.mutes?.drums ?? {})), false);
+    },
+  }),
+  { type: 'drum.removeRow', title: 'a row that is not there is refused', body: { row: 'extra4' }, status: 404, error: 'There is no such row' },
+  { type: 'drum.removeRow', title: 'and none of the eight can be removed', body: { row: 'kick' }, status: 404, error: 'There is no such row' },
 ];
 
 for (const entry of cases) {

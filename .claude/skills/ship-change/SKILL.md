@@ -59,6 +59,9 @@ description: The checks and steps for finishing a change in Discobot and opening
 - The owner allows merging a pull request once every check is green
   (`gh pr merge <n> --merge --delete-branch`). Merge them in order when one
   builds on another.
+  Before merging one that another is stacked on, point the upper one at
+  `main` (`gh pr edit <n> --base main`): deleting the lower one's branch
+  closes the upper pull request, and a closed one cannot be pointed anywhere.
 - `docs/ROADMAP.md`, `AGENTS.md` and `docs/agents/` conflict often, because pull requests add
   lines next to each other. Merge `main` into the branch and keep both sides'
   lines; never drop the other pull request's.
