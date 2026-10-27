@@ -5,8 +5,8 @@ import { acceptLive, resetRooms } from './devLive.ts';
 import { createLocalDatabase } from './src/localDatabase.ts';
 
 // Runs the API on this machine with a database that lives in memory, for development and
-// the browser tests. `POST /__reset` empties it and `GET /__guest` serves the example guest
-// instrument; neither route exists in the Worker.
+// the browser tests. `POST /__reset` empties it, `GET /__guest` serves the example guest
+// instrument and `GET /__send` the example sender of drum sounds; none of them exists in the Worker.
 const port = Number(process.env.PORT || 8787);
 const env = (): Env => ({
   DB: createLocalDatabase(),
@@ -25,6 +25,9 @@ createServer(async (incoming, outgoing) => {
   if (method === 'GET' && (incoming.url === '/__guest' || incoming.url?.startsWith('/__guest?'))) {
     // The example guest instrument, served from this other address so the app can frame it as it would a real one.
     response = new Response(readFileSync(new URL('../docs/guest-example.html', import.meta.url)), { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+  } else if (method === 'GET' && (incoming.url === '/__send' || incoming.url?.startsWith('/__send?'))) {
+    // The example sender of drum sounds (docs/SEND_PROTOCOL.md), from another address as a real one would be.
+    response = new Response(readFileSync(new URL('../docs/send-example.html', import.meta.url)), { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
   } else if (method === 'POST' && incoming.url === '/__reset') {
     current = env();
     resetRooms();
@@ -46,8 +49,8 @@ createServer(async (incoming, outgoing) => {
     const { user, room } = await liveTarget(new Request(`http://127.0.0.1:${port}${incoming.url}`, { headers }), current, Date.now());
     acceptLive(incoming, socket, room, user);
   } catch (error) {
-    socket.end(`HTTP/1.1 ${(error as { status?: number }).status ?? 400} Refused
-
+    socket.end(`HTTP/1.1 ${(error as { status?: number }).status ?? 400} Refused
+
 `);
   }
 }).listen(port, '127.0.0.1', () => console.log(`Discobot API (local, in memory) on http://127.0.0.1:${port}`));

@@ -166,7 +166,7 @@ test('a WAV export records the guest by playing through once, and the named inst
 
   await menu(page, 'Add Guest Instrument');
   const dialog = page.getByRole('dialog', { name: 'Add a guest instrument', exact: true });
-  for (const name of ['Choir', 'Logic Rhythm', 'Boolean Melody Machine', 'Tape Loop Deck', 'Pocket Mouse', 'Axis Stack']) {
+  for (const name of ['Choir', 'Logic Rhythm', 'Boolean Melody Machine', 'Tape Loop Deck', 'Pocket Mouse', 'Axis Stack', 'Drum Foundry']) {
     await expect(dialog.getByRole('group', { name: `${name} by Aaron Van Dorn`, exact: true }).getByRole('button', { name: 'Add', exact: true })).toBeEnabled();
   }
   await dialog.getByLabel('Address of the instrument\'s page', { exact: true }).fill(address);
@@ -435,4 +435,24 @@ test('a guest is in the loop and the stems, and has sends to the shared effects'
   expect(zip).toContain('drums.wav');
   expect(zip).toMatch(/guest-1[a-z0-9-]*\.wav/);
   await expect(page.getByRole('button', { name: /Play All/ }), 'playback stops when the recording is done').toBeVisible();
+});
+
+test('a guest sends a drum sound from its frame, and Import Kit shows it on the lane it was sent for', async ({ page }, testInfo) => {
+  const address = `${guestAddress(String(testInfo.project.use.baseURL))}?send=1`;
+  await menu(page, 'Add Guest Instrument');
+  const adding = page.getByRole('dialog', { name: 'Add a guest instrument', exact: true });
+  await adding.getByLabel('Address of the instrument\'s page', { exact: true }).fill(address);
+  await adding.getByRole('button', { name: 'Add Guest', exact: true }).click();
+  const unit = page.getByRole('region', { name: /^Guest instrument / });
+  await expect(unit).toHaveAttribute('data-status', 'ready');
+  const guest = unit.frameLocator('iframe');
+  // The button shows once Discobot has told the frame it takes sounds (docs/SEND_PROTOCOL.md).
+  await guest.getByRole('button', { name: 'Send a Sound', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Import a drum kit', exact: true });
+  await expect(dialog).toContainText(`From Beat Bell (${new URL(address).host})`);
+  await expect(dialog.getByLabel('File for Clap', { exact: true })).toHaveValue('0');
+  await dialog.getByRole('button', { name: 'Use These Sounds', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(guest.locator('#sent')).toHaveText('Done: 1');
+  await expect.poll(async () => Boolean((await stored(page)).drumState.clap.sampleId)).toBe(true);
 });

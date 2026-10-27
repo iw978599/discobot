@@ -20,7 +20,9 @@
 <label id="voice-control" hidden>Voice <select id="voice" aria-label="Voice"><option value="">None</option></select></label>
 <button id="keep" hidden>Keep a Recording</button>
 <button id="start">Start</button>
+<button id="send-sound" hidden>Send a Sound</button>
 <div id="status" role="status"></div>
+<p id="sent"></p>
 
 <script>
 (function () {
@@ -33,6 +35,9 @@
   // ?files=1 makes this a guest that keeps a file with the host's project (the optional "files"
   // feature): a short recording, made by a button, whose id is kept in the settings.
   var KEEPS_FILES = new URLSearchParams(location.search).get('files') === '1';
+  // ?send=1 makes this a guest that sends a drum sound to the host's drum lanes, by the handshake
+  // in SEND_PROTOCOL.md: the host says "ready" to its frame, and "Send a Sound" sends one.
+  var SENDS_SOUNDS = new URLSearchParams(location.search).get('send') === '1';
   var NOTES = ['C4', 'D4', 'E4', 'G4', 'A4', 'C5'], MIDI = [60, 62, 64, 67, 69, 72];
 
   // ---- the instrument itself: a note on every beat
@@ -204,6 +209,30 @@
     if (state.recording) send({ type: 'getFile', id: 'get-' + (++asked), file: state.recording });
   }
 
+  // ---- a drum sound for the host's drum lanes (SEND_PROTOCOL.md), with ?send=1
+  var soundHost = null;
+  function soundAnswer(m, origin) {
+    var sent = document.getElementById('sent');
+    if (m.type === 'ready') { soundHost = origin; document.getElementById('send-sound').hidden = false; }
+    else if (m.type === 'done') sent.textContent = 'Done: ' + Number(m.imported);
+    else if (m.type === 'error') sent.textContent = 'Error: ' + String(m.message).slice(0, 160);
+  }
+  function clapWav() {
+    var rate = 44100, count = 4410, buffer = new ArrayBuffer(44 + count * 2), view = new DataView(buffer);
+    var text = function (at, value) { for (var i = 0; i < value.length; i++) view.setUint8(at + i, value.charCodeAt(i)); };
+    text(0, 'RIFF'); view.setUint32(4, 36 + count * 2, true); text(8, 'WAVE');
+    text(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+    view.setUint32(24, rate, true); view.setUint32(28, rate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+    text(36, 'data'); view.setUint32(40, count * 2, true);
+    for (var i = 0; i < count; i++) view.setInt16(44 + i * 2, Math.round((Math.random() * 2 - 1) * (1 - i / count) * 9000), true);
+    return buffer;
+  }
+  document.getElementById('send-sound').addEventListener('click', function () {
+    if (!soundHost) return;
+    var data = clapWav();
+    window.parent.postMessage({ discobotImport: 1, type: 'sounds', v: 1, from: 'Beat Bell', files: [{ name: 'bell-clap.wav', mime: 'audio/wav', lane: 'clap', data: data }] }, soundHost, [data]);
+  });
+
   // ---- messages
   function send(message, transfer) {
     if (!hosted) return;
@@ -214,6 +243,7 @@
   window.addEventListener('message', function (event) {
     if (!hosted || event.source !== window.parent) return;
     var m = event.data;
+    if (SENDS_SOUNDS && m && m.discobotImport === 1) { soundAnswer(m, event.origin); return; }
     if (!m || m.discobotGuest !== PROTOCOL) return;
     host = event.source; hostOrigin = event.origin;
     if (m.type === 'hello') { latencyMs = Math.max(0, Math.min(1000, Number(m.latencyMs) || 0)); document.getElementById('start').hidden = true; }

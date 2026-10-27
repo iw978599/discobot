@@ -1250,6 +1250,14 @@ Replaced on 2026-10-19 by "The plan from here" at the top of this file.
   instrument somewhere, with Choir in Cathedral and Logic Rhythm in Silver
   Satellite. Not verified by ear, and the guests' settings not seen running
   in them.
+- **Drum sounds sent from another app** (`docs/SEND_PROTOCOL.md`), asked for
+  by Drum Foundry's creator: Discobot opened with `#receive` takes the sounds
+  its opener sends, and a guest's frame may send them too; either opens
+  Import Kit with them. Built. Drum Foundry is a featured guest as well, at
+  the owner's request; it does not speak the guest protocol, so in the rack
+  it designs and sends sounds but does not follow the tempo or reach the
+  mixer. Its creator has `docs/SEND_PROMPT_FOR_DRUM_FOUNDRY.md` for sending
+  from the frame instead of a second tab. Not tried with Drum Foundry itself.
 
 ## Ideas folded in from roadmap v2
 

@@ -6,6 +6,7 @@ import { getAudioContext } from '../hooks/browserAudio';
 import { guestInputs } from '../services/guestInput';
 import { browserGuestFiles, guestFileIds, isGuestFileId, storeGuestFile } from '../services/guestFiles';
 import { localService } from '../services/localService';
+import { importMessage, soundInbox } from '../services/receiveSounds';
 import {
   GUEST_LATENCY_MS, GUEST_PROTOCOL, guestCapture, guestLink, guestOrigin, isTrustedOrigin, trustOrigin, wallAtContextTime,
   type Guest, type GuestTransport,
@@ -124,6 +125,13 @@ function GuestModule({ studio, guest, onHelp }: { studio: Studio; guest: Guest; 
     const onMessage = (event: MessageEvent) => {
       // Only this guest's own frame, at the address it was loaded from, is listened to.
       if (event.source !== frameRef.current?.contentWindow || event.origin !== origin) return;
+      // Drum sounds the guest sends to the drum lanes go through Import Kit (docs/SEND_PROTOCOL.md).
+      const sent = importMessage(event.data);
+      if (sent?.type === 'sounds') {
+        const target = event.source as Window;
+        void soundInbox.take(sent, origin, answer => target.postMessage({ discobotImport: 1, ...answer }, origin));
+        return;
+      }
       const data = event.data as Record<string, unknown> | null;
       if (!data || typeof data !== 'object' || data.discobotGuest !== GUEST_PROTOCOL) return;
       if (data.type === 'ready') {
@@ -350,6 +358,8 @@ function GuestModule({ studio, guest, onHelp }: { studio: Studio; guest: Guest; 
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
             allow="autoplay"
             referrerPolicy="no-referrer"
+            // A guest may send drum sounds here instead of opening a tab of Discobot to take them.
+            onLoad={() => frameRef.current?.contentWindow?.postMessage({ discobotImport: 1, type: 'ready' }, origin)}
           />
           <p className="rack-hint">A guest plays live and needs a connection to its own site. Its settings, level and mute are kept per scene, like each lane's notes. Every audio export records it first by playing the music through; it is not in MIDI.</p>
         </>

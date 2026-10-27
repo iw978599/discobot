@@ -231,6 +231,13 @@ the context's rate is fine for a few bars; a long recording is better compressed
 **Order.** Answers can arrive in any order and may take a moment: match them by `id`. Do not
 block audio on them: a tape whose file has not arrived yet is silent until it does.
 
+## Sending drum sounds (optional)
+
+A guest may send drum sounds to Discobot's drum lanes through the Import Kit dialog. Discobot posts
+`{ discobotImport: 1, type: 'ready' }` to the frame whenever its page loads; the guest then posts a
+`sounds` message to `window.parent` and is answered `done` or `error`. That handshake has its own
+envelope and is described in `SEND_PROTOCOL.md`. The example guest does it with `?send=1`.
+
 ## Settings
 
 `state` is whatever the guest needs to put itself back exactly: every

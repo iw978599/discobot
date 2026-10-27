@@ -13,6 +13,7 @@ import { shownDrumRows } from '../services/drumKits';
 import SongModule from './SongModule';
 import StarterUnit from './StarterUnit';
 import Dialog from './Dialog';
+import ReceivedSounds from './ReceivedSounds';
 import ProjectsDialog from './ProjectsDialog';
 import ShareDialog from './ShareDialog';
 import LiveSessionDialog from './LiveSessionDialog';
@@ -374,6 +375,7 @@ export default function Rack({ studio }: { studio: Studio }) {
       {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
       {coloursOpen && <ColourSchemeDialog onClose={() => setColoursOpen(false)} />}
       <MidiImportDialog studio={studio} />
+      <ReceivedSounds studio={studio} />
       {projectsOpen && <ProjectsDialog studio={studio} onClose={() => setProjectsOpen(false)} />}
       {shareOpen && <ShareDialog onClose={() => setShareOpen(false)} />}
       {liveOpen && <LiveSessionDialog key={studio.projectId} studio={studio} onClose={() => setLiveOpen(false)} onSignIn={openAccount} />}
