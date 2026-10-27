@@ -53,7 +53,7 @@ and a lane's sound still reaches the audio through the store's events.
 1. **The store, playing and exports.** (Built in the pull request that added this plan.) Types,
    checks and restore, the swap, `scene.sound`, timed changes live, recordings per scene, WAV by
    bar, the share page, project files' samples and live sessions. Unit tests.
-2. **The editor.** (Built.) A "This scene" switch on the lane's editor, a dot in the scene's colour
+2. **The editor.** (Built.) A "This scene" switch beside the model on the lane's Sound level, a dot in the scene's colour
    on the lane's name plate when the open scene has its own sound, a line in Help, and a browser test.
 3. **The songs.** The sample songs rewritten to change instruments between scenes where it suits
    them, and two of them given a guest instrument whose settings change from scene to scene.

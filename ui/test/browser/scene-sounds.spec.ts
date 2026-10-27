@@ -25,13 +25,14 @@ test('a scene given a sound of its own for a lane plays another instrument there
   const plate = page.getByRole('button', { name: 'Synth 1', exact: true }).locator('span');
   const own = lane.getByRole('switch', { name: 'Synth 1 sound in this scene only', exact: true });
   await page.getByRole('button', { name: '+ Copy', exact: true }).click();
+  // The switch is on the Sound level, beside the model.
+  await lane.getByRole('tab', { name: 'Sound', exact: true }).click();
   await expect(own).toHaveAttribute('aria-checked', 'false');
   await expect(plate).not.toHaveAttribute('data-scene-sound', 'true');
 
   await own.click();
   await expect(own).toHaveAttribute('aria-checked', 'true');
   await expect(plate, 'the plate is marked').toHaveAttribute('data-scene-sound', 'true');
-  await lane.getByRole('tab', { name: 'Sound', exact: true }).click();
   await lane.getByRole('button', { name: /^Synth model: / }).click();
   await lane.locator('[role="menuitem"][data-group="Poly"]').click();
   await lane.getByRole('menuitem', { name: 'Juno-106', exact: true }).click();
@@ -51,6 +52,7 @@ test('a scene given a sound of its own for a lane plays another instrument there
   // A reload keeps it; turning it off gives the scene the lane's sound back, and undo puts it back.
   await page.reload();
   await expect(page.getByRole('button', { name: 'Synth 1', exact: true }).locator('span')).toHaveText('Juno-106');
+  await lane.getByRole('tab', { name: 'Sound', exact: true }).click();
   await lane.getByRole('switch', { name: 'Synth 1 sound in this scene only', exact: true }).click();
   await expect(plate).toHaveText('Generic');
   await expect.poll(async () => (await stored(page)).scenes.some((entry: { sounds?: unknown }) => entry.sounds)).toBe(false);
