@@ -3,8 +3,8 @@
 // same way the audio is scheduled, so the hardware stays in step with what is heard. Notes
 // played by hand can be sent too, as they are played. Which channel each lane and the drums go
 // out on is chosen (`channels`); by default lane N is channel N and the drums channel 10.
-import type { DrumInstrument } from '../types';
-import { DRUM_NOTE_MAP, noteNameToMidi } from '../utils/midiExport';
+import type { DrumRow, DrumSettings } from '../types';
+import { drumRowNote, noteNameToMidi } from '../utils/midiExport';
 
 export interface MidiOutPort {
   id: string;
@@ -25,7 +25,7 @@ export const outChannel = (channels: MidiOutChannels, part: number | 'drums') =>
   return Number.isInteger(chosen) && chosen! >= 1 && chosen! <= 16 ? chosen! : part === 'drums' ? MIDI_DRUM_CHANNEL : part;
 };
 // A note or a pad played by hand, as a live session hands it on.
-export type PlayedNote = { kind: 'note'; lane: number; note: string; velocity: number; on: boolean } | { kind: 'hit'; drum: DrumInstrument; velocity: number };
+export type PlayedNote = { kind: 'note'; lane: number; note: string; velocity: number; on: boolean } | { kind: 'hit'; drum: DrumRow; velocity: number };
 
 const NOTE_ON = 0x90, NOTE_OFF = 0x80, CONTROL = 0xb0, ALL_NOTES_OFF = 123;
 const CLOCK = 0xf8, START = 0xfa, STOP = 0xfc;
@@ -74,10 +74,11 @@ export function createMidiOut() {
     // The channel a lane, or the drums, goes out on.
     channelOf: (part: number | 'drums') => outChannel(routes, part),
     // A note or a pad played by hand, sent at once when sending them is on. A pad is a short hit.
-    played(event: PlayedNote) {
+    // `settings` is a pad's row's, which says the note an added row is sent on.
+    played(event: PlayedNote, settings?: Pick<DrumSettings, 'percType' | 'cymbalType'>) {
       if (!port || !played) return;
       if (event.kind === 'hit') {
-        const channel = outChannel(routes, 'drums'), midi = DRUM_NOTE_MAP[event.drum], now = performance.now();
+        const channel = outChannel(routes, 'drums'), midi = drumRowNote(event.drum, settings), now = performance.now();
         if (midi === undefined) return;
         channels.add(channel);
         send([NOTE_ON | (channel - 1), midi, Math.max(1, Math.min(127, Math.round(event.velocity * 127)))], now);

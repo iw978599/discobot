@@ -9,6 +9,7 @@ import SynthModule from './SynthModule';
 import DrumModule from './DrumModule';
 import MixerModule from './MixerModule';
 import { mixerChannels, sameMixer } from '../services/mixerChannels';
+import { shownDrumRows } from '../services/drumKits';
 import SongModule from './SongModule';
 import StarterUnit from './StarterUnit';
 import Dialog from './Dialog';
@@ -417,6 +418,7 @@ export default function Rack({ studio }: { studio: Studio }) {
             onLearn={studio.handleMidiLearn}
             onTieRemove={studio.handleMidiTieRemove}
             pads={studio.midiPads}
+            drumRows={shownDrumRows(studio.drumState)}
             padLearning={studio.midiPadLearn}
             onPadLearn={studio.handleMidiPadLearn}
             onPadsReset={studio.handleMidiPadsReset}

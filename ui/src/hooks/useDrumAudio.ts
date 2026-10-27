@@ -1,5 +1,5 @@
 import { useRef, useEffect, useMemo } from 'react';
-import type { DrumInstrument, DrumRow, DrumSettings, DrumKitId, EffectsLoopState, FxSendLevels } from '../types';
+import type { DrumRow, DrumSettings, DrumKitId, EffectsLoopState, FxSendLevels } from '../types';
 import type { DrumRecordings, DrumSample } from '../../../engine/src/drums/DrumCore';
 import type { DrumWorkletMessage } from '@discobot/engine';
 import { audioEngine, type AudioEngine } from './browserAudio';
@@ -84,7 +84,7 @@ export function useDrumAudio(engine: AudioEngine = audioEngine) {
     }
     // Hands the whole kit, or one drum, to a guest's tap; null gives it back to the mix. A drum
     // given back plays in the kit again from its next hit.
-    function handOver(target: 'drums' | DrumInstrument, tap: AudioNode | null) {
+    function handOver(target: 'drums' | DrumRow, tap: AudioNode | null) {
       const key: PlayerKey = target === 'drums' ? 'kit' : target, player = playerFor(key);
       if (target !== 'drums') {
         if (tap) ownPlayersRef.current.add(target); else ownPlayersRef.current.delete(target);

@@ -18,13 +18,14 @@ import { useComputerKeyboard } from '../hooks/useComputerKeyboard';
 import { CHORD_WINDOW_MS, midiNoteToName } from './studioState';
 import type { StudioCore } from './useStudioCore';
 import { midiOut, type PlayedNote } from '../services/midiOutput';
+import type { DrumSettings } from '../types';
 import { createClockFollower } from '../services/midiClockFollow';
 
 // A note or a pad played by hand goes to the others in a live session and, when sending them is
 // on, to the MIDI output.
-const played = (event: PlayedNote) => {
+const played = (event: PlayedNote, settings?: DrumSettings) => {
   liveJam.send(event);
-  midiOut.played(event);
+  midiOut.played(event, settings);
 };
 
 // What this part of the studio uses from the rest of it.
@@ -284,7 +285,7 @@ ${note}`, { synthId, note, step: at.step, ticks });
       const drums = drumStateRef.current;
       if (!instrument || !drums[instrument]) return;
       const velocity = Math.max(0.05, message.velocity / 127);
-      played({ kind: 'hit', drum: instrument, velocity });
+      played({ kind: 'hit', drum: instrument, velocity }, drums[instrument].settings);
       const silenced = drums[instrument].muted || (Object.values(drums).some(track => track.solo) && !drums[instrument].solo);
       if (!silenced) void drumAudio.playDrumHit(instrument, drums[instrument].settings, velocity);
       const transport = transportRef.current;

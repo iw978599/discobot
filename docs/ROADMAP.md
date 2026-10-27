@@ -1236,8 +1236,8 @@ Replaced on 2026-10-19 by "The plan from here" at the top of this file.
 
 - **More rows in the drum machine** (`docs/DRUM_ROWS_PLAN.md`): up to eight
   rows after the eight drums, each playing a sample. Stage 1 (the row on the
-  grid, live and in exports) is built; stage 2 (the mixer, MIDI pads, stems,
-  live sessions) and stage 3 (kits filling them) are next.
+  grid, live and in exports) and stage 2 (the mixer, MIDI pads, MIDI files,
+  live sessions, guests) are built; stage 3 (kits filling them) is next.
 
 ## Ideas folded in from roadmap v2
 

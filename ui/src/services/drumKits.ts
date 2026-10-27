@@ -15,6 +15,11 @@ export const DRUM_NAMES: Record<DrumInstrument, string> = {
 };
 // The drums in the order the grid has them down the page, and the mixer across it.
 export const DRUM_ROWS: DrumInstrument[] = ['kick', 'snare', 'clap', 'closedHH', 'openHH', 'snare2', 'ride', 'crash'];
+// Every row's name for its controls, wherever it is: a drum's own, and an added row its number on
+// the grid, "Row 9" to "Row 16" (docs/DRUM_ROWS_PLAN.md).
+export const DRUM_ROW_NAMES = { ...DRUM_NAMES, ...Object.fromEntries(EXTRA_DRUMS.map((row, index) => [row, `Row ${9 + index}`])) } as Record<DrumRow, string>;
+// The rows a drum state has in the order the grid and the mixer show them: the eight, then the added ones.
+export const shownDrumRows = (drums: Partial<Record<DrumRow, unknown>>): DrumRow[] => [...DRUM_ROWS, ...EXTRA_DRUMS.filter(row => drums[row] !== undefined)];
 
 // A drum's knobs as a project starts with them.
 const PLAIN_DRUM = { volume: 0.5, tone: 0.5, extra: 0.5, tune: 0, humanize: 0.35 };

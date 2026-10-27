@@ -5,7 +5,7 @@ import { audioEngine, type AudioEngine } from '../hooks/browserAudio';
 import { useSynthAudio } from '../hooks/useSynthAudio';
 import { useDrumAudio } from '../hooks/useDrumAudio';
 import { MidiMode } from '../hooks/useMidiInput';
-import { DrumState, DrumInstrument, DrumRow, DrumKitDefinition, DrumKitId, Scene, Song, TimeSignature } from '../types';
+import { DrumState, DrumRow, DrumKitDefinition, DrumKitId, Scene, Song, TimeSignature } from '../types';
 import { SongPosition } from '../services/songPlayback';
 import { loadCymbals } from '../services/builtInWaves';
 import { type ImportedPreset } from '../services/presetImport';
@@ -103,7 +103,7 @@ export function useStudioCore(engine: AudioEngine = audioEngine) {
   // or a pad's: asking for either calls the other off.
   const [midiPads, setMidiPads] = useState<PadMap>(storedPads);
   const midiPadsRef = useRef(midiPads);
-  const [midiPadLearn, setMidiPadLearn] = useState<DrumInstrument | null>(null);
+  const [midiPadLearn, setMidiPadLearn] = useState<DrumRow | null>(null);
   const midiPadLearnRef = useRef(midiPadLearn);
   const [midiDestinations, setMidiDestinations] = useState<MidiDestinations>(storedMidiDestinations);
   const midiDestinationsRef = useRef(midiDestinations);

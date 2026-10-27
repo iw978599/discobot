@@ -1,5 +1,6 @@
-import type { DrumInstrument } from '../types';
-import { DRUM_INSTRUMENTS, DRUM_NAMES } from './drumKits';
+import type { DrumRow } from '../types';
+import { DRUM_INSTRUMENTS, DRUM_NAMES, DRUM_ROW_NAMES } from './drumKits';
+import { EXTRA_DRUMS } from '@discobot/engine';
 
 // One way of naming a parameter anywhere in the project, so that something outside the screen (a
 // controller's knob today, automation later) can say which one it means. A name is a short string:
@@ -91,7 +92,7 @@ const TOP: Record<string, ParamRange> = {
 
 export type ParsedTarget =
   | { kind: 'lane'; lane: number | 'open'; key: string; range: ParamRange }
-  | { kind: 'drum'; instrument: DrumInstrument; key: string; range: ParamRange }
+  | { kind: 'drum'; instrument: DrumRow; key: string; range: ParamRange }
   | { kind: 'fx'; effect: string; field: string; range: ParamRange }
   | { kind: 'tempo' | 'drumsMaster' | 'drumsSwing'; range: ParamRange };
 
@@ -107,8 +108,9 @@ export function parseTarget(id: unknown): ParsedTarget | null {
     const lane = second === 'open' ? 'open' : /^[1-9]$/.test(second ?? '') ? Number(second) : null;
     return lane === null ? null : { kind: 'lane', lane, key: third, range: LANE_PARAMS[third] };
   }
-  if (kind === 'drum' && DRUM_INSTRUMENTS.includes(second as DrumInstrument) && Object.hasOwnProperty.call(DRUM_PARAMS, third ?? '')) {
-    return { kind: 'drum', instrument: second as DrumInstrument, key: third, range: DRUM_PARAMS[third] };
+  // A row added after the eight drums is named as they are; a tie to one this project lacks moves nothing.
+  if (kind === 'drum' && ([...DRUM_INSTRUMENTS, ...EXTRA_DRUMS] as string[]).includes(second ?? '') && Object.hasOwnProperty.call(DRUM_PARAMS, third ?? '')) {
+    return { kind: 'drum', instrument: second as DrumRow, key: third, range: DRUM_PARAMS[third] };
   }
   if (kind === 'fx' && third === undefined && Object.hasOwnProperty.call(FX_PARAMS, second ?? '')) {
     const [effect, field] = second.split('.');
@@ -135,7 +137,7 @@ export function lanePatch(key: string, value: number): Record<string, unknown> |
 export { DRUM_NAMES };
 
 // Every name there is, in the groups a menu shows them in.
-export function listTargets(laneIds: number[]): Array<{ group: string; targets: Array<{ id: string; label: string }> }> {
+export function listTargets(laneIds: number[], drumRows: readonly DrumRow[] = DRUM_INSTRUMENTS): Array<{ group: string; targets: Array<{ id: string; label: string }> }> {
   const lane = (who: number | 'open', name: string) => ({
     group: name, targets: Object.entries(LANE_PARAMS).map(([key, range]) => ({ id: `lane:${who}:${key}`, label: range.label })),
   });
@@ -144,7 +146,7 @@ export function listTargets(laneIds: number[]): Array<{ group: string; targets: 
     ...laneIds.map(id => lane(id, `Synth ${id}`)),
     { group: 'Drums', targets: [
       { id: 'drums:master', label: 'Master volume' }, { id: 'drums:swing', label: 'Swing' },
-      ...DRUM_INSTRUMENTS.flatMap(instrument => Object.entries(DRUM_PARAMS).map(([key, range]) => ({ id: `drum:${instrument}:${key}`, label: `${DRUM_NAMES[instrument]}: ${range.label}` }))),
+      ...drumRows.flatMap(instrument => Object.entries(DRUM_PARAMS).map(([key, range]) => ({ id: `drum:${instrument}:${key}`, label: `${DRUM_ROW_NAMES[instrument]}: ${range.label}` }))),
     ] },
     { group: 'Effects', targets: Object.entries(FX_PARAMS).map(([key, range]) => ({ id: `fx:${key}`, label: range.label })) },
     { group: 'Song', targets: [{ id: 'tempo', label: 'Tempo' }] },
@@ -156,6 +158,6 @@ export function targetLabel(id: string): string {
   const parsed = parseTarget(id);
   if (!parsed) return 'Something this version does not have';
   if (parsed.kind === 'lane') return `${parsed.lane === 'open' ? 'The open lane' : `Synth ${parsed.lane}`}: ${parsed.range.label}`;
-  if (parsed.kind === 'drum') return `${DRUM_NAMES[parsed.instrument]}: ${parsed.range.label}`;
+  if (parsed.kind === 'drum') return `${DRUM_ROW_NAMES[parsed.instrument]}: ${parsed.range.label}`;
   return parsed.range.label;
 }

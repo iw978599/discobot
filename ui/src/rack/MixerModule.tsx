@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { createDefaultSynthParameters } from '@discobot/engine';
 import type { Studio } from '../studio/useStudio';
 import { tracked } from '../studio/tracked';
-import { DRUM_NAMES, DRUM_SETTINGS_DEFAULT } from '../services/drumKits';
+import { DRUM_ROW_NAMES, DRUM_SETTINGS_DEFAULT, EXTRA_ROW_SETTINGS } from '../services/drumKits';
 import { EFFECTS_DEFAULT } from '../services/effectSettings';
 import { AUX_KIND_DEFAULT, AUX_KIND_LABELS, AUX_NAMES } from '../services/auxSettings';
 import { panText, parsePan, parsePercent, percentText, type MixerChannels } from '../services/mixerChannels';
@@ -13,7 +13,7 @@ import Knob from '../components/Knob';
 import UnitHelp, { UNIT_HELP } from './UnitHelp';
 import Scope from '../components/Scope';
 import { dragClass, useDragOrder } from './useDragOrder';
-import type { DrumInstrument } from '../types';
+import type { DrumInstrument, DrumRow } from '../types';
 import { TRACK_VOLUME } from '../services/audioTracks';
 
 const SOUND_DEFAULTS = createDefaultSynthParameters();
@@ -25,7 +25,7 @@ interface StripProps {
   about: string;
   name: string;
   under?: string;
-  drum?: DrumInstrument;
+  drum?: DrumRow;
   // The guest this channel's voice is handed to, if any: it is not in the mix but heard through the guest.
   handedTo?: string;
   // `word` is what the fader sets, where the strip's name does not already say: "level", "volume".
@@ -172,11 +172,11 @@ function MixerModule({ studio, channels, onHelp }: { studio: Studio; channels: M
             {drums.map(drum => (
               <Strip
                 key={drum.id}
-                about={DRUM_NAMES[drum.id]}
-                name={DRUM_NAMES[drum.id]}
+                about={DRUM_ROW_NAMES[drum.id]}
+                name={DRUM_ROW_NAMES[drum.id]}
                 drum={drum.id}
                 handedTo={handed[`drum:${drum.id}`]}
-                level={{ word: 'volume', value: drum.volume, home: DRUM_SETTINGS_DEFAULT[drum.id].volume, hint: 'How loud this drum is. The same as its Volume knob', onChange: value => studio.handleDrumSettingsChange(drum.id, { volume: value }) }}
+                level={{ word: 'volume', value: drum.volume, home: (drum.id in DRUM_SETTINGS_DEFAULT ? DRUM_SETTINGS_DEFAULT[drum.id as DrumInstrument] : EXTRA_ROW_SETTINGS).volume, hint: 'How loud this drum is. The same as its Volume knob', onChange: value => studio.handleDrumSettingsChange(drum.id, { volume: value }) }}
                 pan={{ value: drum.pan, kind: 'drum', onChange: value => studio.handleDrumSettingsChange(drum.id, { pan: value }) }}
                 muted={drum.muted}
                 solo={drum.solo}

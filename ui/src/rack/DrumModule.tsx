@@ -16,7 +16,7 @@ import CopyToScene from './CopyToScene';
 import CopyBar from './CopyBar';
 import type { Studio } from '../studio/useStudio';
 import { CYMBAL_TYPES, EXTRA_DRUMS, PERC_CHOICES } from '@discobot/engine';
-import { DRUM_NAMES, DRUM_ROWS, DRUM_SETTINGS_DEFAULT, EXTRA_ROW_SETTINGS } from '../services/drumKits';
+import { DRUM_ROWS, DRUM_ROW_NAMES, DRUM_SETTINGS_DEFAULT, EXTRA_ROW_SETTINGS, shownDrumRows } from '../services/drumKits';
 import { DRUM_FX_DEFAULT } from '../services/effectSettings';
 import { DrumInstrument, DrumKitId, DrumRow, DrumTrack, CymbalType, ExtraDrum, PercType } from '../types';
 import DrumKnob from '../components/DrumKnob';
@@ -26,7 +26,7 @@ import { euclid, euclidCounts } from '../services/euclid';
 
 // Each row's name for its controls: a drum's own, and an added row its number on the grid, which
 // stays when the row plays a recording that the grid shows instead (docs/DRUM_ROWS_PLAN.md).
-const LABELS = { ...DRUM_NAMES, ...Object.fromEntries(EXTRA_DRUMS.map((row, index) => [row, `Row ${9 + index}`])) } as Record<DrumRow, string>;
+const LABELS = DRUM_ROW_NAMES;
 const isAdded = (row: DrumRow): row is ExtraDrum => (EXTRA_DRUMS as DrumRow[]).includes(row);
 type Rows = Record<DrumRow, DrumTrack>;
 
@@ -91,7 +91,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
   // Every row is looked up only by a row the grid lists, so the kit is read as having each of them.
   const drumState = kit as Rows;
   // The eight in their order on the grid, then the added rows.
-  const INSTRUMENTS: DrumRow[] = [...DRUM_ROWS, ...EXTRA_DRUMS.filter(row => drumState[row])];
+  const INSTRUMENTS = shownDrumRows(drumState);
   const [chosen, setSelected] = useState<DrumRow>('kick');
   // A row removed (here, by undo or by someone else) leaves the kick chosen.
   const selected: DrumRow = drumState[chosen] ? chosen : 'kick';

@@ -34,7 +34,9 @@ eight keeps `DrumInstrument`; code that must handle every row takes `DrumRow`.
    added row's sample live and in every export, and the grid: "+ Row" under the eight, an added
    row's sound chosen from the recordings and imported samples, its volume, pan and tuning, and
    Remove. Copy bar, Fill, Shift and the step's chance and repeats work on it as on any row.
-2. **Everywhere else a drum is.** The mixer's strips, MIDI pads (an added row has no note until it
+2. **Everywhere else a drum is.** (Built: the mixer, pads, MIDI files and output, MIDI Learn, live
+   sessions' hits and guests' input. Stems and the share page needed nothing: the kit's stem and
+   the page's render take every row.) The mixer's strips, MIDI pads (an added row has no note until it
    is given one by Learn), the drum sends, scene mutes and solo, stems, MIDI export (on its pad's
    note), the share page, live sessions and guests' input.
 3. **Kits.** Import Kit and SoundFont Kit put the samples that match none of the eight on added

@@ -5,7 +5,8 @@ import { WHOLE_SOUND } from './projectReducers';
 import { projectSync } from './projectSync';
 import { DRUM_INSTRUMENTS } from './drumKits';
 import { isLaneId } from './lanes';
-import type { DrumInstrument } from '../types';
+import type { DrumRow } from '../types';
+import { EXTRA_DRUMS } from '@discobot/engine';
 
 // A live session: the people a project is shared with, editing it at once (docs/LIVE_SESSIONS_PLAN.md).
 // The room (server/src/live.ts) keeps nothing and sends every edit to everyone, the sender too, in
@@ -69,7 +70,7 @@ export interface LiveTransportHandlers { start(play: LivePlay): void; stop(): vo
 // It is sound only, never an edit: nothing is recorded, undone or saved from it.
 export type LiveJam =
   | { kind: 'note'; lane: number; note: string; velocity: number; on: boolean }
-  | { kind: 'hit'; drum: DrumInstrument; velocity: number };
+  | { kind: 'hit'; drum: DrumRow; velocity: number };
 export type HeardJam = LiveJam & { by: string };
 
 // A knob's drag is a few messages a second, not one for every value.
@@ -170,7 +171,8 @@ export function readJam(value: unknown): LiveJam | null {
   if (value.kind === 'note' && isLaneId(value.lane) && typeof value.note === 'string' && NOTE_NAME.test(value.note) && typeof value.on === 'boolean') {
     return { kind: 'note', lane: value.lane, note: value.note, velocity, on: value.on };
   }
-  if (value.kind === 'hit' && (DRUM_INSTRUMENTS as readonly unknown[]).includes(value.drum)) return { kind: 'hit', drum: value.drum as DrumInstrument, velocity };
+  // Any row a kit can have, an added one too; one this browser's project does not have is not played.
+  if (value.kind === 'hit' && ([...DRUM_INSTRUMENTS, ...EXTRA_DRUMS] as readonly unknown[]).includes(value.drum)) return { kind: 'hit', drum: value.drum as DrumRow, velocity };
   return null;
 }
 
