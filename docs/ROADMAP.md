@@ -1240,6 +1240,13 @@ Replaced on 2026-10-19 by "The plan from here" at the top of this file.
   live sessions, guests) and stage 3 (Import Kit and SoundFont Kit putting
   their other files on new rows) are built. Not verified by ear.
 
+## Asked for on 2026-10-27, being built
+
+- **A lane's instrument chosen per scene** (`docs/SCENE_SOUNDS_PLAN.md`), so
+  the sample songs can change instruments from scene to scene, and two of
+  them can carry a guest instrument whose settings change with the scenes.
+  Stage 1 (the store, playing and exports) is built. Not verified by ear.
+
 ## Ideas folded in from roadmap v2
 
 These were the ideas at the end of this file until 2026-10-19, when the owner asked for the two

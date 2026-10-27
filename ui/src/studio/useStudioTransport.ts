@@ -20,7 +20,8 @@ import { recordingNow } from '../services/clipRecordings';
 import { clipsSounding, clipsStarting, songSecondsAt } from '../services/clipTiming';
 import { drumRowNote } from '../utils/midiExport';
 import { guestInputs } from '../services/guestInput';
-import { STEP_LIGHT_AHEAD, midiTime, resetMidiClock } from './studioState';
+import { STEP_LIGHT_AHEAD, midiTime, normalizeSynthParams, resetMidiClock } from './studioState';
+import { sampleKey, soundIn } from '../services/sceneSounds';
 import type { PlayMode } from './studioState';
 import type { StudioCore } from './useStudioCore';
 
@@ -33,7 +34,7 @@ export interface StudioTransportNeeds {
 }
 
 export function useStudioTransport(core: StudioCore, needs: StudioTransportNeeds) {
-  const { engine, transportRef, scheduleTickRef, countInRef, metronomeRef, playModeRef, songRef, songStartTickRef, songEndingRef, stopPlaybackRef, setSongPosition, currentSceneIdRef, scenesRef, barAnchorRef, exportingRef, handedByBarRef, synthsRef, autoPassRef, synthAudio, globalTempoRef, drumSwingRef, drumSwingGridRef, drumStateRef, audioTracksRef, externalTempoRef, midiFollowClockRef, drumAudio, synths, liveStartRef, songStartEntryRef, signatureOfRef, announceRef, sceneLengthRef, setStorageError, endAutoPassesRef, setSynths, handleGlobalPlayStopRef, setPlayMode, setSongStartEntry } = core;
+  const { engine, transportRef, scheduleTickRef, countInRef, metronomeRef, playModeRef, songRef, songStartTickRef, songEndingRef, stopPlaybackRef, setSongPosition, currentSceneIdRef, scenesRef, barAnchorRef, exportingRef, handedByBarRef, synthsRef, autoPassRef, synthAudio, soundSamplesRef, globalTempoRef, drumSwingRef, drumSwingGridRef, drumStateRef, audioTracksRef, externalTempoRef, midiFollowClockRef, drumAudio, synths, liveStartRef, songStartEntryRef, signatureOfRef, announceRef, sceneLengthRef, setStorageError, endAutoPassesRef, setSynths, handleGlobalPlayStopRef, setPlayMode, setSongStartEntry } = core;
   const { sceneLength, signatureOf, triggerStep, endRecordedHolds } = needs;
   const showStep = (lane: number | 'drums', step: number, time: number) => {
     const ahead = time - engine.getContext().currentTime;
@@ -80,6 +81,16 @@ export function useStudioTransport(core: StudioCore, needs: StudioTransportNeeds
         // Open the playing scene in the editor. This updates the live pattern at once: selectScene
         // is synchronous, and the sceneChanged handler has written the refs before it returns.
         if (position.sceneId !== currentSceneIdRef.current) {
+          // A lane with another sound in the scene beginning changes to it on the scene's first beat:
+          // opening the scene would change it now, a little before (services/sceneSounds.ts).
+          const next = scenesRef.current.find(entry => entry.id === position.sceneId);
+          for (const synth of synthsRef.current) {
+            if (!synth.synthParams) continue;
+            const sound = normalizeSynthParams(soundIn(next, synth.id, synth as typeof synth & { synthParams: SynthParameters }))!;
+            const at = time - guestInputs.leadSeconds(`synth:${synth.id}`);
+            synthAudio.changeSound(synth.id, sound, globalTempoRef.current, at);
+            synthAudio.setSample(synth.id, soundSamplesRef.current[sampleKey(sound)] ?? null, at);
+          }
           localService.selectScene(position.sceneId);
         }
       }
@@ -127,12 +138,14 @@ export function useStudioTransport(core: StudioCore, needs: StudioTransportNeeds
       // A lane handed to a guest is played early by its lead (services/guestInput), so the guest has it in time.
       const early = guestInputs.leadSeconds(`synth:${synth.id}`);
       const automation = scene ? scene.laneAutomation?.[synth.id] : synth.pattern.automation, held = scene ? undefined : autoPassRef.current.get(synth.id)?.held;
-      synthAudio.automate(synth.id, synth.synthParams, globalTempoRef.current,
-        stepVoiceParams(synth.synthParams, automation, index, globalTempoRef.current, held), time - early, stepSends(synth.synthParams, automation, index, held));
+      // A scene played from its stored copy brings its own sounds too.
+      const sound = scene ? normalizeSynthParams(soundIn(scene, synth.id, synth as typeof synth & { synthParams: SynthParameters }))! : synth.synthParams;
+      synthAudio.automate(synth.id, sound, globalTempoRef.current,
+        stepVoiceParams(sound, automation, index, globalTempoRef.current, held), time - early, stepSends(sound, automation, index, held));
       // A lane that swings plays late as the drums' swing moves their steps. Its automation stays on the step.
       const late = synth.swing ? swingLate(step * duration, duration * 2, drumSwingRef.current, drumSwingGridRef.current) : 0;
       if (heard.has(synth.id) && note?.active && note.note) {
-        triggerStep(synth.synthParams, note, duration * divisor, synth.id, time + late - early);
+        triggerStep(sound, note, duration * divisor, synth.id, time + late - early);
       }
       // The step lights read this themselves. Setting state here would render the whole rack on every step.
       showStep(synth.id, index, time + late);

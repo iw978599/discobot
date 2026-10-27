@@ -11,7 +11,8 @@ import { emptySteps } from './songPlayback';
 import { layAutomationAlong, resizeAutomationEachBar } from './automation';
 import { nextSceneColor, sceneColor } from './sceneColors';
 import { normalizeSynthModelId } from '../synthModels';
-import type { DrumLanePattern, DrumState, DrumTrack, Pattern, Scene, TimeSignature } from '../types';
+import type { DrumLanePattern, DrumState, DrumTrack, LaneSound, Pattern, Scene, TimeSignature } from '../types';
+import { soundOf, withChannel } from './sceneSounds';
 import type { ProjectDefaults, ProjectLane, ProjectState } from './localService';
 import type { Operation, OpResult, OpType, Outcome, Rejected } from './projectOps';
 import { MAX_SWING, swingGridOf } from './grooves';
@@ -128,6 +129,9 @@ export const captureScene = (state: ProjectState, id: string, name: string, colo
   ...(state.guests?.some(guest => guest.state !== undefined)
     ? { guests: Object.fromEntries(state.guests.filter(guest => guest.state !== undefined).map(guest => [guest.id, clone(guest.state)])) } : {}),
   ...(state.guests?.length ? { guestMix: Object.fromEntries(state.guests.map(guest => [guest.id, { volume: guest.volume, muted: guest.muted }])) } : {}),
+  // A lane keeps its shared sound aside only while the open scene has one of its own: the sound it has is that one.
+  ...(state.synths.some(synth => synth.shared)
+    ? { sounds: Object.fromEntries(state.synths.filter(synth => synth.shared).map(synth => [synth.synthId, soundOf(synth)])) } : {}),
   mutes: {
     lanes: Object.fromEntries(state.synths.map(synth => [synth.synthId, { muted: synth.muted, solo: synth.solo }])),
     drums: Object.fromEntries(drumRowsOf(state.drumState).map(instrument => [instrument, { muted: state.drumState[instrument]!.muted, solo: state.drumState[instrument]!.solo }])),
@@ -158,9 +162,45 @@ export const commitScene = (state: ProjectState) => {
   if (index >= 0) state.scenes[index] = captureScene(state, state.currentSceneId, state.scenes[index].name, state.scenes[index].color, state.scenes[index].signature, state.scenes[index].tempo);
 };
 
+// A lane takes a sound, keeping its own level, pan, sends and duck.
+const takeSound = (synth: ProjectLane, sound: LaneSound) => {
+  synth.synthParams = withChannel(clone(sound.synthParams), synth.synthParams);
+  synth.synthModelId = sound.synthModelId;
+  synth.synthModelParams = { ...sound.synthModelParams };
+  if (sound.preset) synth.preset = sound.preset; else delete synth.preset;
+};
+// The lanes' sounds as the open scene has them: a lane holding its shared sound aside while the
+// scene has none of its own takes it back, and one without it, in a scene with its own, keeps its
+// sound aside and takes the scene's. Every scene change ends here, and so does a project read in.
+export const settleSounds = (state: ProjectState) => {
+  const open = state.scenes.find(scene => scene.id === state.currentSceneId);
+  for (const synth of state.synths) {
+    const own = open?.sounds?.[synth.synthId];
+    if (synth.shared && !own) {
+      takeSound(synth, synth.shared);
+      delete synth.shared;
+    } else if (own && !synth.shared) {
+      synth.shared = soundOf(synth);
+      takeSound(synth, own);
+    }
+  }
+};
+
+// The lanes take the sounds of the scene now open, whatever they had: each goes back to its shared
+// sound first. The scene left has its own in its slot already (commitScene).
+const openSounds = (state: ProjectState) => {
+  for (const synth of state.synths) {
+    if (!synth.shared) continue;
+    takeSound(synth, synth.shared);
+    delete synth.shared;
+  }
+  settleSounds(state);
+};
+
 // Makes a scene the live pattern.
 const applyScene = (state: ProjectState, scene: Scene) => {
   state.currentSceneId = scene.id;
+  openSounds(state);
   for (const synth of state.synths) {
     synth.pattern.steps = clone(scene.lanes[synth.synthId] ?? emptySteps(barSteps(scene.signature)));
     const bars = laneBars(synth.pattern.steps.length, scene.laneBars?.[synth.synthId], scene.signature);
@@ -201,7 +241,11 @@ export const sceneMessage = (state: ProjectState) => {
   commitScene(state);
   return {
     scenes: state.scenes, song: state.song, currentSceneId: state.currentSceneId,
-    synths: state.synths.map(synth => ({ synthId: synth.synthId, pattern: synth.pattern, muted: synth.muted, solo: synth.solo })), drumState: state.drumState,
+    synths: state.synths.map(synth => ({
+      synthId: synth.synthId, pattern: synth.pattern, muted: synth.muted, solo: synth.solo,
+      synthParams: synth.synthParams, synthModelId: synth.synthModelId, synthModelParams: synth.synthModelParams,
+      ...(synth.preset ? { preset: synth.preset } : {}), ...(synth.shared ? { shared: synth.shared } : {}),
+    })), drumState: state.drumState,
     guests: state.guests ?? [],
   };
 };
@@ -537,6 +581,12 @@ export const reducers: Reducers = {
     if (!synth) return refuse(404, NO_SYNTH);
     if (synth.synthId === 1) return refuse(400, 'Synth 1 cannot be removed');
     state.synths = state.synths.filter(s => s !== synth);
+    // A lane added again under its number is a new instrument: no scene keeps a sound for it.
+    for (const scene of state.scenes) {
+      if (!scene.sounds?.[synth.synthId]) continue;
+      delete scene.sounds[synth.synthId];
+      if (Object.keys(scene.sounds).length === 0) delete scene.sounds;
+    }
     return update('synthRemoved', { synthId: synth.synthId });
   },
   // A pattern id is compared with the lane's own ids and is truthy or not: nothing to guard.
@@ -659,16 +709,33 @@ export const reducers: Reducers = {
   'scene.replace': ({ state, defaults }, op) => {
     const body = sent({ scenes: op.scenes, currentSceneId: op.currentSceneId, song: op.song });
     if (!body) return refuse(400, BAD_DATA);
-    const scenes = sanitizeScenes(body.scenes, defaults.drumState);
+    const scenes = sanitizeScenes(body.scenes, defaults.drumState, defaults.synthParams);
     state.scenes = scenes ?? [];
     state.currentSceneId = scenes?.some(scene => scene.id === body.currentSceneId) ? body.currentSceneId : scenes?.[0].id ?? '';
     state.song = scenes ? sanitizeSong(body.song, scenes) : { entries: [], loop: false };
+    // The lanes already sound as they are to: a sound kept aside for the scenes before is not wanted.
+    for (const synth of state.synths) delete synth.shared;
     ensureScenes(state);
+    settleSounds(state);
     // The live lanes and drums are held to the bar length of the scene they now are.
     const signature = openSignature(state);
     if (signature) {
       for (const synth of state.synths) synth.pattern = sanitizePattern(synth.pattern, state.tempo, signature) ?? synth.pattern;
       state.drumState = sanitizeDrums(state.drumState, defaults.drumState, signature);
+    }
+    return sceneChanged(state);
+  },
+  // Turned on, the open scene keeps the lane as it sounds now, and the lane's shared sound is put
+  // aside for the other scenes, so nothing is heard to change until the sound is edited. Turned
+  // off, the lane takes its shared sound back.
+  'scene.sound': ({ state }, op) => {
+    const synth = laneOf(state, op.synthId);
+    if (!synth) return refuse(404, NO_SYNTH);
+    if (typeof op.own !== 'boolean') return refuse(400, BAD_DATA);
+    if (op.own && !synth.shared) synth.shared = soundOf(synth);
+    else if (!op.own && synth.shared) {
+      takeSound(synth, synth.shared);
+      delete synth.shared;
     }
     return sceneChanged(state);
   },

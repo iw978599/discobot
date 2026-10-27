@@ -1,6 +1,7 @@
 import { CYMBAL_TYPES, type DrumRecordings, type PercType, type SampleZone, type SynthParameters, type SynthSample } from '@discobot/engine';
 import { loadDrumSample } from './drumSamples';
 import { INSTRUMENT_TYPE, getSample } from './sampleStore';
+import { sampleKey } from './sceneSounds';
 
 // The sounds that come with the app for the sample engine: recordings of instruments and single
 // cycles of waves, in `public/waves.bin`. `scripts/build-waves.mjs` makes that file, and
@@ -150,6 +151,19 @@ export function loadLaneSample(params: SynthParameters | null | undefined): Prom
   const sample = params?.sample;
   if (sample?.wave) return loadBuiltInWave(sample.wave);
   return sample?.id ? loadImported(sample.id) : Promise.resolve(null);
+}
+
+// The recordings a set of sounds play, by `sampleKey` (services/sceneSounds.ts): every one a song's
+// scenes use, for a render outside the studio.
+export async function loadSoundSamples(sounds: SynthParameters[]): Promise<Record<string, SynthSample>> {
+  const loaded: Record<string, SynthSample> = {};
+  for (const params of sounds) {
+    const key = sampleKey(params);
+    if (!key || key in loaded || params.engine !== 'sample') continue;
+    const sample = await loadLaneSample(params);
+    if (sample) loaded[key] = sample;
+  }
+  return loaded;
 }
 
 // The lanes' samples by lane id, for a render outside the studio (the page a share link opens).

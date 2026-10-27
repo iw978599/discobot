@@ -7,12 +7,14 @@ import type { GuestPatch } from '../services/projectOps';
 import { loadDrumSample } from '../services/drumSamples';
 import { loadCymbals, loadLaneSample } from '../services/builtInWaves';
 import { drumRowsOf } from '../services/drumKits';
+import { lanesSounds, sampleKey } from '../services/sceneSounds';
+import type { SynthParameters } from '../types';
 import type { DrumSample } from '../../../engine/src/drums/DrumCore';
 import { guestOrigin, guestUrl, trustOrigin } from '../services/guests';
 import type { StudioCore } from './useStudioCore';
 
 export function useStudioGuests(core: StudioCore) {
-  const { drumState, drumStateRef, drumSamplesRef, drumAudio, setMissingDrumSamples, sampleStoreVersion, cymbalsRef, synths, synthsRef, synthSamplesRef, synthAudio } = core;
+  const { drumState, drumStateRef, drumSamplesRef, drumAudio, setMissingDrumSamples, sampleStoreVersion, cymbalsRef, synths, synthsRef, synthSamplesRef, soundSamplesRef, scenes, scenesRef, synthAudio } = core;
   // Adds another creator's instrument by its address. Typing it in is the user's say-so to load that site.
   const handleAddGuest = useCallback(async (url: string): Promise<string | null> => {
     // Recorded first: the unit appears as soon as the store accepts the guest, and must not ask again.
@@ -52,18 +54,21 @@ export function useStudioGuests(core: StudioCore) {
     });
     return () => { current = false; };
   }, [drumAudio]);
-  // The same for the synth lanes: which recording each one's sample engine plays.
-  const synthSampleKey = synths.map(entry => `${entry.id}:${entry.synthParams?.sample?.wave ?? ''}:${entry.synthParams?.sample?.id ?? ''}`).join('|');
+  // The same for the synth lanes: which recording each one's sample engine plays, in the open scene
+  // and in every other, so a scene with a sound of its own has its recording when the song reaches it.
+  const synthSampleKey = synths.map(entry => `${entry.id}:${lanesSounds(entry, scenes).map(sampleKey).join(',')}`).join('|');
   useEffect(() => {
     let current = true;
-    void Promise.all(synthsRef.current.map(async (entry) => {
-      return [entry.id, await loadLaneSample(entry.synthParams)] as const;
-    })).then((loaded) => {
+    const wanted = new Map<string, SynthParameters>();
+    for (const entry of synthsRef.current) for (const params of lanesSounds(entry, scenesRef.current)) if (sampleKey(params)) wanted.set(sampleKey(params), params);
+    void Promise.all([...wanted].map(async ([key, params]) => [key, await loadLaneSample(params)] as const)).then((found) => {
       if (!current) return;
+      soundSamplesRef.current = Object.fromEntries(found.flatMap(([key, sample]) => (sample ? [[key, sample]] : [])));
+      const loaded = synthsRef.current.map(entry => [entry.id, soundSamplesRef.current[sampleKey(entry.synthParams)] ?? null] as const);
       const next: Record<number, DrumSample> = {};
       for (const [laneId, sample] of loaded) {
         if (sample) next[laneId] = sample;
-        if (sample !== (synthSamplesRef.current[laneId] ?? null)) synthAudio.setSample(laneId, sample);
+        synthAudio.setSample(laneId, sample);
       }
       // A lane that has gone gives its recording back, so a lane added later under its number starts with none.
       for (const laneId of Object.keys(synthSamplesRef.current).map(Number)) {

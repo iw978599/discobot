@@ -9,6 +9,8 @@ interface SynthLane {
   audio?: ReturnType<AudioEngine['createLane']>;
   loading?: Promise<AudioWorkletNode>;
   parameters?: SynthParameters;
+  // The sound last sent, as text with the tempo: what is the same as it is not sent again.
+  sent?: string;
   // What the lane's automation last set, by the voice's own names. While there is any, those
   // parameters are the automation's: a change to the sound made now leaves them alone, and the
   // next step sends them at its own time.
@@ -50,13 +52,28 @@ export function useSynthAudio(engine: AudioEngine = audioEngine) {
     }
     return lane;
   }
+  // A sound the lane has already, or has been sent for a time still to come (changeSound), is not sent again.
   const updateParameters = useCallback((parameters: SynthParameters, bpm = 120, loop?: EffectsLoopState, synthId = 1) => {
     const lane = laneFor(synthId);
-    lane.parameters = parameters;
-    lane.bpm = bpm;
     if (loop) engine.setEffectsLoop(loop);
+    const sent = `${bpm}|${JSON.stringify(parameters)}`;
+    lane.parameters = parameters;
+    if (sent === lane.sent) return;
+    lane.sent = sent;
+    lane.bpm = bpm;
     send(lane.node, { type: 'params', params: soundFor(lane) });
     if (!lane.automatedSends) lane.audio?.setSends(parameters.fxSends, parameters.fxReturn);
+  }, []);
+  // Another instrument from `time` on the audio clock: a scene with a sound of its own beginning
+  // (services/sceneSounds.ts). The lane's level, pan and sends are the same in every scene.
+  const changeSound = useCallback((synthId: number, parameters: SynthParameters, bpm: number, time: number) => {
+    const lane = laneFor(synthId);
+    const sent = `${bpm}|${JSON.stringify(parameters)}`;
+    if (!lane.parameters || sent === lane.sent) return;
+    lane.sent = sent;
+    lane.parameters = parameters;
+    lane.bpm = bpm;
+    send(lane.node, { type: 'params', params: soundFor(lane), time, keep: true });
   }, []);
   // A step's automation: what the voice is to be at `time` on the audio clock, which is when the
   // step sounds (the scheduler works ahead of it). With nothing for the step, whatever automation
@@ -158,11 +175,13 @@ export function useSynthAudio(engine: AudioEngine = audioEngine) {
     lane.starting.clear();
     send(lane.node, { type: 'allNotesOff', release });
   }, []);
-  // A lane's recording for its sample engine, or null for none. The worklet gets its own copy.
-  const setSample = useCallback((synthId: number, sample: SynthSample | null) => {
+  // A lane's recording for its sample engine, or null for none, from `time` if it is given. The
+  // worklet gets its own copy, once: the recording it has, or will have, is not sent again.
+  const setSample = useCallback((synthId: number, sample: SynthSample | null, time?: number) => {
     const lane = laneFor(synthId);
+    if (lane.sample === sample) return;
     lane.sample = sample;
-    send(lane.node, { type: 'sample', sample });
+    send(lane.node, { type: 'sample', sample, time });
   }, []);
   // Hands the lane to a guest's tap, or with null gives it back to the mix.
   const handOver = useCallback((synthId: number, tap: AudioNode | null) => {
@@ -204,6 +223,6 @@ export function useSynthAudio(engine: AudioEngine = audioEngine) {
   // The same object on every render, so effects and callbacks that depend on it do not re-run.
   return useMemo(() => ({
     ensureAudioReady: () => engine.ensureReady(), tryResume: () => { void engine.ensureReady(); },
-    playNote, stopNote, stopSynth, stopAllNotes, updateParameters, automate, endAutomation, setEffectsLoop: (state: EffectsLoopState) => engine.setEffectsLoop(state), setVolume, setSample, setLive, duck, handOver, analyser, dispose,
-  }), [playNote, stopNote, stopSynth, stopAllNotes, updateParameters, automate, endAutomation, setVolume, setSample, setLive, duck, handOver, analyser, dispose]);
+    playNote, stopNote, stopSynth, stopAllNotes, updateParameters, changeSound, automate, endAutomation, setEffectsLoop: (state: EffectsLoopState) => engine.setEffectsLoop(state), setVolume, setSample, setLive, duck, handOver, analyser, dispose,
+  }), [playNote, stopNote, stopSynth, stopAllNotes, updateParameters, changeSound, automate, endAutomation, setVolume, setSample, setLive, duck, handOver, analyser, dispose]);
 }

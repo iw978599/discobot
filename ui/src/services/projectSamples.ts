@@ -64,14 +64,26 @@ export async function fromBase64(text: string, limit: number): Promise<Uint8Arra
 
 const synthLanes = (project: unknown): unknown[] => { const lanes = record(project).synths; return Array.isArray(lanes) ? lanes : []; };
 const laneSample = (lane: unknown) => record(record(record(lane).synthParams).sample);
+const scenesOf = (project: unknown): unknown[] => { const scenes = record(project).scenes; return Array.isArray(scenes) ? scenes : []; };
+// Every sound in a project that may play a sample: each lane's, its shared one while the open scene
+// has its own, and each scene's own (services/sceneSounds.ts).
+const sounds = (project: unknown): unknown[] => [
+  ...synthLanes(project).flatMap(lane => [lane, record(lane).shared]),
+  ...scenesOf(project).flatMap(scene => Object.values(record(record(scene).sounds))),
+];
+// A sound with its sample's id changed, if `renamed` has it.
+const renamedSound = (sound: unknown, renamed: Map<string, string>) => {
+  const to = renamed.get(laneSample(sound).id as string);
+  return to ? { ...record(sound), synthParams: { ...record(record(sound).synthParams), sample: { ...laneSample(sound), id: to } } } : sound;
+};
 
 // The samples a project plays: its drum lanes', its synth lanes' whether or not the lane is set
-// to the sample engine just now, and the recordings its audio tracks' clips play. A lane's sample
-// belongs to the whole project, not to a scene, so a lane that is silent in the open scene still counts.
+// to the sample engine just now, a scene's own sound for a lane, and the recordings its audio
+// tracks' clips play. A lane that is silent in the open scene still counts.
 export function usedSampleIds(project: unknown): string[] {
   const ids = [
     ...Object.values(record(record(project).drumState)).map(track => record(track).sampleId),
-    ...synthLanes(project).map(lane => laneSample(lane).id),
+    ...sounds(project).map(sound => laneSample(sound).id),
     ...clipSampleIds(record(project).audioTracks),
   ];
   return [...new Set(ids.filter((id): id is string => typeof id === 'string' && SAMPLE_ID.test(id)))];
@@ -158,9 +170,12 @@ export async function adoptSamples(file: unknown, store: SampleStore = browserSa
     return [lane, to ? { ...track, sampleId: to } : track];
   }));
   const synths = synthLanes(project).map((lane) => {
-    const to = renamed.get(laneSample(lane).id);
-    return to ? { ...record(lane), synthParams: { ...record(record(lane).synthParams), sample: { ...laneSample(lane), id: to } } } : lane;
+    const sounded = renamedSound(lane, renamed);
+    return record(lane).shared ? { ...record(sounded), shared: renamedSound(record(lane).shared, renamed) } : sounded;
   });
+  const scenes = Array.isArray(project.scenes) ? project.scenes.map(scene => (record(scene).sounds ? {
+    ...record(scene), sounds: Object.fromEntries(Object.entries(record(record(scene).sounds)).map(([id, sound]) => [id, renamedSound(sound, renamed)])),
+  } : scene)) : undefined;
   const audioTracks = Array.isArray(project.audioTracks) ? project.audioTracks.map((track) => ({
     ...record(track),
     clips: (Array.isArray(record(track).clips) ? record(track).clips as unknown[] : []).map((clip) => {
@@ -168,5 +183,5 @@ export async function adoptSamples(file: unknown, store: SampleStore = browserSa
       return to ? { ...record(clip), sampleId: to } : clip;
     }),
   })) : undefined;
-  return { file: { ...rest, project: { ...project, drumState, ...(Array.isArray(project.synths) ? { synths } : {}), ...(audioTracks ? { audioTracks } : {}) } }, added, dropped };
+  return { file: { ...rest, project: { ...project, drumState, ...(Array.isArray(project.synths) ? { synths } : {}), ...(scenes ? { scenes } : {}), ...(audioTracks ? { audioTracks } : {}) } }, added, dropped };
 }

@@ -248,6 +248,25 @@ test('an edit made in another scene lands in that scene, and each person stays w
   assert.deepEqual(shape(ann.store), shape(ben.store));
 });
 
+// docs/SCENE_SOUNDS_PLAN.md: a lane's sound in a scene with its own is that scene's.
+test('a sound edited in a scene with a sound of its own changes it there alone, for both people', async () => {
+  const { live, ann, ben } = await twoInSession();
+  const first = ann.store.openSceneId();
+  const second = ok(ann.store.createScene()).currentSceneId;
+  ok(ann.store.setSceneSound(1, true));
+  live.tick();
+  await live.deliver();
+  ok(ann.store.setSynthParams(1, { oscillator: { type: 'square' } } as never));
+  live.tick();
+  await live.deliver();
+  assert.equal(ben.store.openSceneId(), first, 'Ben is still in the first scene');
+  const wave = (store: typeof ann.store) => store.snapshot().synths[0].synthParams.oscillator.type;
+  assert.notEqual(wave(ben.store), 'square', 'which plays the shared sound');
+  ok(ben.store.selectScene(second));
+  assert.equal(wave(ben.store), 'square', 'and the second scene has Ann\'s');
+  assert.deepEqual(shape(ann.store), shape(ben.store));
+});
+
 test('undo sends the whole project, and everyone takes it', async () => {
   const { live, ann, ben } = await twoInSession();
   const before = ann.store.getTempo().tempo;
