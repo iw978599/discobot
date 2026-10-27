@@ -40,7 +40,7 @@ eight keeps `DrumInstrument`; code that must handle every row takes `DrumRow`.
    is given one by Learn), the drum sends, scene mutes and solo, stems, MIDI export (on its pad's
    note), the share page, live sessions and guests' input.
 3. **Kits.** Import Kit and SoundFont Kit put the samples that match none of the eight on added
-   rows instead of leaving them out.
+   rows instead of leaving them out. (Built: the dialog's New row switches.)
 
 Each stage is a pull request of its own, with its tests, and none changes how a project without
 added rows sounds: a test holds an export of such a project to what `main` rendered.
