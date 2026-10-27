@@ -11,7 +11,7 @@ const fileUrl = (path: string) => new URL(`../public/${path}`, import.meta.url);
 const read = (path: string) => { const bytes = readFileSync(fileUrl(path)); return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer; };
 
 test('the big instruments are files of their own, in the format of waves.bin, and not in it', () => {
-  assert.equal(instruments.length, 7);
+  assert.equal(instruments.length, 8);
   for (const entry of instruments) {
     assert.match(entry.file!, /^sounds\/[a-z0-9-]+\.bin$/);
     assert.ok(!BUNDLED_WAVES.has(entry.id), `${entry.id} is not in waves.bin`);

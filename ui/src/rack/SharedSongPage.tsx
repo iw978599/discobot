@@ -74,7 +74,7 @@ export default function SharedSongPage({ file, author, error: fetchError, onOpen
         synths: project.synths.map(synth => ({ id: synth.synthId, pattern: synth.pattern, synthParams: soundIn(null, synth.synthId, synth), muted: false, solo: false, swing: synth.swing })),
         bars: applySceneMutes(songBars(project.song, project.scenes), project.synths.map(synth => ({ id: synth.synthId, muted: synth.muted, solo: synth.solo }))),
         // The app's own waves come with it, so a lane that plays one sounds here as it did when shared.
-        drumCymbals: await loadCymbals(),
+        drumCymbals: await loadCymbals(project.selectedDrumKitId),
         synthSamples: await loadLaneSamples(project.synths.map(synth => ({ id: synth.synthId, synthParams: soundIn(null, synth.synthId, synth) }))),
         soundSamples: await loadSoundSamples(project.synths.flatMap(synth => project.scenes.flatMap(scene => (scene.sounds?.[synth.synthId] ? [scene.sounds[synth.synthId].synthParams] : [])))),
       });

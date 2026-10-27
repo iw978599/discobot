@@ -80,3 +80,27 @@ test('a lane can be another percussion instrument in any kit, and the choice is 
   await page.getByRole('button', { name: 'Select Low Tom', exact: true }).click();
   await expect(page.getByLabel('Low Tom voice', { exact: true }).locator('option')).toHaveText(['Low Tom', 'Conga']);
 });
+
+test('the later recorded kits fetch their own drums only once chosen, and sound unlike the first', async ({ page }, info) => {
+  const fetched: string[] = [];
+  page.on('request', request => { if (/sounds\/kit-/.test(request.url())) fetched.push(request.url().replace(/^.*\/sounds\//, '')); });
+  const kits = page.getByLabel('Drum kit', { exact: true });
+  await expect(kits.locator('option')).toContainText(['Recorded', 'Recorded: Gogodze', 'Recorded: Swirly']);
+  await page.getByRole('button', { name: 'Kick step 1', exact: true }).click();
+  await page.getByRole('button', { name: 'Snare step 5', exact: true }).click();
+  await kits.selectOption('recorded');
+  const first = await exportScene(page, info.outputPath('recorded.wav'));
+  expect(fetched).toEqual([]);
+  for (const kit of ['gogodze', 'swirly']) {
+    await kits.selectOption(kit);
+    await expect.poll(() => fetched).toContain(`kit-${kit}.bin`);
+    await page.getByRole('button', { name: 'Select Kick', exact: true }).click();
+    await expect(page.getByRole('slider', { name: 'Kick Decay', exact: true })).toBeVisible();
+    // The drums reach the export a moment after their file does.
+    await page.waitForTimeout(500);
+    const own = await exportScene(page, info.outputPath(`${kit}.wav`));
+    expect(own.equals(first)).toBe(false);
+    expect(loudness(own, 0, 0.3)).toBeGreaterThan(200);
+  }
+  expect(fetched.filter(name => name === 'kit-swirly.bin')).toHaveLength(1);
+});

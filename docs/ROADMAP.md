@@ -1258,6 +1258,14 @@ Replaced on 2026-10-19 by "The plan from here" at the top of this file.
   it designs and sends sounds but does not follow the tempo or reach the
   mixer. Its creator has `docs/SEND_PROMPT_FOR_DRUM_FOUNDRY.md` for sending
   from the frame instead of a second tab. Not tried with Drum Foundry itself.
+- **More open-source drum and synth sounds**: after a search for libraries
+  whose makers clearly allow them to be passed on (`docs/BUNDLED_AUDIO.md`
+  records what was found and what was turned down), the owner chose two more
+  recorded kits, Recorded: Gogodze and Recorded: Swirly, and Caveman Organ, a
+  built-in instrument with a preset, all by Karoryfer Samples (CC0). Each is
+  fetched only when used. Built. Not verified by ear; no free TR-808, TR-909
+  or LinnDrum recordings were found with a clear licence from whoever made
+  them.
 
 ## Ideas folded in from roadmap v2
 

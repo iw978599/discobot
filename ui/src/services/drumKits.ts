@@ -1,5 +1,5 @@
 import type { DrumInstrument, DrumKitDefinition, DrumKitId, DrumKitModelVariant, DrumRow, DrumSettings } from '../types';
-import { EXTRA_DRUMS } from '@discobot/engine';
+import { EXTRA_DRUMS, RECORDED_KITS } from '@discobot/engine';
 
 // An added row's settings before it is changed (docs/DRUM_ROWS_PLAN.md). It plays a recording, so
 // Tone and Decay leave it as recorded (Decay at its top is no fade) and it is not humanized.
@@ -38,10 +38,12 @@ const definitions: [DrumKitId, string, DrumKitModelVariant, number[][]][] = [
   ['oberheim-dmx', 'Oberheim DMX', 'analog', [[.7,.55,.58],[.68,.52,.75],[.43,.68,.48],[.48,.72,.55],[.4,.65,.45],[.44,.6,.62],[.55,.5,.65],[.5,.55,.58]]],
   ['tr-707', 'Roland TR-707', 'modern', [[.68,.5,.62],[.66,.55,.72],[.42,.62,.52],[.48,.65,.58],[.4,.58,.48],[.44,.55,.65],[.54,.52,.62],[.5,.52,.6]]],
   ['recorded', 'Recorded', 'analog', [[.62,.5,1],[.55,.5,1],[.4,.5,1],[.4,.5,1],[.55,.5,1],[.5,.5,.7],[.55,.5,1],[.5,.5,1]]],
+  ['gogodze', 'Recorded: Gogodze', 'analog', [[.62,.5,1],[.55,.5,1],[.4,.5,1],[.4,.5,1],[.55,.5,1],[.5,.5,.7],[.55,.5,1],[.5,.5,1]]],
+  ['swirly', 'Recorded: Swirly', 'analog', [[.62,.5,1],[.55,.5,1],[.4,.5,1],[.4,.5,1],[.55,.5,1],[.5,.5,.7],[.55,.5,1],[.5,.5,1]]],
 ];
 
 export const DRUM_KITS: DrumKitDefinition[] = definitions.map(([id, name, modelVariant, values]) => ({
-  id, name, modelVariant, description: id === 'recorded' ? 'Recordings of real drums' : `${name} synthesized drum kit`,
+  id, name, modelVariant, description: RECORDED_KITS[id] ? 'Recordings of real drums' : `${name} synthesized drum kit`,
   instrumentDefaults: Object.fromEntries(DRUM_INSTRUMENTS.map((instrument, i) => [
     instrument, { volume: values[i][0], tone: values[i][1], extra: values[i][2], tune: 0, humanize: .35, pan: 0 },
   ])) as DrumKitDefinition['instrumentDefaults'],

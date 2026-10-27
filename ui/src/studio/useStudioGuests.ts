@@ -14,7 +14,7 @@ import { guestOrigin, guestUrl, trustOrigin } from '../services/guests';
 import type { StudioCore } from './useStudioCore';
 
 export function useStudioGuests(core: StudioCore) {
-  const { drumState, drumStateRef, drumSamplesRef, drumAudio, setMissingDrumSamples, sampleStoreVersion, cymbalsRef, synths, synthsRef, synthSamplesRef, soundSamplesRef, scenes, scenesRef, synthAudio } = core;
+  const { drumState, drumStateRef, drumSamplesRef, drumAudio, setMissingDrumSamples, sampleStoreVersion, cymbalsRef, selectedDrumKitId, synths, synthsRef, synthSamplesRef, soundSamplesRef, scenes, scenesRef, synthAudio } = core;
   // Adds another creator's instrument by its address. Typing it in is the user's say-so to load that site.
   const handleAddGuest = useCallback(async (url: string): Promise<string | null> => {
     // Recorded first: the unit appears as soon as the store accepts the guest, and must not ask again.
@@ -44,16 +44,17 @@ export function useStudioGuests(core: StudioCore) {
     });
     return () => { current = false; };
   }, [drumSampleKey, drumAudio, sampleStoreVersion]);
-  // The cymbals come with the app. Until they arrive the cymbal lane plays its synthesized voice.
+  // The cymbals come with the app, and so do the recorded kits, a later one fetched once it is
+  // chosen. Until they arrive the lanes play their synthesized voices.
   useEffect(() => {
     let current = true;
-    void loadCymbals().then((cymbals) => {
+    void loadCymbals(selectedDrumKitId).then((cymbals) => {
       if (!current) return;
       cymbalsRef.current = cymbals;
       drumAudio.setCymbals(cymbals);
     });
     return () => { current = false; };
-  }, [drumAudio]);
+  }, [drumAudio, selectedDrumKitId]);
   // The same for the synth lanes: which recording each one's sample engine plays, in the open scene
   // and in every other, so a scene with a sound of its own has its recording when the song reaches it.
   const synthSampleKey = synths.map(entry => `${entry.id}:${lanesSounds(entry, scenes).map(sampleKey).join(',')}`).join('|');

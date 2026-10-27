@@ -4,7 +4,7 @@ export { createDefaultSynthParameters, syncedLfoHz, syncedRateHz, toVoiceParams 
 export type { VoiceParams } from './synth/voiceParams';
 export { InsertChain, insertsActive } from './synth/inserts';
 export type { InsertSettings } from './synth/inserts';
-export { DrumCore } from './drums/DrumCore';
+export { DrumCore, RECORDED_KITS } from './drums/DrumCore';
 export type { DrumHitMessage, DrumRecordings, DrumSample } from './drums/DrumCore';
 export type { DrumWorkletMessage, GuestPlayerMessage, GuestTapMessage, SynthWorkletMessage } from './workletMessages';
 export { GUEST_TAP_FRAMES } from './workletMessages';

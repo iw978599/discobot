@@ -487,6 +487,7 @@ const KEYS: BuiltInPreset[] = [
   recorded('keys-kawai-grand', 'Kawai Grand Piano', 'kawai-piano', 1.35),
   recorded('keys-steinway-grand', 'Steinway Grand Piano', 'steinway-piano', 1.4),
   recorded('keys-pipe-organ', 'Pipe Organ', 'pipe-organ', 1.35, true),
+  recorded('keys-caveman-organ', 'Caveman Organ', 'caveman-organ', 1.35, true),
   recorded('keys-fm-piano', 'FM Piano', 'fm-piano', 1.28),
   recorded('keys-fm-piano-2', 'FM Piano 2', 'fm-piano-1', 1.02),
   recorded('keys-fm-clavisynth', 'FM Clavisynth', 'fm-clavisynth', 1.62),
