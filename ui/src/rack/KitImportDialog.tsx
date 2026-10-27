@@ -17,6 +17,10 @@ interface KitImportDialogProps {
   // How many rows can still be added after the eight, and adding one: its id, or null when none can.
   freeRows?: number;
   onAddRow?: () => DrumRow | null;
+  // Where the files came from, when another app sent them ("Drum Foundry (example.com)").
+  source?: string;
+  // Told how many files were kept, before the dialog closes after its Import.
+  onImported?: (count: number) => void;
   onClose: () => void;
 }
 
@@ -24,7 +28,7 @@ interface KitImportDialogProps {
 // nothing is stored or changed until the choices are confirmed.
 // The files no drum is given can each have a row of their own, added after the eight
 // (docs/DRUM_ROWS_PLAN.md): as many as there are rows left, the first of them to begin with.
-export default function KitImportDialog({ files, picked, lanes, initial, onApply, freeRows = 0, onAddRow, onClose }: KitImportDialogProps) {
+export default function KitImportDialog({ files, picked, lanes, initial, onApply, freeRows = 0, onAddRow, source, onImported, onClose }: KitImportDialogProps) {
   const [choice, setChoice] = useState(() => initial ?? matchKit(files.map(file => file.name)));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -54,6 +58,7 @@ export default function KitImportDialog({ files, picked, lanes, initial, onApply
         if (!stored.has(index)) stored.set(index, (await saveSample(files[index])).id);
         await onApply(row, stored.get(index)!);
       }
+      onImported?.(stored.size);
       onClose();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'The kit could not be imported.');
@@ -63,8 +68,11 @@ export default function KitImportDialog({ files, picked, lanes, initial, onApply
 
   return (
     <Dialog title="Import a drum kit" closeLabel="Close kit import" onClose={busy ? () => {} : onClose}>
+      {source && <p role="status">From {source}.</p>}
       <p>
-        Each lane will play the file chosen for it here. The files were matched to lanes by their names, so check them and change any that are wrong.
+        Each lane will play the file chosen for it here. {source
+          ? 'Each file is on the lane it was sent for, or the one its name suggests, so check them and change any that are wrong.'
+          : 'The files were matched to lanes by their names, so check them and change any that are wrong.'}
         A lane set to “Leave as it is” keeps the sound it has.
       </p>
       {lanes.map(lane => (

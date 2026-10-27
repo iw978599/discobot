@@ -32,6 +32,7 @@ export const FEATURED_GUESTS: Array<{ name: string; by: string; about: string; u
   { name: 'Tape Loop Deck', by: 'Aaron Van Dorn', about: 'A tape loop simulator with a mixing deck and effects', url: 'https://aaronvandorn.github.io/Tape-Loop-Deck/' },
   { name: 'Pocket Mouse', by: 'Aaron Van Dorn', about: 'An instrument played on a grid with one finger, after Music Mouse', url: 'https://aaronvandorn.github.io/Pocket-Mouse/' },
   { name: 'Axis Stack', by: 'Aaron Van Dorn', about: 'An XY effects pad in the manner of a Kaoss Pad: each axis drives a stack of effects', url: 'https://aaronvandorn.github.io/Axis-Stack/' },
+  { name: 'Drum Foundry', by: 'Aaron Van Dorn', about: 'A drum synthesizer for designing one-shot sounds and kits, and sending them to the drum lanes', url: 'https://aaronvandorn.github.io/Drum-Foundry/' },
 ];
 export const MAX_GUEST_STATE_CHARS = 100_000;
 export const GUEST_PROTOCOL = 1;
