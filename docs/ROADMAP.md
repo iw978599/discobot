@@ -1245,8 +1245,11 @@ Replaced on 2026-10-19 by "The plan from here" at the top of this file.
 - **A lane's instrument chosen per scene** (`docs/SCENE_SOUNDS_PLAN.md`), so
   the sample songs can change instruments from scene to scene, and two of
   them can carry a guest instrument whose settings change with the scenes.
-  Stage 1 (the store, playing and exports) and stage 2 (the This scene switch
-  on a lane's editor) are built. Not verified by ear.
+  All three stages are built: the store, playing and exports; the This scene
+  switch beside a lane's model; and the songs, every one changing an
+  instrument somewhere, with Choir in Cathedral and Logic Rhythm in Silver
+  Satellite. Not verified by ear, and the guests' settings not seen running
+  in them.
 
 ## Ideas folded in from roadmap v2
 

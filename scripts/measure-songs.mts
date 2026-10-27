@@ -1,7 +1,8 @@
 // How loud each section of each sample song is: every lane (with its automation and any recorded
 // instrument) and the drums (the recorded kit and percussion included), rendered dry by the exporter's
 // own functions and summed. No effects and no master: a section's dry mix should peak near 0.5 so the
-// effects have room (AGENTS.md, Sample songs). Run by hand:
+// effects have room (AGENTS.md, Sample songs). Guest instruments are not measured: they are another
+// site's sound, heard only in the browser. Run by hand:
 //   node --import tsx scripts/measure-songs.mts            every song
 //   node --import tsx scripts/measure-songs.mts lanterns   one song, by its id
 import { readFileSync } from 'node:fs';
@@ -44,7 +45,8 @@ for (const song of SAMPLE_SONGS) {
     for (const lane of project.synths) {
       const steps = bars.map(bar => bar.lanes[lane.synthId] ?? []);
       if (!steps.some(bar => bar.some(step => step.active))) continue;
-      const params = lane.synthParams;
+      // A scene with an instrument of its own for the lane plays it.
+      const params = scene.sounds?.[lane.synthId]?.synthParams ?? lane.synthParams;
       const sample = params.engine === 'sample' && params.sample?.wave ? waves.get(params.sample.wave) ?? null : undefined;
       const peak = add(renderSynthBars(steps, params, tempo, frames, SR, barSeconds, sample, undefined, bars.map(bar => bar.laneAutomation?.[lane.synthId])));
       parts.push(`${lane.name ?? `Synth ${lane.synthId}`} ${peak.toFixed(2)}`);

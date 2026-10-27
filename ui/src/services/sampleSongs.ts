@@ -1,11 +1,12 @@
 import type { Automation } from '../types';
 import { transposeNote } from '../utils/midiExport';
-import type { Hits, Placed, SampleSong } from './sampleSong';
+import type { Hits, Placed, SampleSong, SongGuest } from './sampleSong';
+import { FEATURED_GUESTS } from './guests';
 
 // The songs offered on an empty project, each in another style and each showing off other parts of
 // the app: time signatures, the recorded instruments, strummed and inverted chords, swing, the
-// arpeggiator, the lanes' own effects, the aux buses and automation. Every song plays all five lanes
-// and lasts at least two minutes. Steps are sixteenths of the bar from 0; a bar of 3/4 or 6/8 has
+// arpeggiator, the lanes' own effects, the aux buses, automation, instruments that change between
+// scenes and, in two, a guest instrument. Every song plays all five lanes and lasts at least two minutes. Steps are sixteenths of the bar from 0; a bar of 3/4 or 6/8 has
 // 12, 5/4 20, 7/8 14 and 12/8 24.
 
 const up = (note: string, semitones: number) => transposeNote(note, semitones) ?? note;
@@ -22,6 +23,8 @@ const twice = <T>(bars: T[]): T[] => [...bars, ...bars];
 const moved = (bar: Placed[], semitones: number): Placed[] => bar.map(([step, notes, ...rest]): Placed => [step, Array.isArray(notes) ? notes.map(note => up(note, semitones)) : up(notes, semitones), ...rest]);
 const chordBars = (chords: string[][], length: number, velocity: number): Placed[][] => chords.map((chord): Placed[] => [[0, chord, length, velocity]]);
 const BARS_8 = 8 * 16;
+// The address of one of the guest instruments offered by name, which a song may play.
+const featured = (name: string) => FEATURED_GUESTS.find(guest => guest.name === name)!.url;
 
 // ---------------------------------------------------------------- Night Circuit (dark synthwave, 4/4)
 // F minor at 104 BPM, after the darker side of synthwave: a Pro One bass pulsing in sixteenths and
@@ -93,12 +96,16 @@ const NIGHT_CIRCUIT: SampleSong = {
       lanes: { 1: twice(CIRCUIT_ROOTS.map(pulse)), 2: twice(chordBars(CIRCUIT_ARPS, 16, 0.8)), 3: twice(chordBars(CIRCUIT_PADS, 16, 0.6)), 4: twice(RUN_TUNE), 5: twice(stabs(CIRCUIT_PADS)) },
       drums: circuitBars(CIRCUIT_DRIVE, [0]) },
     // A half step up to G flat, down through E flat minor to C: the lead held, its echo growing, no kick.
+    // The lead turns hollow and soft for the held tune, and the brass becomes voices.
     { id: 'circuit-undertow', name: 'Undertow', color: 'teal', bars: 8,
+      sounds: { 4: { preset: 'builtin-lead-ms-hollow', sound: { ...glide(0.1), ...vibrato(0.2, 4.5) } }, 5: { preset: 'builtin-pad-m1-voices' } },
       lanes: { 1: twice(UNDERTOW_ROOTS.map((root): Placed[] => [[0, root, 16, 0.8]])), 2: twice(chordBars(UNDERTOW_ARPS, 16, 0.7)), 3: twice(chordBars(UNDERTOW_PADS, 16, 0.6)), 4: twice(UNDERTOW_TUNE), 5: [[], [], [], [], [], [], [], [[0, CIRCUIT_PADS[3].map(note => up(note, 12)), 16, 0.6]]] },
       drums: [...Array<Hits>(4).fill({ closedHH: HATS16.filter(([step]) => step % 2 === 0) }), { closedHH: HATS16 }, { closedHH: HATS16 }, { closedHH: HATS16 }, CIRCUIT_SWEEP],
       automation: { 4: { auxASend: ramp(BARS_8, 0.2, 0.75) }, 3: { cutoff: held(BARS_8, 1200) } } },
     // The lead an octave's reach higher, dirtier and brighter as the section goes on.
+    // The arpeggio moves to a Polysix running up and down.
     { id: 'circuit-overdrive', name: 'Overdrive', color: 'pink', bars: 8,
+      sounds: { 2: { preset: 'builtin-keys-polysix', sound: { gain: 1.6, arpeggiator: { enabled: true, mode: 'updown', rate: '1/16', gate: 0.55, octaves: 2 }, modMatrix: [{ source: 'velocity', destination: 'filter', depth: 0.3 }] } } },
       lanes: { 1: twice(CIRCUIT_ROOTS.map(pulse)), 2: twice(chordBars(CIRCUIT_ARPS, 16, 0.85)), 3: twice(chordBars(CIRCUIT_PADS, 16, 0.65)), 4: [...RUN_TUNE, ...HIGH_TUNE], 5: twice(stabs(CIRCUIT_PADS)) },
       drums: circuitBars(CIRCUIT_DRIVE, [0, 4]),
       automation: { 4: { drive: ramp(BARS_8, 0.1, 0.7), cutoff: ramp(BARS_8, 2500, 9000) } } },
@@ -215,9 +222,12 @@ const DOWNTOWN_WAH: SampleSong = {
     { id: 'wah-trumpet', name: 'Trumpet', color: 'red', bars: 8, lanes: { 1: wahBass(WAH_VAMP), 2: wahKeys(WAH_VAMP), 3: wahGuitar(WAH_VAMP), 4: TRUMPET, 5: wahOrgan(WAH_VAMP) }, drums: funkBars() },
     // In six: the congas and the toms, the bass and the guitar going round, the trumpet's few notes.
     { id: 'wah-congas', name: 'Conga Break', color: 'pink', signature: '6/8', bars: 8,
+      // An acoustic guitar in place of the wah for the break.
+      sounds: { 3: { preset: 'builtin-pluck-nylon', sound: { inserts: { tone: 0.1 } } } },
       lanes: { 1: Array<Placed[]>(8).fill(CONGA_BASS), 3: Array<Placed[]>(8).fill(congaGuitar), 4: [[], [], [[0, 'D5', 6, 0.8], [6, 'F5', 6, 0.85]], [], [], [], [[0, 'G5', 12, 0.9]], []] },
       drums: congaBars, automation: { 4: { auxASend: held(8 * 12, 0.6) } } },
-    { id: 'wah-bridge', name: 'Bridge', color: 'teal', bars: 8, lanes: { 1: wahBass(WAH_BRIDGE), 2: wahKeys(WAH_BRIDGE), 3: wahGuitar(WAH_BRIDGE), 4: TRUMPET_BRIDGE, 5: wahOrgan(WAH_BRIDGE) }, drums: funkBars() },
+    // A tenor sax takes the bridge's line from the trumpet.
+    { id: 'wah-bridge', name: 'Bridge', color: 'teal', bars: 8, sounds: { 4: { preset: 'builtin-lead-tenor-sax', sound: { ...glide(0.04), gain: 2 } } }, lanes: { 1: wahBass(WAH_BRIDGE), 2: wahKeys(WAH_BRIDGE), 3: wahGuitar(WAH_BRIDGE), 4: TRUMPET_BRIDGE, 5: wahOrgan(WAH_BRIDGE) }, drums: funkBars() },
     // The keys and the trumpet go; the groove plays out and the drums have the last word.
     { id: 'wah-out', name: 'Out', color: 'blue', bars: 8, lanes: { 1: wahBass(WAH_VAMP).slice(0, 6).concat([[], []]), 3: wahGuitar(WAH_VAMP).slice(0, 4).concat([[], [], [], []]), 5: [...wahOrgan(WAH_VAMP).slice(0, 2), [], [], [], [], [], []] },
       drums: [...funkBars().slice(0, 6), BIG_FILL, { kick: [[0, 1]], crash: [0], snare: [[0, 0.9]] }] },
@@ -294,9 +304,13 @@ const LATE_STUDY: SampleSong = {
     // The bells answer, their echo coming up.
     { id: 'lofi-bells', name: 'Bells', color: 'violet', bars: 8, lanes: { 1: lofiBass(LOFI_ROOTS), 2: lofiKeys(LOFI_CHORDS), 3: LOFI_BELLS, 4: LOFI_TUNE.map(bar => bar.slice(0, 2)), 5: lofiPad(LOFI_CHORDS) }, drums: lofiDrums,
       automation: { 3: { auxASend: [...held(64, 0.15), ...ramp(64, 0.15, 0.7)] } } },
-    { id: 'lofi-bridge', name: 'Bridge', color: 'green', bars: 8, lanes: { 1: lofiBass(LOFI_BRIDGE_ROOTS), 2: lofiKeys(LOFI_BRIDGE), 3: LOFI_BELLS.map((bar, index) => (index % 2 ? bar : [])), 4: LOFI_BRIDGE_TUNE, 5: lofiPad(LOFI_BRIDGE) }, drums: lofiDrums },
+    // A kalimba has the bridge's tune.
+    { id: 'lofi-bridge', name: 'Bridge', color: 'green', bars: 8, sounds: { 4: { preset: 'builtin-pluck-kalimba', sound: { inserts: { tone: -0.2 } } } }, lanes: { 1: lofiBass(LOFI_BRIDGE_ROOTS), 2: lofiKeys(LOFI_BRIDGE), 3: LOFI_BELLS.map((bar, index) => (index % 2 ? bar : [])), 4: LOFI_BRIDGE_TUNE, 5: lofiPad(LOFI_BRIDGE) }, drums: lofiDrums },
     // A little slower than the rest, as if the tape were running down.
-    { id: 'lofi-outro', name: 'Outro', color: 'teal', bars: 8, tempo: 74, lanes: { 2: lofiKeys(LOFI_CHORDS), 3: LOFI_BELLS, 4: LOFI_TUNE.map(bar => bar.slice(0, 1)), 5: lofiPad(LOFI_CHORDS) },
+    { id: 'lofi-outro', name: 'Outro', color: 'teal', bars: 8, tempo: 74,
+      // The electric piano becomes an older suitcase one, as dusty.
+      sounds: { 2: { preset: 'builtin-keys-suitcase', sound: { gain: 0.8, inserts: { drive: 0.3, tone: -0.45, chorus: { mix: 0.35, depth: 0.5, rate: 0.4 } } } } },
+      lanes: { 2: lofiKeys(LOFI_CHORDS), 3: LOFI_BELLS, 4: LOFI_TUNE.map(bar => bar.slice(0, 1)), 5: lofiPad(LOFI_CHORDS) },
       drums: [LOFI_BEAT, LOFI_BEAT, { closedHH: lofiHats(false) }, { closedHH: lofiHats(false) }, {}, {}, {}, {}],
       automation: { 2: { cutoff: ramp(BARS_8, 4000, 500) }, 5: { level: ramp(BARS_8, 0.6, 0.1) } } },
   ],
@@ -397,10 +411,12 @@ const FRACTURE_LINE: SampleSong = {
     { id: 'fracture-lead', name: 'Lead', color: 'pink', bars: 8, lanes: { 1: sub, 2: reese, 3: dnbPad(0.4), 4: dnbStabs, 5: GLASS }, drums: dnbBars,
       automation: { 2: { cutoff: ramp(BARS_8, 1800, 4500) } } },
     // The drums go mad, in seven.
-    { id: 'fracture-meltdown', name: 'Meltdown', color: 'red', signature: '7/8', bars: 8, lanes: { 1: meltdownSub, 2: meltdownReese, 3: dnbPad(0.35, 14) }, drums: MELTDOWN,
+    // The Reese turns into a wobble bass, dirtier.
+    { id: 'fracture-meltdown', name: 'Meltdown', color: 'red', signature: '7/8', bars: 8, sounds: { 2: { preset: 'builtin-bass-wobble', sound: { inserts: { drive: 0.35 } } } }, lanes: { 1: meltdownSub, 2: meltdownReese, 3: dnbPad(0.35, 14) }, drums: MELTDOWN,
       automation: { 2: { cutoff: ramp(8 * 14, 1500, 6000) } } },
     // No drums: the pad, the lead deep in the hall, the Reese low and closed.
-    { id: 'fracture-breakdown', name: 'Breakdown', color: 'teal', bars: 8, lanes: { 2: reeseHeld, 3: dnbPad(0.6), 5: GLASS }, drums: Array<Hits>(8).fill({}),
+    // The glass lead's tune on bell keys.
+    { id: 'fracture-breakdown', name: 'Breakdown', color: 'teal', bars: 8, sounds: { 5: { preset: 'builtin-keys-d50-bell' } }, lanes: { 2: reeseHeld, 3: dnbPad(0.6), 5: GLASS }, drums: Array<Hits>(8).fill({}),
       automation: { 2: { cutoff: held(BARS_8, 400) }, 5: { auxBSend: held(BARS_8, 0.8) } } },
     { id: 'fracture-outro', name: 'Outro', color: 'blue', bars: 8, lanes: { 1: [...sub.slice(0, 2), [], [], [], [], [], []], 3: dnbPad(0.5), 5: GLASS.map(bar => bar.slice(0, 1)) },
       drums: [AMEN, AMEN_B, { closedHH: DNB_HATS }, { closedHH: DNB_HATS }, { closedHH: DNB_HATS.slice(0, 8) }, {}, {}, {}],
@@ -479,10 +495,12 @@ const MARKET_DAY: SampleSong = {
     { id: 'market-groove', name: 'Groove', color: 'green', signature: '12/8', bars: 4, lanes: { 1: marketBass, 2: guitar, 3: marimba }, laneBars: { 3: 2 }, drums: marketBars },
     { id: 'market-horns', name: 'Horns', color: 'pink', signature: '12/8', bars: 4, lanes: { 1: marketBass, 2: guitar, 3: marimba, 4: HORNS, 5: marketOrgan }, laneBars: { 3: 2 }, drums: marketBars },
     // The drums and the bass drop out; the organ, the guitar and the bell are left, and the horns call.
-    { id: 'market-break', name: 'Break', color: 'blue', signature: '12/8', bars: 4, lanes: { 2: guitar, 4: [[], [], [], HORNS[1]], 5: marketOrgan },
+    // A kalimba in place of the guitar.
+    { id: 'market-break', name: 'Break', color: 'blue', signature: '12/8', bars: 4, sounds: { 2: { preset: 'builtin-pluck-kalimba' } }, lanes: { 2: guitar, 4: [[], [], [], HORNS[1]], 5: marketOrgan },
       drums: [MARKET_BREAK, MARKET_BREAK, MARKET_BREAK, { ...MARKET_BREAK, snare2: MARKET_FILL.snare2 }],
       automation: { 2: { cutoff: ramp(STEPS_12, 800, 5000) } } },
-    { id: 'market-shout', name: 'Shout', color: 'red', signature: '12/8', bars: 4, lanes: { 1: marketBass, 2: guitar, 3: marimba, 4: HORN_SHOUT, 5: marketOrgan }, laneBars: { 3: 2 },
+    // Bigger brass for the shout.
+    { id: 'market-shout', name: 'Shout', color: 'red', signature: '12/8', bars: 4, sounds: { 4: { preset: 'builtin-keys-jupiter' } }, lanes: { 1: marketBass, 2: guitar, 3: marimba, 4: HORN_SHOUT, 5: marketOrgan }, laneBars: { 3: 2 },
       drums: [{ ...MARKET_GROOVE, kick: [0, [6, 0.6], [12, 0.8], [18, 0.6]] }, MARKET_GROOVE, MARKET_GROOVE, MARKET_FILL] },
   ],
   // 40 bars of twelve eighths at 96 BPM: two and a half minutes.
@@ -513,11 +531,18 @@ const CHANT: Placed[][] = [
 const HEART: Hits = { kick: [[0, 0.7], [3, 0.4]] };
 const STEPS_5 = 4 * 20;
 const auxSwell: Automation = { auxBSend: ramp(STEPS_5, 0.1, 0.9) };
+// Choir, a guest by Aaron Van Dorn that sings a slowly changing melody in vowels. Its settings are its
+// own controls by their ids (only those named are changed): A minor, a chorale's phrases at half
+// time in its cathedral reverb, and its own arrangement off so the scenes lead it.
+const CHOIR_GUEST: SongGuest = { id: 'c0000000-0000-4000-8000-000000000001', url: featured('Choir'), name: 'Choir', sends: { reverb: 0.3, auxB: 0.2 } };
+const choirSings = (controls: Record<string, string | number | boolean>) => ({ controls: {
+  keySelect: '9', modeSelect: 'minor', phraseStyle: 'chorale', contourShape: 'arch', halfTime: true, restOption: true, arrOn: false, reverbType: 'cathedral', ...controls,
+} });
 
 const CATHEDRAL: SampleSong = {
   id: 'cathedral', name: 'Cathedral', genre: 'Ambient in 5/4',
-  hint: 'Ambient music in 5/4 at 72 BPM, slowing to 60 and then 56 by its scenes\' own tempos: a pipe organ, a CS-80 swell with a second layer an octave up fading in under it, a harp running up and down the chords, a choir of recorded voices, a lead that glides and wavers and is sent ever deeper into the long Hall by automation, and a heartbeat kick',
-  tempo: 72, kit: 'clean-analog', level: 0.5,
+  hint: 'Ambient music in 5/4 at 72 BPM, slowing to 60 and then 56 by its scenes\' own tempos: a pipe organ, a CS-80 swell with a second layer an octave up fading in under it, a harp running up and down the chords, a choir of recorded voices, a lead that glides and wavers and is sent ever deeper into the long Hall by automation, a heartbeat kick, the organ turning into a drifting pad at the end, and Choir, a guest instrument, singing the last three scenes with other settings in each',
+  tempo: 72, kit: 'clean-analog', level: 0.5, guests: [CHOIR_GUEST],
   lanes: [
     { preset: 'builtin-pad-cs80-swell', name: 'Swell', octaveShift: -1, sound: { gain: 0.8, layer: { enabled: true, mix: 0.3, detune: 1200, brightness: -0.5, attack: 1.5, width: 1 }, fxSends: { reverb: 0.5, phaser: 0.4 } } },
     { preset: 'builtin-keys-pipe-organ', name: 'Organ', sound: { fxSends: { reverb: 0.45 } } },
@@ -535,14 +560,23 @@ const CATHEDRAL: SampleSong = {
   scenes: [
     { id: 'cathedral-nave', name: 'Nave', color: 'blue', signature: '5/4', bars: 4, lanes: { 2: organ }, drums: [{}, {}, HEART, HEART] },
     { id: 'cathedral-harp', name: 'Harp', color: 'green', signature: '5/4', bars: 4, lanes: { 2: organ, 4: harp(ORGAN_CHORDS, 0.6) }, drums: [HEART, HEART, HEART, HEART] },
-    { id: 'cathedral-choir', name: 'Choir', color: 'violet', signature: '5/4', bars: 4, lanes: { 1: swell, 2: organ, 3: CHANT, 4: harp(ORGAN_CHORDS, 0.45), 5: choir }, drums: [HEART, HEART, HEART, HEART],
+    // Choir sings with the recorded voices: four voices, slow to start and slow to let go.
+    { id: 'cathedral-choir', name: 'Choir', color: 'violet', signature: '5/4', bars: 4,
+      guests: { [CHOIR_GUEST.id]: { volume: 0.55, state: choirSings({ voices: 4, harmonic: 20, pitchRange: 1, pitchEvolution: 25, attack: 120, release: 300, filterCutoff: 1800, reverbMix: 45, vowelRate: 0.25 }) } },
+      lanes: { 1: swell, 2: organ, 3: CHANT, 4: harp(ORGAN_CHORDS, 0.45), 5: choir }, drums: [HEART, HEART, HEART, HEART],
       automation: { 3: auxSwell } },
     // Without the heartbeat, slower, the last chord turned to E major.
+    // The chant on a soft lead; Choir opens up, six voices higher and brighter.
     { id: 'cathedral-light', name: 'Light', color: 'teal', signature: '5/4', bars: 4, tempo: 60,
+      sounds: { 3: { preset: 'builtin-lead-soft', sound: { ...glide(0.12), ...vibrato(0.25, 4.5) } } },
+      guests: { [CHOIR_GUEST.id]: { volume: 0.65, state: choirSings({ voices: 6, harmonic: 45, pitchRange: 2, pitchEvolution: 40, attack: 150, release: 400, filterCutoff: 3200, reverbMix: 55, vowelOpen: 85 }) } },
       lanes: { 1: swell, 3: CHANT.map(bar => bar.slice(0, 1)), 4: harp([...ORGAN_CHORDS.slice(0, 3), ['E3', 'G#3', 'B3']], 0.5), 5: chordBars([...ORGAN_CHORDS.slice(0, 3), ['E3', 'G#3', 'B3']].map(chord => chord.map(note => up(note, 12))), 20, 0.45) },
       drums: [{}, {}, {}, {}], automation: { 3: { auxBSend: held(STEPS_5, 0.9) } } },
     // Slower again: the organ and the choir on A minor, the harp thinning out.
+    // The organ dissolves into a drifting pad; Choir down to two voices, still and dark.
     { id: 'cathedral-coda', name: 'Coda', color: 'blue', signature: '5/4', bars: 4, tempo: 56,
+      sounds: { 2: { preset: 'builtin-pad-wavestation' } },
+      guests: { [CHOIR_GUEST.id]: { volume: 0.4, state: choirSings({ voices: 2, harmonic: 0, pitchRange: 0, pitchEvolution: 0, rhythmEvolution: 0, attack: 200, release: 500, filterCutoff: 900, reverbMix: 60 }) } },
       lanes: { 2: [...organ.slice(0, 3), [[0, ['A3', 'C4', 'E4'], 20, 0.55]]], 4: harp(ORGAN_CHORDS, 0.4).map((bar, index) => bar.filter((_, eighth) => eighth % (index + 1) === 0)), 5: [...choir.slice(0, 3), [[0, ['A4', 'C5', 'E5'], 20, 0.4]]] },
       drums: [{}, {}, {}, {}], automation: { 5: { level: ramp(STEPS_5, 0.7, 0.05) } } },
   ],
@@ -643,12 +677,14 @@ const LANTERNS: SampleSong = {
     { id: 'lanterns-gather', name: 'Gather', color: 'green', bars: 8, lanes: { 1: bassHeld, 2: picking(0.9), 3: GLOCK, 5: strings }, drums: Array(8).fill(GATHER_BEAT),
       automation: { 5: { level: ramp(BARS_8, 0.2, 0.65) } } },
     // Everything drops away but the guitar and the glockenspiel, deep in the hall.
-    { id: 'lanterns-hush', name: 'Hush', color: 'violet', bars: 8, lanes: { 2: picking(0.6), 3: GLOCK_SPARSE }, drums: nothing,
+    // A harp picks the figure.
+    { id: 'lanterns-hush', name: 'Hush', color: 'violet', bars: 8, sounds: { 2: { preset: 'builtin-pluck-harp' } }, lanes: { 2: picking(0.6), 3: GLOCK_SPARSE }, drums: nothing,
       automation: { 2: { reverbSend: held(BARS_8, 0.7), auxBSend: held(BARS_8, 0.6) }, 3: { auxBSend: held(BARS_8, 0.85) } } },
     // The wall climbs out of nothing: louder, brighter and dirtier with every step.
     { id: 'lanterns-rise', name: 'Rise', color: 'pink', bars: 8, lanes: { 1: bassHeld, 2: picking(0.9), 4: tremolo, 5: strings }, drums: RISE_BEATS,
       automation: { 4: { level: ramp(BARS_8, 0.03, 0.7), cutoff: ramp(BARS_8, 700, 9000), drive: ramp(BARS_8, 0, 0.6) }, 5: { level: ramp(BARS_8, 0.5, 0.85) } } },
-    { id: 'lanterns-storm', name: 'Storm', color: 'red', bars: 8, lanes: { 1: bassDriving, 2: picking(1), 3: GLOCK, 4: tremolo, 5: strings }, drums: stormBeats,
+    // Brighter strings for the storm.
+    { id: 'lanterns-storm', name: 'Storm', color: 'red', bars: 8, sounds: { 5: { preset: 'builtin-pad-jp' } }, lanes: { 1: bassDriving, 2: picking(1), 3: GLOCK, 4: tremolo, 5: strings }, drums: stormBeats,
       automation: { 1: { drive: held(BARS_8, 0.5) } } },
     { id: 'lanterns-break', name: 'Break', color: 'violet', bars: 8, lanes: { 3: GLOCK, 5: strings }, drums: nothing,
       automation: { 3: { auxBSend: held(BARS_8, 0.9) }, 5: { reverbSend: held(BARS_8, 0.8), level: ramp(BARS_8, 0.65, 0.4) } } },
@@ -656,9 +692,10 @@ const LANTERNS: SampleSong = {
     { id: 'lanterns-fall', name: 'Fall', color: 'pink', bars: 8, lanes: { 1: bassHeld, 2: picking(0.9), 3: GLOCK, 4: tremolo, 5: strings }, drums: FALL_BEATS,
       automation: { 4: { level: ramp(BARS_8, 0.7, 0), cutoff: ramp(BARS_8, 9000, 500) }, 2: { auxASend: ramp(BARS_8, 0.45, 0.8) } } },
     // The guitar's filter closes and the room fills with its reverb.
-    { id: 'lanterns-ember', name: 'Ember', color: 'teal', bars: 8, lanes: { 2: picking(0.7), 3: GLOCK_SPARSE }, drums: EMBER_BEATS,
+    // A felt piano picks it at the end, its filter closing all the same.
+    { id: 'lanterns-ember', name: 'Ember', color: 'teal', bars: 8, sounds: { 2: { preset: 'builtin-keys-felt', sound: { gain: 1.4 } } }, lanes: { 2: picking(0.7), 3: GLOCK_SPARSE }, drums: EMBER_BEATS,
       automation: { 2: { cutoff: ramp(BARS_8, 5000, 600), reverbSend: ramp(BARS_8, 0.3, 0.9) }, 3: { level: ramp(BARS_8, 1.4, 0.5) } } },
-    { id: 'lanterns-last', name: 'Last Light', color: 'blue', bars: 8, lanes: { 2: picking(0.55), 3: GLOCK_SPARSE }, drums: nothing,
+    { id: 'lanterns-last', name: 'Last Light', color: 'blue', bars: 8, sounds: { 2: { preset: 'builtin-keys-felt', sound: { gain: 1.4 } } }, lanes: { 2: picking(0.55), 3: GLOCK_SPARSE }, drums: nothing,
       automation: { 2: { cutoff: held(BARS_8, 600), reverbSend: held(BARS_8, 0.9) }, 3: { level: held(BARS_8, 0.5), auxBSend: held(BARS_8, 0.9) } } },
   ],
   // 176 bars at 2.4 seconds a bar: seven minutes and two seconds.
@@ -731,12 +768,39 @@ const LAUNCH_ROLL: Hits = { snare: [[0, 0.3], [4, 0.4], [8, 0.5], [10, 0.55], [1
 const STAR_HATS: Hits = { ...DISCO_BEAT, openHH: OFFBEATS.map(([step]): [number, number] => [step, 0.3]) };
 const TRANSMIT: Hits = { kick: [0, 4, 8, 12], clap: [4, 12], closedHH: DISCO_HATS, ride: [[3, 0.6], [7, 0.6]], snare2: [[11, 0.7], [15, 0.7]] };
 const TRANSMIT_ROLL: Hits = { kick: [0, 4, 8, 12], snare: Array.from({ length: 16 }, (_, step): [number, number, number] => [step, 0.5 + step * 0.03, step >= 12 ? 2 : 1]) };
+// Logic Rhythm, a guest drum machine by Aaron Van Dorn: each of its tracks plays where two of its six
+// clocks meet through a logic gate. It takes its whole rack as its settings, so these are written in
+// its own shape, after patterns it comes with; the tempo is always the song's.
+const LR_VOICES: Record<string, string> = { kick: 'kick', snare: 'snare', clap: 'clap', chat: 'chatClosed', ohat: 'chatOpen', tom: 'tom', rim: 'rim' };
+const lrClock = (division: number, offset = 0) => ({ division, offset, lfo: false });
+const lrTrack = (id: string, name: string, clockA: number, clockB: number, gate: 'AND' | 'OR' | 'XOR', vol: number, mute = false) => ({
+  id, name, clockA, clockB, gate, vol, mute, solo: false, velocity: 1, velocityLfo: false, velocityLfoAmt: 0,
+  swingAmt: 0, swingLfo: false, swingLfoAmt: 0, accent: false, nudge: 0, voice: LR_VOICES[id],
+});
+const lrRack = (clocks: Array<ReturnType<typeof lrClock>>, tracks: Array<ReturnType<typeof lrTrack>>, steps = 16) => ({ clocks, tracks, steps, bpm: 120, swingPct: 0, lfoEnabled: false, lfoPeriod: 45, lfoDepth: 0.4 });
+// Odd clocks that never share a beat: a drifting, weightless rhythm for the Starfield.
+const LR_POLYRHYTHM = lrRack([3, 5, 7, 9, 11, 13].map(division => lrClock(division)), [
+  lrTrack('kick', 'KICK', 0, 2, 'AND', 0.8, true), lrTrack('snare', 'SNARE', 1, 3, 'XOR', 0.45), lrTrack('clap', 'CLAP', 2, 4, 'OR', 0.35),
+  lrTrack('chat', 'CL HAT', 0, 1, 'XOR', 0.4), lrTrack('ohat', 'OP HAT', 3, 5, 'OR', 0.35), lrTrack('tom', 'TOM', 4, 5, 'XOR', 0.55), lrTrack('rim', 'RIM', 1, 2, 'OR', 0.35),
+], 32);
+// Off-beat hats and a ticking rim over the Transmission's beat; its own kick is left out.
+const LR_TECHNO = lrRack([lrClock(4), lrClock(4, 2), lrClock(1), lrClock(2), lrClock(5), lrClock(16, 4)], [
+  lrTrack('kick', 'KICK', 0, 2, 'AND', 0.95, true), lrTrack('snare', 'SNARE', 1, 2, 'AND', 0.4, true), lrTrack('clap', 'CLAP', 1, 2, 'AND', 0.35, true),
+  lrTrack('chat', 'CL HAT', 3, 2, 'AND', 0.4), lrTrack('ohat', 'OP HAT', 1, 2, 'AND', 0.55), lrTrack('tom', 'TOM', 4, 0, 'XOR', 0.4, true), lrTrack('rim', 'RIM', 2, 2, 'AND', 0.18),
+]);
+// A tom and a rim cutting across the Hyperdrive's four on the floor.
+const LR_HYPER = lrRack([lrClock(1), lrClock(2), lrClock(3), lrClock(4), lrClock(5), lrClock(8, 4)], [
+  lrTrack('kick', 'KICK', 3, 0, 'AND', 0.95, true), lrTrack('snare', 'SNARE', 4, 0, 'AND', 0.5, true), lrTrack('clap', 'CLAP', 4, 0, 'AND', 0.75, true),
+  lrTrack('chat', 'CL HAT', 0, 0, 'AND', 0.3, true), lrTrack('ohat', 'OP HAT', 0, 3, 'XOR', 0.4), lrTrack('tom', 'TOM', 3, 2, 'XOR', 0.55), lrTrack('rim', 'RIM', 2, 4, 'OR', 0.35),
+]);
+const RHYTHM_GUEST: SongGuest = { id: 'c0000000-0000-4000-8000-000000000002', url: featured('Logic Rhythm'), name: 'Logic Rhythm', sends: { reverb: 0.25, auxA: 0.2 } };
+
 const REENTRY_BEATS: Hits[] = [1, 0.8, 0.6, 0.4].map((level): Hits => ({ kick: [[0, level], [4, level], [8, level], [12, level]], openHH: OFFBEATS.map(([step]): [number, number] => [step, level * 0.4]) }));
 
 const SILVER_SATELLITE: SampleSong = {
   id: 'silver-satellite', name: 'Silver Satellite', genre: 'Space disco, 5 minutes',
-  hint: 'Five minutes of space disco in A minor: a beatless countdown at its own 96 BPM, then 120 with an octave bass, four on the floor, a string machine through a phaser, a sequencer arpeggio, a clavinet, a gliding lead with a vibrato and tom fills, and breaks made by muting parts in their scenes',
-  tempo: 120, kit: 'linndrum', drumVolume: 0.56, level: 0.53,
+  hint: 'Five minutes of space disco in A minor: a beatless countdown at its own 96 BPM, then 120 with an octave bass, four on the floor, a string machine through a phaser, a sequencer arpeggio, a clavinet, a gliding lead with a vibrato and tom fills, breaks made by muting parts in their scenes, instruments that change between scenes, and Logic Rhythm, a guest drum machine, playing another pattern in each of three scenes',
+  tempo: 120, kit: 'linndrum', drumVolume: 0.56, level: 0.53, guests: [RHYTHM_GUEST],
   lanes: [
     { preset: 'builtin-bass-101', name: 'Octave Bass', octaveShift: -1, sound: { duck: 0.3, fxSends: { reverb: 0 } } },
     { preset: 'builtin-keys-polysix', name: 'Starship Arp', sound: { gain: 1.4, arpeggiator: { enabled: true, mode: 'up', rate: '1/16', gate: 0.45, octaves: 2 }, duck: 0.2, fxSends: { reverb: 0.15, auxA: 0.35 } } },
@@ -769,22 +833,29 @@ const SILVER_SATELLITE: SampleSong = {
       drums: discoBars(DISCO_BEAT, true) },
     // The groove with its bass, arpeggio, kick and clap muted here, and the lead's two bars echoing.
     { id: 'satellite-starfield', name: 'Starfield', color: 'blue', bars: 8, laneBars: { 4: 2 },
+      guests: { [RHYTHM_GUEST.id]: { volume: 0.35, state: LR_POLYRHYTHM } },
       lanes: { 1: octaveBass(ORBIT), 2: discoArp(ORBIT), 3: discoStrings(ORBIT), 4: STARFIELD_CALL },
       drums: [...Array<Hits>(7).fill(STAR_HATS), { ...STAR_HATS, ...DISCO_FILL, kick: DISCO_BEAT.kick }],
       mutes: { lanes: [1, 2], drums: ['kick', 'clap'] },
       automation: { 4: { auxBSend: held(32, 0.7), auxASend: held(32, 0.5) } } },
     // The bridge: through F, G and E minor to the E major that leads home, the lead gliding over long notes.
+    // The lead softer, for the long notes it glides between.
     { id: 'satellite-nebula', name: 'Nebula', color: 'pink', bars: 8,
+      sounds: { 4: { preset: 'builtin-lead-soft', sound: { gain: 2, ...glide(0.1), ...vibrato(0.2, 6) } } },
       lanes: { 1: octaveBass(NEBULA), 2: discoArp(NEBULA), 3: discoStrings(NEBULA), 4: NEBULA_LINE, 5: clav(NEBULA) },
       drums: discoBars({ ...DISCO_BEAT, openHH: [] }, true),
       automation: { 2: { cutoff: ramp(BARS_8, 1500, 6000) } } },
     // Four bars of drums and the bass, the arpeggio opening like a rising signal, and a snare roll.
     { id: 'satellite-transmission', name: 'Transmission', color: 'green', bars: 4,
+      guests: { [RHYTHM_GUEST.id]: { volume: 0.5, state: LR_TECHNO } },
       lanes: { 1: octaveBass(['Am', 'Am', 'Am', 'Am']), 2: discoArp(['Am', 'Am', 'Am', 'Am']) },
       drums: [TRANSMIT, TRANSMIT, TRANSMIT, TRANSMIT_ROLL],
       automation: { 2: { cutoff: ramp(64, 400, 8000) } } },
     // Everything at once, brighter and dirtier.
+    // The arpeggio on a zappier Pro One, and Logic Rhythm's toms across the beat.
     { id: 'satellite-hyperdrive', name: 'Hyperdrive', color: 'red', bars: 8,
+      sounds: { 2: { preset: 'builtin-pluck-pro', sound: { arpeggiator: { enabled: true, mode: 'up', rate: '1/16', gate: 0.45, octaves: 2 } } } },
+      guests: { [RHYTHM_GUEST.id]: { volume: 0.4, state: LR_HYPER } },
       lanes: { 1: octaveBass(ORBIT), 2: discoArp(ORBIT), 3: discoStrings(ORBIT), 4: THEME, 5: clav(ORBIT) },
       drums: discoBars({ ...DISCO_BEAT, openHH: OFFBEATS.map(([step]): [number, number] => [step, 0.65]) }, true).map((bar, index) => (index === 4 ? { ...bar, crash: [0] } : bar)),
       automation: { 1: { drive: held(BARS_8, 0.3) }, 2: { cutoff: held(BARS_8, 7000) }, 4: { auxASend: held(BARS_8, 0.4) } } },
@@ -886,7 +957,8 @@ const LONG_ASCENT: SampleSong = {
       drums: ascentBars(ASCENT_GROOVE),
       automation: { 2: { cutoff: ramp(BARS_8, 4000, 6000) } } },
     // The drums go; the strings and a slow line on the saw over the figure in eighths, the filter half closed.
-    { id: 'ascent-breakdown', name: 'Breakdown', color: 'blue', bars: 8, lanes: { 2: figure(ASCENT_BREAK, 2), 3: ascentStrings(ASCENT_BREAK), 4: BREAK_LINE },
+    // The slow line on a soft lead, saving the saw for the summit.
+    { id: 'ascent-breakdown', name: 'Breakdown', color: 'blue', bars: 8, sounds: { 4: { preset: 'builtin-lead-soft', sound: { gain: 1.5, ...glide(0.1), ...vibrato(0.2, 5) } } }, lanes: { 2: figure(ASCENT_BREAK, 2), 3: ascentStrings(ASCENT_BREAK), 4: BREAK_LINE },
       drums: Array(8).fill({}),
       automation: { 2: { cutoff: held(BARS_8, 1400) }, 4: { level: held(BARS_8, 0.5), auxBSend: held(BARS_8, 0.6) } } },
     // The snare rolls in, the figure back in sixteenths, its filter opening all the way.

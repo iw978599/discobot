@@ -56,8 +56,10 @@ and a lane's sound still reaches the audio through the store's events.
    bar, the share page, project files' samples and live sessions. Unit tests.
 2. **The editor.** (Built.) A "This scene" switch beside the model on the lane's Sound level, a dot in the scene's colour
    on the lane's name plate when the open scene has its own sound, a line in Help, and a browser test.
-3. **The songs.** The sample songs rewritten to change instruments between scenes where it suits
-   them, and two of them given a guest instrument whose settings change from scene to scene.
+3. **The songs.** (Built.) Every sample song changes a lane's instrument in a scene or two (a sax
+   for the acid jazz's bridge, a wobble bass for the Meltdown, a harp and a felt piano in the
+   post-rock's quiet), Cathedral plays Choir in its last three scenes, and Silver Satellite plays
+   Logic Rhythm in three, each scene with settings and a level of its own for the guest.
 
 Each stage is a pull request of its own, and none changes how a project without scene sounds
 sounds: a test holds a song export of such a project to what `main` rendered.

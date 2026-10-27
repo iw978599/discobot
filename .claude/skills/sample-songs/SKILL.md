@@ -24,6 +24,18 @@ new project. The strip on an empty project lists them all (`StarterUnit.tsx`).
   14 in 7/8, 24 in 12/8), `drums` as a list of bars of `Hits`, and `automation`
   per lane (a value or null for every step of the lane: use `ramp` and `held`). A hit in
   `Hits` may be `[step, velocity, repeats, chance]`.
+- **A scene's own instrument** (`sounds`, by lane): a built-in preset and a `sound` laid over it,
+  for a lane that plays another instrument in that scene (`docs/SCENE_SOUNDS_PLAN.md`). It keeps
+  the lane's `pan`, `fxSends` and `duck` from the song's lane and takes the preset's own level:
+  give it a `gain` when the song raised the lane's (the measuring script shows it). An arpeggiator,
+  a glide or a vibrato is part of the sound, so a lane that has one names it again.
+- **Guests** (`guests` on the song, `guests` on a scene): only instruments in `FEATURED_GUESTS`,
+  under fixed ids shaped like a guest's. A scene gives each its `volume` and its settings
+  (`state`), written in that guest's own shape, read from its page's source (Choir takes any of
+  its controls by id; Logic Rhythm takes its whole rack). A scene that does not name a guest mutes
+  it. A guest's tempo is the song's, and it counts quarter-note beats, so one that keeps its own
+  bar (Logic Rhythm) suits 4/4 only. Guests are not measured, and are loaded only once the
+  listener allows the site.
 - **Song**: `order`, scenes with repeats; `kit`, `drums` (per-drum settings such
   as `percType`, `cymbalType` or a drum's own `reverbSend`/`delaySend`, where 1 is the
   default and is not stored), `drumSends`, `effects` laid over the defaults.

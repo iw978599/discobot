@@ -136,6 +136,53 @@ test('every sample song opens sound and whole: its time signatures, sounds, swin
   }
 });
 
+// docs/SCENE_SOUNDS_PLAN.md: the owner asked on 2026-10-27 for the songs to change instruments
+// between scenes, and for a couple to play a guest whose settings change with the scenes.
+test('every sample song changes a lane\'s instrument in a scene of its own, and each is the preset named, with no lane saying Generic', async () => {
+  const sounds = createBuiltInPresets();
+  for (const song of SAMPLE_SONGS) {
+    assert.ok(song.scenes.some(scene => scene.sounds && Object.keys(scene.sounds).length), `${song.name} changes an instrument somewhere`);
+    const made = await service();
+    assert.equal((await made.importProject(build(made, song))).ok, true);
+    const scenes = made.getScenes().scenes as Scene[];
+    for (const [index, spec] of song.scenes.entries()) {
+      for (const [lane, own] of Object.entries(spec.sounds ?? {})) {
+        const preset = sounds.find(sound => sound.id === own!.preset)!;
+        const kept = scenes[index].sounds?.[Number(lane)];
+        assert.ok(kept, `${song.name}: ${spec.name} keeps lane ${lane}'s own sound`);
+        assert.equal(kept.preset, preset.name);
+        assert.notEqual(kept.synthModelId === 'generic' && !kept.preset, true);
+      }
+      // A lane without one in this scene plays its shared sound there.
+      for (const lane of song.lanes.map((_, at) => at + 1)) if (!spec.sounds?.[lane]) assert.equal(scenes[index].sounds?.[lane], undefined);
+    }
+    // The open scene's own sounds are on the lanes, with the shared ones kept aside.
+    const open = song.scenes[0].sounds ?? {};
+    for (const lane of made.snapshot().synths) assert.equal(Boolean(lane.shared), Boolean(open[lane.synthId]));
+  }
+});
+
+test('two songs play a guest instrument, offered by name, whose settings and level change from scene to scene', async () => {
+  const { FEATURED_GUESTS } = await import('../src/services/guests.ts');
+  const withGuests = SAMPLE_SONGS.filter(song => song.guests?.length);
+  assert.deepEqual(withGuests.map(song => song.id), ['cathedral', 'silver-satellite']);
+  for (const song of withGuests) {
+    const made = await service();
+    assert.deepEqual((await made.importProject(build(made, song))).ok, true);
+    const { guests } = made.snapshot(), scenes = made.getScenes().scenes as Scene[];
+    assert.equal(guests.length, song.guests!.length);
+    for (const guest of guests) {
+      assert.ok(FEATURED_GUESTS.some(featured => featured.url === guest.url && featured.name === guest.name), `${guest.name} is one of the guests offered by name`);
+      assert.ok(scenes.every(scene => scene.guestMix?.[guest.id]), 'every scene says its level and mute');
+      const heard = scenes.filter(scene => !scene.guestMix![guest.id].muted);
+      assert.ok(heard.length >= 2 && heard.length < scenes.length, `${song.name}: ${guest.name} is heard in some scenes and not others`);
+      const settings = new Set(heard.map(scene => JSON.stringify(scene.guests?.[guest.id])));
+      assert.equal(settings.size, heard.length, 'with other settings in each');
+      assert.ok(heard.every(scene => scene.guests?.[guest.id] !== undefined));
+    }
+  }
+});
+
 test('every sample song plays all five lanes and lasts at least two minutes', async () => {
   for (const song of SAMPLE_SONGS) {
     const made = await service();

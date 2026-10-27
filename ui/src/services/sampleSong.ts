@@ -1,4 +1,4 @@
-import type { Automation, DrumInstrument, DrumKitId, DrumSettings, EffectsLoopState, FxSendLevels, Scene, SequencerStep, Song, SynthParameters, SynthModelId, SynthModelParams, TimeSignature } from '../types';
+import type { Automation, DrumInstrument, DrumKitId, DrumSettings, EffectsLoopState, FxSendLevels, LaneSound, Scene, SequencerStep, Song, SynthParameters, SynthModelId, SynthModelParams, TimeSignature } from '../types';
 import { withStepNotes } from './noteScheduling';
 import { barSteps } from './patternLength';
 import { EFFECTS_DEFAULT } from './effectSettings';
@@ -37,7 +37,27 @@ export interface SongScene {
   automation?: Partial<Record<Lanes, Automation>>;
   // lanes and drums that keep their notes in the scene but are muted in it, to be unmuted
   mutes?: { lanes?: Lanes[]; drums?: DrumInstrument[] };
+  // a lane's own instrument in this scene (docs/SCENE_SOUNDS_PLAN.md): a built-in preset at its own
+  // level, with the lane's pan, sends and duck, and a sound laid over that.
+  sounds?: Partial<Record<Lanes, SceneSound>>;
+  // each guest's settings, level and mute in this scene, by the song's id for it; a guest the scene
+  // does not name is muted in it. The settings are the guest's own, and only it reads them.
+  guests?: Record<string, { state?: unknown; volume?: number }>;
   drums: Hits[];
+}
+
+export interface SceneSound {
+  preset: string;
+  sound?: Record<string, unknown>;
+}
+
+// A guest instrument the song plays (one of FEATURED_GUESTS), under an id of the guest id's shape.
+// It is loaded only once the person allows its site, as any guest arriving in a project is.
+export interface SongGuest {
+  id: string;
+  url: string;
+  name: string;
+  sends?: Partial<FxSendLevels>;
 }
 
 export interface SongLane {
@@ -71,6 +91,7 @@ export interface SampleSong {
   drumSends?: Partial<FxSendLevels>;
   // laid over the effects a new project has
   effects?: Record<string, unknown>;
+  guests?: SongGuest[];
   scenes: SongScene[];
   order: Array<[sceneId: string, repeats: number]>;
 }
@@ -134,7 +155,16 @@ export function buildSampleSong(file: unknown, sounds: Sound[], song: SampleSong
   const source = file as Json | null;
   const first = source?.project?.synths?.[0];
   const chosen = song.lanes.map(entry => sounds.find(sound => sound.id === entry.preset));
-  if (!first?.pattern?.steps?.length || !source?.project?.drumState || chosen.some(sound => !sound)) return null;
+  const sceneSounds = song.scenes.flatMap(scene => Object.values(scene.sounds ?? {})).map(entry => sounds.find(sound => sound.id === entry?.preset));
+  if (!first?.pattern?.steps?.length || !source?.project?.drumState || [...chosen, ...sceneSounds].some(sound => !sound)) return null;
+  // A scene's own instrument for a lane, made as a lane's sound is. It keeps where the lane is placed
+  // and what it sends (its pan, sends and duck, as the song gives them) and takes the preset's level,
+  // which is set so that presets of a kind are as loud as each other.
+  const ownSound = (entry: SceneSound, lane: SongLane | undefined): LaneSound => {
+    const sound = sounds.find(item => item.id === entry.preset)!;
+    const placed = Object.fromEntries(['pan', 'fxSends', 'duck'].flatMap(key => (lane?.sound?.[key] !== undefined ? [[key, lane.sound[key]]] : [])));
+    return { synthParams: levelled(layOver(layOver(structuredClone(sound.params), placed), entry.sound), song.level ?? 1), synthModelId: sound.modelId, synthModelParams: { ...sound.modelParams }, preset: sound.name };
+  };
   const project: Json = structuredClone(source.project);
   const blank = withStepNotes(first.pattern.steps[0] as SequencerStep, []);
   const ids = song.lanes.map((_, index) => index + 1);
@@ -152,6 +182,13 @@ export function buildSampleSong(file: unknown, sounds: Sound[], song: SampleSong
     ...(scene.automation ? { laneAutomation: scaled(scene.automation as Record<number, Automation>, song.level ?? 1) } : {}),
     // Every scene says its mutes, or one after a scene that mutes a lane would keep it muted.
     mutes: muted(scene),
+    ...(scene.sounds ? { sounds: Object.fromEntries(Object.entries(scene.sounds).map(([id, entry]) => [id, ownSound(entry!, song.lanes[Number(id) - 1])])) } : {}),
+    // Every scene says each guest's level and mute, for the same reason.
+    ...(song.guests?.length ? {
+      guestMix: Object.fromEntries(song.guests.map(guest => [guest.id, { volume: scene.guests?.[guest.id]?.volume ?? 0, muted: !scene.guests?.[guest.id] }])),
+      ...(song.guests.some(guest => scene.guests?.[guest.id]?.state !== undefined)
+        ? { guests: Object.fromEntries(song.guests.filter(guest => scene.guests?.[guest.id]?.state !== undefined).map(guest => [guest.id, scene.guests![guest.id].state])) } : {}),
+    } : {}),
     drums: grid(scene),
   }));
   const order: Song = { entries: song.order.map(([sceneId, repeats]) => ({ sceneId, repeats })), loop: false };
@@ -182,7 +219,13 @@ export function buildSampleSong(file: unknown, sounds: Sound[], song: SampleSong
   Object.assign(project, {
     name: song.name, tempo: song.tempo, drumSwing: song.drumSwing ?? 0, selectedDrumKitId: song.kit,    ...(song.drumVolume !== undefined ? { drumMasterVolume: song.drumVolume } : {}),
     effectsLoop: effects, drumFx: { ...project.drumFx, sends: { ...project.drumFx?.sends, ...song.drumSends } },
-    scenes, currentSceneId: open.id, song: order, guests: [],
+    scenes, currentSceneId: open.id, song: order,
+    // The guests as the first scene has them; the store gives each the settings of the scene it opens.
+    guests: (song.guests ?? []).map(guest => ({
+      id: guest.id, url: guest.url, name: guest.name, ...open.guestMix?.[guest.id],
+      ...(open.guests?.[guest.id] !== undefined ? { state: open.guests[guest.id] } : {}),
+      ...(guest.sends ? { sends: { reverb: 0, delay: 0, drive: 0, phaser: 0, chorus: 0, ...guest.sends } } : {}),
+    })),
   });
   return { ...source, project };
 }

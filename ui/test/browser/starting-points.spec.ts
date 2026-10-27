@@ -116,3 +116,21 @@ test('the songs on offer are in many styles, and one in another time signature o
   await page.getByRole('button', { name: /Stop All/ }).click();
   expect(errors).toEqual([]);
 });
+
+// docs/SCENE_SOUNDS_PLAN.md: two songs play a guest instrument offered by name. Like any guest that
+// arrives in a project, it is not loaded until its site is allowed.
+test('a song with a guest instrument asks before loading it, and fetches nothing from its site', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium', 'the guest unit is on the rack beside the others on the desktop');
+  const requests: string[] = [];
+  page.on('request', request => { if (new URL(request.url()).hostname === 'aaronvandorn.github.io') requests.push(request.url()); });
+  await pick(page, 'A song to hear', 'Cathedral');
+  await expect(tempo(page)).toHaveText('72');
+  const unit = page.getByRole('region', { name: /^Guest instrument / });
+  await expect(unit).toHaveAttribute('data-status', 'asking');
+  await expect(unit).toContainText('uses a guest instrument from https://aaronvandorn.github.io');
+  await expect(unit.locator('iframe')).toHaveCount(0);
+  const stored = await page.evaluate(() => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem('discobot_browser_project_v1') || '{}')));
+  expect(stored.guests.map((guest: { name: string }) => guest.name)).toEqual(['Choir']);
+  expect(stored.scenes.map((scene: { guestMix: Record<string, { muted: boolean }> }) => Object.values(scene.guestMix)[0].muted), 'heard in the Choir, Light and Coda only').toEqual([true, true, false, false, false]);
+  expect(requests).toEqual([]);
+});
