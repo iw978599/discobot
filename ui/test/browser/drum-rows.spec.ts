@@ -66,3 +66,34 @@ test('a row is added under the eight drums, plays the recording chosen for it, a
   await expect(button(page, 'Select Row 16')).toBeVisible();
   await expect(button(page, '+ Row')).toHaveCount(0);
 });
+
+function toneWav(): Buffer {
+  const rate = 22050, frames = rate / 10, data = Buffer.alloc(44 + frames * 2);
+  data.write('RIFF', 0); data.writeUInt32LE(36 + frames * 2, 4); data.write('WAVEfmt ', 8);
+  data.writeUInt32LE(16, 16); data.writeUInt16LE(1, 20); data.writeUInt16LE(1, 22);
+  data.writeUInt32LE(rate, 24); data.writeUInt32LE(rate * 2, 28); data.writeUInt16LE(2, 32); data.writeUInt16LE(16, 34);
+  data.write('data', 36); data.writeUInt32LE(frames * 2, 40);
+  for (let frame = 0; frame < frames; frame++) data.writeInt16LE(Math.round(Math.sin(2 * Math.PI * 660 * frame / rate) * 20000), 44 + frame * 2);
+  return data;
+}
+
+// Stage 3: a kit's files that match none of the eight drums go on rows of their own.
+test('Import Kit puts the files no drum is given on new rows, each named after its file', async ({ page }) => {
+  const wav = (name: string) => ({ name, mimeType: 'audio/wav', buffer: toneWav() });
+  const dialog = page.getByRole('dialog', { name: 'Import a drum kit', exact: true });
+  await page.getByLabel('Import drum kit files', { exact: true }).setInputFiles([wav('Kick.wav'), wav('Gong.wav'), wav('Woodblock.wav')]);
+  await expect(dialog.getByLabel('File for Kick', { exact: true }).locator('option:checked')).toHaveText('Kick.wav');
+  const gong = dialog.getByRole('switch', { name: 'A new row for Gong.wav', exact: true });
+  const wood = dialog.getByRole('switch', { name: 'A new row for Woodblock.wav', exact: true });
+  await expect(gong, 'a file on no lane is given a row to begin with').toHaveAttribute('aria-checked', 'true');
+  await wood.click();
+  await expect(wood).toHaveAttribute('aria-checked', 'false');
+  await dialog.getByRole('button', { name: 'Use These Sounds', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(button(page, 'Select Row 9'), 'the row shows the file it plays').toContainText('Gong');
+  await expect(button(page, 'Select Row 10'), 'and the file left out has none').toHaveCount(0);
+  await expect.poll(async () => {
+    const { drumState } = await stored(page);
+    return [Boolean(drumState.kick.sampleId), Boolean(drumState.extra1?.sampleId)];
+  }).toEqual([true, true]);
+});

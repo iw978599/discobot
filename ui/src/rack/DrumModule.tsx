@@ -700,6 +700,8 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
           initial={kitFiles.initial}
           lanes={DRUM_ROWS.map(instrument => ({ id: instrument, label: LABELS[instrument] }))}
           onApply={(lane, sampleId) => studio.handleDrumSampleChange(lane, sampleId)}
+          freeRows={EXTRA_DRUMS.length - (INSTRUMENTS.length - DRUM_ROWS.length)}
+          onAddRow={studio.handleAddDrumRow}
           onClose={() => { setKitFiles(null); void refreshSamples(); }}
         />
       )}
