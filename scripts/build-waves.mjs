@@ -1,10 +1,12 @@
 // Builds ui/public/waves.bin, the recordings and single-cycle waves the sample engine's built-in
 // sounds play. It is run by hand when the set changes, never by a build or a check:
 //
-//   node scripts/build-waves.mjs <folder holding the source files>
+//   node scripts/build-waves.mjs <folder holding the source files> [the files to build, such as sounds/kit-swirly.bin]
 //
 // The source folder has `vsco/` and `akwf/`, each file fetched from the address beside it in
-// SOURCES below and saved under the name given there (VCSL's go in `vcsl/`). All three libraries are CC0 (docs/BUNDLED_AUDIO.md).
+// SOURCES below and saved under the name given there (VCSL's go in `vcsl/`, Karoryfer's in
+// `karoryfer/`). All four libraries are CC0 (docs/BUNDLED_AUDIO.md). With files named after the
+// folder, only those are built, and only their sources are needed.
 // Everything is cut short, mixed to one channel and stored as 16-bit, so the whole set stays small.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -14,6 +16,9 @@ const VCSL = 'https://raw.githubusercontent.com/sgossner/VCSL/master/';
 const MEMBRANE = `${VCSL}Membranophones/Struck%20Membranophones/`;
 const IDIOPHONE = `${VCSL}Idiophones/Struck%20Idiophones/`;
 const AKWF ='https://raw.githubusercontent.com/KristofferKarlAxelEkstrand/AKWF-FREE/main/AKWF/';
+const GOGODZE = 'https://raw.githubusercontent.com/sfzinstruments/karoryfer.gogodze-phu-vol-ii/master/Samples/';
+const SWIRLY = 'https://raw.githubusercontent.com/sfzinstruments/karoryfer.swirly-drums/main/Samples/';
+const CAVEMAN = 'https://raw.githubusercontent.com/sfzinstruments/karoryfer.caveman-cosmonaut/master/Samples/';
 const RATE = 22050;
 const FRAME = 600;
 
@@ -83,6 +88,46 @@ export const INSTRUMENTS = [
   { id: 'fm-piano', file: 'sounds/fm-piano.bin', zones: octaves(null, 'fmpiano', n => `${TX}FM%20Piano/FMPiano_C${n}_vl2.wav`, [2, 1.8, 1.5, 1.2, 1, 0.8, 0.6], 1) },
   { id: 'fm-piano-1', file: 'sounds/fm-piano-1.bin', zones: octaves(null, 'tx1', n => `${TX}Piano%201/Piano%201_C${n}_vl2.wav`, [2, 1.8, 1.5, 1.2, 1, 0.8, 0.6], 1) },
   { id: 'fm-clavisynth', file: 'sounds/fm-clavisynth.bin', zones: octaves(null, 'clavi', n => `${TX}Clavisynth/Clavisynth_C${n}_vl2.wav`, [1.5, 1.4, 1.2, 1, 0.8, 0.6], 1) },
+  // Caveman Cosmonaut (Karoryfer): a 1983 Unitra B-11 transistor organ with every register drawn
+  // (`all_all_all`). Its files are named an octave below where they sound: c4 is MIDI 48, as the
+  // library's own mapping has it.
+  { id: 'caveman-organ', file: 'sounds/caveman-organ.bin', zones: [[4, 2], [5, 2], [6, 1.6], [7, 1.4]].map(([octave, seconds]) => (
+    { file: `karoryfer/caveman_c${octave}.wav`, from: `${CAVEMAN}all_all_all_c${octave}.wav`, root: 12 * octave, seconds }
+  )) },
+];
+
+// Recorded drum kits other than the first, each a file of its own fetched once the kit is chosen
+// (`sounds/kit-<kit>.bin`), holding `<kit>-<drum>` for the lanes it has; a lane it lacks plays the
+// first recorded kit's. One hit each, from a velocity layer near the top, like the Recorded kit's.
+// A hit recorded by two microphones at once (`mix`) is the two summed at the levels the library's
+// own kit starts with.
+const drum = (kit, name, from, seconds, rate = RATE, mix) => ({
+  id: `${kit}-${name}`,
+  zones: [{ ...(mix ? { mix: mix.map(([part, url, gain]) => ({ file: `karoryfer/${kit}_${name}_${part}.wav`, from: url, gain })) } : { file: `karoryfer/${kit}_${name}.wav`, from }), root: 60, seconds, rate, unpitched: true }],
+});
+export const KITS = [
+  // Gogodze Phu Vol II: recorded with seven microphones, mixed by its player with curves that are
+  // not in its files, so each drum is the one microphone nearest it: the kick's and the snare's own,
+  // and the overheads for the hats and toms.
+  { id: 'gogodze', file: 'sounds/kit-gogodze.bin', sources: [
+    drum('gogodze', 'kick', `${GOGODZE}kick_mic/ks_vl5_rr1.wav`, 0.7),
+    drum('gogodze', 'snare', `${GOGODZE}snare_mic/sc_vl5_rr1.wav`, 0.6),
+    drum('gogodze', 'closedHH', `${GOGODZE}oh_mic/hc_vl3_rr1.wav`, 0.3, 32000),
+    drum('gogodze', 'openHH', `${GOGODZE}oh_mic/ho_vl4_rr1.wav`, 1.2, 32000),
+    drum('gogodze', 'snare2', `${GOGODZE}oh_mic/tl_vl4_rr1.wav`, 0.9),
+    drum('gogodze', 'ride', `${GOGODZE}oh_mic/th_vl4_rr1.wav`, 0.8),
+  ] },
+  // Swirly Drums, dry: the kick is its resonant head and its beater at 100 and 70, the snare its
+  // top and bottom at 80 and 100, the levels `Programs/Basic_kit.sfz` sets; the floor tom and the
+  // mid-high tom, the two toms of that kit after the floor.
+  { id: 'swirly', file: 'sounds/kit-swirly.bin', sources: [
+    drum('swirly', 'kick', null, 0.7, RATE, [['reso', `${SWIRLY}marching_kick/marching_kick_vl18_rr1_reso.wav`, 1], ['beater', `${SWIRLY}marching_kick/marching_kick_vl18_rr1_beater.wav`, 0.7]]),
+    drum('swirly', 'snare', null, 0.6, RATE, [['top', `${SWIRLY}snare_main/snare_hit_vl10_rr1_top.wav`, 0.8], ['btm', `${SWIRLY}snare_main/snare_hit_vl10_rr1_btm.wav`, 1]]),
+    drum('swirly', 'closedHH', `${SWIRLY}hat_closed/hh_closed_vl10_rr1.wav`, 0.3, 32000),
+    drum('swirly', 'openHH', `${SWIRLY}hat_open/hh_open_vl11_rr1.wav`, 1.2, 32000),
+    drum('swirly', 'snare2', `${SWIRLY}tom_floor/tom_floor_vl10_rr1.wav`, 0.9),
+    drum('swirly', 'ride', `${SWIRLY}tom_mhi/tom_mhi_vl8_rr1.wav`, 0.8),
+  ] },
 ];
 
 function readWav(path) {
@@ -148,8 +193,19 @@ function pitchOf(samples, rate, expected) {
   return bestLag ? rate / bestLag : 0;
 }
 
-function zone(folder, { file, root, seconds, rate: wanted = RATE, unpitched = false }) {
-  const { mono, rate } = readWav(join(folder, file));
+// One file, or several recorded at once summed at their gains.
+function readZone(folder, file, mix) {
+  if (!mix) return readWav(join(folder, file));
+  const parts = mix.map(part => ({ ...readWav(join(folder, part.file)), gain: part.gain }));
+  if (parts.some(part => part.rate !== parts[0].rate)) throw new Error(`${mix[0].file}: the parts are at different rates`);
+  const mono = new Float64Array(Math.max(...parts.map(part => part.mono.length)));
+  for (const part of parts) part.mono.forEach((value, index) => { mono[index] += value * part.gain; });
+  return { mono, rate: parts[0].rate };
+}
+
+function zone(folder, { file, mix, root, seconds, rate: wanted = RATE, unpitched = false }) {
+  file ??= mix[0].file;
+  const { mono, rate } = readZone(folder, file, mix);
   // Start a moment before the sound does.
   const loud = peakOf(mono), begin = Math.max(0, mono.findIndex(value => Math.abs(value) > loud * 0.02) - Math.floor(rate * 0.002));
   const cut = resample(mono.subarray(begin, begin + Math.ceil(rate * (seconds + 0.05))), rate, wanted).subarray(0, Math.floor(wanted * seconds));
@@ -202,11 +258,13 @@ function bundle(folder, sources, path) {
   console.log(`${path}: ${file.length} bytes (${(file.length / 1024).toFixed(0)} KB)`);
 }
 
-function build(folder) {
-  bundle(folder, SOURCES, 'ui/public/waves.bin');
-  for (const instrument of INSTRUMENTS) bundle(folder, [{ id: instrument.id, zones: instrument.zones }], `ui/public/${instrument.file}`);
+function build(folder, only) {
+  const wanted = (file) => only.length === 0 || only.includes(file);
+  if (wanted('waves.bin')) bundle(folder, SOURCES, 'ui/public/waves.bin');
+  for (const instrument of INSTRUMENTS) if (wanted(instrument.file)) bundle(folder, [{ id: instrument.id, zones: instrument.zones }], `ui/public/${instrument.file}`);
+  for (const kit of KITS) if (wanted(kit.file)) bundle(folder, kit.sources, `ui/public/${kit.file}`);
 }
 
-if (process.argv[2]) build(process.argv[2]);
-else console.log('Usage: node scripts/build-waves.mjs <folder holding vsco/, vcsl/ and akwf/>');
+if (process.argv[2]) build(process.argv[2], process.argv.slice(3));
+else console.log('Usage: node scripts/build-waves.mjs <folder holding vsco/, vcsl/, akwf/ and karoryfer/> [files to build]');
 

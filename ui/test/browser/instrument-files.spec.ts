@@ -21,7 +21,7 @@ test('a big instrument is fetched from this site only when a lane first uses it'
   await page.getByRole('tab', { name: 'Osc', exact: true }).first().click();
   await synth.getByLabel('Synth engine', { exact: true }).selectOption('sample');
   const sample = synth.getByLabel('Synth sample', { exact: true });
-  await expect(sample.locator('optgroup[label="Built in"] option')).toContainText(['Grand Piano (Kawai)', 'Grand Piano (Steinway B)', 'Pipe Organ', 'Tenor Sax', 'FM Piano', 'FM Piano 1', 'FM Clavisynth']);
+  await expect(sample.locator('optgroup[label="Built in"] option')).toContainText(['Grand Piano (Kawai)', 'Grand Piano (Steinway B)', 'Pipe Organ', 'Tenor Sax', 'FM Piano', 'FM Piano 1', 'FM Clavisynth', 'Caveman Organ']);
   await sample.selectOption({ label: 'Piano' });
   await expect(synth.locator('.synth-sample-note')).toHaveCount(0);
   expect(asked).toEqual([]);

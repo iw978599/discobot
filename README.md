@@ -25,11 +25,12 @@ of its own.
 
 A model is this synth's own voice set up to behave like the instrument it is
 named for. It is not that instrument's circuit. The M1, D-50 and Wavestation, the
-recorded instruments (two grand pianos, a pipe organ, a tenor sax and three FM
-keyboards), the Recorded drum kit and its percussion, and the cymbals play
+recorded instruments (two grand pianos, a pipe organ, a tenor sax, three FM
+keyboards and a transistor organ), the three recorded drum kits and their
+percussion, and the cymbals play
 recordings and waves from free libraries; `docs/BUNDLED_AUDIO.md` has the details.
 
-**Ninety-three presets** in six kinds: bass, lead, pad, keys, pluck and effects,
+**Ninety-four presets** in six kinds: bass, lead, pad, keys, pluck and effects,
 found by group or by typing in the menu's search. They are level-matched, so
 choosing another does not mean reaching for the volume. You can save, export and
 import your own, including presets from some other synths. A lane on the plain

@@ -39,8 +39,10 @@ const METAL_HZ = [205.3, 304.4, 369.6, 522.7, 540, 800];
 const DRUMS: DrumInstrument[] = ['kick', 'snare', 'openHH', 'closedHH', 'ride', 'crash', 'snare2', 'clap'];
 const INSTRUMENTS: DrumRow[] = [...DRUMS, ...EXTRA_DRUMS];
 const isDrum = (row: DrumRow): row is DrumInstrument => (DRUMS as DrumRow[]).includes(row);
-// The kit whose drums are all recordings (the cymbal lane's always are).
-const RECORDED_KIT = 'recorded';
+// The kits whose drums are all recordings (the cymbal lane's always are), and what each one's
+// recordings are called: `<name>-<instrument>`. A drum a kit has no recording of (the clap of the
+// two after the first) plays the first kit's.
+export const RECORDED_KITS: Partial<Record<string, string>> = { recorded: 'kit', gogodze: 'gogodze', swirly: 'swirly' };
 // Brings every voice to a similar peak before the kit's drive, so drive colours all drums
 // evenly and the volume knobs mean the same thing on every instrument.
 const VOICE_TRIM: Record<DrumInstrument, number> = {
@@ -50,8 +52,8 @@ const HIT_LEVEL = 0.7;
 
 // A recording a lane plays instead of its synthesized voice: one channel, at its own rate.
 export interface DrumSample { data: Float32Array; rate: number }
-// The app's own drum recordings by name: a cymbal by its kind (`crash`), a drum of the recorded kit
-// as `kit-<instrument>`.
+// The app's own drum recordings by name: a cymbal by its kind (`crash`), a drum of a recorded kit
+// as `kit-<instrument>` (the first) or `<kit>-<instrument>`.
 export type DrumRecordings = Partial<Record<string, DrumSample>>;
 // Somewhere to write one of the two send mixes: a left and a right channel.
 export type DrumSendMix = ArrayLike<Float32Array>;
@@ -142,6 +144,14 @@ export class DrumCore {
     for (const [name, sample] of Object.entries(cymbals ?? {})) {
       if (sample && sample.data.length > 1 && sample.rate > 0) this.cymbals[name] = sample;
     }
+  }
+
+  // The name of the recording a drum of a recorded kit plays, or '' for a kit of synthesized drums.
+  private kitRecording(kitId: string | undefined, instrument: DrumInstrument): string {
+    const name = RECORDED_KITS[kitId ?? ''];
+    if (!name) return '';
+    const own = `${name}-${instrument}`;
+    return this.cymbals[own] ? own : `kit-${instrument}`;
   }
 
   // Gives a lane a sample to play, or with null hands it back to its synthesized voice.
@@ -241,7 +251,7 @@ export class DrumCore {
     const perc = settings.percType && PERC_CHOICES[message.instrument]?.includes(settings.percType) ? `perc-${settings.percType}` : '';
     // An added row's recording, without an imported sample, is the percussion or the cymbal its settings name.
     const extraRecording = !isDrum(message.instrument) && settings.cymbalType ? settings.cymbalType : '';
-    const recordingName = perc && this.cymbals[perc] ? perc : extraRecording || (message.instrument === 'crash' ? settings.cymbalType ?? 'crash' : message.kitId === RECORDED_KIT && isDrum(message.instrument) ? `kit-${message.instrument}` : '');
+    const recordingName = perc && this.cymbals[perc] ? perc : extraRecording || (message.instrument === 'crash' ? settings.cymbalType ?? 'crash' : isDrum(message.instrument) ? this.kitRecording(message.kitId, message.instrument) : '');
     const cymbal = !imported && recordingName ? this.cymbals[recordingName] ?? null : null;
     voice.sample = imported ?? cymbal;
     voice.shaped = cymbal !== null;

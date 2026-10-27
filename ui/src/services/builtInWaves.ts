@@ -1,4 +1,4 @@
-import { CYMBAL_TYPES, type DrumRecordings, type PercType, type SampleZone, type SynthParameters, type SynthSample } from '@discobot/engine';
+import { CYMBAL_TYPES, type DrumKitId, type DrumRecordings, type PercType, type SampleZone, type SynthParameters, type SynthSample } from '@discobot/engine';
 import { loadDrumSample } from './drumSamples';
 import { INSTRUMENT_TYPE, getSample } from './sampleStore';
 import { sampleKey } from './sceneSounds';
@@ -28,6 +28,7 @@ export const BUILT_IN_WAVES: Array<{ id: string; name: string; steps?: number; f
   { id: 'fm-piano', name: 'FM Piano', file: 'sounds/fm-piano.bin' },
   { id: 'fm-piano-1', name: 'FM Piano 1', file: 'sounds/fm-piano-1.bin' },
   { id: 'fm-clavisynth', name: 'FM Clavisynth', file: 'sounds/fm-clavisynth.bin' },
+  { id: 'caveman-organ', name: 'Caveman Organ', file: 'sounds/caveman-organ.bin' },
 ];
 
 // A zone's own loop (frames into its recording) and the keys it is for, which a SoundFont's zones
@@ -114,12 +115,15 @@ export function loadBuiltInWave(id: string): Promise<SynthSample | null> {
   return loadBundle(file).then(waves => waves.get(id) ?? null);
 }
 
-// The drum machine's recordings: the cymbals by kind (`crash`), and the drums of the recorded kit
-// as `kit-<instrument>`. One that could not be fetched is left out, and the drum voice plays its
+// The drum machine's recordings: the cymbals by kind (`crash`), the drums of the recorded kit
+// as `kit-<instrument>`, and for `kitId` when it is one of the later recorded kits, its drums as
+// `<kit>-<instrument>`, from a file of that kit's own fetched only then (`KIT_FILES`). One that
+// could not be fetched is left out, and the drum voice plays the first kit's recording or its
 // synthesized voice for it. Live playback, export and the share page all take this one list.
 export const KIT_RECORDINGS = ['kick', 'snare', 'clap', 'closedHH', 'openHH', 'snare2', 'ride'];
+export const KIT_FILES: Partial<Record<DrumKitId, string>> = { gogodze: 'sounds/kit-gogodze.bin', swirly: 'sounds/kit-swirly.bin' };
 export const PERC_TYPES: PercType[] = ['tambourine', 'shaker', 'cowbell', 'sidestick', 'conga', 'bongo'];
-export async function loadCymbals(): Promise<DrumRecordings> {
+export async function loadCymbals(kitId?: string): Promise<DrumRecordings> {
   const recordings: DrumRecordings = {};
   const names: Array<[string, string]> = [
     ...CYMBAL_TYPES.map((kind): [string, string] => [kind, `cymbal-${kind}`]),
@@ -129,6 +133,12 @@ export async function loadCymbals(): Promise<DrumRecordings> {
   for (const [name, id] of names) {
     const sample = await loadBuiltInWave(id);
     if (sample) recordings[name] = { data: sample.data, rate: sample.rate };
+  }
+  const file = kitId ? KIT_FILES[kitId as DrumKitId] : undefined;
+  if (file) {
+    for (const [id, sample] of await loadBundle(file)) {
+      if (KIT_RECORDINGS.some(drum => id === `${kitId}-${drum}`)) recordings[id] = { data: sample.data, rate: sample.rate };
+    }
   }
   return recordings;
 }

@@ -1,11 +1,12 @@
 import test from 'node:test';
+import { readFileSync, statSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { CYMBAL_TYPES, type DrumInstrument, type DrumRecordings, type DrumSettings } from '@discobot/engine';
-import { DrumCore, type DrumSample } from '../../engine/src/drums/DrumCore.ts';
+import { DrumCore, RECORDED_KITS, type DrumSample } from '../../engine/src/drums/DrumCore.ts';
 import { BUNDLED_WAVES } from './helpers/presetAudit.ts';
 import { type ExportArrangement, renderDrums } from '../src/services/wavExport.ts';
 import { DRUM_KITS } from '../src/services/drumKits.ts';
-import { KIT_RECORDINGS } from '../src/services/builtInWaves.ts';
+import { KIT_FILES, KIT_RECORDINGS, parseWaveBundle } from '../src/services/builtInWaves.ts';
 import { sanitizeKit } from '../src/services/projectSanitization.ts';
 
 const SR = 48000;
@@ -123,4 +124,41 @@ test('an export renders the recorded kit as the live core does', () => {
   assert.ok(same(exported.subarray(0, 4000), live.subarray(0, 4000)), 'the first hit is the live hit');
   const without = renderDrums({ ...arrangement, drumCymbals: undefined }, frames, SR)[0];
   assert.ok(!same(without, exported), 'and without the recordings it is the synthesized kit');
+});
+
+// The recorded kits after the first, each from a file of its own (scripts/build-waves.mjs, `KITS`).
+const kitFile = (kit: string) => {
+  const bytes = readFileSync(`ui/public/${KIT_FILES[kit as keyof typeof KIT_FILES]}`);
+  return parseWaveBundle(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+};
+const LATER_KITS = Object.keys(RECORDED_KITS).filter(kit => kit !== 'recorded');
+
+test('the later recorded kits are listed, read back, and each has a small file of its own drums', () => {
+  assert.deepEqual(LATER_KITS, ['gogodze', 'swirly']);
+  assert.deepEqual(Object.keys(KIT_FILES).sort(), [...LATER_KITS].sort());
+  for (const kit of LATER_KITS) {
+    assert.ok(DRUM_KITS.find(entry => entry.id === kit)?.name.startsWith('Recorded: '), kit);
+    assert.equal(sanitizeKit(kit), kit);
+    const waves = kitFile(kit);
+    // Every drum but the clap and the cymbal, which play the first kit's and the cymbal recordings.
+    assert.deepEqual([...waves.keys()].sort(), KIT_RECORDINGS.filter(drum => drum !== 'clap').map(drum => `${kit}-${drum}`).sort());
+    assert.ok(statSync(`ui/public/${KIT_FILES[kit as keyof typeof KIT_FILES]}`).size < 300_000, `${kit} is small`);
+  }
+});
+
+test('a later recorded kit plays its own drums, and the first kit\'s for one it lacks or has not loaded', () => {
+  for (const kit of LATER_KITS) {
+    const own = recordings();
+    for (const [id, sample] of kitFile(kit)) own[id] = { data: sample.data, rate: sample.rate };
+    const core = () => { const made = new DrumCore(SR); made.setCymbals(own); return made; };
+    for (const drum of DRUMS) {
+      const heard = hit(core(), drum, {}, kit), first = hit(withRecordings(), drum, {}, 'recorded');
+      assert.ok(heard.every(value => Number.isFinite(value) && Math.abs(value) <= 1), `${kit} ${drum}`);
+      assert.ok(loudness(heard.subarray(0, SR / 10)) > -35, `${kit} ${drum} is heard`);
+      if (drum === 'clap' || drum === 'crash') assert.ok(same(heard, first), `${kit} ${drum} is the first kit's`);
+      else assert.ok(!same(heard, first), `${kit} ${drum} is its own`);
+      // Before its file has arrived the kit plays the first kit's recordings.
+      assert.ok(same(hit(withRecordings(), drum, {}, kit), first), `${kit} ${drum} before its file`);
+    }
+  }
 });

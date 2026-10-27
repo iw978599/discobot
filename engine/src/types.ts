@@ -364,7 +364,7 @@ export type ExtraDrum = 'extra1' | 'extra2' | 'extra3' | 'extra4' | 'extra5' | '
 export const EXTRA_DRUMS: ExtraDrum[] = ['extra1', 'extra2', 'extra3', 'extra4', 'extra5', 'extra6', 'extra7', 'extra8'];
 // A row of the drum machine of either kind.
 export type DrumRow = DrumInstrument | ExtraDrum;
-export type DrumKitId = 'clean-analog' | 'punchy-modern' | 'lofi-dirty' | 'tr-808' | 'tr-909' | 'linndrum' | 'oberheim-dmx' | 'tr-707' | 'recorded';
+export type DrumKitId = 'clean-analog' | 'punchy-modern' | 'lofi-dirty' | 'tr-808' | 'tr-909' | 'linndrum' | 'oberheim-dmx' | 'tr-707' | 'recorded' | 'gogodze' | 'swirly';
 export type DrumKitModelVariant = 'analog' | 'modern' | 'dirty';
 
 export type CymbalType = 'crash' | 'ride' | 'bell' | 'splash';

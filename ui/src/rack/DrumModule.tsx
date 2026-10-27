@@ -15,7 +15,7 @@ import { BAR_CHOICES, barSteps, drumBars, onBeat, stepsAcross } from '../service
 import CopyToScene from './CopyToScene';
 import CopyBar from './CopyBar';
 import type { Studio } from '../studio/useStudio';
-import { CYMBAL_TYPES, EXTRA_DRUMS, PERC_CHOICES } from '@discobot/engine';
+import { CYMBAL_TYPES, EXTRA_DRUMS, PERC_CHOICES, RECORDED_KITS } from '@discobot/engine';
 import { DRUM_ROWS, DRUM_ROW_NAMES, DRUM_SETTINGS_DEFAULT, EXTRA_ROW_SETTINGS, shownDrumRows } from '../services/drumKits';
 import { DRUM_FX_DEFAULT } from '../services/effectSettings';
 import { DrumInstrument, DrumKitId, DrumRow, DrumTrack, CymbalType, ExtraDrum, PercType } from '../types';
@@ -49,7 +49,7 @@ const EXTRA: Record<DrumInstrument, { knob: string; display: (v: number) => stri
   crash: { knob: 'Decay', display: (v) => `${Math.round(v * 100)}%`, parse: (n) => n / 100 },
 };
 
-// In the recorded kit every drum is a recording, and its knob is how much of the recording's own ring is left.
+// In a recorded kit every drum is a recording, and its knob is how much of the recording's own ring is left.
 const RECORDING_EXTRA = { knob: 'Decay', display: (v: number) => `${Math.round(v * 100)}%`, parse: (n: number) => n / 100 };
 
 const parseNumber = (input: string): number | null => {
@@ -157,8 +157,8 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
   };
 
   const track = drumState[selected];
-  // An added row is always a recording, as every drum of the recorded kit is.
-  const extra = isAdded(selected) || (selectedDrumKitId === 'recorded' && !track.sampleId) ? RECORDING_EXTRA : EXTRA[selected];
+  // An added row is always a recording, as every drum of a recorded kit is.
+  const extra = isAdded(selected) || (RECORDED_KITS[selectedDrumKitId] && !track.sampleId) ? RECORDING_EXTRA : EXTRA[selected];
   const rowDefaults = isAdded(selected) ? EXTRA_ROW_SETTINGS : DRUM_SETTINGS_DEFAULT[selected];
   const stepLabel = `${LABELS[selected]} step ${selectedStep + 1}`;
 

@@ -123,6 +123,57 @@ Notes read in the folders on 2026-10-19:
 Nothing in these folders carried terms other than CC0 and the above note, so
 nothing was left out.
 
+### Two more recorded kits and an organ, from Karoryfer (added 2026-10-27)
+
+The owner asked on 2026-10-27 for more open-source drum and synth sounds, and
+chose these from a search of what is clearly allowed: Gogodze Phu Vol II,
+Swirly Drums and Caveman Cosmonaut, all by Karoryfer Samples and CC0 (below).
+Each is a file of its own under `ui/public/sounds/`, in `waves.bin`'s format,
+fetched only when it is used: a kit once a project has it chosen
+(`KIT_FILES`, `loadCymbals(kitId)`), the organ as the other instruments are.
+`waves.bin` is unchanged. Each drum is one hit from a velocity layer near the
+top, round robin 1, at 22,050 Hz (the hats at 32,000 Hz), cut to between 0.3
+and 1.2 seconds; the clap and the cymbal lanes have no recording in either
+kit and play the Recorded kit's clap and the cymbal recordings.
+
+**Recorded: Gogodze** (`sounds/kit-gogodze.bin`, 228,848 bytes), from
+<https://github.com/sfzinstruments/karoryfer.gogodze-phu-vol-ii>, folder
+`Samples/`. The kit was recorded with seven microphones, and its own player
+mixes them with curves that are not in its files, so each drum is the one
+microphone nearest it rather than a guess at that mix.
+
+| Lane | File |
+|---|---|
+| Kick | `kick_mic/ks_vl5_rr1` |
+| Snare | `snare_mic/sc_vl5_rr1` |
+| Closed Hat | `oh_mic/hc_vl3_rr1` |
+| Open Hat | `oh_mic/ho_vl4_rr1` |
+| Low Tom | `oh_mic/tl_vl4_rr1` |
+| High Tom | `oh_mic/th_vl4_rr1` |
+
+**Recorded: Swirly** (`sounds/kit-swirly.bin`, 228,842 bytes), from
+<https://github.com/sfzinstruments/karoryfer.swirly-drums>, folder `Samples/`,
+the dry recordings (not `wet/` or `wetter/`). The kick and the snare were each
+recorded by two microphones at once, and are the two summed at the levels the
+library's `Programs/Basic_kit.sfz` starts with.
+
+| Lane | File |
+|---|---|
+| Kick | `marching_kick/marching_kick_vl18_rr1_reso` at 1 and `_beater` at 0.7 |
+| Snare | `snare_main/snare_hit_vl10_rr1_top` at 0.8 and `_btm` at 1 |
+| Closed Hat | `hat_closed/hh_closed_vl10_rr1` |
+| Open Hat | `hat_open/hh_open_vl11_rr1` |
+| Low Tom | `tom_floor/tom_floor_vl10_rr1` |
+| High Tom | `tom_mhi/tom_mhi_vl8_rr1` |
+
+**Caveman Organ** (`sounds/caveman-organ.bin`, 308,972 bytes), from
+<https://github.com/sfzinstruments/karoryfer.caveman-cosmonaut>: a 1983 Unitra
+B-11 transistor organ with every register drawn, `Samples/all_all_all_c4` to
+`_c7`, four recordings an octave apart, 2 to 1.4 seconds each. The files are
+named an octave below where they sound, as the library's own mapping says
+(c4 is MIDI 48); the build script measured each within 6 cents of its note.
+It has a preset, Caveman Organ, among the keys.
+
 ## The licences
 
 **Versilian Community Sample Library (VCSL)**, Versilian Studios LLC.
@@ -151,6 +202,16 @@ on.
 
 Both were read on 2026-10-12.
 
+**Karoryfer Samples** (D. Smolken): Gogodze Phu Vol II, Swirly Drums and
+Caveman Cosmonaut, in the `sfzinstruments` organisation on GitHub (links
+above). Read on 2026-10-27: each repository's licence file is CC0 1.0
+Universal, added by D. Smolken, who runs Karoryfer. The readmes of Gogodze
+and Caveman Cosmonaut, written earlier, say "Royalty-free for all commercial
+and non-commercial use. Copyright 2018 Karoryfer Lecolds" (and Gogodze's,
+"you can do whatever you want with it"); the CC0 file their author added
+afterwards is the statement relied on. Swirly Drums' file is named `license`.
+Credit: Karoryfer Samples.
+
 ## What was done to them
 
 - Mixed to one channel, cut short (the piano's lowest note is two seconds, an
@@ -173,6 +234,18 @@ Both were read on 2026-10-12.
   restrictions" but name no licence.
 - The Salamander Grand Piano is CC BY, which would need a credit wherever the
   app is shipped.
+- Michael Fischer's TR-808 set (1994), which the TidalCycles project carries
+  under CC0 (`tidalcycles/sounds-tr808-fischer`), and the kits made from it
+  (`Boochi44/free-drum-samples`): Fischer's own readme says only that the
+  samples are "ABSOLUTELY FREE" and names no licence, and the CC0 file was
+  added by TidalCycles in 2021, not by him. Looked at on 2026-10-27.
+- The CR-78, TR-505, LinnDrum and TR-909 sets in `oramics/sampled`: the CR-78
+  is labelled public domain, but the page it came from (boxedear.com) states
+  no licence, and the others name no source for theirs. SM Drums is listed as
+  public domain in the `sfzinstruments` catalogue but its repository has no
+  licence file; Retro Drums and Moog Drums there say "free use" or nothing.
+  Naked Drums, the DrumGizmo kits and the Salamander kit and piano need a
+  credit (CC BY or CC BY-SA). Looked at on 2026-10-27.
 - No recording from a Korg M1, a Roland D-50 or a Korg Wavestation. The three
   models are named for how those instruments worked, and play none of their
   sounds.
