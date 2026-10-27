@@ -10,13 +10,15 @@ Until now a lane's sound has been the project's: every scene played it with the 
 A scene may give a lane a sound of its own. It is opt-in, lane by lane: a scene that does not have
 one plays the lane's shared sound, as every scene did before. A project without any is what it was.
 
-- **The instrument** is the scene's: the model and its macros, the preset's name, and everything in
-  the lane's `SynthParameters` that makes the voice (oscillators, filter, envelopes, LFOs, routes,
-  layer, unison, the sample engine and its recording, the arpeggiator, glide, and the lane's own
-  inserts, which run inside the voice engine).
-- **The channel** stays the lane's in every scene, because the mixer shows it: the level (`gain`),
-  `pan`, the effect sends (`fxSends`, `fxReturn`) and `duck`. So do the lane's name, number, octave,
-  keyboard and swing. `CHANNEL_KEYS` in `services/sceneSounds.ts` is that list.
+- **The sound** is the scene's, the whole of the lane's `SynthParameters`: the model and its macros,
+  the preset's name, the voice (oscillators, filter, envelopes, LFOs, routes, layer, unison, the
+  sample engine and its recording, the arpeggiator, glide, the lane's own inserts) and its level,
+  pan, effect sends and duck. The mixer shows the open scene's, as it shows the open scene's mutes.
+- The lane's name, number, octave, keyboard and swing stay the lane's in every scene.
+- The first version kept the level, pan, sends and duck the lane's in every scene (a "channel"). It
+  was changed before the switch reached the app: loading a preset sets all of them, so a preset
+  loaded in one scene changed the level and sends of every other, and a scene's instrument could not
+  be given its own level (a tenor sax's preset level is half again a CS-80's).
 
 ## The shape of it
 
@@ -32,7 +34,6 @@ and a lane's sound still reaches the audio through the store's events.
   sound of its own for it, and present only then. `sharedSound(lane)` is `shared` or the lane's own.
 - Opening a scene (`applyScene`) swaps: the lane's sound goes back to `scene.sounds` of the scene
   being left (by `commitScene`) or to `shared`, and the scene being opened gives its own, if any.
-  The channel keys are carried across from the lane as it is, never from the copy.
 - `restore()` holds the two together: `shared` without an own sound in the open scene is put back
   as the lane's sound; an own sound in the open scene without `shared` is taken, and the lane's
   sound kept aside as the shared one, which is how a song written by hand can open on one.
@@ -53,8 +54,8 @@ and a lane's sound still reaches the audio through the store's events.
 1. **The store, playing and exports.** (Built in the pull request that added this plan.) Types,
    checks and restore, the swap, `scene.sound`, timed changes live, recordings per scene, WAV by
    bar, the share page, project files' samples and live sessions. Unit tests.
-2. **The editor.** A "This scene only" switch on the lane's editor, a mark on the lane's name plate
-   when the open scene has its own sound, and a browser test.
+2. **The editor.** (Built.) A "This scene" switch beside the model on the lane's Sound level, a dot in the scene's colour
+   on the lane's name plate when the open scene has its own sound, a line in Help, and a browser test.
 3. **The songs.** The sample songs rewritten to change instruments between scenes where it suits
    them, and two of them given a guest instrument whose settings change from scene to scene.
 

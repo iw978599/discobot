@@ -3,10 +3,8 @@ import type { LaneSound, Scene, SynthModelId, SynthModelParams, SynthParameters 
 // A lane's instrument chosen per scene (docs/SCENE_SOUNDS_PLAN.md). The lanes in the store are the
 // open scene's sound, as their steps are the open scene's steps. A scene with a sound of its own for
 // a lane keeps it in `scene.sounds`, and while that scene is open the lane keeps its shared sound
-// aside in `shared`.
-
-// What stays the lane's in every scene, because the mixer shows it: its level, pan, sends and duck.
-export const CHANNEL_KEYS = ['gain', 'pan', 'fxSends', 'fxReturn', 'duck'] as const;
+// aside in `shared`. A scene's own sound is the whole of it, its level, pan, sends and duck too, so a
+// preset loaded in one scene changes nothing in another, and the mixer shows the open scene's.
 
 export interface SoundedLane {
   synthParams: SynthParameters | null;
@@ -18,16 +16,6 @@ export interface SoundedLane {
 
 const copy = <T>(value: T): T => structuredClone(value);
 
-// `params` with `channel`'s level, pan, sends and duck in place of its own.
-export function withChannel(params: SynthParameters, channel: SynthParameters): SynthParameters {
-  const out: Record<string, unknown> = { ...params };
-  for (const key of CHANNEL_KEYS) {
-    if (channel[key] === undefined) delete out[key];
-    else out[key] = copy(channel[key]);
-  }
-  return out as unknown as SynthParameters;
-}
-
 // The sound a lane has now, as a scene would keep it.
 export const soundOf = (lane: SoundedLane & { synthParams: SynthParameters }): LaneSound => ({
   synthParams: copy(lane.synthParams), synthModelId: lane.synthModelId, synthModelParams: { ...lane.synthModelParams },
@@ -37,12 +25,10 @@ export const soundOf = (lane: SoundedLane & { synthParams: SynthParameters }): L
 // The lane's shared sound: what a scene without one of its own plays.
 export const sharedSound = (lane: SoundedLane & { synthParams: SynthParameters }): LaneSound => lane.shared ?? soundOf(lane);
 
-// What a lane plays in a scene that is not open: the scene's own sound, with the lane's channel,
-// or the lane's shared sound. For the open scene the lane itself is the answer.
+// What a lane plays in a scene that is not open: the scene's own sound, or the lane's shared sound.
+// For the open scene the lane itself is the answer.
 export function soundIn(scene: Pick<Scene, 'sounds'> | null | undefined, laneId: number, lane: SoundedLane & { synthParams: SynthParameters }): SynthParameters {
-  const own = scene?.sounds?.[laneId];
-  if (own) return withChannel(own.synthParams, lane.synthParams);
-  return lane.shared ? withChannel(lane.shared.synthParams, lane.synthParams) : lane.synthParams;
+  return scene?.sounds?.[laneId]?.synthParams ?? lane.shared?.synthParams ?? lane.synthParams;
 }
 
 // Which recording a sound's sample engine plays, as a key: the same for the same recording, and

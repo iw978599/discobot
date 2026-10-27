@@ -65,7 +65,7 @@ export function useSynthAudio(engine: AudioEngine = audioEngine) {
     if (!lane.automatedSends) lane.audio?.setSends(parameters.fxSends, parameters.fxReturn);
   }, []);
   // Another instrument from `time` on the audio clock: a scene with a sound of its own beginning
-  // (services/sceneSounds.ts). The lane's level, pan and sends are the same in every scene.
+  // (services/sceneSounds.ts), with its own level, pan and sends.
   const changeSound = useCallback((synthId: number, parameters: SynthParameters, bpm: number, time: number) => {
     const lane = laneFor(synthId);
     const sent = `${bpm}|${JSON.stringify(parameters)}`;
@@ -74,6 +74,7 @@ export function useSynthAudio(engine: AudioEngine = audioEngine) {
     lane.parameters = parameters;
     lane.bpm = bpm;
     send(lane.node, { type: 'params', params: soundFor(lane), time, keep: true });
+    if (!lane.automatedSends) lane.audio?.setSends(parameters.fxSends, parameters.fxReturn, time);
   }, []);
   // A step's automation: what the voice is to be at `time` on the audio clock, which is when the
   // step sounds (the scheduler works ahead of it). With nothing for the step, whatever automation

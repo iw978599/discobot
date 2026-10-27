@@ -5,7 +5,7 @@ import { sceneDrumState } from './songPlayback';
 import { drumRowsOf } from './drumKits';
 import { expandStepNotes } from './noteScheduling';
 import { SEND_PARAMS, automationChange, stepSends, stepVoiceParams } from './automation';
-import { sampleKey, withChannel } from './sceneSounds';
+import { sampleKey } from './sceneSounds';
 import { delaySeconds } from './delayTime';
 import { auxBuses, auxSeconds } from './auxSettings';
 import { rateHz } from './rateSync';
@@ -162,9 +162,9 @@ export function renderSynthBars(
   return renderCore(core, frames);
 }
 
-// Each bar's sound for a lane: the lane's own in a bar of a scene without one of its own (where it
-// is `undefined`), and the scene's, with the lane's level, pan and sends, in one with. A scene's
-// bars share one object, so the render changes instrument only where the scene changes.
+// Each bar's sound for a lane: the lane's own in a bar of a scene without one of its own, and the
+// scene's in one with. A scene's bars share one object, so the render changes instrument only where
+// the scene changes. Empty when no scene has one, and the lane plays its own sound throughout.
 function barSounds(song: Scene[] | null | undefined, laneId: number, params: SynthParameters, arrangement: Pick<ExportArrangement, 'synthSamples' | 'soundSamples'>) {
   if (!song?.some(scene => scene.sounds?.[laneId])) return [];
   const made = new Map<string, { params: SynthParameters; sample: SynthSample | null }>();
@@ -174,12 +174,14 @@ function barSounds(song: Scene[] | null | undefined, laneId: number, params: Syn
     if (!sound) return own;
     const key = JSON.stringify(sound);
     if (!made.has(key)) {
-      const sounded = withChannel(sound.synthParams, params);
-      made.set(key, { params: sounded, sample: arrangement.soundSamples?.[sampleKey(sounded)] ?? null });
+      made.set(key, { params: sound.synthParams, sample: arrangement.soundSamples?.[sampleKey(sound.synthParams)] ?? null });
     }
     return made.get(key)!;
   });
 }
+
+// Which bar a time falls in.
+const barAt = (times: BarTime[], time: number) => { let bar = 0; while (bar + 1 < times.length && times[bar + 1].start <= time) bar++; return bar; };
 
 type DrumArrangement = Pick<ExportArrangement, 'tempo' | 'drumState' | 'drumKitId' | 'drumMasterVolume' | 'drumSwing' | 'drumSwingGrid' | 'bars' | 'signature' | 'drumSamples' | 'drumCymbals'>;
 // The time signature of each bar a render plays.
@@ -336,11 +338,13 @@ const AUX_SENDS = ['auxA', 'auxB'] as const;
 // has none). Empty when no send of the lane is automated anywhere, and the sends stay as set.
 export type SendTimeline = Array<{ time: number; sends: FxSendLevels }>;
 const automatesSends = (automation: Automation | undefined) => SEND_PARAMS.some(key => automation?.[key]?.some(value => value !== null));
-export function sendTimeline(bars: SequencerStep[][], params: SynthParameters, automation: Array<Automation | undefined>, times: BarTime[]): SendTimeline {
-  if (!automation.some(automatesSends)) return [];
+// `sounds` is each bar's sound where a scene has one of its own (`barSounds`), with sends of its own.
+export function sendTimeline(bars: SequencerStep[][], params: SynthParameters, automation: Array<Automation | undefined>, times: BarTime[], sounds: Array<{ params: SynthParameters } | undefined> = []): SendTimeline {
+  const own = (bar: number) => sounds[bar]?.params ?? params;
+  if (!automation.some(automatesSends) && !sounds.some(sound => sound && JSON.stringify(sound.params.fxSends) !== JSON.stringify(params.fxSends))) return [];
   return bars.flatMap((steps, bar) => {
     const { start, duration } = times[bar], each = duration / Math.max(1, steps.length);
-    return steps.map((_, index) => ({ time: start + index * each, sends: stepSends(params, automation[bar], index) ?? params.fxSends }));
+    return steps.map((_, index) => ({ time: start + index * each, sends: stepSends(own(bar), automation[bar], index) ?? own(bar).fxSends }));
   });
 }
 
@@ -350,15 +354,17 @@ export function effectsTail(arrangement: ExportArrangement): number {
   // A lane's automation can send to a bus its sound does not.
   const automated = (synth: ExportArrangement['synths'][number], key: string) => [synth.pattern?.automation, ...(arrangement.bars ?? []).map(bar => bar.laneAutomation?.[synth.id])]
     .some(automation => automation?.[key]?.some(value => (value ?? 0) > 0));
-  const sent = (name: typeof AUX_SENDS[number]) => arrangement.synths.some(synth => (synth.synthParams?.fxSends?.[name] ?? 0) > 0 || automated(synth, `${name}Send`))
+  // Every sound a lane plays: its own, and each bar's where a scene has one of its own.
+  const soundsOf = (synth: ExportArrangement['synths'][number]) => [synth.synthParams, ...(arrangement.bars ?? []).map(bar => bar.sounds?.[synth.id]?.synthParams)].filter((params): params is SynthParameters => Boolean(params));
+  const sent = (name: typeof AUX_SENDS[number]) => arrangement.synths.some(synth => soundsOf(synth).some(params => (params.fxSends?.[name] ?? 0) > 0) || automated(synth, `${name}Send`))
     || (arrangement.drumFx.sends[name] ?? 0) > 0 || [...(arrangement.guestTakes ?? []), ...(arrangement.trackTakes ?? [])].some(take => (take.sends?.[name] ?? 0) > 0);
   const aux = auxBuses(arrangement.effectsLoop.aux).map((bus, slot) => {
     if (bus.level <= 0 || !sent(AUX_SENDS[slot])) return 0;
     return bus.kind === 'hall' ? bus.main + 0.5 : bus.kind === 'echo' ? Math.min(4, auxSeconds(bus, arrangement.tempo) * 6) : 0.2;
   });
-  const inserts = arrangement.synths.map(synth => {
-    const delay = synth.synthParams?.inserts?.delay;
-    return synth.synthParams && delay && delay.mix > 0 ? Math.min(4, toVoiceParams(synth.synthParams, arrangement.tempo).insDelayTime * 6) : 0;
+  const inserts = arrangement.synths.flatMap(soundsOf).map((params) => {
+    const delay = params.inserts?.delay;
+    return delay && delay.mix > 0 ? Math.min(4, toVoiceParams(params, arrangement.tempo).insDelayTime * 6) : 0;
   });
   return Math.max(0, ...aux, ...inserts);
 }
@@ -431,18 +437,22 @@ export async function renderArrangement(arrangement: ExportArrangement, options:
   } else master.connect(limiter);
   limiter.connect(safety).connect(ctx.destination);
   const kickTimes = drumHits(arrangement, bars, barDuration).filter(hit => hit.instrument === 'kick').map(hit => hit.time);
-  const ducked = ([left, right]: Stereo, duck: number) => {
+  // `duck` is the amount, or for a lane whose scenes have sounds of their own, the amount at a time.
+  const ducked = ([left, right]: Stereo, duck: number | ((time: number) => number)) => {
     const buffer = ctx.createBuffer(2, frames, sampleRate);
     buffer.getChannelData(0).set(left); buffer.getChannelData(1).set(right);
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     const ducker = ctx.createGain();
-    for (const time of kickTimes) scheduleDuck(ducker.gain, time, duck);
+    for (const time of kickTimes) {
+      const amount = typeof duck === 'number' ? duck : duck(time);
+      if (typeof duck === 'number' || amount > 0) scheduleDuck(ducker.gain, time, amount);
+    }
     source.connect(ducker);
     source.start(0);
     return ducker;
   };
-  const play = (stereo: Stereo, sends: FxSendLevels, returnLevel: number, group: 'synth' | 'drums', duck = 0, mixes: Partial<Record<OwnMix, Stereo>> = {}, timeline: SendTimeline = []) => {
+  const play = (stereo: Stereo, sends: FxSendLevels, returnLevel: number, group: 'synth' | 'drums', duck: number | ((time: number) => number) = 0, mixes: Partial<Record<OwnMix, Stereo>> = {}, timeline: SendTimeline = []) => {
     const own = Object.fromEntries(Object.entries(mixes).map(([name, mix]) => [name, () => ducked(mix, duck)]));
     connectEffects(ctx, ducked(stereo, duck), master, sends, returnLevel, arrangement.effectsLoop, group, arrangement.tempo, own, timeline);
   };
@@ -463,8 +473,11 @@ export async function renderArrangement(arrangement: ExportArrangement, options:
     if (!lane.pattern || !lane.synthParams) continue;
     const laneBars = song ? song.map(scene => scene.lanes[lane.id] ?? []) : Array.from({ length: bars }, () => lane.pattern!.steps);
     const laneAutomation = song ? song.map(scene => scene.laneAutomation?.[lane.id]) : Array.from({ length: bars }, () => lane.pattern!.automation);
-    play(renderSynthBars(laneBars, lane.synthParams, arrangement.tempo, frames, sampleRate, barDuration, arrangement.synthSamples?.[lane.id], times, laneAutomation, lane.swing ? arrangement.drumSwing : 0, arrangement.drumSwingGrid, barSounds(song, lane.id, lane.synthParams, arrangement)),
-      lane.synthParams.fxSends, lane.synthParams.fxReturn, 'synth', lane.synthParams.duck ?? 0, {}, sendTimeline(laneBars, lane.synthParams, laneAutomation, times));
+    const sounds = barSounds(song, lane.id, lane.synthParams, arrangement), params = lane.synthParams;
+    // A scene's own sound has a duck of its own: the amount is the one of the bar the kick is in.
+    const duck = sounds.length ? (time: number) => (sounds[barAt(times, time)]?.params ?? params).duck ?? 0 : params.duck ?? 0;
+    play(renderSynthBars(laneBars, params, arrangement.tempo, frames, sampleRate, barDuration, arrangement.synthSamples?.[lane.id], times, laneAutomation, lane.swing ? arrangement.drumSwing : 0, arrangement.drumSwingGrid, sounds),
+      params.fxSends, params.fxReturn, 'synth', duck, {}, sendTimeline(laneBars, params, laneAutomation, times, sounds));
     await partDone();
   }
   if (drums) {

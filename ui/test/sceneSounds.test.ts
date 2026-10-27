@@ -4,7 +4,7 @@ import { ok, setup } from './helpers/store.ts';
 import { createMemoryLibrary } from '../src/services/projectLibrary.ts';
 import { renderSynthBars } from '../src/services/wavExport.ts';
 import { usedSampleIds } from '../src/services/projectSamples.ts';
-import { soundIn, withChannel } from '../src/services/sceneSounds.ts';
+import { soundIn } from '../src/services/sceneSounds.ts';
 import { SynthCore } from '../../engine/src/synth/SynthCore.ts';
 import { createDefaultSynthParameters, toVoiceParams } from '../../engine/src/synth/voiceParams.ts';
 import type { SequencerStep } from '../src/types.ts';
@@ -21,7 +21,7 @@ function twoScenes() {
 const lane = (service: ReturnType<typeof setup>) => service.snapshot().synths[0];
 const PLAIN = createDefaultSynthParameters().oscillator.type;
 
-test('a scene with a sound of its own plays it, the others the shared sound, and the lane keeps one level, pan and sends in all of them', () => {
+test('a scene with a sound of its own plays it, level, pan and sends too, and the others the shared sound', () => {
   const { service, first, second } = twoScenes();
   ok(service.setSceneSound(1, true));
   ok(service.setSynthParams(1, { oscillator: { type: 'square' }, filter: { frequency: 400 } } as never));
@@ -30,12 +30,13 @@ test('a scene with a sound of its own plays it, the others the shared sound, and
   ok(service.selectScene(first));
   assert.equal(lane(service).synthParams.oscillator.type, PLAIN, 'the shared sound');
   assert.equal(lane(service).synthModelId, 'generic');
-  assert.deepEqual([lane(service).synthParams.gain, lane(service).synthParams.pan, lane(service).synthParams.fxSends.reverb], [0.3, -0.5, 0.6], 'the channel came along');
+  assert.notDeepEqual([lane(service).synthParams.gain, lane(service).synthParams.pan, lane(service).synthParams.fxSends.reverb], [0.3, -0.5, 0.6], 'the level, pan and sends were the scene\'s');
   assert.equal('shared' in lane(service), false);
   ok(service.setSynthParams(1, { gain: 0.7 } as never));
   ok(service.selectScene(second));
   assert.deepEqual([lane(service).synthParams.oscillator.type, lane(service).synthParams.filter.frequency, lane(service).synthModelId], ['square', 400, 'juno-106']);
-  assert.equal(lane(service).synthParams.gain, 0.7, 'a level set in another scene is this one\'s too');
+  assert.deepEqual([lane(service).synthParams.gain, lane(service).synthParams.pan, lane(service).synthParams.fxSends.reverb], [0.3, -0.5, 0.6], 'a level set in another scene is that one\'s alone');
+  assert.equal(lane(service).shared?.synthParams.gain, 0.7);
   assert.equal(lane(service).shared?.synthParams.oscillator.type, PLAIN);
 });
 
@@ -129,9 +130,9 @@ test('what a lane plays in a scene that is not open', () => {
   const studioLane = { synthParams: live, synthModelId: 'generic' as const, synthModelParams: { macro1: .5, macro2: .5, macro3: .5, macro4: .5 } };
   assert.equal(soundIn(null, 1, studioLane), live, 'a lane without a scene of its own');
   const scene = { sounds: { 1: { synthParams: own, synthModelId: 'generic' as const, synthModelParams: studioLane.synthModelParams } } };
-  assert.deepEqual([soundIn(scene, 1, studioLane).oscillator.type, soundIn(scene, 1, studioLane).gain], ['square', 0.9]);
+  assert.deepEqual([soundIn(scene, 1, studioLane).oscillator.type, soundIn(scene, 1, studioLane).gain], ['square', 0.1]);
   const withShared = { ...studioLane, shared: { synthParams: shared, synthModelId: 'generic' as const, synthModelParams: studioLane.synthModelParams } };
-  assert.deepEqual(soundIn({}, 1, withShared), withChannel(shared, live));
+  assert.equal(soundIn({}, 1, withShared), shared);
 });
 
 const steps = (note: string): SequencerStep[] => Array.from({ length: 16 }, (_, index) => ({ active: index % 4 === 0, note, velocity: 0.8 }));
@@ -146,6 +147,15 @@ test('a render changes instrument at the first bar of a scene with a sound of it
   const changed = renderSynthBars(bars, params, 120, SR * 4, SR, 2, null, undefined, [], 0, 16, [undefined, { params: square, sample: null }]);
   assert.deepEqual([...changed[0].subarray(0, SR * 2 - 200)], [...plain[0].subarray(0, SR * 2 - 200)], 'the first bar is as it was');
   assert.notDeepEqual([...changed[0].subarray(SR * 2 + 200, SR * 3)], [...plain[0].subarray(SR * 2 + 200, SR * 3)], 'the second is the other instrument');
+});
+
+test('a scene\'s own sound brings its own sends to the export, bar by bar', async () => {
+  const { sendTimeline } = await import('../src/services/wavExport.ts');
+  const params = createDefaultSynthParameters(), times = [{ start: 0, duration: 2 }, { start: 2, duration: 2 }];
+  const wet = { ...params, fxSends: { ...params.fxSends, reverb: 0.8 } };
+  assert.deepEqual(sendTimeline([steps('C3'), steps('C3')], params, [], times), [], 'nothing to follow');
+  const timeline = sendTimeline([steps('C3'), steps('C3')], params, [], times, [undefined, { params: wet }]);
+  assert.deepEqual([timeline[0].sends.reverb, timeline[16].sends.reverb], [params.fxSends.reverb, 0.8]);
 });
 
 test('a timed sound or recording is not forgotten when the waiting changes are cleared: it is made at once', () => {

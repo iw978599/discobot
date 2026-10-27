@@ -332,6 +332,8 @@
 .rack-plate[aria-pressed="true"] b { color: var(--on); }
 .rack-plate:not(.static):hover b { text-decoration: underline; }
 .rack-plate span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+/* The open scene has a sound of its own for the lane: a dot in the scene's colour before the sound's name. */
+.rack-plate span[data-scene-sound]::before { content: ''; display: inline-block; width: 0.55em; height: 0.55em; margin-right: 0.35em; border-radius: 50%; background: var(--scene-color, var(--on)); vertical-align: 0.05em; }
 .rack-plate-actions { display: flex; gap: 4px; }
 /* Help for a unit: a "?" in the top corner of its name plate, laid over room the plate already
    has beside its name, so no plate is taller for it. A lane's plate is itself a button, so the

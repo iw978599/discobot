@@ -12,7 +12,7 @@ import { layAutomationAlong, resizeAutomationEachBar } from './automation';
 import { nextSceneColor, sceneColor } from './sceneColors';
 import { normalizeSynthModelId } from '../synthModels';
 import type { DrumLanePattern, DrumState, DrumTrack, LaneSound, Pattern, Scene, TimeSignature } from '../types';
-import { soundOf, withChannel } from './sceneSounds';
+import { soundOf } from './sceneSounds';
 import type { ProjectDefaults, ProjectLane, ProjectState } from './localService';
 import type { Operation, OpResult, OpType, Outcome, Rejected } from './projectOps';
 import { MAX_SWING, swingGridOf } from './grooves';
@@ -162,9 +162,9 @@ export const commitScene = (state: ProjectState) => {
   if (index >= 0) state.scenes[index] = captureScene(state, state.currentSceneId, state.scenes[index].name, state.scenes[index].color, state.scenes[index].signature, state.scenes[index].tempo);
 };
 
-// A lane takes a sound, keeping its own level, pan, sends and duck.
+// A lane takes a sound, the whole of it.
 const takeSound = (synth: ProjectLane, sound: LaneSound) => {
-  synth.synthParams = withChannel(clone(sound.synthParams), synth.synthParams);
+  synth.synthParams = clone(sound.synthParams);
   synth.synthModelId = sound.synthModelId;
   synth.synthModelParams = { ...sound.synthModelParams };
   if (sound.preset) synth.preset = sound.preset; else delete synth.preset;
