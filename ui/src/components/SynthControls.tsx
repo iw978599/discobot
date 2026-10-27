@@ -417,7 +417,7 @@ export default function SynthControls({
                 className="scene-sound-toggle" label={`Synth ${laneId} sound in this scene only`} checked={sceneSound.own} onChange={sceneSound.onChange}
                 title={sceneSound.own
                   ? `${sceneSound.scene} has a sound of its own for this lane: what you change here is heard in ${sceneSound.scene} only. Turn it off to hear the lane's sound from the other scenes again`
-                  : `Give this lane a sound of its own in ${sceneSound.scene}, so another instrument can play here. The other scenes keep the lane's sound, and the level, pan and sends stay the same in every scene`}
+                  : `Give this lane a sound of its own in ${sceneSound.scene}, so another instrument can play here. The other scenes keep the lane's sound`}
               >This scene</Toggle>
             )}
             <div className="preset-controls">
