@@ -34,8 +34,9 @@
   font-weight: 700;
 }
 
+/* They wrap on a narrow screen, the same on both levels. */
 .synth-level-row .synth-header-tools {
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   padding-bottom: 4px;
   margin-left: auto;
 }

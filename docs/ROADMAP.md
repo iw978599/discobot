@@ -1245,7 +1245,8 @@ Replaced on 2026-10-19 by "The plan from here" at the top of this file.
 - **A lane's instrument chosen per scene** (`docs/SCENE_SOUNDS_PLAN.md`), so
   the sample songs can change instruments from scene to scene, and two of
   them can carry a guest instrument whose settings change with the scenes.
-  Stage 1 (the store, playing and exports) is built. Not verified by ear.
+  Stage 1 (the store, playing and exports) and stage 2 (the This scene switch
+  on a lane's editor) are built. Not verified by ear.
 
 ## Ideas folded in from roadmap v2
 

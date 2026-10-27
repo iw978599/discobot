@@ -48,6 +48,8 @@ interface SynthControlsProps {
   laneId?: number;
   laneName?: string;
   onRename?: (name: string) => void;
+  // Whether the open scene has a sound of its own for the lane, the scene's name, and what turning it on or off calls.
+  sceneSound?: { own: boolean; scene: string; onChange: (own: boolean) => void };
   // Goes up when samples arrive from somewhere else (an imported project file), so the list is read again.
   sampleStoreVersion?: number;
   onSampleError?: (message: string) => void;
@@ -199,6 +201,7 @@ export default function SynthControls({
   laneId,
   laneName,
   onRename,
+  sceneSound,
   sampleStoreVersion,
   onSampleError,
 }: SynthControlsProps) {
@@ -387,6 +390,14 @@ export default function SynthControls({
         </div>
         <div className="synth-header-tools">
           {onRename && laneId !== undefined && <LaneNameField id={laneId} name={laneName ?? ''} onRename={onRename} />}
+          {sceneSound && laneId !== undefined && (
+            <Toggle
+              className="synth-toggle" label={`Synth ${laneId} sound in this scene only`} checked={sceneSound.own} onChange={sceneSound.onChange}
+              title={sceneSound.own
+                ? `${sceneSound.scene} has a sound of its own for this lane: what you change here is heard in ${sceneSound.scene} only. Turn it off to hear the lane's sound from the other scenes again`
+                : `Give this lane a sound of its own in ${sceneSound.scene}, so another instrument can play here. The other scenes keep the lane's sound, and the level, pan and sends stay the same in every scene`}
+            >This scene</Toggle>
+          )}
           <Toggle className="synth-toggle" label="Hold notes" title={TOOLTIPS.hold} checked={Boolean(parameters.hold)} onChange={(on) => onParameterChange({ hold: on })}>Hold</Toggle>
           {onRemove && (
             <button className="rack-btn" onClick={onRemove} title="Remove this synth lane">Remove</button>

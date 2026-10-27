@@ -75,6 +75,8 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
   // A pattern longer than one bar is shown a bar at a time.
   // How long a bar is comes from the open scene's time signature.
   const signature = studio.signature, barLength = barSteps(signature);
+  // The open scene, for its name and colour where it has a sound of its own for this lane.
+  const openScene = studio.scenes.find(scene => scene.id === studio.currentSceneId);
   const bars = laneBars(stepCount, synth?.pattern?.bars, signature);
   const perBar = stepCount / bars || barLength;
   const [viewBar, setViewBar] = useState(0);
@@ -158,7 +160,10 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
             title={`${selected ? 'This lane is open for editing' : 'Open this lane for editing'}. Alt and an arrow key move it up or down the rack`}
           >
             <b>{laneName(synthId, synth.name)}</b>
-            <span data-handed={handedTo ? 'true' : undefined} title={handedTo ? `Sent to the guest ${handedTo}, and heard through it` : undefined}>{handedTo ? `→ ${handedTo}` : laneSound(synth.synthModelId, model.name, synth.preset)}</span>
+            <span
+              data-handed={handedTo ? 'true' : undefined} data-scene-sound={synth.shared && !handedTo ? 'true' : undefined} data-color={synth.shared ? openScene?.color : undefined}
+              title={handedTo ? `Sent to the guest ${handedTo}, and heard through it` : synth.shared ? `The sound of this lane in ${openScene?.name ?? 'this scene'} only` : undefined}
+            >{handedTo ? `→ ${handedTo}` : laneSound(synth.synthModelId, model.name, synth.preset)}</span>
           </button>
           {onHelp && <UnitHelp about={`Synth ${synthId}`} section={UNIT_HELP.synth} onHelp={onHelp} />}
           <UnitFold unit={laneUnit(synthId)} about={`Synth ${synthId}`} />
@@ -333,6 +338,7 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
           laneId={synthId}
           laneName={synth.name ?? ''}
           onRename={name => studio.handleSynthRename(synthId, name)}
+          sceneSound={{ own: Boolean(synth.shared), scene: openScene?.name ?? 'This scene', onChange: own => studio.handleSceneSound(synthId, own) }}
           notes={synth.pattern && (
             <div className="synth-notes">
               <div className="step-tools">

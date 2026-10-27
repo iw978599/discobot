@@ -353,6 +353,12 @@ export function useStudioLanes(core: StudioCore, needs: StudioLanesNeeds) {
   const handleSynthSwingChange = useCallback((synthId: number, swing: boolean) => {
     localService.setSynthSwing(synthId, swing);
   }, []);
+  // Whether the open scene has a sound of its own for the lane (services/sceneSounds.ts). The
+  // sceneChanged event brings the lane's sound, as the store kept it.
+  const handleSceneSound = useCallback((synthId: number, own: boolean) => {
+    const result = localService.setSceneSound(synthId, own);
+    if (!result.ok) setStorageError(result.error);
+  }, []);
   // An empty name gives the lane back its number.
   const handleSynthRename = useCallback((synthId: number, name: string) => {
     localService.setSynthName(synthId, name);
@@ -423,5 +429,5 @@ export function useStudioLanes(core: StudioCore, needs: StudioLanesNeeds) {
   const handleDeleteSynthPreset = useCallback((presetId: string) => {
     setSynthPresets((prev) => prev.filter((preset) => preset.id !== presetId || preset.builtIn));
   }, []);
-  return { handleStepChange, handleStepSelect, handleKeyboardModeChange, handlePianoRollNoteAssign, handleClearPatternNotes, handleTransposeLane, handleRandomizeLane, handleParameterChange, handleAutomationDraw, handleAutomationClear, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange, handleLaneBarsChange, handleDrumBarsChange, handleCopyDrumBar, handleCopyLaneBar, handleSynthMixChange, handleSynthSwingChange, handleSynthRename, handleLaneMove, handleLaneStep, handleSaveSynthPreset, handleLoadSynthPreset, handleImportSynthPreset, handleExportSynthPreset, handleDeleteSynthPreset };
+  return { handleStepChange, handleStepSelect, handleKeyboardModeChange, handlePianoRollNoteAssign, handleClearPatternNotes, handleTransposeLane, handleRandomizeLane, handleParameterChange, handleAutomationDraw, handleAutomationClear, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange, handleLaneBarsChange, handleDrumBarsChange, handleCopyDrumBar, handleCopyLaneBar, handleSynthMixChange, handleSynthSwingChange, handleSceneSound, handleSynthRename, handleLaneMove, handleLaneStep, handleSaveSynthPreset, handleLoadSynthPreset, handleImportSynthPreset, handleExportSynthPreset, handleDeleteSynthPreset };
 }
