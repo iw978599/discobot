@@ -470,6 +470,18 @@ export interface Scene {
   // which synth lanes and drum lanes are muted or soloed in this scene. A scene saved before
   // mutes were kept per scene has none, and plays with whatever the project has at the time.
   mutes?: SceneMutes;
+  // a lane's own sound in this scene, by synth lane id (docs/SCENE_SOUNDS_PLAN.md). A lane without
+  // one plays its shared sound here, as every lane did before a scene could have its own.
+  sounds?: Record<number, LaneSound>;
+}
+
+// A lane's instrument: the voice, the model and its macros, and the preset last loaded. A scene's
+// own copy is played with the lane's level, pan, sends and duck, never its own (`CHANNEL_KEYS`).
+export interface LaneSound {
+  synthParams: SynthParameters;
+  synthModelId: SynthModelId;
+  synthModelParams: SynthModelParams;
+  preset?: string;
 }
 
 export interface MuteFlags { muted: boolean; solo: boolean }

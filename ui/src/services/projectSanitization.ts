@@ -1,11 +1,11 @@
-import type { DrumRow, DrumSettings, DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, Scene, SceneMutes, Song, SynthParameters, SynthModelParams } from '../types';
+import type { DrumRow, DrumSettings, DrumState, EffectsLoopState, FxSendLevels, LaneSound, Pattern, SavedPatternFull, Scene, SceneMutes, Song, SynthParameters, SynthModelParams } from '../types';
 import { CYMBAL_TYPES, DRIVE_KINDS, EXTRA_DRUMS, PERC_CHOICES, MAX_MOD_ROUTES, MOD_DESTINATIONS, MOD_SOURCES, type DriveKind, type ModRoute } from '@discobot/engine';
 import { DELAY_SYNCS } from './delayTime';
 import { storedRateSync } from './rateSync';
 import { CHORUS_DEFAULT, EQ_RANGE_DB, INSERT_DEFAULT, MAX_INSERT_DELAY_TIME, MAX_PRE_DELAY } from './effectSettings';
 import { MAX_STEP_NOTES, MAX_STEP_OFFSET, MAX_STRUM } from './noteScheduling';
 import { BAR_CHOICES, MAX_BARS, barSteps, clampLengths, laneBars, storedSignature } from './patternLength';
-import { LANE_IDS } from './lanes';
+import { LANE_IDS, storedPresetName } from './lanes';
 import { sanitizeGuestMix, sanitizeSceneGuests } from './guests';
 import { MAX_REPEATS, MAX_SONG_ENTRIES } from './songPlayback';
 import { sceneColor } from './sceneColors';
@@ -296,7 +296,29 @@ export function sanitizeSceneMutes(value: unknown): SceneMutes | undefined {
   return { lanes, drums };
 }
 
-export function sanitizeScenes(value: unknown, defaults: DrumState): Scene[] | null {
+// A lane's sound as a scene keeps it, or nothing for what is not one.
+export function sanitizeLaneSound(value: unknown, defaults: SynthParameters): LaneSound | undefined {
+  const input = record(value);
+  if (!input.synthParams || typeof input.synthParams !== 'object') return undefined;
+  return {
+    synthParams: sanitizeSynthParams(input.synthParams, defaults), synthModelId: normalizeSynthModelId(input.synthModelId),
+    synthModelParams: sanitizeModelParams(input.synthModelParams), ...(storedPresetName(input.preset) ? { preset: storedPresetName(input.preset) } : {}),
+  };
+}
+
+// Each lane's own sound in a scene (docs/SCENE_SOUNDS_PLAN.md), by lane id; none is nothing.
+function sanitizeSceneSounds(value: unknown, defaults: SynthParameters | undefined): Scene['sounds'] {
+  if (!defaults) return undefined;
+  const sounds: NonNullable<Scene['sounds']> = {};
+  for (const id of LANE_IDS) {
+    const sound = sanitizeLaneSound(record(value)[id], defaults);
+    if (sound) sounds[id] = sound;
+  }
+  return Object.keys(sounds).length ? sounds : undefined;
+}
+
+// Without the synth defaults a scene's own sounds are not read, and are left out.
+export function sanitizeScenes(value: unknown, defaults: DrumState, synthDefaults?: SynthParameters): Scene[] | null {
   if (!Array.isArray(value)) return null;
   const seen = new Set<string>();
   const scenes = value.slice(0, MAX_SCENES).flatMap((entry: unknown) => {
@@ -329,6 +351,7 @@ export function sanitizeScenes(value: unknown, defaults: DrumState): Scene[] | n
       ...(sanitizeSceneGuests(input.guests) ? { guests: sanitizeSceneGuests(input.guests) } : {}),
       ...(sanitizeGuestMix(input.guestMix) ? { guestMix: sanitizeGuestMix(input.guestMix) } : {}),
       ...(sanitizeSceneMutes(input.mutes) ? { mutes: sanitizeSceneMutes(input.mutes) } : {}),
+      ...(sanitizeSceneSounds(input.sounds, synthDefaults) ? { sounds: sanitizeSceneSounds(input.sounds, synthDefaults) } : {}),
       drums: Object.fromEntries(drumRowsOf(drums).map(instrument => {
         const { steps, stepVelocities, stepProbabilities, stepRatchets } = drums[instrument]!;
         return [instrument, {

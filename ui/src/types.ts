@@ -21,6 +21,7 @@ export type {
   DelaySync,
   MuteFlags,
   SceneMutes,
+  LaneSound,
   Pattern,
   Automation,
 

@@ -59,6 +59,8 @@ export function useStudioCore(engine: AudioEngine = audioEngine) {
   const cymbalsRef = useRef<Awaited<ReturnType<typeof loadCymbals>>>({});
   // The decoded recording each synth lane's sample engine plays, by lane id.
   const synthSamplesRef = useRef<Record<number, DrumSample>>({});
+  // Every recording a lane's sound uses in any scene, decoded, by `sampleKey` (services/sceneSounds.ts).
+  const soundSamplesRef = useRef<Record<string, DrumSample>>({});
   // Goes up when samples arrive from a project file, so a lane whose sample was missing looks again.
   const [sampleStoreVersion, setSampleStoreVersion] = useState(0);
   // What an imported preset was, and what did not carry over, shown once after importing.
@@ -257,6 +259,7 @@ export function useStudioCore(engine: AudioEngine = audioEngine) {
     setMissingDrumSamples,
     cymbalsRef,
     synthSamplesRef,
+    soundSamplesRef,
     sampleStoreVersion,
     setSampleStoreVersion,
     presetImportReport,

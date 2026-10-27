@@ -199,6 +199,8 @@ export function sceneBar(scene: Scene, bar: number): Scene {
     ...(scene.signature ? { signature: scene.signature } : {}),
     ...(scene.tempo !== undefined ? { tempo: scene.tempo } : {}),
     ...(scene.guestMix ? { guestMix: scene.guestMix } : {}),
+    // A lane's own sound in the scene is the scene's, in every bar of it.
+    ...(scene.sounds ? { sounds: scene.sounds } : {}),
   };
 }
 

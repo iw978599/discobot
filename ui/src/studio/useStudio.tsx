@@ -23,6 +23,7 @@ import { storeMetronome, type MetronomeSettings } from '../services/metronome';
 import { LiveArp, type LiveArpLane } from '../services/liveArp';
 import { auxBuses } from '../services/auxSettings';
 import { isLaneId, laneOrderOf } from '../services/lanes';
+import { sameSound } from '../services/sceneSounds';
 import { noteNameToMidi } from '../utils/midiExport';
 import { DEFAULT_SYNTH_MODEL_ID, createDefaultSynthModelParams, getSynthModelDefinition, normalizeSynthModelId, normalizeSynthModelParams } from '../synthModels';
 import { guestInputs, inputSources } from '../services/guestInput';
@@ -519,7 +520,7 @@ export function useStudio(engine?: AudioEngine) {
             stepRecordPointer: 0,
             octaveShift: s.octaveShift || 0,
             muted: Boolean(s.muted),
-            solo: Boolean(s.solo), swing: s.swing === true, name: s.name, preset: s.preset,
+            solo: Boolean(s.solo), swing: s.swing === true, name: s.name, preset: s.preset, ...(s.shared ? { shared: s.shared } : {}),
             forceReleaseSignal: false,
           })));
         } else if (message.data.synthParameters) {
@@ -587,7 +588,7 @@ export function useStudio(engine?: AudioEngine) {
             stepRecordPointer: was?.stepRecordPointer ?? 0,
             octaveShift: s.octaveShift || 0,
             muted: Boolean(s.muted),
-            solo: Boolean(s.solo), swing: s.swing === true, name: s.name, preset: s.preset,
+            solo: Boolean(s.solo), swing: s.swing === true, name: s.name, preset: s.preset, ...(s.shared ? { shared: s.shared } : {}),
             forceReleaseSignal: was?.forceReleaseSignal ?? false,
           };
         });
@@ -625,13 +626,26 @@ export function useStudio(engine?: AudioEngine) {
         if (switched) autoPassRef.current.clear();
         localService.holdUndo('auto', false);
         // A scene brings its lanes' mutes and solos with it.
+        // And each lane's sound in it, which may be the scene's own (services/sceneSounds.ts).
         const withScene = (s: SynthState): SynthState => {
           const lane = lanePatterns.find((entry: { synthId: number }) => entry.synthId === s.id);
           // A step that is no longer there (the scene's bars were made shorter) is not selected.
           const kept = switched || (s.selectedStep !== null && s.selectedStep >= (lane?.pattern?.steps.length ?? 0)) ? null : s.selectedStep;
-          return lane?.pattern ? { ...s, pattern: lane.pattern, muted: Boolean(lane.muted), solo: Boolean(lane.solo), selectedStep: kept } : s;
+          if (!lane?.pattern) return s;
+          const { shared: _shared, ...rest } = s;
+          return {
+            ...rest, pattern: lane.pattern, muted: Boolean(lane.muted), solo: Boolean(lane.solo), selectedStep: kept,
+            synthParams: sameSound(s.synthParams, lane.synthParams) ? s.synthParams : normalizeSynthParams(lane.synthParams),
+            synthModelId: normalizeSynthModelId(lane.synthModelId), synthModelParams: normalizeSynthModelParams(lane.synthModelParams),
+            preset: lane.preset, ...(lane.shared ? { shared: lane.shared } : {}),
+          };
         };
-        const nextLanes = synthsRef.current.map(withScene);
+        const before = synthsRef.current;
+        const nextLanes = before.map(withScene);
+        // A sound the scheduler has already sent for the tick it begins on is not sent again here.
+        nextLanes.forEach(s => {
+          if (s.synthParams && s.synthParams !== before.find(lane => lane.id === s.id)?.synthParams) synthAudio.updateParameters(s.synthParams, globalTempoRef.current, effectsLoopRef.current, s.id);
+        });
         const stillHeard = audibleLanes(null, nextLanes);
         nextLanes.forEach(s => { if (!stillHeard.has(s.id)) synthAudio.stopSynth(s.id); });
         // The scheduler and undo read these refs before React has rendered again.

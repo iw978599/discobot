@@ -1,6 +1,6 @@
 // What useStudio keeps at module level: the shapes of its state, the defaults, and pure helpers
 // that copy and tidy what the store hands it. Split out of useStudio.tsx.
-import { Pattern, SynthParameters, DrumState, DrumInstrument, DrumKitId, EffectsLoopState, FxSendLevels, SynthModelId, SynthModelParams, TimeSignature } from '../types';
+import { LaneSound, Pattern, SynthParameters, DrumState, DrumInstrument, DrumKitId, EffectsLoopState, FxSendLevels, SynthModelId, SynthModelParams, TimeSignature } from '../types';
 import { createDefaultSynthParameters } from '@discobot/engine';
 import { DRUM_INSTRUMENTS, DRUM_SETTINGS_DEFAULT } from '../services/drumKits';
 import { DRUM_FX_DEFAULT, EFFECTS_DEFAULT } from '../services/effectSettings';
@@ -59,6 +59,8 @@ export interface SynthState {
   swing?: boolean;
   name?: string;
   preset?: string;
+  // The lane's shared sound, while the open scene has one of its own for it (services/sceneSounds.ts).
+  shared?: LaneSound;
   forceReleaseSignal: boolean;
 }
 

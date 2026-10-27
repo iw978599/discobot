@@ -67,7 +67,7 @@ const sceneChange = (title: string, rest: Omit<Case, 'title' | 'events' | 'saved
   check: (result, service, ctx, before) => {
     const message = result.events[0].data;
     assert.deepEqual(keys(message), SCENE_MESSAGE);
-    assert.deepEqual(keys(message.synths[0]), ['muted', 'pattern', 'solo', 'synthId']);
+    assert.deepEqual(keys(message.synths[0]).filter(key => key !== 'preset' && key !== 'shared'), ['muted', 'pattern', 'solo', 'synthId', 'synthModelId', 'synthModelParams', 'synthParams']);
     const now = service.snapshot();
     assert.deepEqual(message.scenes, now.scenes);
     assert.deepEqual(message.song, now.song);
@@ -229,6 +229,23 @@ const cases: Case[] = [
       assert.equal('tempo' in service.snapshot().scenes[0], false);
     },
   }),
+  sceneChange('the open scene is given a sound of its own for a lane, which the other scenes do not hear, and gives it back', {
+    type: 'scene.sound', arrange: twoScenes,
+    body: { synthId: 1, own: true },
+    check: (result, service, ids) => {
+      const lane = result.events[0].data.synths[0];
+      assert.deepEqual(lane.shared.synthParams, lane.synthParams, 'nothing is heard to change');
+      ok(service.setSynthParams(1, { filter: { frequency: 300 } } as never));
+      ok(service.selectScene(ids.first));
+      assert.notEqual(service.snapshot().synths[0].synthParams.filter.frequency, 300, 'the other scene plays the shared sound');
+      ok(service.selectScene(ids.second));
+      assert.equal(service.snapshot().synths[0].synthParams.filter.frequency, 300, 'and this one its own');
+      ok(service.setSceneSound(1, false));
+      const now = service.snapshot();
+      assert.notEqual(now.synths[0].synthParams.filter.frequency, 300);
+      assert.equal('shared' in now.synths[0] || now.scenes.some((scene: any) => scene.sounds), false, 'nothing is kept of it');
+    },
+  }),
   sceneChange('the open scene is given a time signature, and every lane and the drums become bars of it', {
     type: 'scene.signature',
     arrange: (service) => {
@@ -287,6 +304,14 @@ const cases: Case[] = [
   {
     type: 'scene.move', title: 'a scene that does not exist cannot be moved',
     body: { sceneId: 'nope', to: 0 }, status: 400, error: 'That scene is not in the project.',
+  },
+  {
+    type: 'scene.sound', title: 'a lane that does not exist cannot have a sound of its own',
+    body: { synthId: 4, own: true }, status: 404, error: 'Synth not found',
+  },
+  {
+    type: 'scene.sound', title: 'a scene has a sound of its own or not, and nothing else',
+    body: { synthId: 1, own: 'yes' }, status: 400, error: 'Invalid local operation data',
   },
   {
     type: 'scene.tempo', title: 'a scene that does not exist cannot be given a tempo',

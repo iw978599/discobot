@@ -95,10 +95,12 @@ interface Edit { op: Operation; scene: string }
 // project. `n` is the message it went in; an entry without one has not been sent.
 interface Own { n?: number; edit?: Edit; keys?: string[]; project?: unknown }
 
-// Edits that change the open scene, and so are applied in the scene they were made in.
+// Edits that change the open scene, and so are applied in the scene they were made in. A lane's sound
+// is one: in a scene with a sound of its own for the lane, an edit to it is that scene's.
 const SCENE_BOUND = new Set<OpType>([
   'drum.state', 'drum.reset', 'drum.bars', 'drum.copyBar', 'drum.step', 'drum.stepVelocity', 'drum.stepDetail', 'drum.mix',
   'synth.create', 'synth.mix', 'pattern.write', 'scene.signature', 'scene.copyPart', 'scene.create',
+  'synth.params', 'synth.model', 'synth.preset', 'scene.sound',
 ]);
 
 function patchKeys(prefix: string, patch: unknown): string[] {
@@ -145,6 +147,7 @@ export function editKeys(op: Operation, scene: string): string[] {
     case 'scene.signature': return [here];
     case 'scene.copyPart': return [`scenes/${op.toSceneId}`];
     case 'scene.replace': return [''];
+    case 'scene.sound': return [`synth/${op.synthId}/sound`, `synth/${op.synthId}/model`, `synth/${op.synthId}/preset`, `${here}/sounds/${op.synthId}`];
     case 'song.set': return ['song'];
     case 'guest.add': case 'guest.remove': return [`guests/${op.guestId}`];
     case 'guest.patch': return patchKeys(`guests/${op.guestId}`, Object.fromEntries(Object.keys(op.patch ?? {}).map(key => [key, true])));

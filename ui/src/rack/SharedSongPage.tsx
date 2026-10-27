@@ -3,7 +3,8 @@ import { localService } from '../services/localService';
 import { applySceneMutes, songBars, songLengthBars, songRows, songSeconds } from '../services/songPlayback';
 import { sceneBars } from '../services/patternLength';
 import { renderArrangementWav } from '../services/wavExport';
-import { loadCymbals, loadLaneSamples } from '../services/builtInWaves';
+import { loadCymbals, loadLaneSamples, loadSoundSamples } from '../services/builtInWaves';
+import { soundIn } from '../services/sceneSounds';
 import { USER_PREFIX, userName } from '../services/shareLink';
 import SongPlayer from './SongPlayer';
 import SongTimeline, { type TimelineEntry } from './SongTimeline';
@@ -69,11 +70,13 @@ export default function SharedSongPage({ file, author, error: fetchError, onOpen
       const wav = await renderArrangementWav({
         tempo: project.tempo, drumState: project.drumState, drumKitId: project.selectedDrumKitId,
         drumMasterVolume: project.drumMasterVolume, drumSwing: project.drumSwing, drumSwingGrid: project.drumSwingGrid, drumFx: project.drumFx, effectsLoop: project.effectsLoop,
-        synths: project.synths.map(synth => ({ id: synth.synthId, pattern: synth.pattern, synthParams: synth.synthParams, muted: false, solo: false, swing: synth.swing })),
+        // Each lane's shared sound; a scene with one of its own brings it in its bars.
+        synths: project.synths.map(synth => ({ id: synth.synthId, pattern: synth.pattern, synthParams: soundIn(null, synth.synthId, synth), muted: false, solo: false, swing: synth.swing })),
         bars: applySceneMutes(songBars(project.song, project.scenes), project.synths.map(synth => ({ id: synth.synthId, muted: synth.muted, solo: synth.solo }))),
         // The app's own waves come with it, so a lane that plays one sounds here as it did when shared.
         drumCymbals: await loadCymbals(),
-        synthSamples: await loadLaneSamples(project.synths.map(synth => ({ id: synth.synthId, synthParams: synth.synthParams }))),
+        synthSamples: await loadLaneSamples(project.synths.map(synth => ({ id: synth.synthId, synthParams: soundIn(null, synth.synthId, synth) }))),
+        soundSamples: await loadSoundSamples(project.synths.flatMap(synth => project.scenes.flatMap(scene => (scene.sounds?.[synth.synthId] ? [scene.sounds[synth.synthId].synthParams] : [])))),
       });
       setAudioUrl(URL.createObjectURL(new Blob([wav], { type: 'audio/wav' })));
       setStatus('idle');

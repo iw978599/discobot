@@ -1,7 +1,7 @@
 // The edits a project accepts, as data. `LocalProjectService.apply` is the one way in; the
 // reducers that carry them out are in projectReducers.ts. See docs/TYPED_STORE_PLAN.md.
 import type {
-  DrumRow, ExtraDrum, DrumKitId, DrumSettings, DrumState, EffectsLoopState, FxSendLevels, Pattern, Scene, Song,
+  DrumRow, ExtraDrum, DrumKitId, DrumSettings, DrumState, EffectsLoopState, FxSendLevels, LaneSound, Pattern, Scene, Song,
   SynthModelId, SynthModelParams, SynthParameters,
 } from '../types';
 import type { SwingGrid } from './grooves';
@@ -65,6 +65,8 @@ export type Operation =
   // One part of the open scene, a lane's notes or one drum's row, put into another scene.
   | { type: 'scene.copyPart'; toSceneId: string; synthId?: number; drum?: DrumRow }
   | { type: 'scene.replace'; scenes?: unknown; currentSceneId?: string; song?: unknown }
+  // Whether the open scene has a sound of its own for a lane (docs/SCENE_SOUNDS_PLAN.md).
+  | { type: 'scene.sound'; synthId: number; own: boolean }
   | { type: 'song.set'; entries?: unknown; loop?: boolean }
   | { type: 'guest.add'; guestId: string; url: string; name?: string }
   | { type: 'guest.patch'; guestId: string; patch: GuestPatch }
@@ -84,7 +86,8 @@ type GuestAnswer = { guests: Guest[] };
 type TrackAnswer = { audioTracks: AudioTrack[] };
 type SceneAnswer = {
   scenes: Scene[]; song: Song; currentSceneId: string;
-  synths: Array<{ synthId: number; pattern: Pattern; muted: boolean; solo: boolean }>;
+  // Each lane as the open scene has it: its steps, mutes and sound, and its shared sound while the scene has its own.
+  synths: Array<{ synthId: number; pattern: Pattern; muted: boolean; solo: boolean; synthParams: SynthParameters; synthModelId: SynthModelId; synthModelParams: SynthModelParams; preset?: string; shared?: LaneSound }>;
   drumState: DrumState; guests: Guest[];
 };
 type Total<T extends Record<OpType, unknown>> = T;
@@ -131,6 +134,7 @@ type OpResults = Total<{
   'drum.removeRow': SceneAnswer;
   'scene.copyPart': SceneAnswer;
   'scene.replace': SceneAnswer;
+  'scene.sound': SceneAnswer;
   'song.set': SceneAnswer;
   'guest.add': GuestAnswer;
   'guest.patch': GuestAnswer;
@@ -202,6 +206,7 @@ export const OP_META: Record<OpType, { save: boolean; undoable: boolean; share: 
   'scene.signature': { save: true, undoable: true, share: true },
   'scene.copyPart': { save: true, undoable: true, share: true },
   'scene.replace': { save: true, undoable: true, share: true },
+  'scene.sound': { save: true, undoable: true, share: true },
   'song.set': { save: true, undoable: true, share: true },
   'guest.add': { save: true, undoable: false, share: true },
   'guest.patch': { save: true, undoable: false, share: true },

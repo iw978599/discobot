@@ -120,8 +120,9 @@ export class SynthCore {
     unisonCount: 1, unisonRatios: new Float64Array(MAX_UNISON).fill(1), unisonLevels: new Float64Array(MAX_UNISON).fill(1), twoStage: false,
   };
   private pending: Array<NoteOnMessage & { frame: number }> = [];
-  // Parameter changes that have a time of their own, soonest first: a pattern's automation.
-  private scheduled: Array<{ frame: number; update: ParamUpdate }> = [];
+  // Changes that have a time of their own, soonest first: a pattern's automation, and a scene's
+  // own sound and recording (`keep`), which are made at once rather than forgotten when the rest are.
+  private scheduled: Array<{ frame: number; update?: ParamUpdate; sample?: SynthSample | null; keep?: boolean }> = [];
   private globalLfoPhase: [number, number] = [0, 0];
   private inserts: InsertChain;
   private noise = new Noise();
@@ -169,7 +170,9 @@ export class SynthCore {
 
   // Gives the sample engine its recording, or with null takes it away. A lane set to the sample
   // engine with no recording plays its oscillators.
-  setSample(sample: SynthSample | null): void {
+  // With a time that has not come yet it waits for it, as a timed change of the sound does.
+  setSample(sample: SynthSample | null, time?: number): void {
+    if (this.later(time, { sample, keep: true })) return;
     this.sample = sample && sample.data.length > 1 && sample.rate > 0 ? sample : null;
     if (this.sample && !this.sample.frame) {
       for (const data of [this.sample.data, ...(this.sample.zones ?? []).map(zone => zone.data)]) {
@@ -190,15 +193,10 @@ export class SynthCore {
 
   // With a time (seconds on the core's clock) that has not come yet, the change waits for it and
   // is made on that sample; without one, or with one that has passed, it is made now.
-  setParams(update: ParamUpdate | null | undefined, time?: number): void {
+  // `keep`: a change that is made at once, not forgotten, if the waiting changes are cleared.
+  setParams(update: ParamUpdate | null | undefined, time?: number, keep = false): void {
     if (!update) return;
-    if (Number.isFinite(time) && time! * this.sampleRate > this.frame) {
-      const frame = Math.round(time! * this.sampleRate);
-      let at = this.scheduled.length;
-      while (at > 0 && this.scheduled[at - 1].frame > frame) at--;
-      this.scheduled.splice(at, 0, { frame, update });
-      return;
-    }
+    if (this.later(time, { update, ...(keep ? { keep } : {}) })) return;
     const p = this.params as unknown as Record<string, unknown>;
     const signature = () => `${p.oscType}|${p.filterType}|${p.engine}|${p.osc2Type}|${p.filterSlope}|${p.unisonVoices}|${p.filterModel}|${p.layerEnabled}`;
     const before = signature();
@@ -437,9 +435,27 @@ export class SynthCore {
     voice.filterEnv.gateOff();
   }
 
-  // Forgets the parameter changes still waiting for their time: the transport has stopped.
+  // Puts a change with a time still to come in its place among those waiting, and says so.
+  private later(time: number | undefined, change: { update?: ParamUpdate; sample?: SynthSample | null; keep?: boolean }): boolean {
+    if (!Number.isFinite(time) || time! * this.sampleRate <= this.frame) return false;
+    const frame = Math.round(time! * this.sampleRate);
+    let at = this.scheduled.length;
+    while (at > 0 && this.scheduled[at - 1].frame > frame) at--;
+    this.scheduled.splice(at, 0, { frame, ...change });
+    return true;
+  }
+
+  private make(change: { update?: ParamUpdate; sample?: SynthSample | null }): void {
+    if ('sample' in change) this.setSample(change.sample ?? null);
+    else this.setParams(change.update);
+  }
+
+  // Forgets the parameter changes still waiting for their time: the transport has stopped. A scene's
+  // sound waiting for its first beat is made now instead, since the lane already has it.
   clearScheduledParams(): void {
+    const kept = this.scheduled.filter(change => change.keep);
     this.scheduled = [];
+    for (const change of kept) this.make(change);
   }
 
   get idle(): boolean {
@@ -452,7 +468,7 @@ export class SynthCore {
   process(left: Float32Array, right: Float32Array): void {
     if (this.scheduled.length === 0) { this.render(left, right); return; }
     for (let at = 0; at < left.length;) {
-      while (this.scheduled.length && this.scheduled[0].frame <= this.frame) this.setParams(this.scheduled.shift()!.update);
+      while (this.scheduled.length && this.scheduled[0].frame <= this.frame) this.make(this.scheduled.shift()!);
       const end = this.scheduled.length ? Math.min(left.length, at + this.scheduled[0].frame - this.frame) : left.length;
       this.render(left.subarray(at, end), right.subarray(at, end));
       at = end;

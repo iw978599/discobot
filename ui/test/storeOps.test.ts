@@ -634,7 +634,11 @@ const openScene = (service: LocalProjectService) => service.getScenes().currentS
 // drums as that scene left them.
 const sceneAnswer = (project: any) => ({
   scenes: project.scenes, song: project.song, currentSceneId: project.currentSceneId,
-  synths: project.synths.map((lane: any) => ({ synthId: lane.synthId, pattern: lane.pattern, muted: lane.muted, solo: lane.solo })),
+  synths: project.synths.map((lane: any) => ({
+    synthId: lane.synthId, pattern: lane.pattern, muted: lane.muted, solo: lane.solo,
+    synthParams: lane.synthParams, synthModelId: lane.synthModelId, synthModelParams: lane.synthModelParams,
+    ...(lane.preset ? { preset: lane.preset } : {}), ...(lane.shared ? { shared: lane.shared } : {}),
+  })),
   drumState: project.drumState, guests: project.guests ?? [],
 });
 const sceneChange = (op: Case['op'], run: (service: LocalProjectService, body: any) => Applied<unknown>) =>
@@ -653,6 +657,8 @@ const colour = sceneChange('scene.color', (service, body) => service.setSceneCol
 const colourRefused = sceneRefused('scene.color', (service, body) => service.setSceneColor(body.sceneId, body.color));
 const sceneTempo = sceneChange('scene.tempo', (service, body) => service.setSceneTempo(body.sceneId, body.tempo));
 const sceneTempoRefused = sceneRefused('scene.tempo', (service, body) => service.setSceneTempo(body.sceneId, body.tempo));
+const sceneSound = sceneChange('scene.sound', (service, body) => service.setSceneSound(body.synthId, body.own));
+const sceneSoundRefused = sceneRefused('scene.sound', (service, body) => service.setSceneSound(body.synthId, body.own));
 const sceneMove = sceneChange('scene.move', (service, body) => service.moveScene(body.sceneId, body.to));
 const sceneMoveRefused = sceneRefused('scene.move', (service, body) => service.moveScene(body.sceneId, body.to));
 const signature = sceneChange('scene.signature', (service, body) => service.setSceneSignature(body.signature));
@@ -758,6 +764,15 @@ const sceneCases: Case[] = [
   sceneTempo('no tempo takes it back to the project tempo', (ids: Ids) => ({ sceneId: ids.second }), twoScenes, project => {
     assert.equal('tempo' in project.scenes[1], false);
   }),
+  sceneSound('the open scene keeps a sound of its own for a lane, and the lane keeps its shared sound aside', { synthId: 1, own: true }, twoScenes, project => {
+    assert.deepEqual(project.synths[0].shared.synthParams, project.synths[0].synthParams);
+    assert.deepEqual(Object.keys(project.scenes[1].sounds), ['1']);
+    assert.equal('sounds' in project.scenes[0], false);
+  }),
+  sceneSound('turning off a sound the scene does not have changes nothing', { synthId: 1, own: false }, twoScenes, project => {
+    assert.equal('shared' in project.synths[0], false);
+  }),
+  sceneSoundRefused('a lane that does not exist cannot have one', { synthId: 5, own: true }, 404, 'Synth not found'),
   sceneTempoRefused('a scene that does not exist cannot be given a tempo', { sceneId: 'nope', tempo: 90 }, 400, 'That scene is not in the project.'),
 
   sceneMove('a scene moves to another place, and the open scene and the song are as they were', (ids: Ids) => ({ sceneId: ids.second, to: 0 }), twoScenes, project => {
@@ -1585,7 +1600,7 @@ test('the store keeps nothing of a scene or song operation\'s own objects', () =
 // Undo puts back the whole project, so every edit to the scenes and the song is undone. Opening a
 // scene is moving about in the project, not an edit.
 test('scene operations are saved, undone and shared; opening a scene is neither undone nor shared', () => {
-  for (const type of ['scene.signature', 'scene.create', 'scene.rename', 'scene.color', 'scene.tempo', 'scene.copyPart', 'scene.delete', 'scene.replace', 'song.set'] as const) {
+  for (const type of ['scene.signature', 'scene.create', 'scene.rename', 'scene.color', 'scene.tempo', 'scene.copyPart', 'scene.delete', 'scene.replace', 'scene.sound', 'song.set'] as const) {
     assert.deepEqual(OP_META[type], { save: true, undoable: true, share: true }, type);
   }
   // Each person in a live session opens their own scenes; an edit says the scene it was made in.

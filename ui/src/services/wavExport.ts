@@ -5,6 +5,7 @@ import { sceneDrumState } from './songPlayback';
 import { drumRowsOf } from './drumKits';
 import { expandStepNotes } from './noteScheduling';
 import { SEND_PARAMS, automationChange, stepSends, stepVoiceParams } from './automation';
+import { sampleKey, withChannel } from './sceneSounds';
 import { delaySeconds } from './delayTime';
 import { auxBuses, auxSeconds } from './auxSettings';
 import { rateHz } from './rateSync';
@@ -38,6 +39,8 @@ export interface ExportArrangement {
   // Decoded recordings for the synth lanes set to the sample engine, by lane id. A lane without
   // one plays its oscillators, as it does live.
   synthSamples?: Record<number, SynthSample>;
+  // The recordings that scenes' own sounds play (services/sceneSounds.ts), by `sampleKey`.
+  soundSamples?: Record<string, SynthSample>;
   // Guest instruments, recorded in real time at 44.1 kHz from the first beat. For a loop each
   // take is exactly one pass of the pattern, recorded once it had already been round once.
   // In a song `gains` is the guest's level in each bar, and is used instead of `gain`.
@@ -122,8 +125,11 @@ export function renderSynthBars(
   bars: SequencerStep[][], params: SynthParameters, tempo: number, frames: number, sampleRate: number,
   barDuration = 240 / tempo, sample?: SynthSample | null, times: BarTime[] = evenBars(bars.length, barDuration),
   automation: Array<Automation | undefined> = [], swing = 0, grid: SwingGrid = 16,
+  // Each bar's sound where a scene has one of its own: from that bar on the lane is that instrument.
+  sounds: Array<{ params: SynthParameters; sample: SynthSample | null } | undefined> = [],
 ): Stereo {
-  const core = new SynthCore(sampleRate), sound = toVoiceParams(params, tempo);
+  const core = new SynthCore(sampleRate);
+  let sound = toVoiceParams(params, tempo);
   core.setParams(sound);
   if (sample) core.setSample(sample);
   const random = seededRandom(2);
@@ -131,6 +137,15 @@ export function renderSynthBars(
   bars.forEach((steps, bar) => {
     const { start, duration } = times[bar];
     const stepDuration = duration / Math.max(1, steps.length);
+    const next = sounds[bar];
+    if (next && next.params !== params) {
+      params = next.params;
+      sound = toVoiceParams(params, tempo);
+      core.setParams(sound, start);
+      core.setSample(next.sample, start);
+      // The whole sound was sent: what the automation holds is sent again on the bar's first step.
+      automated = null;
+    }
     steps.forEach((step, index) => {
       const now = stepVoiceParams(params, automation[bar], index, tempo), moved = automationChange(automated, now, sound);
       if (moved) core.setParams(moved, start + index * stepDuration);
@@ -145,6 +160,25 @@ export function renderSynthBars(
     });
   });
   return renderCore(core, frames);
+}
+
+// Each bar's sound for a lane: the lane's own in a bar of a scene without one of its own (where it
+// is `undefined`), and the scene's, with the lane's level, pan and sends, in one with. A scene's
+// bars share one object, so the render changes instrument only where the scene changes.
+function barSounds(song: Scene[] | null | undefined, laneId: number, params: SynthParameters, arrangement: Pick<ExportArrangement, 'synthSamples' | 'soundSamples'>) {
+  if (!song?.some(scene => scene.sounds?.[laneId])) return [];
+  const made = new Map<string, { params: SynthParameters; sample: SynthSample | null }>();
+  const own = { params, sample: arrangement.synthSamples?.[laneId] ?? null };
+  return song.map((scene) => {
+    const sound = scene.sounds?.[laneId];
+    if (!sound) return own;
+    const key = JSON.stringify(sound);
+    if (!made.has(key)) {
+      const sounded = withChannel(sound.synthParams, params);
+      made.set(key, { params: sounded, sample: arrangement.soundSamples?.[sampleKey(sounded)] ?? null });
+    }
+    return made.get(key)!;
+  });
 }
 
 type DrumArrangement = Pick<ExportArrangement, 'tempo' | 'drumState' | 'drumKitId' | 'drumMasterVolume' | 'drumSwing' | 'drumSwingGrid' | 'bars' | 'signature' | 'drumSamples' | 'drumCymbals'>;
@@ -429,7 +463,7 @@ export async function renderArrangement(arrangement: ExportArrangement, options:
     if (!lane.pattern || !lane.synthParams) continue;
     const laneBars = song ? song.map(scene => scene.lanes[lane.id] ?? []) : Array.from({ length: bars }, () => lane.pattern!.steps);
     const laneAutomation = song ? song.map(scene => scene.laneAutomation?.[lane.id]) : Array.from({ length: bars }, () => lane.pattern!.automation);
-    play(renderSynthBars(laneBars, lane.synthParams, arrangement.tempo, frames, sampleRate, barDuration, arrangement.synthSamples?.[lane.id], times, laneAutomation, lane.swing ? arrangement.drumSwing : 0, arrangement.drumSwingGrid),
+    play(renderSynthBars(laneBars, lane.synthParams, arrangement.tempo, frames, sampleRate, barDuration, arrangement.synthSamples?.[lane.id], times, laneAutomation, lane.swing ? arrangement.drumSwing : 0, arrangement.drumSwingGrid, barSounds(song, lane.id, lane.synthParams, arrangement)),
       lane.synthParams.fxSends, lane.synthParams.fxReturn, 'synth', lane.synthParams.duck ?? 0, {}, sendTimeline(laneBars, lane.synthParams, laneAutomation, times));
     await partDone();
   }

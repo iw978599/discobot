@@ -1,4 +1,4 @@
-import type { DrumKitDefinition, DrumRow, ExtraDrum, DrumKitId, DrumSettings, DrumState, EffectsLoopState, FxSendLevels, Pattern, SavedPatternFull, Scene, Song, SynthParameters, SynthModelId, SynthModelParams } from '../types';
+import type { DrumKitDefinition, DrumRow, ExtraDrum, DrumKitId, DrumSettings, DrumState, EffectsLoopState, FxSendLevels, LaneSound, Pattern, SavedPatternFull, Scene, Song, SynthParameters, SynthModelId, SynthModelParams } from '../types';
 import { sanitizeGuests, type Guest } from './guests';
 import { createIndexedDbLibrary, createMemoryLibrary, hasIndexedDb, type ProjectInfo, type ProjectLibrary, type ProjectRecord, type VersionInfo, type VersionReason } from './projectLibrary';
 import { COPY_SUFFIX, DEFAULT_PROJECT_NAME, EARLIER_SUFFIX } from './projectFamilies';
@@ -7,12 +7,12 @@ import { barSteps } from './patternLength';
 import { LANE_IDS, isLaneId, laneOrderOf, storedLaneName, storedPresetName } from './lanes';
 import { normalizeSynthModelId } from '../synthModels';
 import { NEW_PROJECT_REVERB } from './effectSettings';
-import { record, number, clone, matchesShape, sanitizePattern, sanitizeSynthParams, sanitizeDrums, sanitizeEffects, sanitizeSends, sanitizeSaved, sanitizeModelParams, sanitizeKit, sanitizeScenes, sanitizeSong } from './projectSanitization';
+import { record, number, clone, matchesShape, sanitizePattern, sanitizeSynthParams, sanitizeDrums, sanitizeEffects, sanitizeSends, sanitizeSaved, sanitizeModelParams, sanitizeKit, sanitizeLaneSound, sanitizeScenes, sanitizeSong } from './projectSanitization';
 import type { Applied, DeepPartial, DrumFxState, GuestPatch, OpNotice, OpResult, Operation, Origin, Outcome } from './projectOps';
 import { UndoHistory } from './undoHistory';
 import { swingGridOf, type SwingGrid } from './grooves';
 import { sanitizeAudioTracks, type AudioClip, type AudioTrack, type ClipPatch, type TrackPatch } from './audioTracks';
-import { commitScene, ensureScenes, newLane, openSignature, reducers, sceneMessage, type ReducerContext } from './projectReducers';
+import { commitScene, ensureScenes, newLane, openSignature, reducers, sceneMessage, settleSounds, type ReducerContext } from './projectReducers';
 
 type Message = { type: string; data: any };
 type Listener = (message: Message) => void;
@@ -30,6 +30,8 @@ type LocalSynth = {
   name?: string;
   // The name of the preset last loaded on the lane, shown in place of "Generic". Absent when none was.
   preset?: string;
+  // The lane's shared sound, kept aside while the open scene has one of its own (sceneSounds.ts).
+  shared?: LaneSound;
 };
 type State = Defaults & {
   version: 1; schema: typeof SCHEMA; synths: LocalSynth[]; tempo: number; selectedDrumKitId: string;
@@ -149,7 +151,7 @@ export class LocalProjectService {
     // Projects from before scenes existed have none: ensureScenes makes one from the live pattern.
     // The scenes are read first: the open one's time signature says how long a bar of the live
     // lanes and drums is.
-    const scenes = sanitizeScenes(parsed.scenes, defaults.drumState);
+    const scenes = sanitizeScenes(parsed.scenes, defaults.drumState, defaults.synthParams);
     const currentSceneId = scenes ? (scenes.some(scene => scene.id === parsed.currentSceneId) ? parsed.currentSceneId as string : scenes[0].id) : '';
     const signature = scenes?.find(scene => scene.id === currentSceneId)?.signature;
     // A bar shorter than one of 4/4 has fewer steps than the defaults' sixteen, which is not damage.
@@ -177,6 +179,7 @@ export class LocalProjectService {
         ...(input.swing === true ? { swing: true } : {}),
         ...(storedLaneName(input.name) ? { name: storedLaneName(input.name) } : {}),
         ...(storedPresetName(input.preset) ? { preset: storedPresetName(input.preset) } : {}),
+        ...(sanitizeLaneSound(input.shared, defaults.synthParams) ? { shared: sanitizeLaneSound(input.shared, defaults.synthParams) } : {}),
         octaveShift: Math.round(number(input.octaveShift, 0, -2, 2)), keyboardMode: input.keyboardMode === 'piano-roll' ? 'piano-roll' : 'keyboard',
       }];
     });
@@ -209,6 +212,8 @@ export class LocalProjectService {
       state.currentSceneId = currentSceneId;
       state.song = sanitizeSong(parsed.song, scenes);
     }
+    // A lane's shared sound and the open scene's own for it go together (sceneSounds.ts).
+    settleSounds(state);
     return { state, damaged };
   }
 
@@ -911,6 +916,8 @@ export class LocalProjectService {
   setSceneTempo(sceneId: string, tempo?: number) { return this.apply({ type: 'scene.tempo', sceneId, tempo }); }
   moveScene(sceneId: string, to: number) { return this.apply({ type: 'scene.move', sceneId, to }); }
   setSceneSignature(signature: string) { return this.apply({ type: 'scene.signature', signature }); }
+  // Whether the open scene has a sound of its own for a lane.
+  setSceneSound(synthId: number, own: boolean) { return this.apply({ type: 'scene.sound', synthId, own }); }
   copyPartToScene(toSceneId: string, part: { synthId?: number; drum?: DrumRow }) { return this.apply({ type: 'scene.copyPart', toSceneId, ...part }); }
   deleteScene(sceneId: string) { return this.apply({ type: 'scene.delete', sceneId }); }
   replaceScenes(replacement: { scenes?: unknown; currentSceneId?: string; song?: unknown } = {}) { return this.apply({ type: 'scene.replace', scenes: replacement.scenes, currentSceneId: replacement.currentSceneId, song: replacement.song }); }

@@ -2,7 +2,8 @@
 // waiting for the guests' settings first when it leaves the open scene), the song's order, and the
 // song as an arrangement to export. Split out of useStudio.tsx.
 import { useCallback } from 'react';
-import { Scene, Song } from '../types';
+import { Scene, Song, SynthParameters } from '../types';
+import { sampleKey, soundIn } from '../services/sceneSounds';
 import { applySceneMutes, songBars } from '../services/songPlayback';
 import { localService } from '../services/localService';
 import { timeSignature } from '../services/patternLength';
@@ -11,7 +12,7 @@ import { ExportArrangement } from '../services/wavExport';
 import type { StudioCore } from './useStudioCore';
 
 export function useStudioScenes(core: StudioCore) {
-  const { setStorageError, signatureOfRef, currentSceneIdRef, currentArrangementRef } = core;
+  const { setStorageError, signatureOfRef, currentSceneIdRef, currentArrangementRef, synthsRef, soundSamplesRef } = core;
   const sceneChange = useCallback(async (change: () => { ok: boolean; error?: string }, leavesScene = true) => {
     // Leaving the open scene records it, so first collect what each guest is set to right now.
     // Guests are only asked every few seconds otherwise, and a change made just before switching
@@ -47,9 +48,21 @@ export function useStudioScenes(core: StudioCore) {
     const stored = localService.getScenes();
     // Each scene has its own mutes and solos, so they are applied bar by bar here and the
     // lanes are handed to the exporter unmuted.
+    // A lane is handed over with its shared sound; a scene with its own brings it in its bars.
     const arrangement = currentArrangementRef.current();
+    const lanes = synthsRef.current;
     return {
-      ...arrangement, synths: arrangement.synths.map(lane => ({ ...lane, muted: false, solo: false })),
+      ...arrangement,
+      synths: arrangement.synths.map((lane) => {
+        const studioLane = lanes.find(entry => entry.id === lane.id);
+        const synthParams = studioLane?.shared && studioLane.synthParams ? soundIn(null, lane.id, studioLane as typeof studioLane & { synthParams: SynthParameters }) : lane.synthParams;
+        return { ...lane, synthParams, muted: false, solo: false };
+      }),
+      synthSamples: Object.fromEntries(lanes.flatMap((lane) => {
+        const sample = lane.shared ? soundSamplesRef.current[sampleKey(lane.shared.synthParams)] : arrangement.synthSamples?.[lane.id];
+        return sample ? [[lane.id, sample]] : [];
+      })),
+      soundSamples: { ...soundSamplesRef.current },
       bars: applySceneMutes(songBars(stored.song, stored.scenes), arrangement.synths),
     };
   }, []);
