@@ -18,7 +18,7 @@ import { swingSteps } from '../services/grooves';
 import { trackPlayer } from '../hooks/trackAudio';
 import { recordingNow } from '../services/clipRecordings';
 import { clipsSounding, clipsStarting, songSecondsAt } from '../services/clipTiming';
-import { DRUM_NOTE_MAP } from '../utils/midiExport';
+import { drumRowNote } from '../utils/midiExport';
 import { guestInputs } from '../services/guestInput';
 import { STEP_LIGHT_AHEAD, midiTime, resetMidiClock } from './studioState';
 import type { PlayMode } from './studioState';
@@ -152,7 +152,7 @@ export function useStudioTransport(core: StudioCore, needs: StudioTransportNeeds
         const hitTime = time + swingOffset + offset * duration * 2;
         const early = guestInputs.leadSeconds('drums') || guestInputs.leadSeconds(`drum:${instrument}`);
         void drumAudio.playDrumHit(instrument, track.settings, velocity, hitTime - early);
-        if (midiOut.active) midiOut.note(midiOut.channelOf('drums'), DRUM_NOTE_MAP[instrument], velocity, midiTime(hitTime), midiTime(hitTime + 0.06));
+        if (midiOut.active) midiOut.note(midiOut.channelOf('drums'), drumRowNote(instrument, track.settings), velocity, midiTime(hitTime), midiTime(hitTime + 0.06));
         if (instrument !== 'kick') continue;
         for (const synth of lanes) {
           const amount = synth.synthParams?.duck ?? 0;

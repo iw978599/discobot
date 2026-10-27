@@ -1,4 +1,5 @@
-import { DrumInstrument, DrumState, Pattern, SequencerStep } from '../types';
+import { CymbalType, DrumInstrument, DrumRow, DrumSettings, DrumState, ExtraDrum, Pattern, PercType, SequencerStep } from '../types';
+import { EXTRA_DRUMS } from '@discobot/engine';
 import { expandDrumStep, seededRandom, swingLate } from '../services/drumScheduling';
 import { swingSteps, type SwingGrid } from '../services/grooves';
 import { barSteps, beatStarts, signatureFraction, timeSignature } from '../services/patternLength';
@@ -53,6 +54,18 @@ export const DRUM_NOTE_MAP: Record<DrumInstrument, number> = {
   snare2: 45,
   clap: 39,
 };
+
+// The General MIDI note an added row is written on (docs/DRUM_ROWS_PLAN.md): its recording's own
+// where General MIDI has one, and otherwise a percussion note of its own that none of the eight uses.
+const PERC_NOTES: Record<PercType, number> = { tambourine: 54, shaker: 82, cowbell: 56, sidestick: 37, conga: 63, bongo: 60 };
+const CYMBAL_NOTES: Record<CymbalType, number> = { crash: 49, ride: 51, bell: 53, splash: 55 };
+const ADDED_NOTES: Record<ExtraDrum, number> = { extra1: 64, extra2: 65, extra3: 66, extra4: 67, extra5: 68, extra6: 69, extra7: 70, extra8: 71 };
+export function drumRowNote(row: DrumRow, settings?: Pick<DrumSettings, 'percType' | 'cymbalType'>): number {
+  if (row in DRUM_NOTE_MAP) return DRUM_NOTE_MAP[row as DrumInstrument];
+  if (settings?.percType && settings.percType in PERC_NOTES) return PERC_NOTES[settings.percType];
+  if (settings?.cymbalType && settings.cymbalType in CYMBAL_NOTES) return CYMBAL_NOTES[settings.cymbalType];
+  return ADDED_NOTES[row as ExtraDrum];
+}
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
@@ -213,7 +226,12 @@ function buildDrumTrack(bars: DrumState[], swing = 0, masterVolume = 1, times: B
   const random = seededRandom(1);
   bars.forEach((drumState, bar) => {
   const hasSolo = Object.values(drumState).some(track => track.solo);
-  for (const [instrument, note] of Object.entries(DRUM_NOTE_MAP) as Array<[DrumInstrument, number]>) {
+  // The eight in the order they always were, then the added rows.
+  const rows = [
+    ...Object.entries(DRUM_NOTE_MAP) as Array<[DrumRow, number]>,
+    ...EXTRA_DRUMS.flatMap((row): Array<[DrumRow, number]> => (drumState[row] ? [[row, drumRowNote(row, drumState[row]!.settings)]] : [])),
+  ];
+  for (const [instrument, note] of rows) {
     const track = drumState[instrument];
     if (!track || track.muted || (hasSolo && !track.solo) || masterVolume <= 0) continue;
     for (let stepIndex = 0; stepIndex < track.steps.length; stepIndex += 1) {

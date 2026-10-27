@@ -41,6 +41,15 @@ test('a row is added under the eight drums, plays the recording chosen for it, a
     return ['percType' in settings, settings.cymbalType];
   }, 'a cymbal in place of the percussion').toEqual([false, 'splash']);
 
+  // The mixer has a strip for it, after the eight, named as the grid names its controls.
+  const mixer = page.getByRole('region', { name: 'Mixer module', exact: true });
+  await mixer.getByLabel('Mixer Row 9 volume value', { exact: true }).fill('40%');
+  await mixer.getByLabel('Mixer Row 9 volume value', { exact: true }).press('Enter');
+  await expect.poll(async () => (await stored(page)).drumState.extra1.settings.volume).toBeCloseTo(0.4, 2);
+  await button(page, 'Mixer Row 9 mute').click();
+  await expect(button(page, 'Mute Row 9'), 'and its mute is the grid\'s').toHaveAttribute('aria-pressed', 'true');
+  await button(page, 'Mixer Row 9 mute').click();
+
   await page.getByRole('button', { name: /Play All/ }).click();
   await page.waitForTimeout(600);
   await page.getByRole('button', { name: /Stop All/ }).click();

@@ -1,7 +1,7 @@
 import { useCallback, useRef, useEffect, useMemo } from 'react';
 import { useMidiInput } from '../hooks/useMidiInput';
 import { midiOut } from '../services/midiOutput';
-import { SequencerStep, SynthParameters, DrumState, DrumInstrument, DrumKitId, EffectsLoopState, Scene, TimeSignature } from '../types';
+import { SequencerStep, SynthParameters, DrumState, DrumKitId, DrumRow, EffectsLoopState, Scene, TimeSignature } from '../types';
 import { audibleLanes } from '../services/songPlayback';
 import { localService } from '../services/localService';
 import { startProjectSync } from '../services/projectSync';
@@ -26,6 +26,7 @@ import { isLaneId, laneOrderOf } from '../services/lanes';
 import { noteNameToMidi } from '../utils/midiExport';
 import { DEFAULT_SYNTH_MODEL_ID, createDefaultSynthModelParams, getSynthModelDefinition, normalizeSynthModelId, normalizeSynthModelParams } from '../synthModels';
 import { guestInputs, inputSources } from '../services/guestInput';
+import { shownDrumRows } from '../services/drumKits';
 import { DEFAULT_PARAMS, DEFAULT_DRUM_FX, DEFAULT_EFFECTS_LOOP, createDefaultDrumState, parseUserPresets, normalizeSynthParams, normalizeDrumFx, normalizeEffectsLoop, midiTime } from './studioState';
 import { useStudioCore } from './useStudioCore';
 import type { AudioEngine } from '../hooks/browserAudio';
@@ -216,7 +217,7 @@ export function useStudio(engine?: AudioEngine) {
   midiPadLearnRef.current = midiPadLearn;
   midiDestinationsRef.current = midiDestinations;
   const handleMidiLearn = useCallback((target: string | null) => { setMidiPadLearn(null); setMidiLearn(target); }, []);
-  const handleMidiPadLearn = useCallback((drum: DrumInstrument | null) => { setMidiLearn(null); setMidiPadLearn(drum); }, []);
+  const handleMidiPadLearn = useCallback((drum: DrumRow | null) => { setMidiLearn(null); setMidiPadLearn(drum); }, []);
   const handleMidiPadsReset = useCallback(() => { const next = defaultPads(); storePads(next); setMidiPadLearn(null); setMidiPads(next); }, []);
   const handleMidiTieRemove = useCallback((target: string) => {
     setMidiTies(current => { const next = withoutTie(current, target); storeMidiTies(next); return next; });
@@ -280,10 +281,10 @@ export function useStudio(engine?: AudioEngine) {
   useEffect(() => { audio.setMasterMuted(browserMuted); }, [browserMuted]);
 
   // The voices a guest may be handed (services/guestInput): each lane by its model's name, the kit
-  // and each drum. A guest whose voice has gone is told by its own unit.
-  const inputKey = synths.map(synth => `${synth.id}:${synth.synthModelId}`).join(',');
+  // and each drum, the rows added after the eight among them. A guest whose voice has gone is told by its own unit.
+  const inputKey = `${synths.map(synth => `${synth.id}:${synth.synthModelId}`).join(',')}|${shownDrumRows(drumState).join(',')}`;
   useEffect(() => {
-    guestInputs.setSources(inputSources(synthsRef.current.map(synth => ({ id: synth.id, model: getSynthModelDefinition(synth.synthModelId).name }))));
+    guestInputs.setSources(inputSources(synthsRef.current.map(synth => ({ id: synth.id, model: getSynthModelDefinition(synth.synthModelId).name })), shownDrumRows(drumStateRef.current)));
   }, [inputKey]);
   // Each voice goes where the guests have it: to a guest's tap, or to the mix.
   useEffect(() => {
@@ -292,7 +293,7 @@ export function useStudio(engine?: AudioEngine) {
         const tap = (guestInputs.tapFor(source.id) ?? null) as AudioNode | null;
         if (source.kind === 'synth') synthAudio.handOver(Number(source.id.slice('synth:'.length)), tap);
         else if (source.kind === 'drums') drumAudio.handOver('drums', tap);
-        else drumAudio.handOver(source.id.slice('drum:'.length) as DrumInstrument, tap);
+        else drumAudio.handOver(source.id.slice('drum:'.length) as DrumRow, tap);
       }
     };
     route();

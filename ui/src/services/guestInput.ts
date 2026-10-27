@@ -1,6 +1,6 @@
-import type { DrumInstrument, Scene } from '../types';
+import type { DrumRow, Scene } from '../types';
 import type { ExportArrangement } from './wavExport';
-import { DRUM_NAMES, DRUM_ROWS } from './drumKits';
+import { DRUM_ROWS, DRUM_ROW_NAMES } from './drumKits';
 
 // A voice of Discobot's own handed to a guest instrument (the `input` feature of the guest
 // protocol, docs/GUEST_PROTOCOL.md): the guest asks for a synth lane, the whole kit or one drum,
@@ -22,11 +22,11 @@ export const INPUT_LATE_MARGIN_MS = 20;
 
 // The voices a guest may ask for, with ids that stay the same across reloads and devices: a guest
 // saves its choice in its own settings. Never another guest or the whole mix.
-export function inputSources(lanes: Array<{ id: number; model: string }>, drums: readonly DrumInstrument[] = DRUM_ROWS): InputSource[] {
+export function inputSources(lanes: Array<{ id: number; model: string }>, drums: readonly DrumRow[] = DRUM_ROWS): InputSource[] {
   return [
     ...lanes.map(lane => ({ id: `synth:${lane.id}`, name: `Synth ${lane.id} · ${lane.model}`, kind: 'synth' as const })),
     { id: 'drums', name: 'Drums', kind: 'drums' as const },
-    ...drums.map(drum => ({ id: `drum:${drum}`, name: DRUM_NAMES[drum], kind: 'drum' as const })),
+    ...drums.map(drum => ({ id: `drum:${drum}`, name: DRUM_ROW_NAMES[drum], kind: 'drum' as const })),
   ];
 }
 

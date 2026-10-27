@@ -1,7 +1,7 @@
-import type { AuxBus, DrumInstrument, DrumState, EffectsLoopState, SynthModelId, SynthParameters } from '../types';
+import type { AuxBus, DrumRow, DrumState, EffectsLoopState, SynthModelId, SynthParameters } from '../types';
 import { auxBuses } from './auxSettings';
 import { getSynthModelDefinition } from '../synthModels';
-import { DRUM_ROWS } from './drumKits';
+import { shownDrumRows } from './drumKits';
 import { LANE_IDS, laneName, laneSound } from './lanes';
 import { guestOrigin, type Guest } from './guests';
 import type { AudioTrack } from './audioTracks';
@@ -11,7 +11,7 @@ import type { AudioTrack } from './audioTracks';
 // settings, a guest, the effects) and each is changed by the handler its own knob calls.
 
 export interface MixerLane { id: number; name: string; model: string; level: number; pan: number; muted: boolean; solo: boolean }
-export interface MixerDrum { id: DrumInstrument; volume: number; pan: number; muted: boolean; solo: boolean }
+export interface MixerDrum { id: DrumRow; volume: number; pan: number; muted: boolean; solo: boolean }
 export interface MixerGuest { id: string; name: string; volume: number; muted: boolean }
 export interface MixerTrack { id: string; name: string; volume: number; pan: number; muted: boolean; solo: boolean }
 export interface MixerChannels {
@@ -51,8 +51,8 @@ export function mixerChannels(source: MixerSource): MixerChannels {
       muted: Boolean(synth.muted),
       solo: Boolean(synth.solo),
     })),
-    drums: DRUM_ROWS.filter(id => source.drumState[id]).map((id) => {
-      const track = source.drumState[id];
+    drums: shownDrumRows(source.drumState).filter(id => source.drumState[id]).map((id) => {
+      const track = source.drumState[id]!;
       return { id, volume: track.settings.volume, pan: track.settings.pan ?? 0, muted: Boolean(track.muted), solo: Boolean(track.solo) };
     }),
     drumMaster: source.drumMasterVolume,

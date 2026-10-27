@@ -70,3 +70,53 @@ test('a file\'s rows that cannot be added, or are not rows at all, are left out'
   assert.equal('extra9' in drumState || 'extra4' in drumState, false);
   assert.deepEqual([drumState.extra5?.steps.some(Boolean), drumState.extra5?.settings.volume, 'percType' in (drumState.extra5?.settings ?? {})], [false, 1, false], 'held to what a row can be');
 });
+
+// Stage 2: everywhere else a drum is.
+test('an added row has no pad until one is learnt, and then it takes the note from whatever had it', async () => {
+  const { asPadMap, defaultPads, drumForNote, padsAreDefault, withPad } = await import('../src/services/midiDrums.ts');
+  const pads = defaultPads();
+  assert.equal(pads.extra1, undefined, 'no note to begin with');
+  assert.equal(drumForNote(64, pads), null);
+  const learnt = withPad(pads, 'extra1', 36);
+  assert.deepEqual([learnt.extra1, learnt.kick, drumForNote(36, learnt)], [36, null, 'extra1'], 'the kick\'s note is the row\'s now');
+  assert.equal(padsAreDefault(learnt), false);
+  assert.deepEqual(asPadMap({ ...learnt, extra2: 36, extra3: 'x', extra4: 200 }).extra2, undefined, 'a note already given, or no note at all, is not kept');
+  assert.equal(asPadMap(learnt).extra1, 36, 'and the row keeps its note between visits');
+});
+
+test('an added row is written on its recording\'s General MIDI note, or a note of its own, and the eight are as they were', async () => {
+  const { createMidiFile, drumRowNote, DRUM_NOTE_MAP } = await import('../src/utils/midiExport.ts');
+  assert.equal(drumRowNote('kick'), DRUM_NOTE_MAP.kick);
+  assert.deepEqual([drumRowNote('extra1', { percType: 'cowbell' }), drumRowNote('extra2', { cymbalType: 'splash' }), drumRowNote('extra3')], [56, 55, 66]);
+  const service = setup();
+  ok(service.setDrumStep('kick', 0, true));
+  const plain = createMidiFile({ tempo: 120, drumState: structuredClone(service.snapshot().drumState), drumMasterVolume: 1, synthLanes: [] });
+  ok(service.addDrumRow('extra1'));
+  const empty = createMidiFile({ tempo: 120, drumState: structuredClone(service.snapshot().drumState), drumMasterVolume: 1, synthLanes: [] });
+  assert.deepEqual(Array.from(empty), Array.from(plain), 'a row with no steps writes nothing');
+  ok(service.setDrumStep('extra1', 4, true));
+  ok(service.setDrumSettings('extra1', { percType: 'cowbell' }));
+  const file = createMidiFile({ tempo: 120, drumState: structuredClone(service.snapshot().drumState), drumMasterVolume: 1, synthLanes: [] });
+  const struck = new Set<number>();
+  for (let i = 0; i + 2 < file.length; i += 1) if (file[i] === 0x99 && file[i + 2] > 0) struck.add(file[i + 1]);
+  assert.ok(struck.has(56) && struck.has(36));
+});
+
+test('the mixer, a live session, MIDI Learn and the guests know the added rows by their names', async () => {
+  const { mixerChannels } = await import('../src/services/mixerChannels.ts');
+  const { readJam } = await import('../src/services/liveSession.ts');
+  const { listTargets, parseTarget, targetLabel } = await import('../src/services/paramTargets.ts');
+  const { inputSources } = await import('../src/services/guestInput.ts');
+  const { shownDrumRows } = await import('../src/services/drumKits.ts');
+  const service = setup();
+  ok(service.addDrumRow('extra2'));
+  const drumState = service.snapshot().drumState;
+  const strips = mixerChannels({ synths: [], drumState, drumMasterVolume: 1, guests: [], effectsLoop: { returns: { synth: 1, drums: 1 } } as never, browserVolume: 1 } as never);
+  assert.deepEqual(strips.drums.map(strip => strip.id).slice(-2), ['crash', 'extra2'], 'a strip after the eight');
+  assert.deepEqual(readJam({ kind: 'hit', drum: 'extra2', velocity: 0.5 }), { kind: 'hit', drum: 'extra2', velocity: 0.5 });
+  assert.equal(readJam({ kind: 'hit', drum: 'extra9', velocity: 0.5 }), null);
+  assert.equal(parseTarget('drum:extra2:volume')?.kind, 'drum');
+  assert.equal(targetLabel('drum:extra2:volume'), 'Row 10: Volume');
+  assert.ok(listTargets([1], shownDrumRows(drumState)).flatMap(group => group.targets).some(target => target.id === 'drum:extra2:volume'));
+  assert.ok(inputSources([], shownDrumRows(drumState)).some(source => source.id === 'drum:extra2' && source.name === 'Row 10'));
+});

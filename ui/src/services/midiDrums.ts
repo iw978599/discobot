@@ -1,4 +1,5 @@
-import type { DrumInstrument } from '../types';
+import type { DrumInstrument, DrumRow, ExtraDrum } from '../types';
+import { EXTRA_DRUMS } from '@discobot/engine';
 import { DRUM_NOTE_MAP } from '../utils/midiExport';
 
 // The channel drum pads send on unless they are told otherwise, as General MIDI has it.
@@ -7,10 +8,15 @@ export const DEFAULT_DRUM_CHANNEL = 10;
 // The drums in the order the grid has them.
 export const PAD_DRUMS: DrumInstrument[] = ['kick', 'snare', 'clap', 'closedHH', 'openHH', 'snare2', 'ride', 'crash'];
 
+// Every row a pad can play: the eight, and the rows that can be added after them, which have no
+// note of their own until one is learnt (docs/DRUM_ROWS_PLAN.md).
+const PAD_ROWS: DrumRow[] = [...PAD_DRUMS, ...EXTRA_DRUMS];
+
 // The note each drum answers to, or null for a drum that has none. A note has one drum and a drum
 // one note. It is this browser's, kept between visits like the knob ties, and never the project's:
-// a MIDI export goes on writing the General MIDI notes whatever is here.
-export type PadMap = Record<DrumInstrument, number | null>;
+// a MIDI export goes on writing the General MIDI notes whatever is here. An added row is in it only
+// once it has been given a note, and keeps it whether or not this project has the row.
+export type PadMap = Record<DrumInstrument, number | null> & Partial<Record<ExtraDrum, number | null>>;
 
 const KEY = 'discobot_midi_pads_v1';
 
@@ -35,6 +41,12 @@ export function asPadMap(value: unknown): PadMap {
     pads[drum] = said.has(note) ? null : note;
     said.add(note);
   }
+  for (const row of EXTRA_DRUMS) {
+    const note = source[row];
+    if (!isNote(note) || said.has(note)) continue;
+    pads[row] = note;
+    said.add(note);
+  }
   return pads;
 }
 
@@ -47,15 +59,15 @@ export function storePads(pads: PadMap) {
 }
 
 // The map with this note given to this drum. The drum that had the note is left with none.
-export function withPad(pads: PadMap, drum: DrumInstrument, note: number): PadMap {
-  if (!isNote(note) || !PAD_DRUMS.includes(drum)) return pads;
+export function withPad(pads: PadMap, drum: DrumRow, note: number): PadMap {
+  if (!isNote(note) || !PAD_ROWS.includes(drum)) return pads;
   const next = { ...pads };
-  for (const other of PAD_DRUMS) if (next[other] === note) next[other] = null;
+  for (const other of PAD_ROWS) if (next[other] === note) next[other] = null;
   next[drum] = note;
   return next;
 }
 
-export const padsAreDefault = (pads: PadMap) => PAD_DRUMS.every(drum => pads[drum] === DRUM_NOTE_MAP[drum]);
+export const padsAreDefault = (pads: PadMap) => PAD_DRUMS.every(drum => pads[drum] === DRUM_NOTE_MAP[drum]) && EXTRA_DRUMS.every(row => pads[row] == null);
 
 // General MIDI drum notes that are not the eight a MIDI export writes, each given to the lane
 // nearest to it. A pad controller's sixteen pads (notes 36 to 51) all land somewhere.
@@ -73,9 +85,9 @@ const DEFAULT_PADS = defaultPads();
 // map is its drum's. A General MIDI note near a drum's own plays that drum too, but only while
 // the drum still has its General MIDI note: a drum that has been given a note by hand answers to
 // that note alone, and one whose note was taken answers to nothing.
-export function drumForNote(note: number, pads: PadMap = DEFAULT_PADS): DrumInstrument | null {
+export function drumForNote(note: number, pads: PadMap = DEFAULT_PADS): DrumRow | null {
   if (!isNote(note)) return null;
-  const own = PAD_DRUMS.find(drum => pads[drum] === note);
+  const own = PAD_ROWS.find(drum => pads[drum] === note);
   if (own) return own;
   const near = NEIGHBOURS[note];
   return near && pads[near] === DRUM_NOTE_MAP[near] ? near : null;

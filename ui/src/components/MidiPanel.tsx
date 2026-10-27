@@ -3,8 +3,9 @@ import { MidiDeviceInfo, MidiMode } from '../hooks/useMidiInput';
 import type { MidiTie } from '../services/midiTies';
 import { PAD_DRUMS, padNoteLabel, padsAreDefault, type PadMap } from '../services/midiDrums';
 import { MIDI_DESTINATIONS, destinationFor, type MidiDestination, type MidiDestinations } from '../services/midiDevices';
-import { DRUM_NAMES, listTargets, targetLabel } from '../services/paramTargets';
-import type { DrumInstrument } from '../types';
+import { listTargets, targetLabel } from '../services/paramTargets';
+import type { DrumRow } from '../types';
+import { DRUM_ROW_NAMES } from '../services/drumKits';
 import './MidiPanel.css';
 import Toggle from './Toggle';
 
@@ -29,8 +30,10 @@ interface MidiPanelProps {
   onTieRemove: (target: string) => void;
   // The note each drum's pad sends, and the drum waiting for a pad to be hit (Learn).
   pads: PadMap;
-  padLearning: DrumInstrument | null;
-  onPadLearn: (drum: DrumInstrument | null) => void;
+  padLearning: DrumRow | null;
+  onPadLearn: (drum: DrumRow | null) => void;
+  // The rows that have a pad to learn: the eight, and the rows this project has added after them.
+  drumRows?: readonly DrumRow[];
   onPadsReset: () => void;
   // Where each device's notes go, by the device's name.
   destinations: MidiDestinations;
@@ -78,6 +81,7 @@ export default function MidiPanel({
   onTieRemove,
   pads,
   padLearning,
+  drumRows,
   onPadLearn,
   onPadsReset,
   destinations,
@@ -197,19 +201,19 @@ export default function MidiPanel({
         <>
           <h3>Pads</h3>
           <ul className="midi-pad-list" aria-label="The note each drum's pad sends">
-            {PAD_DRUMS.map(drum => (
+            {(drumRows ?? PAD_DRUMS).map(drum => (
               <li key={drum}>
-                <b>{DRUM_NAMES[drum]}</b>
-                <span className={pads[drum] === null ? 'midi-pad-note none' : 'midi-pad-note'}>{padNoteLabel(pads[drum])}</span>
+                <b>{DRUM_ROW_NAMES[drum]}</b>
+                <span className={(pads[drum] ?? null) === null ? 'midi-pad-note none' : 'midi-pad-note'}>{padNoteLabel(pads[drum] ?? null)}</span>
                 {padLearning === drum
-                  ? <button className="rack-btn on" aria-pressed="true" aria-label={`Cancel learning a pad for ${DRUM_NAMES[drum]}`} onClick={() => onPadLearn(null)}>Cancel</button>
-                  : <button className="rack-btn" aria-label={`Learn a pad for ${DRUM_NAMES[drum]}`} title="Then hit the pad on the controller that should play it" disabled={waiting} onClick={() => onPadLearn(drum)}>Learn</button>}
+                  ? <button className="rack-btn on" aria-pressed="true" aria-label={`Cancel learning a pad for ${DRUM_ROW_NAMES[drum]}`} onClick={() => onPadLearn(null)}>Cancel</button>
+                  : <button className="rack-btn" aria-label={`Learn a pad for ${DRUM_ROW_NAMES[drum]}`} title="Then hit the pad on the controller that should play it" disabled={waiting} onClick={() => onPadLearn(drum)}>Learn</button>}
               </li>
             ))}
           </ul>
           <div className="midi-panel midi-ties">
             <button className="rack-btn" title="Put every drum back on its General MIDI note" disabled={padsAreDefault(pads) && padLearning === null} onClick={onPadsReset}>Reset pads</button>
-            <span className="midi-pad-status" role="status">{padLearning !== null ? `Hit a pad on the controller for ${DRUM_NAMES[padLearning]}.` : ''}</span>
+            <span className="midi-pad-status" role="status">{padLearning !== null ? `Hit a pad on the controller for ${DRUM_ROW_NAMES[padLearning]}.` : ''}</span>
           </div>
           <p className="midi-note">
             Press Learn beside a drum and hit a pad on the controller: from then on that pad plays that drum, and a drum that had the note is left with none. A drum still on its usual note also answers to the General MIDI notes near it. Reset pads puts every drum back on its General MIDI note. Pads are heard on the Pads channel above, or on every channel of a device sent to Drums. The notes are kept in this browser for every project, and a MIDI file is always exported with the General MIDI notes.
@@ -218,7 +222,7 @@ export default function MidiPanel({
           <h3>Controller knobs</h3>
           <div className="midi-panel midi-ties">
             <select aria-label="Parameter to tie to a knob" value={chosen} onChange={(e) => setChosen(e.target.value)} disabled={waiting}>
-              {listTargets(synthIds).map(group => (
+              {listTargets(synthIds, drumRows).map(group => (
                 <optgroup key={group.group} label={group.group}>
                   {group.targets.map(target => <option key={target.id} value={target.id}>{target.label}</option>)}
                 </optgroup>
