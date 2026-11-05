@@ -248,6 +248,44 @@ function TransportUnit({ studio, onOpenSettings, onOpenProjects, onShare, onStar
     );
   }
 
+  // The desk on a wide screen: the same controls in three groups, the project at the left, playing
+  // in the middle, and history, sharing, the account, help and the volume at the right.
+  if (desk) {
+    return (
+      <header className="rack-unit transport desk-bar">
+        <div className="rack-row">
+          <div className="desk-bar-group desk-bar-project">
+            <div className="rack-plate static brand">
+              <h1>Discobot</h1>
+              <div className="project-line">
+                {projectName}
+                <SaveState projectId={studio.projectId} />
+              </div>
+            </div>
+            {projectMenu}
+          </div>
+          <div className="desk-bar-group desk-bar-play">
+            {play}
+            {tempo}
+            {metronome}
+          </div>
+          <div className="desk-bar-group desk-bar-tools">
+            {undo}
+            {redo}
+            {exportButton}
+            {exporting && <ExportDialog studio={studio} onClose={() => setExporting(false)} />}
+            {account}
+            {midi}
+            {help}
+            {mute}
+            {volume}
+          </div>
+        </div>
+        {files}
+      </header>
+    );
+  }
+
   return (
     <header className="rack-unit transport">
       <div className="rack-row">
