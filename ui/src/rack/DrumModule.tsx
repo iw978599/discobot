@@ -168,14 +168,9 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
     // Editing a bar holds the view on it.
     setViewBar(Math.floor(step / perBar));
     setFollow(false);
+    // Shift only selects, so a hit's velocity, chance and repeats can be set below without removing it.
+    if (shiftKey) return;
     const row = drumState[instrument];
-    if (shiftKey && row.steps[step]) {
-      const levels = [0.25, 0.5, 0.75, 1.0];
-      const next = levels[(levels.indexOf(row.stepVelocities?.[step] ?? 1) + 1) % levels.length] ?? 1;
-      onStepVelocity(instrument, step, next);
-      preview(instrument, drumState, next);
-      return;
-    }
     if (!row.steps[step]) preview(instrument, drumState, row.stepVelocities?.[step] ?? 1);
     onStepToggle(instrument, step, !row.steps[step]);
   };
@@ -315,7 +310,7 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
                         onFocus={() => setGridCursor(now => (now && now.instrument === instrument && now.step === step ? now : { instrument, step }))}
                         style={active ? { opacity: 0.45 + velocity * 0.55 } : undefined}
                         onClick={(event) => handleStepClick(instrument, step, event.shiftKey)}
-                        title={active ? `Velocity ${percentText(velocity)} (Shift+click to change) · Chance ${percentText(chance)} · Repeats ${repeats}` : ''}
+                        title={active ? `Velocity ${percentText(velocity)} · Chance ${percentText(chance)} · Repeats ${repeats} (Shift+click to select it without removing it)` : 'Shift+click to select without adding a hit'}
                       >
                         {active && repeats > 1 ? `×${repeats}` : ''}
                       </button>
