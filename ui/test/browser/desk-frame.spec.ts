@@ -78,9 +78,11 @@ test('the handle sets the dock height from the keyboard and it survives a reload
   await expect(handle).toHaveAttribute('aria-orientation', 'horizontal');
   const height = async () => Number(await handle.getAttribute('aria-valuenow'));
   const box = async () => (await unit(page, 'synth-1').boundingBox())!.height;
+  await handle.focus();
+  // From the shortest, so two steps up have room on any test screen.
+  await page.keyboard.press('Home');
   const before = await height();
   const boxBefore = await box();
-  await handle.focus();
   await page.keyboard.press('ArrowUp');
   await page.keyboard.press('ArrowUp');
   expect(await height()).toBe(before + 48);

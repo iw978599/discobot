@@ -1433,7 +1433,7 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
   :root[data-layout="desk"] .desk-frame .rack {
     height: 100%; max-width: none; min-width: 0; margin: 0; padding: 0; gap: 0; border-radius: 0;
     display: grid; grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto auto minmax(0, 1fr) auto var(--dock-height, 360px);
+    grid-template-rows: auto auto auto minmax(140px, 1fr) auto var(--dock-height, 300px);
     align-items: stretch; background-image: none;
   }
   :root[data-layout="desk"] .desk-frame .rack-main,
@@ -1445,7 +1445,7 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
   :root[data-layout="desk"] .desk-frame .rack-top:not(:empty) { padding: 5px; }
   :root[data-layout="desk"] .desk-frame .rack-top > * { flex: none; }
   :root[data-layout="desk"] .desk-frame .rack-song-area {
-    grid-column: 1 / -1; grid-row: 3; display: flex; flex-direction: column; gap: 5px; padding: 5px; min-height: 0; max-height: 34vh; overflow-y: auto;
+    grid-column: 1 / -1; grid-row: 3; display: flex; flex-direction: column; gap: 5px; padding: 5px; min-height: 0; max-height: 22vh; overflow-y: auto;
   }
   :root[data-layout="desk"] .desk-frame .rack-song-area > * { flex: none; }
 
@@ -1461,6 +1461,7 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
      than the screen. */
   :root[data-layout="desk"] .desk-frame .desk-tracks {
     grid-column: 1 / -1; grid-row: 4; min-height: 0; overflow: auto; background: var(--surface-panel);
+    scroll-padding-top: 28px; scroll-padding-left: var(--desk-head);
     border-top: 1px solid var(--edge); --desk-head: 210px;
   }
   :root[data-layout="desk"] .desk-grid { min-width: calc(var(--desk-head) + var(--cols, 16) * 14px); display: flex; flex-direction: column; padding-bottom: 5px; }
