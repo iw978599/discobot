@@ -1267,6 +1267,15 @@ Replaced on 2026-10-19 by "The plan from here" at the top of this file.
   or LinnDrum recordings were found with a clear licence from whoever made
   them.
 
+## Asked for on 2026-11-05
+
+- **Select a drum hit without removing it**: Shift+click on a drum step now
+  selects it, so its velocity, chance and repeats can be changed in place. A
+  plain click still adds and removes. Shift+click used to step a hit through
+  four velocities; the Velocity slider does that instead. Built.
+- **A redesign of the whole interface**: the owner finds the rack clunky.
+  Three directions were proposed as mock-ups; none is chosen yet.
+
 ## Ideas folded in from roadmap v2
 
 These were the ideas at the end of this file until 2026-10-19, when the owner asked for the two
