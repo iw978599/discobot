@@ -47,7 +47,11 @@ import '@fontsource/ibm-plex-sans-condensed/latin-600.css';
 import '@fontsource/ibm-plex-mono/latin-400.css';
 import './rack.css';
 import AddLaneUnit from './AddLaneUnit';
-import { shownLanes } from '../services/lanes';
+import DeskTrackList from './DeskTrackList';
+import DeskDockBar from './DeskDockBar';
+import { laneName, shownLanes } from '../services/lanes';
+import { layoutChoice } from '../services/layoutChoice';
+import { clampDockHeight, dockUnit, storeDock, storeDockHeight, storedDock, storedDockHeight, trackLane, type DeskDock, laneTrack, type DeskTrack } from '../services/deskFrame';
 
 // The whole instrument as one rack, read top to bottom: transport, three synth lanes,
 // the drum grid, the mixer, then the shared effects.
@@ -146,6 +150,56 @@ export default function Rack({ studio }: { studio: Studio }) {
   const hasGuests = studio.guests.length > 0;
   const shown = unit === 'guests' && !hasGuests ? laneUnit(studio.selectedSynthId) : unit;
   const paged = narrow && shown !== 'all';
+  // The desk layout on a wide screen (docs/DESK_LAYOUT_PLAN.md, stage 2): the dock shows one unit,
+  // chosen by the track list and its tabs. Like `shown`, it is view state kept here and handed to the
+  // stylesheet as an attribute; the units are hidden, never taken away. Which track and tab, and how
+  // tall, are this browser's (services/deskFrame.ts).
+  const desk = useSyncExternalStore(layoutChoice.subscribe, layoutChoice.get) === 'desk';
+  const deskWide = desk && !narrow;
+  const [dock, setDock] = useState<DeskDock>(storedDock);
+  const [dockHeight, setDockHeight] = useState(storedDockHeight);
+  const [viewport, setViewport] = useState(() => window.innerHeight);
+  useEffect(() => {
+    if (!deskWide) return;
+    const onResize = () => setViewport(window.innerHeight);
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [deskWide]);
+  const deskTrack: DeskTrack = (() => {
+    const track = dock.track;
+    const lane = track === null ? null : trackLane(track);
+    if (track === null || (lane !== null && !studio.synths.some(synth => synth.id === lane)) || (track === 'guests' && !hasGuests)) return laneTrack(studio.selectedSynthId);
+    return track;
+  })();
+  const dockShown = dockUnit(deskTrack, dock.tab);
+  const deskLane = trackLane(deskTrack);
+  const dockTrackName = deskLane !== null ? laneName(deskLane, studio.synths.find(synth => synth.id === deskLane)?.name) : deskTrack === 'drums' ? 'Drums' : 'Guests';
+  const showDock = (next: Partial<DeskDock>) => {
+    const value = { track: next.track ?? deskTrack, tab: next.tab ?? dock.tab };
+    setDock(value);
+    storeDock(value);
+  };
+  const showTrack = (track: DeskTrack) => {
+    const lane = trackLane(track);
+    if (lane !== null) studio.setSelectedSynthId(lane);
+    showDock({ track, tab: 'track' });
+  };
+  const deskHeight = clampDockHeight(dockHeight, viewport);
+  const setHeight = (height: number, keep: boolean) => {
+    setDockHeight(height);
+    if (keep) storeDockHeight(height);
+  };
+  // The open lane and the lane on the dock are kept the same one, as the phone's are (below).
+  const lastDeskLane = useRef(studio.selectedSynthId);
+  useEffect(() => {
+    const moved = lastDeskLane.current !== studio.selectedSynthId;
+    lastDeskLane.current = studio.selectedSynthId;
+    const lane = trackLane(deskTrack);
+    if (!deskWide || lane === null || lane === studio.selectedSynthId) return;
+    if (moved) showDock({ track: laneTrack(studio.selectedSynthId) });
+    else if (studio.synths.some(synth => synth.id === lane)) studio.setSelectedSynthId(lane);
+  }, [deskWide, deskTrack, studio.selectedSynthId, studio.synths.length]);
   // Counts the times a unit was asked for from the bar, so the page can settle after each.
   const [moves, setMoves] = useState(0);
   const show = (next: RackUnit) => {
@@ -246,16 +300,16 @@ export default function Rack({ studio }: { studio: Studio }) {
   // Guests that are not on show stay laid out, out of sight (rack.css), so their pages go on
   // running. They are also put out of reach of the keyboard and of a screen reader.
   useLayoutEffect(() => {
-    const away = paged && shown !== 'guests';
+    const away = (paged && shown !== 'guests') || (deskWide && dockShown !== 'guests');
     pageRef.current?.querySelectorAll<HTMLElement>('.rack [data-unit="guests"]').forEach((guest) => {
       guest.inert = away;
       if (away) guest.setAttribute('aria-hidden', 'true'); else guest.removeAttribute('aria-hidden');
     });
-  }, [paged, shown, studio.guests.length]);
+  }, [paged, shown, deskWide, dockShown, studio.guests.length]);
 
   return (
-    <div ref={pageRef} className={narrow ? 'rack-page has-unit-bar' : 'rack-page'}>
-      <div className="rack" data-shown={paged ? shown : undefined}>
+    <div ref={pageRef} className={narrow ? 'rack-page has-unit-bar' : deskWide ? 'rack-page desk-frame' : 'rack-page'} style={deskWide ? { '--dock-height': `${deskHeight}px` } as CSSProperties : undefined}>
+      <div className="rack" data-shown={paged ? shown : undefined} data-dock={deskWide ? dockShown : undefined}>
         <TransportUnit
           studio={studio}
           onOpenSettings={openSettings}
@@ -267,6 +321,8 @@ export default function Rack({ studio }: { studio: Studio }) {
           onOpenVersions={openVersions}
           onOpenColours={openColours}
         />
+        {/* The alerts: no box of their own, except in the desk, where they are a strip above the song. */}
+        <div className="rack-top">
         {studio.changedElsewhere && (
           <div role="alert" className="app-alert">
             <span>This project was changed in another tab. Edits made here are not being saved.</span>
@@ -346,14 +402,44 @@ export default function Rack({ studio }: { studio: Studio }) {
             <button className="rack-btn" onClick={() => studio.setStorageError(null)} aria-label="Dismiss message">✕</button>
           </div>
         )}
+        </div>
+        {/* The desk's track list, only while the desk is on and the screen is wide. */}
+        {deskWide && (
+          <DeskTrackList
+            synths={studio.synths}
+            laneOrder={studio.laneOrder}
+            drums={studio.drumState}
+            guests={studio.guests}
+            track={deskTrack}
+            onShow={showTrack}
+            onMuteLane={(id, muted) => { void studio.handleSynthMixChange(id, { muted }); }}
+            onSoloLane={(id, solo) => { void studio.handleSynthMixChange(id, { solo }); }}
+            onMuteDrums={studio.handleDrumMuteAll}
+            onAddLane={(id) => { void studio.ensureSynthExists(id).then((created) => { if (created) { studio.setSelectedSynthId(id); showDock({ track: laneTrack(id), tab: 'track' }); } }); }}
+          />
+        )}
         {/* The units, in two groups: on a wide screen the second is a column of its own beside the
             first, and otherwise neither makes a box of its own (rack.css). */}
         <div className="rack-main">
+        <div className="rack-song-area">
         <StarterUnit studio={studio} />
         <SongModule studio={studio} onHelp={openHelpAt} />
+        </div>
+        {deskWide && (
+          <DeskDockBar
+            trackName={dockTrackName}
+            tab={dock.tab}
+            onTab={tab => showDock({ tab })}
+            height={deskHeight}
+            viewport={viewport}
+            onHeight={setHeight}
+          />
+        )}
         {shownLanes(studio.synths.map(entry => entry.id), studio.laneOrder).map(id => <SynthModule key={id} studio={studio} synthId={id} synth={studio.synths.find(entry => entry.id === id)} onHelp={openHelpAt} />)}
         <AddLaneUnit studio={studio} />
+        <div className="rack-guests">
         {studio.guests.map(guest => <GuestModule key={guest.id} studio={studio} guest={guest} onHelp={openHelpAt} />)}
+        </div>
         <DrumModule studio={studio} onHelp={openHelpAt} />
         </div>
         <div className="rack-side">

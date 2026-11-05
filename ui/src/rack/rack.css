@@ -321,6 +321,8 @@
 /* The units' two groups (Rack.tsx): no box of their own, so the units are the rack's column, until a
    wide screen makes the second a column beside the first (below). */
 .rack-main, .rack-side { display: contents; }
+/* Wrappers that make no box of their own, so the rack is what it was: the alerts, the starting points with the song, and the guests. The desk gives each a place (below). */
+.rack-top, .rack-song-area, .rack-guests { display: contents; }
 
 .rack-unit {
   background: var(--surface-panel);
@@ -1360,6 +1362,7 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
   .rack > :not(.rack-main):not(.rack-side) { grid-column: 1 / -1; }
   .rack-main, .rack-side { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
   .rack-main { grid-column: 1; }
+  .rack-top > * { grid-column: 1 / -1; }
   .rack-side {
     grid-column: 2; position: sticky; top: calc(var(--transport-height, 100px) + 5px);
     max-height: calc(100vh - var(--transport-height, 100px) - 60px); max-height: calc(100dvh - var(--transport-height, 100px) - 60px);
@@ -1416,4 +1419,112 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
 :root[data-layout="desk"] .rack-dialog-body .rack-btn,
 :root[data-layout="desk"] .rack-dialog-overlay.small .rack-dialog {
   font-weight: 500;
+}
+
+/* The desk's frame (docs/DESK_LAYOUT_PLAN.md, stage 2), on a wide screen only: Rack gives the page
+   `desk-frame` and the rack `data-dock` just then, so every rule here needs both. One screen and no
+   page scroll: the transport across the top, the track list down the left, the song (and the
+   alerts) in the middle, which scrolls on its own, and the dock across the bottom at a height the
+   handle sets (--dock-height). The dock shows one unit; every other is hidden, never taken away, and
+   the guests, whose pages must go on running, are clipped out of sight as the phone does it. The
+   two groups of units are boxless so the units are grid items of the rack itself. */
+@media (min-width: 1060px) {
+  :root[data-layout="desk"] .rack-page.desk-frame { height: 100vh; height: 100dvh; padding: 0; overflow: hidden; }
+  :root[data-layout="desk"] .desk-frame .rack {
+    height: 100%; max-width: none; min-width: 0; margin: 0; padding: 0; gap: 0; border-radius: 0;
+    display: grid; grid-template-columns: 210px minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr) auto var(--dock-height, 360px);
+    align-items: stretch; background-image: none;
+  }
+  :root[data-layout="desk"] .desk-frame .rack-main,
+  :root[data-layout="desk"] .desk-frame .rack-side { display: contents; }
+  :root[data-layout="desk"] .desk-frame .rack > .transport { grid-column: 1 / -1; grid-row: 1; position: relative; }
+  :root[data-layout="desk"] .desk-frame .rack-top {
+    grid-column: 1 / -1; grid-row: 2; display: flex; flex-direction: column; gap: 5px; max-height: 30vh; overflow-y: auto; min-height: 0;
+  }
+  :root[data-layout="desk"] .desk-frame .rack-top:not(:empty) { padding: 5px; }
+  :root[data-layout="desk"] .desk-frame .rack-top > * { flex: none; }
+  :root[data-layout="desk"] .desk-frame .rack-song-area {
+    grid-column: 2; grid-row: 3; display: flex; flex-direction: column; gap: 5px; padding: 5px; min-height: 0; overflow-y: auto;
+  }
+  :root[data-layout="desk"] .desk-frame .rack-song-area > * { flex: none; }
+
+  /* The top bar in three groups. The same controls as the rack's wide bar, which wrap if they must. */
+  :root[data-layout="desk"] .desk-frame .desk-bar > .rack-row { flex-wrap: wrap; align-items: center; gap: 6px 18px; }
+  :root[data-layout="desk"] .desk-frame .desk-bar-group { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; min-width: 0; }
+  :root[data-layout="desk"] .desk-frame .desk-bar-play { flex: 1 1 auto; justify-content: center; }
+  :root[data-layout="desk"] .desk-frame .desk-bar-tools { justify-content: flex-end; }
+
+  /* The track list. */
+  :root[data-layout="desk"] .desk-frame .desk-tracks {
+    grid-column: 1; grid-row: 3; min-height: 0; overflow-y: auto; padding: 5px; display: flex; flex-direction: column; gap: 5px;
+    background: var(--surface-panel); border-right: 1px solid var(--edge);
+  }
+  :root[data-layout="desk"] .desk-tracks ul { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+  :root[data-layout="desk"] .desk-track { display: flex; align-items: stretch; min-width: 0; background: var(--surface-inset); border-radius: var(--corner-control); }
+  :root[data-layout="desk"] .desk-track-pick {
+    flex: 1 1 0; min-width: 0; display: grid; grid-template-columns: 6px minmax(0, 1fr); column-gap: 8px; align-items: center; text-align: left;
+    padding: 5px 4px 5px 6px; background: none; border: 1px solid transparent; border-radius: var(--corner-control);
+    color: var(--text); font: inherit; cursor: pointer;
+  }
+  :root[data-layout="desk"] .desk-track-pick[aria-current="true"] { border-color: var(--on); background: var(--surface-hover); }
+  @media (hover: hover) {
+    :root[data-layout="desk"] .desk-track-pick:hover { border-color: var(--hover); }
+    :root[data-layout="desk"] .desk-track-pick[aria-current="true"]:hover { border-color: var(--on-bright); }
+  }
+  :root[data-layout="desk"] .desk-track-swatch { grid-row: 1 / span 2; align-self: stretch; background: var(--track-color); border-radius: 2px; }
+  :root[data-layout="desk"] .desk-track-name { font-family: var(--panel-font); font-size: var(--type-label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  :root[data-layout="desk"] .desk-track-sound { grid-column: 2; font-size: var(--type-caption); color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  :root[data-layout="desk"] .desk-track-ms { flex: none; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 3px; }
+  :root[data-layout="desk"] .desk-track-ms button {
+    width: 22px; height: 20px; padding: 0; background: var(--surface-control); border: 1px solid var(--edge-control); border-radius: var(--corner-control);
+    color: var(--text-label); font: inherit; font-size: var(--type-caption); cursor: pointer;
+  }
+  :root[data-layout="desk"] .desk-track-ms button.on { background: var(--on); border-color: var(--on); color: var(--text-on); }
+  :root[data-layout="desk"] .rack-page :is(.desk-track-pick, .desk-track-ms button, .desk-add-lane):focus-visible { outline-offset: -2px; box-shadow: inset 0 0 0 4px var(--gap); }
+
+  /* The handle and tabs above the dock. */
+  :root[data-layout="desk"] .desk-frame .desk-dock-bar {
+    grid-column: 1 / -1; grid-row: 4; display: flex; flex-direction: column; background: var(--surface-rail); border-top: 1px solid var(--edge-strong);
+  }
+  :root[data-layout="desk"] .desk-dock-handle { position: relative; height: 10px; cursor: ns-resize; touch-action: none; }
+  :root[data-layout="desk"] .desk-dock-handle::after {
+    content: ''; position: absolute; left: 50%; top: 4px; width: 56px; height: 2px; margin-left: -28px; border-radius: 1px; background: var(--edge-strong);
+  }
+  :root[data-layout="desk"] .desk-dock-handle:hover::after, :root[data-layout="desk"] .desk-dock-handle:focus-visible::after { background: var(--hover); }
+  :root[data-layout="desk"] .desk-dock-tabs { display: flex; gap: 2px; padding: 0 8px; }
+  :root[data-layout="desk"] .desk-dock-tab {
+    padding: 5px 14px; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--text-label);
+    font-family: var(--panel-font); font-size: var(--type-label); cursor: pointer;
+  }
+  :root[data-layout="desk"] .desk-dock-tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--on); background: var(--surface-panel); }
+  :root[data-layout="desk"] .rack-page .desk-dock-tab:focus-visible { outline-offset: -2px; box-shadow: inset 0 0 0 4px var(--gap); }
+
+  /* The dock: the one unit on show fills its cell and scrolls inside it. */
+  :root[data-layout="desk"] .desk-frame .rack :is([data-unit^="synth-"], [data-unit="drums"], [data-unit="mixer"], [data-unit="effects"]) {
+    grid-column: 1 / -1; grid-row: 5; min-height: 0; overflow: auto; margin: 0; border-radius: 0;
+  }
+  :root[data-layout="desk"] .desk-frame .rack :is([data-unit^="synth-"], [data-unit="drums"], [data-unit="mixer"], [data-unit="effects"]) > * { flex-shrink: 0; }
+  :root[data-layout="desk"] .desk-frame .rack [data-unit="add-lane"] { display: none; }
+  :root[data-layout="desk"] .desk-frame .rack-guests {
+    grid-column: 1 / -1; grid-row: 5; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 5px;
+  }
+  :root[data-layout="desk"] .desk-frame .rack:not([data-dock="guests"]) .rack-guests { position: fixed; top: 0; left: 0; right: 0; clip-path: inset(50%); pointer-events: none; }
+  :root[data-layout="desk"] .rack[data-dock="synth-1"] :is([data-unit^="synth-"], [data-unit="drums"], [data-unit="mixer"], [data-unit="effects"]):not([data-unit="synth-1"]),
+  :root[data-layout="desk"] .rack[data-dock="synth-2"] :is([data-unit^="synth-"], [data-unit="drums"], [data-unit="mixer"], [data-unit="effects"]):not([data-unit="synth-2"]),
+  :root[data-layout="desk"] .rack[data-dock="synth-3"] :is([data-unit^="synth-"], [data-unit="drums"], [data-unit="mixer"], [data-unit="effects"]):not([data-unit="synth-3"]),
+  :root[data-layout="desk"] .rack[data-dock="synth-4"] :is([data-unit^="synth-"], [data-unit="drums"], [data-unit="mixer"], [data-unit="effects"]):not([data-unit="synth-4"]),
+  :root[data-layout="desk"] .rack[data-dock="synth-5"] :is([data-unit^="synth-"], [data-unit="drums"], [data-unit="mixer"], [data-unit="effects"]):not([data-unit="synth-5"]),
+  :root[data-layout="desk"] .rack[data-dock="drums"] :is([data-unit^="synth-"], [data-unit="drums"], [data-unit="mixer"], [data-unit="effects"]):not([data-unit="drums"]),
+  :root[data-layout="desk"] .rack[data-dock="mixer"] :is([data-unit^="synth-"], [data-unit="drums"], [data-unit="mixer"], [data-unit="effects"]):not([data-unit="mixer"]),
+  :root[data-layout="desk"] .rack[data-dock="effects"] :is([data-unit^="synth-"], [data-unit="drums"], [data-unit="mixer"], [data-unit="effects"]):not([data-unit="effects"]),
+  :root[data-layout="desk"] .rack[data-dock="guests"] :is([data-unit^="synth-"], [data-unit="drums"], [data-unit="mixer"], [data-unit="effects"]) { display: none; }
+  /* A lane's unit in the dock carries its track's colour along its top edge. */
+  :root[data-layout="desk"] .rack[data-dock="synth-1"] [data-unit="synth-1"] { border-top: 3px solid var(--track-1); }
+  :root[data-layout="desk"] .rack[data-dock="synth-2"] [data-unit="synth-2"] { border-top: 3px solid var(--track-2); }
+  :root[data-layout="desk"] .rack[data-dock="synth-3"] [data-unit="synth-3"] { border-top: 3px solid var(--track-3); }
+  :root[data-layout="desk"] .rack[data-dock="synth-4"] [data-unit="synth-4"] { border-top: 3px solid var(--track-4); }
+  :root[data-layout="desk"] .rack[data-dock="synth-5"] [data-unit="synth-5"] { border-top: 3px solid var(--track-5); }
+  :root[data-layout="desk"] .rack[data-dock="drums"] [data-unit="drums"] { border-top: 3px solid var(--drum-kick); }
+  :root[data-layout="desk"] .rack[data-dock="guests"] [data-unit="guests"] { border-top: 3px solid var(--track-guest); }
 }
