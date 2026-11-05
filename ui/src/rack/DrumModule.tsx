@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
+import { drumSelection } from '../services/drumSelection';
 import { isAudioFile, listSamples, saveSample } from '../services/sampleStore';
 import { MAX_KIT_FILES } from '../services/kitImport';
 import KitImportDialog from './KitImportDialog';
@@ -92,10 +93,14 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
   const drumState = kit as Rows;
   // The eight in their order on the grid, then the added rows.
   const INSTRUMENTS = shownDrumRows(drumState);
-  const [chosen, setSelected] = useState<DrumRow>('kick');
+  // The drum and step chosen are held outside the unit (services/drumSelection.ts), so the desk's overview can choose them too.
+  const pick = useSyncExternalStore(drumSelection.subscribe, drumSelection.get);
+  const chosen = pick.row;
+  const setSelected = (row: DrumRow) => drumSelection.set({ row });
   // A row removed (here, by undo or by someone else) leaves the kick chosen.
   const selected: DrumRow = drumState[chosen] ? chosen : 'kick';
-  const [selectedStep, setSelectedStep] = useState(0);
+  const selectedStep = pick.step;
+  const setSelectedStep = (step: number) => drumSelection.set({ step });
   const folded = useFolded('drums');
   const [showMore, setShowMore] = useState(false);
   const [showSends, setShowSends] = useState(false);
@@ -117,6 +122,14 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
   // The grid's steps are one stop for the Tab key, on the step the keyboard was last on.
   const [gridCursor, setGridCursor] = useState<{ instrument: DrumRow; step: number } | null>(null);
   const gridStop = gridCursor && gridCursor.step >= base && gridCursor.step < base + perBar ? gridCursor : { instrument: selected, step: selectedStep >= base && selectedStep < base + perBar ? selectedStep : base };
+  // A step chosen in the desk's overview is brought into view, as a click on the grid does.
+  const seenOutside = useRef(pick.outside);
+  useEffect(() => {
+    if (seenOutside.current === pick.outside) return;
+    seenOutside.current = pick.outside;
+    setViewBar(Math.floor(pick.step / perBar));
+    setFollow(false);
+  }, [pick.outside, pick.step, perBar]);
   // A pattern made shorter can leave the selected step past its end.
   useEffect(() => { if (selectedStep >= bars * perBar) setSelectedStep(0); }, [bars, perBar, selectedStep]);
   // Imported samples a lane can play instead of its built-in sound.

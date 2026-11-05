@@ -79,3 +79,16 @@ export function dockKeyHeight(key: string, height: number, viewport: number): nu
 }
 
 export const laneTrack = (id: number): DeskTrack => laneUnit(id) as DeskTrack;
+
+// Whether the drums are folded open into their rows in the overview. This browser's, like the dock.
+const DRUMS_OPEN_KEY = 'discobot_desk_drums_open_v1';
+
+export const readDrumsOpen = (raw: string | null): boolean => raw === 'open';
+
+export function storedDrumsOpen(): boolean {
+  try { return readDrumsOpen(localStorage.getItem(DRUMS_OPEN_KEY)); } catch { return false; }
+}
+
+export function storeDrumsOpen(open: boolean) {
+  try { localStorage.setItem(DRUMS_OPEN_KEY, open ? 'open' : 'closed'); } catch { /* kept for this visit only */ }
+}
