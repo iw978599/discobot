@@ -62,4 +62,4 @@ shorter. On a phone the same parts stack and the dock is a sheet pulled up from 
 
 ## How far it has got
 
-Nothing is built yet.
+Stage 1 is built: the switch (`layoutChoice.ts`, the Project menu item), the desk's faces and no-capitals look under `[data-layout="desk"]`, the bundled IBM Plex fonts (OFL-1.1 checked) and the track colour names in every scheme. Fewer frames is left for later stages. Stages 2 to 5 are not started.

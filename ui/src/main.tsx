@@ -3,10 +3,13 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
 import { startColourScheme } from './services/colourScheme';
+import { startLayout } from './services/layoutChoice';
 import { startReceiveLink } from './services/receiveSounds';
 
 // This browser's colour scheme is put on the page before anything is drawn.
 startColourScheme();
+// So is its layout, the rack or the desk.
+startLayout();
 // A page opened by another app to take its drum sounds (`#receive`) loses the mark at once.
 startReceiveLink();
 

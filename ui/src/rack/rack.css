@@ -79,6 +79,14 @@
   --person-5: #f97316;
   --person-6: #06b6d4;
   --person-7: #ef4444;
+  /* A track's own colour, by lane number, for guests and for audio tracks (the desk layout). */
+  --track-1: #e0a030;
+  --track-2: #4aa3df;
+  --track-3: #5bbf6a;
+  --track-4: #d96aa8;
+  --track-5: #9a7be0;
+  --track-guest: #2fb8a8;
+  --track-audio: #d4694a;
   /* Three faces: condensed capitals for labels and names, a plain face for anything longer than a
      label (a hint, a message, a dialog's words), and the lit figures. */
   --panel-font: 'Barlow Condensed', 'Arial Narrow', 'Roboto Condensed', Arial, sans-serif;
@@ -178,6 +186,14 @@
   --shadow-control: 0 1px 2px rgba(0, 0, 0, 0.18);
   --shadow-float: 0 10px 24px rgba(0, 0, 0, 0.25);
   color-scheme: light;
+  /* A track's own colour, by lane number, for guests and for audio tracks (the desk layout). */
+  --track-1: #a86a00;
+  --track-2: #1f6fb0;
+  --track-3: #2a8a3c;
+  --track-4: #b0407f;
+  --track-5: #6a4bbf;
+  --track-guest: #0f8a7c;
+  --track-audio: #b24a2a;
 }
 :root[data-scheme="contrast"] .rack-page,
 .rack-page [data-sample="contrast"] {
@@ -222,6 +238,14 @@
   --danger-surface: #2b0a03;
   --danger-ink: #ffe2da;
   --danger-word: #ffa08c;
+  /* A track's own colour, by lane number, for guests and for audio tracks (the desk layout). */
+  --track-1: #ffd400;
+  --track-2: #5cc8ff;
+  --track-3: #5dff7a;
+  --track-4: #ff7ad1;
+  --track-5: #b79cff;
+  --track-guest: #2fffe0;
+  --track-audio: #ff8c5a;
 }
 :root[data-scheme="midnight"] .rack-page,
 .rack-page [data-sample="midnight"] {
@@ -266,6 +290,14 @@
   --danger-surface: #2a1210;
   --danger-ink: #ffdcd2;
   --danger-word: #ff9c85;
+  /* A track's own colour, by lane number, for guests and for audio tracks (the desk layout). */
+  --track-1: #7fb0ff;
+  --track-2: #ffb454;
+  --track-3: #5ee0a0;
+  --track-4: #ff7aa8;
+  --track-5: #b69cff;
+  --track-guest: #35d3e8;
+  --track-audio: #ff8f6b;
 }
 
 .rack {
@@ -1341,3 +1373,47 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
 
 .guest-confirm { display: inline-flex; gap: 4px; }
 .guest-trouble { margin: 0; padding: 6px 10px; border: 1px solid var(--danger); border-radius: var(--corner-panel); color: var(--danger-word); font-family: var(--sentence-font); text-transform: none; letter-spacing: 0; font-weight: 400; font-size: var(--type-label); }
+
+/* The desk layout (services/layoutChoice.ts, docs/DESK_LAYOUT_PLAN.md). Every rule for it is
+   scoped under :root[data-layout="desk"], so the rack, which sets nothing, is as it was. The look:
+   IBM Plex for words, names and figures; no capitals and no wide letter spacing. */
+:root[data-layout="desk"] .rack-page {
+  --panel-font: 'IBM Plex Sans Condensed', 'Arial Narrow', 'Roboto Condensed', Arial, sans-serif;
+  --sentence-font: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --led-font: 'IBM Plex Mono', Consolas, 'Courier New', monospace;
+  font-family: var(--sentence-font);
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+}
+:root[data-layout="desk"] .rack-plate b,
+:root[data-layout="desk"] .rack-plate h1,
+:root[data-layout="desk"] .rack-dialog-header h2,
+:root[data-layout="desk"] .tour-card h2,
+:root[data-layout="desk"] .tour-count,
+:root[data-layout="desk"] .rack-menu-head,
+:root[data-layout="desk"] .owner-tools h4,
+:root[data-layout="desk"] .rack-dialog-body h3,
+:root[data-layout="desk"] .account-field > label,
+:root[data-layout="desk"] .export-choice legend,
+:root[data-layout="desk"] .shared-eyebrow,
+:root[data-layout="desk"] .shared-card h1,
+:root[data-layout="desk"] .shared-card .rack-btn,
+:root[data-layout="desk"] .rack-dialog-body .rack-btn,
+:root[data-layout="desk"] .app-alert .rack-btn,
+:root[data-layout="desk"] .live-people .rack-btn,
+:root[data-layout="desk"] .export-status .rack-btn,
+:root[data-layout="desk"] .guest-ask .rack-btn,
+:root[data-layout="desk"] .rack-dialog-overlay.small .rack-dialog,
+:root[data-layout="desk"] .song-timeline-entry,
+:root[data-layout="desk"] .save-state,
+:root[data-layout="desk"] .mixer-name,
+:root[data-layout="desk"] .shortcut-row kbd {
+  text-transform: none;
+  letter-spacing: normal;
+}
+:root[data-layout="desk"] .rack-btn,
+:root[data-layout="desk"] .rack-dialog-body .rack-btn,
+:root[data-layout="desk"] .rack-dialog-overlay.small .rack-dialog {
+  font-weight: 500;
+}
