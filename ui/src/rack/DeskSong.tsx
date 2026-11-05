@@ -32,7 +32,7 @@ interface DeskSongProps {
   track: DeskTrack;
   view: DeskView;
   onView: (view: DeskView) => void;
-  onShow: (track: DeskTrack) => void;
+  onShow: (track: DeskTrack, from?: HTMLElement) => void;
 }
 
 const percent = (value: number, total: number) => `${(100 * value) / total}%`;
@@ -100,7 +100,7 @@ export default function DeskSong({ studio, track, view, onView, onShow }: DeskSo
   ));
   const head = (label: string, sound: string | null, here: boolean, showAs: DeskTrack, extra?: JSX.Element) => (
     <div className="desk-track-head">
-      <button className="desk-track-pick" aria-current={here ? 'true' : undefined} aria-label={`Show ${label} in the dock`} onClick={() => onShow(showAs)}>
+      <button className="desk-track-pick" aria-current={here ? 'true' : undefined} aria-label={`Show ${label} in the dock`} onClick={event => onShow(showAs, event.currentTarget)}>
         <span className="desk-track-swatch" aria-hidden="true" />
         <span className="desk-track-name">{label}</span>
         {sound && <span className="desk-track-sound">{sound}</span>}

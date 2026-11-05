@@ -50,6 +50,8 @@ import AddLaneUnit from './AddLaneUnit';
 import DeskTrackList from './DeskTrackList';
 import DeskDockBar from './DeskDockBar';
 import DeskSong from './DeskSong';
+import DeskSheetBar from './DeskSheetBar';
+import { SHEET_BAR, sheetHeight, storeSheetSize, storedSheetSize, type SheetSize } from '../services/deskSheet';
 import { livePeople, parsePeople, type Person } from './DeskPeople';
 import { presenceSelector, storeDeskView, storedDeskView, type DeskView } from '../services/deskSong';
 import { laneName, shownLanes } from '../services/lanes';
@@ -143,14 +145,24 @@ export default function Rack({ studio }: { studio: Studio }) {
   const pageRef = useRef<HTMLDivElement>(null);
   const [unit, setUnit] = useState<RackUnit>(() => storedRackUnit() ?? laneUnit(studio.selectedSynthId));
   const hasGuests = studio.guests.length > 0;
+  const desk = useSyncExternalStore(layoutChoice.subscribe, layoutChoice.get) === 'desk';
   const shown = unit === 'guests' && !hasGuests ? laneUnit(studio.selectedSynthId) : unit;
-  const paged = narrow && shown !== 'all';
+  // The desk replaces the bar of units on a phone, so nothing is paged then.
+  const paged = narrow && !desk && shown !== 'all';
   // The desk layout on a wide screen (docs/DESK_LAYOUT_PLAN.md, stage 2): the dock shows one unit,
   // chosen by the track list and its tabs. Like `shown`, it is view state kept here and handed to the
   // stylesheet as an attribute; the units are hidden, never taken away. Which track and tab, and how
   // tall, are this browser's (services/deskFrame.ts).
-  const desk = useSyncExternalStore(layoutChoice.subscribe, layoutChoice.get) === 'desk';
   const deskWide = desk && !narrow;
+  // The desk on a phone (stage 5): the song as a short strip, the tracks as a list and the dock as a sheet
+  // raised from the bottom edge. Its size is this browser's (services/deskSheet.ts); whether it is up is
+  // view state, and it starts put away.
+  const deskPhone = desk && narrow;
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetSize, setSheetSizeState] = useState<SheetSize>(storedSheetSize);
+  const [sheetLive, setSheetLive] = useState<number | null>(null);
+  const sheetFrom = useRef<HTMLElement | null>(null);
+  const setSheetSize = (size: SheetSize) => { setSheetSizeState(size); storeSheetSize(size); };
   const [dock, setDock] = useState<DeskDock>(storedDock);
   const [dockHeight, setDockHeight] = useState(storedDockHeight);
   // Which view the tracks region shows. It changes what the middle shows, never what plays.
@@ -158,12 +170,12 @@ export default function Rack({ studio }: { studio: Studio }) {
   const setDeskView = (view: DeskView) => { setDeskViewState(view); storeDeskView(view); };
   const [viewport, setViewport] = useState(() => window.innerHeight);
   useEffect(() => {
-    if (!deskWide) return;
+    if (!desk) return;
     const onResize = () => setViewport(window.innerHeight);
     onResize();
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-  }, [deskWide]);
+  }, [desk]);
   const deskTrack: DeskTrack = (() => {
     const track = dock.track;
     const lane = track === null ? null : trackLane(track);
@@ -178,12 +190,51 @@ export default function Rack({ studio }: { studio: Studio }) {
     setDock(value);
     storeDock(value);
   };
-  const showTrack = (track: DeskTrack) => {
+  // `from` is a header that was pressed: on a phone that raises the sheet, and is where focus goes back to.
+  const showTrack = (track: DeskTrack, from?: HTMLElement) => {
     const lane = trackLane(track);
     if (lane !== null) studio.setSelectedSynthId(lane);
     showDock({ track, tab: 'track' });
+    if (deskPhone && from) {
+      sheetFrom.current = from;
+      setSheetOpen(true);
+    }
   };
   const deskHeight = clampDockHeight(dockHeight, viewport);
+  const sheetPx = sheetLive ?? sheetHeight(sheetSize, viewport);
+  // The sheet takes focus when it is raised, and gives it back to the header that raised it when it is put
+  // away. A header that would be under the sheet is scrolled clear of it.
+  const sheetWas = useRef(false);
+  useEffect(() => {
+    const was = sheetWas.current;
+    sheetWas.current = sheetOpen;
+    const page = pageRef.current;
+    if (!page || was === sheetOpen) return;
+    if (sheetOpen) {
+      const from = sheetFrom.current;
+      if (from?.isConnected) {
+        const under = from.getBoundingClientRect().bottom - (window.innerHeight - sheetHeight(sheetSize, window.innerHeight));
+        if (under > -8) page.scrollTop += under + 8;
+      }
+      page.querySelector<HTMLElement>('.desk-sheet-bar [role="tab"][aria-selected="true"]')?.focus({ preventScroll: true });
+    } else {
+      const from = sheetFrom.current;
+      sheetFrom.current = null;
+      const target = from?.isConnected ? from : page.querySelector<HTMLElement>(`.desk-tracks .desk-track[data-track="${deskTrack}"] .desk-track-pick`);
+      target?.focus({ preventScroll: true });
+    }
+  }, [sheetOpen]);
+  useEffect(() => {
+    if (!deskPhone || !sheetOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || document.querySelector('[aria-modal="true"], [role="menu"]')) return;
+      const at = document.activeElement;
+      if (at && at !== document.body && !at.closest('.desk-sheet-bar, .rack [data-unit]')) return;
+      setSheetOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [deskPhone, sheetOpen]);
   const setHeight = (height: number, keep: boolean) => {
     setDockHeight(height);
     if (keep) storeDockHeight(height);
@@ -194,10 +245,10 @@ export default function Rack({ studio }: { studio: Studio }) {
     const moved = lastDeskLane.current !== studio.selectedSynthId;
     lastDeskLane.current = studio.selectedSynthId;
     const lane = trackLane(deskTrack);
-    if (!deskWide || lane === null || lane === studio.selectedSynthId) return;
+    if (!desk || lane === null || lane === studio.selectedSynthId) return;
     if (moved) showDock({ track: laneTrack(studio.selectedSynthId) });
     else if (studio.synths.some(synth => synth.id === lane)) studio.setSelectedSynthId(lane);
-  }, [deskWide, deskTrack, studio.selectedSynthId, studio.synths.length]);
+  }, [desk, deskTrack, studio.selectedSynthId, studio.synths.length]);
   // Counts the times a unit was asked for from the bar, so the page can settle after each.
   const [moves, setMoves] = useState(0);
   const show = (next: RackUnit) => {
@@ -239,7 +290,7 @@ export default function Rack({ studio }: { studio: Studio }) {
     const moved = lastOpenLane.current !== openLane;
     lastOpenLane.current = openLane;
     const lane = unitLane(unit);
-    if (!narrow || lane === null || lane === openLane) return;
+    if (!narrow || desk || lane === null || lane === openLane) return;
     if (moved) {
       // Another lane was opened from somewhere else (the one on show was removed, say): turn to it.
       const next = laneUnit(openLane);
@@ -249,7 +300,7 @@ export default function Rack({ studio }: { studio: Studio }) {
       // The view chose the lane, as when a remembered unit is shown on a new visit: open it.
       studio.setSelectedSynthId(lane);
     }
-  }, [narrow, unit, openLane, lanes]);
+  }, [narrow, desk, unit, openLane, lanes]);
   // The transport unit is tracked, so what it is handed must stay the same from render to render.
   const openSettings = useCallback(() => setSettingsOpen(true), []);
   const openProjects = useCallback(() => setProjectsOpen(true), []);
@@ -301,16 +352,20 @@ export default function Rack({ studio }: { studio: Studio }) {
   // Guests that are not on show stay laid out, out of sight (rack.css), so their pages go on
   // running. They are also put out of reach of the keyboard and of a screen reader.
   useLayoutEffect(() => {
-    const away = (paged && shown !== 'guests') || (deskWide && dockShown !== 'guests');
+    const away = (paged && shown !== 'guests') || (deskWide && dockShown !== 'guests') || (deskPhone && (!sheetOpen || dockShown !== 'guests'));
     pageRef.current?.querySelectorAll<HTMLElement>('.rack [data-unit="guests"]').forEach((guest) => {
       guest.inert = away;
       if (away) guest.setAttribute('aria-hidden', 'true'); else guest.removeAttribute('aria-hidden');
     });
-  }, [paged, shown, deskWide, dockShown, studio.guests.length]);
+  }, [paged, shown, deskWide, deskPhone, sheetOpen, dockShown, studio.guests.length]);
 
   return (
-    <div ref={pageRef} className={narrow ? 'rack-page has-unit-bar' : deskWide ? 'rack-page desk-frame' : 'rack-page'} style={deskWide ? { '--dock-height': `${deskHeight}px` } as CSSProperties : undefined}>
-      <div className="rack" data-shown={paged ? shown : undefined} data-dock={deskWide ? dockShown : undefined}>
+    <div
+      ref={pageRef}
+      className={deskPhone ? `rack-page desk-phone${sheetOpen ? ' sheet-open' : ''}` : narrow ? 'rack-page has-unit-bar' : deskWide ? 'rack-page desk-frame' : 'rack-page'}
+      style={deskWide ? { '--dock-height': `${deskHeight}px` } as CSSProperties : deskPhone ? { '--sheet-height': `${sheetPx}px`, '--sheet-bar': `${SHEET_BAR}px` } as CSSProperties : undefined}
+    >
+      <div className="rack" data-shown={paged ? shown : undefined} data-dock={deskWide ? dockShown : deskPhone ? (sheetOpen ? dockShown : 'none') : undefined}>
         <TransportUnit
           studio={studio}
           onOpenSettings={openSettings}
@@ -405,7 +460,7 @@ export default function Rack({ studio }: { studio: Studio }) {
         )}
         </div>
         {/* The desk's track list, only while the desk is on and the screen is wide. */}
-        {deskWide && (
+        {desk && (
           <DeskTrackList
             synths={studio.synths}
             laneOrder={studio.laneOrder}
@@ -459,7 +514,20 @@ export default function Rack({ studio }: { studio: Studio }) {
         </div>
         </div>
       </div>
-      {narrow && (
+      {deskPhone && sheetOpen && (
+        <DeskSheetBar
+          trackName={dockTrackName}
+          tab={dock.tab}
+          onTab={tab => showDock({ tab })}
+          size={sheetSize}
+          height={sheetPx}
+          viewport={viewport}
+          onSize={setSheetSize}
+          onLive={setSheetLive}
+          onClose={() => setSheetOpen(false)}
+        />
+      )}
+      {narrow && !desk && (
         <UnitBar
           shown={shown}
           synths={studio.synths}
