@@ -14,6 +14,7 @@ import { useAccountUser } from './AccountDialog';
 import { enterKidsMode } from '../services/kids';
 import { CLICK_LEVEL, COUNT_IN_CHOICES, clickLevel, countInBars } from '../services/metronome';
 import { tracked } from '../studio/tracked';
+import DeskPeople from './DeskPeople';
 
 interface TransportUnitProps {
   studio: Studio;
@@ -270,6 +271,7 @@ function TransportUnit({ studio, onOpenSettings, onOpenProjects, onShare, onStar
             {metronome}
           </div>
           <div className="desk-bar-group desk-bar-tools">
+            <DeskPeople />
             {undo}
             {redo}
             {exportButton}

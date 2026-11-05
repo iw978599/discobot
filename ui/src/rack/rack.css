@@ -1571,4 +1571,62 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
   :root[data-layout="desk"] .rack[data-dock="synth-5"] [data-unit="synth-5"] { border-top: 3px solid var(--track-5); }
   :root[data-layout="desk"] .rack[data-dock="drums"] [data-unit="drums"] { border-top: 3px solid var(--drum-kick); }
   :root[data-layout="desk"] .rack[data-dock="guests"] [data-unit="guests"] { border-top: 3px solid var(--track-guest); }
+  /* The Patterns / Song switch in the ruler's corner. */
+  :root[data-layout="desk"] .desk-view-switch { display: flex; align-items: center; gap: 2px; padding: 3px; }
+  :root[data-layout="desk"] .desk-view-switch button {
+    flex: 1 1 0; padding: 2px 6px; background: var(--surface-control); border: 1px solid var(--edge-control); border-radius: var(--corner-control);
+    color: var(--text-plain); font: inherit; font-size: var(--type-caption); cursor: pointer;
+  }
+  :root[data-layout="desk"] .desk-view-switch button.on { background: var(--on); border-color: var(--on); color: var(--text-on); }
+  @media (hover: hover) {
+    :root[data-layout="desk"] .desk-view-switch button:hover { border-color: var(--hover); }
+    :root[data-layout="desk"] .desk-view-switch button.on:hover { border-color: var(--on-bright); background: var(--on-bright); }
+  }
+
+  /* Patterns view: a guest has no steps, so its row says so. */
+  :root[data-layout="desk"] .desk-cells.desk-guest-note { display: flex; align-items: center; padding: 0 10px; font-family: var(--sentence-font); font-size: var(--type-caption); color: var(--text-faint); }
+
+  /* The Song view (stage 4). Everything is placed along the song's ticks as a share of its width, and the
+     rows are as wide as the patterns' grid is (--cols). */
+  :root[data-layout="desk"] .desk-song-ruler { position: relative; display: block; min-height: 20px; }
+  :root[data-layout="desk"] .desk-song-bar {
+    position: absolute; top: 0; bottom: 0; padding: 2px 4px; font-family: var(--led-font); font-size: var(--type-caption); color: var(--text-label); border-left: 1px solid var(--edge-strong);
+  }
+  :root[data-layout="desk"] .desk-song-title { padding: 4px 8px; align-self: center; color: var(--text-label); }
+  :root[data-layout="desk"] .desk-song-lane { position: relative; min-width: 0; min-height: 26px; background: var(--surface-well); border-radius: var(--corner-control); overflow: hidden; }
+  :root[data-layout="desk"] .desk-song-order .desk-song-lane { min-height: 30px; }
+  :root[data-layout="desk"] .desk-song-block {
+    position: absolute; top: 3px; bottom: 3px; box-sizing: border-box; padding: 0; background: var(--track-color); border: 0; border-right: 1px solid var(--surface-well);
+    border-radius: 2px; opacity: 0.85; cursor: pointer;
+  }
+  :root[data-layout="desk"] .desk-song-entry {
+    position: absolute; top: 3px; bottom: 3px; box-sizing: border-box; padding: 0 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: left;
+    border: 0; border-left: 4px solid var(--scene-color, var(--edge-strong)); border-right: 1px solid var(--surface-well); border-radius: 2px;
+    background: var(--surface-control); color: var(--text-plain); font: inherit; font-size: var(--type-caption); cursor: pointer;
+  }
+  :root[data-layout="desk"] .desk-song-clip {
+    position: absolute; top: 3px; bottom: 3px; box-sizing: border-box; padding: 0 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: left;
+    border: 1px solid var(--edge-strong); border-radius: var(--corner-control); background: var(--track-color); color: var(--text-on); font: inherit; font-size: var(--type-caption); cursor: pointer;
+  }
+  :root[data-layout="desk"] .desk-song-clip.on { box-shadow: inset 0 0 0 1px var(--gap), inset 0 0 0 3px var(--select); }
+  :root[data-layout="desk"] .desk-song-now { position: absolute; top: 0; bottom: 0; background: var(--lit); opacity: 0.22; pointer-events: none; }
+  :root[data-layout="desk"] .desk-audio-name { cursor: default; }
+  @media (hover: hover) {
+    :root[data-layout="desk"] .desk-song-block:hover { opacity: 1; }
+    :root[data-layout="desk"] .desk-song-entry:hover, :root[data-layout="desk"] .desk-song-clip:hover { border-color: var(--hover); }
+    :root[data-layout="desk"] .desk-song-entry:hover { background: var(--surface-hover); }
+  }
+  :root[data-layout="desk"] .rack-page :is(.desk-song-block, .desk-song-entry, .desk-song-clip, .desk-view-switch button):focus-visible { z-index: 2; outline-offset: -2px; box-shadow: inset 0 0 0 4px var(--gap); }
+  :root[data-layout="desk"] .rack-page .desk-song-clip.on:focus-visible { box-shadow: inset 0 0 0 4px var(--gap), inset 0 0 0 6px var(--select); }
+
+  /* Live session: the others' initials in the top bar, and a dot on the header of the track each is at
+     (Rack sets `data-present` on the header, as it does on a unit). */
+  :root[data-layout="desk"] .desk-people { display: inline-flex; align-items: center; gap: 3px; }
+  :root[data-layout="desk"] .desk-person {
+    display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%;
+    background: var(--present); color: var(--text-on); font-family: var(--panel-font); font-size: var(--type-caption); font-weight: 600;
+  }
+  :root[data-layout="desk"] .desk-tracks .desk-track-head[data-present]::after {
+    content: ''; position: absolute; top: 2px; right: 2px; width: 9px; height: 9px; border-radius: 50%; background: var(--present); border: 1px solid var(--edge-deep); pointer-events: none;
+  }
 }

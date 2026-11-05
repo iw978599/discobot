@@ -1,4 +1,4 @@
-import { memo, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
+import { memo, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
 import type { DrumRow, DrumState, DrumTrack, TimeSignature } from '../types';
 import type { SynthState } from '../studio/studioState';
 import { guestOrigin, type Guest } from '../services/guests';
@@ -12,6 +12,8 @@ import { drumLine, overviewColumns, toggledNotes } from '../services/deskOvervie
 import { stepNotes } from '../services/noteScheduling';
 import { drumSelection } from '../services/drumSelection';
 import DeskCells, { type DeskCellData } from './DeskCells';
+import { DeskViewSwitch } from './DeskSong';
+import type { DeskView } from '../services/deskSong';
 
 // What the overview does with a cell or a header, handed down once and kept the same across renders.
 interface Actions {
@@ -45,6 +47,10 @@ interface DeskTrackListProps {
   onAssignNotes: (id: number, step: number, notes: string[], on: boolean) => void;
   onSelectStep: (id: number, step: number) => void;
   onToggleDrum: (row: DrumRow, step: number, active: boolean) => void;
+  // Which of the two views the tracks region shows, and the Song view itself, which Rack makes.
+  view: DeskView;
+  onView: (view: DeskView) => void;
+  songView: ReactNode;
 }
 
 type Rows = Record<DrumRow, DrumTrack>;
@@ -201,7 +207,7 @@ function DrumsTrack({ drums, here, open, bars, signature, playing, actions }: { 
 // A click on a cell edits the step, a Shift+click only selects it. Whether the drums are folded open is
 // this browser's (services/deskFrame.ts); the list holds no other state.
 export default function DeskTrackList(props: DeskTrackListProps) {
-  const { synths, laneOrder, drums, guests, track, bars, signature, playing, onAddLane } = props;
+  const { synths, laneOrder, drums, guests, track, bars, signature, playing, onAddLane, view, onView, songView } = props;
   const latest = useRef(props);
   latest.current = props;
   const [drumsOpen, setDrumsOpenState] = useState(storedDrumsOpen);
@@ -217,12 +223,13 @@ export default function DeskTrackList(props: DeskTrackListProps) {
   }), []);
   const ids = synths.map(synth => synth.id);
   const next = nextExtraLane(ids);
+  if (view === 'song') return <nav className="desk-tracks" aria-label="Tracks" data-view="song">{songView}</nav>;
   return (
-    <nav className="desk-tracks" aria-label="Tracks">
+    <nav className="desk-tracks" aria-label="Tracks" data-view="patterns">
       <div className="desk-grid" style={{ '--cols': bars * barSteps(signature) } as CSSProperties}>
-        <div className="desk-ruler" aria-hidden="true">
-          <span className="desk-ruler-head" />
-          <span className="desk-ruler-bars" style={{ gridTemplateColumns: `repeat(${bars}, minmax(0, 1fr))` }}>
+        <div className="desk-ruler">
+          <DeskViewSwitch view={view} onView={onView} />
+          <span className="desk-ruler-bars" aria-hidden="true" style={{ gridTemplateColumns: `repeat(${bars}, minmax(0, 1fr))` }}>
             {Array.from({ length: bars }, (_, bar) => <span key={bar} className="desk-ruler-bar">{bar + 1}</span>)}
           </span>
         </div>
@@ -243,7 +250,7 @@ export default function DeskTrackList(props: DeskTrackListProps) {
                     <span className="desk-track-sound">Guest instrument</span>
                   </button>
                 </div>
-                <div className="desk-cells desk-cells-empty" aria-hidden="true" />
+                <div className="desk-cells desk-cells-empty desk-guest-note" aria-hidden="true">Guest instrument: no steps here, its page is in the dock</div>
               </li>
             );
           })}
