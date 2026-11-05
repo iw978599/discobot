@@ -49,6 +49,9 @@ import './rack.css';
 import AddLaneUnit from './AddLaneUnit';
 import DeskTrackList from './DeskTrackList';
 import DeskDockBar from './DeskDockBar';
+import DeskSong from './DeskSong';
+import { livePeople, parsePeople, type Person } from './DeskPeople';
+import { presenceSelector, storeDeskView, storedDeskView, type DeskView } from '../services/deskSong';
 import { laneName, shownLanes } from '../services/lanes';
 import { layoutChoice } from '../services/layoutChoice';
 import { clampDockHeight, dockUnit, storeDock, storeDockHeight, storedDock, storedDockHeight, trackLane, type DeskDock, laneTrack, type DeskTrack } from '../services/deskFrame';
@@ -60,14 +63,6 @@ import { clampDockHeight, dockUnit, storeDock, storeDockHeight, storedDock, stor
 const livePlayer = () => {
   const status = liveStatus();
   return status.state === 'live' && status.others.length > 0 ? status.playing?.by ?? '' : '';
-};
-
-// The other people in a live session: each one's name, colour and the unit they were last at, as
-// text for the same reason.
-type Person = [user: string, colour: number, at: string];
-const livePeople = () => {
-  const status = liveStatus();
-  return status.state === 'live' ? JSON.stringify(status.others.map((member): Person => [member.user, member.colour, member.at ?? ''])) : '[]';
 };
 
 export default function Rack({ studio }: { studio: Studio }) {
@@ -127,7 +122,7 @@ export default function Rack({ studio }: { studio: Studio }) {
   // Who started the music in this live session (liveSession.ts), shown while it is not playing here.
   const playingBy = useSyncExternalStore(subscribeLive, livePlayer);
   const peopleText = useSyncExternalStore(subscribeLive, livePeople);
-  const people = useMemo(() => JSON.parse(peopleText) as Person[], [peopleText]);
+  const people = useMemo(() => parsePeople(peopleText), [peopleText]);
   const snap = useSyncExternalStore(subscribeLive, liveJam.snap);
   const liveMessage = useSyncExternalStore(subscribeLive, liveSummary);
 
@@ -158,6 +153,9 @@ export default function Rack({ studio }: { studio: Studio }) {
   const deskWide = desk && !narrow;
   const [dock, setDock] = useState<DeskDock>(storedDock);
   const [dockHeight, setDockHeight] = useState(storedDockHeight);
+  // Which view the tracks region shows. It changes what the middle shows, never what plays.
+  const [deskView, setDeskViewState] = useState<DeskView>(storedDeskView);
+  const setDeskView = (view: DeskView) => { setDeskViewState(view); storeDeskView(view); };
   const [viewport, setViewport] = useState(() => window.innerHeight);
   useEffect(() => {
     if (!deskWide) return;
@@ -269,7 +267,8 @@ export default function Rack({ studio }: { studio: Studio }) {
     const page = pageRef.current;
     if (!page) return;
     const note = (event: Event) => {
-      const at = (event.target as Element | null)?.closest?.('.rack [data-unit]')?.getAttribute('data-unit');
+      const marked = (event.target as Element | null)?.closest?.('.rack [data-unit], .desk-tracks .desk-track[data-track]');
+      const at = marked?.getAttribute('data-unit') ?? marked?.getAttribute('data-track');
       if (at) livePlace(at);
     };
     page.addEventListener('pointerdown', note, true);
@@ -290,7 +289,9 @@ export default function Rack({ studio }: { studio: Studio }) {
     const byUnit = new Map<string, Person[]>();
     for (const person of people) if (person[2]) byUnit.set(person[2], [...(byUnit.get(person[2]) ?? []), person]);
     for (const [at, here] of byUnit) {
-      page.querySelectorAll<HTMLElement>(`.rack [data-unit="${at}"], .unit-bar [data-tab="${at}"]`).forEach((marked) => {
+      const selector = presenceSelector(at);
+      if (!selector) continue;
+      page.querySelectorAll<HTMLElement>(selector).forEach((marked) => {
         marked.setAttribute('data-present', String(here[0][1]));
         marked.setAttribute('data-present-names', here.map(person => person[0]).join(', '));
         marked.style.setProperty('--present', `var(--person-${here[0][1]})`);
@@ -421,6 +422,9 @@ export default function Rack({ studio }: { studio: Studio }) {
             onMuteLane={(id, muted) => { void studio.handleSynthMixChange(id, { muted }); }}
             onSoloLane={(id, solo) => { void studio.handleSynthMixChange(id, { solo }); }}
             onMuteDrums={studio.handleDrumMuteAll}
+            view={deskView}
+            onView={setDeskView}
+            songView={deskView === 'song' ? <DeskSong studio={studio} track={deskTrack} view={deskView} onView={setDeskView} onShow={showTrack} /> : null}
             onAddLane={(id) => { void studio.ensureSynthExists(id).then((created) => { if (created) { studio.setSelectedSynthId(id); showDock({ track: laneTrack(id), tab: 'track' }); } }); }}
           />
         )}
