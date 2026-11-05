@@ -58,6 +58,7 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 | `server/src/secrets.ts` / `rules.ts` | Password hashing, tokens and codes; username and password rules |
 | `server/src/localDatabase.ts` / `server/dev.ts` | An in-memory SQLite with D1's interface, and a local runner for it. Used by tests and `npm run dev:api`; never deployed |
 | `server/migrations/` | The database schema. Add a new numbered file; never edit one that has been applied |
+| `ui/src/services/layoutChoice.ts` | This browser's layout, the rack (default) or the desk (`docs/DESK_LAYOUT_PLAN.md`): `data-layout="desk"` on the root element, and every desk rule in `rack.css` is under it |
 | `ui/src/services/account.ts` | Browser side of accounts: the session and every API call. `accountsEnabled` is false when the build has no `VITE_API_URL` |
 | `ui/src/services/guests.ts` | Guest instruments: address and data checks, per-site consent, the shared-clock helpers and `guestLink`, which tells guests about the transport |
 | `ui/src/rack/GuestModule.tsx` / `ui/src/hooks/guestAudio.ts` | The guest's rack unit and frame, and the player that brings its audio into the mixer |
@@ -210,6 +211,7 @@ table. The names from before (`--amber`, `--ink`, `--legend`, `--dim` and the re
 | A lit step light, a hit's dashed edge for chance | `--lit` |
 | The edge of a held note | `--on-deep` |
 | The deepest outline (round a display, a lamp, a slider's track); the lines between the switches on a phone's bar | `--edge-deep`; `--edge-rail` |
+| A track's own colour in the desk layout: a synth lane by its number, guests, audio tracks | `--track-1` to `--track-5`, `--track-guest`, `--track-audio` |
 | A scene's own colour | `--scene-red`, `--scene-green`, `--scene-blue`, `--scene-teal`, `--scene-violet`, `--scene-pink`; whatever carries `data-color` reads its own as `--scene-color` |
 | A drum lane | `--drum-kick`, `--drum-snare`, `--drum-clap`, `--drum-closed-hat`, `--drum-open-hat`, `--drum-low-tom`, `--drum-high-tom`, `--drum-cymbal`; a row carries `data-drum` and reads its own as `--drum-color` |
 | A person in a live session | `--person-0` to `--person-7`, by the colour the room gave them; whatever carries `data-present` reads its own as `--present` |

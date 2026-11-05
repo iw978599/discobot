@@ -1273,8 +1273,11 @@ Replaced on 2026-10-19 by "The plan from here" at the top of this file.
   selects it, so its velocity, chance and repeats can be changed in place. A
   plain click still adds and removes. Shift+click used to step a hit through
   four velocities; the Velocity slider does that instead. Built.
-- **A redesign of the whole interface**: the owner finds the rack clunky.
-  Three directions were proposed as mock-ups; none is chosen yet.
+- **The desk layout** (`docs/DESK_LAYOUT_PLAN.md`): the owner finds the rack
+  clunky. Of three redesign directions drawn as mock-ups, the owner chose the
+  studio desk: tracks on the left, the song on top, every pattern in the
+  middle, one editor docked below. The rack stays the default and the desk is
+  an option to try. Being built in five stages.
 
 ## Ideas folded in from roadmap v2
 

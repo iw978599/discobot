@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { layoutChoice } from '../services/layoutChoice';
 import { useNarrow } from '../hooks/useNarrow';
 import SaveState from './SaveState';
 import { spaceBelongsToTarget } from '../hooks/useComputerKeyboard';
@@ -58,6 +59,7 @@ function TransportUnit({ studio, onOpenSettings, onOpenProjects, onShare, onStar
   // Something chosen in the sheet that opens a dialog, or leaves the page, puts the sheet away
   // first. The sheet hands focus back to its button as it goes, so the dialog that opens in the
   // same turn returns focus there when it closes. On a wide screen there is no sheet to put away.
+  const desk = useSyncExternalStore(layoutChoice.subscribe, layoutChoice.get) === 'desk';
   const leaving = (action: () => void) => () => { setMoreOpen(false); action(); };
   const midiStatus = !midiState.supported ? 'MIDI is not available in this browser'
     : midiState.connected ? 'A MIDI controller is connected' : 'No MIDI controller connected';
@@ -134,6 +136,9 @@ function TransportUnit({ studio, onOpenSettings, onOpenProjects, onShare, onStar
       ], [
         { label: 'Add Guest Instrument', title: "Host another creator's web instrument in this project, by its address", onSelect: leaving(onAddGuest) },
         { label: 'Colour Scheme', title: 'Light, dark, high contrast or blue colours for the rack, kept in this browser', onSelect: leaving(onOpenColours) },
+        desk
+          ? { label: 'Back to the Rack', title: 'Go back to the rack, one unit under another. Kept in this browser', onSelect: leaving(() => layoutChoice.set('rack')) }
+          : { label: 'Try the Desk Layout', title: 'A new arrangement of the rack on one screen, still being built. Kept in this browser', onSelect: leaving(() => layoutChoice.set('desk')) },
         { label: 'Kids Mode', title: 'Big pads, a beat grid of pictures and one play button for a small child. It keeps its own tune and cannot change your projects', onSelect: leaving(enterKidsMode) },
       ], [
         { label: 'Reset All', title: 'Clear every lane, the drums and the effects of this project', danger: true, onSelect: leaving(() => { void studio.handleReset(); }) },

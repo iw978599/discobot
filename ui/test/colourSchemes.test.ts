@@ -63,3 +63,14 @@ test('the choice is one of the schemes, and Match This Device picks light or dar
   assert.equal(resolveScheme('device', false), 'studio');
   assert.equal(resolveScheme('midnight', true), 'midnight');
 });
+
+test('every scheme gives the track colours values that differ and can be seen on its panel', () => {
+  const names = ['--track-1', '--track-2', '--track-3', '--track-4', '--track-5', '--track-guest', '--track-audio'];
+  for (const { id } of SCHEMES.filter(entry => entry.id !== 'device')) {
+    const colours = scheme(id);
+    const values = names.map(name => colours[name]);
+    assert.ok(values.every(Boolean), `${id} names every track colour`);
+    assert.equal(new Set(values).size, names.length, `${id}'s track colours differ`);
+    for (const name of names) assert.ok(contrast(colours[name], colours['--surface-panel-top']) >= 3, `${id} ${name}: ${contrast(colours[name], colours['--surface-panel-top']).toFixed(2)}`);
+  }
+});
