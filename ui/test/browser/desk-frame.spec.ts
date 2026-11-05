@@ -113,9 +113,12 @@ test('muting from the track list mutes the lane', async ({ page }) => {
   await solo.click();
   await expect(page.getByRole('button', { name: 'Solo Synth 1', exact: true })).toHaveAttribute('aria-pressed', 'true');
 
-  await tracks(page).getByRole('button', { name: 'Track list mute Drums', exact: true }).click();
+  const drumsMute = tracks(page).getByRole('button', { name: 'Track list mute Drums', exact: true });
+  await drumsMute.click();
+  await expect(drumsMute).toHaveAttribute('aria-pressed', 'true');
   await tracks(page).getByRole('button', { name: 'Show Drums in the dock', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Mute All', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  // Every drum's own mute on the grid is pressed (the drums' Mute All shows only with Sends open).
+  await expect(page.getByRole('button', { name: 'Mute Kick', exact: true })).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('Add Lane in the track list adds the next lane and shows it', async ({ page }) => {
