@@ -24,9 +24,10 @@ test('a stored dock is read back, and anything else is the first tab on no track
 });
 
 test('the dock height is held between a minimum and most of the screen', () => {
-  assert.equal(dockMax(1000), 850);
+  assert.equal(dockMax(1000), 620);
   assert.equal(clampDockHeight(50, 1000), DOCK_MIN);
-  assert.equal(clampDockHeight(5000, 1000), 850);
+  assert.equal(clampDockHeight(5000, 1000), 620, 'room is kept for the bar, the song and the tracks');
+  assert.equal(clampDockHeight(5000, 3000), 2550, 'on a very tall screen, 85% of it');
   assert.equal(clampDockHeight(400.4, 1000), 400);
   assert.equal(clampDockHeight(NaN, 1000), DOCK_DEFAULT);
   assert.equal(clampDockHeight(500, 100), DOCK_MIN, 'a very short screen still has a dock');
@@ -41,8 +42,8 @@ test('keys move the handle: up is taller, down shorter, Home the least, End the 
   assert.equal(dockKeyHeight('ArrowUp', 300, 1000), 324);
   assert.equal(dockKeyHeight('ArrowDown', 300, 1000), 276);
   assert.equal(dockKeyHeight('ArrowDown', DOCK_MIN, 1000), DOCK_MIN);
-  assert.equal(dockKeyHeight('ArrowUp', 840, 1000), 850);
+  assert.equal(dockKeyHeight('ArrowUp', 610, 1000), 620);
   assert.equal(dockKeyHeight('Home', 300, 1000), DOCK_MIN);
-  assert.equal(dockKeyHeight('End', 300, 1000), 850);
+  assert.equal(dockKeyHeight('End', 300, 1000), 620);
   assert.equal(dockKeyHeight('a', 300, 1000), null);
 });

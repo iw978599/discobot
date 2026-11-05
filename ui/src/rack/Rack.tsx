@@ -411,7 +411,13 @@ export default function Rack({ studio }: { studio: Studio }) {
             drums={studio.drumState}
             guests={studio.guests}
             track={deskTrack}
+            bars={studio.sceneInfo[studio.currentSceneId]?.bars ?? 1}
+            signature={studio.signature}
+            playing={studio.isAnyPlaying}
             onShow={showTrack}
+            onAssignNotes={(id, step, notes, on) => { void studio.handlePianoRollNoteAssign(id, step, notes, on); }}
+            onSelectStep={studio.handleStepSelect}
+            onToggleDrum={studio.handleDrumStepToggle}
             onMuteLane={(id, muted) => { void studio.handleSynthMixChange(id, { muted }); }}
             onSoloLane={(id, solo) => { void studio.handleSynthMixChange(id, { solo }); }}
             onMuteDrums={studio.handleDrumMuteAll}
