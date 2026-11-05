@@ -43,12 +43,14 @@ export function storeDock(dock: DeskDock) {
 }
 
 export const DOCK_MIN = 160;
-export const DOCK_DEFAULT = 360;
+export const DOCK_DEFAULT = 300;
 export const DOCK_STEP = 24;
 const DOCK_MAX_SHARE = 0.85;
 
-// The tallest the dock may be on a screen this high: most of it, so the song and the tracks keep a strip.
-export const dockMax = (viewport: number) => Math.max(DOCK_MIN, Math.floor(viewport * DOCK_MAX_SHARE));
+// The tallest the dock may be on a screen this high: most of it, but never so tall that the top bar, the
+// song and the track rows lose the room they need (DOCK_ROOM), or the rows are squeezed out of reach.
+const DOCK_ROOM = 380;
+export const dockMax = (viewport: number) => Math.max(DOCK_MIN, Math.min(Math.floor(viewport * DOCK_MAX_SHARE), viewport - DOCK_ROOM));
 
 export function clampDockHeight(height: number, viewport: number): number {
   const value = Number.isFinite(height) ? Math.round(height) : DOCK_DEFAULT;
