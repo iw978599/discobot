@@ -14,6 +14,14 @@ const strum = (amount: number) => ({ strum: amount });
 // A value for every step of a scene, from one level to another, or held.
 const ramp = (steps: number, from: number, to: number): Array<number | null> => Array.from({ length: steps }, (_, index) => Number((from + (to - from) * index / Math.max(1, steps - 1)).toFixed(3)));
 const held = (steps: number, value: number): Array<number | null> => Array(steps).fill(value);
+// A drum's automation (a value or nothing for every step of the scene's drum grid): `segment` has
+// values from one step on and nothing elsewhere, `perStep` asks each step of each bar (`per` steps)
+// what it is. A hit on a step without a value plays with the drum's own setting.
+const segment = (total: number, start: number, values: Array<number | null>): Array<number | null> => Array.from({ length: total }, (_, step) => values[step - start] ?? null);
+const perStep = (bars: number, per: number, value: (bar: number, step: number) => number | null): Array<number | null> => Array.from({ length: bars * per }, (_, index) => value(Math.floor(index / per), index % per));
+// A drum's send that is low except on the last hit of a phrase, which rings out.
+const tail = (bars: number, per: number, hits: number[], phrase: number, base: number): Array<number | null> =>
+  perStep(bars, per, (bar, step) => (hits.includes(step) ? (bar % phrase === phrase - 1 && step === hits[hits.length - 1] ? 1 : base) : null));
 // A slow vibrato on the second LFO, in semitones at its widest.
 const vibrato = (depth: number, rate = 5.5) => ({ lfo2: { enabled: true, target: 'vibrato', waveform: 'sine', rate, depth, sync: false, retrigger: true } });
 const glide = (seconds: number) => ({ portamento: { enabled: true, glide: seconds, fingered: false, speed: false } });
@@ -88,13 +96,16 @@ const NIGHT_CIRCUIT: SampleSong = {
     { id: 'circuit-ignition', name: 'Ignition', color: 'blue', bars: 8,
       lanes: { 2: twice(chordBars(CIRCUIT_ARPS, 16, 0.8)), 3: twice(chordBars(CIRCUIT_PADS, 16, 0.55)), 4: [[], [], [], [], ...['C5', 'C#5', 'C#5', 'C5'].map((note): Placed[] => [[0, note, 16, 0.5]])] },
       drums: [{}, {}, {}, {}, { closedHH: HATS16 }, { closedHH: HATS16 }, { closedHH: HATS16 }, CIRCUIT_SWEEP],
+      // The hats brighten with the arpeggio's filter, and the last four snares climb into the Pulse.
+      drumAutomation: { closedHH: { tone: ramp(BARS_8, 0.3, 0.95) }, snare: { tune: segment(BARS_8, 124, [-0.3, -0.1, 0.2, 0.5]) } },
       automation: { 2: { cutoff: ramp(BARS_8, 300, 5000) }, 4: { auxBSend: held(BARS_8, 0.7) } } },
     { id: 'circuit-pulse', name: 'Pulse', color: 'violet', bars: 8,
       lanes: { 1: twice(CIRCUIT_ROOTS.map(pulse)), 2: twice(chordBars(CIRCUIT_ARPS, 16, 0.8)), 3: twice(chordBars(CIRCUIT_PADS, 16, 0.6)), 5: [[], [], [], [], ...stabs(CIRCUIT_PADS)] },
       drums: circuitBars(CIRCUIT_BEAT, []) },
     { id: 'circuit-run', name: 'Run', color: 'red', bars: 8,
       lanes: { 1: twice(CIRCUIT_ROOTS.map(pulse)), 2: twice(chordBars(CIRCUIT_ARPS, 16, 0.8)), 3: twice(chordBars(CIRCUIT_PADS, 16, 0.6)), 4: twice(RUN_TUNE), 5: twice(stabs(CIRCUIT_PADS)) },
-      drums: circuitBars(CIRCUIT_DRIVE, [0]) },
+      // The snare is dry until the last of every four bars, which rings out into the reverb.
+      drums: circuitBars(CIRCUIT_DRIVE, [0]), drumAutomation: { snare: { reverbSend: tail(8, 16, [4, 12], 4, 0.25) } } },
     // A half step up to G flat, down through E flat minor to C: the lead held, its echo growing, no kick.
     // The lead turns hollow and soft for the held tune, and the brass becomes voices.
     { id: 'circuit-undertow', name: 'Undertow', color: 'teal', bars: 8,
@@ -108,11 +119,15 @@ const NIGHT_CIRCUIT: SampleSong = {
       sounds: { 2: { preset: 'builtin-keys-polysix', sound: { gain: 1.6, arpeggiator: { enabled: true, mode: 'updown', rate: '1/16', gate: 0.55, octaves: 2 }, modMatrix: [{ source: 'velocity', destination: 'filter', depth: 0.3 }] } } },
       lanes: { 1: twice(CIRCUIT_ROOTS.map(pulse)), 2: twice(chordBars(CIRCUIT_ARPS, 16, 0.85)), 3: twice(chordBars(CIRCUIT_PADS, 16, 0.65)), 4: [...RUN_TUNE, ...HIGH_TUNE], 5: twice(stabs(CIRCUIT_PADS)) },
       drums: circuitBars(CIRCUIT_DRIVE, [0, 4]),
+      // The snare tightens upward and the hats open their tone as the lead gets dirtier.
+      drumAutomation: { snare: { tune: ramp(BARS_8, -0.15, 0.4) }, closedHH: { tone: ramp(BARS_8, 0.55, 1) } },
       automation: { 4: { drive: ramp(BARS_8, 0.1, 0.7), cutoff: ramp(BARS_8, 2500, 9000) } } },
     // The arpeggio closes again and fades; the pad is last.
     { id: 'circuit-shutdown', name: 'Shutdown', color: 'blue', bars: 8,
       lanes: { 1: [CIRCUIT_ROOTS.map(pulse)[0], [], [], [], [], [], [], []], 2: twice(chordBars(CIRCUIT_ARPS, 16, 0.7)), 3: twice(chordBars(CIRCUIT_PADS, 16, 0.5)), 4: [[[0, 'C5', 16, 0.6]], [], [], [], [], [], [], []] },
       drums: [{ kick: [[0, 0.8]], closedHH: HATS16 }, { kick: [[0, 0.6]], closedHH: HATS16 }, { kick: [[0, 0.4]] }, {}, {}, {}, {}, {}],
+      // The hats go dull as the machine shuts down.
+      drumAutomation: { closedHH: { tone: ramp(BARS_8, 0.9, 0.2) } },
       automation: { 2: { cutoff: ramp(BARS_8, 5000, 300) }, 3: { cutoff: ramp(BARS_8, 2500, 300) } } },
   ],
   // 72 bars at 104 BPM: two minutes and 46 seconds.
@@ -215,22 +230,30 @@ const DOWNTOWN_WAH: SampleSong = {
   },
   scenes: [
     // The drums and the congas alone, the bass coming in halfway.
-    { id: 'wah-street', name: 'Street', color: 'blue', bars: 8, lanes: { 1: [[], [], [], [], ...wahBass(WAH_VAMP).slice(4)] }, drums: funkBars(false) },
+    // The tambourine swells in from nothing.
+    { id: 'wah-street', name: 'Street', color: 'blue', bars: 8, lanes: { 1: [[], [], [], [], ...wahBass(WAH_VAMP).slice(4)] }, drums: funkBars(false),
+      drumAutomation: { clap: { volume: ramp(BARS_8, 0.12, 0.45) } } },
     { id: 'wah-vamp', name: 'Vamp', color: 'violet', bars: 8, lanes: { 1: wahBass(WAH_VAMP), 3: wahGuitar(WAH_VAMP) }, drums: funkBars() },
     { id: 'wah-keys', name: 'Keys', color: 'green', bars: 8, lanes: { 1: wahBass(WAH_VAMP), 2: wahKeys(WAH_VAMP), 3: wahGuitar(WAH_VAMP), 5: wahOrgan(WAH_VAMP) }, drums: funkBars(),
       automation: { 5: { level: ramp(BARS_8, 0.2, 0.7) } } },
-    { id: 'wah-trumpet', name: 'Trumpet', color: 'red', bars: 8, lanes: { 1: wahBass(WAH_VAMP), 2: wahKeys(WAH_VAMP), 3: wahGuitar(WAH_VAMP), 4: TRUMPET, 5: wahOrgan(WAH_VAMP) }, drums: funkBars() },
+    // The snare stays dry, and only the last stroke of each fill, the bigger ones most of all, rings out into the room.
+    { id: 'wah-trumpet', name: 'Trumpet', color: 'red', bars: 8, lanes: { 1: wahBass(WAH_VAMP), 2: wahKeys(WAH_VAMP), 3: wahGuitar(WAH_VAMP), 4: TRUMPET, 5: wahOrgan(WAH_VAMP) }, drums: funkBars(),
+      drumAutomation: { snare: { reverbSend: perStep(8, 16, (bar, step) => (step === 15 && bar % 2 ? (bar % 4 === 3 ? 1 : 0.6) : 0.15)) } } },
     // In six: the congas and the toms, the bass and the guitar going round, the trumpet's few notes.
     { id: 'wah-congas', name: 'Conga Break', color: 'pink', signature: '6/8', bars: 8,
       // An acoustic guitar in place of the wah for the break.
       sounds: { 3: { preset: 'builtin-pluck-nylon', sound: { inserts: { tone: 0.1 } } } },
       lanes: { 1: Array<Placed[]>(8).fill(CONGA_BASS), 3: Array<Placed[]>(8).fill(congaGuitar), 4: [[], [], [[0, 'D5', 6, 0.8], [6, 'F5', 6, 0.85]], [], [], [], [[0, 'G5', 12, 0.9]], []] },
+      // The bongos travel across the stereo field over the break, the conga a little the other way.
+      drumAutomation: { ride: { pan: ramp(8 * 12, -0.7, 0.7) }, snare2: { pan: ramp(8 * 12, 0.5, 0.1) } },
       drums: congaBars, automation: { 4: { auxASend: held(8 * 12, 0.6) } } },
     // A tenor sax takes the bridge's line from the trumpet.
     { id: 'wah-bridge', name: 'Bridge', color: 'teal', bars: 8, sounds: { 4: { preset: 'builtin-lead-tenor-sax', sound: { ...glide(0.04), gain: 2 } } }, lanes: { 1: wahBass(WAH_BRIDGE), 2: wahKeys(WAH_BRIDGE), 3: wahGuitar(WAH_BRIDGE), 4: TRUMPET_BRIDGE, 5: wahOrgan(WAH_BRIDGE) }, drums: funkBars() },
     // The keys and the trumpet go; the groove plays out and the drums have the last word.
     { id: 'wah-out', name: 'Out', color: 'blue', bars: 8, lanes: { 1: wahBass(WAH_VAMP).slice(0, 6).concat([[], []]), 3: wahGuitar(WAH_VAMP).slice(0, 4).concat([[], [], [], []]), 5: [...wahOrgan(WAH_VAMP).slice(0, 2), [], [], [], [], [], []] },
-      drums: [...funkBars().slice(0, 6), BIG_FILL, { kick: [[0, 1]], crash: [0], snare: [[0, 0.9]] }] },
+      drums: [...funkBars().slice(0, 6), BIG_FILL, { kick: [[0, 1]], crash: [0], snare: [[0, 0.9]] }],
+      // The hats fade out under the groove.
+      drumAutomation: { closedHH: { volume: ramp(BARS_8, 0.55, 0.12) } } },
   ],
   // 64 bars of 4/4 and 8 of 6/8 at 112 BPM: two minutes and 30 seconds.
   order: [['wah-street', 1], ['wah-vamp', 1], ['wah-keys', 1], ['wah-trumpet', 2], ['wah-congas', 1], ['wah-bridge', 1], ['wah-trumpet', 1], ['wah-out', 1]],
@@ -298,8 +321,12 @@ const LATE_STUDY: SampleSong = {
     // The electric piano comes in from behind a closed filter, over the pad.
     { id: 'lofi-intro', name: 'Intro', color: 'teal', bars: 8, lanes: { 2: lofiKeys(LOFI_CHORDS), 5: lofiPad(LOFI_CHORDS) },
       drums: [{}, {}, {}, {}, { closedHH: lofiHats(false) }, { closedHH: lofiHats(false) }, { closedHH: lofiHats(false) }, LOFI_TURN],
+      // The dusty hats lift their tone with the piano's filter.
+      drumAutomation: { closedHH: { tone: ramp(BARS_8, 0.15, 0.5) } },
       automation: { 2: { cutoff: ramp(BARS_8, 400, 4000) } } },
-    { id: 'lofi-loop', name: 'Loop', color: 'blue', bars: 8, lanes: { 1: lofiBass(LOFI_ROOTS), 2: lofiKeys(LOFI_CHORDS), 5: lofiPad(LOFI_CHORDS) }, drums: lofiDrums },
+    // The snare is mostly dry; the last one of every four bars sinks into the room.
+    { id: 'lofi-loop', name: 'Loop', color: 'blue', bars: 8, lanes: { 1: lofiBass(LOFI_ROOTS), 2: lofiKeys(LOFI_CHORDS), 5: lofiPad(LOFI_CHORDS) }, drums: lofiDrums,
+      drumAutomation: { snare: { reverbSend: tail(8, 16, [4, 12], 4, 0.3) } } },
     { id: 'lofi-tune', name: 'Tune', color: 'pink', bars: 8, lanes: { 1: lofiBass(LOFI_ROOTS), 2: lofiKeys(LOFI_CHORDS), 4: LOFI_TUNE, 5: lofiPad(LOFI_CHORDS) }, drums: lofiDrums },
     // The bells answer, their echo coming up.
     { id: 'lofi-bells', name: 'Bells', color: 'violet', bars: 8, lanes: { 1: lofiBass(LOFI_ROOTS), 2: lofiKeys(LOFI_CHORDS), 3: LOFI_BELLS, 4: LOFI_TUNE.map(bar => bar.slice(0, 2)), 5: lofiPad(LOFI_CHORDS) }, drums: lofiDrums,
@@ -312,6 +339,8 @@ const LATE_STUDY: SampleSong = {
       sounds: { 2: { preset: 'builtin-keys-suitcase', sound: { gain: 0.8, inserts: { drive: 0.3, tone: -0.45, chorus: { mix: 0.35, depth: 0.5, rate: 0.4 } } } } },
       lanes: { 2: lofiKeys(LOFI_CHORDS), 3: LOFI_BELLS, 4: LOFI_TUNE.map(bar => bar.slice(0, 1)), 5: lofiPad(LOFI_CHORDS) },
       drums: [LOFI_BEAT, LOFI_BEAT, { closedHH: lofiHats(false) }, { closedHH: lofiHats(false) }, {}, {}, {}, {}],
+      // The tape slows: the kick and the snare sag in pitch and the hats go dull.
+      drumAutomation: { kick: { tune: ramp(BARS_8, 0, -0.6) }, snare: { tune: ramp(BARS_8, 0, -0.6) }, closedHH: { tone: ramp(BARS_8, 0.4, 0.1) } },
       automation: { 2: { cutoff: ramp(BARS_8, 4000, 500) }, 5: { level: ramp(BARS_8, 0.6, 0.1) } } },
   ],
   // 48 bars at 80 and 8 at 74: two minutes and 50 seconds.
@@ -380,10 +409,58 @@ const meltdownReese = DNB.map((name): Placed[] => {
   return [[0, note, 3, 0.9], [6, note, 2, 0.8], [10, note, 4, 0.85]];
 });
 
+// The snare rings out into the reverb on the last hit of every fourth bar, as a break does.
+const DNB_TAIL = tail(8, 16, [4, 7, 9, 12, 15], 4, 0.25);
+
+// Axis Stack, a guest XY effects pad: each axis of its pad drives a stack of effects, and it keeps four
+// sets of them. Its settings are its own (read from its page's source) and are written here in its
+// own shape: the second set, Grit (a bit crusher and a downsampler across, a drive and a high-pass up),
+// with Discobot's drums as its source. It takes the whole drum kit through the pad, so the drums leave
+// Discobot's own mix (and its reverb send, hence `sends`) and come back through it; the four sets are
+// the ones it comes with, since it needs all four.
+//
+// The pad is played by a gesture loop in beats ('beat' unit), which follows Discobot's tempo and
+// the beat count it keeps. The beat counts on through every scene, and a 7/8 bar is three and a half
+// beats, so a scene after a Meltdown starts a whole number of bars later than one before it: the
+// loops here are one bar (4 beats) or two (8) long so they land on the bar wherever the scene begins
+// (the Meltdown's is one beat long, so it needs no landing). A scene that holds no drums does not name
+// the guest, which mutes it.
+const AXIS_GUEST: SongGuest = { id: 'c0000000-0000-4000-8000-000000000003', url: featured('Axis Stack'), name: 'Axis Stack', sends: { reverb: 0.2 } };
+const axisFx = (type: string, param: string, lo: number, hi: number, curve: string, fixed: Record<string, number> = {}, opts: Record<string, string> = {}) => ({ type, param, lo, hi, curve, on: true, fixed, opts });
+interface AxisLoop { len: number; pts: Array<[time: number, x: number, y: number]> }
+const axisSet = (name: string, restX: number, restY: number, x: ReturnType<typeof axisFx>[], y: ReturnType<typeof axisFx>[], loop?: AxisLoop) => ({
+  name, route: 'xy', restX, restY, x, y, loopOn: Boolean(loop),
+  loop: loop ? { unit: 'beat', len: loop.len, start: 0, pts: loop.pts.map(([time, px, py]) => [time, px, py, 1]) } : null,
+});
+const axisGrit = (restX: number, restY: number, loop?: AxisLoop) => ({
+  v: 1, cur: 1, sample: 0, source: { mode: 'discobot', id: 'drums', name: 'Drums' }, gate: 'latch', loopSync: true, hold: false,
+  sets: [
+    axisSet('Bend', 0, 0.5, [axisFx('delay', 'mix', 0, 0.6, 'lin', { time: 0.375, feedback: 0.45 }), axisFx('reverb', 'mix', 0, 0.35, 'in', {}, { size: 'hall' })],
+      [axisFx('pitch', 'semi', -12, 12, 'lin'), axisFx('filter', 'cutoff', 600, 16000, 'fold', { q: 5 }, { type: 'lowpass' })]),
+    axisSet('Grit', restX, restY, [axisFx('crush', 'bits', 16, 3, 'out', { rate: 1 }), axisFx('crush', 'rate', 1, 24, 'in', { bits: 16 })],
+      [axisFx('drive', 'amount', 0, 1, 'lin', { mix: 1 }), axisFx('filter', 'cutoff', 25, 1400, 'in', { q: 2 }, { type: 'highpass' })], loop),
+    axisSet('Space', 0, 0, [axisFx('flanger', 'mix', 0, 0.8, 'in', { rate: 0.25, feedback: 0.7 }), axisFx('pan', 'pan', -0.8, 0.8, 's')],
+      [axisFx('delay', 'mix', 0, 0.7, 'lin', { time: 0.5, feedback: 0.6 }), axisFx('reverb', 'mix', 0, 0.75, 'out', {}, { size: 'cave' })]),
+    axisSet('Chop', 0, 0, [axisFx('chop', 'depth', 0, 1, 'out', { rate: 8 }, { shape: 'square' }), axisFx('filter', 'cutoff', 25, 900, 'in', { q: 3 }, { type: 'highpass' })],
+      [axisFx('ring', 'mix', 0, 0.7, 'lin', { freq: 330 }), axisFx('flanger', 'mix', 0, 0.6, 'in', { rate: 2, feedback: 0.75 })]),
+  ],
+});
+// A bar of grit that swells on the half bar and settles; the intro's.
+const GRIT_FAINT = axisGrit(0.04, 0, { len: 4, pts: [[0, 0.06, 0.05], [2, 0.2, 0.12], [3.9, 0.06, 0.05]] });
+// Two bars that rise: a crushed, driven and high-passed sweep that thins the break into the drop.
+const GRIT_RISER = axisGrit(0, 0, { len: 8, pts: [[0, 0.1, 0.05], [3.9, 0.35, 0.3], [4, 0.3, 0.2], [7.9, 0.85, 0.9]] });
+// A crunch on each snare (beats 1 and 3), clean between.
+const GRIT_CRUNCH = axisGrit(0, 0, { len: 4, pts: [[0, 0.05, 0.05], [0.9, 0.05, 0.05], [1, 0.55, 0.2], [1.4, 0.1, 0.05], [2.9, 0.05, 0.05], [3, 0.7, 0.35], [3.5, 0.1, 0.05], [3.9, 0.05, 0.05]] });
+const GRIT_HEAVY = axisGrit(0, 0, { len: 4, pts: [[0, 0.1, 0.15], [0.9, 0.1, 0.15], [1, 0.7, 0.45], [1.5, 0.15, 0.2], [2, 0.1, 0.15], [2.9, 0.1, 0.15], [3, 0.85, 0.55], [3.5, 0.2, 0.2], [3.9, 0.1, 0.15]] });
+// Half a beat on, half a beat off, as the drums go mad.
+const GRIT_FLUTTER = axisGrit(0, 0, { len: 1, pts: [[0, 0.25, 0.2], [0.45, 0.25, 0.2], [0.5, 0.8, 0.55], [0.95, 0.8, 0.55]] });
+// No gesture, the pad resting a little off its corner.
+const GRIT_REST = axisGrit(0.12, 0.08);
+
 const FRACTURE_LINE: SampleSong = {
   id: 'fracture-line', name: 'Fracture Line', genre: 'Drum and bass',
   hint: 'Drum and bass in F sharp minor at 174 BPM: a sub bass under a Reese whose filter opens by automation, a dark pad, chord stabs, a glass lead into an echo, an Amen-style break with ghost notes left to chance, and two Meltdowns in 7/8 where every drum plays repeats of three and four in a step, more of them and harder every bar',
-  tempo: 174, kit: 'recorded', drumVolume: 0.75, level: 0.6,
+  tempo: 174, kit: 'recorded', drumVolume: 0.75, level: 0.6, guests: [AXIS_GUEST],
   lanes: [
     { preset: 'builtin-bass-sub', name: 'Sub', sound: { duck: 0.3, fxSends: { reverb: 0 } } },
     { preset: 'builtin-bass-reese', name: 'Reese', sound: { duck: 0.25, inserts: { drive: 0.3 }, fxSends: { reverb: 0.05 } } },
@@ -402,24 +479,38 @@ const FRACTURE_LINE: SampleSong = {
     // The pad and the lead behind closed filters, then the hats.
     { id: 'fracture-intro', name: 'Intro', color: 'blue', bars: 8, lanes: { 3: dnbPad(0.6), 5: GLASS },
       drums: [{}, {}, {}, {}, ...Array<Hits>(4).fill({ closedHH: DNB_HATS })],
+      // The hats come up from nothing, and the drums go through Axis Stack's Grit with a faint crunch.
+      drumAutomation: { closedHH: { volume: segment(BARS_8, 64, ramp(64, 0.12, 0.4)) } },
+      guests: { [AXIS_GUEST.id]: { volume: 1, state: GRIT_FAINT } },
       automation: { 3: { cutoff: ramp(BARS_8, 400, 3000) }, 5: { cutoff: ramp(BARS_8, 600, 6000), auxBSend: held(BARS_8, 0.5) } } },
     // The Reese rising out of the dark, the break coming in, and a snare roll.
+    // The last bar's snare roll gets louder and wetter, and the pad's grit rises twice over the scene.
     { id: 'fracture-build', name: 'Build', color: 'violet', bars: 8, lanes: { 2: reeseHeld, 3: dnbPad(0.55) }, drums: BUILD_BEATS,
+      drumAutomation: { snare: { volume: segment(BARS_8, 112, ramp(16, 0.5, 0.95)), reverbSend: segment(BARS_8, 112, ramp(16, 0.2, 1)) } },
+      guests: { [AXIS_GUEST.id]: { volume: 1, state: GRIT_RISER } },
       automation: { 2: { cutoff: ramp(BARS_8, 200, 2500) } } },
+    // Dry snares, the last of every fourth bar wet; Grit crunches on each snare.
     { id: 'fracture-drop', name: 'Drop', color: 'red', bars: 8, lanes: { 1: sub, 2: reese, 3: dnbPad(0.4), 4: dnbStabs }, drums: dnbBars,
+      drumAutomation: { snare: { reverbSend: DNB_TAIL } }, guests: { [AXIS_GUEST.id]: { volume: 1, state: GRIT_CRUNCH } },
       automation: { 2: { cutoff: held(BARS_8, 2500) } } },
     { id: 'fracture-lead', name: 'Lead', color: 'pink', bars: 8, lanes: { 1: sub, 2: reese, 3: dnbPad(0.4), 4: dnbStabs, 5: GLASS }, drums: dnbBars,
+      drumAutomation: { snare: { reverbSend: DNB_TAIL } }, guests: { [AXIS_GUEST.id]: { volume: 1, state: GRIT_HEAVY } },
       automation: { 2: { cutoff: ramp(BARS_8, 1800, 4500) } } },
     // The drums go mad, in seven.
     // The Reese turns into a wobble bass, dirtier.
     { id: 'fracture-meltdown', name: 'Meltdown', color: 'red', signature: '7/8', bars: 8, sounds: { 2: { preset: 'builtin-bass-wobble', sound: { inserts: { drive: 0.35 } } } }, lanes: { 1: meltdownSub, 2: meltdownReese, 3: dnbPad(0.35, 14) }, drums: MELTDOWN,
+      // The ride and the low tom cross the stereo field in opposite directions as the heat rises.
+      drumAutomation: { ride: { pan: ramp(8 * 14, -0.8, 0.8) }, snare2: { pan: ramp(8 * 14, 0.8, -0.8) } },
+      guests: { [AXIS_GUEST.id]: { volume: 1, state: GRIT_FLUTTER } },
       automation: { 2: { cutoff: ramp(8 * 14, 1500, 6000) } } },
-    // No drums: the pad, the lead deep in the hall, the Reese low and closed.
+    // No drums: the pad, the lead deep in the hall, the Reese low and closed. Axis Stack, which holds the drums, is not named here, so it is muted: nothing to crunch, and the break is clean.
     // The glass lead's tune on bell keys.
     { id: 'fracture-breakdown', name: 'Breakdown', color: 'teal', bars: 8, sounds: { 5: { preset: 'builtin-keys-d50-bell' } }, lanes: { 2: reeseHeld, 3: dnbPad(0.6), 5: GLASS }, drums: Array<Hits>(8).fill({}),
       automation: { 2: { cutoff: held(BARS_8, 400) }, 5: { auxBSend: held(BARS_8, 0.8) } } },
     { id: 'fracture-outro', name: 'Outro', color: 'blue', bars: 8, lanes: { 1: [...sub.slice(0, 2), [], [], [], [], [], []], 3: dnbPad(0.5), 5: GLASS.map(bar => bar.slice(0, 1)) },
       drums: [AMEN, AMEN_B, { closedHH: DNB_HATS }, { closedHH: DNB_HATS }, { closedHH: DNB_HATS.slice(0, 8) }, {}, {}, {}],
+      // The hats fade out; the pad rests at a hint of Grit.
+      drumAutomation: { closedHH: { volume: ramp(BARS_8, 0.4, 0.08) } }, guests: { [AXIS_GUEST.id]: { volume: 1, state: GRIT_REST } },
       automation: { 3: { cutoff: ramp(BARS_8, 3000, 300) } } },
   ],
   // 88 bars of 4/4 and 16 of 7/8 at 174 BPM: two minutes and 21 seconds.
@@ -490,14 +581,20 @@ const MARKET_DAY: SampleSong = {
     aux: [{ kind: 'echo', level: 0.6, main: 0.469, shape: 0.4, sync: '1/8' }, { kind: 'hall', level: 0.8, main: 2.5, shape: 0.4 }],
   },
   scenes: [
+    // The shaker swells in from nothing.
     { id: 'market-start', name: 'Percussion', color: 'teal', signature: '12/8', bars: 4, lanes: {},
+      drumAutomation: { clap: { volume: ramp(4 * 24, 0.12, 0.55) } },
       drums: [MARKET_BREAK, { ...MARKET_BREAK, snare2: MARKET_GROOVE.snare2 }, { ...MARKET_GROOVE, kick: [] }, MARKET_FILL] },
-    { id: 'market-groove', name: 'Groove', color: 'green', signature: '12/8', bars: 4, lanes: { 1: marketBass, 2: guitar, 3: marimba }, laneBars: { 3: 2 }, drums: marketBars },
+    { id: 'market-groove', name: 'Groove', color: 'green', signature: '12/8', bars: 4, lanes: { 1: marketBass, 2: guitar, 3: marimba }, laneBars: { 3: 2 }, drums: marketBars,
+      // The shaker travels across the stereo field.
+      drumAutomation: { clap: { pan: ramp(4 * 24, -0.7, 0.7) } } },
     { id: 'market-horns', name: 'Horns', color: 'pink', signature: '12/8', bars: 4, lanes: { 1: marketBass, 2: guitar, 3: marimba, 4: HORNS, 5: marketOrgan }, laneBars: { 3: 2 }, drums: marketBars },
     // The drums and the bass drop out; the organ, the guitar and the bell are left, and the horns call.
     // A kalimba in place of the guitar.
     { id: 'market-break', name: 'Break', color: 'blue', signature: '12/8', bars: 4, sounds: { 2: { preset: 'builtin-pluck-kalimba' } }, lanes: { 2: guitar, 4: [[], [], [], HORNS[1]], 5: marketOrgan },
       drums: [MARKET_BREAK, MARKET_BREAK, MARKET_BREAK, { ...MARKET_BREAK, snare2: MARKET_FILL.snare2 }],
+      // The bell rings further into the room as the break goes on.
+      drumAutomation: { crash: { reverbSend: ramp(4 * 24, 0.3, 1) } },
       automation: { 2: { cutoff: ramp(STEPS_12, 800, 5000) } } },
     // Bigger brass for the shout.
     { id: 'market-shout', name: 'Shout', color: 'red', signature: '12/8', bars: 4, sounds: { 4: { preset: 'builtin-keys-jupiter' } }, lanes: { 1: marketBass, 2: guitar, 3: marimba, 4: HORN_SHOUT, 5: marketOrgan }, laneBars: { 3: 2 },
@@ -558,12 +655,18 @@ const CATHEDRAL: SampleSong = {
     aux: [{ kind: 'echo', level: 0.55, main: 0.833, shape: 0.5, sync: '1/4' }, { kind: 'hall', level: 0.85, main: 5, shape: 0.25 }],
   },
   scenes: [
-    { id: 'cathedral-nave', name: 'Nave', color: 'blue', signature: '5/4', bars: 4, lanes: { 2: organ }, drums: [{}, {}, HEART, HEART] },
-    { id: 'cathedral-harp', name: 'Harp', color: 'green', signature: '5/4', bars: 4, lanes: { 2: organ, 4: harp(ORGAN_CHORDS, 0.6) }, drums: [HEART, HEART, HEART, HEART] },
+    { id: 'cathedral-nave', name: 'Nave', color: 'blue', signature: '5/4', bars: 4, lanes: { 2: organ }, drums: [{}, {}, HEART, HEART],
+      // The heart grows stronger.
+      drumAutomation: { kick: { volume: ramp(STEPS_5, 0.25, 0.7) } } },
+    { id: 'cathedral-harp', name: 'Harp', color: 'green', signature: '5/4', bars: 4, lanes: { 2: organ, 4: harp(ORGAN_CHORDS, 0.6) }, drums: [HEART, HEART, HEART, HEART],
+      // Each beat rings longer.
+      drumAutomation: { kick: { extra: ramp(STEPS_5, 0.3, 0.9) } } },
     // Choir sings with the recorded voices: four voices, slow to start and slow to let go.
     { id: 'cathedral-choir', name: 'Choir', color: 'violet', signature: '5/4', bars: 4,
       guests: { [CHOIR_GUEST.id]: { volume: 0.55, state: choirSings({ voices: 4, harmonic: 20, pitchRange: 1, pitchEvolution: 25, attack: 120, release: 300, filterCutoff: 1800, reverbMix: 45, vowelRate: 0.25 }) } },
       lanes: { 1: swell, 2: organ, 3: CHANT, 4: harp(ORGAN_CHORDS, 0.45), 5: choir }, drums: [HEART, HEART, HEART, HEART],
+      // The heart slows and sinks in pitch with the choir.
+      drumAutomation: { kick: { tune: ramp(STEPS_5, 0, -0.4), extra: held(STEPS_5, 0.9) } },
       automation: { 3: auxSwell } },
     // Without the heartbeat, slower, the last chord turned to E major.
     // The chant on a soft lead; Choir opens up, six voices higher and brighter.
@@ -682,14 +785,20 @@ const LANTERNS: SampleSong = {
       automation: { 2: { reverbSend: held(BARS_8, 0.7), auxBSend: held(BARS_8, 0.6) }, 3: { auxBSend: held(BARS_8, 0.85) } } },
     // The wall climbs out of nothing: louder, brighter and dirtier with every step.
     { id: 'lanterns-rise', name: 'Rise', color: 'pink', bars: 8, lanes: { 1: bassHeld, 2: picking(0.9), 4: tremolo, 5: strings }, drums: RISE_BEATS,
+      // The snare is dry at first and washes out into the Storm.
+      drumAutomation: { snare: { reverbSend: ramp(BARS_8, 0.2, 1) } },
       automation: { 4: { level: ramp(BARS_8, 0.03, 0.7), cutoff: ramp(BARS_8, 700, 9000), drive: ramp(BARS_8, 0, 0.6) }, 5: { level: ramp(BARS_8, 0.5, 0.85) } } },
     // Brighter strings for the storm.
     { id: 'lanterns-storm', name: 'Storm', color: 'red', bars: 8, sounds: { 5: { preset: 'builtin-pad-jp' } }, lanes: { 1: bassDriving, 2: picking(1), 3: GLOCK, 4: tremolo, 5: strings }, drums: stormBeats,
+      // In the last bar's fill the ride and the low tom cross the stereo field.
+      drumAutomation: { ride: { pan: segment(BARS_8, 123, [-0.7, 0.7]) }, snare2: { pan: segment(BARS_8, 125, [0.7, -0.7]) } },
       automation: { 1: { drive: held(BARS_8, 0.5) } } },
     { id: 'lanterns-break', name: 'Break', color: 'violet', bars: 8, lanes: { 3: GLOCK, 5: strings }, drums: nothing,
       automation: { 3: { auxBSend: held(BARS_8, 0.9) }, 5: { reverbSend: held(BARS_8, 0.8), level: ramp(BARS_8, 0.65, 0.4) } } },
     // The wall dies away, and the guitar's echo takes over.
     { id: 'lanterns-fall', name: 'Fall', color: 'pink', bars: 8, lanes: { 1: bassHeld, 2: picking(0.9), 3: GLOCK, 4: tremolo, 5: strings }, drums: FALL_BEATS,
+      // The kick and snare sink into the reverb as the wall dies.
+      drumAutomation: { snare: { reverbSend: ramp(BARS_8, 0.4, 1) }, kick: { reverbSend: ramp(BARS_8, 0.3, 0.9) } },
       automation: { 4: { level: ramp(BARS_8, 0.7, 0), cutoff: ramp(BARS_8, 9000, 500) }, 2: { auxASend: ramp(BARS_8, 0.45, 0.8) } } },
     // The guitar's filter closes and the room fills with its reverb.
     // A felt piano picks it at the end, its filter closing all the same.
@@ -824,12 +933,18 @@ const SILVER_SATELLITE: SampleSong = {
     { id: 'satellite-countdown', name: 'Countdown', color: 'blue', bars: 8, tempo: 96,
       lanes: { 2: discoArp(ORBIT), 3: discoStrings(ORBIT), 4: COUNTDOWN_LINE },
       drums: [{}, {}, {}, {}, {}, {}, {}, LAUNCH_ROLL],
+      // The launch roll climbs in pitch.
+      drumAutomation: { snare: { tune: segment(BARS_8, 112, ramp(16, -0.4, 0.6)) } },
       automation: { 2: { cutoff: ramp(BARS_8, 300, 4000) }, 3: { level: ramp(BARS_8, 0.2, 0.75) }, 4: { auxBSend: held(BARS_8, 0.6) } } },
     { id: 'satellite-liftoff', name: 'Lift-off', color: 'teal', bars: 8,
       lanes: { 1: octaveBass(ORBIT), 2: discoArp(ORBIT), 3: discoStrings(ORBIT), 5: [[], [], [], [], ...clav(ORBIT).slice(4)] },
+      // The open hats ring longer as the scene goes on.
+      drumAutomation: { openHH: { extra: ramp(BARS_8, 0.25, 0.85) } },
       drums: discoBars(DISCO_BEAT, true) },
     { id: 'satellite-orbit', name: 'Orbit', color: 'violet', bars: 8,
       lanes: { 1: octaveBass(ORBIT), 2: discoArp(ORBIT), 3: discoStrings(ORBIT), 4: THEME, 5: clav(ORBIT) },
+      // The tom fill at the end of the eight bars runs across the stereo field.
+      drumAutomation: { snare2: { pan: segment(BARS_8, 124, [-0.9, -0.3, 0.3, 0.9]) } },
       drums: discoBars(DISCO_BEAT, true) },
     // The groove with its bass, arpeggio, kick and clap muted here, and the lead's two bars echoing.
     { id: 'satellite-starfield', name: 'Starfield', color: 'blue', bars: 8, laneBars: { 4: 2 },
@@ -857,12 +972,16 @@ const SILVER_SATELLITE: SampleSong = {
       sounds: { 2: { preset: 'builtin-pluck-pro', sound: { arpeggiator: { enabled: true, mode: 'up', rate: '1/16', gate: 0.45, octaves: 2 } } } },
       guests: { [RHYTHM_GUEST.id]: { volume: 0.4, state: LR_HYPER } },
       lanes: { 1: octaveBass(ORBIT), 2: discoArp(ORBIT), 3: discoStrings(ORBIT), 4: THEME, 5: clav(ORBIT) },
+      // The hats get brighter all the way.
+      drumAutomation: { closedHH: { tone: ramp(BARS_8, 0.4, 1) } },
       drums: discoBars({ ...DISCO_BEAT, openHH: OFFBEATS.map(([step]): [number, number] => [step, 0.65]) }, true).map((bar, index) => (index === 4 ? { ...bar, crash: [0] } : bar)),
       automation: { 1: { drive: held(BARS_8, 0.3) }, 2: { cutoff: held(BARS_8, 7000) }, 4: { auxASend: held(BARS_8, 0.4) } } },
     // The arpeggio closing, the kick fading out, the lead's last note held.
     { id: 'satellite-reentry', name: 'Re-entry', color: 'blue', bars: 8,
       lanes: { 2: discoArp(ORBIT), 3: discoStrings([...ORBIT.slice(0, 7), 'Am']), 4: [[], [], [], [], [], [], [[0, 'E5', 16, 0.6]], [[0, 'A4', 16, 0.55]]] },
       drums: [...REENTRY_BEATS, {}, {}, {}, {}],
+      // The open hats dull as the signal fades.
+      drumAutomation: { openHH: { tone: ramp(BARS_8, 0.8, 0.2) } },
       automation: { 2: { cutoff: ramp(BARS_8, 5000, 300) }, 3: { level: ramp(BARS_8, 0.75, 0.2) } } },
   ],
   // The countdown's 8 bars at 96 BPM are 20 seconds; the other 140 bars at 120 are 280: five minutes.
@@ -944,17 +1063,22 @@ const LONG_ASCENT: SampleSong = {
     // Eighths, and the hats.
     { id: 'ascent-sprout', name: 'Sprout', color: 'teal', bars: 8, lanes: { 2: figure(ASCENT, 2) },
       drums: [{}, {}, {}, {}, ...Array<Hits>(3).fill({ closedHH: ASCENT_HATS }), { closedHH: ASCENT_HATS, snare: [[12, 0.4], [14, 0.5]] }],
+      // The hats' tone opens with the filter, section by section: here from dull to a little brighter.
+      drumAutomation: { closedHH: { tone: ramp(BARS_8, 0.3, 0.5) } },
       automation: { 2: { cutoff: ramp(BARS_8, 900, 1600) } } },
     // Sixteenths, the kick and the off-beat bass.
     { id: 'ascent-pulse', name: 'Pulse', color: 'green', bars: 8, lanes: { 1: offBass(ASCENT), 2: figure(ASCENT, 1) },
       drums: ascentBars({ ...ASCENT_KICK, closedHH: ASCENT_HATS }),
+      drumAutomation: { closedHH: { tone: ramp(BARS_8, 0.5, 0.65) } },
       automation: { 2: { cutoff: ramp(BARS_8, 1600, 2500) } } },
     { id: 'ascent-growth', name: 'Growth', color: 'violet', bars: 8, lanes: { 1: offBass(ASCENT), 2: figure(ASCENT, 1), 5: counter(ASCENT) },
       drums: ascentBars(ASCENT_GROOVE),
+      drumAutomation: { closedHH: { tone: ramp(BARS_8, 0.65, 0.8) }, openHH: { extra: ramp(BARS_8, 0.3, 0.6) } },
       automation: { 2: { cutoff: ramp(BARS_8, 2500, 4000) } } },
     // The figure leaps an octave on every other note; the strings come in.
     { id: 'ascent-canopy', name: 'Canopy', color: 'pink', bars: 8, lanes: { 1: offBass(ASCENT), 2: figure(ASCENT, 1, true), 3: ascentStrings(ASCENT), 5: counter(ASCENT) },
       drums: ascentBars(ASCENT_GROOVE),
+      drumAutomation: { closedHH: { tone: ramp(BARS_8, 0.8, 0.95) }, openHH: { extra: ramp(BARS_8, 0.6, 0.9) } },
       automation: { 2: { cutoff: ramp(BARS_8, 4000, 6000) } } },
     // The drums go; the strings and a slow line on the saw over the figure in eighths, the filter half closed.
     // The slow line on a soft lead, saving the saw for the summit.
@@ -964,6 +1088,8 @@ const LONG_ASCENT: SampleSong = {
     // The snare rolls in, the figure back in sixteenths, its filter opening all the way.
     { id: 'ascent-lift', name: 'Lift', color: 'teal', bars: 8, lanes: { 2: figure(ASCENT_BREAK, 1), 3: ascentStrings(ASCENT_BREAK), 5: counter(ASCENT_BREAK) },
       drums: LIFT_ROLL,
+      // The snare rolls up in pitch and washes out into the summit.
+      drumAutomation: { snare: { tune: ramp(BARS_8, -0.5, 0.6), reverbSend: ramp(BARS_8, 0.3, 1) } },
       automation: { 2: { cutoff: ramp(BARS_8, 1400, 9000) }, 3: { level: ramp(BARS_8, 0.4, 0.9) } } },
     { id: 'ascent-summit', name: 'Summit', color: 'red', bars: 8, lanes: { 1: offBass(ASCENT), 2: figure(ASCENT, 1, true), 3: ascentStrings(ASCENT), 4: summitChords, 5: counter(ASCENT) },
       drums: ascentBars({ ...ASCENT_GROOVE, ride: [[2, 0.4], [6, 0.4], [10, 0.4], [14, 0.4]] }).map((bar, index) => (index === 4 ? { ...bar, crash: [0] } : bar)),
@@ -971,6 +1097,8 @@ const LONG_ASCENT: SampleSong = {
     // Down the way it came: the bass and the counter-figure go, the filter closes.
     { id: 'ascent-afterglow', name: 'Afterglow', color: 'violet', bars: 8, lanes: { 2: figure(ASCENT, 2), 3: ascentStrings(ASCENT) },
       drums: [ASCENT_GROOVE, ASCENT_GROOVE, ASCENT_KICK, ASCENT_KICK, { closedHH: ASCENT_HATS }, { closedHH: ASCENT_HATS }, {}, {}],
+      // The hats go dull again, the way the filter closes.
+      drumAutomation: { closedHH: { tone: ramp(BARS_8, 0.9, 0.3) } },
       automation: { 2: { cutoff: ramp(BARS_8, 5000, 1200) }, 3: { level: ramp(BARS_8, 0.8, 0.4) } } },
     { id: 'ascent-last', name: 'Last Note', color: 'blue', bars: 8, lanes: { 2: [...figure(ASCENT, 4).slice(0, 7), [[0, 'D4', 16, 0.7]]], 3: [...ascentStrings(ASCENT).slice(0, 7), [[0, ['D3', 'F3', 'A3', 'D4'], 16, 0.55]]] },
       drums: Array(8).fill({}),

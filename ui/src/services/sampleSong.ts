@@ -17,6 +17,10 @@ export type Placed = [step: number, notes: string | string[], length?: number, v
 export type Hits = Partial<Record<DrumInstrument, Array<number | [step: number, velocity: number, repeats?: number, chance?: number]>>>;
 // A lane by its number, 1 to 5.
 type Lanes = number;
+// The settings of a drum that can be automated (docs/DRUM_AUTOMATION_PLAN.md): a value or null for
+// every step of the scene's drum grid.
+export type DrumAutomationKey = 'volume' | 'tone' | 'extra' | 'tune' | 'pan' | 'delaySend' | 'reverbSend';
+export type DrumAutomationSpec = Partial<Record<DrumInstrument, Partial<Record<DrumAutomationKey, Array<number | null>>>>>;
 
 export interface SongScene {
   id: string;
@@ -43,6 +47,10 @@ export interface SongScene {
   // each guest's settings, level and mute in this scene, by the song's id for it; a guest the scene
   // does not name is muted in it. The settings are the guest's own, and only it reads them.
   guests?: Record<string, { state?: unknown; volume?: number }>;
+  // a drum's settings that move through the scene, a value or nothing for every step of its drum
+  // grid (bars times the bar's sixteenths): a hit on a step with a value plays with it in place of
+  // the drum's own setting
+  drumAutomation?: DrumAutomationSpec;
   drums: Hits[];
 }
 
@@ -125,6 +133,7 @@ function grid(scene: SongScene): Scene['drums'] {
   return Object.fromEntries(DRUMS.map((instrument) => {
     const steps = Array<boolean>(length).fill(false), stepVelocities = Array<number>(length).fill(1), stepRatchets = Array<number>(length).fill(1);
     const stepProbabilities = Array<number>(length).fill(1);
+    const automation = scene.drumAutomation?.[instrument];
     scene.drums.forEach((bar, index) => {
       for (const hit of bar[instrument] ?? []) {
         const [step, velocity, repeats = 1, chance = 1] = Array.isArray(hit) ? hit : [hit, 1];
@@ -137,6 +146,7 @@ function grid(scene: SongScene): Scene['drums'] {
     return [instrument, {
       steps, stepVelocities, ...(stepProbabilities.some(chance => chance < 1) ? { stepProbabilities } : {}),
       ...(stepRatchets.some(count => count > 1) ? { stepRatchets } : {}),
+      ...(automation && Object.keys(automation).length > 0 ? { stepAutomation: structuredClone(automation) as Automation } : {}),
     }];
   })) as Scene['drums'];
 }
@@ -209,7 +219,7 @@ export function buildSampleSong(file: unknown, sounds: Sound[], song: SampleSong
   });
   for (const instrument of DRUMS) {
     const was = project.drumState[instrument];
-    const { stepProbabilities: _p, stepRatchets: _r, sampleId: _s, ...kept } = was;
+    const { stepProbabilities: _p, stepRatchets: _r, stepAutomation: _a, sampleId: _s, ...kept } = was;
     project.drumState[instrument] = {
       ...kept, ...open.drums[instrument], muted: Boolean(openScene.mutes?.drums?.includes(instrument)), solo: false,
       settings: { ...was.settings, ...(song.drums?.[instrument] ?? {}) },

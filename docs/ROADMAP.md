@@ -1292,8 +1292,9 @@ Replaced on 2026-10-19 by "The plan from here" at the top of this file.
   drum's level, tone, second knob, tune, pan and its sends to the delay and the
   reverb, drawn in a row under the drum grid for the selected drum, recorded by
   Auto, carried by every edit that moves drum steps, and played the same live
-  and in exports. Stage 1 built; stage 2 (the sample songs using it, and Axis
-  Stack on Fracture Line) is not. Not verified by ear.
+  and in exports. Stage 1 built; stage 2 built too (every sample song uses it,
+  and Axis Stack holds Fracture Line's drums on its Grit set). Not verified by
+  ear, and the guest's part is not measured.
 
 ## Ideas folded in from roadmap v2
 
