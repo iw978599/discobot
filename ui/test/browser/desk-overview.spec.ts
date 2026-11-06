@@ -116,3 +116,32 @@ test('with the desk off there is no overview', async ({ page }) => {
   await open(page, 'rack');
   await expect(page.locator('.desk-cell, .desk-grid, .desk-ruler')).toHaveCount(0);
 });
+
+test('a drum\'s automation shows in the overview: a mark on the folded line and a strip under the open drum', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: 'Show Drums in the dock', exact: true }).click();
+  const drums = unit(page, 'drums');
+  await drums.getByRole('button', { name: 'Select Snare', exact: true }).click();
+  await drums.getByLabel('Snare automation parameter', { exact: true }).selectOption('tune');
+  await drums.getByRole('slider', { name: 'Snare Tune automation, step 3', exact: true }).focus();
+  await page.keyboard.press('End');
+  await expect.poll(async () => (await stored(page)).drumState.snare.stepAutomation?.tune?.[2]).toBe(1);
+
+  // Folded, the step is marked on the one line; the steps without automation are not.
+  await expect(cell(page, 'Drums step 3')).toHaveClass(/\bauto\b/);
+  await expect(cell(page, 'Drums step 4')).not.toHaveClass(/\bauto\b/);
+
+  // Open, the Snare has a strip for its tune, with a bar on step 3 alone; the Kick has none.
+  await page.getByRole('button', { name: 'Drum rows', exact: true }).click();
+  const strip = page.getByRole('button', { name: 'Snare Tune automation, 1 of 16 steps set. Show it in the dock', exact: true });
+  await expect(strip).toBeVisible();
+  await expect(strip.locator('i.set')).toHaveCount(1);
+  await expect(strip.locator('i').nth(2)).toHaveClass(/\bset\b/);
+  await expect(page.getByRole('button', { name: /^Kick .* automation, / })).toHaveCount(0);
+
+  // Pressing it shows the drums in the dock, and clearing the automation takes the strip away.
+  await strip.click();
+  await expect(drums).toBeVisible();
+  await drums.getByRole('button', { name: 'Clear this automation', exact: true }).click();
+  await expect(strip).toHaveCount(0);
+});

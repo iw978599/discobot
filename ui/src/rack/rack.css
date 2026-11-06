@@ -1529,6 +1529,30 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
   :root[data-layout="desk"] .desk-cell.on.chance.ghost::before { opacity: 0.4; }
   :root[data-layout="desk"] .desk-cell.selected { background: var(--surface-hover); box-shadow: inset 0 0 0 1px var(--gap), inset 0 0 0 3px var(--select), inset 0 0 0 4px var(--gap); }
   :root[data-layout="desk"] .desk-cell.now::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--lit); }
+  /* Drum automation (DeskAutomationStrips): a mark along the foot of a folded step that has some, and
+     under an open drum's cells a strip for each automated setting, its bars as high as the values. */
+  :root[data-layout="desk"] .desk-cell.auto {
+    background-image: linear-gradient(var(--value), var(--value)); background-repeat: no-repeat; background-size: 60% 2px; background-position: center bottom 1px;
+  }
+  :root[data-layout="desk"] .desk-auto-strips { grid-column: -2 / -1; display: flex; flex-direction: column; gap: 1px; min-width: 0; padding-top: 1px; }
+  :root[data-layout="desk"] .desk-auto-strip {
+    position: relative; display: grid; min-width: 0; height: 18px; padding: 0; border: 0; border-radius: var(--corner-control);
+    background: var(--surface-inset); cursor: pointer; overflow: hidden;
+  }
+  :root[data-layout="desk"] .desk-auto-strip > i { position: relative; min-width: 0; border-left: 1px solid var(--edge-faint); }
+  :root[data-layout="desk"] .desk-auto-strip > i.bar { border-left-color: var(--edge-strong); }
+  :root[data-layout="desk"] .desk-auto-strip > i.set::before {
+    content: ''; position: absolute; left: 1px; right: 1px; bottom: var(--from); height: max(2px, var(--size)); background: var(--value); opacity: 0.85;
+  }
+  :root[data-layout="desk"] .desk-auto-strip > i.ghost.set::before { opacity: 0.35; }
+  :root[data-layout="desk"] .desk-auto-label {
+    position: absolute; left: 3px; top: 50%; transform: translateY(-50%); padding: 0 3px; border-radius: var(--corner-control);
+    background: var(--surface-inset); color: var(--text-faint); font-size: var(--type-caption); line-height: 1.2; pointer-events: none;
+  }
+  @media (hover: hover) {
+    :root[data-layout="desk"] .desk-auto-strip:hover { box-shadow: inset 0 0 0 1px var(--hover); }
+  }
+  :root[data-layout="desk"] .rack-page .desk-auto-strip:focus-visible { outline-offset: -2px; box-shadow: inset 0 0 0 4px var(--gap); }
   @media (hover: hover) {
     :root[data-layout="desk"] .desk-cell:hover { background: var(--surface-hover); }
   }

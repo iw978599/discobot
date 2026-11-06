@@ -12,6 +12,8 @@ import { drumLine, overviewColumns, toggledNotes } from '../services/deskOvervie
 import { stepNotes } from '../services/noteScheduling';
 import { drumSelection } from '../services/drumSelection';
 import DeskCells, { type DeskCellData } from './DeskCells';
+import DeskAutomationStrips from './DeskAutomationStrips';
+import { drumAutomatedKeys } from '../services/drumAutomation';
 import { DeskViewSwitch } from './DeskSong';
 import type { DeskView } from '../services/deskSong';
 
@@ -147,6 +149,12 @@ const DrumRowTrack = memo(function DrumRowTrack({ row, data, bars, signature, pi
           if (!shift) actions.toggleDrum(row, cell.step, !data.steps[cell.step]);
         }}
       />
+      <DeskAutomationStrips
+        name={name}
+        automation={data.stepAutomation}
+        columns={cells}
+        onShow={() => { actions.show('drums'); drumSelection.pick(row, picked ?? 0); }}
+      />
     </li>
   );
 });
@@ -158,10 +166,13 @@ function DrumsTrack({ drums, here, open, bars, signature, playing, actions }: { 
   const perBar = barSteps(signature);
   const length = drums.kick?.steps.length ?? perBar;
   const combined = useMemo<DeskCellData[]>(() => {
-    const line = drumLine(shownDrumRows(drums).map(row => (drums as unknown as Rows)[row]), length);
+    const tracks = shownDrumRows(drums).map(row => (drums as unknown as Rows)[row]);
+    const line = drumLine(tracks, length);
+    // A step where any drum has automation is marked, so it shows with the drums folded.
+    const automated = (step: number) => tracks.some(track => drumAutomatedKeys(track?.stepAutomation).some(key => track!.stepAutomation![key][step] !== null && track!.stepAutomation![key][step] !== undefined));
     return overviewColumns(length, perBar, Math.max(bars, length / perBar), signature).map(cell => ({
-      ...cell, on: line[cell.step].on, strength: line[cell.step].velocity, dashed: false, selected: false,
-      title: 'Press to open the drums into their rows',
+      ...cell, on: line[cell.step].on, strength: line[cell.step].velocity, dashed: false, selected: false, automated: automated(cell.step),
+      title: automated(cell.step) ? 'Automated here. Press to open the drums into their rows' : 'Press to open the drums into their rows',
     }));
   }, [drums, length, perBar, bars, signature]);
   return (

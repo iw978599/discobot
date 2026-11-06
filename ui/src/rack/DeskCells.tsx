@@ -11,6 +11,8 @@ export interface DeskCellData extends OverviewCell {
   // A hit that may not play (chance below one), drawn dashed as the drum grid does.
   dashed: boolean;
   selected: boolean;
+  // Something on this step is automated (the drums' folded line): a mark along the cell's foot.
+  automated?: boolean;
   text?: string;
   title?: string;
 }
@@ -72,7 +74,7 @@ export default function DeskCells({ name, cells, stepCount, lane, playing, onCel
         return (
           <button
             key={cell.column}
-            className={`desk-cell${cell.on ? ' on' : ''}${cell.dashed ? ' chance' : ''}${cell.ghost ? ' ghost' : ''}${cell.selected ? ' selected' : ''}${cell.beat ? ' beat' : ''}${cell.barStart ? ' bar' : ''}`}
+            className={`desk-cell${cell.on ? ' on' : ''}${cell.dashed ? ' chance' : ''}${cell.ghost ? ' ghost' : ''}${cell.selected ? ' selected' : ''}${cell.beat ? ' beat' : ''}${cell.barStart ? ' bar' : ''}${cell.automated ? ' auto' : ''}`}
             data-step={cell.ghost ? undefined : cell.step}
             aria-label={`Overview ${name} step ${cell.step + 1}${cell.ghost ? ` repeat ${repeat + 1}` : ''}`}
             aria-pressed={pressable ? cell.on : undefined}
