@@ -7,7 +7,7 @@ import { drumsMuted } from '../services/unitActivity';
 import { laneName, laneSound, nextExtraLane, shownLanes, MAX_LANES } from '../services/lanes';
 import { laneTrack, storeDrumsOpen, storedDrumsOpen, type DeskTrack } from '../services/deskFrame';
 import { DRUM_ROW_NAMES, shownDrumRows } from '../services/drumKits';
-import { barSteps, laneBars, stepsPerBar } from '../services/patternLength';
+import { barSteps, laneBars, stepsAcross, stepsPerBar } from '../services/patternLength';
 import { drumLine, overviewColumns, toggledNotes } from '../services/deskOverview';
 import { stepNotes } from '../services/noteScheduling';
 import { drumSelection } from '../services/drumSelection';
@@ -17,7 +17,7 @@ import type { DeskView } from '../services/deskSong';
 
 // What the overview does with a cell or a header, handed down once and kept the same across renders.
 interface Actions {
-  show: (track: DeskTrack) => void;
+  show: (track: DeskTrack, from?: HTMLElement) => void;
   muteLane: (id: number, muted: boolean) => void;
   soloLane: (id: number, solo: boolean) => void;
   muteDrums: (muted: boolean) => void;
@@ -38,7 +38,8 @@ interface DeskTrackListProps {
   signature: TimeSignature | undefined;
   // Whether any music plays, which lights the drums' steps.
   playing: boolean;
-  onShow: (track: DeskTrack) => void;
+  // `from` is the header that was pressed, which a phone's sheet gives focus back to when it closes.
+  onShow: (track: DeskTrack, from?: HTMLElement) => void;
   onMuteLane: (id: number, muted: boolean) => void;
   onSoloLane: (id: number, solo: boolean) => void;
   onMuteDrums: (muted: boolean) => void;
@@ -79,7 +80,7 @@ const LaneTrack = memo(function LaneTrack({ synth, here, bars, signature, action
   return (
     <li className="desk-track" data-track={laneTrack(id)} style={{ '--track-color': `var(--track-${id})` } as CSSProperties}>
       <div className="desk-track-head">
-        <button className="desk-track-pick" aria-current={here ? 'true' : undefined} aria-label={`Show ${name} in the dock`} onClick={() => actions.show(laneTrack(id))}>
+        <button className="desk-track-pick" aria-current={here ? 'true' : undefined} aria-label={`Show ${name} in the dock`} onClick={event => actions.show(laneTrack(id), event.currentTarget)}>
           <span className="desk-track-swatch" aria-hidden="true" />
           <span className="desk-track-name">{name}</span>
           <span className="desk-track-sound">{laneSound(synth.synthModelId, getSynthModelDefinition(synth.synthModelId).name, synth.preset)}</span>
@@ -129,7 +130,7 @@ const DrumRowTrack = memo(function DrumRowTrack({ row, data, bars, signature, pi
   return (
     <li className="desk-track desk-drum-row" data-drum={row}>
       <div className="desk-track-head">
-        <button className="desk-track-pick" aria-label={`Show ${name} in the dock`} onClick={() => { actions.show('drums'); drumSelection.pick(row, picked ?? 0); }}>
+        <button className="desk-track-pick" aria-label={`Show ${name} in the dock`} onClick={event => { actions.show('drums', event.currentTarget); drumSelection.pick(row, picked ?? 0); }}>
           <span className="desk-track-swatch" aria-hidden="true" />
           <span className="desk-track-name">{name}</span>
         </button>
@@ -166,7 +167,7 @@ function DrumsTrack({ drums, here, open, bars, signature, playing, actions }: { 
   return (
     <li className="desk-track desk-drums" data-track="drums" data-open={open ? 'true' : undefined} style={{ '--track-color': 'var(--drum-kick)' } as CSSProperties}>
       <div className="desk-track-head">
-        <button className="desk-track-pick" aria-current={here ? 'true' : undefined} aria-label="Show Drums in the dock" onClick={() => actions.show('drums')}>
+        <button className="desk-track-pick" aria-current={here ? 'true' : undefined} aria-label="Show Drums in the dock" onClick={event => actions.show('drums', event.currentTarget)}>
           <span className="desk-track-swatch" aria-hidden="true" />
           <span className="desk-track-name">Drums</span>
           <span className="desk-track-sound">Drum machine</span>
@@ -212,7 +213,7 @@ export default function DeskTrackList(props: DeskTrackListProps) {
   latest.current = props;
   const [drumsOpen, setDrumsOpenState] = useState(storedDrumsOpen);
   const actions = useMemo<Actions>(() => ({
-    show: next => latest.current.onShow(next),
+    show: (next, from) => latest.current.onShow(next, from),
     muteLane: (id, muted) => latest.current.onMuteLane(id, muted),
     soloLane: (id, solo) => latest.current.onSoloLane(id, solo),
     muteDrums: muted => latest.current.onMuteDrums(muted),
@@ -226,7 +227,7 @@ export default function DeskTrackList(props: DeskTrackListProps) {
   if (view === 'song') return <nav className="desk-tracks" aria-label="Tracks" data-view="song">{songView}</nav>;
   return (
     <nav className="desk-tracks" aria-label="Tracks" data-view="patterns">
-      <div className="desk-grid" style={{ '--cols': bars * barSteps(signature) } as CSSProperties}>
+      <div className="desk-grid" style={{ '--cols': bars * barSteps(signature), '--across': stepsAcross(signature) } as CSSProperties}>
         <div className="desk-ruler">
           <DeskViewSwitch view={view} onView={onView} />
           <span className="desk-ruler-bars" aria-hidden="true" style={{ gridTemplateColumns: `repeat(${bars}, minmax(0, 1fr))` }}>
@@ -244,7 +245,7 @@ export default function DeskTrackList(props: DeskTrackListProps) {
             return (
               <li key={guest.id} className="desk-track" data-track="guests" style={{ '--track-color': 'var(--track-guest)' } as CSSProperties}>
                 <div className="desk-track-head">
-                  <button className="desk-track-pick" aria-current={track === 'guests' ? 'true' : undefined} aria-label={`Show guest ${name} in the dock`} onClick={() => actions.show('guests')}>
+                  <button className="desk-track-pick" aria-current={track === 'guests' ? 'true' : undefined} aria-label={`Show guest ${name} in the dock`} onClick={event => actions.show('guests', event.currentTarget)}>
                     <span className="desk-track-swatch" aria-hidden="true" />
                     <span className="desk-track-name">{name}</span>
                     <span className="desk-track-sound">Guest instrument</span>

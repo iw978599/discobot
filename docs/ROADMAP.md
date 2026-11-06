@@ -1277,7 +1277,16 @@ Replaced on 2026-10-19 by "The plan from here" at the top of this file.
   clunky. Of three redesign directions drawn as mock-ups, the owner chose the
   studio desk: tracks on the left, the song on top, every pattern in the
   middle, one editor docked below. The rack stays the default and the desk is
-  an option to try. Being built in five stages.
+  an option to try. Built, in five stages, as an option (Project menu, "Try the
+  Desk Layout"): the switch and look, the frame with its dock, the overview
+  grid, the Song view with presence, and the phone (a song strip, the tracks as a
+  list and the dock as a sheet). Not yet in the desk: painting steps by
+  dragging, Shift-range selecting, a note's length across cells, trimming or
+  fading a clip in the Song view, cells for the guests, a block for each repeat,
+  Click, count-in and MIDI moving into the Project menu, the walkthrough
+  pointing at what the dock hides, and fewer frames. Whether the desk should
+  become the default is the owner's to decide after trying it. None of it has
+  been checked in a browser on this machine.
 
 ## Ideas folded in from roadmap v2
 

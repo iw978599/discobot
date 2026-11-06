@@ -1421,14 +1421,16 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
   font-weight: 500;
 }
 
-/* The desk's frame (docs/DESK_LAYOUT_PLAN.md, stage 2), on a wide screen only: Rack gives the page
+/* The desk's frame (docs/DESK_LAYOUT_PLAN.md, stage 2), on a wide screen only (every rule that places the page
+   has `.desk-frame` in it; the others, which dress the tracks, the cells, the dock's units and the song, are shared
+   with the phone's arrangement at the end of this file): Rack gives the page
    `desk-frame` and the rack `data-dock` just then, so every rule here needs both. One screen and no
    page scroll: the transport across the top, the track list down the left, the song (and the
    alerts) in the middle, which scrolls on its own, and the dock across the bottom at a height the
    handle sets (--dock-height). The dock shows one unit; every other is hidden, never taken away, and
    the guests, whose pages must go on running, are clipped out of sight as the phone does it. The
    two groups of units are boxless so the units are grid items of the rack itself. */
-@media (min-width: 1060px) {
+@media all {
   :root[data-layout="desk"] .rack-page.desk-frame { height: 100vh; height: 100dvh; padding: 0; overflow: hidden; }
   :root[data-layout="desk"] .desk-frame .rack {
     height: 100%; max-width: none; min-width: 0; margin: 0; padding: 0; gap: 0; border-radius: 0;
@@ -1629,4 +1631,73 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
   :root[data-layout="desk"] .desk-tracks .desk-track-head[data-present]::after {
     content: ''; position: absolute; top: 2px; right: 2px; width: 9px; height: 9px; border-radius: 50%; background: var(--present); border: 1px solid var(--edge-deep); pointer-events: none;
   }
+}
+
+/* The desk on a phone (docs/DESK_LAYOUT_PLAN.md, stage 5): Rack gives the page `desk-phone` only while the desk is on
+   and the screen is narrow (the same condition as the phone block above), and the rack `data-dock` ("none"
+   while the sheet is put away). The page scrolls as the rack's does. The song is a short strip that scrolls on
+   its own; the tracks are a list, each a header over its cells wrapped eight (or six) to a row; and the dock is a
+   sheet raised from the bottom edge, which is the unit on show, fixed to the bottom, under a bar of its own
+   (DeskSheetBar). The other units are hidden by the rules above (display: none), never taken away, and the guests
+   are clipped out of sight as everywhere. The bar of units is not rendered. Every rule needs `desk-phone`. */
+@media (max-width: 1059px), (max-width: 960px) and (max-height: 500px) and (orientation: landscape) {
+  :root[data-layout="desk"] .rack-page.desk-phone { padding-bottom: calc(24px + env(safe-area-inset-bottom)); scroll-padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+  :root[data-layout="desk"] .rack-page.desk-phone.sheet-open { padding-bottom: calc(var(--sheet-height) + 12px); scroll-padding-bottom: calc(var(--sheet-height) + 8px); }
+  :root[data-layout="desk"] .desk-phone .rack [data-unit="add-lane"] { display: none; }
+
+  /* The song: its starting points and its unit in a strip of limited height, scrolling inside itself. */
+  :root[data-layout="desk"] .desk-phone .rack-song-area {
+    order: 1; display: flex; flex-direction: column; gap: 5px; flex: none; min-height: 0;
+    max-height: min(26dvh, 190px); overflow-y: auto; overscroll-behavior: contain;
+  }
+  :root[data-layout="desk"] .desk-phone .rack-song-area > * { flex: none; }
+  @media (max-height: 500px) {
+    :root[data-layout="desk"] .desk-phone .rack-song-area { max-height: 38dvh; }
+  }
+
+  /* The tracks: one list in the page. The Patterns view stacks a track's header over its cells; the Song view
+     keeps the header at the left and scrolls sideways inside its region. */
+  :root[data-layout="desk"] .desk-phone .desk-tracks { order: 2; min-width: 0; background: none; --desk-head: 150px; }
+  :root[data-layout="desk"] .desk-phone .desk-tracks[data-view="song"] { overflow-x: auto; overscroll-behavior-x: contain; --desk-head: 170px; }
+  :root[data-layout="desk"] .desk-phone .desk-tracks[data-view="patterns"] .desk-grid { min-width: 0; }
+  :root[data-layout="desk"] .desk-phone .desk-tracks[data-view="patterns"] .desk-ruler { position: static; grid-template-columns: minmax(0, 1fr); }
+  :root[data-layout="desk"] .desk-phone .desk-tracks[data-view="patterns"] .desk-ruler-bars { display: none; }
+  :root[data-layout="desk"] .desk-phone .desk-view-switch button { min-height: 36px; font-size: var(--type-label); }
+  :root[data-layout="desk"] .desk-phone .desk-tracks[data-view="patterns"] .desk-track { grid-template-columns: minmax(0, 1fr); gap: 3px; padding-bottom: 6px; }
+  :root[data-layout="desk"] .desk-phone .desk-tracks[data-view="patterns"] .desk-track-head { position: static; }
+  :root[data-layout="desk"] .desk-phone .desk-track-pick { min-height: 44px; }
+  :root[data-layout="desk"] .desk-phone .desk-track-ms button { width: 40px; height: 36px; font-size: var(--type-label); }
+  :root[data-layout="desk"] .desk-phone .desk-drum-row .desk-track-head { padding-left: 8px; }
+  :root[data-layout="desk"] .desk-phone .desk-drum-row .desk-track-pick { min-height: 40px; }
+  :root[data-layout="desk"] .desk-phone .desk-add-lane { min-height: 44px; }
+  /* A track's cells wrap like the phone's step rows: eight to a row, or six where the beats are six steps
+     (--across, from the scene's signature), and each is a finger's size. */
+  :root[data-layout="desk"] .desk-phone .desk-cells { grid-template-columns: repeat(var(--across, 8), minmax(0, 1fr)) !important; }
+  :root[data-layout="desk"] .desk-phone .desk-cell { min-height: 34px; }
+  :root[data-layout="desk"] .desk-phone .desk-cells.desk-guest-note { min-height: 34px; }
+
+  /* The sheet. With it put away every unit of the dock is hidden; raised, the one on show is fixed to the
+     bottom edge, above the home indicator, under the bar, and scrolls inside itself. */
+  :root[data-layout="desk"] .rack[data-dock="none"] :is([data-unit^="synth-"], [data-unit="drums"], [data-unit="mixer"], [data-unit="effects"]) { display: none; }
+  :root[data-layout="desk"] .desk-phone.sheet-open .rack :is([data-unit^="synth-"], [data-unit="drums"], [data-unit="mixer"], [data-unit="effects"]),
+  :root[data-layout="desk"] .desk-phone.sheet-open .rack[data-dock="guests"] .rack-guests {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 37; box-sizing: border-box; height: calc(var(--sheet-height) - var(--sheet-bar));
+    margin: 0; border-radius: 0; overflow: auto; overscroll-behavior: contain;
+    padding: 8px max(8px, env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+  }
+  :root[data-layout="desk"] .desk-phone .rack-guests { display: flex; flex-direction: column; gap: 5px; }
+  :root[data-layout="desk"] .desk-phone .rack:not([data-dock="guests"]) .rack-guests { position: fixed; top: 0; left: 0; right: 0; clip-path: inset(50%); pointer-events: none; }
+  :root[data-layout="desk"] .desk-phone.sheet-open .rack[data-dock="guests"] .rack-guests { background: var(--surface-panel); border-top: 3px solid var(--track-guest); }
+
+  :root[data-layout="desk"] .desk-sheet-bar {
+    position: fixed; left: 0; right: 0; bottom: calc(var(--sheet-height) - var(--sheet-bar)); z-index: 38; box-sizing: border-box; height: var(--sheet-bar);
+    display: flex; flex-direction: column; padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left);
+    background: var(--surface-rail); border-top: 1px solid var(--edge-strong); box-shadow: 0 -6px 14px rgba(0, 0, 0, 0.45);
+  }
+  :root[data-layout="desk"] .desk-sheet-handle { flex: none; height: 22px; }
+  :root[data-layout="desk"] .desk-sheet-handle::after { top: 10px; }
+  :root[data-layout="desk"] .desk-sheet-row { flex: 1 1 0; min-height: 0; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 4px; }
+  :root[data-layout="desk"] .desk-sheet-row .desk-dock-tabs { flex: 1 1 0; min-width: 0; overflow-x: auto; padding: 0; }
+  :root[data-layout="desk"] .desk-sheet-row .desk-dock-tab { min-height: 44px; padding: 8px 12px; white-space: nowrap; }
+  :root[data-layout="desk"] .desk-sheet-close { flex: none; min-height: 40px; }
 }
