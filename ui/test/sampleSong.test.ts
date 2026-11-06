@@ -13,6 +13,7 @@ import { stepNotes } from '../src/services/noteScheduling.ts';
 import { noteNameToMidi } from '../src/utils/midiExport.ts';
 import { barSteps, sceneBars } from '../src/services/patternLength.ts';
 import { songBars, songSeconds } from '../src/services/songPlayback.ts';
+import { DRUM_PARAMS } from '../src/services/paramTargets.ts';
 import type { DrumState, EffectsLoopState, Scene, SequencerStep } from '../src/types.ts';
 
 const effectsLoop: EffectsLoopState = {
@@ -112,6 +113,17 @@ test('every sample song opens sound and whole: its time signatures, sounds, swin
         assert.deepEqual(Object.keys(scene.laneAutomation?.[Number(lane)] ?? {}).sort(), Object.keys(automation!).sort(), `${song.name}: ${spec.name} keeps its automation`);
         for (const values of Object.values(automation!)) assert.equal(values.length, laneLength(Number(lane)));
       }
+      // Drum automation is kept as written: a value or nothing for every step of the drum grid, inside its
+      // knob's range, so that the store had nothing to cut, clamp or drop.
+      for (const [instrument, settings] of Object.entries(spec.drumAutomation ?? {})) {
+        for (const [key, values] of Object.entries(settings!)) {
+          assert.equal(values!.length, length, `${song.name}: ${spec.name} ${instrument} ${key} has a value for every step`);
+          assert.ok(values!.some(value => value !== null), `${song.name}: ${spec.name} ${instrument} ${key} has a value somewhere`);
+          assert.ok(values!.every(value => value === null || (value >= DRUM_PARAMS[key].min && value <= DRUM_PARAMS[key].max)), `${song.name}: ${spec.name} ${instrument} ${key} is in its range`);
+        }
+        assert.deepEqual(scene.drums[instrument as 'kick'].stepAutomation, settings, `${song.name}: ${spec.name} keeps its ${instrument} automation`);
+      }
+      for (const instrument of DRUM_INSTRUMENTS) if (!spec.drumAutomation?.[instrument]) assert.equal(scene.drums[instrument].stepAutomation, undefined, `${song.name}: ${spec.name} ${instrument} has none`);
       const sounding = lanes.some(lane => played(scene.lanes[lane]).length > 0) || DRUM_INSTRUMENTS.some(instrument => scene.drums[instrument].steps.some(Boolean));
       assert.ok(sounding, `${song.name}: ${spec.name} plays something`);
     }
@@ -162,10 +174,20 @@ test('every sample song changes a lane\'s instrument in a scene of its own, and 
   }
 });
 
-test('two songs play a guest instrument, offered by name, whose settings and level change from scene to scene', async () => {
+test('every sample song moves a drum by automation in at least one scene, and the open scene has it on the drums', async () => {
+  for (const song of SAMPLE_SONGS) {
+    assert.ok(song.scenes.some(scene => Object.keys(scene.drumAutomation ?? {}).length > 0), `${song.name} has drum automation`);
+    const made = await service();
+    assert.equal((await made.importProject(build(made, song))).ok, true);
+    const open = song.scenes[0], state = made.snapshot();
+    for (const instrument of DRUM_INSTRUMENTS) assert.deepEqual(state.drumState[instrument].stepAutomation, open.drumAutomation?.[instrument], `${song.name}: ${instrument} in the open scene`);
+  }
+});
+
+test('three songs play a guest instrument, offered by name, whose settings and level change from scene to scene', async () => {
   const { FEATURED_GUESTS } = await import('../src/services/guests.ts');
   const withGuests = SAMPLE_SONGS.filter(song => song.guests?.length);
-  assert.deepEqual(withGuests.map(song => song.id), ['cathedral', 'silver-satellite']);
+  assert.deepEqual(withGuests.map(song => song.id), ['fracture-line', 'cathedral', 'silver-satellite']);
   for (const song of withGuests) {
     const made = await service();
     assert.deepEqual((await made.importProject(build(made, song))).ok, true);
@@ -226,6 +248,36 @@ test('the drum and bass song is at 174 BPM, and in its Meltdown the drums go mad
   const hits = (bar: number) => meltdown.drums.snare.steps.slice(bar * 14, bar * 14 + 14).filter(Boolean).length;
   assert.ok(hits(6) > hits(0) && hits(7) === 14, 'more of them every bar, and a snare rolled on every step at the end');
   assert.equal(scenes.find(scene => scene.id === 'fracture-breakdown')!.drums.snare.steps.some(Boolean), false, 'and a breakdown without drums');
+});
+
+test('the drum and bass song gives its drums to Axis Stack on its Grit set, with a gesture loop in beats in each scene that holds drums', async () => {
+  const song = SAMPLE_SONGS.find(entry => entry.id === 'fracture-line')!;
+  const made = await service();
+  assert.equal((await made.importProject(build(made, song))).ok, true);
+  const { guests } = made.snapshot(), scenes = made.getScenes().scenes as Scene[];
+  assert.deepEqual(guests.map(guest => guest.name), ['Axis Stack']);
+  const axis = guests[0].id;
+  for (const scene of scenes) {
+    const heard = !scene.guestMix![axis].muted, withDrums = DRUM_INSTRUMENTS.some(instrument => scene.drums[instrument].steps.some(Boolean));
+    assert.equal(heard, withDrums, `${scene.name}: Axis Stack holds the drums wherever there are drums, and is muted in the break`);
+    if (!heard) continue;
+    const state = scene.guests![axis] as { v: number; cur: number; source: { mode: string; id: string }; gate: string; sets: Array<{ name: string; loopOn: boolean; loop: { unit: string; len: number; pts: number[][] } | null }> };
+    assert.equal(state.v, 1);
+    assert.equal(state.cur, 1, 'the Grit set');
+    assert.deepEqual([state.source.mode, state.source.id, state.gate], ['discobot', 'drums', 'latch']);
+    assert.deepEqual(state.sets.map(set => set.name), ['Bend', 'Grit', 'Space', 'Chop']);
+    const loop = state.sets[1].loop;
+    assert.ok(loop || state.sets[1].loopOn === false, `${scene.name}: Grit has a gesture loop or rests`);
+    if (loop) {
+      assert.equal(state.sets[1].loopOn, true);
+      assert.equal(loop.unit, 'beat');
+      assert.ok(loop.pts.every(([time, x, y]) => time >= 0 && time <= loop.len && x >= 0 && x <= 1 && y >= 0 && y <= 1), `${scene.name}: the gesture is on the pad`);
+      assert.ok(loop.pts.some(([, x, y]) => x > 0 || y > 0));
+    }
+    assert.ok(JSON.stringify(state).length < 10_000, 'a small state');
+  }
+  assert.ok(scenes.filter(scene => !scene.guestMix![axis].muted).length >= 5);
+  assert.equal(guests[0].state !== undefined && (guests[0].state as { cur: number }).cur, 1, 'and the first scene sets it on the guest');
 });
 
 test('the long build plays one figure that gains notes and opens its filter, section by section', async () => {

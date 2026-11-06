@@ -23,7 +23,13 @@ new project. The strip on an empty project lists them all (`StarterUnit.tsx`).
   counted in sixteenths within the bar: 16 in 4/4, 12 in 3/4 and 6/8, 20 in 5/4,
   14 in 7/8, 24 in 12/8), `drums` as a list of bars of `Hits`, and `automation`
   per lane (a value or null for every step of the lane: use `ramp` and `held`). A hit in
-  `Hits` may be `[step, velocity, repeats, chance]`.
+  `Hits` may be `[step, velocity, repeats, chance]`. `drumAutomation` moves a drum's settings
+  (`volume`, `tone`, `extra`, `tune`, `pan`, `delaySend`, `reverbSend`) through the scene, by drum and
+  then setting: a value or null for every step of the drum grid (bars times the bar's sixteenths), with
+  `ramp`, `held`, `segment` (from a step on), `perStep` and `tail` (a send low except on a phrase's
+  last hit). A value replaces the drum's own setting for a hit on that step, so write absolute values
+  (a send's default is 1). On the Recorded kit automate volume, pan and sends: a recording may not answer tone
+  or the second knob. `sampleSong.test.ts` fails if the store would repair it.
 - **A scene's own instrument** (`sounds`, by lane): a built-in preset and a `sound` laid over it,
   for a lane that plays another instrument in that scene (`docs/SCENE_SOUNDS_PLAN.md`). It keeps
   the lane's `pan`, `fxSends` and `duck` from the song's lane and takes the preset's own level:
@@ -35,7 +41,13 @@ new project. The strip on an empty project lists them all (`StarterUnit.tsx`).
   its controls by id; Logic Rhythm takes its whole rack). A scene that does not name a guest mutes
   it. A guest's tempo is the song's, and it counts quarter-note beats, so one that keeps its own
   bar (Logic Rhythm) suits 4/4 only. Guests are not measured, and are loaded only once the
-  listener allows the site.
+  listener allows the site. A guest may take one of Discobot's voices through its own settings
+  (Axis Stack's `source: { mode: 'discobot', id: 'drums' }` in Fracture Line): then the voice leaves
+  Discobot's mix and returns through the guest, so name the guest in every scene that has that voice
+  playing (a scene that does not is muted, and the voice goes silent), and keep its `volume` so the
+  voice is as loud as it was. A guest's gesture loop in beats is timed by the host's beat count, which
+  runs on through every scene, so write it a bar or two long (or short of a beat) to land on the bar
+  wherever the scene starts.
 - **Song**: `order`, scenes with repeats; `kit`, `drums` (per-drum settings such
   as `percType`, `cymbalType` or a drum's own `reverbSend`/`delaySend`, where 1 is the
   default and is not stored), `drumSends`, `effects` laid over the defaults.
