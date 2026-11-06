@@ -24,7 +24,7 @@ export interface StudioLanesNeeds {
 }
 
 export function useStudioLanes(core: StudioCore, needs: StudioLanesNeeds) {
-  const { synthsRef, setSynths, signatureOfRef, currentSceneIdRef, autoPassRef, transportRef, endAutoPassesRef, autoRecordingRef, synthAudio, globalTempoRef, drumStateRef, setSynthPresets, synthPresets, setStorageError, synthPresetsRef, setPresetImportReport } = core;
+  const { synthsRef, setSynths, signatureOfRef, currentSceneIdRef, autoPassRef, transportRef, endAutoPassesRef, endDrumPassesRef, autoRecordingRef, synthAudio, globalTempoRef, drumStateRef, setSynthPresets, synthPresets, setStorageError, synthPresetsRef, setPresetImportReport } = core;
   const { recordedStep } = needs;
   const handleStepChange = useCallback(async (synthId: number, stepIndex: number) => {
     const synth = synthsRef.current.find(s => s.id === synthId);
@@ -134,6 +134,7 @@ export function useStudioLanes(core: StudioCore, needs: StudioLanesNeeds) {
   // Ends every pass being recorded. With `write`, each knob that was turned is first written at
   // where it was left, up to the step being heard.
   endAutoPassesRef.current = (write) => {
+    endDrumPassesRef.current(write);
     for (const [synthId, pass] of autoPassRef.current) {
       const lane = synthsRef.current.find(entry => entry.id === synthId), at = write ? recordedStep(synthId, 0) : null;
       if (!lane?.pattern || lane.pattern.id !== pass.patternId || !at) continue;

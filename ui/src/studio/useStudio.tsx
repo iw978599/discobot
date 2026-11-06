@@ -938,7 +938,7 @@ export function useStudio(engine?: AudioEngine) {
     const hasSelected = data.kits.some((kit) => kit.id === selectedDrumKitIdRef.current);
     if (!hasSelected) setSelectedDrumKitId(data.defaultKitId);
   }, []);
-  const { handleAddDrumRow, handleRemoveDrumRow, handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail, handleDrumSettingsChange, handleDrumMixChange, handleDrumReset, handleStarter, handleCopyPartToScene, handleSampleSong, dismissStarters, handleDrumMasterVolumeChange, handleDrumSwingChange, handleSwingTemplate, handleDrumFxChange, handleEffectsLoopChange, handleDrumMuteAll, handleDrumSoloAll } = useStudioDrums(core, { handleImportProject });
+  const { handleAddDrumRow, handleRemoveDrumRow, handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail, handleDrumSettingsChange, handleDrumAutomationDraw, handleDrumAutomationSet, handleDrumAutomationClear, handleDrumMixChange, handleDrumReset, handleStarter, handleCopyPartToScene, handleSampleSong, dismissStarters, handleDrumMasterVolumeChange, handleDrumSwingChange, handleSwingTemplate, handleDrumFxChange, handleEffectsLoopChange, handleDrumMuteAll, handleDrumSoloAll } = useStudioDrums(core, { handleImportProject });
 
   // Everything back to a new project's, as one undo step.
   const handleReset = useCallback(async () => {
@@ -1040,7 +1040,7 @@ export function useStudio(engine?: AudioEngine) {
     handleParameterChange, handleSynthModelChange, handleStepCountChange, handleStepVelocityChange, handleStepSlideChange, handleStepLengthChange, handleStepDetailChange, guests, audioTracks, handleTrackChange, handleAddTrack, handleRemoveTrack, handleAddRecording, handleRecordSession, handleClipChange, handleClipRemove, handleAddGuest, handleRemoveGuest, handleGuestChange, guestRecording, handleExportWav, exportStatus, dismissExportStatus, soundAnalyser, missingDrumSamples, sampleStoreVersion, handleDrumSampleChange, handleLaneBarsChange, handleDrumBarsChange, sceneLength,
     handleSynthMixChange, handleSynthSwingChange, handleSceneSound, handleSynthRename, handleLaneMove, handleLaneStep, laneOrder, handleSaveSynthPreset, handleLoadSynthPreset, handleDeleteSynthPreset,
     handleExportMidi, currentArrangement, reportExportError, handleExportProject, projectImportFileRef, handleImportProjectFile, handleImportProject,
-    handleNewProject, handleOpenProject, handleCopyProject, handleRenameProject, handleDeleteProject, handleRestoreVersion, handleCopyVersion, handleImportSynthPreset, handleExportSynthPreset, presetImportReport, setPresetImportReport, handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail,
+    handleNewProject, handleOpenProject, handleCopyProject, handleRenameProject, handleDeleteProject, handleRestoreVersion, handleCopyVersion, handleImportSynthPreset, handleExportSynthPreset, presetImportReport, setPresetImportReport, handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail, handleDrumAutomationDraw, handleDrumAutomationSet, handleDrumAutomationClear,
     handleDrumSettingsChange, handleDrumMixChange, handleDrumReset, handleDrumMasterVolumeChange, handleDrumSwingChange, handleSwingTemplate,
     handleDrumFxChange, handleEffectsLoopChange, handleDrumMuteAll, handleDrumSoloAll, handleReset, handleAddDrumRow, handleRemoveDrumRow,
     scenes, currentSceneId, song, playMode, setPlayMode, songStartEntry, setSongStartEntry, handleSongJump, songPosition,

@@ -204,8 +204,8 @@ export function toUnit(range: ParamRange, value: number): number {
 }
 
 // A value as it is read out beside the strip.
-export function describeValue(key: string, value: number): string {
-  const range = LANE_PARAMS[key];
+export const describeValue = (key: string, value: number): string => describeRange(LANE_PARAMS[key], value);
+export function describeRange(range: ParamRange, value: number): string {
   if (range.whole) return `${Math.round(value)}`;
   if (range.max <= 2 && range.min >= -1) return `${Math.round(value * 100)}%`;
   if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;

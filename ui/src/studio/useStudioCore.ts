@@ -124,6 +124,8 @@ export function useStudioCore(engine: AudioEngine = audioEngine) {
   // place of what the pattern holds), and the step and the transport tick it was last written at.
   const autoPassRef = useRef(new Map<number, { patternId: string; held: Record<string, number>; step: Record<string, number>; tick: Record<string, number> }>());
   const endAutoPassesRef = useRef<(write: boolean) => void>(() => {});
+  // The same for the drums' passes, which are in `autoPassRef` under `drumPassKey`.
+  const endDrumPassesRef = useRef<(write: boolean) => void>(() => {});
   const [midiChannel, setMidiChannel] = useState(1);
   // The channel pads are listened to on, for the drums. A keyboard on one channel and pads on
   // another play a lane and the drums at once. 0 is none.
@@ -325,6 +327,7 @@ export function useStudioCore(engine: AudioEngine = audioEngine) {
     autoRecordingRef,
     autoPassRef,
     endAutoPassesRef,
+    endDrumPassesRef,
     midiChannel,
     setMidiChannel,
     midiDrumChannel,

@@ -10,6 +10,7 @@ import { sanitizeGuestMix, sanitizeSceneGuests } from './guests';
 import { MAX_REPEATS, MAX_SONG_ENTRIES } from './songPlayback';
 import { sceneColor } from './sceneColors';
 import { sanitizeAutomation } from './automation';
+import { sanitizeDrumAutomation } from './drumAutomation';
 import { sanitizeAux } from './auxSettings';
 import { normalizeSynthModelId } from '../synthModels';
 import { noteNameToMidi } from '../utils/midiExport';
@@ -278,6 +279,7 @@ export function sanitizeDrums(value: unknown, defaults: DrumState, signature?: u
       ...(Array.isArray(track.stepRatchets) ? {
         stepRatchets: Array.from({ length: total }, (_, i) => Math.round(number(track.stepRatchets[i], 1, 1, MAX_RATCHET))),
       } : {}),
+      ...(sanitizeDrumAutomation(track.stepAutomation, total) ? { stepAutomation: sanitizeDrumAutomation(track.stepAutomation, total) } : {}),
     };
     return [instrument, state];
   })) as DrumState;
@@ -353,10 +355,10 @@ export function sanitizeScenes(value: unknown, defaults: DrumState, synthDefault
       ...(sanitizeSceneMutes(input.mutes) ? { mutes: sanitizeSceneMutes(input.mutes) } : {}),
       ...(sanitizeSceneSounds(input.sounds, synthDefaults) ? { sounds: sanitizeSceneSounds(input.sounds, synthDefaults) } : {}),
       drums: Object.fromEntries(drumRowsOf(drums).map(instrument => {
-        const { steps, stepVelocities, stepProbabilities, stepRatchets } = drums[instrument]!;
+        const { steps, stepVelocities, stepProbabilities, stepRatchets, stepAutomation } = drums[instrument]!;
         return [instrument, {
           steps, ...(stepVelocities ? { stepVelocities } : {}), ...(stepProbabilities ? { stepProbabilities } : {}),
-          ...(stepRatchets ? { stepRatchets } : {}),
+          ...(stepRatchets ? { stepRatchets } : {}), ...(stepAutomation ? { stepAutomation } : {}),
         }];
       })) as Scene['drums'],
     }];

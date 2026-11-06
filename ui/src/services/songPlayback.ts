@@ -222,6 +222,7 @@ export function sceneDrumState(scene: Scene, kit: DrumState): DrumState {
       ...(pattern?.stepVelocities ? { stepVelocities: pattern.stepVelocities } : {}),
       ...(pattern?.stepProbabilities ? { stepProbabilities: pattern.stepProbabilities } : {}),
       ...(pattern?.stepRatchets ? { stepRatchets: pattern.stepRatchets } : {}),
+      ...(pattern?.stepAutomation ? { stepAutomation: pattern.stepAutomation } : {}),
     }];
   })) as DrumState;
 }

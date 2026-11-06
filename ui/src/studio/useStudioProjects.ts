@@ -187,6 +187,7 @@ export function useStudioProjects(core: StudioCore, needs: StudioProjectsNeeds) 
         next[instrument].stepVelocities = plain ? velocities : relayBars(velocities, bar, () => 1).items;
         delete next[instrument].stepProbabilities;
         delete next[instrument].stepRatchets;
+        delete next[instrument].stepAutomation;
       }
       localService.setDrumState(next);
     }

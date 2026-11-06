@@ -733,6 +733,11 @@
 .auto-tools { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; }
 .auto-tools .rack-btn { padding: 3px 8px; min-width: 0; }
 .auto-readout { flex: none; width: 9ch; text-align: right; white-space: nowrap; overflow: hidden; }
+/* A drum's automation: the setting to show, then the strip on the grid's own cells' column, then its buttons. */
+.drum-auto { display: grid; grid-template-columns: 64px 50px minmax(0, 1fr); column-gap: 6px; row-gap: 4px; align-items: center; }
+.drum-auto > .auto-pick { grid-column: 1 / -1; }
+.drum-auto .auto-pick select { flex: 0 1 220px; }
+.drum-auto > .auto-strip, .drum-auto > .auto-empty, .drum-auto > .auto-tools { grid-column: 3; margin-left: 6px; }
 
 /* synth editor */
 .synth-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--edge-faint); }
@@ -1234,6 +1239,7 @@ button.song-timeline-entry:hover { border-top-color: var(--hover); border-right-
   .drum-grid-row { grid-template-columns: 52px 64px minmax(0, 1fr); align-items: stretch; }
   .drum-grid-row .rack-ms { align-items: center; }
   .drum-cells { grid-template-columns: repeat(var(--across, 8), minmax(0, 1fr)); gap: 4px; }
+  .drum-auto > .auto-strip, .drum-auto > .auto-empty, .drum-auto > .auto-tools { grid-column: 1 / -1; margin-left: 0; }
   .drum-name { height: auto; min-height: 30px; font-size: var(--type-label); white-space: normal; line-height: 1.1; padding: 2px; overflow-wrap: anywhere; }
   .drum-step-btn { height: 30px; font-size: var(--type-caption); }
   .drum-step-indicator { font-size: var(--type-caption); }

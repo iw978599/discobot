@@ -10,6 +10,7 @@ import { delaySeconds } from './delayTime';
 import { auxBuses, auxSeconds } from './auxSettings';
 import { rateHz } from './rateSync';
 import { expandDrumStep, seededRandom, swingLate } from './drumScheduling';
+import { hitSettings } from './drumAutomation';
 import { swingSteps, type SwingGrid } from './grooves';
 import { createZip } from '../utils/zip';
 import { MASTER_LEVEL, SEND_GLIDE, chorusSweep, createWow, delayColorHz, configureLimiter, createAuxEffect, createChorus, createBuiltReverb, createMasterEq, driveCurve, eqGains, reverbImpulse, reverbLevel, safetyCurve, scheduleDuck } from '../hooks/browserAudio';
@@ -211,10 +212,12 @@ export function drumHits(arrangement: DrumArrangement, bars = 1, barDuration = 2
       const track = state[instrument]!;
       if (track.muted || (solo && !track.solo)) continue;
       for (let step = 0; step < steps; step++) {
+        // The step's automated settings play in place of the drum's own, as they do live.
+        const settings = hitSettings(track, step);
         for (const offset of expandDrumStep(track, step, random)) {
           hits.push({
             instrument, velocity: track.stepVelocities?.[step] ?? 1,
-            settings: { ...track.settings, volume: track.settings.volume * arrangement.drumMasterVolume },
+            settings: { ...settings, volume: settings.volume * arrangement.drumMasterVolume },
             time: start + (step + swingSteps(step, arrangement.drumSwing, arrangement.drumSwingGrid) + offset) * stepDuration,
           });
         }

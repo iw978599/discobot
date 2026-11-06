@@ -1288,6 +1288,13 @@ Replaced on 2026-10-19 by "The plan from here" at the top of this file.
   become the default is the owner's to decide after trying it. None of it has
   been checked in a browser on this machine.
 
+- **Drum automation** (`docs/DRUM_AUTOMATION_PLAN.md`): a value per step for a
+  drum's level, tone, second knob, tune, pan and its sends to the delay and the
+  reverb, drawn in a row under the drum grid for the selected drum, recorded by
+  Auto, carried by every edit that moves drum steps, and played the same live
+  and in exports. Stage 1 built; stage 2 (the sample songs using it, and Axis
+  Stack on Fracture Line) is not. Not verified by ear.
+
 ## Ideas folded in from roadmap v2
 
 These were the ideas at the end of this file until 2026-10-19, when the owner asked for the two

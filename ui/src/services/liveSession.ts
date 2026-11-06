@@ -98,7 +98,7 @@ interface Own { n?: number; edit?: Edit; keys?: string[]; project?: unknown }
 // Edits that change the open scene, and so are applied in the scene they were made in. A lane's sound
 // is one: in a scene with a sound of its own for the lane, an edit to it is that scene's.
 const SCENE_BOUND = new Set<OpType>([
-  'drum.state', 'drum.reset', 'drum.bars', 'drum.copyBar', 'drum.step', 'drum.stepVelocity', 'drum.stepDetail', 'drum.mix',
+  'drum.state', 'drum.reset', 'drum.bars', 'drum.copyBar', 'drum.step', 'drum.stepVelocity', 'drum.stepDetail', 'drum.automation', 'drum.mix',
   'synth.create', 'synth.mix', 'pattern.write', 'scene.signature', 'scene.copyPart', 'scene.create',
   'synth.params', 'synth.model', 'synth.preset', 'scene.sound',
 ]);
@@ -121,6 +121,7 @@ export function editKeys(op: Operation, scene: string): string[] {
     case 'drum.state': case 'drum.reset': return ['drums', `${here}/drums`];
     case 'drum.bars': case 'drum.copyBar': return [`${here}/drums`];
     case 'drum.step': case 'drum.stepVelocity': case 'drum.stepDetail': return [`${here}/drums/${op.instrument}/${op.step}`];
+    case 'drum.automation': return [`${here}/drums/${op.instrument}/automation/${op.key}`];
     case 'drum.mix': return [`${here}/drums/${op.instrument}/mix`];
     case 'drum.addRow': case 'drum.removeRow': return ['drums', 'scenes'];
     case 'drum.settings': return [`drums/settings/${op.instrument}`];

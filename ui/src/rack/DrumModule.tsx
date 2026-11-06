@@ -21,6 +21,8 @@ import { DRUM_ROWS, DRUM_ROW_NAMES, DRUM_SETTINGS_DEFAULT, EXTRA_ROW_SETTINGS, s
 import { DRUM_FX_DEFAULT } from '../services/effectSettings';
 import { DrumInstrument, DrumKitId, DrumRow, DrumTrack, CymbalType, ExtraDrum, PercType } from '../types';
 import DrumKnob from '../components/DrumKnob';
+import { DrumAutomationRow } from './AutomationRow';
+import { rearrangeDrumAutomation } from '../services/drumAutomation';
 import Menu from './Menu';
 import { SWING_GROUPS, currentTemplate } from '../services/grooves';
 import { euclid, euclidCounts } from '../services/euclid';
@@ -203,6 +205,12 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
       }
       if (steps[column] !== track.steps[step]) onStepToggle(selected, step, steps[column]);
     });
+    // The automation travels with its step too.
+    const moved = rearrangeDrumAutomation(track.stepAutomation, base, perBar, sourceFor);
+    for (const key of Object.keys(track.stepAutomation ?? {})) {
+      const steps = STEPS.map(column => base + column);
+      studio.handleDrumAutomationSet(selected, key, steps, steps.map(step => moved?.[key]?.[step] ?? null));
+    }
   };
 
   const selectKit = async (kitId: DrumKitId) => {
@@ -345,6 +353,23 @@ function DrumModule({ studio, onHelp }: { studio: Studio; onHelp?: (section: str
             </div>
           )}
         </div>
+
+        <DrumAutomationRow
+          instrument={selected}
+          name={LABELS[selected]}
+          settings={track.settings}
+          automation={track.stepAutomation}
+          count={track.steps.length}
+          labels={{ extra: extra.knob }}
+          isPlaying={studio.isAnyPlaying}
+          firstStep={base}
+          visibleSteps={perBar}
+          signature={signature}
+          recording={studio.autoRecording}
+          onRecordingChange={studio.setAutoRecording}
+          onDraw={(key, steps, value) => studio.handleDrumAutomationDraw(selected, key, steps, value)}
+          onClear={(key) => studio.handleDrumAutomationClear(selected, key)}
+        />
 
         <div className="rack-knobs">
           <DrumKnob

@@ -91,7 +91,7 @@ const unchanged = (result: Result, service: LocalProjectService, _ctx: any, befo
 
 const cases: Case[] = [
   // --- An instrument the drums do not have
-  ...(['drum.step', 'drum.stepVelocity', 'drum.stepDetail', 'drum.settings', 'drum.sample', 'drum.mix'] as const).flatMap((type): Case[] => [
+  ...(['drum.step', 'drum.stepVelocity', 'drum.stepDetail', 'drum.automation', 'drum.settings', 'drum.sample', 'drum.mix'] as const).flatMap((type): Case[] => [
     { type, title: 'an instrument that does not exist is an unknown operation, whatever else is sent', body: { instrument: 'cowbell', step: -1, muted: true }, status: 404, error: NO_LANE },
     { type, title: 'no instrument is an unknown operation', body: { step: 0 }, status: 404, error: NO_LANE },
   ]),
@@ -1155,6 +1155,32 @@ const cases: Case[] = [
   drumChange('a step detail request with neither changes nothing but still emits and saves', {
     type: 'drum.stepDetail', body: { instrument: 'kick', step: 3 }, arrange: checkedDrums, check: unchanged,
   }),
+  drumChange('drum automation is kept beside the steps, held to the knob\'s range, and only for the steps named', {
+    type: 'drum.automation', body: { instrument: 'snare', key: 'tune', steps: [2, 5, 6], values: [.5, 9, null] },
+    check: result => {
+      const { snare } = result.events[0].data.drumState;
+      assert.deepEqual(snare.stepAutomation, { tune: [null, null, .5, null, null, 1, null, ...Array(9).fill(null)] });
+      assert.equal('stepAutomation' in result.events[0].data.drumState.kick, false);
+    },
+  }),
+  drumChange('drum automation takes a value off a step with null, and the last one takes the whole setting away', {
+    type: 'drum.automation', body: { instrument: 'snare', key: 'pan', steps: [2], values: [null] },
+    arrange: service => ok(service.setDrumAutomation('snare', 'pan', [2], [-.5])),
+    check: result => assert.equal('stepAutomation' in result.events[0].data.drumState.snare, false),
+  }),
+  drumChange('a value that is not a number arrives as null and is no value', {
+    type: 'drum.automation', body: { instrument: 'snare', key: 'volume', steps: [1], values: [Number.NaN] },
+    arrange: service => ok(service.setDrumAutomation('snare', 'volume', [1, 2], [.2, .3])),
+    check: result => assert.deepEqual(result.events[0].data.drumState.snare.stepAutomation, { volume: [null, null, .3, ...Array(13).fill(null)] }),
+  }),
+  ...([['a setting that cannot be automated', { key: 'humanize', steps: [1], values: [.5] }, 'That drum setting cannot be automated'],
+    ['a setting that is not one', { key: 'constructor', steps: [1], values: [.5] }, 'That drum setting cannot be automated'],
+    ['a step past the end', { key: 'tune', steps: [16], values: [.5] }, 'Invalid drum step'],
+    ['a step that is a fraction', { key: 'tune', steps: [1.5], values: [.5] }, 'Invalid drum step'],
+    ['steps and values of different lengths', { key: 'tune', steps: [1, 2], values: [.5] }, 'Invalid local operation data'],
+    ['no steps at all', { key: 'tune', values: [.5] }, 'Invalid local operation data']] as const).map(([what, body, error]): Case => (
+    { type: 'drum.automation', title: `${what} is refused`, body: { instrument: 'snare', ...body } as any, status: 400, error }
+  )),
   drumChange('a drum\'s settings are merged into what is there, then checked', {
     type: 'drum.settings', body: { instrument: 'ride', settings: { pan: -3, tune: .4, cymbalType: 'crash', bogus: 1 } },
     arrange: service => ok(service.setDrumSettings('ride', { volume: .9 })),

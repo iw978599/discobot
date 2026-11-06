@@ -116,6 +116,8 @@ export function starterDrums(starter: Starter, drums: DrumState, signature?: unk
       ...(chance || track.stepProbabilities ? { stepProbabilities: along(chance) } : {}),
       ...(repeat || track.stepRatchets ? { stepRatchets: along(repeat) } : {}),
     };
+    // The values were for the steps being replaced.
+    delete next[instrument].stepAutomation;
   }
   return next;
 }
