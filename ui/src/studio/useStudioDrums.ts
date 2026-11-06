@@ -8,7 +8,9 @@ import { createBuiltInPresets } from '../services/builtInPresets';
 import { STARTERS, projectIsEmpty, starterDrums, starterPattern } from '../services/starters';
 import { buildSampleSong } from '../services/sampleSong';
 import { SAMPLE_SONGS } from '../services/sampleSongs';
-import { sentAutomation } from '../services/automation';
+import { sentAutomation, stepsThrough } from '../services/automation';
+import { drumPassKey, splitDrumAutomated } from '../services/drumAutomation';
+import { playhead } from '../services/playhead';
 import { normalizeDrumFx, normalizeEffectsLoop } from './studioState';
 import type { StudioCore } from './useStudioCore';
 import type { SwingTemplate } from '../services/grooves';
@@ -19,7 +21,7 @@ export interface StudioDrumsNeeds {
 }
 
 export function useStudioDrums(core: StudioCore, needs: StudioDrumsNeeds) {
-  const { synthsRef, drumStateRef, signatureOfRef, currentSceneIdRef, setStorageError, setPlayMode, setShowStarters, projectOpens, scenesRef, drumFxRef, effectsLoopRef} = core;
+  const { synthsRef, drumStateRef, signatureOfRef, currentSceneIdRef, setStorageError, setPlayMode, setShowStarters, projectOpens, scenesRef, drumFxRef, effectsLoopRef, autoRecordingRef, autoPassRef, transportRef, endDrumPassesRef } = core;
   const { handleImportProject } = needs;
   // The kit and the drums are applied by the drumKitChanged event. The answer is handed back
   // for the caller to audition: its own copy of the drums is from before the change.
@@ -36,11 +38,63 @@ export function useStudioDrums(core: StudioCore, needs: StudioDrumsNeeds) {
   const handleDrumStepDetail = useCallback((instrument: DrumRow, step: number, detail: { probability?: number; ratchet?: number }) => {
     localService.setDrumStepDetail(instrument, step, detail);
   }, []);
-  const handleDrumSettingsChange = useCallback((instrument: DrumRow, settings: Partial<DrumSettings>) => {
-    const synth = synthsRef.current[0];
-    if (synth?.pattern) {
+  // One setting of a drum written into a pass of Auto recording at `step`: the steps passed since it was
+  // last written take the value its knob was left at, and `step` takes `value`.
+  const writeDrumPass = (instrument: DrumRow, step: number, moved: Record<string, number>) => {
+    const track = drumStateRef.current[instrument], pass = autoPassRef.current.get(drumPassKey(instrument));
+    if (!track || !pass) return;
+    const length = track.steps.length, now = transportRef.current?.scheduledTicks ?? 0;
+    for (const [key, value] of Object.entries(moved)) {
+      const last = pass.step[key], before = pass.held[key];
+      const passed = last === undefined ? [] : stepsThrough(last, step, length, now - pass.tick[key] >= length * 2).filter(entry => entry !== step);
+      Object.assign(pass, { held: { ...pass.held, [key]: value }, step: { ...pass.step, [key]: step }, tick: { ...pass.tick, [key]: now } });
+      localService.setDrumAutomation(instrument, key, [...passed, step], [...passed.map(() => before), value]);
     }
-    localService.setDrumSettings(instrument, settings);
+  };
+  // Ends every pass of the drums being recorded; with `write`, each knob turned is first written where it was
+  // left, up to the step being heard. The lanes' passes end in the same call (useStudioLanes).
+  endDrumPassesRef.current = (write) => {
+    const at = playhead.get('drums');
+    for (const [key, pass] of autoPassRef.current) {
+      if (key >= 0 || !write || at < 0) continue;
+      const instrument = (Object.keys(drumStateRef.current) as DrumRow[]).find(row => drumPassKey(row) === key);
+      if (instrument) writeDrumPass(instrument, at, pass.held);
+    }
+  };
+  // With Auto on and the song playing, the automatable settings a drum's knob moves are written into
+  // its automation at the step being heard, and the drum's own setting keeps the value it had. What is
+  // left of the change is answered, to be made as it always was; null when nothing is left.
+  const recordDrumAutomation = (instrument: DrumRow, settings: Partial<DrumSettings>): Partial<DrumSettings> | null => {
+    const track = drumStateRef.current[instrument];
+    if (!autoRecordingRef.current || !transportRef.current?.running || !track || playhead.get('drums') < 0) return settings;
+    const { moved, rest } = splitDrumAutomated(settings, track.settings);
+    if (Object.keys(moved).length === 0) return rest;
+    // The pass is one undo step, held open until the passes end.
+    if (!autoPassRef.current.has(drumPassKey(instrument))) {
+      localService.holdUndo('auto', true);
+      autoPassRef.current.set(drumPassKey(instrument), { patternId: 'drums', held: {}, step: {}, tick: {} });
+    }
+    writeDrumPass(instrument, playhead.get('drums'), moved);
+    return rest;
+  };
+  const handleDrumSettingsChange = useCallback((instrument: DrumRow, settings: Partial<DrumSettings>) => {
+    const kept = recordDrumAutomation(instrument, settings);
+    if (kept) localService.setDrumSettings(instrument, kept);
+  }, []);
+  // One setting's automation drawn on some steps of a drum's grid, or rubbed out of them with null.
+  // Steps drawn one after another without a pause are one undo step, as a knob's turn is.
+  const handleDrumAutomationDraw = useCallback((instrument: DrumRow, key: string, steps: number[], value: number | null) => {
+    localService.undoAs(`drum-automation:${instrument}:${key}`);
+    localService.setDrumAutomation(instrument, key, steps, steps.map(() => value));
+  }, []);
+  // Some steps of a drum's automation set to given values at once (the pattern tools move it with the steps).
+  const handleDrumAutomationSet = useCallback((instrument: DrumRow, key: string, steps: number[], values: Array<number | null>) => {
+    localService.setDrumAutomation(instrument, key, steps, values);
+  }, []);
+  const handleDrumAutomationClear = useCallback((instrument: DrumRow, key: string) => {
+    const track = drumStateRef.current[instrument];
+    if (!track?.stepAutomation?.[key]) return;
+    localService.setDrumAutomation(instrument, key, track.steps.map((_, step) => step), track.steps.map(() => null));
   }, []);
   const handleDrumMixChange = useCallback((instrument: DrumRow, mix: { muted?: boolean; solo?: boolean }) => {
     localService.setDrumMix(instrument, mix);
@@ -129,5 +183,5 @@ export function useStudioDrums(core: StudioCore, needs: StudioDrumsNeeds) {
     return row && localService.addDrumRow(row).ok ? row : null;
   }, []);
   const handleRemoveDrumRow = useCallback((row: ExtraDrum) => { localService.removeDrumRow(row); }, []);
-  return { handleAddDrumRow, handleRemoveDrumRow, handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail, handleDrumSettingsChange, handleDrumMixChange, handleDrumReset, handleStarter, handleCopyPartToScene, handleSampleSong, dismissStarters, handleDrumMasterVolumeChange, handleDrumSwingChange, handleSwingTemplate, handleDrumFxChange, handleEffectsLoopChange, handleDrumMuteAll, handleDrumSoloAll };
+  return { handleAddDrumRow, handleRemoveDrumRow, handleDrumKitChange, handleDrumStepToggle, handleDrumStepVelocity, handleDrumStepDetail, handleDrumSettingsChange, handleDrumAutomationDraw, handleDrumAutomationSet, handleDrumAutomationClear, handleDrumMixChange, handleDrumReset, handleStarter, handleCopyPartToScene, handleSampleSong, dismissStarters, handleDrumMasterVolumeChange, handleDrumSwingChange, handleSwingTemplate, handleDrumFxChange, handleEffectsLoopChange, handleDrumMuteAll, handleDrumSoloAll };
 }

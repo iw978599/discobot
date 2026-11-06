@@ -9,6 +9,7 @@ import { LANE_IDS, MAX_LANES, laneOrderOf, storedLaneName, storedPresetName } fr
 import { BAR_CHOICES, TIME_SIGNATURES, barSteps, barTargets, clampLengths, copyBar, drumBars, laneBars, layAlong, resizeBars, resizeEachBar, stepsPerBar, storedSignature } from './patternLength';
 import { emptySteps } from './songPlayback';
 import { layAutomationAlong, resizeAutomationEachBar } from './automation';
+import { DRUM_AUTOMATABLE, copyDrumAutomationBar, layDrumAutomationAlong, resizeDrumAutomationBars, resizeDrumAutomationEachBar, withDrumAutomationValues } from './drumAutomation';
 import { nextSceneColor, sceneColor } from './sceneColors';
 import { normalizeSynthModelId } from '../synthModels';
 import type { DrumLanePattern, DrumState, DrumTrack, LaneSound, Pattern, Scene, TimeSignature } from '../types';
@@ -77,6 +78,8 @@ const drumLaneEdit = ({ state, defaults }: ReducerContext, instrument: unknown, 
   state.drumState = sanitizeDrums(state.drumState, defaults.drumState, openSignature(state));
   return update('drumFullState', { drumState: state.drumState });
 };
+// A drum's automation put on its track, or taken off when it has none: the track never holds an empty one.
+const setAutomation = (track: DrumLane, automation: DrumLane['stepAutomation']) => { if (automation) track.stepAutomation = automation; else delete track.stepAutomation; };
 const badDrumStep = (track: DrumLane, step: number) =>
   (!Number.isInteger(step) || step < 0 || step >= track.steps.length ? refuse(400, 'Invalid drum step') : undefined);
 
@@ -137,10 +140,10 @@ export const captureScene = (state: ProjectState, id: string, name: string, colo
     drums: Object.fromEntries(drumRowsOf(state.drumState).map(instrument => [instrument, { muted: state.drumState[instrument]!.muted, solo: state.drumState[instrument]!.solo }])),
   },
   drums: Object.fromEntries(drumRowsOf(state.drumState).map(instrument => {
-    const { steps, stepVelocities, stepProbabilities, stepRatchets } = state.drumState[instrument]!;
+    const { steps, stepVelocities, stepProbabilities, stepRatchets, stepAutomation } = state.drumState[instrument]!;
     return [instrument, clone({
       steps, ...(stepVelocities ? { stepVelocities } : {}), ...(stepProbabilities ? { stepProbabilities } : {}),
-      ...(stepRatchets ? { stepRatchets } : {}),
+      ...(stepRatchets ? { stepRatchets } : {}), ...(stepAutomation ? { stepAutomation } : {}),
     })];
   })) as Scene['drums'],
 });
@@ -231,6 +234,8 @@ const applyScene = (state: ProjectState, scene: Scene) => {
       if (pattern[key]) track[key] = clone(pattern[key]);
       else delete track[key];
     }
+    if (pattern.stepAutomation) track.stepAutomation = clone(pattern.stepAutomation);
+    else delete track.stepAutomation;
   }
 };
 
@@ -261,6 +266,7 @@ export const reducers: Reducers = {
       const lane = state.drumState[instrument]!;
       lane.steps = resizeBars(lane.steps, perBar, bars, () => false);
       for (const [key, blank] of DRUM_DETAILS) if (lane[key]) lane[key] = resizeBars(lane[key]!, perBar, bars, () => blank);
+      setAutomation(lane, resizeDrumAutomationBars(lane.stepAutomation, perBar, bars));
     }
     state.drumState = sanitizeDrums(state.drumState, defaults.drumState, signature);
     return update('drumFullState', { drumState: state.drumState });
@@ -274,6 +280,7 @@ export const reducers: Reducers = {
       const lane = state.drumState[instrument]!;
       lane.steps = copyBar(lane.steps, perBar, op.from, to);
       for (const [key] of DRUM_DETAILS) if (lane[key]) lane[key] = copyBar(lane[key]!, perBar, op.from, to);
+      setAutomation(lane, copyDrumAutomationBar(lane.stepAutomation, perBar, op.from, to));
     }
     state.drumState = sanitizeDrums(state.drumState, defaults.drumState, signature);
     return update('drumFullState', { drumState: state.drumState });
@@ -360,6 +367,15 @@ export const reducers: Reducers = {
       track.stepRatchets ||= Array(track.steps.length).fill(1);
       track.stepRatchets![op.step] = number(op.ratchet, 1, 1, 4);
     }
+  }),
+  // Some steps of one setting given values, or none. `steps` and `values` go together; they are read
+  // as sent, so a number that is not finite is a step with no value.
+  'drum.automation': (ctx, op) => drumLaneEdit(ctx, op.instrument, track => {
+    const body = sent({ key: op.key, steps: op.steps, values: op.values });
+    if (!body || !Array.isArray(body.steps) || !Array.isArray(body.values) || body.steps.length !== body.values.length) return refuse(400, BAD_DATA);
+    if (typeof body.key !== 'string' || !DRUM_AUTOMATABLE.includes(body.key)) return refuse(400, 'That drum setting cannot be automated');
+    if (body.steps.some((step: unknown) => !Number.isInteger(step) || (step as number) < 0 || (step as number) >= track.steps.length)) return refuse(400, 'Invalid drum step');
+    setAutomation(track, withDrumAutomationValues(track.stepAutomation, body.key, body.steps, body.values, track.steps.length));
   }),
   'drum.stepVelocity': (ctx, op) => drumLaneEdit(ctx, op.instrument, track => {
     const refused = badDrumStep(track, op.step);
@@ -685,9 +701,11 @@ export const reducers: Reducers = {
       const row = from.drums[op.drum]!, length = to.drums[op.drum]!.steps.length;
       const along = <T,>(values: T[] | undefined) => (values?.length ? Array.from({ length }, (_, step) => values[step % values.length]) : undefined);
       const velocities = along(row.stepVelocities), probabilities = along(row.stepProbabilities), ratchets = along(row.stepRatchets);
+      const automation = layDrumAutomationAlong(row.stepAutomation, length);
       to.drums[op.drum] = {
         steps: along(row.steps) ?? Array(length).fill(false),
         ...(velocities ? { stepVelocities: velocities } : {}), ...(probabilities ? { stepProbabilities: probabilities } : {}), ...(ratchets ? { stepRatchets: ratchets } : {}),
+        ...(automation ? { stepAutomation: structuredClone(automation) } : {}),
       };
     } else return refuse(400, 'Choose a lane or a drum to copy.');
     return sceneChanged(state);
@@ -758,6 +776,7 @@ export const reducers: Reducers = {
       const lane = state.drumState[instrument]!;
       lane.steps = resizeEachBar(lane.steps, from, to, () => false);
       for (const [key, blank] of DRUM_DETAILS) if (lane[key]) lane[key] = resizeEachBar(lane[key]!, from, to, () => blank);
+      setAutomation(lane, resizeDrumAutomationEachBar(lane.stepAutomation, from, to));
     }
     if (storedSignature(signature)) scene.signature = signature; else delete scene.signature;
     state.drumState = sanitizeDrums(state.drumState, defaults.drumState, signature);

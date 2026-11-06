@@ -66,7 +66,7 @@ const ownOrigin = () => (typeof window !== 'undefined' && window.location ? wind
 const STORAGE_KEY = 'discobot_browser_project_v1';
 // Bumped when synth parameters gain fields. An older project is upgraded with defaults,
 // which is a migration and not damage worth warning about.
-const SCHEMA = 23;
+const SCHEMA = 24;
 // Edits are written this long after the last one, so dragging a knob is one write, not hundreds.
 const SAVE_DELAY_MS = 300;
 // A version is kept when a project is opened, before anything replaces it, and this often while it is edited.
@@ -873,6 +873,7 @@ export class LocalProjectService {
   setDrumStep(instrument: DrumRow, step: number, active: boolean) { return this.apply({ type: 'drum.step', instrument, step, active }); }
   setDrumStepVelocity(instrument: DrumRow, step: number, velocity: number) { return this.apply({ type: 'drum.stepVelocity', instrument, step, velocity }); }
   setDrumStepDetail(instrument: DrumRow, step: number, detail: { probability?: number; ratchet?: number }) { return this.apply({ type: 'drum.stepDetail', instrument, step, probability: detail.probability, ratchet: detail.ratchet }); }
+  setDrumAutomation(instrument: DrumRow, key: string, steps: number[], values: Array<number | null>) { return this.apply({ type: 'drum.automation', instrument, key, steps, values }); }
   setDrumSettings(instrument: DrumRow, settings: Partial<DrumSettings>) { return this.apply({ type: 'drum.settings', instrument, settings }); }
   setDrumSample(instrument: DrumRow, sampleId?: string) { return this.apply({ type: 'drum.sample', instrument, sampleId }); }
   addDrumRow(row: ExtraDrum) { return this.apply({ type: 'drum.addRow', row }); }

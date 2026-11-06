@@ -14,6 +14,7 @@ import { stepSends, stepVoiceParams } from '../services/automation';
 import { CLICK_LEVEL, clickAt, clickLevel, countInBars } from '../services/metronome';
 import { BrowserTransport } from '../services/browserTransport';
 import { expandDrumStep, swingLate } from '../services/drumScheduling';
+import { drumPassKey, hitSettings } from '../services/drumAutomation';
 import { swingSteps } from '../services/grooves';
 import { trackPlayer } from '../hooks/trackAudio';
 import { recordingNow } from '../services/clipRecordings';
@@ -161,10 +162,12 @@ export function useStudioTransport(core: StudioCore, needs: StudioTransportNeeds
       const track = state[instrument];
       if (track.muted || (drumSolo && !track.solo)) continue;
       const velocity = track.stepVelocities?.[drumStep] ?? 1;
+      // The step's automated settings, and a knob being recorded right now, play in place of the drum's own.
+      const settings = hitSettings(track, drumStep, scene ? undefined : autoPassRef.current.get(drumPassKey(instrument))?.held);
       for (const offset of expandDrumStep(track, drumStep)) {
         const hitTime = time + swingOffset + offset * duration * 2;
         const early = guestInputs.leadSeconds('drums') || guestInputs.leadSeconds(`drum:${instrument}`);
-        void drumAudio.playDrumHit(instrument, track.settings, velocity, hitTime - early);
+        void drumAudio.playDrumHit(instrument, settings, velocity, hitTime - early);
         if (midiOut.active) midiOut.note(midiOut.channelOf('drums'), drumRowNote(instrument, track.settings), velocity, midiTime(hitTime), midiTime(hitTime + 0.06));
         if (instrument !== 'kick') continue;
         for (const synth of lanes) {

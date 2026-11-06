@@ -1,6 +1,7 @@
 import { CymbalType, DrumInstrument, DrumRow, DrumSettings, DrumState, ExtraDrum, Pattern, PercType, SequencerStep } from '../types';
 import { EXTRA_DRUMS } from '@discobot/engine';
 import { expandDrumStep, seededRandom, swingLate } from '../services/drumScheduling';
+import { hitSettings } from '../services/drumAutomation';
 import { swingSteps, type SwingGrid } from '../services/grooves';
 import { barSteps, beatStarts, signatureFraction, timeSignature } from '../services/patternLength';
 
@@ -235,10 +236,11 @@ function buildDrumTrack(bars: DrumState[], swing = 0, masterVolume = 1, times: B
     const track = drumState[instrument];
     if (!track || track.muted || (hasSolo && !track.solo) || masterVolume <= 0) continue;
     for (let stepIndex = 0; stepIndex < track.steps.length; stepIndex += 1) {
-      if (track.settings.volume <= 0) continue;
+      const { volume } = hitSettings(track, stepIndex);
+      if (volume <= 0) continue;
       const offsets = expandDrumStep(track, stepIndex, random);
       const stepVelocity = track.stepVelocities?.[stepIndex] ?? 1;
-      const velocity = clampVelocity(track.settings.volume * stepVelocity * masterVolume * 127, 100);
+      const velocity = clampVelocity(volume * stepVelocity * masterVolume * 127, 100);
       const length = Math.max(1, Math.round(TICKS_PER_STEP * 0.5 / offsets.length));
       for (const offset of offsets) {
         const tick = times[bar].start + Math.round((stepIndex + swingSteps(stepIndex, swing, grid) + offset) * TICKS_PER_STEP);

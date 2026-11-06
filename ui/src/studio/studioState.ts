@@ -88,6 +88,7 @@ export function cloneDrumState(state: DrumState): DrumState {
         stepVelocities: state[instrument].stepVelocities ? [...state[instrument].stepVelocities!] : undefined,
         stepProbabilities: state[instrument].stepProbabilities ? [...state[instrument].stepProbabilities!] : undefined,
         stepRatchets: state[instrument].stepRatchets ? [...state[instrument].stepRatchets!] : undefined,
+        stepAutomation: state[instrument].stepAutomation ? structuredClone(state[instrument].stepAutomation) : undefined,
       },
     ])
   ) as DrumState;

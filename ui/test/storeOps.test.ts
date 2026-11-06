@@ -149,6 +149,7 @@ const drumCase = (op: Case['op'], run: (service: LocalProjectService, body: any)
 const drumStep = drumCase('drum.step', (service, body) => service.setDrumStep(body.instrument, body.step, body.active));
 const drumVelocity = drumCase('drum.stepVelocity', (service, body) => service.setDrumStepVelocity(body.instrument, body.step, body.velocity));
 const drumDetail = drumCase('drum.stepDetail', (service, body) => service.setDrumStepDetail(body.instrument, body.step, { probability: body.probability, ratchet: body.ratchet }));
+const drumAutomation = drumCase('drum.automation', (service, body) => service.setDrumAutomation(body.instrument, body.key, body.steps, body.values));
 const drumSettings = drumCase('drum.settings', (service, body) => service.setDrumSettings(body.instrument, body.settings));
 const drumSample = drumCase('drum.sample', (service, body) => service.setDrumSample(body.instrument, body.sampleId));
 const drumMix = drumCase('drum.mix', (service, body) => service.setDrumMix(body.instrument, { muted: body.muted, solo: body.solo }));
@@ -202,6 +203,15 @@ const drumCases: Case[] = [
   drumDetail('a chance for a step that is not there is refused', { instrument: 'kick', step: -1, probability: .5 }, { status: 400, error: NO_STEP }),
   drumDetail('a chance for an instrument that does not exist is refused', { instrument: 'cowbell', step: 3, probability: .5 }, { status: 404, error: NO_LANE }),
 
+  drumAutomation('a value is kept for a step, beside the steps', { instrument: 'snare', key: 'tune', steps: [4], values: [.5] },
+    { answer: drums({ snare: { stepAutomation: { tune: [...Array(4).fill(null), .5, ...Array(11).fill(null)] } } }) }),
+  drumAutomation('a value outside the knob is held to it', { instrument: 'snare', key: 'delaySend', steps: [0], values: [4] },
+    { answer: drums({ snare: { stepAutomation: { delaySend: [1, ...Array(15).fill(null)] } } }) }),
+  drumAutomation('null takes a value away', { instrument: 'snare', key: 'tune', steps: [4], values: [null] }, { answer: drums() },
+    service => { assert.ok(service.setDrumAutomation('snare', 'tune', [4], [.5]).ok); }),
+  drumAutomation('a setting that cannot be automated is refused', { instrument: 'snare', key: 'humanize', steps: [4], values: [.5] }, { status: 400, error: 'That drum setting cannot be automated' }),
+  drumAutomation('an instrument that does not exist is refused', { instrument: 'cowbell', key: 'tune', steps: [4], values: [.5] }, { status: 404, error: NO_LANE }),
+  drumAutomation('a step that is not there is refused', { instrument: 'snare', key: 'tune', steps: [16], values: [.5] }, { status: 400, error: NO_STEP }),
   drumSettings('settings are laid over the lane\'s own', { instrument: 'kick', settings: { volume: .9, pan: -.5 } }, { answer: drums({ kick: { settings: { volume: .9, pan: -.5 } } }) }),
   drumSettings('each setting is held to its range, and one that is not a setting is dropped', { instrument: 'kick', settings: { volume: 7, tone: -1, tune: -3, bogus: 1 } },
     { answer: drums({ kick: { settings: { volume: 1, tone: 0, tune: -1 } } }) }),
@@ -1346,6 +1356,7 @@ test('an instrument named after a built-in property is an unknown instrument, an
     ['drum.step', (service, name) => service.setDrumStep(wrong(name), 0, true)],
     ['drum.stepVelocity', (service, name) => service.setDrumStepVelocity(wrong(name), 0, .5)],
     ['drum.stepDetail', (service, name) => service.setDrumStepDetail(wrong(name), 0, { ratchet: 2 })],
+    ['drum.automation', (service, name) => service.setDrumAutomation(wrong(name), 'tune', [0], [.5])],
     ['drum.settings', (service, name) => service.setDrumSettings(wrong(name), { volume: 1 })],
     ['drum.sample', (service, name) => service.setDrumSample(wrong(name), SAMPLE)],
     ['drum.mix', (service, name) => service.setDrumMix(wrong(name), { muted: true })],

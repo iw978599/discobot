@@ -177,6 +177,8 @@ export function drumLaneBar<T extends DrumLanePattern>(lane: T, bar: number, sig
   const perBar = barSteps(signature);
   const sliced = { ...lane, steps: barOf(lane.steps, perBar, bar) };
   for (const key of DRUM_ARRAYS) if (lane[key]) sliced[key] = barOf(lane[key]!, perBar, bar);
+  // The drum's automation is cut at the same place as its steps.
+  if (lane.stepAutomation) sliced.stepAutomation = Object.fromEntries(Object.entries(lane.stepAutomation).map(([key, values]) => [key, barOf(values, perBar, bar)]));
   return sliced;
 }
 

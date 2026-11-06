@@ -417,6 +417,10 @@ export interface DrumTrack {
   stepProbabilities?: number[];
   // hits packed evenly into one step, 1 to 4; missing means one
   stepRatchets?: number[];
+  // A value per step for some of this drum's settings (docs/DRUM_AUTOMATION_PLAN.md), by setting
+  // (volume, tone, extra, tune, pan, delaySend, reverbSend), null for a step that has none. A hit on
+  // a step with a value plays with it in place of the drum's own. Absent means none.
+  stepAutomation?: Automation;
   settings: DrumSettings;
   muted?: boolean;
   solo?: boolean;
@@ -433,6 +437,7 @@ export interface DrumLanePattern {
   stepVelocities?: number[];
   stepProbabilities?: number[];
   stepRatchets?: number[];
+  stepAutomation?: Automation;
 }
 
 // The drive's ways of clipping besides its own smooth one: soft and lopsided, hard, and extreme.

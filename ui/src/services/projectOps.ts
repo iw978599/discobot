@@ -30,6 +30,7 @@ export type Operation =
   | { type: 'drum.copyBar'; from: number; to: number[] }
   | { type: 'drum.step'; instrument: DrumRow; step: number; active: boolean }
   | { type: 'drum.stepVelocity'; instrument: DrumRow; step: number; velocity: number }
+  | { type: 'drum.automation'; instrument: DrumRow; key: string; steps: number[]; values: Array<number | null> }
   | { type: 'drum.stepDetail'; instrument: DrumRow; step: number; probability?: number; ratchet?: number }
   | { type: 'drum.settings'; instrument: DrumRow; settings: Partial<DrumSettings> }
   | { type: 'drum.sample'; instrument: DrumRow; sampleId?: string }
@@ -104,6 +105,7 @@ type OpResults = Total<{
   'drum.step': DrumAnswer;
   'drum.stepVelocity': DrumAnswer;
   'drum.stepDetail': DrumAnswer;
+  'drum.automation': DrumAnswer;
   'drum.settings': DrumAnswer;
   'drum.sample': DrumAnswer;
   'drum.mix': DrumAnswer;
@@ -176,6 +178,7 @@ export const OP_META: Record<OpType, { save: boolean; undoable: boolean; share: 
   'drum.step': { save: true, undoable: true, share: true },
   'drum.stepVelocity': { save: true, undoable: true, share: true },
   'drum.stepDetail': { save: true, undoable: true, share: true },
+  'drum.automation': { save: true, undoable: true, share: true },
   'drum.settings': { save: true, undoable: true, share: true },
   'drum.sample': { save: true, undoable: true, share: true },
   'drum.mix': { save: true, undoable: true, share: true },
