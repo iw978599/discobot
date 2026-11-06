@@ -49,8 +49,7 @@ Stage 1 is built (not verified by ear, and not run in a browser on this machine)
 per step or null; `SCHEMA` 24). One operation, `drum.automation` (`instrument`, `key`, `steps`, `values`).
 `hitSettings` in `services/drumAutomation.ts` is the one place a hit's settings are built, used live, in
 WAV and stem export and (level only) in MIDI. The row under the drum grid is `DrumAutomationRow`, sharing
-its editor with the lane's `AutomationRow`. Auto records a drum's knob. Left out: the desk overview shows
-nothing of it, Fill and Spread leave it where it is, and kit-wide levels are not automatable.
+its editor with the lane's `AutomationRow`. Auto records a drum's knob. Since asked for on 2026-11-05, the desk overview shows it (`DeskAutomationStrips`: a mark on the folded drums line, a strip a setting under an open drum). Left out: Fill and Spread leave it where it is, and kit-wide levels are not automatable.
 
 Stage 2 is built (not verified by ear, not run in a browser on this machine). A sample song's scene gives
 `drumAutomation` (by drum, then setting: a value or null for every step of the scene's drum grid, written
