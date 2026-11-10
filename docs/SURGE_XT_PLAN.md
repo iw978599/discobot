@@ -235,7 +235,7 @@ is close to the heaviest that patch gets. That is one Surge
 lane with eight notes at about 9% on that computer, about twice what GitHub's
 machine measured. A block over 100% is late and can be heard as a click.
 The owner said "the patches sounded really good" (2026-11-10): heard by ear in
-the browser build, the first sound in this plan that is. Not yet said: whether five lanes clicked.
+the browser build. Not yet said: whether five lanes clicked.
 
 The worklet code is also checked on every build in a bare scope with what an
 audio worklet lacks (`process`, `crypto`, `performance`, `TextDecoder`). That
