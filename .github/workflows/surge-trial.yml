@@ -66,7 +66,7 @@ jobs:
             -DSURGE_SKIP_VST3=ON -DSURGE_SKIP_STANDALONE=ON -DSURGE_BUILD_CLAP=OFF \
             -DSURGE_BUILD_XT=OFF -DSURGE_BUILD_FX=OFF -DSURGE_BUILD_TESTRUNNER=OFF \
             -DSURGE_SKIP_WERROR=ON -DSURGE_BUILD_32BIT_LINUX=ON \
-            -DCMAKE_C_FLAGS="-msimd128 -fwasm-exceptions" -DCMAKE_CXX_FLAGS="-msimd128 -fwasm-exceptions"
+            -DCMAKE_C_FLAGS="-msimd128 -fwasm-exceptions -I$PWD/trial/surge/shim" -DCMAKE_CXX_FLAGS="-msimd128 -fwasm-exceptions -I$PWD/trial/surge/shim"
           mkdir -p out
           if ! cmake --build build --target surge-trial -j "$(nproc)" -- -k > out/build.log 2>&1; then
             grep -nE -B2 -A12 "error:|undefined symbol|Error [0-9]" out/build.log | head -400
