@@ -234,7 +234,8 @@ worst block of 150%. Its macros include Drive, FX1 Send and Feedback, so this
 is close to the heaviest that patch gets. That is one Surge
 lane with eight notes at about 9% on that computer, about twice what GitHub's
 machine measured. A block over 100% is late and can be heard as a click.
-Not yet said: whether it sounded right and whether it clicked.
+The owner said "the patches sounded really good" (2026-11-10): heard by ear in
+the browser build, the first sound in this plan that is. Not yet said: whether five lanes clicked.
 
 The worklet code is also checked on every build in a bare scope with what an
 audio worklet lacks (`process`, `crypto`, `performance`, `TextDecoder`). That
@@ -243,7 +244,7 @@ caught two crashes the page would have had:
 - its clock needing `performance`, which the page now supplies from
   `Date.now()`.
 
-**Decision: go**, if the owner's ear agrees, with these limits:
+**Decision: go**, with these limits:
 - at most two Surge lanes in a project to begin with;
 - a voice limit on each;
 - the watchdog from stage 2.
@@ -345,7 +346,7 @@ Nothing:
 ## Decisions for the owner
 
 1. **Stage 0:** done. The owner played the test page and measured five lanes
-   (above). Still to say: whether it sounded right, and whether to go on
+   (above), and the patches "sounded really good". Still to say: whether to go on
    with stage 1.
 2. **Lane sound or guest:** the recommendation is a lane sound (above).
 3. **Contacting the Surge team:** a short note from you, in your own words,

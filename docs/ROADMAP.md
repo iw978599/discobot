@@ -1492,6 +1492,6 @@ V24. **Recording a live session as audio.** Done: Record Session in the timeline
   - one Surge lane costs about 9% of the owner's computer.
 
   Its recommendation is go, with at most two Surge lanes, a voice limit and a watchdog; the
-  owner is still to say whether it sounded right and whether to start stage 1. Not
+  owner said the patches sounded really good; still to say whether to start stage 1. Not
   chosen: Surge as a guest page (a guest is never sent notes), and translating Surge patches
   into Discobot's synth (still possible, smaller, and not the real sound).
