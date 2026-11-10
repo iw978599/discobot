@@ -113,6 +113,9 @@ jobs:
           cp trial/surge/serve.mjs out/
           cp surge/LICENSE out/SURGE-LICENSE.txt 2>/dev/null || true
 
+      - name: Check the worklet starts without what a worklet lacks
+        run: node trial/surge/worklet-check.mjs out/web
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
