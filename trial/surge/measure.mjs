@@ -141,10 +141,11 @@ for (const path of files.sort()) {
   const bytes = readFileSync(path), name = relative(patchRoot, path).replace(/\\/g, '/');
   try {
     const a = create(7); const loaded = load(a.engine, bytes);
+    const named = Array.from({ length: 8 }, (_, i) => text(Module._surge_macro_name(a.engine, i))).filter(label => label && label !== '-').length;
     const first = play(a.engine, [48, 55, 64], 1.5, 1, true); Module._surge_destroy(a.engine);
     const b = create(7); load(b.engine, bytes);
     const second = play(b.engine, [48, 55, 64], 1.5, 1, true); Module._surge_destroy(b.engine);
-    results.sweep.push({ name, result: loaded.result, loadMs: loaded.ms, cost: first.cost, worst: first.worst, peak: first.peak, nan: first.nan, silent: first.silent, repeats: same(first, second) });
+    results.sweep.push({ name, result: loaded.result, loadMs: loaded.ms, cost: first.cost, worst: first.worst, peak: first.peak, nan: first.nan, silent: first.silent, repeats: same(first, second), named });
   } catch (error) {
     results.sweep.push({ name, error: describe(error).slice(0, 200) });
   }

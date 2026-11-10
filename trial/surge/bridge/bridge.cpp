@@ -2,6 +2,7 @@
 // docs/SURGE_XT_PLAN.md). Nothing here is part of the app.
 #include "SurgeSynthesizer.h"
 #include "PatchFileHeaderStructs.h"
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
@@ -26,14 +27,37 @@ struct Engine
 
 int readBE(const unsigned char *p) { return (p[0] << 24) | (p[1] << 16) | (p[2] << 8) | p[3]; }
 std::string lastError;
+
+// Surge's effects and modulators ask the system for random numbers (std::random_device, which
+// asks getentropy). Defining getentropy here answers them from a sequence the seed decides, so
+// an export can repeat, and nothing asks the browser, which an audio worklet could not answer.
+uint64_t entropyState = 0x9E3779B97F4A7C15ull;
+void seedEntropy(unsigned seed) { entropyState = 0x9E3779B97F4A7C15ull ^ ((uint64_t)seed << 32 | seed); }
 } // namespace
+
+extern "C" int getentropy(void *buffer, size_t length)
+{
+    auto *bytes = static_cast<unsigned char *>(buffer);
+    for (size_t i = 0; i < length; ++i)
+    {
+        entropyState ^= entropyState << 13;
+        entropyState ^= entropyState >> 7;
+        entropyState ^= entropyState << 17;
+        bytes[i] = (unsigned char)(entropyState >> 24);
+    }
+    return 0;
+}
 
 extern "C"
 {
     EMSCRIPTEN_KEEPALIVE int surge_block_size() { return BLOCK_SIZE; }
 
     // Surge seeds std::rand from the clock when it is made; this sets it again.
-    EMSCRIPTEN_KEEPALIVE void surge_seed(unsigned seed) { std::srand(seed); }
+    EMSCRIPTEN_KEEPALIVE void surge_seed(unsigned seed)
+    {
+        std::srand(seed);
+        seedEntropy(seed);
+    }
 
     // What the last call that failed threw, if anything.
     EMSCRIPTEN_KEEPALIVE const char *surge_last_error() { return lastError.c_str(); }
@@ -42,6 +66,7 @@ extern "C"
     EMSCRIPTEN_KEEPALIVE Engine *surge_create(float sampleRate, unsigned seed)
     {
         auto *engine = new Engine();
+        seedEntropy(seed);
         try
         {
             engine->synth = std::make_unique<SurgeSynthesizer>(
