@@ -561,6 +561,21 @@ let holding = false;
 let retryAfter = RETRY_FIRST_MS;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 let retryKey = '';
+// Who this browser was in a session whose connection was lost, so that on coming back the room can
+// close that connection if it never heard it go (a phone asleep, the network changed). Kept for the
+// tab, so a reload can say it too. Forgotten on leaving a session on purpose.
+const FORMER_KEY = 'discobot_live_was_v1';
+let former: { key: string; id: string } | null = (() => {
+  try {
+    const kept = JSON.parse(sessionStorage.getItem(FORMER_KEY) ?? 'null');
+    return kept && typeof kept.key === 'string' && typeof kept.id === 'string' ? { key: kept.key, id: kept.id } : null;
+  } catch { return null; }
+})();
+function remember(next: { key: string; id: string } | null) {
+  if (former?.key === next?.key && former?.id === next?.id) return;
+  former = next;
+  try { if (next) sessionStorage.setItem(FORMER_KEY, JSON.stringify(next)); else sessionStorage.removeItem(FORMER_KEY); } catch { /* for this page only */ }
+}
 const listeners = new Set<() => void>();
 const changed = () => listeners.forEach(listener => listener());
 
@@ -582,10 +597,12 @@ export function liveUnavailableReason(accounts = accountsEnabled, sockets = type
 
 export const liveSummary = () => liveUnavailableReason() || liveSessionMessage(liveStatus());
 
-// The setup can bring forward an automatic retry, but never replaces a running session.
+// Rejoin Now, the network coming back, or the tab coming back to the front: brings forward an
+// automatic retry, but never replaces a running session.
 export function retryLiveSession() {
   if (!watching || running) return;
   if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
+  retryAfter = RETRY_FIRST_MS;
   check();
 }
 
@@ -653,6 +670,7 @@ function stop() {
   running = null;
   const others = session.status().others.length > 0;
   session.close();
+  remember(null);
   projectSync.hold(id, false, others ? 'yield' : undefined);
   holding = false;
   changed();
@@ -668,10 +686,11 @@ function check() {
   if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
   if (!target) { retryAfter = RETRY_FIRST_MS; return; }
   let welcomed = false;
+  const was = former?.key === key ? former.id : undefined;
   const session = createLiveSession({
     store: localService,
     connect: events => {
-      const socket = openLiveSocket(target.owner, target.id);
+      const socket = openLiveSocket(target.owner, target.id, was);
       if (!socket) { queueMicrotask(events.closed); return { send: () => {}, close: () => {} }; }
       socket.onmessage = event => { if (typeof event.data === 'string') events.received(event.data); };
       socket.onclose = () => events.closed();
@@ -695,6 +714,7 @@ function check() {
     changed: () => {
       const status = session.status();
       if (status.state === 'live' && !welcomed) { welcomed = true; retryAfter = RETRY_FIRST_MS; }
+      if (status.me && status.state !== 'closed') remember({ key, id: status.me.id });
       if (status.state === 'closed' && running?.session === session) {
         // Lost or refused (a server without live sessions answers 503): try again later, less
         // often each time, while the project is still shared and open.
@@ -723,6 +743,7 @@ export function startLiveSessions() {
   projectSync.subscribe(check);
   subscribeAccount(check);
   localService.subscribe(message => { if (message.type === 'init' || message.type === 'projectsChanged') check(); });
-  window.addEventListener('online', check);
+  window.addEventListener('online', retryLiveSession);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') retryLiveSession(); });
   check();
 }

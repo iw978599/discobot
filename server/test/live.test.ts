@@ -3,7 +3,7 @@ import { createServer, type Server } from 'node:http';
 import { test } from 'node:test';
 import { handle, liveTarget, type Env } from '../src/index.ts';
 import { createLocalDatabase } from '../src/localDatabase.ts';
-import { MAX_MESSAGE, freeColour, joined, left, received, type Peer } from '../src/live.ts';
+import { MAX_MESSAGE, formerSelf, freeColour, joined, left, received, type Peer } from '../src/live.ts';
 import { acceptLive, resetRooms } from '../devLive.ts';
 
 const PASSWORD = 'correct horse battery';
@@ -30,6 +30,15 @@ test('someone joining is welcomed, the others are told, and the one longest in t
   assert.deepEqual(ann.heard.at(-1), { t: 'leave', id: 'bob' });
   assert.equal(freeColour([ann, bob]), 2);
   assert.equal(freeColour([bob]), 0, 'a colour comes free when its person leaves');
+});
+
+test('someone coming back can name only their own earlier connection', () => {
+  const ann = person('ann', 1), bob = person('bob', 2, 1);
+  assert.equal(formerSelf([ann, bob], 'ann', 'ann'), ann);
+  assert.equal(formerSelf([ann, bob], 'ann', 'bob'), undefined, 'not anyone else\'s');
+  assert.equal(formerSelf([ann, bob], 'ann', 'gone'), undefined);
+  assert.equal(formerSelf([ann, bob], 'ann', null), undefined);
+  assert.equal(formerSelf([ann, bob], 'ann', 'a b'), undefined);
 });
 
 test('an edit reaches everyone in one order, the sender too; a project for someone joining reaches them alone', () => {
@@ -99,8 +108,8 @@ test('two browsers in one room hear each other through the local runner', async 
   });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const port = (server.address() as { port: number }).port;
-  const open = (token: string) => new Promise<{ socket: WebSocket; heard: any[] }>((resolve, reject) => {
-    const socket = new WebSocket(`ws://127.0.0.1:${port}/live/ian/${SONG}`, ['discobot', token]);
+  const open = (token: string, was = '') => new Promise<{ socket: WebSocket; heard: any[] }>((resolve, reject) => {
+    const socket = new WebSocket(`ws://127.0.0.1:${port}/live/ian/${SONG}${was ? `?was=${was}` : ''}`, ['discobot', token]);
     const heard: any[] = [];
     socket.onmessage = event => heard.push(JSON.parse(String(event.data)));
     socket.onopen = () => resolve({ socket, heard });
@@ -120,8 +129,24 @@ test('two browsers in one room hear each other through the local runner', async 
     second.socket.send(JSON.stringify({ t: 'op', op: { type: 'tempo.set', tempo: 99 }, keys: ['tempo'] }));
     await until(() => first.heard.some(message => message.t === 'op') && second.heard.some(message => message.t === 'op'));
     assert.equal(first.heard.find(message => message.t === 'op').op.tempo, 99);
-    second.socket.close();
-    await until(() => first.heard.some(message => message.t === 'leave'));
+    // Dana comes back while the room still holds her earlier connection: that one is closed, and
+    // the project is asked of Ian for her new one.
+    const danaWas = second.heard.find(message => message.t === 'welcome').you.id;
+    let secondClosed = false;
+    second.socket.onclose = () => { secondClosed = true; };
+    const third = await open(dana, danaWas);
+    await until(() => secondClosed && first.heard.some(message => message.t === 'leave' && message.id === danaWas));
+    await until(() => third.heard.some(message => message.t === 'welcome'));
+    assert.deepEqual(third.heard.find(message => message.t === 'welcome').members.map((entry: any) => entry.user), ['Ian']);
+    const thirdId = third.heard.find(message => message.t === 'welcome').you.id;
+    await until(() => first.heard.some(message => message.t === 'send-state' && message.to === thirdId));
+    // Naming someone else's connection closes nothing.
+    const fourth = await open(dana, first.heard.find(message => message.t === 'welcome').you.id);
+    await until(() => fourth.heard.some(message => message.t === 'welcome'));
+    assert.equal(first.socket.readyState, WebSocket.OPEN);
+    third.socket.close();
+    fourth.socket.close();
+    await until(() => first.heard.filter(message => message.t === 'leave').length === 3);
     first.socket.close();
   } finally {
     server.close();

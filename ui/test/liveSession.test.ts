@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { LocalProjectService } from '../src/services/localService.ts';
 import { readJam, BATCH_MS, CLOCK_PINGS, JOIN_WAIT_MS, LISTEN_WAIT_MS, createLiveSession, editKeys, overlap, liveSessionMessage, liveUnavailableReason, type HeardJam, type LiveAnchor, type LivePlay, type LiveStatus } from '../src/services/liveSession.ts';
-import { freeColour, joined, left, received, type Peer } from '../../server/src/live.ts';
+import { formerSelf, freeColour, joined, left, received, type Peer } from '../../server/src/live.ts';
 import { comparable, defaults, ok, setup, storage } from './helpers/store.ts';
 
 test('live setup distinguishes a build without accounts and a browser without WebSocket support', () => {
@@ -32,8 +32,9 @@ function room() {
   const timers: Array<{ at: number; run: () => void; done: boolean }> = [];
 
   // A browser with a project of its own (the first one made shares the helper's storage).
-  // `skew` is how far this browser's computer clock is ahead of the room's.
-  function browser(user: string, store?: LocalProjectService, skew = 0) {
+  // `skew` is how far this browser's computer clock is ahead of the room's. `was` is the member this
+  // browser was before its connection was lost, as it tells the room on coming back.
+  function browser(user: string, store?: LocalProjectService, skew = 0, was?: string) {
     if (!store) {
       storage.clear();
       store = new LocalProjectService();
@@ -47,7 +48,8 @@ function room() {
     const music = { started: [] as LivePlay[], stops: 0, now: null as LiveAnchor | null };
     // What the others played, as this browser heard it.
     const heard: HeardJam[] = [];
-    const peer: Peer = { id: user, user, colour: freeColour(peers), since: ++since, send: text => inbox.push(text) };
+    const id = peers.some(entry => entry.id === user) ? `${user}${since + 1}` : user;
+    const peer: Peer = { id, user, colour: freeColour(peers), since: ++since, send: text => inbox.push(text) };
     const session = createLiveSession({
       store,
       connect: handlers => {
@@ -67,9 +69,13 @@ function room() {
         now: () => music.now,
       },
     });
+    const old = formerSelf(peers, user, was);
+    if (old) { peers.splice(peers.findIndex(entry => entry.id === old.id), 1); left(peers, old); }
     peers.push(peer);
     joined(peers, peer);
-    const made = { user, store, session, inbox, sent, saving, music, heard, receive: (text: string) => events.received(text) };
+    // The connection is lost on this browser's side, and the room does not hear of it.
+    const drop = () => events.closed();
+    const made = { user, store, session, inbox, sent, saving, music, heard, drop, receive: (text: string) => events.received(text) };
     browsers.push(made);
     return made;
   }
@@ -364,6 +370,26 @@ test('when the person saving leaves, the next longest in the session saves', asy
   ok(ann.store.setTempo(90));
   live.tick();
   assert.deepEqual(ann.sent, []);
+});
+
+test('someone whose connection was lost comes back into the session in progress, with its project', async () => {
+  const { live, ann, ben } = await twoInSession();
+  const annWas = ann.session.status().me!.id;
+  ann.drop();
+  assert.equal(ann.session.status().state, 'closed');
+  ok(ben.store.setTempo(131));
+  live.tick();
+  await live.deliver();
+  const back = live.browser('ann', ann.store, 0, annWas);
+  await live.deliver();
+  assert.equal(back.session.status().state, 'live');
+  assert.equal(back.store.getTempo().tempo, 131);
+  assert.deepEqual(shape(back.store), shape(ben.store));
+  // Nobody sees the lost connection as a second person, and the one who stayed now saves.
+  assert.deepEqual(ben.session.status().others.map(member => member.user), ['ann']);
+  assert.deepEqual(back.session.status().others.map(member => member.user), ['ben']);
+  assert.deepEqual(ben.saving, [false, true]);
+  assert.deepEqual(back.saving, [false]);
 });
 
 const anchor = (wall: number, tick = 0): LiveAnchor => ({ wall, tick, mode: 'song', entry: 1, countIn: 32 });

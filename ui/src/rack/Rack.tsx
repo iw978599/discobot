@@ -19,7 +19,7 @@ import ShareDialog from './ShareDialog';
 import LiveSessionDialog from './LiveSessionDialog';
 import AccountDialog, { useAccountUser, useSyncStatus } from './AccountDialog';
 import { projectSync } from '../services/projectSync';
-import { liveJam, livePlace, liveStatus, liveSummary, subscribeLive } from '../services/liveSession';
+import { liveJam, livePlace, liveStatus, liveSummary, liveUnavailableReason, retryLiveSession, subscribeLive } from '../services/liveSession';
 import { markWalkthroughSeen } from '../services/walkthrough';
 import Walkthrough from './Walkthrough';
 import MidiImportDialog from './MidiImportDialog';
@@ -66,6 +66,8 @@ const livePlayer = () => {
   const status = liveStatus();
   return status.state === 'live' && status.others.length > 0 ? status.playing?.by ?? '' : '';
 };
+// The live connection is lost and waiting to try again, so Rejoin Now is offered.
+const liveLost = () => !liveUnavailableReason() && liveStatus().state === 'closed';
 
 export default function Rack({ studio }: { studio: Studio }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -127,6 +129,7 @@ export default function Rack({ studio }: { studio: Studio }) {
   const people = useMemo(() => parsePeople(peopleText), [peopleText]);
   const snap = useSyncExternalStore(subscribeLive, liveJam.snap);
   const liveMessage = useSyncExternalStore(subscribeLive, liveSummary);
+  const lost = useSyncExternalStore(subscribeLive, liveLost);
 
   // The mixer is handed the levels it shows, already gathered, and the same object for as long as
   // none of them changes: the lanes and the drums are new objects after every note and step.
@@ -426,6 +429,7 @@ export default function Rack({ studio }: { studio: Studio }) {
               Snap their notes to the beat
             </button>}
             {people.length > 0 && <SessionRecordButton onToggle={() => { void studio.handleRecordSession(); }} />}
+            {lost && <button className="rack-btn live-rejoin" onClick={retryLiveSession}>Rejoin Now</button>}
             <button className="rack-btn" onClick={openLive}>Session Setup</button>
           </div>
         )}

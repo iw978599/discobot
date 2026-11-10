@@ -1,13 +1,14 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
-import { freeColour, joined, left, received, type Peer } from './src/live.ts';
+import { formerSelf, freeColour, joined, left, received, type Peer } from './src/live.ts';
 
 // Live sessions for the local runner (dev.ts) and the browser tests: just enough of a WebSocket server
 // (the handshake, and unfragmented text, ping and close frames) to run the same room rules as the
 // Durable Object, with no dependency. Never deployed.
 
 const rooms = new Map<string, Peer[]>();
+const sockets = new WeakMap<Peer, Duplex>();
 export const resetRooms = () => rooms.clear();
 
 export function acceptLive(request: IncomingMessage, socket: Duplex, room: string, user: string) {
@@ -15,7 +16,16 @@ export function acceptLive(request: IncomingMessage, socket: Duplex, room: strin
   socket.write(['HTTP/1.1 101 Switching Protocols', 'Upgrade: websocket', 'Connection: Upgrade', `Sec-WebSocket-Accept: ${accept}`, 'Sec-WebSocket-Protocol: discobot', '', ''].join('\r\n'));
   const peers = rooms.get(room) ?? [];
   rooms.set(room, peers);
+  // Someone coming back: the connection they say they were is closed, as the Durable Object does.
+  const was = formerSelf(peers, user, new URL(request.url ?? '', 'http://localhost').searchParams.get('was'));
+  const old = was && peers.find(entry => entry.id === was.id);
+  if (old) {
+    peers.splice(peers.indexOf(old), 1);
+    left(peers, old);
+    sockets.get(old)?.end(frame(Buffer.alloc(0), 8));
+  }
   const peer: Peer = { id: randomUUID().slice(0, 8), user, colour: freeColour(peers), since: Date.now(), send: text => socket.write(frame(Buffer.from(text))) };
+  sockets.set(peer, socket);
   peers.push(peer);
   joined(peers, peer);
 
