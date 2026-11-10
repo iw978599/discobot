@@ -32,8 +32,20 @@ std::string lastError;
 // asks getentropy). Defining getentropy here answers them from a sequence the seed decides, so
 // an export can repeat, and nothing asks the browser, which an audio worklet could not answer.
 uint64_t entropyState = 0x9E3779B97F4A7C15ull;
-void seedEntropy(unsigned seed) { entropyState = 0x9E3779B97F4A7C15ull ^ ((uint64_t)seed << 32 | seed); }
+uint32_t clockSeeds = 1;
+void seedEntropy(unsigned seed)
+{
+    entropyState = 0x9E3779B97F4A7C15ull ^ ((uint64_t)seed << 32 | seed);
+    clockSeeds = seed * 2654435761u + 1;
+}
 } // namespace
+
+// What Surge's random number generators are seeded with in place of the clock (shim/trial_seed.h).
+extern "C" unsigned surge_trial_next_seed(void)
+{
+    clockSeeds = clockSeeds * 1664525u + 1013904223u;
+    return clockSeeds;
+}
 
 extern "C" int getentropy(void *buffer, size_t length)
 {
