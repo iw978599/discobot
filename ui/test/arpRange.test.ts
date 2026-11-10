@@ -55,3 +55,10 @@ test('a stored arpeggiator Hold is on or absent, and a sound saved before it has
   // The steps play the same with it on: it is for keys held live.
   assert.deepEqual(played(chord(6), arp({ hold: true })), played(chord(6), arp()));
 });
+
+test('the studio\'s copy of a sound keeps Hold, and always says whether it is on', async () => {
+  const { normalizeSynthParams } = await import('../src/studio/studioState.ts');
+  const defaults = createDefaultSynthParameters();
+  assert.equal(normalizeSynthParams({ ...defaults, arpeggiator: { ...defaults.arpeggiator, hold: true } })!.arpeggiator.hold, true);
+  assert.equal(normalizeSynthParams(defaults)!.arpeggiator.hold, false, 'off is sent to the store, so switching it off is not merged away');
+});
