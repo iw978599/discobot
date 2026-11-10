@@ -1173,6 +1173,10 @@ for new accounts.
   and phases wrap without a remainder). Most of the cost is the voices
   themselves (oscillators, the twice-run filter, the per-voice drive): the
   owner is to say whether the static is still there.
+  On 2026-11-10 the owner heard crackle that went on after letting go of a
+  long Room Decay, not in the WAV: the synth and drum buses each ran a Room
+  convolver of up to 8 seconds, and they now share one, which halves that
+  work and sounds the same (a reverb is linear). Not verified by ear.
 - **A cover of Opus** (sample songs, 2026-10-26). Opus's tune is Eric
   Prydz's, and a song bundled with the app must be ours to redistribute, so
   Long Ascent is built the way Opus is built on a figure and chords of its

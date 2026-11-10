@@ -30,12 +30,9 @@ type Effects = {
   output: GainNode;
   delay: DelayNode;
   feedback: GainNode;
-  // The reverb that is sounding: the Room's convolver or one built of nodes (the Hall, the Spring),
-  // and never both.
-  reverb: ConvolverNode | null;
-  hall: BuiltReverb | null;
-  reverbFade: GainNode;
-  decay: number;
+  // What this bus sends to the one reverb both buses share, at the bus's return level.
+  reverbReturn: GainNode;
+  room: SharedReverb;
   drive: WaveShaperNode;
   driveFade: GainNode;
   driveAmount: number;
@@ -45,7 +42,6 @@ type Effects = {
   lfo: OscillatorNode;
   depth: GainNode;
   chorus: Chorus;
-  reverbShape: string;
   // What each aux bus is pointed at, built the first time something is sent to it.
   aux: Array<{ kind: AuxKind; effect: AuxEffect } | null>;
 };
@@ -415,6 +411,26 @@ const halt = (source: AudioScheduledSourceNode) => {
   try { source.stop(); } catch { /* already stopped */ }
 };
 
+// Live, the synths and the drums share one reverb (the effects are the same settings for both): a
+// Room is a convolver holding seconds of noise, and two of them at a long Decay were more than the
+// browser could work through in time, which was heard as crackle that an export, made without
+// hurry, did not have (2026-11-10). A reverb is linear, so one fed with each bus at its return
+// level sounds as two would. Export still builds one for each bus.
+type SharedReverb = {
+  input: GainNode;
+  // The reverb that is sounding: the Room's convolver or one built of nodes (the Hall, the Spring),
+  // and never both.
+  reverb: ConvolverNode | null;
+  hall: BuiltReverb | null;
+  fade: GainNode;
+  wet: GainNode;
+  decay: number;
+  shape: string;
+};
+function releaseReverb(room: SharedReverb) {
+  [room.input, ...(room.reverb ? [room.reverb] : []), ...(room.hall?.nodes ?? []), room.fade, room.wet].forEach(node => node.disconnect());
+}
+
 // The chorus keeps two delays and an inverter to itself; cut off from the bus they go with the context.
 function releaseEffects(bus: Effects) {
   halt(bus.lfo);
@@ -422,7 +438,7 @@ function releaseEffects(bus: Effects) {
   bus.wow.oscillators.forEach(halt);
   const nodes: AudioNode[] = [
     ...Object.values(bus.inputs), ...Object.values(bus.wet), bus.output, bus.delay, bus.feedback, bus.color, ...bus.wow.nodes,
-    ...(bus.reverb ? [bus.reverb] : []), ...(bus.hall?.nodes ?? []), bus.reverbFade, bus.drive, bus.driveFade, bus.tone, ...bus.phaser, bus.phaserFeedback,
+    bus.reverbReturn, bus.drive, bus.driveFade, bus.tone, ...bus.phaser, bus.phaserFeedback,
     bus.lfo, bus.depth, bus.chorus.input, bus.chorus.output, bus.chorus.lfo, bus.chorus.depth,
   ];
   for (const held of bus.aux) {
@@ -444,6 +460,7 @@ export class AudioEngine {
   // A tempo-synced delay, phaser and chorus follow this.
   private effectsTempo = 120;
   private readonly effects = new Map<Group, Effects>();
+  private room?: SharedReverb;
   private readonly samples = new Map<AudioBufferSourceNode, GainNode>();
   private readonly clicks = new Map<OscillatorNode, GainNode>();
   private readonly lanes = new Set<() => void>();
@@ -455,6 +472,7 @@ export class AudioEngine {
     if (this.live && this.live.context.state !== 'closed') return this.live;
     const context = this.makeContext();
     this.effects.clear();
+    this.room = undefined;
     this.workletLoading = undefined;
     const master = context.createGain();
     master.gain.value = this.masterLevel();
@@ -557,8 +575,10 @@ export class AudioEngine {
     color.connect(feedback).connect(delay);
     color.connect(wet.delay);
     const wow = createWow(ctx, delay.delayTime);
-    const reverb = ctx.createConvolver(), reverbFade = ctx.createGain();
-    inputs.reverb.connect(reverb).connect(reverbFade).connect(wet.reverb);
+    const reverbReturn = ctx.createGain();
+    reverbReturn.gain.value = 0;
+    const room = this.sharedReverb(ctx, master);
+    inputs.reverb.connect(reverbReturn).connect(room.input);
     const drive = ctx.createWaveShaper(), driveFade = ctx.createGain(), tone = ctx.createBiquadFilter();
     drive.oversample = '4x';
     inputs.drive.connect(drive).connect(driveFade).connect(tone).connect(wet.drive);
@@ -579,7 +599,7 @@ export class AudioEngine {
     const chorus = createChorus(ctx);
     inputs.chorus.connect(chorus.input);
     chorus.output.connect(wet.chorus);
-    const bus: Effects = { inputs, wet, output, delay, feedback, color, wow, driveKind: undefined, reverb, hall: null, reverbFade, decay: 0, drive, driveFade, driveAmount: -1, tone, phaser, phaserFeedback, lfo, depth, chorus, reverbShape: '', aux: [null, null] };
+    const bus: Effects = { inputs, wet, output, delay, feedback, color, wow, driveKind: undefined, reverbReturn, room, drive, driveFade, driveAmount: -1, tone, phaser, phaserFeedback, lfo, depth, chorus, aux: [null, null] };
     this.effects.set(group, bus);
     if (this.loop) this.update(bus, group, this.loop, ctx);
     return bus;
@@ -614,20 +634,59 @@ export class AudioEngine {
     this.retiring.set(timer, release);
   }
 
+  // The one reverb, made with the first bus.
+  private sharedReverb(ctx: AudioContext, master: GainNode): SharedReverb {
+    if (this.room) return this.room;
+    const input = ctx.createGain(), reverb = ctx.createConvolver(), fade = ctx.createGain(), wet = ctx.createGain();
+    wet.gain.value = 0;
+    input.connect(reverb).connect(fade).connect(wet).connect(master);
+    this.room = { input, reverb, hall: null, fade, wet, decay: 0, shape: '' };
+    return this.room;
+  }
+
   // Puts another reverb in the place of the one that is sounding: the new one fades up as the old
   // fades down, and the old one, with every node inside it, is cut loose once it is silent.
-  private replaceReverb(bus: Effects, ctx: AudioContext, next: { reverb: ConvolverNode } | { hall: BuiltReverb }) {
-    const previous = bus.reverb ?? bus.hall!.input, previousNodes = bus.reverb ? [bus.reverb] : bus.hall!.nodes, previousFade = bus.reverbFade;
+  private replaceReverb(room: SharedReverb, ctx: AudioContext, next: { reverb: ConvolverNode } | { hall: BuiltReverb }) {
+    const previous = room.reverb ?? room.hall!.input, previousNodes = room.reverb ? [room.reverb] : room.hall!.nodes, previousFade = room.fade;
     const fade = ctx.createGain();
     fade.gain.value = 0;
-    bus.reverb = 'reverb' in next ? next.reverb : null;
-    bus.hall = 'hall' in next ? next.hall : null;
-    bus.inputs.reverb.connect(bus.reverb ?? bus.hall!.input);
-    (bus.reverb ?? bus.hall!.output).connect(fade).connect(bus.wet.reverb);
+    room.reverb = 'reverb' in next ? next.reverb : null;
+    room.hall = 'hall' in next ? next.hall : null;
+    room.input.connect(room.reverb ?? room.hall!.input);
+    (room.reverb ?? room.hall!.output).connect(fade).connect(room.wet);
     smooth(previousFade.gain, 0, ctx);
     smooth(fade.gain, 1, ctx);
-    this.retire(() => { bus.inputs.reverb.disconnect(previous); previousNodes.forEach(node => node.disconnect()); previousFade.disconnect(); });
-    bus.reverbFade = fade;
+    this.retire(() => { room.input.disconnect(previous); previousNodes.forEach(node => node.disconnect()); previousFade.disconnect(); });
+    room.fade = fade;
+  }
+
+  // The shared reverb's settings. Both buses ask; the second finds nothing to change.
+  private updateReverb(room: SharedReverb, state: EffectsLoopState, ctx: AudioContext) {
+    smooth(room.wet.gain, state.reverb.enabled ? limit(state.reverb.mix, 0, 1) * reverbLevel(state.reverb.decay) : 0, ctx);
+    const decay = limit(state.reverb.decay, 0.1, 8);
+    const shape = `${(state.reverb.preDelay ?? 0).toFixed(3)}/${(state.reverb.damping ?? 0).toFixed(2)}`;
+    if (state.reverb.kind === 'hall' || state.reverb.kind === 'spring') {
+      // A Hall's or a Spring's decay and damping are settings of the nodes it has: only choosing one
+      // builds one, and choosing the other builds that in its place.
+      if (room.hall?.kind === state.reverb.kind) room.hall.set(state.reverb, ctx.currentTime);
+      else {
+        const hall = createBuiltReverb(ctx, state.reverb.kind);
+        hall.set(state.reverb);
+        this.replaceReverb(room, ctx, { hall });
+        room.decay = 0;
+        room.shape = '';
+      }
+    } else if (!room.reverb || Math.abs(decay - room.decay) > 0.04 || shape !== room.shape) {
+      const buffer = reverbImpulse(ctx, decay, Math.random, state.reverb.preDelay, state.reverb.damping);
+      room.shape = shape;
+      if (room.reverb && !room.reverb.buffer) room.reverb.buffer = buffer;
+      else {
+        const reverb = ctx.createConvolver();
+        reverb.buffer = buffer;
+        this.replaceReverb(room, ctx, { reverb });
+      }
+      room.decay = decay;
+    }
   }
 
   private update(bus: Effects, group: Group, state: EffectsLoopState, ctx: AudioContext) {
@@ -638,31 +697,8 @@ export class AudioEngine {
     smooth(bus.wet.delay.gain, state.delay.enabled ? limit(state.delay.mix, 0, 1) : 0, ctx);
     smooth(bus.color.frequency, state.delay.color ? delayColorHz(state.delay.color) : Math.min(20000, ctx.sampleRate / 2 - 100), ctx);
     bus.wow.set(state.delay.wow ?? 0, ctx.currentTime);
-    smooth(bus.wet.reverb.gain, state.reverb.enabled ? limit(state.reverb.mix, 0, 1) * reverbLevel(state.reverb.decay) : 0, ctx);
-    const decay = limit(state.reverb.decay, 0.1, 8);
-    const shape = `${(state.reverb.preDelay ?? 0).toFixed(3)}/${(state.reverb.damping ?? 0).toFixed(2)}`;
-    if (state.reverb.kind === 'hall' || state.reverb.kind === 'spring') {
-      // A Hall's or a Spring's decay and damping are settings of the nodes it has: only choosing one
-      // builds one, and choosing the other builds that in its place.
-      if (bus.hall?.kind === state.reverb.kind) bus.hall.set(state.reverb, ctx.currentTime);
-      else {
-        const hall = createBuiltReverb(ctx, state.reverb.kind);
-        hall.set(state.reverb);
-        this.replaceReverb(bus, ctx, { hall });
-        bus.decay = 0;
-        bus.reverbShape = '';
-      }
-    } else if (!bus.reverb || Math.abs(decay - bus.decay) > 0.04 || shape !== bus.reverbShape) {
-      const buffer = reverbImpulse(ctx, decay, Math.random, state.reverb.preDelay, state.reverb.damping);
-      bus.reverbShape = shape;
-      if (bus.reverb && !bus.reverb.buffer) bus.reverb.buffer = buffer;
-      else {
-        const reverb = ctx.createConvolver();
-        reverb.buffer = buffer;
-        this.replaceReverb(bus, ctx, { reverb });
-      }
-      bus.decay = decay;
-    }
+    smooth(bus.reverbReturn.gain, enabled ? limit(state.returns[group], 0, 1) : 0, ctx);
+    this.updateReverb(bus.room, state, ctx);
     const driveAmount = limit(state.drive.amount, 0, 1);
     if (Math.abs(driveAmount - bus.driveAmount) > 0.005 || state.drive.kind !== bus.driveKind) {
       const curve = driveCurve(driveAmount, state.drive.kind);
@@ -850,6 +886,8 @@ export class AudioEngine {
     }
     this.effects.forEach(releaseEffects);
     this.effects.clear();
+    if (this.room) releaseReverb(this.room);
+    this.room = undefined;
     if (!live) return;
     [live.master, ...live.eq, live.limiter, live.safety, ...(live.analyser ? [live.analyser] : [])].forEach(node => node.disconnect());
     if (live.context.state !== 'closed') await live.context.close().catch(() => {});
