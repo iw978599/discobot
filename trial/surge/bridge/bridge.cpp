@@ -5,6 +5,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <string>
+#include <exception>
 #include <emscripten/emscripten.h>
 
 namespace
@@ -23,6 +25,7 @@ struct Engine
 };
 
 int readBE(const unsigned char *p) { return (p[0] << 24) | (p[1] << 16) | (p[2] << 8) | p[3]; }
+std::string lastError;
 } // namespace
 
 extern "C"
@@ -32,14 +35,33 @@ extern "C"
     // Surge seeds std::rand from the clock when it is made; this sets it again.
     EMSCRIPTEN_KEEPALIVE void surge_seed(unsigned seed) { std::srand(seed); }
 
+    // What the last call that failed threw, if anything.
+    EMSCRIPTEN_KEEPALIVE const char *surge_last_error() { return lastError.c_str(); }
+
+    // Null when Surge could not be made; surge_last_error says why.
     EMSCRIPTEN_KEEPALIVE Engine *surge_create(float sampleRate, unsigned seed)
     {
         auto *engine = new Engine();
-        engine->synth = std::make_unique<SurgeSynthesizer>(
-            &engine->layer, SurgeStorage::skipPatchLoadDataPathSentinel);
-        engine->synth->setSamplerate(sampleRate);
-        engine->synth->time_data.tempo = 120;
-        engine->synth->time_data.ppqPos = 0;
+        try
+        {
+            engine->synth = std::make_unique<SurgeSynthesizer>(
+                &engine->layer, SurgeStorage::skipPatchLoadDataPathSentinel);
+            engine->synth->setSamplerate(sampleRate);
+            engine->synth->time_data.tempo = 120;
+            engine->synth->time_data.ppqPos = 0;
+        }
+        catch (const std::exception &e)
+        {
+            lastError = std::string("create: ") + e.what();
+            delete engine;
+            return nullptr;
+        }
+        catch (...)
+        {
+            lastError = "create: unknown exception";
+            delete engine;
+            return nullptr;
+        }
         std::srand(seed);
         return engine;
     }
@@ -60,7 +82,20 @@ extern "C"
         synth.allNotesOff();
         synth.storage.getPatch().comment = "";
         synth.storage.getPatch().author = "";
-        synth.loadRaw(data + sizeof(sst::io::fxChunkSetCustom), chunk, false);
+        try
+        {
+            synth.loadRaw(data + sizeof(sst::io::fxChunkSetCustom), chunk, false);
+        }
+        catch (const std::exception &e)
+        {
+            lastError = std::string("load: ") + e.what();
+            return 3;
+        }
+        catch (...)
+        {
+            lastError = "load: unknown exception";
+            return 3;
+        }
         engine->used = BLOCK_SIZE;
         return 0;
     }

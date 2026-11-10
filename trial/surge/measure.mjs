@@ -15,10 +15,17 @@ const startupMs = performance.now() - started;
 const RATE = 48000, BLOCK = 128, BUDGET_MS = (BLOCK / RATE) * 1000;
 const left = Module._malloc(BLOCK * 4), right = Module._malloc(BLOCK * 4);
 const text = (pointer) => Module.UTF8ToString(pointer);
+// A C++ exception that escaped, as words where Emscripten can say them.
+function describe(error) {
+  try { if (Module.getExceptionMessage && error instanceof WebAssembly.Exception) return Module.getExceptionMessage(error).join(': '); } catch { /* fall through */ }
+  return String(error?.stack ?? error);
+}
 
 function create(seed = 7) {
   const t = performance.now();
-  const engine = Module._surge_create(RATE, seed);
+  let engine;
+  try { engine = Module._surge_create(RATE, seed); } catch (error) { throw new Error(`create threw: ${describe(error)}`); }
+  if (!engine) throw new Error(text(Module._surge_last_error()));
   return { engine, ms: performance.now() - t };
 }
 function load(engine, bytes) {
@@ -28,7 +35,7 @@ function load(engine, bytes) {
   const result = Module._surge_load_fxp(engine, pointer, bytes.length);
   const ms = performance.now() - t;
   Module._free(pointer);
-  return { result, ms };
+  return result === 3 ? { result, ms, error: text(Module._surge_last_error()) } : { result, ms };
 }
 // Plays notes for `hold` seconds and lets them ring for `tail`, 128 frames at a time as a worklet would.
 function play(engine, notes, hold, tail, keep) {
@@ -139,7 +146,7 @@ for (const path of files.sort()) {
     const second = play(b.engine, [48, 55, 64], 1.5, 1, true); Module._surge_destroy(b.engine);
     results.sweep.push({ name, result: loaded.result, loadMs: loaded.ms, cost: first.cost, worst: first.worst, peak: first.peak, nan: first.nan, silent: first.silent, repeats: same(first, second) });
   } catch (error) {
-    results.sweep.push({ name, error: String(error).slice(0, 200) });
+    results.sweep.push({ name, error: describe(error).slice(0, 200) });
   }
 }
 results.heapEnd = Module.HEAPU8.length;
