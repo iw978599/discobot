@@ -2,8 +2,9 @@
 
 Written 2026-11-10. The owner asked whether Surge XT could be added, and then
 for option B (Surge's real engine, not a translation of its patches) to be
-looked into thoroughly and planned. Nothing here is built. Stage 0 decides
-whether the rest is worth doing.
+looked into thoroughly and planned. Stage 0, the trial build, ran the same day
+(results under stage 0): it works, and the recommendation is to go ahead with
+the limits it found. Nothing is in the app yet.
 
 ## Short answer
 
@@ -179,13 +180,84 @@ patches into Discobot's synth) is still there.
 Also look at, in this stage: building Surge as a WCLAP (the plugin standard
 CLAP compiled for the web), which a maintainer suggested. If that works it
 might be less glue, but it would make Discobot a WCLAP host, which is a larger
-decision.
+decision. (Not looked at: the plain build worked, so it was not needed.)
+
+#### Results (2026-11-10)
+
+The trial is on the branch `trial/surge-xt`, not merged: `trial/surge/` (the
+bridge, the measuring scripts, the test page) and
+`.github/workflows/surge-trial.yml`, which runs only for that branch. It builds
+Surge at commit `d307b47` with Emscripten 4.0.10 in about seven minutes, and
+its run summary holds the full tables.
+
+**It builds, with five small changes**, all made by the workflow, none to
+Surge's repository:
+- a stand-in for `execinfo.h` (crash backtraces, which a browser lacks);
+- a Linux-only linker option taken out;
+- a made-up path where Surge asks which file it is running from;
+- every clock-based seed of Surge's random number generators (in
+  `SurgeStorage.h` and sst-basic-blocks' `RNG.h`) asking the bridge instead;
+- the bridge answering `getentropy` itself.
+
+The last two are what make renders repeat. Without them only 199 of 641 patches
+did. They are also the change worth offering upstream.
+
+**Measured on GitHub's machine, in Node, 48 kHz, 128-sample blocks:**
+- **Size:** 5.9 MB of WebAssembly, 1.7 MB gzipped, 1.2 MB with brotli. It
+  starts in about 70 ms, and an engine takes about 15 ms to make.
+- **All 641 factory patches load**, none crash and none put out a broken
+  number. 10 are silent, for known reasons: 7 need audio coming in (4
+  audio-in templates and the 3 vocoders), and 3 use the Formula modulator,
+  which is left out with Lua.
+- **Repeatable:** 641 of 641 patches give identical output twice from one seed.
+- **Processor:** three notes cost a median 1.4 to 2.2% of real time across
+  runs, with the costliest patch at 9 to 14%. Eight notes on the twenty
+  patches cost 1 to 7%. Discobot's own synth costs 5 to 7% for the same eight
+  notes, so Surge is not heavier than what the app runs now.
+- **Loading a patch:** a median 2 to 3 ms, about one audio block (2.7 ms).
+  Loading must not happen inside the audio thread's block while the lane
+  plays.
+- **Memory:** about 16 MB for each engine. Memory reached 366 MB during the
+  641-patch run; whether that is a leak or freed space the module keeps is
+  not known yet.
+- **Level:** the median peak of three notes was 0.51, but 55 patches went
+  over full scale. A Surge lane needs its level brought down before the
+  mix.
+- **Macros:** 570 of the 641 patches name none of their eight macros, 52 name
+  one to four, and 19 name five or more. Macros alone are not enough controls
+  (stage 4 changes).
+
+**In the owner's browser (Chrome, the test page, 2026-11-10):** Ambient
+E-Guitar holding an eight-note chord on five Surge lanes at once (40 voices),
+with all eight of its macros at full, averaged 44% of the audio time, with a
+worst block of 150%. Its macros include Drive, FX1 Send and Feedback, so this
+is close to the heaviest that patch gets. That is one Surge
+lane with eight notes at about 9% on that computer, about twice what GitHub's
+machine measured. A block over 100% is late and can be heard as a click.
+The owner said "the patches sounded really good" (2026-11-10): heard by ear in
+the browser build. Not yet said: whether five lanes clicked.
+
+The worklet code is also checked on every build in a bare scope with what an
+audio worklet lacks (`process`, `crypto`, `performance`, `TextDecoder`). That
+caught two crashes the page would have had:
+- Emscripten's random fill reaching for a shell command;
+- its clock needing `performance`, which the page now supplies from
+  `Date.now()`.
+
+**Decision: go**, with these limits:
+- at most two Surge lanes in a project to begin with;
+- a voice limit on each;
+- the watchdog from stage 2.
+
+The 150% worst block most likely came from starting forty voices in one
+block. That is unmeasured; stage 2 should measure it before choosing the
+limits.
 
 ### Stage 1: the build in the repository
 
 - A `surge/` folder: Surge at the pinned commit (a submodule), our small
-  patches (the seed, the 32-bit change), the C layer, and a build script with
-  a pinned Emscripten version.
+  changes (the five from stage 0), the C layer, and a build script with a
+  pinned Emscripten version. Start from `trial/surge/` on the trial branch.
 - A GitHub workflow, run by hand, that builds it and commits the result.
   Rebuilding is rare, so the built file is committed rather than built on
   every check. A file beside it records the Surge commit and compiler version.
@@ -204,6 +276,17 @@ decision.
   typed worklet messages.
 - **A watchdog:** the processor times its own work, and a lane that keeps
   overrunning is muted with a message instead of making every lane stutter.
+- **Limits from stage 0:**
+  - at most two Surge lanes;
+  - a voice limit on each, measured by playing a chord with many voices
+    starting at once;
+  - a patch loaded outside the audio thread's block (or while the lane is
+    silent);
+  - the level brought down so a loud patch does not reach the mix over
+    full scale;
+  - memory checked across many patch changes.
+- **The worklet's clock:** a worklet may have no `performance`; the page gives
+  Emscripten `Date.now()` in its place, as the trial does.
 
 ### Stage 3: export
 
@@ -219,6 +302,16 @@ decision.
   group in the preset menu.
 - **The eight macros:** knobs on the lane, named as each patch names them, with
   automation, Auto, MIDI Learn and per-scene sounds.
+- **A few of Surge's own controls, by name.** Stage 0 found 570 of 641
+  factory patches name no macros, so macros alone would mostly be eight
+  unnamed knobs. Every patch also gets a short fixed set of Surge's own
+  parameters, for example:
+  - filter cutoff and resonance;
+  - the amplitude envelope's attack and release;
+  - the volume.
+
+  The exact set is to be chosen when this stage is planned in detail. The
+  macros are shown only where the patch names them.
 - **Your own `.fxp`:** imported like a sample (stored by fingerprint, carried
   in project files, not synced). A project naming a file this browser does
   not have says so, and the lane stays silent rather than guessing.
@@ -252,15 +345,17 @@ Nothing:
 
 ## Decisions for the owner
 
-1. **Go ahead with stage 0?** It changes nothing in the app.
+1. **Stage 0:** done. The owner played the test page and measured five lanes
+   (above), and the patches "sounded really good". Still to say: whether to go on
+   with stage 1.
 2. **Lane sound or guest:** the recommendation is a lane sound (above).
 3. **Contacting the Surge team:** a short note from you, in your own words,
    would be welcomed more than a generated one. It's worth asking two things:
    what licence the factory patches and wavetables are under, and whether they
    would take the seeding change upstream.
-4. **Download size:** what you would accept for the engine plus the first
-   patches, once stage 0 has measured it. It is only downloaded when a lane
-   first uses Surge.
+4. **Download size:** the engine is 1.2 to 1.7 MB compressed, and the 641
+   factory patches are 24 MB before compression. They are downloaded only
+   when a lane first uses Surge, and a patch category only when it is opened.
 
 ## Sources
 
