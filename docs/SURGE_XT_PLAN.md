@@ -277,14 +277,22 @@ limits.
 
 ### Stage 1: the build in the repository
 
-- A `surge/` folder: Surge at the pinned commit (a submodule), our small
-  changes (the five from stage 0), the C layer, and a build script with a
-  pinned Emscripten version. Start from `trial/surge/` on the trial branch.
-- A GitHub workflow, run by hand, that builds it and commits the result.
-  Rebuilding is rare, so the built file is committed rather than built on
-  every check. A file beside it records the Surge commit and compiler version.
-- A licences page in the app (Help) naming Surge XT, its licence, its authors
-  and where its exact source is, as GPL-3 asks.
+- A `surge/` folder: the Surge commit it builds (`surge/SURGE_COMMIT`, a
+  pinned commit rather than a submodule, so a clone of Discobot stays small),
+  our small changes (the five from stage 0), the C layer, and a build script
+  with a pinned Emscripten version. Started from `trial/surge/`.
+- A GitHub workflow builds it on any pull request that touches `surge/`, and
+  can be run by hand. The built engine is committed in `surge/dist/` with a
+  record of the Surge commit, the compiler and each file's fingerprint. The
+  workflow fails if the committed engine is not what the source builds, so
+  the binary always matches its source, as GPL-3 asks.
+- A unit test in `npm test` plays the committed engine: it makes sound, the
+  same seed gives the same sound, and a file that is not a Surge patch is
+  refused.
+- Nothing reaches the site yet: `surge/dist/` is outside the app. The
+  licences note in Help comes with stage 2, when the engine first ships. It
+  names Surge XT, its licence and authors, its exact source, and the
+  libraries built into it, each read before it ships.
 
 ### Stage 2: one lane plays Surge live
 
@@ -292,12 +300,38 @@ limits.
   (the `add-project-field` skill: optional, absent means as before, checked,
   `SCHEMA` bumped). What is stored is which patch (a factory patch's name, or
   a file's fingerprint) and the eight macro values.
-- A `surge-processor` in the worklet. The compiled module is fetched once
-  from Discobot's own site and handed in; one engine per lane that uses it.
+- **One processor for all the synth lanes** (asked for by the owner on
+  2026-11-10):
+  - **What changes:** today every lane is its own `synth-processor` node.
+    Stage 2 replaces them with one `lanes-processor` that holds every
+    synth lane's voice core, the built-in `SynthCore` or a Surge engine, and
+    gives each lane an output of its own (an `AudioWorkletNode` can have
+    many).
+  - **What stays:** each lane's inserts, pan, sends, ducking and hand-over
+    to a guest are still Web Audio nodes after its output, so the mix and
+    export are unchanged.
+  - **Why:** one place sees the whole load, so it can keep a voice budget
+    across every lane, Surge included, and quieten the least important
+    voices (the oldest released ones first) before a block runs late,
+    rather than each lane guessing on its own.
+  - **The drums:** they keep their own processor for now. Whether they
+    join it is decided by measuring.
+  - **The core module:** a lane's sound moves through the same typed
+    worklet messages, carrying the lane's number.
+  - **No change to sound:** a project without Surge must sound the same
+    after the move. Tests compare a lane's output through the new processor
+    with the old one, sample for sample.
+- The compiled Surge module is fetched once from Discobot's own site, when a
+  lane first uses Surge, and handed to the processor. The engine is made off
+  the audio thread's block (the trial's late second at every lane change),
+  before the lane is given it.
 - Notes, release, pitch bend and the macros arrive as the synth's do, through
   typed worklet messages.
-- **A watchdog:** the processor times its own work, and a lane that keeps
-  overrunning is muted with a message instead of making every lane stutter.
+- **A watchdog:** the processor counts late blocks over each second, since
+  Chrome's worklet clock only reads whole milliseconds. Before muting
+  anything it sheds voices against the budget. A Surge lane that keeps
+  overrunning after that is muted with a message, instead of making every
+  lane stutter.
 - **Limits from stage 0:**
   - at most two Surge lanes;
   - a voice limit on each, measured by playing a chord with many voices

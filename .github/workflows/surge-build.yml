@@ -1,0 +1,77 @@
+name: Surge XT engine
+
+# Builds Surge XT's engine for the browser from surge/ (docs/SURGE_XT_PLAN.md), tests it, and checks
+# that the engine committed in surge/dist/ is exactly what this source builds. The built files are
+# kept as the run's artifact; to update surge/dist/, download them and commit them.
+on:
+  push:
+    branches-ignore: [main]
+    paths: ['surge/**', '.github/workflows/surge-build.yml', 'ui/test/surgeEngine.test.ts']
+  pull_request:
+    paths: ['surge/**', '.github/workflows/surge-build.yml', 'ui/test/surgeEngine.test.ts']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      EMSDK_VERSION: 4.0.10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Cache Emscripten
+        uses: actions/cache@v4
+        with:
+          path: ~/emsdk
+          key: emsdk-${{ env.EMSDK_VERSION }}
+
+      - name: Install Emscripten
+        run: |
+          [ -d ~/emsdk ] || git clone -q https://github.com/emscripten-core/emsdk.git ~/emsdk
+          cd ~/emsdk
+          ./emsdk install "$EMSDK_VERSION"
+          ./emsdk activate "$EMSDK_VERSION"
+
+      - name: Build
+        run: |
+          source ~/emsdk/emsdk_env.sh
+          bash surge/build.sh "$RUNNER_TEMP/surge-work" "$PWD/built"
+
+      - name: Test the fresh build
+        run: |
+          npm ci --no-audit --no-fund
+          SURGE_DIST="$PWD/built" node --import tsx --test ui/test/surgeEngine.test.ts
+
+      - name: Compare with the committed engine
+        run: |
+          if [ ! -f surge/dist/BUILD.json ]; then
+            echo "Nothing is committed in surge/dist yet." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          node -e '
+            const built = require("./built/BUILD.json"), committed = require("./surge/dist/BUILD.json");
+            let same = true;
+            for (const name of Object.keys(built.files)) {
+              const a = built.files[name].sha256, b = committed.files[name]?.sha256;
+              console.log(`${name}: ${a === b ? "same" : `built ${a}, committed ${b}`}`);
+              if (a !== b) same = false;
+            }
+            if (built.surge.commit !== committed.surge.commit) { console.log("Different Surge commit."); same = false; }
+            if (!same) { console.log("surge/dist is not what this source builds. Download this run'"'"'s artifact and commit it."); process.exit(1); }
+          ' | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: surge-engine
+          path: built
+          retention-days: 30
