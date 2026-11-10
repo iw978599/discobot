@@ -234,7 +234,7 @@ export default function MidiPanel({
             <span className="midi-learn-status" role="status">{learning !== null ? `Turn a knob on the controller for ${targetLabel(learning)}.` : ''}</span>
           </div>
           <p className="midi-note">
-            A controller's pitch bend bends the notes of the lane its keys play, up or down two semitones, and springs back when you let go, stop, or send the device elsewhere. Its mod wheel (CC 1) moves whatever a lane's route sends it to (choose Mod wheel as a route's source on the LFO tab), unless the wheel is tied to a knob here, in which case it moves that knob instead. Both are played live: they are not saved, not undone, not recorded into the pattern and not in an export.
+            A controller's pitch bend bends the notes of the lane its keys play, up or down two semitones, and springs back when you let go, stop, or send the device elsewhere. Its mod wheel (CC 1) moves whatever a lane's route sends it to (choose Mod wheel as a route's source on the LFO tab), unless the wheel is tied to a knob here, in which case it moves that knob instead. Its sustain pedal (CC 64) keeps the notes you let go sounding until the pedal comes up, and with the arpeggiator on keeps it running. All three are played live: they are not saved, not undone, not recorded into the pattern and not in an export.
           </p>
           {ties.length > 0 && (
             <ul className="midi-tie-list" aria-label="Knobs tied to parameters">

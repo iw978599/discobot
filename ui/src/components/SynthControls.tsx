@@ -524,6 +524,7 @@ export default function SynthControls({
         <div className="synth-arp-panel">
         <div className="arp-controls">
           <Toggle className="synth-toggle" label="Arpeggiator enabled" title="Enable arpeggiator for this synth" checked={parameters.arpeggiator.enabled} onChange={(on) => updateArpeggiator({ enabled: on })}>On</Toggle>
+          <Toggle className="synth-toggle" label="Arpeggiator hold" title="Keep arpeggiating a chord after its keys come up, until you play the next chord or switch Hold off. A sustain pedal does the same while it is down" checked={Boolean(parameters.arpeggiator.hold)} onChange={(on) => updateArpeggiator({ hold: on })}>Hold</Toggle>
           <span className="octave-shift-value">ARP</span>
           <select
             className="synth-select arp-select"

@@ -260,6 +260,9 @@ export interface SynthParameters {
     // how many octaves it runs through, 1 to 3. Absent means as it was before there was a choice:
     // a single note through three octaves, a chord through its own notes once.
     octaves?: number;
+    // Hold: a chord played into the arpeggiator keeps going after its keys come up, until the next
+    // chord or Hold is switched off. Live keys only; the steps never use it. Absent: off, as before.
+    hold?: boolean;
   };
   oscillator: {
     type: OscillatorType;

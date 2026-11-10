@@ -1,9 +1,11 @@
 // Keys held under a lane's arpeggiator. It runs for as long as any key is down, through the
-// notes held as one chord, a beat at a time, as a hardware arpeggiator does; with Hold on the keys
-// latch, so it runs until Hold is let go. Each pulse is handed on only `AHEAD` seconds before it
-// sounds, so letting the last key go stops it at once. A key pressed or let go starts the pattern
-// again from the top with the notes now held, except that a key pressed with another, a moment
-// after it, joins the chord without the first note sounding twice.
+// notes held as one chord, a beat at a time, as a hardware arpeggiator does. With the arpeggiator's
+// Hold on (`latch`) the chord stays when the keys come up, until a key pressed with none down starts
+// the next chord, or Hold is switched off, which lets go of every note no key still holds. Each pulse
+// is handed on only `AHEAD` seconds before it sounds, so letting the last key go stops it at once. A
+// key pressed or let go starts the pattern again from the top with the notes now held, except that
+// a key pressed with another, a moment after it, joins the chord without the first note sounding
+// twice.
 
 export interface ArpPulse { note: string; offset: number; duration: number }
 
@@ -12,6 +14,8 @@ export interface LiveArpLane {
   pulses: (notes: string[], beat: number) => ArpPulse[];
   beat: () => number;
   play: (note: string, time: number, duration: number, velocity: number) => void;
+  // Whether the lane's Hold is on, read as often as the beat. Absent: off.
+  latch?: () => boolean;
 }
 
 const AHEAD = 0.1;
@@ -21,6 +25,8 @@ const TOGETHER = 0.05;
 
 interface Held {
   notes: string[];
+  // The keys actually down, which with Hold on can be fewer than the notes played.
+  down: string[];
   velocity: number;
   lane: LiveArpLane;
   // When the beat being played began, and the pulses of it not yet handed on.
@@ -37,15 +43,20 @@ export class LiveArp {
 
   press(id: number, note: string, velocity: number, lane: LiveArpLane) {
     const held = this.held.get(id);
-    if (held?.notes.includes(note)) return;
-    const notes = [...(held?.notes ?? []), note];
-    this.held.set(id, { notes, velocity, lane, start: 0, queue: [], played: held?.played ?? -Infinity });
-    this.restart(id, held);
+    const down = [...(held?.down ?? []).filter(entry => entry !== note), note];
+    // With every key up, the chord held by Hold gives way to the one now played.
+    const fresh = held !== undefined && held.down.length === 0;
+    if (held?.notes.includes(note) && !fresh) { held.down = down; return; }
+    const notes = fresh ? [note] : [...(held?.notes ?? []), note];
+    this.held.set(id, { notes, down, velocity, lane, start: 0, queue: [], played: held?.played ?? -Infinity });
+    this.restart(id, fresh ? undefined : held);
   }
 
   release(id: number, note: string) {
     const held = this.held.get(id);
     if (!held?.notes.includes(note)) return;
+    held.down = held.down.filter(entry => entry !== note);
+    if (held.lane.latch?.()) return;
     const notes = held.notes.filter(entry => entry !== note);
     if (notes.length === 0) { this.stop(id); return; }
     this.held.set(id, { ...held, notes });
@@ -76,6 +87,15 @@ export class LiveArp {
 
   tick() {
     const until = this.now() + AHEAD;
+    // Hold switched off: what no key holds is let go, as if its key had come up now.
+    for (const [id, held] of [...this.held]) {
+      if (held.lane.latch?.() || held.notes.length === held.down.length) continue;
+      const notes = held.notes.filter(note => held.down.includes(note));
+      if (notes.length === 0) { this.stop(id); continue; }
+      this.held.set(id, { ...held, notes });
+      this.restart(id, held);
+      return;
+    }
     for (const held of this.held.values()) {
       for (;;) {
         while (held.queue.length > 0 && held.queue[0].time <= until) {

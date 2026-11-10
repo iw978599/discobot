@@ -77,6 +77,25 @@ interface UserMeta {
   shared: Record<string, Linked & { owner: string }>;
   // Shared projects removed here, whose owners are still to be told this account has left.
   left: Record<string, string>;
+  // What the account said at the end of the last pass: who saved each shared project last, and
+  // which of this account's projects are shared. Shown from the start of the next pass, so a page
+  // loaded again, or a server out of reach, still shows what is shared (and the open project's live
+  // session can start) until the account answers.
+  seen?: { savedBy: Record<string, string>; sharedByMe: SyncStatus['sharedByMe'] };
+}
+
+// The stored `seen`, keeping only entries of the right shape.
+function readSeen(found: unknown): UserMeta['seen'] {
+  const object = (value: unknown): Record<string, unknown> => (value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {});
+  const seen = object(found);
+  const savedBy: Record<string, string> = {};
+  for (const [id, by] of Object.entries(object(seen.savedBy))) if (typeof by === 'string') savedBy[id] = by;
+  const sharedByMe: SyncStatus['sharedByMe'] = {};
+  for (const [id, entry] of Object.entries(object(seen.sharedByMe))) {
+    const { people, savedBy: by } = object(entry);
+    if (typeof people === 'number' && Number.isFinite(people) && people > 0 && typeof by === 'string') sharedByMe[id] = { people, savedBy: by };
+  }
+  return { savedBy, sharedByMe };
 }
 
 // Two saves of an unchanged project must hash the same, so fields that change on every
@@ -126,8 +145,13 @@ export function createProjectSync(deps: SyncDeps) {
   const load = (username: string): { meta: UserMeta; fresh: boolean } => {
     const found = readAll()[username.toLowerCase()];
     if (!found || typeof found !== 'object') return { meta: { projects: {}, deleted: {}, localOnly: [], shared: {}, left: {} }, fresh: true };
-    return { meta: { projects: found.projects || {}, deleted: found.deleted || {}, localOnly: Array.isArray(found.localOnly) ? found.localOnly : [], shared: found.shared || {}, left: found.left || {} }, fresh: false };
+    return { meta: { projects: found.projects || {}, deleted: found.deleted || {}, localOnly: Array.isArray(found.localOnly) ? found.localOnly : [], shared: found.shared || {}, left: found.left || {}, seen: readSeen(found.seen) }, fresh: false };
   };
+  // Shared projects as this browser last knew them.
+  const remembered = (meta: UserMeta): Pick<SyncStatus, 'shared' | 'sharedByMe'> => ({
+    shared: Object.fromEntries(Object.entries(meta.shared).map(([id, link]) => [id, { owner: link.owner, savedBy: meta.seen?.savedBy[id] ?? link.owner }])),
+    sharedByMe: Object.fromEntries(Object.entries(meta.seen?.sharedByMe ?? {}).filter(([id]) => meta.projects[id])),
+  });
   const save = (username: string, meta: UserMeta) => {
     try { deps.storage.write(JSON.stringify({ ...readAll(), [username.toLowerCase()]: meta })); } catch { /* sync state is rebuilt next time */ }
   };
@@ -140,9 +164,11 @@ export function createProjectSync(deps: SyncDeps) {
   async function pass(username: string) {
     const loaded = load(username);
     const meta = loaded.meta;
+    if (knownUser !== username) setStatus(remembered(meta));
     let records = await store.syncRecords();
     // Another tab has unresolved changes: leave everything alone until the user has chosen.
     if (!records) return;
+    if (knownUser !== username) describe(meta, records);
     const problems: Record<string, string> = {};
     const keptBoth: string[] = [];
 
@@ -306,14 +332,16 @@ export function createProjectSync(deps: SyncDeps) {
       }
     }
 
+    meta.seen = {
+      savedBy: theirs ? Object.fromEntries(theirs.filter(entry => entry.savedBy).map(entry => [entry.id, entry.savedBy!])) : meta.seen?.savedBy ?? {},
+      sharedByMe: Object.fromEntries(remote.filter(entry => entry.sharedWith && !entry.deleted).map(entry => [entry.id, { people: entry.sharedWith!, savedBy: entry.savedBy ?? username }])),
+    };
     save(username, meta);
     describe(meta, await store.syncRecords() || records);
-    const savedBy = new Map((theirs ?? []).map(entry => [entry.id, entry.savedBy]));
     setStatus({
       problems, keptBoth: keptBoth.length ? keptBoth : status.keptBoth, lastSyncedAt: Date.now(),
-      shared: Object.fromEntries(Object.entries(meta.shared).map(([id, link]) => [id, { owner: link.owner, savedBy: savedBy.get(id) ?? link.owner }])),
+      ...remembered(meta),
       offered: (theirs ?? []).filter(entry => !meta.shared[entry.id]),
-      sharedByMe: Object.fromEntries(remote.filter(entry => entry.sharedWith && !entry.deleted).map(entry => [entry.id, { people: entry.sharedWith!, savedBy: entry.savedBy ?? username }])),
       updates: updates.length ? updates : status.updates,
       ended: ended.length ? ended : status.ended,
     });

@@ -436,6 +436,10 @@ export function useStudio(engine?: AudioEngine) {
       if (!synth?.synthParams || synth.muted || (lanes.some(s => s.solo) && !synth.solo)) return;
       void synthAudio.playNote(note, synth.synthParams, duration, velocity, browserMutedRef.current, effectsLoopRef.current, globalTempoRef.current, synthId, time);
     },
+    latch: () => {
+      const arp = synthsRef.current.find(s => s.id === synthId)?.synthParams?.arpeggiator;
+      return Boolean(arp?.enabled && arp.hold);
+    },
   });
 
   // One step of a pattern: its whole chord, for its whole length.

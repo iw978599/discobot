@@ -20,6 +20,7 @@ import type { StudioCore } from './useStudioCore';
 import { midiOut, type PlayedNote } from '../services/midiOutput';
 import type { DrumSettings } from '../types';
 import { createClockFollower } from '../services/midiClockFollow';
+import { MidiSustain, SUSTAIN_PEDAL, pedalDown } from '../services/midiSustain';
 
 // A note or a pad played by hand goes to the others in a live session and, when sending them is
 // on, to the MIDI output.
@@ -37,6 +38,8 @@ export interface StudioNotesNeeds {
 export function useStudioNotes(core: StudioCore, needs: StudioNotesNeeds) {
   const { engine, synthsRef, setSynths, quantizeRef, transportRef, signatureOfRef, currentSceneIdRef, recordHeldRef, midiChordRef, recordingRef, synthAudio, liveArpRef, browserMutedRef, effectsLoopRef, globalTempo, synths, selectedSynthId, liveLanesRef, midiHeldRef, midiDestinationsRef, setMidiDestinations, midiChannelRef, midiTargetSynthIdRef, selectedSynthIdRef, midiLearnRef, setMidiTies, setMidiLearn, midiTiesRef, applyParamTargetRef, midiPadLearnRef, midiPadsRef, setMidiPads, setMidiPadLearn, midiDrumChannelRef, drumStateRef, drumAudio, midiModeRef, globalTempoRef, midiFollowClockRef, externalTempoRef, setExternalTempo, handleGlobalPlayStopRef } = core;
   const clockFollowerRef = useRef(createClockFollower());
+  // Each controller's sustain pedal, and the keys it is keeping sounding (midiHeldRef's keys).
+  const sustainRef = useRef(new MidiSustain());
   const { arpLane, handleOctaveShift } = needs;
   // Writes a note to a step. `add` joins it to the chord already there instead of replacing it.
   const upsertStepNote = useCallback(async (synthId: number, stepIndex: number, note: string, velocity: number, add = false, offset?: number, select = true) => {
@@ -202,17 +205,27 @@ ${note}`, { synthId, note, step: at.step, ticks });
     setMidiDestinations(next);
   }, [handleNoteRelease, releaseLiveGestures]);
   const handleMidiMessage = useCallback((message: MidiMessage, source: MidiSource) => {
-    if (message.type === 'noteOff') {
-      // Release on the lane that took the note-on, even if the channel, the target or the device's
-      // place changed since. A pad's note-off means nothing: no lane holds it.
-      const heldKey = `${source.id}\n${message.channel}:${message.note}`;
+    // Lets go of a note held under a key, on the lane that took its note-on.
+    const letGo = (heldKey: string) => {
       const held = midiHeldRef.current.get(heldKey);
       if (!held) return;
       midiHeldRef.current.delete(heldKey);
       void handleNoteRelease(held.synthId, held.note);
+    };
+    if (message.type === 'noteOff') {
+      // Release on the lane that took the note-on, even if the channel, the target or the device's
+      // place changed since. A pad's note-off means nothing: no lane holds it. With the device's
+      // sustain pedal down the note keeps sounding until the pedal comes up.
+      const heldKey = `${source.id}\n${message.channel}:${message.note}`;
+      if (!midiHeldRef.current.has(heldKey) || sustainRef.current.keep(source.id, heldKey)) return;
+      letGo(heldKey);
       return;
     }
-    if (message.type === 'deviceGone') { releaseLiveGestures(source.name); return; }
+    if (message.type === 'deviceGone') {
+      releaseLiveGestures(source.name);
+      sustainRef.current.forget(source.id).forEach(letGo);
+      return;
+    }
     const place = destinationFor(midiDestinationsRef.current, source.name);
     if (place === 'off') return;
     // Another device's clock, while following it: its pulses set the tempo, and its start and stop
@@ -263,6 +276,8 @@ ${note}`, { synthId, note, step: at.step, ticks });
       const tie = tieFor(midiTiesRef.current, message.channel, message.controller);
       if (tie) applyParamTargetRef.current(tie.target, message.value / 127);
       else if (message.controller === 1) gesture({ wheel: message.value / 127 });
+      // The sustain pedal, on whatever lane each kept note was played into.
+      else if (message.controller === SUSTAIN_PEDAL) sustainRef.current.pedal(source.id, pedalDown(message.value)).forEach(letGo);
       return;
     }
     // While a drum is waiting to be learned, the first note played is its pad's from then on.
@@ -323,7 +338,10 @@ ${note}`, { synthId, note, step: at.step, ticks });
     if (mode === 'live') {
       if (!targetSynth.synthParams) return;
       // Held under the device's key whether or not it is arpeggiated, so its note-off finds the lane.
-      midiHeldRef.current.set(`${source.id}\n${message.channel}:${message.note}`, { synthId: targetSynth.id, note: noteName, device: source.name });
+      // A key the pedal was keeping lets that note go first, so the same note never sounds twice.
+      const heldKey = `${source.id}\n${message.channel}:${message.note}`;
+      if (sustainRef.current.struck(source.id, heldKey)) letGo(heldKey);
+      midiHeldRef.current.set(heldKey, { synthId: targetSynth.id, note: noteName, device: source.name });
       played({ kind: 'note', lane: targetSynth.id, note: noteName, velocity, on: true });
       if (targetSynth.synthParams.arpeggiator.enabled) {
         liveArpRef.current!.press(targetSynth.id, noteName, velocity, arpLane(targetSynth.id));
