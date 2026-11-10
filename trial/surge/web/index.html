@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Surge XT trial</title>
+<style>
+  :root { color-scheme: dark; --bg: #16181c; --panel: #22252b; --text: #e8e6e1; --faint: #a3a09a; --on: #f2a93b; }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; display: grid; gap: 14px; }
+  section { background: var(--panel); border-radius: 6px; padding: 14px; }
+  h1 { font-size: 20px; margin: 0; }
+  p { margin: 0 0 8px; color: var(--faint); }
+  button, select { font: inherit; padding: 6px 10px; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .macros { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+  .macros label { display: grid; gap: 4px; font-size: 13px; }
+  .meter { font: 600 22px/1.2 ui-monospace, monospace; color: var(--on); }
+  .keys { display: flex; gap: 4px; flex-wrap: wrap; }
+  .keys button { width: 42px; height: 64px; }
+  .keys button.held { background: var(--on); color: #000; }
+</style>
+</head>
+<body>
+<main>
+  <section>
+    <h1>Surge XT in the browser: trial</h1>
+    <p>Stage 0 of the Surge XT plan. Surge XT's own engine, built for the browser, playing its factory patches. Nothing here is part of Discobot.</p>
+    <div class="row"><button id="start">Start audio</button><span id="status">Not started.</span></div>
+  </section>
+  <section>
+    <div class="row">
+      <label>Patch <select id="patch" disabled></select></label>
+      <label>Surge lanes at once <select id="lanes" disabled><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></label>
+      <button id="chord" disabled>Hold an 8-note chord</button>
+    </div>
+    <p id="patchInfo"></p>
+  </section>
+  <section>
+    <p>Play with the computer keyboard (A W S E D F T G Y H U J K is one octave from C3, Z and X move the octave) or press the keys below.</p>
+    <div class="keys" id="keys"></div>
+  </section>
+  <section>
+    <p>Share of the audio time Surge takes (above 100% the sound breaks up; Discobot's own lanes and drums need room too).</p>
+    <div class="meter" id="meter">-</div>
+    <p id="meterNote"></p>
+  </section>
+  <section>
+    <p>This patch's macros.</p>
+    <div class="macros" id="macros"></div>
+  </section>
+</main>
+<script src="page.js"></script>
+</body>
+</html>

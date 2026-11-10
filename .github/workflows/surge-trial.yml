@@ -1,0 +1,107 @@
+name: Surge XT trial
+
+# Stage 0 of docs/SURGE_XT_PLAN.md: builds Surge XT's engine for the browser, measures it, and
+# packages a test page. It runs only for the trial's own branch and changes nothing in the app.
+on:
+  push:
+    branches: [trial/surge-xt]
+    paths: ['trial/surge/**', '.github/workflows/surge-trial.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  trial:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      SURGE_COMMIT: d307b472cd5e986baf61f9db0a4f173183aba3f9
+      EMSDK_VERSION: 4.0.10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Fetch Surge XT at the pinned commit
+        run: |
+          git init -q surge
+          cd surge
+          git remote add origin https://github.com/surge-synthesizer/surge.git
+          git sparse-checkout set --cone src libs cmake resources/surge-shared resources/data/patches_factory
+          git fetch -q --depth 1 origin "$SURGE_COMMIT"
+          git checkout -q FETCH_HEAD
+          for path in libs/eurorack/eurorack libs/fmt libs/simde libs/tuning-library libs/PEGTL libs/pffft \
+            libs/sst/sst-basic-blocks libs/sst/sst-cpputils libs/sst/sst-effects libs/sst/sst-filters \
+            libs/sst/sst-plugininfra libs/sst/sst-waveshapers libs/sst/sst-cmake libs/r8brain-free-src \
+            libs/zstd libs/oddsound-mts/MTS-ESP; do
+            git submodule update -q --init --recursive --depth 1 "$path" || git submodule update -q --init --recursive "$path"
+          done
+          git log -1 --format='Surge %H %cd'
+
+      - name: Cache Emscripten
+        uses: actions/cache@v4
+        with:
+          path: ~/emsdk
+          key: emsdk-${{ env.EMSDK_VERSION }}
+
+      - name: Install Emscripten
+        run: |
+          [ -d ~/emsdk ] || git clone -q https://github.com/emscripten-core/emsdk.git ~/emsdk
+          cd ~/emsdk
+          ./emsdk install "$EMSDK_VERSION"
+          ./emsdk activate "$EMSDK_VERSION"
+
+      - name: Build the engine
+        run: |
+          source ~/emsdk/emsdk_env.sh
+          emcc --version | head -1
+          cp -r trial/surge/bridge surge/src/discobot-trial
+          echo 'add_subdirectory(discobot-trial)' >> surge/src/CMakeLists.txt
+          emcmake cmake -S surge -B build -DCMAKE_BUILD_TYPE=Release -DENABLE_LTO=OFF \
+            -DSURGE_SKIP_JUCE_FOR_RACK=ON -DSURGE_SKIP_LUA=ON -DSURGE_SKIP_ODDSOUND_MTS=ON \
+            -DSURGE_SKIP_VST3=ON -DSURGE_SKIP_STANDALONE=ON -DSURGE_BUILD_CLAP=OFF \
+            -DSURGE_BUILD_XT=OFF -DSURGE_BUILD_FX=OFF -DSURGE_BUILD_TESTRUNNER=OFF \
+            -DSURGE_SKIP_WERROR=ON -DSURGE_BUILD_32BIT_LINUX=ON \
+            -DCMAKE_C_FLAGS="-msimd128 -fwasm-exceptions" -DCMAKE_CXX_FLAGS="-msimd128 -fwasm-exceptions"
+          cmake --build build --target surge-trial -j "$(nproc)" 2>&1 | grep -vE "warning:|note:|^\s" | tail -60
+          test -f build/src/discobot-trial/surge-trial.wasm
+          ls -la build/src/discobot-trial
+
+      - name: Measure
+        run: |
+          npm ci --no-audit --no-fund
+          mkdir -p out
+          node --import tsx trial/surge/baseline.ts out/baseline.json
+          node trial/surge/measure.mjs "$PWD/build/src/discobot-trial/surge-trial.js" surge/resources/data/patches_factory out
+          node trial/surge/report.mjs out
+          cat out/results.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Package the test page
+        if: always()
+        run: |
+          mkdir -p out/web/patches
+          if [ -f build/src/discobot-trial/surge-trial.wasm ]; then
+            cp build/src/discobot-trial/surge-trial.wasm out/web/
+            cat trial/surge/web/worklet-head.js build/src/discobot-trial/surge-trial.js trial/surge/web/worklet-body.js > out/web/surge-worklet.js
+          fi
+          cp trial/surge/web/index.html trial/surge/web/page.js trial/surge/patches.json out/web/
+          node -e '
+            const fs = require("fs"), path = require("path");
+            for (const name of require("./trial/surge/patches.json")) {
+              const from = path.join("surge/resources/data/patches_factory", name), to = path.join("out/web/patches", name);
+              if (!fs.existsSync(from)) continue;
+              fs.mkdirSync(path.dirname(to), { recursive: true }); fs.copyFileSync(from, to);
+            }'
+          cp trial/surge/serve.mjs out/
+          cp surge/LICENSE out/SURGE-LICENSE.txt 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: surge-trial
+          path: out
+          retention-days: 14
