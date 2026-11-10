@@ -102,8 +102,17 @@ test('synth and drums share one protected destination and independent parallel F
     assert.ok(ctx.nodes.some(node => node.gain.value === 0.75), 'phaser feedback safely bounded');
     assert.ok(ctx.nodes.some(node => node.frequency.value === 400 * Math.pow(40, 0.25)), 'drive tone is connected and controlled');
     assert.ok(ctx.nodes.some(node => node.buffer), 'reverb receives an impulse');
-    const effectReturns = ctx.nodes.filter(node => node !== synth.output && node !== drums.output && node.connections.includes(master));
+    const intoMaster = ctx.nodes.filter(node => node !== synth.output && node !== drums.output && node.connections.includes(master));
+    // Each bus returns to the master, and the one reverb both share returns at its mix.
+    const convolvers = ctx.nodes.filter(node => node.buffer);
+    assert.equal(convolvers.length, 1, 'one reverb for the synths and the drums');
+    const reverbWet = convolvers[0].connections[0].connections[0];
+    const effectReturns = intoMaster.filter(node => node !== reverbWet);
     assert.deepEqual(effectReturns.map(node => node.gain.value), [0.7, 0.6]);
+    assert.equal(reverbWet.gain.value, 0.7);
+    const reverbIn = ctx.nodes.find(node => node.connections.includes(convolvers[0]))!;
+    const reverbReturns = ctx.nodes.filter(node => node.connections.includes(reverbIn));
+    assert.deepEqual(reverbReturns.map(node => node.gain.value), [0.7, 0.6], 'each bus is sent into it at its own return');
     const oldReverbs = ctx.nodes.filter(node => node.buffer);
     const oldDrives = ctx.nodes.filter(node => node.curve && node !== destinationInputs[0]);
     setEffectsLoop({ ...loop, reverb: { ...loop.reverb, decay: 1.5 }, drive: { ...loop.drive, amount: 0.7 } });
@@ -112,7 +121,7 @@ test('synth and drums share one protected destination and independent parallel F
     await new Promise(resolve => setTimeout(resolve, 150));
     assert.ok([...oldReverbs, ...oldDrives].every(node => node.connections.length === 0), 'crossfaded processors are released');
     setEffectsLoop({ ...loop, enabled: false });
-    assert.ok(effectReturns.every(node => node.gain.value === 0), 'global bypass silences only returns, not dry audio');
+    assert.ok([...effectReturns, ...reverbReturns].every(node => node.gain.value === 0), 'global bypass silences only returns, not dry audio');
     assert.equal((synth.input as unknown as Node).gain.value, 1);
     synth.setVolume(0.4);
     assert.equal((synth.input as unknown as Node).gain.value, 0.4);
