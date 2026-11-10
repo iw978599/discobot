@@ -63,6 +63,10 @@ jobs:
           echo 'add_subdirectory(discobot-trial)' >> surge/src/CMakeLists.txt
           # A Linux linker option the browser's linker does not know.
           sed -i '/-Wl,--no-undefined/d' surge/src/common/CMakeLists.txt
+          # A browser cannot say which file it is running from; Surge only uses it to look for data
+          # folders beside itself, and the trial hands it every patch directly.
+          sed -i 's|throw std::runtime_error{"Failed to retrieve shared object file name"};|return fs::path{"/surge/bin/surge.so"};|' surge/libs/sst/sst-plugininfra/src/paths_linux.cpp
+          grep -q '/surge/bin/surge.so' surge/libs/sst/sst-plugininfra/src/paths_linux.cpp
           emcmake cmake -S surge -B build -DCMAKE_BUILD_TYPE=Release -DENABLE_LTO=OFF \
             -DSURGE_SKIP_JUCE_FOR_RACK=ON -DSURGE_SKIP_LUA=ON -DSURGE_SKIP_ODDSOUND_MTS=ON \
             -DSURGE_SKIP_VST3=ON -DSURGE_SKIP_STANDALONE=ON -DSURGE_BUILD_CLAP=OFF \
