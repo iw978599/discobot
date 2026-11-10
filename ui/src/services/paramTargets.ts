@@ -20,6 +20,11 @@ export interface ParamRange {
   curve?: 'log';
   // whole numbers only
   whole?: boolean;
+  // on or off: a knob or a button past half way is on (`min` 0, `max` 1)
+  toggle?: boolean;
+  // false: a controller can move it, but it cannot be automated (it is not one of the voice's own
+  // numbers, such as the arpeggiator's gate, which is read when notes are scheduled)
+  automate?: false;
 }
 
 // A lane's parameters, and where each is in its sound. `macro` ones are the model's four knobs.
@@ -53,6 +58,24 @@ export const LANE_PARAMS: Record<string, ParamRange & { path?: string[]; macro?:
   auxASend: { label: 'Aux A send', min: 0, max: 1, path: ['fxSends', 'auxA'] },
   auxBSend: { label: 'Aux B send', min: 0, max: 1, path: ['fxSends', 'auxB'] },
   duck: { label: 'Duck', min: 0, max: 1, path: ['duck'] },
+  // Added 2026-11-09, when the owner asked for more to tie a controller to, the arpeggiator's gate first.
+  arpGate: { label: 'Arpeggiator gate', min: 0.1, max: 1, path: ['arpeggiator', 'gate'], automate: false },
+  arpOn: { label: 'Arpeggiator on', min: 0, max: 1, whole: true, toggle: true, path: ['arpeggiator', 'enabled'], automate: false },
+  arpHold: { label: 'Arpeggiator hold', min: 0, max: 1, whole: true, toggle: true, path: ['arpeggiator', 'hold'], automate: false },
+  keyTracking: { label: 'Filter key tracking', min: 0, max: 1, path: ['filter', 'keyTracking'] },
+  filterAttack: { label: 'Filter envelope attack', min: 0.001, max: 5, curve: 'log', path: ['filterEnvelope', 'attack'] },
+  filterDecay: { label: 'Filter envelope decay', min: 0.005, max: 5, curve: 'log', path: ['filterEnvelope', 'decay'] },
+  filterSustain: { label: 'Filter envelope sustain', min: 0, max: 1, path: ['filterEnvelope', 'sustain'] },
+  filterRelease: { label: 'Filter envelope release', min: 0.005, max: 5, curve: 'log', path: ['filterEnvelope', 'release'] },
+  oscLevel: { label: 'Oscillator level', min: 0, max: 1, path: ['mixer', 'osc'] },
+  ring: { label: 'Ring mod level', min: 0, max: 1, path: ['mixer', 'ring'] },
+  osc2Level: { label: 'Oscillator 2 level', min: 0, max: 1, path: ['oscillator2', 'level'] },
+  osc2Detune: { label: 'Oscillator 2 detune', min: -100, max: 100, whole: true, path: ['oscillator2', 'detune'] },
+  osc2Semitones: { label: 'Oscillator 2 pitch', min: -24, max: 24, whole: true, path: ['oscillator2', 'semitones'] },
+  unisonDetune: { label: 'Unison detune', min: 0, max: 1, path: ['unison', 'detune'] },
+  unisonMix: { label: 'Unison mix', min: 0, max: 1, path: ['unison', 'mix'] },
+  fmRatio: { label: 'FM ratio', min: 0.25, max: 16, curve: 'log', path: ['fm', 'ratio'] },
+  fmIndex: { label: 'FM amount', min: 0, max: 1, path: ['fm', 'index'] },
 };
 
 export const DRUM_PARAMS: Record<string, ParamRange> = {
@@ -129,9 +152,9 @@ export function fromUnit(range: ParamRange, unit: number): number {
 // The change to a lane's sound that sets one of its parameters: the value at its place, nested as
 // the sound is, which is what the store merges.
 export function lanePatch(key: string, value: number): Record<string, unknown> | null {
-  const path = LANE_PARAMS[key]?.path;
+  const range = LANE_PARAMS[key], path = range?.path;
   if (!path) return null;
-  return path.reduceRight<unknown>((inner, name) => ({ [name]: inner }), value) as Record<string, unknown>;
+  return path.reduceRight<unknown>((inner, name) => ({ [name]: inner }), range.toggle ? value >= 0.5 : value) as Record<string, unknown>;
 }
 
 export { DRUM_NAMES };

@@ -179,6 +179,8 @@ export function sanitizeSynthParams(value: unknown, defaults: SynthParameters): 
   const arpOctaves = Math.round(number(record(input.arpeggiator).octaves, 0, 0, 3));
   if (arpOctaves >= 1) params.arpeggiator.octaves = arpOctaves;
   else delete params.arpeggiator.octaves;
+  if (record(input.arpeggiator).hold === true) params.arpeggiator.hold = true;
+  else delete params.arpeggiator.hold;
   params.effects.reverb.wet = number(params.effects.reverb.wet, defaults.effects.reverb.wet, 0, 1);
   params.effects.reverb.decay = number(params.effects.reverb.decay, defaults.effects.reverb.decay, .1, 8);
   params.effects.delay.wet = number(params.effects.delay.wet, defaults.effects.delay.wet, 0, 1);

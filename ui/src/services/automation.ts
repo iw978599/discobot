@@ -16,7 +16,7 @@ import { copyBar, layAlong, resizeBars, resizeEachBar } from './patternLength';
 // path (`stepSends`), live and in export alike.
 const IN_THE_MIXER = ['duck'];
 export const SEND_PARAMS = ['reverbSend', 'delaySend', 'chorusSend', 'auxASend', 'auxBSend'];
-export const AUTOMATABLE: string[] = Object.keys(LANE_PARAMS).filter(key => LANE_PARAMS[key].path && !IN_THE_MIXER.includes(key));
+export const AUTOMATABLE: string[] = Object.keys(LANE_PARAMS).filter(key => LANE_PARAMS[key].path && LANE_PARAMS[key].automate !== false && !IN_THE_MIXER.includes(key));
 // How many of a lane's parameters can have automation at once.
 export const MAX_AUTOMATED = 8;
 

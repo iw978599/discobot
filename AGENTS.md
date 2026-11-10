@@ -292,6 +292,7 @@ npm run migrate --workspace=server  # Apply new database migrations to the live 
 - Sync never infers a deletion from a project being absent, because lost browser storage must not empty the account. A delete reaches the account only through `projectSync.noteDeleted`.
 - Signing in uploads nothing that was already in the browser; those projects are listed as "this browser only" until the user adds them. Projects made while signed in are the account's.
 - Sync state is in `localStorage` under `discobot_sync_v1`, per username. Signed out, `startProjectSync` sends nothing.
+- Sync keeps what the account last said about sharing (`seen` in that state: who saved each shared project last, and which of this account's projects are shared and with how many) and shows it, with the links in `shared`, from the start of the first pass after a page loads or someone signs in (`remembered`). Without it a reload showed every shared project as this browser's alone, and started no live session, until a pass finished, and for good if the pass failed. It is this browser's state and is never sent anywhere.
 - The server stores projects as sent and checks only size and shape. Whatever the browser downloads goes through `restore()` like a project file.
 - Imported samples are not synced. `fileFor`, `contentHash`, the working copy, the library and kept versions hold a sample's id and never its audio; a test in `projectSamples.test.ts` checks each. Syncing samples needs file storage on the server.
 

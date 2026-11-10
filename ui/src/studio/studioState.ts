@@ -163,6 +163,8 @@ export function normalizeSynthParams(params: SynthParameters | null): SynthParam
       gate: Math.max(0.1, Math.min(1, params.arpeggiator?.gate ?? DEFAULT_PARAMS.arpeggiator.gate)),
       // Always present here, so choosing Auto reaches the store instead of being merged away.
       octaves: params.arpeggiator?.octaves ?? 0,
+      // Always present too, so switching Hold off reaches the store.
+      hold: params.arpeggiator?.hold === true,
     },
     fxSends: normalizeFxSends(params.fxSends),
   };

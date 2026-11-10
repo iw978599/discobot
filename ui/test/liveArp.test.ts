@@ -56,3 +56,55 @@ test('lanes run apart, a lane with nothing to play stops asking, and stop lets e
   assert.equal(arp.holds(1), false);
   assert.equal(arp.holds(2), false);
 });
+
+test('with Hold on, the chord keeps going after the keys come up, and the next chord played replaces it', () => {
+  const { arp, lane, played, at } = setup();
+  let hold = true;
+  const latched: LiveArpLane = { ...lane, latch: () => hold };
+  arp.press(1, 'C4', 1, latched);
+  arp.press(1, 'E4', 1, latched);
+  at(0.1);
+  arp.release(1, 'C4');
+  arp.release(1, 'E4');
+  played.length = 0;
+  for (let t = 0.15; t <= 2; t += 0.05) at(t);
+  assert.ok(played.length >= 7, 'it runs on with no key down');
+  assert.deepEqual([...new Set(played.map(([note]) => note))].sort(), ['C4', 'E4'], 'through the chord that was let go');
+  // A key pressed with nothing down starts a chord of its own; one pressed while it is down joins it.
+  arp.press(1, 'G4', 1, latched);
+  played.length = 0;
+  for (let t = 2.05; t <= 2.5; t += 0.05) at(t);
+  assert.deepEqual([...new Set(played.map(([note]) => note))], ['G4']);
+  arp.press(1, 'B4', 1, latched);
+  arp.release(1, 'B4');
+  arp.release(1, 'G4');
+  played.length = 0;
+  for (let t = 2.55; t <= 3.5; t += 0.05) at(t);
+  assert.deepEqual([...new Set(played.map(([note]) => note))].sort(), ['B4', 'G4']);
+  // Hold switched off lets go of what no key holds any more.
+  hold = false;
+  at(3.55);
+  const count = played.length;
+  for (let t = 3.6; t <= 5; t += 0.05) at(t);
+  assert.equal(played.length, count);
+  assert.equal(arp.holds(1), false);
+  arp.stop();
+});
+
+test('Hold switched off while a key is still down keeps that key alone', () => {
+  const { arp, lane, played, at } = setup();
+  let hold = true;
+  const latched: LiveArpLane = { ...lane, latch: () => hold };
+  arp.press(1, 'C4', 1, latched);
+  arp.press(1, 'E4', 1, latched);
+  arp.release(1, 'C4');
+  at(0.1);
+  hold = false;
+  at(0.15);
+  played.length = 0;
+  for (let t = 0.2; t <= 2; t += 0.05) at(t);
+  assert.deepEqual([...new Set(played.map(([note]) => note))], ['E4']);
+  arp.release(1, 'E4');
+  assert.equal(arp.holds(1), false);
+  arp.stop();
+});

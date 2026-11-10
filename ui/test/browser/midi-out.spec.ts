@@ -160,6 +160,16 @@ test('notes played by hand go out on the channel chosen for their lane, and anot
   await emit([0x80, 60, 0]);
   await expect.poll(async () => (await sent(page)).map(entry => entry.data)).toEqual([[0x96, 60, 100], [0x86, 60, 0]]);
 
+  // With the sustain pedal (CC 64) down, a key let go keeps sounding until the pedal comes up.
+  await emit([0xb0, 64, 127]);
+  await emit([0x90, 62, 90]);
+  await emit([0x80, 62, 0]);
+  await expect.poll(async () => (await sent(page)).length).toBe(3);
+  await page.waitForTimeout(300);
+  expect((await sent(page)).map(entry => entry.data).slice(2), 'the pedal holds the note').toEqual([[0x96, 62, 90]]);
+  await emit([0xb0, 64, 0]);
+  await expect.poll(async () => (await sent(page)).map(entry => entry.data).slice(2)).toEqual([[0x96, 62, 90], [0x86, 62, 0]]);
+
   // Following the controller's clock: Start plays, its pulses set the tempo, Stop stops.
   await openMidi(page);
   await page.getByLabel('Follow MIDI clock', { exact: true }).check();

@@ -43,20 +43,26 @@ test('setting a lane\'s parameter is a change the store can merge, and what it s
   assert.deepEqual(lanePatch('reverbSend', 0.4), { fxSends: { reverb: 0.4 } });
   assert.equal(lanePatch('macro1', 0.5), null, 'a model\'s knob is not part of the sound: it goes to the model');
   assert.equal(lanePatch('nothing', 1), null);
+  // The arpeggiator, asked for 2026-11-09: its gate, and switches a button past half way turns on.
+  assert.deepEqual(lanePatch('arpGate', 0.4), { arpeggiator: { gate: 0.4 } });
+  assert.deepEqual(lanePatch('arpOn', fromUnit(LANE_PARAMS.arpOn, 127 / 127)), { arpeggiator: { enabled: true } });
+  assert.deepEqual(lanePatch('arpHold', fromUnit(LANE_PARAMS.arpHold, 63 / 127)), { arpeggiator: { hold: false } });
+  assert.deepEqual(lanePatch('arpHold', fromUnit(LANE_PARAMS.arpHold, 64 / 127)), { arpeggiator: { hold: true } });
   // Every lane parameter, at both ends of its travel, is a value the sound's own limits accept.
   const defaults = createDefaultSynthParameters();
   for (const [key, range] of Object.entries(LANE_PARAMS)) {
     if (!range.path) continue;
     for (const unit of [0, 1]) {
-      const value = fromUnit(range, unit);
+      const value = range.toggle ? fromUnit(range, unit) >= 0.5 : fromUnit(range, unit);
       const merged = structuredClone(defaults) as unknown as Record<string, unknown>;
       let at = merged;
       for (const name of range.path.slice(0, -1)) at = at[name] as Record<string, unknown>;
       at[range.path.at(-1)!] = value;
       let kept: unknown = sanitizeSynthParams(merged, defaults);
       for (const name of range.path) kept = (kept as Record<string, unknown> | undefined)?.[name];
-      // A send of nothing is stored as no send at all.
-      assert.equal(kept === undefined && range.path[0] === 'fxSends' ? 0 : kept, value, `${key} at ${unit}`);
+      // A send of nothing is stored as no send at all, and a switch that is off may be absent.
+      const nothing = range.path[0] === 'fxSends' ? 0 : range.toggle ? false : undefined;
+      assert.equal(kept === undefined ? nothing : kept, value, `${key} at ${unit}`);
     }
   }
   assert.ok(Object.keys(DRUM_PARAMS).length >= 4 && Object.keys(FX_PARAMS).length >= 8);

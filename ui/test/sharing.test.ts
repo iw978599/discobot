@@ -71,15 +71,13 @@ async function browser(remote: Remote, username: 'Ian' | 'Dana', sharing: Pick<S
   const service = new LocalProjectService();
   service.initialize(defaults());
   await service.openLibrary(createMemoryLibrary());
-  const sync = createProjectSync({
-    store: service, api: remote.projects(remote.tokens[username]), sharing, user: () => username,
-    storage: { read: () => storage.get('sync') ?? null, write: text => { storage.set('sync', text); } },
-  });
+  const syncStorage = { read: () => storage.get('sync') ?? null, write: (text: string) => { storage.set('sync', text); } };
+  const sync = createProjectSync({ store: service, api: remote.projects(remote.tokens[username]), sharing, user: () => username, storage: syncStorage });
   const run = async () => { use(); await sync.sync(); };
   await run();
   const idOf = async (name: string) => (await service.listProjects()).find(project => project.name === name)!.id;
   return {
-    service, sync, use, run, idOf,
+    service, sync, use, run, idOf, syncStorage,
     names: async () => { use(); return (await service.listProjects()).map(project => project.name).sort(); },
     tempo: async (name: string, bpm?: number) => {
       use();
@@ -251,4 +249,32 @@ test('a server that has never heard of sharing changes nothing', async () => {
   assert.deepEqual(await alone.names(), ['Night Drive', 'Untitled']);
   assert.deepEqual(alone.sync.status().shared, {});
   old = false;
+});
+
+test('after a reload, shared projects are known as shared at once, and stay so when the server cannot be reached', async () => {
+  const remote = await server();
+  const ian = await browser(remote, 'Ian'), dana = await browser(remote, 'Dana');
+  const song = await ian.make('Night Drive', 97);
+  await remote.share(song);
+  await dana.sync.join('Ian', song);
+  await ian.run();
+
+  // Each page is loaded again, with the server out of reach.
+  const down = async (): Promise<never> => { throw new TypeError('Failed to fetch'); };
+  const reload = (who: Awaited<ReturnType<typeof browser>>, username: 'Ian' | 'Dana') => createProjectSync({
+    store: who.service, api: { list: down, get: down, put: down, remove: down }, sharing: { list: down, get: down, put: down, leave: down },
+    user: () => username, storage: who.syncStorage,
+  });
+  dana.use();
+  const danaAgain = reload(dana, 'Dana');
+  await danaAgain.sync();
+  assert.equal(danaAgain.status().state, 'error');
+  assert.deepEqual(danaAgain.status().shared, { [song]: { owner: 'Ian', savedBy: 'Ian' } }, 'Dana\'s copy is still Ian\'s shared project');
+  assert.ok(!danaAgain.status().browserOnly.includes(song));
+
+  ian.use();
+  const ianAgain = reload(ian, 'Ian');
+  await ianAgain.sync();
+  assert.deepEqual(ianAgain.status().sharedByMe, { [song]: { people: 1, savedBy: 'Ian' } }, 'Ian\'s project is still shared with Dana');
+  assert.ok(ianAgain.status().inAccount.includes(song));
 });

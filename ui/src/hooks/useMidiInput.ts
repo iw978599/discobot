@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { midiOut, type MidiOutPort } from '../services/midiOutput';
+import { SUSTAIN_PEDAL } from '../services/midiSustain';
 
 export type MidiMode = 'live' | 'record' | 'step';
 
@@ -118,8 +119,9 @@ export function useMidiInput({ onMessage }: UseMidiInputOptions) {
         setLastMessage(`Ch ${parsed.channel} Pitch bend ${Math.round(parsed.value * 100)}%`);
         gestured.add(inputId);
       } else if (parsed.type === 'controlChange') {
-        setLastMessage(`Ch ${parsed.channel} CC ${parsed.controller} (${parsed.value})`);
-        if (parsed.controller === 1) gestured.add(inputId);
+        // The mod wheel and the sustain pedal are let go when the device goes, before its notes are.
+        setLastMessage(`Ch ${parsed.channel} ${parsed.controller === SUSTAIN_PEDAL ? 'Sustain' : `CC ${parsed.controller}`} (${parsed.value})`);
+        if (parsed.controller === 1 || parsed.controller === SUSTAIN_PEDAL) gestured.add(inputId);
       } else if (parsed.type === 'pressure') {
         gestured.add(inputId);
       } else if (parsed.type === 'start' || parsed.type === 'continue' || parsed.type === 'stop') {

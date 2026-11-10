@@ -1380,7 +1380,12 @@ V11. **Swing for the synth lanes.** (S) The drums have swing; the lanes do
 
 V11a. **The arpeggiator held under a key.** (S) A key held on the keyboard is
     arpeggiated for one beat and stops, where a hardware arpeggiator runs for
-    as long as the key is down, and latches with Hold.
+    as long as the key is down, and latches with Hold. On 2026-11-09 the
+    Arp page gained a Hold switch of its own, and a controller's sustain
+    pedal (CC 64) holds notes, and the arpeggio, until it is lifted. A
+    controller's knob can also be tied to the arpeggiator's gate, on and
+    hold, and to more of a lane's sound (the filter envelope, oscillator 2,
+    unison, the ring and FM).
 
 V11b. **More from portamento.** (S to M) Asked for by the owner on
     2026-10-13. What exists: a switch and a Glide time on a lane's Amp
