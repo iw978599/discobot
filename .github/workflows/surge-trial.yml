@@ -67,7 +67,11 @@ jobs:
             -DSURGE_BUILD_XT=OFF -DSURGE_BUILD_FX=OFF -DSURGE_BUILD_TESTRUNNER=OFF \
             -DSURGE_SKIP_WERROR=ON -DSURGE_BUILD_32BIT_LINUX=ON \
             -DCMAKE_C_FLAGS="-msimd128 -fwasm-exceptions" -DCMAKE_CXX_FLAGS="-msimd128 -fwasm-exceptions"
-          cmake --build build --target surge-trial -j "$(nproc)" 2>&1 | grep -vE "warning:|note:|^\s" | tail -60
+          mkdir -p out
+          if ! cmake --build build --target surge-trial -j "$(nproc)" -- -k > out/build.log 2>&1; then
+            grep -nE -B2 -A12 "error:|undefined symbol|Error [0-9]" out/build.log | head -400
+            exit 1
+          fi
           test -f build/src/discobot-trial/surge-trial.wasm
           ls -la build/src/discobot-trial
 
