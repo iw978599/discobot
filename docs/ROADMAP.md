@@ -1484,14 +1484,17 @@ V24. **Recording a live session as audio.** Done: Record Session in the timeline
 ### Surge XT's engine (asked about 2026-11-10)
 
 - **Surge XT as a lane's sound.** (L) Surge's real engine compiled for the browser and run in the
-  lane's worklet, playing its factory patches with their eight macros, live and in export. Not
-  planned yet: `docs/SURGE_XT_PLAN.md` holds the findings and the stages. Stage 0, the trial
+  lane's worklet, playing its factory patches with their eight macros, live and in export.
+  `docs/SURGE_XT_PLAN.md` holds the findings and the stages. Stage 0, the trial
   build, ran on 2026-11-10:
   - it works: every factory patch loads, and renders repeat;
   - it is 1.2 to 1.7 MB compressed;
   - one Surge lane costs about 9% of the owner's computer.
 
   Its recommendation is go, with at most two Surge lanes, a voice limit and a watchdog; the
-  owner said the patches sounded really good; still to say whether to start stage 1. Not
+  owner said the patches sounded really good, and on 2026-11-10 asked to go on, with every
+  synth lane in one audio processor (folded into stage 2). Stage 1, the build in the
+  repository (`surge/`), is done. Next is stage 2: one processor for all the synth lanes, then
+  Surge on a lane. Not
   chosen: Surge as a guest page (a guest is never sent notes), and translating Surge patches
   into Discobot's synth (still possible, smaller, and not the real sound).
