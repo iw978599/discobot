@@ -1480,3 +1480,12 @@ V24. **Recording a live session as audio.** Done: Record Session in the timeline
   mastering, a compressor per lane, comments or "remix this" on published songs,
   a vocoder, granular sound and pitch correction. Ableton Link cannot be done
   from a web page; turning a recording into notes well needs a paid server.
+
+### Surge XT's engine (asked about 2026-11-10)
+
+- **Surge XT as a lane's sound.** (L) Surge's real engine compiled for the browser and run in the
+  lane's worklet, playing its factory patches with their eight macros, live and in export. Not
+  planned yet: `docs/SURGE_XT_PLAN.md` holds the findings and the stages, and begins with a trial
+  build (stage 0) that measures size and processor cost before anything goes into the app. Not
+  chosen: Surge as a guest page (a guest is never sent notes), and translating Surge patches
+  into Discobot's synth (still possible, smaller, and not the real sound).
