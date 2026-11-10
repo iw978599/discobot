@@ -1,0 +1,17 @@
+{
+  "surge": {
+    "repository": "https://github.com/surge-synthesizer/surge",
+    "commit": "d307b472cd5e986baf61f9db0a4f173183aba3f9"
+  },
+  "emscripten": "emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 4.0.10 (b7dc6e5747465580df5984e723b9d1f10d8e804b)",
+  "files": {
+    "surge-engine.wasm": {
+      "sha256": "5fc6498089465848bdbf72e443111aaa6c572f032c95ba9c58b2844cf2529fce",
+      "bytes": 5859578
+    },
+    "surge-engine.js": {
+      "sha256": "a64a62025924a4dec4ec3cc4fdafe22705cc9da4ff105623467ae91d945094d7",
+      "bytes": 73620
+    }
+  }
+}
