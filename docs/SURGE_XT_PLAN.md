@@ -237,6 +237,28 @@ machine measured. A block over 100% is late and can be heard as a click.
 The owner said "the patches sounded really good" (2026-11-10): heard by ear in
 the browser build. Not yet said: whether five lanes clicked.
 
+**The page walked in Chrome on GitHub** (`trial/surge/walk.mjs`, asked for by
+the owner on 2026-11-10). Headless Chrome played each patch as a tune and a
+held chord, on 1, 2 and 5 lanes, noting the meter and recording one lane as a
+WAV. The recordings were given to the owner; they have sound throughout and
+no dropouts, and 11 of 21 reach full scale. Four things came out of it:
+- **Chrome's audio worklet has no `performance.now()`.** Every reading was a
+  whole number of milliseconds (34% of a 2.9 ms block at 44.1 kHz). So
+  single-block figures are rough, the owner's 150% included: that was a 4 ms
+  reading, really 3 to 5 ms against 2.7 ms. Averages over a second are
+  still fair. Stage 2's watchdog has to work from averages, or count late
+  blocks some other way.
+- **Nearly every change to 2 or 5 lanes made one late second**, and one lane
+  almost never did. Engines made, and their first blocks played, on the audio
+  thread are the likely cause, which stage 2 already rules out.
+- **The tab crashed** on the last patch (the Formula tutorial) after all 21
+  had been recorded. The cause is not known. The same steps in a bare worklet
+  scope in Node, two rounds of all 21 patches at 1, 2 and 5 lanes, held
+  memory level at 176 MB and did not crash. So it is not a leak in the
+  engines, and it was not seen again.
+- **GitHub's machine is not the owner's.** One lane there read 0 to 2% on
+  average with a chord, and five lanes 3 to 21%.
+
 The worklet code is also checked on every build in a bare scope with what an
 audio worklet lacks (`process`, `crypto`, `performance`, `TextDecoder`). That
 caught two crashes the page would have had:
@@ -285,7 +307,7 @@ limits.
   - the level brought down so a loud patch does not reach the mix over
     full scale;
   - memory checked across many patch changes.
-- **The worklet's clock:** a worklet may have no `performance`; the page gives
+- **The worklet's clock:** Chrome's audio worklet has no `performance`; the page gives
   Emscripten `Date.now()` in its place, as the trial does.
 
 ### Stage 3: export
