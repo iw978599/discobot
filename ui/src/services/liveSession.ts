@@ -502,6 +502,8 @@ export function createLiveSession(deps: LiveDeps) {
 
   return {
     close,
+    // Whether any edit of this browser's has not yet come back from the room.
+    unsent: () => pending.length > 0 || queue.length > 0 || wholeWanted,
     status: (): LiveStatus => ({ state, me, others: others.map(member => (places.has(member.id) ? { ...member, at: places.get(member.id) } : member)), playing }),
     // This person is now at another unit of the rack. Sent only when it changes, and again to anyone joining.
     place(at: string) {
@@ -555,7 +557,7 @@ export type LiveSession = ReturnType<typeof createLiveSession>;
 const RETRY_FIRST_MS = 5_000;
 const RETRY_MOST_MS = 300_000;
 
-let running: { key: string; id: string; session: LiveSession } | null = null;
+let running: { key: string; id: string; session: LiveSession; welcomed: boolean } | null = null;
 // Whether the open session's project is held from sync because someone else is saving it.
 let holding = false;
 let retryAfter = RETRY_FIRST_MS;
@@ -666,12 +668,13 @@ function wanted(): { owner: string; id: string } | null {
 // session has everything this browser had, and the account's copy will be theirs.
 function stop() {
   if (!running) return;
-  const { session, id } = running;
+  const { session, id, welcomed } = running;
   running = null;
   const others = session.status().others.length > 0;
+  const unsent = session.unsent();
   session.close();
   remember(null);
-  projectSync.hold(id, false, others ? 'yield' : undefined);
+  projectSync.ended(id, others || (welcomed && !unsent) ? 'yield' : undefined);
   holding = false;
   changed();
 }
@@ -713,14 +716,21 @@ function check() {
     },
     changed: () => {
       const status = session.status();
-      if (status.state === 'live' && !welcomed) { welcomed = true; retryAfter = RETRY_FIRST_MS; }
+      if (status.state === 'live' && !welcomed) {
+        welcomed = true;
+        retryAfter = RETRY_FIRST_MS;
+        if (running?.session === session) running.welcomed = true;
+        projectSync.live(target.id);
+      }
       if (status.me && status.state !== 'closed') remember({ key, id: status.me.id });
       if (status.state === 'closed' && running?.session === session) {
         // Lost or refused (a server without live sessions answers 503): try again later, less
         // often each time, while the project is still shared and open.
-        // This browser may have missed edits, so the usual rule applies: both copies are kept.
+        // Everything here reached the session unless an edit was still on its way: then the usual
+        // rule applies and both copies are kept. Otherwise the account's copy, which the session
+        // went on saving, replaces this one, and a version of it is kept first.
         running = null;
-        projectSync.hold(target.id, false);
+        projectSync.ended(target.id, welcomed && !session.unsent() ? 'yield' : undefined);
         holding = false;
         retryKey = key;
         retryTimer = setTimeout(() => { retryTimer = null; check(); }, retryAfter);
@@ -729,7 +739,7 @@ function check() {
       changed();
     },
   });
-  running = { key, id: target.id, session };
+  running = { key, id: target.id, session, welcomed: false };
   if (place) session.place(place);
   changed();
 }

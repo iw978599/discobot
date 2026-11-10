@@ -82,6 +82,10 @@ interface UserMeta {
   // loaded again, or a server out of reach, still shows what is shared (and the open project's live
   // session can start) until the account answers.
   seen?: { savedBy: Record<string, string>; sharedByMe: SyncStatus['sharedByMe'] };
+  // Projects that were in a live session in this browser, kept until the first pass after it
+  // ends, even across a reload: everything in such a copy reached the session, so unless the
+  // session ended otherwise (`after`) the account's copy replaces it rather than standing beside it.
+  live?: string[];
 }
 
 // The stored `seen`, keeping only entries of the right shape.
@@ -121,6 +125,18 @@ export function createProjectSync(deps: SyncDeps) {
   // top of theirs; 'yield', it left the others in the session, whose copy holds everything it had,
   // so theirs replaces it (a version of it is kept first). Otherwise both are kept, as always.
   const after = new Map<string, 'adopt' | 'yield'>();
+  // Projects in a live session in this browser now, and those whose session ended with something
+  // of this browser's not yet sent, which are settled as any other project.
+  const liveNow = new Set<string>();
+  const dropped = new Set<string>();
+  const keepLive = (change: (live: string[]) => string[]) => {
+    const username = deps.user();
+    if (!username) return;
+    const { meta, fresh } = load(username);
+    if (fresh) return;
+    meta.live = change(meta.live ?? []);
+    save(username, meta);
+  };
   let knownUser: string | null = null;
   let started = false;
 
@@ -145,7 +161,7 @@ export function createProjectSync(deps: SyncDeps) {
   const load = (username: string): { meta: UserMeta; fresh: boolean } => {
     const found = readAll()[username.toLowerCase()];
     if (!found || typeof found !== 'object') return { meta: { projects: {}, deleted: {}, localOnly: [], shared: {}, left: {} }, fresh: true };
-    return { meta: { projects: found.projects || {}, deleted: found.deleted || {}, localOnly: Array.isArray(found.localOnly) ? found.localOnly : [], shared: found.shared || {}, left: found.left || {}, seen: readSeen(found.seen) }, fresh: false };
+    return { meta: { projects: found.projects || {}, deleted: found.deleted || {}, localOnly: Array.isArray(found.localOnly) ? found.localOnly : [], shared: found.shared || {}, left: found.left || {}, seen: readSeen(found.seen), live: Array.isArray(found.live) ? found.live.filter((id: unknown) => typeof id === 'string') : [] }, fresh: false };
   };
   // Shared projects as this browser last knew them.
   const remembered = (meta: UserMeta): Pick<SyncStatus, 'shared' | 'sharedByMe'> => ({
@@ -225,8 +241,9 @@ export function createProjectSync(deps: SyncDeps) {
     // Brings one project and its other copy back in step, whichever side changed.
     const settle = async (there: { id: string; revision: number; savedBy?: string }, place: Place) => {
       if (held.has(there.id)) return;
-      const ending = after.get(there.id);
+      const ending = after.get(there.id) ?? (meta.live?.includes(there.id) && !liveNow.has(there.id) && !dropped.has(there.id) ? 'yield' : undefined);
       after.delete(there.id);
+      if (!liveNow.has(there.id)) meta.live = meta.live?.filter(id => id !== there.id);
       const here = records!.find(entry => entry.id === there.id);
       if (!here) { await download(there.id, there.revision, undefined, place); return; }
       const linked = place.linked(there.id);
@@ -336,6 +353,8 @@ export function createProjectSync(deps: SyncDeps) {
       savedBy: theirs ? Object.fromEntries(theirs.filter(entry => entry.savedBy).map(entry => [entry.id, entry.savedBy!])) : meta.seen?.savedBy ?? {},
       sharedByMe: Object.fromEntries(remote.filter(entry => entry.sharedWith && !entry.deleted).map(entry => [entry.id, { people: entry.sharedWith!, savedBy: entry.savedBy ?? username }])),
     };
+    meta.live = [...new Set([...(meta.live ?? []).filter(id => !dropped.has(id)), ...liveNow])];
+    dropped.clear();
     save(username, meta);
     describe(meta, await store.syncRecords() || records);
     setStatus({
@@ -382,6 +401,22 @@ export function createProjectSync(deps: SyncDeps) {
       if (on) { held.add(id); after.delete(id); return; }
       held.delete(id);
       if (ending) after.set(id, ending); else after.delete(id);
+    },
+    // This browser's live session on the project has ended: as `hold` letting it go, and with no
+    // ending (something of this browser's never reached the session) it is settled as any other.
+    ended: (id: string, ending?: 'adopt' | 'yield') => {
+      held.delete(id);
+      liveNow.delete(id);
+      if (ending) { after.set(id, ending); return; }
+      after.delete(id);
+      dropped.add(id);
+      keepLive(live => live.filter(entry => entry !== id));
+    },
+    // This browser is in a live session on the project (see `live` in the stored state).
+    live: (id: string) => {
+      liveNow.add(id);
+      dropped.delete(id);
+      keepLive(live => (live.includes(id) ? live : [...live, id]));
     },
     dismissKeptBoth: () => setStatus({ keptBoth: [] }),
     dismissShared: () => setStatus({ updates: [], ended: [] }),

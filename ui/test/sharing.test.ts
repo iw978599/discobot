@@ -278,3 +278,49 @@ test('after a reload, shared projects are known as shared at once, and stay so w
   assert.deepEqual(ianAgain.status().sharedByMe, { [song]: { people: 1, savedBy: 'Ian' } }, 'Ian\'s project is still shared with Dana');
   assert.ok(ianAgain.status().inAccount.includes(song));
 });
+
+// A live session in which Ian saves and Dana's sync is held: every edit reaches both copies. Then
+// Dana's session ends as `end` says, and Ian goes on alone.
+async function afterSession(end: (dana: Awaited<ReturnType<typeof browser>>, song: string, remote: Remote) => Awaited<ReturnType<typeof browser>>['sync']) {
+  const remote = await server();
+  const ian = await browser(remote, 'Ian'), dana = await browser(remote, 'Dana');
+  const song = await ian.make('Night Drive', 97);
+  await remote.share(song);
+  await dana.sync.join('Ian', song);
+  await dana.run();
+  dana.sync.live(song);
+  dana.sync.hold(song, true);
+  await ian.tempo('Night Drive', 120);
+  await dana.tempo('Night Drive', 120);
+  await ian.run();
+  const sync = end(dana, song, remote);
+  await ian.tempo('Night Drive', 125);
+  await ian.run();
+  dana.use();
+  await sync.sync();
+  return { dana, sync };
+}
+
+test('after a live session, the copy of someone who was not saving is brought up to date, not kept as a second project', async () => {
+  // The connection is lost with everything of Dana's sent.
+  const { dana, sync } = await afterSession((dana, song) => { dana.sync.ended(song, 'yield'); return dana.sync; });
+  assert.deepEqual(sync.status().keptBoth, []);
+  assert.deepEqual(await dana.names(), ['Night Drive', 'Untitled'], 'no "this browser\'s version"');
+  assert.equal(await dana.tempo('Night Drive'), 125);
+});
+
+test('a tab closed during a live session is brought up to date when it is opened again', async () => {
+  const { dana, sync } = await afterSession((dana, _song, remote) => {
+    dana.use();
+    return createProjectSync({ store: dana.service, api: remote.projects(remote.tokens.Dana), sharing: remote.sharing(remote.tokens.Dana), user: () => 'Dana', storage: dana.syncStorage });
+  });
+  assert.deepEqual(sync.status().keptBoth, []);
+  assert.deepEqual(await dana.names(), ['Night Drive', 'Untitled']);
+  assert.equal(await dana.tempo('Night Drive'), 125);
+});
+
+test('a live session that ends with an edit of this browser\'s not yet sent keeps both copies, as any clash does', async () => {
+  const { dana, sync } = await afterSession((dana, song) => { dana.sync.ended(song); return dana.sync; });
+  assert.deepEqual(sync.status().keptBoth, ['Night Drive']);
+  assert.deepEqual(await dana.names(), ['Night Drive', 'Night Drive (this browser\'s version)', 'Untitled']);
+});

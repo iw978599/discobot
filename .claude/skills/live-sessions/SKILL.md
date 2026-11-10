@@ -37,7 +37,7 @@ design, the stages, and how far they have got.
   in the room); the others hold their saves, or every save would refuse the
   others' and split the project. When the hold ends, say how (`projectSync.hold`:
   `'adopt'` on taking over the saving, `'yield'` on leaving others behind,
-  nothing when the connection was lost), or the next sync splits it anyway.
+  `projectSync.ended` with nothing only when an edit had not come back from the room), or the next sync splits it anyway.
 - **Ids are made before an edit is applied**, never inside a reducer, or each
   browser makes its own. An edit whose result cannot be repeated (Reset All)
   goes as the whole project instead.
