@@ -49,18 +49,18 @@ extern "C"
     // A whole .fxp file. 0 when loaded; 1 when it is not a Surge patch; 2 when it is cut short.
     EMSCRIPTEN_KEEPALIVE int surge_load_fxp(Engine *engine, const unsigned char *data, int size)
     {
-        if (size < (int)sizeof(fxChunkSetCustom))
+        if (size < (int)sizeof(sst::io::fxChunkSetCustom))
             return 2;
         if (readBE(data) != 'CcnK' || readBE(data + 8) != 'FPCh' || readBE(data + 16) != 'cjs3')
             return 1;
         int chunk = readBE(data + 56);
-        if (chunk <= 0 || (int)sizeof(fxChunkSetCustom) + chunk > size)
+        if (chunk <= 0 || (int)sizeof(sst::io::fxChunkSetCustom) + chunk > size)
             return 2;
         auto &synth = *engine->synth;
         synth.allNotesOff();
         synth.storage.getPatch().comment = "";
         synth.storage.getPatch().author = "";
-        synth.loadRaw(data + sizeof(fxChunkSetCustom), chunk, false);
+        synth.loadRaw(data + sizeof(sst::io::fxChunkSetCustom), chunk, false);
         engine->used = BLOCK_SIZE;
         return 0;
     }
