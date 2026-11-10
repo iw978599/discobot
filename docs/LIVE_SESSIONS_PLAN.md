@@ -62,6 +62,19 @@ Stage 2 in detail:
 send the whole project (`state`) to the newcomer, who opens it in place of their own copy and then
 applies the edits that arrived while it was on its way. Alone, a person's own copy is the project.
 
+**Rejoining** a session in progress (asked for 2026-11-09): a connection lost on a browser's side (a
+phone asleep, the network changed) can stay open in the room for a while. If the room still held it
+when that person came back, they were shown twice, and if they had been longest in the session the
+room asked the dead connection for the project, so after `JOIN_WAIT_MS` they went on with their own
+stale copy. Now the browser remembers its member id for the tab and, coming back, names it in the
+address (`?was=`; an id, not a secret). The room closes that connection and tells the others it
+left before welcoming the newcomer, only when it has the same username (`formerSelf`), so nobody can
+push anyone else out, and the same person on two devices keeps both. The browser also tries again at
+once when the network comes back, when the tab comes back to the front, or on Rejoin Now on the
+rack's live line, instead of sitting out a wait that grows to five minutes. Still open: a person
+who never comes back stays in the room until the platform notices the connection is dead, and
+meanwhile can be the one asked for the project (the newcomer goes on after `JOIN_WAIT_MS`).
+
 **Undo** puts back a whole project, so in a session it is sent whole (`replace`) and everybody takes
 it.
 

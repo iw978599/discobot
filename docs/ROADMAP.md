@@ -167,7 +167,7 @@ Cheap for the agent but blocked until the owner does or says something.
 - **MIDI hardware**: the owner said on 2026-10-22 that their controller "has worked thus far". The clock, the output channels, played notes and aftertouch (item 24) are newer and not tried with it yet.
 - **A screen reader trial** (improvements 5).
 - **Firefox and guest instruments**: what the owner sees there.
-- **Live collaboration** (features 7): the owner lifted the rule on 2026-10-20 and it is being built in stages (`docs/LIVE_SESSIONS_PLAN.md`): all four stages are built (the relay, edits, the transport, presence), and playing together with a snap to the beat. The owner tried jamming live with someone on 2026-10-22 and it "worked pretty great". Was: needs the rule against a held-open
+- **Live collaboration** (features 7): the owner lifted the rule on 2026-10-20 and it is being built in stages (`docs/LIVE_SESSIONS_PLAN.md`): all four stages are built (the relay, edits, the transport, presence), and playing together with a snap to the beat. The owner tried jamming live with someone on 2026-10-22 and it "worked pretty great". On 2026-11-09 someone whose connection was lost can rejoin a session in progress and receive its project (the room closes their old connection; Rejoin Now on the rack). Was: needs the rule against a held-open
   connection changed on purpose. L.
 - **Samples that sync** (sound 2): not planned; the storage asks for a card.
 

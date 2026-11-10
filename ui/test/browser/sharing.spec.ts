@@ -158,12 +158,15 @@ test('two people work on one project together or in turns, and it ends when the 
   await expect(sharing.getByRole('group', { name: 'Shared with Dana', exact: true })).toBeVisible();
   await expect(setup).toContainText('Shared with you');
   await expect(setup.getByRole('status').first()).toContainText('unavailable or disconnected', { timeout: 10_000 });
-  refuseLive = false;
-  await setup.getByRole('button', { name: 'Retry Connection', exact: true }).click();
-  await expect(setup).toContainText('Waiting for collaborators', { timeout: 10_000 });
-  const connected = connections;
+  await expect(setup.getByRole('button', { name: 'Retry Connection', exact: true })).toBeVisible();
+  // The rack's own line offers to rejoin while the connection is down, and not once it is back.
   await page.keyboard.press('Escape');
-  await expect(page.locator('.live-people')).toContainText('Waiting for collaborators');
+  refuseLive = false;
+  const rejoin = page.locator('.live-people').getByRole('button', { name: 'Rejoin Now', exact: true });
+  await rejoin.click();
+  await expect(page.locator('.live-people')).toContainText('Waiting for collaborators', { timeout: 10_000 });
+  await expect(rejoin).toHaveCount(0);
+  const connected = connections;
   setup = await liveSetup(page);
   await expect(setup.getByRole('group', { name: 'Shared with Dana', exact: true })).toBeVisible();
   await expect(setup).toContainText('Waiting for collaborators');

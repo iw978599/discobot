@@ -43,6 +43,16 @@ export function joined(peers: Peer[], peer: Peer) {
   if (host) say(host, { t: 'send-state', to: peer.id });
 }
 
+// Someone coming back after losing their connection says which member they were (`?was=` in the
+// address: a member id, not a secret). A connection lost on their side may still be open here, and
+// would be asked for the project and shown as a second person. It is theirs only if it has their
+// username, so nobody can push out anyone else. The caller closes it and tells the others with `left`.
+export const MEMBER_ID = /^[0-9a-zA-Z-]{1,40}$/;
+export function formerSelf(peers: Member[], user: string, was: string | null | undefined): Member | undefined {
+  if (!was || !MEMBER_ID.test(was)) return undefined;
+  return peers.find(peer => peer.id === was && peer.user === user);
+}
+
 // Someone has left. `peers` holds those still there.
 export function left(peers: Peer[], gone: Member) {
   for (const peer of peers) say(peer, { t: 'leave', id: gone.id });
@@ -93,6 +103,15 @@ export class LiveRoomObject {
     if (!user || request.headers.get('Upgrade') !== 'websocket') return new Response('Expected a live connection.', { status: 426 });
     const pair = new WebSocketPair();
     const [client, server] = [pair[0], pair[1]];
+    const was = formerSelf(this.peers(), user, new URL(request.url).searchParams.get('was'));
+    if (was) {
+      for (const socket of this.ctx.getWebSockets()) {
+        if ((socket.deserializeAttachment() as Member | null)?.id !== was.id) continue;
+        socket.serializeAttachment(null);
+        try { socket.close(1000, 'Rejoined.'); } catch { /* gone */ }
+      }
+      left(this.peers(), was);
+    }
     const before = this.peers();
     const details: Member = { id: crypto.randomUUID().slice(0, 8), user, colour: freeColour(before), since: Date.now() };
     this.ctx.acceptWebSocket(server);

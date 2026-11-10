@@ -539,7 +539,7 @@
   background: var(--surface-inset); border: 1px solid var(--edge); border-radius: var(--corner-panel); padding: 8px 14px;
   color: var(--text-plain); font-family: var(--sentence-font); font-size: var(--type-body);
 }
-.live-snap { margin-left: auto; }
+.live-snap, .live-rejoin { margin-left: auto; }
 .live-person { display: inline-flex; align-items: center; gap: 6px; color: var(--text); }
 .live-person::before { content: ''; width: 10px; height: 10px; border-radius: 50%; background: var(--present); }
 /* A guests unit off screen keeps `position: fixed`: its rule in the phone block is more specific. */

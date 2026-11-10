@@ -158,8 +158,10 @@ export const account = {
 // The connection of a live session (liveSession.ts), or null when there can be none. A browser cannot
 // put a header on a WebSocket, so the session token travels as its second protocol name, never in
 // the address, and it stays in this file.
-export function openLiveSocket(owner: string, id: string): WebSocket | null {
+// `was` is the member this browser was in the session before its connection was lost: a member id,
+// not a secret, so it may go in the address. The room closes that connection if it is still open.
+export function openLiveSocket(owner: string, id: string, was?: string): WebSocket | null {
   if (!session || !accountsEnabled || typeof WebSocket === 'undefined') return null;
-  const url = `${API_URL.replace(/^http/, 'ws')}/live/${encodeURIComponent(owner)}/${encodeURIComponent(id)}`;
+  const url = `${API_URL.replace(/^http/, 'ws')}/live/${encodeURIComponent(owner)}/${encodeURIComponent(id)}${was ? `?was=${encodeURIComponent(was)}` : ''}`;
   try { return new WebSocket(url, ['discobot', session.token]); } catch { return null; }
 }
