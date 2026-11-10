@@ -61,6 +61,8 @@ jobs:
           emcc --version | head -1
           cp -r trial/surge/bridge surge/src/discobot-trial
           echo 'add_subdirectory(discobot-trial)' >> surge/src/CMakeLists.txt
+          # A Linux linker option the browser's linker does not know.
+          sed -i '/-Wl,--no-undefined/d' surge/src/common/CMakeLists.txt
           emcmake cmake -S surge -B build -DCMAKE_BUILD_TYPE=Release -DENABLE_LTO=OFF \
             -DSURGE_SKIP_JUCE_FOR_RACK=ON -DSURGE_SKIP_LUA=ON -DSURGE_SKIP_ODDSOUND_MTS=ON \
             -DSURGE_SKIP_VST3=ON -DSURGE_SKIP_STANDALONE=ON -DSURGE_BUILD_CLAP=OFF \
