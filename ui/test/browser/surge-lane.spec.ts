@@ -21,6 +21,15 @@ test.beforeEach(async ({ page }) => {
         analyser.fftSize = 2048;
         this.connect(analyser, 0);
         win.surgeProbe = analyser;
+        // What passes between the page and the processor, said if Surge is not heard.
+        win.surgeLog = [];
+        const post = this.port.postMessage.bind(this.port);
+        this.port.postMessage = (message: any) => {
+          const m = message?.message ?? message;
+          win.surgeLog.push(`to ${message?.lane ?? '-'}: ${m?.type}${m?.note ? ' ' + m.note : ''}${m?.params?.engine ? ' ' + m.params.engine : ''}`);
+          post(message);
+        };
+        this.port.addEventListener('message', (event: MessageEvent) => win.surgeLog.push(`from: ${JSON.stringify(event.data)}`));
       }
     };
   });
@@ -56,7 +65,10 @@ test('a lane on Surge XT loads Surge from this site and plays its patch, and its
     const samples = new Float32Array(analyser.fftSize);
     analyser.getFloatTimeDomainData(samples);
     return samples.reduce((most, value) => Math.max(most, Math.abs(value)), 0);
-  }), { timeout: 15000, message: 'Surge is heard' }).toBeGreaterThan(0.001);
+  }), { timeout: 15000, message: 'Surge is heard' }).toBeGreaterThan(0.001).catch(async (error) => {
+    const log: string[] = await page.evaluate(() => (window as any).surgeLog);
+    throw new Error([error.message, ...new Set(log), ...errors].slice(0, 80).join('\n'));
+  });
   await page.getByRole('button', { name: /Stop All/ }).click();
 
   // Another patch, with its own macros, each a knob the lane keeps.
@@ -79,12 +91,11 @@ test('a lane on Surge XT loads Surge from this site and plays its patch, and its
 
 test('a third lane cannot be put on Surge XT', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name === 'mobile-chromium', 'the three lanes side by side are the wide layout');
-  await page.getByRole('tab', { name: 'Sound', exact: true }).first().click();
-  for (const index of [0, 1, 2]) {
-    const panel = page.locator('.synth-controls-panel').nth(index);
-    await panel.getByRole('tab', { name: 'Sound', exact: true }).click();
-    await panel.getByRole('tab', { name: 'Osc', exact: true }).click();
-    await panel.getByLabel('Synth engine', { exact: true }).selectOption('surge');
+  for (const id of [1, 2, 3]) {
+    await page.getByRole('button', { name: `Synth ${id}`, exact: true }).click();
+    await page.getByRole('tab', { name: 'Sound', exact: true }).first().click();
+    await page.getByRole('tab', { name: 'Osc', exact: true }).first().click();
+    await page.locator('.synth-controls-panel').first().getByLabel('Synth engine', { exact: true }).selectOption('surge');
   }
   await expect(page.getByText('Only 2 lanes can play Surge XT at once.', { exact: false })).toBeVisible();
   await expect.poll(async () => [(await sound(page, 0)).engine, (await sound(page, 1)).engine, (await sound(page, 2)).engine]).toEqual(['surge', 'surge', 'subtractive']);
