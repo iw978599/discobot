@@ -94,3 +94,64 @@ test('a file that is not a Surge patch is refused, and the engine plays on', asy
   assert.equal(send(cut), 2, 'cut short');
   M._surge_destroy(engine);
 });
+
+// Discobot's own patches are written from the blank patch (surge/patches/).
+interface PatchWriter extends SurgeModule {
+  _surge_param_count(engine: number): number;
+  _surge_param_name(engine: number, index: number): number;
+  _surge_param_display(engine: number, index: number): number;
+  _surge_param_set(engine: number, name: number, text: number): number;
+  _surge_route_macro(engine: number, macro: number, name: number, depth: number): number;
+  _surge_set_macro_name(engine: number, macro: number, name: number): void;
+  _surge_set_patch_name(engine: number, name: number): void;
+  _surge_save_fxp(engine: number): number;
+  _surge_saved_data(): number;
+  _surge_macro_name(engine: number, macro: number): number;
+  _surge_patch_name(engine: number): number;
+}
+
+function text(M: SurgeModule, value: string) {
+  const bytes = new TextEncoder().encode(value + '\0'), pointer = M._malloc(bytes.length);
+  M.HEAPU8.set(bytes, pointer);
+  return pointer;
+}
+
+test('a patch written from the blank one is saved, and loads back the same', async () => {
+  const M = await load() as PatchWriter;
+  const engine = M._surge_create(48000, 3);
+  const names = Array.from({ length: M._surge_param_count(engine) }, (_, i) => M.UTF8ToString(M._surge_param_name(engine, i)));
+  const shown = (on: number, name: string) => M.UTF8ToString(M._surge_param_display(on, names.indexOf(name)));
+  assert.ok(names.includes('a_osc1_type') && names.includes('a_filter1_cutoff'), names.slice(0, 40).join(' '));
+  const set = (name: string, value: string) => {
+    const n = text(M, name), v = text(M, value), result = M._surge_param_set(engine, n, v);
+    M._free(n); M._free(v);
+    return result;
+  };
+  assert.equal(set('no_such_thing', '1'), 1);
+  assert.equal(set('a_filter1_cutoff', 'loud'), 2, 'a value Surge cannot read');
+  const blank = shown(engine, 'a_filter1_cutoff');
+  assert.equal(set('a_filter1_cutoff', '200 Hz'), 0, M.UTF8ToString(M._surge_last_error()));
+  assert.notEqual(shown(engine, 'a_filter1_cutoff'), blank);
+  assert.match(shown(engine, 'a_filter1_cutoff'), /200/);
+  const osc = shown(engine, 'a_osc1_type');
+  assert.equal(set('a_osc1_type', osc), 0, 'a whole-number parameter by what Surge shows for it');
+  const cutoff = text(M, 'a_filter1_cutoff');
+  assert.equal(M._surge_route_macro(engine, 0, cutoff, 0.5), 0);
+  M._free(cutoff);
+  const label = text(M, 'Open'), title = text(M, 'Test Patch');
+  M._surge_set_macro_name(engine, 0, label);
+  M._surge_set_patch_name(engine, title);
+  M._free(label); M._free(title);
+  const size = M._surge_save_fxp(engine);
+  const file = M.HEAPU8.slice(M._surge_saved_data(), M._surge_saved_data() + size);
+  assert.equal(String.fromCharCode(...file.subarray(0, 4)), 'CcnK');
+
+  const again = M._surge_create(48000, 3), pointer = M._malloc(file.length);
+  M.HEAPU8.set(file, pointer);
+  assert.equal(M._surge_load_fxp(again, pointer, file.length), 0);
+  M._free(pointer);
+  assert.equal(M.UTF8ToString(M._surge_patch_name(again)), 'Test Patch');
+  assert.equal(M.UTF8ToString(M._surge_macro_name(again, 0)), 'Open');
+  assert.equal(shown(again, 'a_filter1_cutoff'), shown(engine, 'a_filter1_cutoff'));
+  M._surge_destroy(engine); M._surge_destroy(again);
+});

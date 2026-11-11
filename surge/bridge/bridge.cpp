@@ -2,13 +2,18 @@
 // surge/build.sh into surge/dist/.
 #include "SurgeSynthesizer.h"
 #include "PatchFileHeaderStructs.h"
+#include "sst/basic-blocks/mechanics/endian-ops.h"
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <climits>
+#include <vector>
 #include <memory>
 #include <string>
 #include <exception>
 #include <emscripten/emscripten.h>
+
+namespace mech = sst::basic_blocks::mechanics;
 
 namespace
 {
@@ -27,6 +32,7 @@ struct Engine
 
 int readBE(const unsigned char *p) { return (p[0] << 24) | (p[1] << 16) | (p[2] << 8) | p[3]; }
 std::string lastError;
+const unsigned char *savedData = nullptr;
 
 // Surge's effects and modulators ask the system for random numbers (std::random_device, which
 // asks getentropy). Defining getentropy here answers them from a sequence the seed decides, so
@@ -172,6 +178,154 @@ extern "C"
     {
         engine->synth->pitchBend(0, value < -8192 ? -8192 : value > 8191 ? 8191 : value);
     }
+
+    // Writing patches (surge/patches/): Discobot's own Surge patches are made from the blank patch
+    // by naming each parameter and the value Surge would show for it.
+
+    EMSCRIPTEN_KEEPALIVE int surge_param_count(Engine *engine)
+    {
+        return (int)engine->synth->storage.getPatch().param_ptr.size();
+    }
+
+    // The name a parameter is saved under in a patch, such as "a_osc1_type".
+    EMSCRIPTEN_KEEPALIVE const char *surge_param_name(Engine *engine, int index)
+    {
+        auto &params = engine->synth->storage.getPatch().param_ptr;
+        return index >= 0 && index < (int)params.size() ? params[index]->get_storage_name() : "";
+    }
+
+    // What Surge shows for a parameter now, such as "Classic" or "440.00 Hz".
+    EMSCRIPTEN_KEEPALIVE const char *surge_param_display(Engine *engine, int index)
+    {
+        static std::string shown;
+        auto &params = engine->synth->storage.getPatch().param_ptr;
+        shown = index >= 0 && index < (int)params.size() ? params[index]->get_display() : "";
+        return shown.c_str();
+    }
+
+    // 0 when set; 1 when no parameter has that name; 2 when Surge cannot read the value
+    // (surge_last_error says why). A whole-number parameter takes what Surge shows for one of
+    // its values ("Sine") or the number itself; an on-off one takes "on" or "off". A change of
+    // type (an oscillator's, a filter's) happens on the next block, so a patch sets types first,
+    // renders a block, then sets the rest.
+    EMSCRIPTEN_KEEPALIVE int surge_param_set(Engine *engine, const char *name, const char *text)
+    {
+        auto &synth = *engine->synth;
+        auto &params = synth.storage.getPatch().param_ptr;
+        int found = -1;
+        for (int i = 0; i < (int)params.size(); ++i)
+            if (std::strcmp(params[i]->get_storage_name(), name) == 0)
+            {
+                found = i;
+                break;
+            }
+        if (found < 0)
+            return 1;
+        auto *p = params[found];
+        std::string value(text);
+        float normalized = 0;
+        if (p->valtype == vt_float)
+        {
+            if (!synth.stringToNormalizedValue(synth.idForParameter(p), value, normalized))
+            {
+                lastError = std::string(name) + ": cannot read '" + value + "'";
+                return 2;
+            }
+        }
+        else if (p->valtype == vt_bool)
+        {
+            if (value != "on" && value != "off")
+            {
+                lastError = std::string(name) + ": on or off, not '" + value + "'";
+                return 2;
+            }
+            normalized = value == "on" ? 1.f : 0.f;
+        }
+        else
+        {
+            int chosen = INT32_MIN;
+            auto before = p->val;
+            for (int k = p->val_min.i; k <= p->val_max.i && chosen == INT32_MIN; ++k)
+            {
+                p->val.i = k;
+                if (p->get_display() == value)
+                    chosen = k;
+            }
+            p->val = before;
+            if (chosen == INT32_MIN)
+            {
+                char *end = nullptr;
+                long number = std::strtol(value.c_str(), &end, 10);
+                if (end && *end == 0 && !value.empty() && number >= p->val_min.i && number <= p->val_max.i)
+                    chosen = (int)number;
+            }
+            if (chosen == INT32_MIN)
+            {
+                lastError = std::string(name) + ": no value '" + value + "'";
+                return 2;
+            }
+            normalized = Parameter::intScaledToFloat(chosen, p->val_max.i, p->val_min.i);
+        }
+        synth.setParameter01(found, normalized, false, p->valtype != vt_float);
+        return 0;
+    }
+
+    // Lets macro `macro` (0 to 7) move a parameter; depth is from -1 to 1 of its whole range.
+    // 0 when set; 1 when no parameter has that name; 2 when it cannot be modulated.
+    EMSCRIPTEN_KEEPALIVE int surge_route_macro(Engine *engine, int macro, const char *name, float depth)
+    {
+        auto &synth = *engine->synth;
+        if (macro < 0 || macro >= n_customcontrollers)
+            return 2;
+        auto &params = synth.storage.getPatch().param_ptr;
+        for (int i = 0; i < (int)params.size(); ++i)
+            if (std::strcmp(params[i]->get_storage_name(), name) == 0)
+                return synth.setModDepth01(i, (modsources)(ms_ctrl1 + macro), 0, 0,
+                                           depth * 0.5f + 0.5f)
+                           ? 0
+                           : 2;
+        return 1;
+    }
+
+    EMSCRIPTEN_KEEPALIVE void surge_set_macro_name(Engine *engine, int macro, const char *name)
+    {
+        if (macro >= 0 && macro < n_customcontrollers)
+        {
+            auto &label = engine->synth->storage.getPatch().CustomControllerLabel[macro];
+            std::strncpy(label, name, CUSTOM_CONTROLLER_LABEL_SIZE - 1);
+            label[CUSTOM_CONTROLLER_LABEL_SIZE - 1] = 0;
+        }
+    }
+
+    EMSCRIPTEN_KEEPALIVE void surge_set_patch_name(Engine *engine, const char *name)
+    {
+        engine->synth->storage.getPatch().name = name;
+    }
+
+    // The patch as a whole .fxp file, as Surge saves one; surge_saved_data is where it is.
+    EMSCRIPTEN_KEEPALIVE int surge_save_fxp(Engine *engine)
+    {
+        static std::vector<unsigned char> saved;
+        auto &patch = engine->synth->storage.getPatch();
+        void *data = nullptr;
+        unsigned int size = patch.save_patch(&data);
+        sst::io::fxChunkSetCustom header{};
+        header.chunkMagic = mech::endian_write_int32BE('CcnK');
+        header.fxMagic = mech::endian_write_int32BE('FPCh');
+        header.fxID = mech::endian_write_int32BE('cjs3');
+        header.numPrograms = mech::endian_write_int32BE(1);
+        header.version = mech::endian_write_int32BE(1);
+        header.fxVersion = mech::endian_write_int32BE(1);
+        std::strncpy(header.prgName, patch.name.c_str(), 27);
+        header.chunkSize = mech::endian_write_int32BE(size);
+        saved.resize(sizeof(header) + size);
+        std::memcpy(saved.data(), &header, sizeof(header));
+        std::memcpy(saved.data() + sizeof(header), data, size);
+        savedData = saved.data();
+        return (int)saved.size();
+    }
+
+    EMSCRIPTEN_KEEPALIVE const unsigned char *surge_saved_data() { return savedData; }
 
     // Fills left and right with the next frames, 32 samples at a time inside.
     EMSCRIPTEN_KEEPALIVE void surge_render(Engine *engine, float *left, float *right, int frames)
