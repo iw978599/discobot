@@ -21,6 +21,10 @@ export type SynthWorkletMessage =
   | { type: 'live'; bend?: number; wheel?: number; pressure?: number }
   | { type: 'allNotesOff'; release?: number };
 
+// What the page sends the one `lanes-processor`, which plays every synth lane: a lane's message
+// with the lane's number (1 to 5), which is also its output's number plus one.
+export type LanesWorkletMessage = { lane: number; message: SynthWorkletMessage };
+
 export type DrumWorkletMessage =
   | ({ type: 'hit' } & DrumHitMessage)
   // null puts the lane back on its synthesized voice

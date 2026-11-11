@@ -1494,7 +1494,8 @@ V24. **Recording a live session as audio.** Done: Record Session in the timeline
   Its recommendation is go, with at most two Surge lanes, a voice limit and a watchdog; the
   owner said the patches sounded really good, and on 2026-11-10 asked to go on, with every
   synth lane in one audio processor (folded into stage 2). Stage 1, the build in the
-  repository (`surge/`), is done. Next is stage 2: one processor for all the synth lanes, then
-  Surge on a lane. Not
+  repository (`surge/`), is done. Stage 2 has begun: the libraries' licences are read (none
+  stops it), and every synth lane now plays in one audio processor. Next is Surge on a lane,
+  with the voice budget and watchdog. Not
   chosen: Surge as a guest page (a guest is never sent notes), and translating Surge patches
   into Discobot's synth (still possible, smaller, and not the real sound).
