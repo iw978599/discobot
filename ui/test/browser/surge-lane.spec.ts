@@ -20,7 +20,14 @@ test.beforeEach(async ({ page }) => {
         const analyser = context.createAnalyser();
         analyser.fftSize = 2048;
         this.connect(analyser, 0);
-        win.surgeProbe = analyser;
+        // Listened to all the time, not only when the test looks: a short note in a two-second loop
+        // is easily missed between two looks.
+        win.surgePeak = 0;
+        const samples = new Float32Array(analyser.fftSize);
+        setInterval(() => {
+          analyser.getFloatTimeDomainData(samples);
+          for (const value of samples) win.surgePeak = Math.max(win.surgePeak, Math.abs(value));
+        }, 20);
         // What passes between the page and the processor, said if Surge is not heard.
         win.surgeLog = [];
         const post = this.port.postMessage.bind(this.port);
@@ -59,13 +66,7 @@ test('a lane on Surge XT loads Surge from this site and plays its patch, and its
 
   await page.getByRole('button', { name: /Play All/ }).click();
   await expect(synth.getByText('Loading Surge XT…')).toHaveCount(0, { timeout: 20000 });
-  await expect.poll(() => page.evaluate(() => {
-    const analyser = (window as any).surgeProbe as AnalyserNode | undefined;
-    if (!analyser) return 0;
-    const samples = new Float32Array(analyser.fftSize);
-    analyser.getFloatTimeDomainData(samples);
-    return samples.reduce((most, value) => Math.max(most, Math.abs(value)), 0);
-  }), { timeout: 15000, message: 'Surge is heard' }).toBeGreaterThan(0.001).catch(async (error) => {
+  await expect.poll(() => page.evaluate(() => (window as any).surgePeak ?? 0), { timeout: 15000, message: 'Surge is heard' }).toBeGreaterThan(0.001).catch(async (error) => {
     const log: string[] = await page.evaluate(() => (window as any).surgeLog);
     throw new Error([error.message, ...new Set(log), ...errors].slice(0, 80).join('\n'));
   });
