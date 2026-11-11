@@ -95,8 +95,9 @@ test.beforeEach(async ({ page }) => {
       constructor(context: BaseAudioContext, name: string, options?: AudioWorkletNodeOptions) {
         super(context, name, options);
         const post = this.port.postMessage.bind(this.port);
-        this.port.postMessage = (message: { type: string }) => {
-          captured.push(message);
+        this.port.postMessage = (message: any) => {
+          // The lanes processor's messages carry the lane: { lane, message }.
+          captured.push(typeof message?.lane === 'number' && message.message ? { ...message.message, lane: message.lane } : message);
           post(message);
         };
       }
