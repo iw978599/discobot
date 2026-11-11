@@ -266,7 +266,7 @@ extern "C"
             }
             normalized = Parameter::intScaledToFloat(chosen, p->val_max.i, p->val_min.i);
         }
-        synth.setParameter01(found, normalized, false, p->valtype != vt_float);
+        synth.setParameter01(synth.idForParameter(p), normalized, false, p->valtype != vt_float);
         return 0;
     }
 
