@@ -1,3 +1,5 @@
+import type { SynthParameters } from '../types';
+import { SURGE_PATCHES, surgePatch } from './surgePatches';
 // The synth lanes a project can have. Synths 1 to 3 are where they have always been: a new project
 // has all three, and one that is removed leaves an empty place on the rack to add it back. Synths 4
 // and 5 are more, added one at a time from an Add Lane unit after the third, and shown only while
@@ -55,7 +57,9 @@ export function storedPresetName(value: unknown): string | undefined {
 
 // What a lane says under its name: the preset loaded on it, where its model is the plain engine and
 // it has one, or else its model.
-export function laneSound(modelId: string, modelName: string, preset?: string | null): string {
+export function laneSound(modelId: string, modelName: string, preset?: string | null, sound?: Pick<SynthParameters, 'engine' | 'surge'> | null): string {
+  // A lane on Surge XT's engine plays a Surge patch, whatever preset it was built on.
+  if (sound?.engine === 'surge') return `Surge XT: ${surgePatch(sound.surge?.patch)?.name ?? SURGE_PATCHES[0].name}`;
   return modelId === 'generic' && preset ? preset : modelName;
 }
 

@@ -85,7 +85,7 @@ const LaneTrack = memo(function LaneTrack({ synth, here, bars, signature, action
         <button className="desk-track-pick" aria-current={here ? 'true' : undefined} aria-label={`Show ${name} in the dock`} onClick={event => actions.show(laneTrack(id), event.currentTarget)}>
           <span className="desk-track-swatch" aria-hidden="true" />
           <span className="desk-track-name">{name}</span>
-          <span className="desk-track-sound">{laneSound(synth.synthModelId, getSynthModelDefinition(synth.synthModelId).name, synth.preset)}</span>
+          <span className="desk-track-sound">{laneSound(synth.synthModelId, getSynthModelDefinition(synth.synthModelId).name, synth.preset, synth.synthParams)}</span>
         </button>
         <span className="desk-track-ms">
           <button className={synth.muted ? 'on' : ''} aria-pressed={synth.muted} aria-label={`Track list mute ${name}`} onClick={() => actions.muteLane(id, !synth.muted)}>M</button>

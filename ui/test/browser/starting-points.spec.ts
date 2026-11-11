@@ -102,7 +102,7 @@ test('the songs on offer are in many styles, and one in another time signature o
   await page.keyboard.press('Escape');
   await offer(page).getByRole('button', { name: 'A song to hear', exact: true }).click();
   const songs = menu(page, 'A song to hear').getByRole('menuitem');
-  await expect(songs).toHaveText([/Night Circuit/, /Downtown Wah/, /Late Study/, /Fracture Line/, /Market Day/, /Cathedral/, /Lanterns Over Dark Water/, /Silver Satellite/, /Long Ascent/]);
+  await expect(songs).toHaveText([/Night Circuit/, /Downtown Wah/, /Late Study/, /Fracture Line/, /Market Day/, /Cathedral/, /Lanterns Over Dark Water/, /Silver Satellite/, /Long Ascent/, /Edge of the Room/]);
 
   const stored = () => page.evaluate(() => (window.dispatchEvent(new Event('pagehide')), JSON.parse(localStorage.getItem('discobot_browser_project_v1') || '{}')));
   await songs.filter({ hasText: 'Fracture Line' }).click();

@@ -235,7 +235,7 @@ const DOWNTOWN_WAH: SampleSong = {
       drumAutomation: { clap: { volume: ramp(BARS_8, 0.12, 0.45) } } },
     { id: 'wah-vamp', name: 'Vamp', color: 'violet', bars: 8, lanes: { 1: wahBass(WAH_VAMP), 3: wahGuitar(WAH_VAMP) }, drums: funkBars() },
     { id: 'wah-keys', name: 'Keys', color: 'green', bars: 8, lanes: { 1: wahBass(WAH_VAMP), 2: wahKeys(WAH_VAMP), 3: wahGuitar(WAH_VAMP), 5: wahOrgan(WAH_VAMP) }, drums: funkBars(),
-      automation: { 5: { level: ramp(BARS_8, 0.2, 0.7) } } },
+      automation: { 5: { level: ramp(BARS_8, 0.6, 2) } } },
     // The snare stays dry, and only the last stroke of each fill, the bigger ones most of all, rings out into the room.
     { id: 'wah-trumpet', name: 'Trumpet', color: 'red', bars: 8, lanes: { 1: wahBass(WAH_VAMP), 2: wahKeys(WAH_VAMP), 3: wahGuitar(WAH_VAMP), 4: TRUMPET, 5: wahOrgan(WAH_VAMP) }, drums: funkBars(),
       drumAutomation: { snare: { reverbSend: perStep(8, 16, (bar, step) => (step === 15 && bar % 2 ? (bar % 4 === 3 ? 1 : 0.6) : 0.15)) } } },
@@ -1111,4 +1111,101 @@ const LONG_ASCENT: SampleSong = {
   ],
 };
 
-export const SAMPLE_SONGS: SampleSong[] = [NIGHT_CIRCUIT, DOWNTOWN_WAH, LATE_STUDY, FRACTURE_LINE, MARKET_DAY, CATHEDRAL, LANTERNS, SILVER_SATELLITE, LONG_ASCENT];
+// Edge of the Room: dance-punk in the way LCD Soundsystem builds a song, on parts of its own. One
+// riff on Surge XT's engine that never stops, everything else arriving a section at a time, a
+// cowbell from the start, and the Surge patches' macros opening as it builds (docs/SURGE_XT_PLAN.md).
+const EDGE_SHIFT = [0, 0, -4, -2];
+const EDGE_RIFF: Placed[] = [[0, 'E1', 1, 1], [2, 'E1', 1, 0.75], [3, 'E2', 1, 0.9], [4, 'E1', 1, 0.8], [6, 'G1', 1, 0.85], [7, 'E1', 1, 0.7],
+  [8, 'E1', 1, 1], [10, 'E1', 1, 0.75], [11, 'E2', 1, 0.9], [12, 'D2', 1, 0.8], [14, 'B1', 1, 0.85], [15, 'A1', 1, 0.75]];
+const edgeBass = (bars = 8): Placed[][] => Array.from({ length: bars }, (_, bar) => moved(EDGE_RIFF, EDGE_SHIFT[bar % 4]));
+const EDGE_CHORDS = [['E4', 'G4', 'B4'], ['E4', 'G4', 'B4'], ['C4', 'E4', 'G4'], ['D4', 'F#4', 'A4']];
+const edgeStabs = (velocity = 0.8): Placed[][] => Array.from({ length: 8 }, (_, bar) => [2, 6, 10, 14].map((step): Placed => [step, EDGE_CHORDS[bar % 4], 1, step === 14 ? velocity + 0.1 : velocity]));
+const EDGE_PIANO = [['E3', 'B3', 'E4', 'G4'], ['E3', 'B3', 'E4', 'G4'], ['C3', 'G3', 'C4', 'E4'], ['D3', 'A3', 'D4', 'F#4']];
+const edgePiano = (velocity = 0.85): Placed[][] => Array.from({ length: 8 }, (_, bar) => [0, 4, 8, 12].map((step): Placed => [step, EDGE_PIANO[bar % 4], 3, step === 0 ? velocity + 0.1 : velocity, strum(0.08)]));
+// Two bars that turn round against the eight: the 303 nags on one note and slides up to the next.
+const EDGE_NAG: Placed[][] = [
+  [[0, 'B3', 1, 0.9], [2, 'B3', 1, 0.7], [3, 'B3', 1, 0.8], [5, 'B3', 1, 0.7], [6, 'D4', 2, 0.9, { slide: true }], [8, 'B3', 1, 0.9], [10, 'B3', 1, 0.7], [11, 'E4', 2, 0.95, { slide: true }], [14, 'D4', 1, 0.8]],
+  [[0, 'B3', 1, 0.9], [2, 'B3', 1, 0.7], [3, 'B3', 1, 0.8], [5, 'A3', 1, 0.7], [6, 'G3', 2, 0.85, { slide: true }], [8, 'A3', 1, 0.9], [10, 'B3', 1, 0.75], [12, 'D4', 4, 0.9, { slide: true }]],
+];
+const EDGE_DRONE: Placed[][] = Array.from({ length: 8 }, (_, bar): Placed[] => [[0, bar % 4 === 2 ? ['C3', 'G3'] : bar % 4 === 3 ? ['D3', 'A3'] : ['E3', 'B3'], 16, 0.6]]);
+const EDGE_COWBELL: Array<[number, number]> = [[0, 0.6], [3, 0.4], [6, 0.5], [8, 0.6], [11, 0.4], [14, 0.5]];
+const EDGE_HATS: Array<[number, number]> = Array.from({ length: 16 }, (_, step): [number, number] => [step, step % 4 === 2 ? 0.2 : step % 2 ? 0.25 : 0.35]);
+const EDGE_GROOVE: Hits = { kick: [0, 4, 8, 12], snare: [[4, 0.9], [12, 0.95]], closedHH: EDGE_HATS, openHH: [[2, 0.4], [6, 0.4], [10, 0.4], [14, 0.45]], clap: EDGE_COWBELL };
+const EDGE_FILL: Hits = { ...EDGE_GROOVE, snare: [[4, 0.9], [12, 0.8], [13, 0.85], [14, 0.9], [15, 1]], openHH: [] };
+const edgeBars = (beat: Hits, crash = true): Hits[] => Array.from({ length: 8 }, (_, bar) => (bar === 7 ? EDGE_FILL : bar === 0 && crash ? { ...beat, crash: [0] } : beat));
+// Seven-eight, counted two, two and three: the riff and the piano lose their last two sixteenths.
+const under14 = (bars: Placed[][]): Placed[][] => bars.map(bar => bar.filter(([step]) => step < 14));
+const STUMBLE_BEAT: Hits = { kick: [0, 4, 8], snare: [[4, 0.85], [11, 0.9]], closedHH: EDGE_HATS.filter(([step]) => step < 14), clap: [[0, 0.6], [4, 0.5], [8, 0.6], [11, 0.5]] };
+const EDGE_ROLL: Hits[] = Array.from({ length: 8 }, (_, bar): Hits => ({
+  kick: bar < 6 ? [0, 4, 8, 12] : [0, 2, 4, 6, 8, 10, 12, 14],
+  snare: bar < 4 ? [[12, 0.6]] : bar < 6 ? [0, 4, 8, 12].map((step): [number, number] => [step, 0.5 + bar * 0.05]) : Array.from({ length: 16 }, (_, step): [number, number] => [step, Math.min(1, 0.55 + bar * 0.04 + step * 0.01)]),
+  closedHH: EDGE_HATS, clap: EDGE_COWBELL,
+}));
+
+const EDGE_OF_THE_ROOM: SampleSong = {
+  id: 'edge-of-the-room', name: 'Edge of the Room', genre: 'Dance-punk, Surge XT',
+  hint: 'Four minutes of dance-punk at 122 BPM, built the way LCD Soundsystem builds a song but on parts of its own: a bass riff on Surge XT that never stops, a cowbell from the first bar, then clipped Surge stabs, a hammered piano and a nagging 303 arriving a section at a time, a stumble into seven-eight, a break, and a long build where the Surge patches\' macros are automated wide open',
+  tempo: 122, kit: 'linndrum', drumSwing: 0.08, drumVolume: 0.45, level: 0.28,
+  lanes: [
+    { preset: 'builtin-bass', name: 'Punk Bass', sound: { engine: 'surge', surge: { patch: 'punk-bass', macros: [0.25, 0.2, 0, 0, 0, 0, 0, 0] }, duck: 0.2, fxSends: { reverb: 0 } } },
+    { preset: 'builtin-pluck-stab', name: 'Clipped Stabs', sound: { gain: 1.1, engine: 'surge', surge: { patch: 'clipped-stab', macros: [0.2, 0.1, 0, 0, 0, 0, 0, 0] }, pan: -0.2, duck: 0.15, fxSends: { reverb: 0.2, auxA: 0.25 } } },
+    { preset: 'builtin-keys-m1-piano', name: 'Piano Pound', sound: { pan: 0.2, inserts: { drive: 0.25 }, fxSends: { reverb: 0.25 } } },
+    { preset: 'builtin-lead-squelch', name: 'Nag Line', swing: true, sound: { gain: 2, pan: 0.3, fxSends: { delay: 0.3, reverb: 0.15 } } },
+    { preset: 'builtin-pad-polysix', name: 'Drone', sound: { gain: 2, duck: 0.3, fxSends: { reverb: 0.4, auxB: 0.35 } } },
+  ],
+  drums: { kick: { reverbSend: 0 }, clap: { percType: 'cowbell', volume: 0.55, pan: 0.25 }, openHH: { reverbSend: 0.3 }, snare: { reverbSend: 0.6 } },
+  drumSends: { reverb: 0.25 },
+  effects: {
+    delay: { enabled: true, time: 0.369, feedback: 0.35, mix: 0.2, sync: '1/8d', color: 0.45 },
+    reverb: { enabled: true, kind: 'room', decay: 1.2, mix: 0.22, preDelay: 0.01, damping: 0.4 },
+    aux: [{ kind: 'echo', level: 0.45, main: 0.246, shape: 0.4, sync: '1/8' }, { kind: 'hall', level: 0.7, main: 3, shape: 0.35 }],
+  },
+  scenes: [
+    // The cowbell and the hats, and the riff behind a closed filter, opening.
+    { id: 'edge-count', name: 'Count Off', color: 'blue', bars: 8, lanes: { 1: edgeBass() },
+      drums: Array.from({ length: 8 }, (_, bar): Hits => (bar < 4 ? { clap: EDGE_COWBELL } : { clap: EDGE_COWBELL, closedHH: EDGE_HATS })),
+      automation: { 1: { surgeMacro1: ramp(BARS_8, 0, 0.35), surgeMacro2: held(BARS_8, 0.1) } } },
+    // The kick and the snare.
+    { id: 'edge-groove', name: 'Groove', color: 'green', bars: 8, lanes: { 1: edgeBass() }, drums: edgeBars(EDGE_GROOVE, false),
+      automation: { 1: { surgeMacro1: held(BARS_8, 0.4) } } },
+    // Clipped Surge stabs on the off-beats, brightening.
+    { id: 'edge-stabs', name: 'Stabs', color: 'teal', bars: 8, lanes: { 1: edgeBass(), 2: edgeStabs() }, drums: edgeBars(EDGE_GROOVE),
+      automation: { 2: { surgeMacro1: ramp(BARS_8, 0.1, 0.6) } } },
+    // The piano hammers quarter notes; the open hats brighten.
+    { id: 'edge-piano', name: 'Piano', color: 'violet', bars: 8, lanes: { 1: edgeBass(), 2: edgeStabs(0.7), 3: edgePiano() }, drums: edgeBars(EDGE_GROOVE),
+      drumAutomation: { openHH: { tone: ramp(BARS_8, 0.4, 0.8) } } },
+    // The 303 nags over it, two bars round and round, its filter opening each time round.
+    { id: 'edge-nag', name: 'Nag', color: 'pink', bars: 8, laneBars: { 4: 2 }, lanes: { 1: edgeBass(), 2: edgeStabs(0.7), 3: edgePiano(0.8), 4: EDGE_NAG }, drums: edgeBars(EDGE_GROOVE),
+      automation: { 4: { cutoff: [...ramp(16, 1200, 2200), ...ramp(16, 2200, 3600)] } } },
+    // Four bars stumbling in seven-eight, the bass driven harder.
+    { id: 'edge-stumble', name: 'Stumble', color: 'red', signature: '7/8', bars: 4, lanes: { 1: under14(edgeBass(4)), 3: under14(edgePiano(0.8).slice(0, 4)) },
+      drums: Array<Hits>(4).fill(STUMBLE_BEAT),
+      automation: { 1: { surgeMacro2: ramp(4 * 14, 0.3, 0.7) } } },
+    // Everything out but the bass, the drone and the cowbell; the 303's lane is another instrument here.
+    { id: 'edge-break', name: 'Break', color: 'blue', bars: 8, sounds: { 4: { preset: 'builtin-lead-ms-hollow', sound: { ...glide(0.08) } } },
+      lanes: { 1: edgeBass(), 4: [[], [], [], [], [[0, 'B4', 8, 0.6]], [], [[0, 'D5', 8, 0.6]], []], 5: EDGE_DRONE },
+      mutes: { drums: ['kick'] }, drums: Array<Hits>(8).fill({ clap: EDGE_COWBELL, kick: [0, 8] }),
+      automation: { 1: { surgeMacro1: ramp(BARS_8, 0.4, 0.1) }, 5: { level: ramp(BARS_8, 0.6, 2) } } },
+    // The kick doubles, the snare rolls up in pitch, and both Surge patches open all the way.
+    { id: 'edge-build', name: 'Build', color: 'violet', bars: 8, lanes: { 1: edgeBass(), 2: edgeStabs(0.75), 5: EDGE_DRONE }, drums: EDGE_ROLL,
+      drumAutomation: { snare: { tune: ramp(BARS_8, -0.3, 0.5) } },
+      automation: { 1: { surgeMacro1: ramp(BARS_8, 0.1, 1), surgeMacro2: ramp(BARS_8, 0.2, 0.8) }, 2: { surgeMacro1: ramp(BARS_8, 0.3, 1), surgeMacro2: ramp(BARS_8, 0.1, 0.7) }, 5: { level: ramp(BARS_8, 1.4, 2) } } },
+    // All five, the macros up, the drone arpeggiated.
+    { id: 'edge-everybody', name: 'Everybody', color: 'red', bars: 8, laneBars: { 4: 2 },
+      sounds: { 5: { preset: 'builtin-pad-polysix', sound: { gain: 2, arpeggiator: { enabled: true, mode: 'updown', rate: '1/16', gate: 0.5, octaves: 2 } } } },
+      lanes: { 1: edgeBass(), 2: edgeStabs(0.85), 3: edgePiano(0.9), 4: EDGE_NAG, 5: EDGE_DRONE },
+      drums: edgeBars({ ...EDGE_GROOVE, ride: [[2, 0.35], [6, 0.35], [10, 0.35], [14, 0.35]] }),
+      automation: { 1: { surgeMacro1: held(BARS_8, 0.8), surgeMacro2: held(BARS_8, 0.7) }, 2: { surgeMacro1: held(BARS_8, 0.85), surgeMacro2: ramp(BARS_8, 0.5, 0.9) }, 4: { cutoff: held(32, 4000) } } },
+    // Down to the bass and the cowbell, the filter closing.
+    { id: 'edge-out', name: 'Out', color: 'teal', bars: 8, lanes: { 1: [...edgeBass(6), [[0, 'E1', 16, 0.9]], []], 3: [...edgePiano(0.7).slice(0, 4), [], [], [], []] },
+      drums: [EDGE_GROOVE, EDGE_GROOVE, EDGE_GROOVE, EDGE_GROOVE, { clap: EDGE_COWBELL, closedHH: EDGE_HATS }, { clap: EDGE_COWBELL }, { clap: EDGE_COWBELL }, { clap: [[0, 0.6]] }],
+      automation: { 1: { surgeMacro1: ramp(BARS_8, 0.6, 0) } } },
+  ],
+  // 116 bars at 122 BPM, four of them in seven-eight: three minutes and fifty seconds.
+  order: [
+    ['edge-count', 1], ['edge-groove', 2], ['edge-stabs', 2], ['edge-piano', 2], ['edge-nag', 2], ['edge-stumble', 1],
+    ['edge-break', 1], ['edge-build', 1], ['edge-everybody', 3], ['edge-out', 1],
+  ],
+};
+
+export const SAMPLE_SONGS: SampleSong[] = [NIGHT_CIRCUIT, DOWNTOWN_WAH, LATE_STUDY, FRACTURE_LINE, MARKET_DAY, CATHEDRAL, LANTERNS, SILVER_SATELLITE, LONG_ASCENT, EDGE_OF_THE_ROOM];
