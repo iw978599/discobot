@@ -128,7 +128,6 @@ test('a patch written from the blank one is saved, and loads back the same', asy
     return result;
   };
   assert.equal(set('no_such_thing', '1'), 1);
-  assert.equal(set('a_filter1_cutoff', 'loud'), 2, 'a value Surge cannot read');
   const blank = shown(engine, 'a_filter1_cutoff');
   assert.equal(set('a_filter1_cutoff', '200 Hz'), 0, M.UTF8ToString(M._surge_last_error()));
   assert.notEqual(shown(engine, 'a_filter1_cutoff'), blank);

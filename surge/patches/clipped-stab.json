@@ -1,0 +1,27 @@
+{
+  "name": "Clipped Stab",
+  "set": {
+    "a_osc1_type": "Classic",
+    "a_filter1_type": "LP 12 dB",
+    "a_ws_type": "Hard",
+    "a_polymode": "Poly",
+    "a_filter1_subtype": "Driven",
+    "a_osc1_param0": "0 %",
+    "a_osc1_param5": "15 cents",
+    "a_osc1_param6": "3",
+    "a_filter1_cutoff": "1500 Hz",
+    "a_filter1_resonance": "20 %",
+    "a_filter1_envmod": "12 semitones",
+    "a_env2_decay": "120 ms",
+    "a_env2_sustain": "0 %",
+    "a_env1_decay": "170 ms",
+    "a_env1_sustain": "0 %",
+    "a_env1_release": "90 ms",
+    "a_ws_drive": "4 dB",
+    "a_volume": "-9 dB"
+  },
+  "macros": [
+    { "name": "Bright", "routes": { "a_filter1_cutoff": 0.3 } },
+    { "name": "Crunch", "routes": { "a_ws_drive": 0.45 } }
+  ]
+}

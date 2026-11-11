@@ -39,3 +39,14 @@ To build by hand on Linux, with Emscripten 4.0.10 active:
 `bash surge/build.sh /tmp/surge-work /tmp/surge-built`.
 
 Nothing here is part of the app yet: stage 2 of the plan brings the engine into it.
+
+## Discobot's own patches
+
+Surge's factory patches do not ship: their licence has not been settled. The patches Discobot
+offers are its own, written in `patches/` as Surge's blank patch plus a list of parameters by
+their saved names and the values Surge shows for them, and each macro's name and what it moves.
+`node surge/patches/make.mjs` makes each into `ui/public/surge/patches/<name>.fxp` with the
+built engine, reading every value back and stopping on any Surge did not take as written. A
+type (an oscillator's, a filter's) is set first and takes effect on the next block, then the rest.
+`ui/test/surgePatches.test.ts` fails unless each file is exactly what its definition makes.
+After changing a definition, or the engine, run the script and commit the files.

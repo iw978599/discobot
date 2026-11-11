@@ -6,12 +6,12 @@
   "emscripten": "emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 4.0.10 (b7dc6e5747465580df5984e723b9d1f10d8e804b)",
   "files": {
     "surge-engine.wasm": {
-      "sha256": "5fc6498089465848bdbf72e443111aaa6c572f032c95ba9c58b2844cf2529fce",
-      "bytes": 5859578
+      "sha256": "15d5a88fd363aa14294a961a424c61eaaaf984966de9d3b0840fea135e18479c",
+      "bytes": 6318363
     },
     "surge-engine.js": {
-      "sha256": "a64a62025924a4dec4ec3cc4fdafe22705cc9da4ff105623467ae91d945094d7",
-      "bytes": 73620
+      "sha256": "4ee66a2125dece44b4e047174159afcb5c38afb308b83483036b718c2e3fbc21",
+      "bytes": 74388
     }
   }
 }

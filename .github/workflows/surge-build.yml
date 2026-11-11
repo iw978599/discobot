@@ -6,9 +6,9 @@ name: Surge XT engine
 on:
   push:
     branches-ignore: [main]
-    paths: ['surge/**', '.github/workflows/surge-build.yml', 'ui/test/surgeEngine.test.ts']
+    paths: ['surge/**', '.github/workflows/surge-build.yml', 'ui/test/surgeEngine.test.ts', 'ui/test/surgePatches.test.ts', 'ui/public/surge/**']
   pull_request:
-    paths: ['surge/**', '.github/workflows/surge-build.yml', 'ui/test/surgeEngine.test.ts']
+    paths: ['surge/**', '.github/workflows/surge-build.yml', 'ui/test/surgeEngine.test.ts', 'ui/test/surgePatches.test.ts', 'ui/public/surge/**']
   workflow_dispatch:
 
 permissions:
@@ -49,7 +49,7 @@ jobs:
       - name: Test the fresh build
         run: |
           npm ci --no-audit --no-fund
-          SURGE_DIST="$PWD/built" node --import tsx --test ui/test/surgeEngine.test.ts
+          SURGE_DIST="$PWD/built" node --import tsx --test ui/test/surgeEngine.test.ts ui/test/surgePatches.test.ts
 
       - name: Compare with the committed engine
         run: |
