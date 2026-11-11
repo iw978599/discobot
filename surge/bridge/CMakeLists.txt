@@ -18,5 +18,5 @@ target_link_options(surge-engine PRIVATE
   -sTEXTDECODER=0
   -sEXPORT_EXCEPTION_HANDLING_HELPERS=1
   -sEXPORTED_RUNTIME_METHODS=HEAPF32,HEAPU8,UTF8ToString
-  "-sEXPORTED_FUNCTIONS=_malloc,_free,_surge_create,_surge_destroy,_surge_load_fxp,_surge_note_on,_surge_note_off,_surge_all_notes_off,_surge_pitch_bend,_surge_set_macro,_surge_macro_name,_surge_patch_name,_surge_render,_surge_block_size,_surge_seed,_surge_last_error"
+  "-sEXPORTED_FUNCTIONS=_malloc,_free,_surge_create,_surge_destroy,_surge_load_fxp,_surge_note_on,_surge_note_off,_surge_all_notes_off,_surge_pitch_bend,_surge_set_macro,_surge_macro_name,_surge_patch_name,_surge_render,_surge_block_size,_surge_seed,_surge_last_error,_surge_param_count,_surge_param_name,_surge_param_display,_surge_param_set,_surge_route_macro,_surge_set_macro_name,_surge_set_patch_name,_surge_save_fxp,_surge_saved_data"
 )

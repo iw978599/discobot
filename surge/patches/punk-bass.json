@@ -1,0 +1,31 @@
+{
+  "name": "Punk Bass",
+  "set": {
+    "a_osc1_type": "Classic",
+    "a_osc2_type": "Classic",
+    "a_filter1_type": "LP Legacy Ladder",
+    "a_ws_type": "Soft",
+    "a_polymode": "Mono",
+    "a_filter1_subtype": "24 dB",
+    "a_osc1_param0": "0 %",
+    "a_osc2_param0": "100 %",
+    "a_osc2_octave": "-1",
+    "a_mute_o2": "Off",
+    "a_level_o2": "-6 dB",
+    "a_filter1_cutoff": "330 Hz",
+    "a_filter1_resonance": "35 %",
+    "a_filter1_envmod": "30 semitones",
+    "a_env2_decay": "180 ms",
+    "a_env2_sustain": "15 %",
+    "a_env2_release": "60 ms",
+    "a_env1_decay": "400 ms",
+    "a_env1_sustain": "80 %",
+    "a_env1_release": "60 ms",
+    "a_ws_drive": "6 dB",
+    "a_volume": "-6 dB"
+  },
+  "macros": [
+    { "name": "Cutoff", "routes": { "a_filter1_cutoff": 0.35 } },
+    { "name": "Drive", "routes": { "a_ws_drive": 0.4 } }
+  ]
+}

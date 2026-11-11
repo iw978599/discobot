@@ -373,6 +373,16 @@ limits.
 
 ### Stage 4: patches and controls
 
+- **Discobot's own patches come first (2026-11-11).** The factory patches'
+  licence could not be found stated anywhere (not in Surge's README or
+  repository files), so none ship. The bridge gained functions to set any
+  parameter by name and the value Surge shows, route a macro, name things and
+  save an `.fxp`, and `surge/patches/make.mjs` builds Discobot's own patches
+  from readable definitions (`surge/README.md`). The first two, Punk Bass and
+  Clipped Stab, are for the dance-punk sample song the owner asked for; each
+  names its macros, so the song can automate them. The factory patches stay
+  below, waiting on their licence.
+
 - **Factory patches:** packed and compressed into a few category files, each
   downloaded on first use and kept by the service worker. Shown as a "Surge XT"
   group in the preset menu.
