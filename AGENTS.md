@@ -84,12 +84,12 @@ compatibility. See `README.md` and `docs/CONTROL_AUDIT.md`.
 | `ui/pwa/service-worker.js` | Service worker template. `vite.config.ts` fills in the build's file list and emits it as `sw.js`; `main.tsx` registers it in production only |
 | `ui/src/services/drumKits.ts` | Drum instrument list and kit metadata |
 | `ui/src/hooks/browserAudio.ts` | `AudioEngine`, which owns live playback's AudioContext, master limiter, parallel FX buses and sample playback; `audioEngine`, the app's one; the functions everything else calls, which call it; and the pure builders export shares |
-| `ui/src/hooks/useSynthAudio.ts` | Per-lane AudioWorklet nodes, note start/stop, parameter flattening |
+| `ui/src/hooks/useSynthAudio.ts` | One `lanes-processor` node for every synth lane (lane N on output N - 1, each into its own lane audio), note start/stop, parameter flattening |
 | `ui/src/hooks/useDrumAudio.ts` | Posts drum hits to the `drum-processor` worklet node, whose three outputs are the kit and what it sends to the delay and to the reverb |
 | `ui/src/hooks/useMidiInput.ts` | Web MIDI input, per-device held-note tracking, and the list of outputs. Every message is handed on with the input it came from (`MidiSource`) |
 | `ui/src/services/midiDrums.ts` / `midiDevices.ts` | The note each drum's pad sends (`PadMap`, `drumForNote`), and where each MIDI input's notes go (`MidiDestination`). Both are this browser's, not the project's |
 | `ui/src/services/midiOutput.ts` | `midiOut`: the sequencer's notes and MIDI clock to a hardware output |
-| `ui/src/audio/worklet.ts` | Worklet entry: thin `synth-processor` and `drum-processor` wrappers around the engine cores. `vite.config.ts` bundles it to `public/audio-worklet.js` (generated, gitignored) |
+| `ui/src/audio/worklet.ts` | Worklet entry: thin `lanes-processor` and `drum-processor` wrappers around the engine (`LaneHost` in `engine/src/synth/LaneHost.ts` holds every lane's `SynthCore`). `vite.config.ts` bundles it to `public/audio-worklet.js` (generated, gitignored) |
 | `ui/src/services/songPlayback.ts` | Pure song helpers: `sceneAtBar` (which scene plays in a bar, and where in it), `songBars`, `sceneDrumState` |
 | `ui/src/services/builtInPresets.ts` | The sounds that come with the app, by kind. `ui/test/helpers/presetAudit.ts` renders one through `SynthCore` and measures what can be measured without ears; `builtInPresets.test.ts` holds every preset to it |
 | `ui/src/services/presetImport.ts` | Synth preset files: Discobot's own (`discobot-preset`), and translators for other synths' presets |

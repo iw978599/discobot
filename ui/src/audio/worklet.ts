@@ -1,12 +1,12 @@
 // AudioWorklet entry point. vite.config.ts bundles this file to public/audio-worklet.js;
 // the DSP itself lives in the engine so offline export runs exactly the same code.
-import { SynthCore } from '../../../engine/src/synth/SynthCore';
+import { LaneHost } from '../../../engine/src/synth/LaneHost';
 import { DrumCore } from '../../../engine/src/drums/DrumCore';
-import { GUEST_TAP_FRAMES, type DrumWorkletMessage, type GuestPlayerMessage, type GuestTapMessage, type SynthWorkletMessage } from '../../../engine/src/workletMessages';
+import { GUEST_TAP_FRAMES, type DrumWorkletMessage, type GuestPlayerMessage, type GuestTapMessage, type LanesWorkletMessage } from '../../../engine/src/workletMessages';
 
 declare const sampleRate: number;
 declare const currentFrame: number;
-declare function registerProcessor(name: string, processor: new () => WorkletProcessor): void;
+declare function registerProcessor(name: string, processor: new (options: { numberOfOutputs?: number }) => WorkletProcessor): void;
 declare class AudioWorkletProcessor {
   readonly port: MessagePort;
 }
@@ -14,27 +14,18 @@ type WorkletProcessor = AudioWorkletProcessor & {
   process(inputs: Float32Array[][], outputs: Float32Array[][]): boolean;
 };
 
-class SynthProcessor extends AudioWorkletProcessor {
-  private core = new SynthCore(sampleRate);
+// Every synth lane, each into an output of its own (engine/src/synth/LaneHost.ts).
+class LanesProcessor extends AudioWorkletProcessor {
+  private host: LaneHost;
 
-  constructor() {
+  constructor(options: { numberOfOutputs?: number }) {
     super();
-    this.port.onmessage = ({ data }: MessageEvent<SynthWorkletMessage>) => {
-      if (data.type === 'params') this.core.setParams(data.params, data.time, data.keep);
-      else if (data.type === 'unschedule') this.core.clearScheduledParams();
-      else if (data.type === 'sample') this.core.setSample(data.sample, data.time);
-      else if (data.type === 'live') { if (data.bend !== undefined) this.core.setBend(data.bend); if (data.wheel !== undefined) this.core.setWheel(data.wheel); if (data.pressure !== undefined) this.core.setPressure(data.pressure); }
-      else if (data.type === 'noteOn') this.core.noteOn(data);
-      else if (data.type === 'noteOff') this.core.noteOff(data.note, data.id);
-      else if (data.type === 'allNotesOff') this.core.allNotesOff(data.release);
-    };
+    this.host = new LaneHost(sampleRate, options.numberOfOutputs ?? 1);
+    this.port.onmessage = ({ data }: MessageEvent<LanesWorkletMessage>) => this.host.receive(data);
   }
 
   process(_inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
-    const output = outputs[0];
-    if (!output?.length) return true;
-    this.core.frame = currentFrame;
-    this.core.process(output[0], output[1] || output[0]);
+    this.host.process(currentFrame, outputs);
     return true;
   }
 }
@@ -132,5 +123,5 @@ class GuestTap extends AudioWorkletProcessor {
 
 registerProcessor('guest-player', GuestPlayer);
 registerProcessor('guest-tap', GuestTap);
-registerProcessor('synth-processor', SynthProcessor);
+registerProcessor('lanes-processor', LanesProcessor);
 registerProcessor('drum-processor', DrumProcessor);

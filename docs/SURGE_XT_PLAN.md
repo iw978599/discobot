@@ -293,6 +293,20 @@ limits.
   licences note in Help comes with stage 2, when the engine first ships. It
   names Surge XT, its licence and authors, its exact source, and the
   libraries built into it, each read before it ships.
+- **The libraries' licences, read on 2026-11-11** (`surge/dist/licences/`):
+  - Surge and the sst libraries that hold its sound (basic blocks, effects,
+    filters, waveshapers) are GPL-3, as Discobot is.
+  - The rest are permissive and ask only that their notice goes with the
+    engine: MIT (airwindows, PEGTL, r8brain, simde, fmt, elliptic-blep,
+    tuning-library, sst-cpputils, sst-plugininfra, sst-cmake, miniz, stmlib),
+    BSD (CLI11, zstd, which is also offered as GPL-2), Apache-2.0 (binn),
+    zlib (tinyxml), the libpng licence and MTS-ESP's public-domain-like
+    notice.
+  - Steinberg's ASIO kit, inside sst-plugininfra, is offered under GPL-3 as
+    well as Steinberg's own licence, so it would be fine even if it were
+    built in. It is a Windows audio-driver kit and the engine does not use it.
+  - Nothing found stops the engine shipping. The factory patches' licence is
+    still a separate question (below).
 
 ### Stage 2: one lane plays Surge live
 
@@ -301,7 +315,13 @@ limits.
   `SCHEMA` bumped). What is stored is which patch (a factory patch's name, or
   a file's fingerprint) and the eight macro values.
 - **One processor for all the synth lanes** (asked for by the owner on
-  2026-11-10):
+  2026-11-10). **Built first, on its own (2026-11-11):** `LaneHost`
+  (`engine/src/synth/LaneHost.ts`) holds each lane's `SynthCore` and the
+  worklet's `lanes-processor` wraps it; `useSynthAudio` makes one node with
+  five outputs and wires lane N's output N - 1 to the lane's audio.
+  `laneHost.test.ts` holds three lanes' sound through it to the old
+  processor-per-lane, sample for sample. The voice budget and watchdog come
+  with the Surge lane, which is what they are for.
   - **What changes:** today every lane is its own `synth-processor` node.
     Stage 2 replaces them with one `lanes-processor` that holds every
     synth lane's voice core, the built-in `SynthCore` or a Surge engine, and

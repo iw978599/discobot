@@ -1,10 +1,13 @@
 import { useRef, useCallback, useEffect, useMemo } from 'react';
 import type { SynthParameters, EffectsLoopState, FxSendLevels } from '../types';
-import { toVoiceParams, type SynthSample, type SynthWorkletMessage, type VoiceParams } from '@discobot/engine';
+import { toVoiceParams, type LanesWorkletMessage, type SynthSample, type SynthWorkletMessage, type VoiceParams } from '@discobot/engine';
+import { MAX_LANES } from '../services/lanes';
 import { automationChange } from '../services/automation';
 import { audioEngine, type AudioEngine } from './browserAudio';
 
 interface SynthLane {
+  id: number;
+  // The one `lanes-processor` every lane plays in, once this lane's output is wired to its audio.
   node?: AudioWorkletNode;
   audio?: ReturnType<AudioEngine['createLane']>;
   loading?: Promise<AudioWorkletNode>;
@@ -30,7 +33,7 @@ interface SynthLane {
   starting: Map<string, Set<number>>;
 }
 
-const send = (node: AudioWorkletNode | undefined, message: SynthWorkletMessage) => node?.port.postMessage(message);
+const send = (lane: SynthLane, message: SynthWorkletMessage) => lane.node?.port.postMessage({ lane: lane.id, message } satisfies LanesWorkletMessage);
 // A lane's sound for the voice, without the parameters its automation is holding.
 const soundFor = (lane: SynthLane): Partial<VoiceParams> => {
   const sound: Partial<VoiceParams> = toVoiceParams(lane.parameters!, lane.bpm);
@@ -43,11 +46,13 @@ export function useSynthAudio(engine: AudioEngine = audioEngine) {
   const lanesRef = useRef(new Map<number, SynthLane>());
   const volumeRef = useRef(1);
   const sequenceRef = useRef(0);
+  // The one node every lane plays in (docs/SURGE_XT_PLAN.md, stage 2), lane N on output N - 1.
+  const hostRef = useRef<{ node?: AudioWorkletNode; loading?: Promise<AudioWorkletNode> }>({});
 
   function laneFor(id: number): SynthLane {
     let lane = lanesRef.current.get(id);
     if (!lane) {
-      lane = { bpm: 120, generation: 0, starting: new Map() };
+      lane = { id, bpm: 120, generation: 0, starting: new Map() };
       lanesRef.current.set(id, lane);
     }
     return lane;
@@ -61,7 +66,7 @@ export function useSynthAudio(engine: AudioEngine = audioEngine) {
     if (sent === lane.sent) return;
     lane.sent = sent;
     lane.bpm = bpm;
-    send(lane.node, { type: 'params', params: soundFor(lane) });
+    send(lane, { type: 'params', params: soundFor(lane) });
     if (!lane.automatedSends) lane.audio?.setSends(parameters.fxSends, parameters.fxReturn);
   }, []);
   // Another instrument from `time` on the audio clock: a scene with a sound of its own beginning
@@ -73,7 +78,7 @@ export function useSynthAudio(engine: AudioEngine = audioEngine) {
     lane.sent = sent;
     lane.parameters = parameters;
     lane.bpm = bpm;
-    send(lane.node, { type: 'params', params: soundFor(lane), time, keep: true });
+    send(lane, { type: 'params', params: soundFor(lane), time, keep: true });
     if (!lane.automatedSends) lane.audio?.setSends(parameters.fxSends, parameters.fxReturn, time);
   }, []);
   // A step's automation: what the voice is to be at `time` on the audio clock, which is when the
@@ -91,44 +96,55 @@ export function useSynthAudio(engine: AudioEngine = audioEngine) {
     const change = automationChange(lane.automated ?? null, step, toVoiceParams(lane.parameters, lane.bpm));
     lane.automated = step;
     // Made now, it is a knob being recorded: what was waiting for the steps already scheduled is older than it.
-    if (time === undefined) send(lane.node, { type: 'unschedule' });
-    if (change) send(lane.node, { type: 'params', params: change, time });
+    if (time === undefined) send(lane, { type: 'unschedule' });
+    if (change) send(lane, { type: 'params', params: change, time });
   }, []);
   // The transport has stopped: nothing more is waiting, and every lane is back at its own sound.
   const endAutomation = useCallback(() => {
     lanesRef.current.forEach(lane => {
-      send(lane.node, { type: 'unschedule' });
+      send(lane, { type: 'unschedule' });
       if (lane.automatedSends) {
         lane.automatedSends = null;
         if (lane.parameters) lane.audio?.setSends(lane.parameters.fxSends, lane.parameters.fxReturn);
       }
       if (!lane.automated) return;
       lane.automated = null;
-      if (lane.parameters) send(lane.node, { type: 'params', params: toVoiceParams(lane.parameters, lane.bpm) });
+      if (lane.parameters) send(lane, { type: 'params', params: toVoiceParams(lane.parameters, lane.bpm) });
     });
   }, []);
+
+  function getHost(): Promise<AudioWorkletNode> {
+    const host = hostRef.current;
+    if (host.node) return Promise.resolve(host.node);
+    host.loading ??= engine.loadWorklet().then(() => {
+      const node = new AudioWorkletNode(engine.getContext(), 'lanes-processor', {
+        numberOfInputs: 0, numberOfOutputs: MAX_LANES, outputChannelCount: Array.from({ length: MAX_LANES }, () => 2),
+      });
+      host.node = node;
+      return node;
+    }).finally(() => { host.loading = undefined; });
+    return host.loading;
+  }
 
   async function getNode(lane: SynthLane): Promise<AudioWorkletNode> {
     if (lane.node) return lane.node;
     if (!lane.loading) {
       const generation = lane.generation;
-      lane.loading = engine.loadWorklet().then(() => {
+      lane.loading = getHost().then((node) => {
         if (generation !== lane.generation) throw new Error('Audio lane stopped');
-        const ctx = engine.getContext();
-        const node = new AudioWorkletNode(ctx, 'synth-processor', { numberOfOutputs: 1, outputChannelCount: [2] });
         const audio = engine.createLane('synth');
         audio.setVolume(volumeRef.current);
-        node.connect(audio.input);
+        node.connect(audio.input, lane.id - 1);
         lane.audio = audio;
         lane.node = node;
         if (lane.parameters) {
-          send(node, { type: 'params', params: toVoiceParams(lane.parameters, lane.bpm) });
+          send(lane, { type: 'params', params: toVoiceParams(lane.parameters, lane.bpm) });
           // A step's automation sent before there was a node to send it to.
-          if (lane.automated) send(node, { type: 'params', params: lane.automated });
+          if (lane.automated) send(lane, { type: 'params', params: lane.automated });
           audio.setSends(lane.automatedSends ?? lane.parameters.fxSends, lane.parameters.fxReturn);
         }
-        if (lane.sample) send(node, { type: 'sample', sample: lane.sample });
-        if (lane.live) send(node, { type: 'live', ...lane.live });
+        if (lane.sample) send(lane, { type: 'sample', sample: lane.sample });
+        if (lane.live) send(lane, { type: 'live', ...lane.live });
         if (lane.handedTo) audio.handOver(lane.handedTo);
         return node;
       }).finally(() => { lane.loading = undefined; });
@@ -151,9 +167,9 @@ export function useSynthAudio(engine: AudioEngine = audioEngine) {
       if (!await engine.ensureReady() || cancelled()) return;
       if (parameters) updateParameters(parameters, bpm, loop, synthId);
       else if (loop) engine.setEffectsLoop(loop);
-      const node = await getNode(lane);
+      await getNode(lane);
       if (cancelled()) return;
-      send(node, { type: 'noteOn', note, velocity, id, duration, time: scheduledTime });
+      send(lane, { type: 'noteOn', note, velocity, id, duration, time: scheduledTime });
     } catch (error) {
       if (generation === lane.generation) console.error('Synth playback failed:', error);
     } finally {
@@ -167,14 +183,14 @@ export function useSynthAudio(engine: AudioEngine = audioEngine) {
     const lane = lanesRef.current.get(synthId);
     if (!lane) return;
     lane.starting.delete(note);
-    send(lane.node, { type: 'noteOff', note });
+    send(lane, { type: 'noteOff', note });
   }, []);
   const stopSynth = useCallback((synthId: number, release = 0.03) => {
     const lane = lanesRef.current.get(synthId);
     if (!lane) return;
     lane.generation++;
     lane.starting.clear();
-    send(lane.node, { type: 'allNotesOff', release });
+    send(lane, { type: 'allNotesOff', release });
   }, []);
   // A lane's recording for its sample engine, or null for none, from `time` if it is given. The
   // worklet gets its own copy, once: the recording it has, or will have, is not sent again.
@@ -182,7 +198,7 @@ export function useSynthAudio(engine: AudioEngine = audioEngine) {
     const lane = laneFor(synthId);
     if (lane.sample === sample) return;
     lane.sample = sample;
-    send(lane.node, { type: 'sample', sample, time });
+    send(lane, { type: 'sample', sample, time });
   }, []);
   // Hands the lane to a guest's tap, or with null gives it back to the mix.
   const handOver = useCallback((synthId: number, tap: AudioNode | null) => {
@@ -197,7 +213,7 @@ export function useSynthAudio(engine: AudioEngine = audioEngine) {
   const setLive = useCallback((synthId: number, live: { bend?: number; wheel?: number; pressure?: number }) => {
     const lane = laneFor(synthId);
     lane.live = { bend: 0, wheel: 0, pressure: 0, ...lane.live, ...live };
-    send(lane.node, { type: 'live', ...live });
+    send(lane, { type: 'live', ...live });
   }, []);
   // Stopping lets go of the bend, as the wheel springs back; the mod wheel stays where the hand left it.
   const stopAllNotes = useCallback((release = 0.03) => {
@@ -214,11 +230,13 @@ export function useSynthAudio(engine: AudioEngine = audioEngine) {
   const analyser = useCallback((synthId: number) => lanesRef.current.get(synthId)?.audio?.analyser() ?? null, []);
   const dispose = useCallback(() => {
     stopAllNotes();
-    const previous = [...lanesRef.current.values()];
+    const previous = [...lanesRef.current.values()], host = hostRef.current;
     lanesRef.current.clear();
-    setTimeout(() => previous.forEach(lane => {
-      lane.node?.disconnect(); lane.node?.port.close(); lane.audio?.dispose();
-    }), 50);
+    hostRef.current = {};
+    setTimeout(() => {
+      host.node?.disconnect(); host.node?.port.close();
+      previous.forEach(lane => lane.audio?.dispose());
+    }, 50);
   }, [stopAllNotes]);
   useEffect(() => dispose, [dispose]);
   // The same object on every render, so effects and callbacks that depend on it do not re-run.

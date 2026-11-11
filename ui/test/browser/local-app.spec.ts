@@ -89,10 +89,13 @@ test('browser-local transport emits audible independent synth lanes with no API 
     window.AudioWorkletNode = class extends Worklet {
       constructor(context: BaseAudioContext, name: string, options?: AudioWorkletNodeOptions) {
         super(context, name, options);
-        const analyser = context.createAnalyser();
-        analyser.fftSize = 2048;
-        this.connect(analyser);
-        win.audioProbes.push(analyser);
+        // Every synth lane plays in one node, each on an output of its own: one probe for each output.
+        for (let output = 0; output < this.numberOfOutputs; output++) {
+          const analyser = context.createAnalyser();
+          analyser.fftSize = 2048;
+          this.connect(analyser, output);
+          win.audioProbes.push(analyser);
+        }
       }
     };
   });
@@ -104,7 +107,7 @@ test('browser-local transport emits audible independent synth lanes with no API 
   }
   await page.getByRole('button', { name: /Play All/ }).click();
   await expect(page.getByRole('button', { name: /Stop All/ })).toBeVisible();
-  await expect.poll(() => page.evaluate(() => (window as any).audioProbes.length)).toBe(3);
+  await expect.poll(() => page.evaluate(() => (window as any).audioProbes.length)).toBeGreaterThanOrEqual(3);
   await expect.poll(() => page.evaluate(() => (window as any).audioProbes.filter((analyser: AnalyserNode) => {
     const samples = new Float32Array(analyser.fftSize);
     analyser.getFloatTimeDomainData(samples);
