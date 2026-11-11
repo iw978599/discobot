@@ -15,6 +15,14 @@ import { barSteps, sceneAsBars } from '../ui/src/services/patternLength.ts';
 import { createMemoryLibrary } from '../ui/src/services/projectLibrary.ts';
 import { setup } from '../ui/test/helpers/store.ts';
 import { CYMBAL_TYPES } from '../engine/src/index.ts';
+import { createRequire } from 'node:module';
+import { SURGE_PATCHES } from '../ui/src/services/surgePatches.ts';
+
+// Surge XT's engine as built (surge/dist) and Discobot's patches for it, for lanes that play it.
+const surge = {
+  module: await (createRequire(import.meta.url)('../surge/dist/surge-engine.js') as () => Promise<any>)(),
+  patches: Object.fromEntries(SURGE_PATCHES.map(patch => [patch.id, new Uint8Array(readFileSync(new URL(`../ui/public/surge/patches/${patch.id}.fxp`, import.meta.url)))])),
+};
 
 const read = (path: string) => {
   const bytes = readFileSync(new URL(`../ui/public/${path}`, import.meta.url));
@@ -48,7 +56,7 @@ for (const song of SAMPLE_SONGS) {
       // A scene with an instrument of its own for the lane plays it.
       const params = scene.sounds?.[lane.synthId]?.synthParams ?? lane.synthParams;
       const sample = params.engine === 'sample' && params.sample?.wave ? waves.get(params.sample.wave) ?? null : undefined;
-      const peak = add(renderSynthBars(steps, params, tempo, frames, SR, barSeconds, sample, undefined, bars.map(bar => bar.laneAutomation?.[lane.synthId])));
+      const peak = add(renderSynthBars(steps, params, tempo, frames, SR, barSeconds, sample, undefined, bars.map(bar => bar.laneAutomation?.[lane.synthId]), 0, 16, [], { kit: surge, lane: lane.synthId }));
       parts.push(`${lane.name ?? `Synth ${lane.synthId}`} ${peak.toFixed(2)}`);
     }
     const drums = add(renderDrums({ tempo, drumState: project.drumState, drumKitId: project.selectedDrumKitId, drumMasterVolume: project.drumMasterVolume, drumSwing: project.drumSwing, bars, signature: scene.signature, drumCymbals: recordings }, frames, SR, bars.length, 240 / tempo));

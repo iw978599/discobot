@@ -31,7 +31,7 @@ export interface MixerChannels {
 export interface MixerSource {
   // The order the lanes are shown in, when the project has one.
   laneOrder?: number[];
-  synths: Array<{ id: number; name?: string; preset?: string; synthModelId: SynthModelId; synthParams: Pick<SynthParameters, 'gain' | 'pan'> | null; muted?: boolean; solo?: boolean }>;
+  synths: Array<{ id: number; name?: string; preset?: string; synthModelId: SynthModelId; synthParams: Pick<SynthParameters, 'gain' | 'pan' | 'engine' | 'surge'> | null; muted?: boolean; solo?: boolean }>;
   drumState: DrumState;
   drumMasterVolume: number;
   guests: Array<Pick<Guest, 'id' | 'url' | 'name' | 'volume' | 'muted'>>;
@@ -45,7 +45,7 @@ export function mixerChannels(source: MixerSource): MixerChannels {
     lanes: [...source.synths].sort((a, b) => (source.laneOrder ?? LANE_IDS).indexOf(a.id) - (source.laneOrder ?? LANE_IDS).indexOf(b.id)).map(synth => ({
       id: synth.id,
       name: laneName(synth.id, synth.name),
-      model: laneSound(synth.synthModelId, getSynthModelDefinition(synth.synthModelId).name, synth.preset),
+      model: laneSound(synth.synthModelId, getSynthModelDefinition(synth.synthModelId).name, synth.preset, synth.synthParams),
       level: synth.synthParams?.gain ?? 1,
       pan: synth.synthParams?.pan ?? 0,
       muted: Boolean(synth.muted),

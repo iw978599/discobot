@@ -163,7 +163,7 @@ function SynthModule({ studio, synthId, synth, onHelp }: SynthModuleProps) {
             <span
               data-handed={handedTo ? 'true' : undefined} data-scene-sound={synth.shared && !handedTo ? 'true' : undefined} data-color={synth.shared ? openScene?.color : undefined}
               title={handedTo ? `Sent to the guest ${handedTo}, and heard through it` : synth.shared ? `The sound of this lane in ${openScene?.name ?? 'this scene'} only` : undefined}
-            >{handedTo ? `→ ${handedTo}` : laneSound(synth.synthModelId, model.name, synth.preset)}</span>
+            >{handedTo ? `→ ${handedTo}` : laneSound(synth.synthModelId, model.name, synth.preset, synth.synthParams)}</span>
           </button>
           {onHelp && <UnitHelp about={`Synth ${synthId}`} section={UNIT_HELP.synth} onHelp={onHelp} />}
           <UnitFold unit={laneUnit(synthId)} about={`Synth ${synthId}`} />
