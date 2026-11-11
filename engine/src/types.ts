@@ -117,7 +117,8 @@ export const MOD_SOURCES: ModSource[] = ['lfo1', 'lfo2', 'ampEnv', 'filterEnv', 
 export const MOD_DESTINATIONS: ModDestination[] = ['pitch', 'osc2Pitch', 'filter', 'amp', 'pulseWidth', 'pan', 'fmIndex'];
 
 export type FilterModel = 'svf' | 'ladder' | 'ms20';
-export type SynthEngineMode = 'subtractive' | 'fm' | 'sample';
+// 'surge' plays Surge XT's engine (docs/SURGE_XT_PLAN.md) with the patch in `surge`.
+export type SynthEngineMode = 'subtractive' | 'fm' | 'sample' | 'surge';
 export type SynthVoiceMode = 'poly' | 'mono';
 
 export interface SynthLfo {
@@ -207,6 +208,10 @@ export interface SynthParameters {
   // a second layer on every note: the same sound again, tuned, filtered, faded in and placed
   // differently. Absent or not enabled means one layer, as there always was. Two layers take
   // two voices a note, so half as many notes can sound at once.
+  // Surge XT's engine, played when `engine` is 'surge': one of Discobot's own Surge patches by its
+  // id (ui/src/services/surgePatches.ts, files in ui/public/surge/patches/) and its eight macros,
+  // 0 to 1. With another engine it is kept and does nothing.
+  surge?: { patch: string; macros: number[] };
   layer?: {
     enabled: boolean;
     // the balance between the two, 0 (the first alone) to 1 (the second alone)

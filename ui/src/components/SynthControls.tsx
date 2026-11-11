@@ -24,6 +24,8 @@ import Knob from './Knob';
 import './SynthControls.css';
 import { MAX_LANE_NAME } from '../services/lanes';
 import Toggle from './Toggle';
+import SurgeColumn from './SurgeColumn';
+import { SURGE_PATCHES } from '../services/surgePatches';
 
 interface SynthControlsProps {
   parameters: SynthParameters;
@@ -264,6 +266,7 @@ export default function SynthControls({
   const layer = parameters.layer ?? DEFAULTS.layer!;
   const isFm = parameters.engine === 'fm';
   const isSample = parameters.engine === 'sample';
+  const isSurge = parameters.engine === 'surge';
   const sample = parameters.sample ?? DEFAULTS.sample!;
   const updateSample = (updates: Partial<NonNullable<SynthParameters['sample']>>) => {
     onParameterChange({ sample: { ...sample, ...updates } });
@@ -585,15 +588,22 @@ export default function SynthControls({
             <div className="synth-waveform-selector">
               <label>ENGINE</label>
               <select
-                value={isFm ? 'fm' : isSample ? 'sample' : 'subtractive'}
+                value={isSurge ? 'surge' : isFm ? 'fm' : isSample ? 'sample' : 'subtractive'}
                 aria-label="Synth engine"
-                title="Analog: oscillators. FM: four operators. Sample: an imported sample played up and down the keyboard"
-                onChange={(e) => onParameterChange({ engine: e.target.value as 'subtractive' | 'fm' | 'sample' })}
+                title="Analog: oscillators. FM: four operators. Sample: an imported sample played up and down the keyboard. Surge XT: Surge's own engine, with Discobot's patches for it"
+                onChange={(e) => {
+                  const engine = e.target.value as 'subtractive' | 'fm' | 'sample' | 'surge';
+                  // A lane put on Surge has a patch from the start.
+                  onParameterChange(engine === 'surge' && !parameters.surge?.patch
+                    ? { engine, surge: { patch: SURGE_PATCHES[0].id, macros: parameters.surge?.macros ?? [0, 0, 0, 0, 0, 0, 0, 0] } }
+                    : { engine });
+                }}
                 className="synth-select"
               >
                 <option value="subtractive">Analog</option>
                 <option value="fm">FM</option>
                 <option value="sample">Sample</option>
+                <option value="surge">Surge XT</option>
               </select>
             </div>
             <div className="synth-waveform-selector">
@@ -642,7 +652,9 @@ export default function SynthControls({
           </div>
         </div>
 
-        {isFm ? (
+        {isSurge ? (
+          <SurgeColumn laneId={laneId ?? 1} parameters={parameters} onParameterChange={onParameterChange} />
+        ) : isFm ? (
           <div className="synth-column" data-tab={COLUMN_TABS['FM']}>
             <h3>FM</h3>
             <div className="synth-column-controls">

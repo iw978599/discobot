@@ -2,6 +2,7 @@
 // and model, automation and Auto, bars and Copy bar, mix, swing, name and presets (and the drums'
 // bars, which go with the lanes'). Split out of useStudio.tsx.
 import { movedLaneOrder, shownLanes } from '../services/lanes';
+import { MAX_SURGE_LANES } from '@discobot/engine';
 import { useCallback } from 'react';
 import { Pattern, SynthParameters, SynthModelId, SynthModelParams } from '../types';
 import { localService } from '../services/localService';
@@ -178,9 +179,15 @@ export function useStudioLanes(core: StudioCore, needs: StudioLanesNeeds) {
   // What a knob calls, on screen or on a controller: recorded as automation where Auto says so,
   // and otherwise a change to the sound. A preset is always the sound, and calls `changeSound`.
   const handleParameterChange = useCallback(async (synthId: number, params: Partial<SynthParameters>) => {
+    // At most two lanes play Surge (docs/SURGE_XT_PLAN.md): the third is refused here and told why.
+    const onSurge = synthsRef.current.filter(entry => entry.id !== synthId && entry.synthParams?.engine === 'surge').length;
+    if (params.engine === 'surge' && onSurge >= MAX_SURGE_LANES) {
+      setStorageError(`Only ${MAX_SURGE_LANES} lanes can play Surge XT at once. Put another lane on another engine first.`);
+      return;
+    }
     const kept = recordAutomation(synthsRef.current.find((entry) => entry.id === synthId), params);
     if (kept) await changeSound(synthId, kept);
-  }, [changeSound, recordAutomation]);
+  }, [changeSound, recordAutomation, setStorageError]);
   // One parameter's automation drawn on some steps of a lane's pattern, or rubbed out of them
   // with null. Steps drawn one after another without a pause are one undo step, as a knob's turn is.
   const handleAutomationDraw = useCallback((synthId: number, key: string, steps: number[], value: number | null) => {

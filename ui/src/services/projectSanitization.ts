@@ -1,4 +1,5 @@
 import type { DrumRow, DrumSettings, DrumState, EffectsLoopState, FxSendLevels, LaneSound, Pattern, SavedPatternFull, Scene, SceneMutes, Song, SynthParameters, SynthModelParams } from '../types';
+import { SURGE_PATCHES, surgePatch } from './surgePatches';
 import { CYMBAL_TYPES, DRIVE_KINDS, EXTRA_DRUMS, PERC_CHOICES, MAX_MOD_ROUTES, MOD_DESTINATIONS, MOD_SOURCES, type DriveKind, type ModRoute } from '@discobot/engine';
 import { DELAY_SYNCS } from './delayTime';
 import { storedRateSync } from './rateSync';
@@ -113,7 +114,11 @@ export function sanitizeSynthParams(value: unknown, defaults: SynthParameters): 
     lfo.retrigger = raw.retrigger !== false;
   }
   params.modMatrix = sanitizeModMatrix(input.modMatrix);
-  params.engine = input.engine === 'fm' || input.engine === 'sample' ? input.engine : 'subtractive';
+  params.engine = input.engine === 'fm' || input.engine === 'sample' || input.engine === 'surge' ? input.engine : 'subtractive';
+  // Surge's patch is one of Discobot's own, or none; a lane on Surge always has one.
+  const surge = record(input.surge), macros = Array.isArray(surge.macros) ? surge.macros : [];
+  const patch = typeof surge.patch === 'string' && surgePatch(surge.patch) ? surge.patch : params.engine === 'surge' ? SURGE_PATCHES[0].id : '';
+  params.surge = { patch, macros: Array.from({ length: 8 }, (_, index) => number(macros[index], 0, 0, 1)) };
   const sample = record(input.sample);
   params.sample = {
     ...(typeof sample.id === 'string' && /^[0-9a-f-]{36}$/.test(sample.id) ? { id: sample.id } : {}),

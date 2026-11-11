@@ -52,6 +52,8 @@ export const LANE_PARAMS: Record<string, ParamRange & { path?: string[]; macro?:
   sub: { label: 'Sub level', min: 0, max: 1, path: ['mixer', 'sub'] },
   noise: { label: 'Noise level', min: 0, max: 1, path: ['mixer', 'noise'] },
   glide: { label: 'Glide', min: 0.001, max: 2, curve: 'log', path: ['portamento', 'glide'] },
+  // A Surge patch's eight macros (engine 'surge'): each patch names its own (surgePatches.ts).
+  ...Object.fromEntries(Array.from({ length: 8 }, (_, index) => [`surgeMacro${index + 1}`, { label: `Surge macro ${index + 1}`, min: 0, max: 1, path: ['surge', 'macros', String(index)] }])),
   reverbSend: { label: 'Reverb send', min: 0, max: 1, path: ['fxSends', 'reverb'] },
   delaySend: { label: 'Delay send', min: 0, max: 1, path: ['fxSends', 'delay'] },
   chorusSend: { label: 'Chorus send', min: 0, max: 1, path: ['fxSends', 'chorus'] },

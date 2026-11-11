@@ -3,6 +3,7 @@ import type { Automation, DrumRow, DrumSettings, Pattern, SynthParameters } from
 import { AUTOMATABLE, MAX_AUTOMATED, describeRange, toUnit } from '../services/automation';
 import { DRUM_AUTOMATABLE } from '../services/drumAutomation';
 import { DRUM_PARAMS, LANE_PARAMS, fromUnit, type ParamRange } from '../services/paramTargets';
+import { surgePatch } from '../services/surgePatches';
 import { barSteps, onBeat, stepsAcross } from '../services/patternLength';
 import { usePlayheadMark } from '../hooks/usePlayhead';
 
@@ -215,10 +216,14 @@ export default function AutomationRow({ synthId, pattern, params, isPlaying, fir
     const range = LANE_PARAMS[key], own = range.path!.reduce<unknown>((inner, name) => (inner as Record<string, unknown> | undefined)?.[name], params);
     return typeof own === 'number' ? own : range.min;
   };
+  // A Surge patch's macros are offered on a lane playing it, by the names the patch gives them.
+  const surge = params.engine === 'surge' ? surgePatch(params.surge?.patch) : undefined;
+  const choices = AUTOMATABLE.filter(key => !key.startsWith('surgeMacro') || Boolean(surge?.macros[Number(key.slice(10)) - 1]));
+  const labelOf = (key: string) => key.startsWith('surgeMacro') && surge ? surge.macros[Number(key.slice(10)) - 1] ?? LANE_PARAMS[key].label : LANE_PARAMS[key].label;
   return (
     <AutomationEditor
       playheadLane={synthId} pickLabel={`Synth ${synthId} automation parameter`} namePrefix="" noun="lane"
-      automation={pattern.automation} count={pattern.steps.length} choices={AUTOMATABLE} max={MAX_AUTOMATED} rangeOf={key => LANE_PARAMS[key]} restOf={restOf}
+      automation={pattern.automation} count={pattern.steps.length} choices={choices} max={MAX_AUTOMATED} rangeOf={key => LANE_PARAMS[key]} labelOf={labelOf} restOf={restOf}
       isPlaying={isPlaying} firstStep={firstStep} visibleSteps={visibleSteps} signature={signature}
       recording={recording} onRecordingChange={onRecordingChange} onDraw={onDraw} onClear={onClear}
     />

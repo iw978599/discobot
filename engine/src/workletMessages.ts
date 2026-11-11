@@ -19,11 +19,23 @@ export type SynthWorkletMessage =
   | { type: 'noteOff'; note: string; id?: number }
   // A controller's pitch bend (-1 to 1), mod wheel and aftertouch (0 to 1): live gestures, never part of the sound
   | { type: 'live'; bend?: number; wheel?: number; pressure?: number }
-  | { type: 'allNotesOff'; release?: number };
+  | { type: 'allNotesOff'; release?: number }
+  // The Surge patch the lane plays when its engine is 'surge': a whole .fxp file
+  | { type: 'surgePatch'; patch: string; bytes: Uint8Array };
 
 // What the page sends the one `lanes-processor`, which plays every synth lane: a lane's message
 // with the lane's number (1 to 5), which is also its output's number plus one.
 export type LanesWorkletMessage = { lane: number; message: SynthWorkletMessage };
+// Surge's compiled module (a WebAssembly.Module), sent once, the first time a lane plays Surge.
+export type SurgeModuleMessage = { type: 'surgeModule'; module: unknown };
+
+// What the lanes processor tells the page about Surge. `surgeShed`: those lanes were held to fewer
+// notes to keep up; `surgeMuted`: that lane still could not, and was silenced; `surgeRefused`: two
+// lanes already play Surge; `surgeFailed`: Surge could not be made or loaded.
+export type LanesWorkletEvent =
+  | { type: 'surgeReady' }
+  | { type: 'surgeShed'; lanes: number[] }
+  | { type: 'surgeMuted' | 'surgeRefused' | 'surgeFailed'; lane: number };
 
 export type DrumWorkletMessage =
   | ({ type: 'hit' } & DrumHitMessage)
