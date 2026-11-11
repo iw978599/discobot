@@ -313,8 +313,8 @@ limits.
 **Built on 2026-11-11.** The engine menu offers Surge XT; a lane on it plays one of Discobot's
 own patches, with its macros as knobs that can be automated, at most two lanes, through
 `SurgeVoice` in the one lanes processor, with the watchdog. `docs/agents/synth-sound.md` says
-how it fits together. Not yet: exports (stage 3), and a scene's sound with another patch loads
-that patch when it is sent, not on the scene's beat. The voice limit is 8, halved by the
+how it fits together. A scene's own Surge patch is sent with its beat's time, and loads then if the
+file has arrived. The voice limit is 8, halved by the
 watchdog; a chord of many voices starting at once was not measured on its own.
 
 - `engine: 'surge'` beside the synth and sample engines, stored the usual way
@@ -372,6 +372,11 @@ watchdog; a chord of many voices starting at once was not measured on its own.
   Emscripten `Date.now()` in its place, as the trial does.
 
 ### Stage 3: export
+
+**Built on 2026-11-11** for WAV, Loop, stems and the share page (all go through
+`renderArrangement`): `surgeExport.test.ts` holds a Surge lane to repeating sample for sample,
+a scene's own patch to its bar, macro automation to its step, and a lane without Surge to what it
+rendered before. Published songs are the share page, so they play it too.
 
 - The same compiled engine is driven by the export, seeded, block by block.
   WAV, Loop, stems, the share page and published songs all go through it.

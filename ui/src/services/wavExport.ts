@@ -1,4 +1,6 @@
-import { DrumCore, type DrumRecordings, type DrumSample, SynthCore, type SynthSample, toVoiceParams } from '@discobot/engine';
+import { DrumCore, type DrumRecordings, type DrumSample, SurgeVoice, SynthCore, type SynthSample, toVoiceParams } from '@discobot/engine';
+import { surgeKit, type SurgeKit } from './surgeEngine';
+import { SURGE_PATCHES } from './surgePatches';
 import type { Automation, DrumState, EffectsLoopState, FxSendLevels, Pattern, Scene, SequencerStep, SynthParameters, TimeSignature } from '../types';
 import { type BarTime, barSteps, barTimes, wholeNotes } from './patternLength';
 import { sceneDrumState } from './songPlayback';
@@ -49,6 +51,9 @@ export interface ExportArrangement {
   // The audio tracks of a song, each laid out as one take (trackRender.ts) and mixed as a guest's
   // is. Only a Song WAV has them: a clip belongs to the song, not to a scene.
   trackTakes?: Array<{ left: Float32Array; right: Float32Array; gain: number; name?: string; sends?: FxSendLevels }>;
+  // Surge XT's engine and the patches the lanes play (docs/SURGE_XT_PLAN.md, stage 3). Without it
+  // an arrangement with a Surge lane fetches them (services/surgeEngine.ts); tests hand it in.
+  surge?: SurgeKit;
 }
 
 // How long a guest's level takes to move when it changes at a bar line, in seconds.
@@ -128,11 +133,25 @@ export function renderSynthBars(
   automation: Array<Automation | undefined> = [], swing = 0, grid: SwingGrid = 16,
   // Each bar's sound where a scene has one of its own: from that bar on the lane is that instrument.
   sounds: Array<{ params: SynthParameters; sample: SynthSample | null } | undefined> = [],
+  // Surge's engine and patches, and the lane's number, which seeds its engine as it does live.
+  surge?: { kit: SurgeKit; lane: number },
 ): Stereo {
   const core = new SynthCore(sampleRate);
   let sound = toVoiceParams(params, tempo);
   core.setParams(sound);
   if (sample) core.setSample(sample);
+  // A lane that plays Surge in any bar has a Surge engine beside its core, sent the same as the
+  // core is, as the lanes processor does live; each plays only while the lane's engine is its own.
+  const onSurge = (sound: SynthParameters) => sound.engine === 'surge';
+  const voice = surge && (onSurge(params) || sounds.some(next => next && onSurge(next.params))) ? new SurgeVoice(surge.kit.module, sampleRate, surge.lane, sound) : null;
+  let patch = '';
+  const surgePatch = (sound: SynthParameters, time?: number) => {
+    const id = sound.surge?.patch || SURGE_PATCHES[0].id, bytes = surge?.kit.patches[id];
+    if (!voice || !onSurge(sound) || id === patch || !bytes) return;
+    voice.setPatch(bytes, time);
+    patch = id;
+  };
+  surgePatch(params);
   const random = seededRandom(2);
   let automated: ReturnType<typeof stepVoiceParams> = null;
   bars.forEach((steps, bar) => {
@@ -144,23 +163,37 @@ export function renderSynthBars(
       sound = toVoiceParams(params, tempo);
       core.setParams(sound, start);
       core.setSample(next.sample, start);
+      voice?.setParams(sound, start);
+      surgePatch(params, start);
       // The whole sound was sent: what the automation holds is sent again on the bar's first step.
       automated = null;
     }
     steps.forEach((step, index) => {
       const now = stepVoiceParams(params, automation[bar], index, tempo), moved = automationChange(automated, now, sound);
-      if (moved) core.setParams(moved, start + index * stepDuration);
+      if (moved) { core.setParams(moved, start + index * stepDuration); voice?.setParams(moved, start + index * stepDuration); }
       automated = now;
       const late = swingLate(index * stepDuration, 15 / tempo, swing, grid);
       for (const scheduled of expandStepNotes(step, params, stepDuration, tempo, random)) {
-        core.noteOn({
+        const note = {
           note: scheduled.note, velocity: step.velocity, duration: scheduled.duration,
           time: start + index * stepDuration + late + scheduled.offset,
-        });
+        };
+        core.noteOn(note);
+        voice?.noteOn(note);
       }
     });
   });
-  return renderCore(core, frames);
+  if (!voice) return renderCore(core, frames);
+  let extraLeft = new Float32Array(128), extraRight = new Float32Array(128);
+  const both = {
+    process(left: Float32Array, right: Float32Array) {
+      core.process(left, right);
+      if (extraLeft.length !== left.length) { extraLeft = new Float32Array(left.length); extraRight = new Float32Array(left.length); }
+      voice.process(extraLeft, extraRight);
+      for (let i = 0; i < left.length; i++) { left[i] += extraLeft[i]; right[i] += extraRight[i]; }
+    },
+  };
+  try { return renderCore(both, frames); } finally { voice.destroy(); }
 }
 
 // Each bar's sound for a lane: the lane's own in a bar of a scene without one of its own, and the
@@ -439,6 +472,10 @@ export async function renderArrangement(arrangement: ExportArrangement, options:
     eq[2].connect(limiter);
   } else master.connect(limiter);
   limiter.connect(safety).connect(ctx.destination);
+  // Surge's engine and patches, when a lane plays Surge in any bar of what is rendered.
+  const surgeSounds = arrangement.synths.flatMap(lane => [lane.synthParams, ...(arrangement.bars ?? []).map(scene => scene.sounds?.[lane.id]?.synthParams)])
+    .filter((sound): sound is SynthParameters => sound?.engine === 'surge');
+  const kit = surgeSounds.length ? arrangement.surge ?? await surgeKit(surgeSounds.map(sound => sound.surge?.patch || SURGE_PATCHES[0].id)) : undefined;
   const kickTimes = drumHits(arrangement, bars, barDuration).filter(hit => hit.instrument === 'kick').map(hit => hit.time);
   // `duck` is the amount, or for a lane whose scenes have sounds of their own, the amount at a time.
   const ducked = ([left, right]: Stereo, duck: number | ((time: number) => number)) => {
@@ -479,7 +516,7 @@ export async function renderArrangement(arrangement: ExportArrangement, options:
     const sounds = barSounds(song, lane.id, lane.synthParams, arrangement), params = lane.synthParams;
     // A scene's own sound has a duck of its own: the amount is the one of the bar the kick is in.
     const duck = sounds.length ? (time: number) => (sounds[barAt(times, time)]?.params ?? params).duck ?? 0 : params.duck ?? 0;
-    play(renderSynthBars(laneBars, params, arrangement.tempo, frames, sampleRate, barDuration, arrangement.synthSamples?.[lane.id], times, laneAutomation, lane.swing ? arrangement.drumSwing : 0, arrangement.drumSwingGrid, sounds),
+    play(renderSynthBars(laneBars, params, arrangement.tempo, frames, sampleRate, barDuration, arrangement.synthSamples?.[lane.id], times, laneAutomation, lane.swing ? arrangement.drumSwing : 0, arrangement.drumSwingGrid, sounds, kit && { kit, lane: lane.id }),
       params.fxSends, params.fxReturn, 'synth', duck, {}, sendTimeline(laneBars, params, laneAutomation, times, sounds));
     await partDone();
   }

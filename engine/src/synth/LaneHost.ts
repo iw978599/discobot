@@ -51,7 +51,7 @@ export class LaneHost {
       if (lane.surge) {
         lane.surge.muted = false;
         lane.surge.setVoiceLimit(SURGE_VOICE_LIMIT);
-        lane.surge.loadPatch(message.bytes);
+        lane.surge.setPatch(message.bytes, message.time);
       } else this.makeSurge(id, lane);
       return;
     }
