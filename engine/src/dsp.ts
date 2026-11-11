@@ -38,12 +38,18 @@ export function lfoShape(type: string, phase: number): number {
 
 const SEMITONES: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 
-export function noteFrequency(note: unknown): number | null {
+// A note's name ("C4", "F#3", "Bb2") as a MIDI key, 0 to 127, or null.
+export function noteNumber(note: unknown): number | null {
   if (typeof note !== 'string') return null;
   const match = /^([A-G])([#b]?)(-?\d+)$/.exec(note);
   if (!match) return null;
   const midi = (Number(match[3]) + 1) * 12 + SEMITONES[match[1]] + (match[2] === '#' ? 1 : match[2] === 'b' ? -1 : 0);
-  return midi >= 0 && midi <= 127 ? 440 * 2 ** ((midi - 69) / 12) : null;
+  return midi >= 0 && midi <= 127 ? midi : null;
+}
+
+export function noteFrequency(note: unknown): number | null {
+  const midi = noteNumber(note);
+  return midi === null ? null : 440 * 2 ** ((midi - 69) / 12);
 }
 
 // Seeded noise, so the same arrangement always renders the same audio.

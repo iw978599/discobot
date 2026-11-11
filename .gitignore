@@ -28,6 +28,8 @@ ui/test/browser-results/
 
 # Bundled from ui/src/audio/worklet.ts by the Vite config
 ui/public/audio-worklet.js
+ui/public/surge/surge-engine.wasm
+ui/public/surge/surge-worklet.js
 
 # Left by wrangler when the API is deployed: holds the Cloudflare account, never commit it.
 .wrangler/

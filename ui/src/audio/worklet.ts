@@ -2,7 +2,8 @@
 // the DSP itself lives in the engine so offline export runs exactly the same code.
 import { LaneHost } from '../../../engine/src/synth/LaneHost';
 import { DrumCore } from '../../../engine/src/drums/DrumCore';
-import { GUEST_TAP_FRAMES, type DrumWorkletMessage, type GuestPlayerMessage, type GuestTapMessage, type LanesWorkletMessage } from '../../../engine/src/workletMessages';
+import { GUEST_TAP_FRAMES, type DrumWorkletMessage, type GuestPlayerMessage, type GuestTapMessage, type LanesWorkletEvent, type LanesWorkletMessage, type SurgeModuleMessage } from '../../../engine/src/workletMessages';
+import type { SurgeModule } from '../../../engine/src/synth/SurgeVoice';
 
 declare const sampleRate: number;
 declare const currentFrame: number;
@@ -14,18 +15,39 @@ type WorkletProcessor = AudioWorkletProcessor & {
   process(inputs: Float32Array[][], outputs: Float32Array[][]): boolean;
 };
 
+// Surge's glue (public/surge/surge-worklet.js, loaded into this scope only when a lane first plays
+// Surge) leaves this behind.
+declare const createSurgeModule: undefined | ((options: Record<string, unknown>) => Promise<SurgeModule>);
+// Chrome's audio worklet has no performance; its clock then reads whole milliseconds, which the
+// watchdog adds up over a second.
+const clock = typeof performance === 'object' ? () => performance.now() : () => Date.now();
+
 // Every synth lane, each into an output of its own (engine/src/synth/LaneHost.ts).
 class LanesProcessor extends AudioWorkletProcessor {
   private host: LaneHost;
 
   constructor(options: { numberOfOutputs?: number }) {
     super();
-    this.host = new LaneHost(sampleRate, options.numberOfOutputs ?? 1);
-    this.port.onmessage = ({ data }: MessageEvent<LanesWorkletMessage>) => this.host.receive(data);
+    const tell = (event: LanesWorkletEvent) => this.port.postMessage(event);
+    this.host = new LaneHost(sampleRate, options.numberOfOutputs ?? 1, tell);
+    this.port.onmessage = ({ data }: MessageEvent<LanesWorkletMessage | SurgeModuleMessage>) => {
+      if ('lane' in data) { this.host.receive(data); return; }
+      if (data.type !== 'surgeModule' || typeof createSurgeModule !== 'function') return;
+      const module = data.module as WebAssembly.Module;
+      createSurgeModule({
+        instantiateWasm(imports: WebAssembly.Imports, done: (instance: WebAssembly.Instance, module: WebAssembly.Module) => void) {
+          WebAssembly.instantiate(module, imports).then(instance => done(instance, module));
+          return {};
+        },
+        print() {}, printErr() {},
+      }).then(made => { this.host.useSurge(made); tell({ type: 'surgeReady' }); }, () => tell({ type: 'surgeFailed', lane: 0 }));
+    };
   }
 
   process(_inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
+    const started = clock();
     this.host.process(currentFrame, outputs);
+    this.host.watch(clock() - started, outputs[0]?.[0]?.length ?? 128);
     return true;
   }
 }

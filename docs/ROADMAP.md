@@ -1497,8 +1497,8 @@ V24. **Recording a live session as audio.** Done: Record Session in the timeline
   repository (`surge/`), is done. Stage 2 has begun: the libraries' licences are read (none
   stops it), and every synth lane now plays in one audio processor. Discobot writes its own
   Surge patches (`surge/patches/`), since the factory patches' licence is unsettled. Next is
-  Surge on a lane (at most two, the owner agreed on 2026-11-11), with the voice budget and
-  watchdog, then export, then a dance-punk sample song with Surge on two lanes (asked for
+  Surge on a lane is built (at most two, the owner agreed on 2026-11-11), with the watchdog.
+  Next is export, then a dance-punk sample song with Surge on two lanes (asked for
   2026-11-11). Not
   chosen: Surge as a guest page (a guest is never sent notes), and translating Surge patches
   into Discobot's synth (still possible, smaller, and not the real sound).

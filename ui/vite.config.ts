@@ -3,9 +3,32 @@ import react from '@vitejs/plugin-react';
 import { build } from 'esbuild';
 import path from 'path';
 import { createHash } from 'crypto';
-import { readFileSync, readdirSync } from 'fs';
+import { copyFileSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
 
 const engineSource = path.resolve(__dirname, '../engine/src');
+
+// Surge XT's engine (surge/dist, docs/SURGE_XT_PLAN.md) beside the app, fetched only when a lane
+// first plays Surge: the module itself, and its glue as a script for the audio worklet's scope,
+// after a few lines giving that scope what Emscripten reaches for and it lacks.
+const SURGE_WORKLET_HEAD = `// Made by ui/vite.config.ts from surge/dist/surge-engine.js. Generated; not committed.
+if (typeof globalThis.performance !== 'object') globalThis.performance = { now: () => Date.now() };
+if (typeof globalThis.crypto !== 'object') {
+  let state = 0x2545f491;
+  globalThis.crypto = { getRandomValues(array) {
+    const bytes = new Uint8Array(array.buffer, array.byteOffset, array.byteLength);
+    for (let i = 0; i < bytes.length; i++) { state ^= state << 13; state ^= state >>> 17; state ^= state << 5; bytes[i] = state & 255; }
+    return array;
+  } };
+}
+`;
+function copySurge() {
+  const dist = path.resolve(__dirname, '../surge/dist'), out = path.resolve(__dirname, 'public/surge');
+  mkdirSync(out, { recursive: true });
+  copyFileSync(path.join(dist, 'surge-engine.wasm'), path.join(out, 'surge-engine.wasm'));
+  writeFileSync(path.join(out, 'surge-worklet.js'), `${SURGE_WORKLET_HEAD}${readFileSync(path.join(dist, 'surge-engine.js'), 'utf8')}
+globalThis.createSurgeModule = createSurgeModule;
+`);
+}
 
 // An AudioWorklet module must be one self-contained script, so it is bundled separately
 // into public/ where both the dev server and the production build serve it.
@@ -21,7 +44,7 @@ function audioWorklet(): Plugin {
   });
   return {
     name: 'discobot-audio-worklet',
-    buildStart: async () => { await bundle(); },
+    buildStart: async () => { await bundle(); copySurge(); },
     configureServer(server) {
       server.watcher.add(engineSource);
       server.watcher.on('change', async (file) => {

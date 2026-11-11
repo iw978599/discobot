@@ -458,6 +458,9 @@ export class SynthCore {
     for (const change of kept) this.make(change);
   }
 
+  // The sound as it is now, for a Surge engine made for the lane after its sound was sent.
+  get sound(): VoiceParams { return { ...this.params }; }
+
   get idle(): boolean {
     return this.pending.length === 0 && this.voices.every(voice => !voice.active);
   }
@@ -476,6 +479,15 @@ export class SynthCore {
   }
 
   private render(left: Float32Array, right: Float32Array): void {
+    // A lane on Surge XT's engine is played by SurgeVoice, never by this core: it is silent, and
+    // keeps no note that would sound if the lane went back to another engine.
+    if (this.params.engine === 'surge') {
+      left.fill(0); right.fill(0);
+      this.pending = this.pending.filter(entry => entry.frame >= this.frame + left.length);
+      for (const voice of this.voices) voice.active = false;
+      this.frame += left.length;
+      return;
+    }
     const p = this.params, s = this.smoothed, d = this.derived, sr = this.sampleRate, k = this.smoothing;
     const maxCutoff = Math.min(20000, sr * 0.45);
     const fm = p.engine === 'fm';

@@ -310,6 +310,13 @@ limits.
 
 ### Stage 2: one lane plays Surge live
 
+**Built on 2026-11-11.** The engine menu offers Surge XT; a lane on it plays one of Discobot's
+own patches, with its macros as knobs that can be automated, at most two lanes, through
+`SurgeVoice` in the one lanes processor, with the watchdog. `docs/agents/synth-sound.md` says
+how it fits together. Not yet: exports (stage 3), and a scene's sound with another patch loads
+that patch when it is sent, not on the scene's beat. The voice limit is 8, halved by the
+watchdog; a chord of many voices starting at once was not measured on its own.
+
 - `engine: 'surge'` beside the synth and sample engines, stored the usual way
   (the `add-project-field` skill: optional, absent means as before, checked,
   `SCHEMA` bumped). What is stored is which patch (a factory patch's name, or

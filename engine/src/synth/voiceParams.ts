@@ -29,6 +29,10 @@ export interface VoiceParams extends InsertSettings, FlatRoutes {
   sampleLoopEnd: number;
   sampleScan: number;
   sampleFade: number;
+  // Surge XT's patch, by id, and its eight macros (engine 'surge')
+  surgePatch: string;
+  surgeMacro1: number; surgeMacro2: number; surgeMacro3: number; surgeMacro4: number;
+  surgeMacro5: number; surgeMacro6: number; surgeMacro7: number; surgeMacro8: number;
   layerEnabled: boolean;
   layerMix: number;
   layerDetune: number;
@@ -103,6 +107,7 @@ export function createDefaultSynthParameters(): SynthParameters {
     unison: { voices: 1, detune: 0.3, mix: 1 },
     sample: { root: 60, loop: false },
     layer: { enabled: false, mix: 0.5, detune: 8, brightness: 0, attack: 0, width: 0 },
+    surge: { patch: '', macros: [0, 0, 0, 0, 0, 0, 0, 0] },
     duck: 0,
     lfo1: { enabled: false, target: 'pitch', waveform: 'sine', rate: 5, depth: 0.2, sync: false, retrigger: true },
     lfo2: { enabled: false, target: 'filter', waveform: 'triangle', rate: 0.8, depth: 0.25, sync: false, retrigger: true },
@@ -165,6 +170,19 @@ function flatInserts(inserts: SynthParameters['inserts'], bpm: number): InsertSe
   };
 }
 
+// A Surge patch's eight macros as the voice's flat names. A list automation has moved may have
+// become an object with the same numbered keys, which reads the same way.
+const surgeMacros = (macros: ArrayLike<number> | Record<string, number> | undefined) => {
+  const at = (index: number) => {
+    const value = Number((macros as Record<string, number> | undefined)?.[index] ?? 0);
+    return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0;
+  };
+  return {
+    surgeMacro1: at(0), surgeMacro2: at(1), surgeMacro3: at(2), surgeMacro4: at(3),
+    surgeMacro5: at(4), surgeMacro6: at(5), surgeMacro7: at(6), surgeMacro8: at(7),
+  };
+};
+
 export function toVoiceParams(p: SynthParameters, bpm = 120): VoiceParams {
   const d = createDefaultSynthParameters();
   const osc2 = p.oscillator2 ?? d.oscillator2!;
@@ -185,6 +203,7 @@ export function toVoiceParams(p: SynthParameters, bpm = 120): VoiceParams {
     sampleRoot: p.sample?.root ?? 60, sampleLoop: p.sample?.loop ?? false,
     sampleStart: p.sample?.start ?? 0, sampleLoopStart: p.sample?.loopStart ?? 0, sampleLoopEnd: p.sample?.loopEnd ?? 1,
     sampleScan: syncedRateHz(p.sample?.sync, bpm) ?? p.sample?.scan ?? 2, sampleFade: p.sample?.fade ?? 1,
+    surgePatch: p.surge?.patch ?? '', ...surgeMacros(p.surge?.macros),
     layerEnabled: layer.enabled, layerMix: layer.mix, layerDetune: layer.detune,
     layerBrightness: layer.brightness, layerAttack: layer.attack, layerWidth: layer.width,
     fmAlgorithm: fm.algorithm, fmRatio: fm.ratio, fmIndex: fm.index, fmDecay: fm.decay, fmFeedback: fm.feedback,
