@@ -1,4 +1,23 @@
 import { expect, test, type Page } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
+
+const onPhone = (page: Page) => {
+  const size = page.viewportSize();
+  return size !== null && (size.width <= 1059 || (size.width <= 960 && size.height <= 500 && size.width > size.height));
+};
+// A Scene WAV, through the Export dialog.
+async function exportSceneWav(page: Page) {
+  if (onPhone(page) && !await page.getByRole('dialog', { name: 'More controls', exact: true }).isVisible()) {
+    await page.getByRole('button', { name: 'More controls', exact: true }).click();
+  }
+  await page.locator('.transport').getByRole('button', { name: 'Export', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Export', exact: true });
+  await dialog.getByRole('radio', { name: 'This scene', exact: true }).check();
+  await dialog.getByRole('radio', { name: 'Audio', exact: true }).check();
+  await dialog.getByRole('button', { name: 'Export', exact: true }).click();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+}
 
 // A synth lane on Surge XT's engine (docs/SURGE_XT_PLAN.md, stage 2): its glue loaded into the
 // audio worklet, its module compiled by the page, a patch of Discobot's own, all from this site.
@@ -79,6 +98,14 @@ test('a lane on Surge XT loads Surge from this site and plays its patch, and its
   await bright.fill('60%');
   await bright.press('Enter');
   await expect.poll(async () => (await sound(page)).surge.macros[0]).toBeCloseTo(0.6, 2);
+
+  // An export plays Surge too: made on the page, not in the worklet.
+  const download = page.waitForEvent('download', { timeout: 30000 });
+  await exportSceneWav(page);
+  const path = test.info().outputPath('surge.wav');
+  await (await download).saveAs(path);
+  const wav = await readFile(path), pcm = new Int16Array(wav.buffer.slice(wav.byteOffset + 44, wav.byteOffset + wav.length - (wav.length % 2)));
+  expect(pcm.reduce((most, value) => Math.max(most, Math.abs(value)), 0), 'the Surge lane is in the WAV').toBeGreaterThan(300);
 
   // The engine and the patches are this site's own files.
   const files = await page.evaluate(async () => Promise.all(['surge/surge-engine.wasm', 'surge/surge-worklet.js', 'surge/patches/punk-bass.fxp'].map(async file => {

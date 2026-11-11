@@ -20,8 +20,8 @@ export type SynthWorkletMessage =
   // A controller's pitch bend (-1 to 1), mod wheel and aftertouch (0 to 1): live gestures, never part of the sound
   | { type: 'live'; bend?: number; wheel?: number; pressure?: number }
   | { type: 'allNotesOff'; release?: number }
-  // The Surge patch the lane plays when its engine is 'surge': a whole .fxp file
-  | { type: 'surgePatch'; patch: string; bytes: Uint8Array };
+  // The Surge patch the lane plays when its engine is 'surge': a whole .fxp file, from `time` if given
+  | { type: 'surgePatch'; patch: string; bytes: Uint8Array; time?: number };
 
 // What the page sends the one `lanes-processor`, which plays every synth lane: a lane's message
 // with the lane's number (1 to 5), which is also its output's number plus one.

@@ -2,7 +2,8 @@ import { useRef, useCallback, useEffect, useMemo } from 'react';
 import type { SynthParameters, EffectsLoopState, FxSendLevels } from '../types';
 import { toVoiceParams, type LanesWorkletEvent, type LanesWorkletMessage, type SurgeModuleMessage, type SynthSample, type SynthWorkletMessage, type VoiceParams } from '@discobot/engine';
 import { MAX_LANES } from '../services/lanes';
-import { SURGE_PATCHES, surgePatchUrl } from '../services/surgePatches';
+import { SURGE_PATCHES } from '../services/surgePatches';
+import { SURGE_WORKLET_URL, surgePatchBytes, surgeWasm } from '../services/surgeEngine';
 import { surgeStatus } from '../services/surgeStatus';
 import { automationChange } from '../services/automation';
 import { audioEngine, type AudioEngine } from './browserAudio';
@@ -37,21 +38,6 @@ interface SynthLane {
   starting: Map<string, Set<number>>;
 }
 
-const base = (import.meta as ImportMeta & { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
-// Each Surge patch's file, fetched once for the page.
-const surgeFiles = new Map<string, Promise<Uint8Array>>();
-const surgeFile = (id: string) => {
-  let file = surgeFiles.get(id);
-  if (!file) {
-    file = fetch(surgePatchUrl(base, id)).then(async response => {
-      if (!response.ok) throw new Error(`Surge patch ${id}: ${response.status}`);
-      return new Uint8Array(await response.arrayBuffer());
-    });
-    file.catch(() => surgeFiles.delete(id));
-    surgeFiles.set(id, file);
-  }
-  return file;
-};
 const send = (lane: SynthLane, message: SynthWorkletMessage) => lane.node?.port.postMessage({ lane: lane.id, message } satisfies LanesWorkletMessage);
 // A lane's sound for the voice, without the parameters its automation is holding.
 const soundFor = (lane: SynthLane): Partial<VoiceParams> => {
@@ -73,28 +59,26 @@ export function useSynthAudio(engine: AudioEngine = audioEngine) {
   function loadSurge(node: AudioWorkletNode): Promise<void> {
     const host = hostRef.current;
     host.surge ??= (async () => {
-      await engine.getContext().audioWorklet.addModule(`${base}surge/surge-worklet.js`);
-      const response = await fetch(`${base}surge/surge-engine.wasm`);
-      if (!response.ok) throw new Error(`Surge engine: ${response.status}`);
-      const module = await WebAssembly.compile(await response.arrayBuffer());
+      await engine.getContext().audioWorklet.addModule(SURGE_WORKLET_URL);
+      const module = await surgeWasm();
       node.port.postMessage({ type: 'surgeModule', module } satisfies SurgeModuleMessage);
     })();
     host.surge.catch(() => { if (hostRef.current === host) host.surge = undefined; });
     return host.surge;
   }
 
-  // A lane on Surge is sent its patch whenever the patch changes. It is loaded when it arrives,
-  // not at a scene's beat.
-  function followSurge(lane: SynthLane) {
+  // A lane on Surge is sent its patch whenever the patch changes: from `time`, a scene's first beat,
+  // when it is given and the file arrives before then.
+  function followSurge(lane: SynthLane, time?: number) {
     const node = lane.node, params = lane.parameters;
     if (!node || params?.engine !== 'surge') return;
     const id = params.surge?.patch || SURGE_PATCHES[0].id;
     if (lane.surgePatch === id) return;
     lane.surgePatch = id;
     surgeStatus.set(lane.id, 'loading');
-    Promise.all([loadSurge(node), surgeFile(id)]).then(([, bytes]) => {
+    Promise.all([loadSurge(node), surgePatchBytes(id)]).then(([, bytes]) => {
       if (lane.surgePatch !== id || lane.node !== node) return;
-      send(lane, { type: 'surgePatch', patch: id, bytes });
+      send(lane, { type: 'surgePatch', patch: id, bytes, ...(time !== undefined ? { time } : {}) });
       surgeStatus.set(lane.id, 'ready');
     }, error => {
       if (lane.surgePatch === id) lane.surgePatch = undefined;
@@ -134,7 +118,7 @@ export function useSynthAudio(engine: AudioEngine = audioEngine) {
     lane.parameters = parameters;
     lane.bpm = bpm;
     send(lane, { type: 'params', params: soundFor(lane), time, keep: true });
-    followSurge(lane);
+    followSurge(lane, time);
     if (!lane.automatedSends) lane.audio?.setSends(parameters.fxSends, parameters.fxReturn, time);
   }, []);
   // A step's automation: what the voice is to be at `time` on the audio clock, which is when the

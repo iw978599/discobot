@@ -32,7 +32,8 @@ const MACROS = ['surgeMacro1', 'surgeMacro2', 'surgeMacro3', 'surgeMacro4', 'sur
 type Change =
   | { frame: number; kind: 'on'; key: number; velocity: number; serial: number; note: string; id?: number; duration?: number }
   | { frame: number; kind: 'off'; key: number; serial: number }
-  | { frame: number; kind: 'params'; update: Partial<VoiceParams>; keep?: boolean };
+  | { frame: number; kind: 'params'; update: Partial<VoiceParams>; keep?: boolean }
+  | { frame: number; kind: 'patch'; bytes: Uint8Array };
 
 // One lane played by Surge. It takes the messages SynthCore takes, with the same timing: a note or
 // a change with a time still to come waits for its sample. It plays only while the lane's engine
@@ -81,6 +82,13 @@ export class SurgeVoice {
     return result;
   }
 
+  // A patch from `time` on (a scene with a sound of its own beginning), or now.
+  setPatch(bytes: Uint8Array, time?: number): void {
+    const frame = this.frameOf(time);
+    if (frame > this.frame) this.add({ frame, kind: 'patch', bytes });
+    else this.loadPatch(bytes);
+  }
+
   setVoiceLimit(limit: number): void {
     this.limit = Math.max(1, Math.min(SURGE_VOICE_LIMIT, Math.round(limit)));
     const M = this.M, name = this.text('polylimit'), value = this.text(String(this.limit));
@@ -95,11 +103,12 @@ export class SurgeVoice {
     else this.apply(update);
   }
 
-  // Forgets the changes still waiting for their time, keeping the notes. A kept one is made now.
+  // Forgets the changes still waiting for their time, keeping the notes. A kept one is made now,
+  // and so is a patch waiting, which belongs to a scene's sound as a kept change does.
   clearScheduledParams(): void {
-    const kept = this.changes.filter(change => change.kind === 'params' && change.keep);
-    this.changes = this.changes.filter(change => change.kind !== 'params');
-    for (const change of kept) if (change.kind === 'params') this.apply(change.update);
+    const kept = this.changes.filter(change => (change.kind === 'params' && change.keep) || change.kind === 'patch');
+    this.changes = this.changes.filter(change => change.kind === 'on' || change.kind === 'off');
+    for (const change of kept) this.make(change);
   }
 
   noteOn(message: NoteOnMessage): void {
@@ -117,7 +126,7 @@ export class SurgeVoice {
   noteOff(note: string, id?: number): void {
     const matches = (entry: { note: string; id?: number }) => entry.note === note && (id === undefined || entry.id === id);
     const dropped = new Set(this.changes.filter(change => change.kind === 'on' && matches(change)).map(change => (change as { serial: number }).serial));
-    this.changes = this.changes.filter(change => change.kind === 'params' || !dropped.has(change.serial));
+    this.changes = this.changes.filter(change => (change.kind !== 'on' && change.kind !== 'off') || !dropped.has(change.serial));
     for (const [key, playing] of this.sounding) {
       if (!matches(playing)) continue;
       this.M._surge_note_off(this.engine, key, 64);
@@ -126,7 +135,7 @@ export class SurgeVoice {
   }
 
   allNotesOff(_release = 0.03): void {
-    this.changes = this.changes.filter(change => change.kind === 'params');
+    this.changes = this.changes.filter(change => change.kind !== 'on' && change.kind !== 'off');
     this.sounding.clear();
     this.M._surge_all_notes_off(this.engine);
   }
@@ -183,6 +192,7 @@ export class SurgeVoice {
 
   private make(change: Change): void {
     if (change.kind === 'params') { this.apply(change.update); return; }
+    if (change.kind === 'patch') { this.loadPatch(change.bytes); return; }
     if (change.kind === 'off') {
       if (this.sounding.get(change.key)?.serial !== change.serial) return;
       this.sounding.delete(change.key);
