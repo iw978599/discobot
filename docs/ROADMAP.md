@@ -1499,7 +1499,7 @@ V24. **Recording a live session as audio.** Done: Record Session in the timeline
   Surge patches (`surge/patches/`), since the factory patches' licence is unsettled. Next is
   Surge on a lane is built (at most two, the owner agreed on 2026-11-11), with the watchdog.
   Exports play it too, and the sample song Edge of the Room (dance-punk, asked for 2026-11-11)
-  plays Surge on two lanes with their macros automated. Next: stage 4's further patches and
-  controls, and stage 5. Not
+  plays Surge on two lanes with their macros automated. Nine of Discobot's own patches are
+  offered (seven added on 2026-11-11). Next: stage 4's controls, and stage 5. Not
   chosen: Surge as a guest page (a guest is never sent notes), and translating Surge patches
   into Discobot's synth (still possible, smaller, and not the real sound).

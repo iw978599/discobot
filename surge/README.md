@@ -50,3 +50,15 @@ built engine, reading every value back and stopping on any Surge did not take as
 type (an oscillator's, a filter's) is set first and takes effect on the next block, then the rest.
 `ui/test/surgePatches.test.ts` fails unless each file is exactly what its definition makes.
 After changing a definition, or the engine, run the script and commit the files.
+
+There are nine (2026-11-11): Punk Bass and Clipped Stab, made for Edge of the Room, then Sine Sub,
+Acid Line, Sync Lead, Supersaw, Wide Pad, Plucked String and FM Bell, one for each kind of part a
+song needs. Each names two macros. What to know when writing one:
+- A macro is the only modulation a definition can route (the bridge has no LFO or envelope
+  routing), so a patch moves only through its macros and their automation.
+- Surge cannot read a time between 0 and its shortest step (an attack of 1 ms): write 0 or 4 ms.
+- Levels were set by measuring, not by ear: a three-note chord and single low and high notes, with
+  the macros down and up, against Punk Bass. `surgePatches.test.ts` holds every patch between 0.05
+  and 0.9 for a chord at full velocity, macros down and up.
+- `ui/src/services/surgePatches.ts` lists what the app offers, and the test fails unless that list
+  is exactly these definitions, with their names and their macros' names.

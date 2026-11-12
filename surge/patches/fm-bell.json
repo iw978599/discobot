@@ -1,0 +1,20 @@
+{
+  "name": "FM Bell",
+  "set": {
+    "a_osc1_type": "FM2",
+    "a_polymode": "Poly",
+    "a_osc1_param0": "35 %",
+    "a_osc1_param1": "C : 3",
+    "a_osc1_param2": "12 %",
+    "a_osc1_param3": "C : 7",
+    "a_env1_attack": "0 ms",
+    "a_env1_decay": "1.8 s",
+    "a_env1_sustain": "0 %",
+    "a_env1_release": "1.2 s",
+    "a_volume": "-12 dB"
+  },
+  "macros": [
+    { "name": "Strike", "routes": { "a_osc1_param0": 0.4 } },
+    { "name": "Shimmer", "routes": { "a_osc1_param2": 0.4 } }
+  ]
+}

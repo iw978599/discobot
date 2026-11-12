@@ -11,6 +11,13 @@ export interface SurgePatch {
 export const SURGE_PATCHES: SurgePatch[] = [
   { id: 'punk-bass', name: 'Punk Bass', macros: ['Cutoff', 'Drive'] },
   { id: 'clipped-stab', name: 'Clipped Stab', macros: ['Bright', 'Crunch'] },
+  { id: 'sine-sub', name: 'Sine Sub', macros: ['Weight', 'Growl'] },
+  { id: 'acid-line', name: 'Acid Line', macros: ['Cutoff', 'Squelch'] },
+  { id: 'sync-lead', name: 'Sync Lead', macros: ['Sync', 'Tone'] },
+  { id: 'supersaw', name: 'Supersaw', macros: ['Spread', 'Bright'] },
+  { id: 'wide-pad', name: 'Wide Pad', macros: ['Open', 'Width'] },
+  { id: 'plucked-string', name: 'Plucked String', macros: ['Ring', 'Tone'] },
+  { id: 'fm-bell', name: 'FM Bell', macros: ['Strike', 'Shimmer'] },
 ];
 
 export const surgePatch = (id: string | undefined): SurgePatch | undefined => SURGE_PATCHES.find(patch => patch.id === id);

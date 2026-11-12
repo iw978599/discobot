@@ -1,0 +1,32 @@
+{
+  "name": "Wide Pad",
+  "set": {
+    "a_osc1_type": "Classic",
+    "a_osc2_type": "Classic",
+    "a_filter1_type": "LP 24 dB",
+    "a_polymode": "Poly",
+    "a_osc1_param0": "0 %",
+    "a_osc1_param5": "22 cents",
+    "a_osc1_param6": "5",
+    "a_osc2_param0": "-100 %",
+    "a_osc2_octave": "1",
+    "a_mute_o2": "Off",
+    "a_level_o2": "-10 dB",
+    "a_filter1_cutoff": "900 Hz",
+    "a_filter1_resonance": "12 %",
+    "a_filter1_envmod": "14 semitones",
+    "a_env2_attack": "900 ms",
+    "a_env2_decay": "2 s",
+    "a_env2_sustain": "40 %",
+    "a_env2_release": "1.5 s",
+    "a_env1_attack": "500 ms",
+    "a_env1_decay": "1 s",
+    "a_env1_sustain": "85 %",
+    "a_env1_release": "1.6 s",
+    "a_volume": "-10 dB"
+  },
+  "macros": [
+    { "name": "Open", "routes": { "a_filter1_cutoff": 0.35 } },
+    { "name": "Width", "routes": { "a_osc1_param5": 0.3 } }
+  ]
+}
