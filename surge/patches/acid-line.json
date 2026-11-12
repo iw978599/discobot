@@ -1,0 +1,26 @@
+{
+  "name": "Acid Line",
+  "set": {
+    "a_osc1_type": "Classic",
+    "a_filter1_type": "LP Diode Ladder",
+    "a_ws_type": "Asymmetric",
+    "a_polymode": "Mono",
+    "a_portamento": "50 ms",
+    "a_osc1_param0": "0 %",
+    "a_filter1_cutoff": "260 Hz",
+    "a_filter1_resonance": "70 %",
+    "a_filter1_envmod": "36 semitones",
+    "a_env2_decay": "220 ms",
+    "a_env2_sustain": "0 %",
+    "a_env2_release": "60 ms",
+    "a_env1_decay": "300 ms",
+    "a_env1_sustain": "70 %",
+    "a_env1_release": "50 ms",
+    "a_ws_drive": "4 dB",
+    "a_volume": "-2 dB"
+  },
+  "macros": [
+    { "name": "Cutoff", "routes": { "a_filter1_cutoff": 0.4 } },
+    { "name": "Squelch", "routes": { "a_filter1_resonance": 0.25, "a_filter1_envmod": 0.2 } }
+  ]
+}

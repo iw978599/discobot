@@ -1,0 +1,24 @@
+{
+  "name": "Sync Lead",
+  "set": {
+    "a_osc1_type": "Classic",
+    "a_filter1_type": "LP 12 dB",
+    "a_ws_type": "Soft",
+    "a_polymode": "Mono",
+    "a_portamento": "40 ms",
+    "a_osc1_param0": "0 %",
+    "a_osc1_param4": "12 semitones",
+    "a_filter1_cutoff": "3500 Hz",
+    "a_filter1_resonance": "15 %",
+    "a_env1_attack": "4 ms",
+    "a_env1_decay": "500 ms",
+    "a_env1_sustain": "85 %",
+    "a_env1_release": "120 ms",
+    "a_ws_drive": "3 dB",
+    "a_volume": "-8 dB"
+  },
+  "macros": [
+    { "name": "Sync", "routes": { "a_osc1_param4": 0.3 } },
+    { "name": "Tone", "routes": { "a_filter1_cutoff": 0.25 } }
+  ]
+}

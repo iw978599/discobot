@@ -1,0 +1,22 @@
+{
+  "name": "Supersaw",
+  "set": {
+    "a_osc1_type": "Classic",
+    "a_filter1_type": "LP 12 dB",
+    "a_polymode": "Poly",
+    "a_osc1_param0": "0 %",
+    "a_osc1_param5": "30 cents",
+    "a_osc1_param6": "7",
+    "a_filter1_cutoff": "5000 Hz",
+    "a_filter1_resonance": "8 %",
+    "a_env1_attack": "5 ms",
+    "a_env1_decay": "600 ms",
+    "a_env1_sustain": "75 %",
+    "a_env1_release": "350 ms",
+    "a_volume": "-11 dB"
+  },
+  "macros": [
+    { "name": "Spread", "routes": { "a_osc1_param5": 0.35 } },
+    { "name": "Bright", "routes": { "a_filter1_cutoff": 0.25 } }
+  ]
+}

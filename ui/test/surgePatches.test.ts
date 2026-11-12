@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { SURGE_PATCHES } from '../src/services/surgePatches.ts';
 
 const dist = resolve(process.env.SURGE_DIST ?? 'surge/dist');
 const definitions = readdirSync('surge/patches').filter(file => file.endsWith('.json')).sort();
@@ -45,4 +46,13 @@ test('every patch loads with its names and plays below full scale, its macros do
       M._surge_destroy(engine);
     }
   }
+});
+
+test("the app's list is every definition, with its name and its macros' names", () => {
+  const listed = SURGE_PATCHES.map(({ id, name, macros }) => ({ id, name, macros }));
+  const defined = definitions.map(file => {
+    const patch = JSON.parse(readFileSync(join('surge/patches', file), 'utf8'));
+    return { id: file.replace(/\.json$/, ''), name: patch.name, macros: patch.macros.map((m: { name: string }) => m.name) };
+  });
+  assert.deepEqual([...listed].sort((a, b) => a.id.localeCompare(b.id)), defined);
 });

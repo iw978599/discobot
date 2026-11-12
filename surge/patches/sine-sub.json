@@ -1,0 +1,18 @@
+{
+  "name": "Sine Sub",
+  "set": {
+    "a_osc1_type": "Sine",
+    "a_ws_type": "Soft",
+    "a_polymode": "Mono",
+    "a_env1_attack": "4 ms",
+    "a_env1_decay": "400 ms",
+    "a_env1_sustain": "90 %",
+    "a_env1_release": "80 ms",
+    "a_ws_drive": "0 dB",
+    "a_volume": "-7 dB"
+  },
+  "macros": [
+    { "name": "Weight", "routes": { "a_ws_drive": 0.4 } },
+    { "name": "Growl", "routes": { "a_osc1_param1": 0.35 } }
+  ]
+}

@@ -392,8 +392,10 @@ rendered before. Published songs are the share page, so they play it too.
   save an `.fxp`, and `surge/patches/make.mjs` builds Discobot's own patches
   from readable definitions (`surge/README.md`). The first two, Punk Bass and
   Clipped Stab, are for the dance-punk sample song the owner asked for; each
-  names its macros, so the song can automate them. The factory patches stay
-  below, waiting on their licence.
+  names its macros, so the song can automate them. Seven more followed the
+  same day, after the owner liked how the first two sounded: Sine Sub, Acid
+  Line, Sync Lead, Supersaw, Wide Pad, Plucked String and FM Bell, each with
+  two named macros. The factory patches stay below, waiting on their licence.
 
 - **Factory patches:** packed and compressed into a few category files, each
   downloaded on first use and kept by the service worker. Shown as a "Surge XT"
