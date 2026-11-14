@@ -233,5 +233,20 @@ test('Record Session puts what this browser heard on a new Session track', async
   const seconds = (wav.length - 44) / (wav.readUInt16LE(22) * 2 * wav.readUInt32LE(24));
   expect(seconds, 'about as long as it was recording').toBeGreaterThan(1);
   expect(seconds).toBeLessThan(4);
+
+  // And as an MP3: 320 kb/s at 48 kHz, made by the encoder's worker.
+  const savedMp3 = page.waitForEvent('download', { timeout: 30_000 });
+  await timeline.getByRole('button', { name: 'Download Session MP3', exact: true }).click();
+  const mp3Download = await savedMp3;
+  expect(mp3Download.suggestedFilename()).toMatch(/^Session \d{4}-\d{2}-\d{2} \d{2}\.\d{2}\.mp3$/);
+  const mp3 = await readFile(await mp3Download.path());
+  expect(mp3[0]).toBe(0xff);
+  expect(mp3[1] & 0xfe, 'MPEG-1 Layer III').toBe(0xfa);
+  expect(mp3[2] >> 4, '320 kb/s').toBe(14);
+  expect((mp3[2] >> 2) & 3, '48 kHz').toBe(1);
+  const mp3Seconds = mp3.length / (320_000 / 8);
+  expect(mp3Seconds, 'about as long as it was recording').toBeGreaterThan(1);
+  expect(mp3Seconds).toBeLessThan(4.5);
+  await expect(timeline.getByRole('button', { name: 'Download Session MP3', exact: true })).toBeEnabled();
   expect(errors).toEqual([]);
 });

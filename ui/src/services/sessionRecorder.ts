@@ -2,13 +2,16 @@
 // in a live session, guests), taken from the engine's output by the browser's own MediaRecorder and
 // compressed as it goes. When it stops the take is a file, which the studio keeps as a recording and
 // puts on an audio track, and which stays here as the last take, to be downloaded as a WAV
-// (`takeWav`). Nothing leaves the browser. One recording at a time; its state is kept here, outside
+// (`takeWav`) or an MP3 (`takeMp3`). Nothing leaves the browser. One recording at a time; its state is kept here, outside
 // React, and read with useSyncExternalStore.
 import { encodeWav } from './wavExport';
+import type { Mp3Reply, Mp3Request } from './mp3Worker';
 
 // Formats the browser may record in, best first: each is one the same browser can decode again.
 export const RECORDING_TYPES = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/webm'];
-// Longer than any jam is likely to be, and at about 128 kb/s well under what a sample may hold.
+// Longer than any jam is likely to be. At 192 kb/s, near enough the sound itself for an MP3 made
+// from the take (`takeMp3`) to be a good one, 30 minutes is about 43 MB, under the 50 MB a sample may be.
+export const RECORDING_BITS_PER_SECOND = 192_000;
 export const MAX_RECORDING_MS = 30 * 60 * 1000;
 
 export function recordingType(supported: (type: string) => boolean): string | null {
@@ -42,7 +45,7 @@ export const sessionRecorder = {
     if (current || typeof MediaRecorder === 'undefined') return false;
     const type = recordingType(candidate => MediaRecorder.isTypeSupported(candidate));
     if (!type) { source.release(); return false; }
-    const recorder = new MediaRecorder(source.stream, { mimeType: type, audioBitsPerSecond: 128_000 });
+    const recorder = new MediaRecorder(source.stream, { mimeType: type, audioBitsPerSecond: RECORDING_BITS_PER_SECOND });
     const chunks: Blob[] = [], started = new Date();
     let finish: (file: File | null) => void = () => {};
     const done = new Promise<File | null>(resolve => { finish = resolve; });
@@ -76,6 +79,30 @@ export const sessionRecorder = {
 export function takeWav(take: File, decoded: Pick<AudioBuffer, 'numberOfChannels' | 'sampleRate' | 'getChannelData'>): File {
   const channels = Array.from({ length: Math.min(2, decoded.numberOfChannels) }, (_, channel) => decoded.getChannelData(channel));
   return new File([encodeWav(channels, decoded.sampleRate)], `${take.name.replace(/\.[^.]+$/, '')}.wav`, { type: 'audio/wav' });
+}
+
+// The take as a 320 kb/s MP3 file, named as the take is: decoded at 48 kHz (an MP3 cannot be every
+// rate a device runs at) and encoded by LAME in a worker of its own (`mp3Worker.ts`), which reports
+// how far it has got, from 0 to 1.
+export async function takeMp3(take: File, onProgress: (done: number) => void = () => {}): Promise<File> {
+  const decoded = await new OfflineAudioContext(2, 1, 48000).decodeAudioData(await take.arrayBuffer());
+  const channels = Array.from({ length: Math.min(2, decoded.numberOfChannels) }, (_, channel) => decoded.getChannelData(channel).slice());
+  const worker = new Worker(new URL('./mp3Worker.ts', import.meta.url), { type: 'module' });
+  try {
+    const pieces = await new Promise<Uint8Array[]>((resolve, reject) => {
+      worker.onmessage = ({ data }: MessageEvent<Mp3Reply>) => {
+        if (data.type === 'progress') onProgress(data.done);
+        else if (data.type === 'done') resolve(data.pieces);
+        else reject(new Error(data.error));
+      };
+      worker.onerror = event => { event.preventDefault(); reject(new Error(event.message || 'The MP3 encoder could not start')); };
+      const request: Mp3Request = { channels, sampleRate: decoded.sampleRate };
+      worker.postMessage(request, channels.map(channel => channel.buffer));
+    });
+    return new File(pieces as BlobPart[], `${take.name.replace(/\.[^.]+$/, '')}.mp3`, { type: 'audio/mpeg' });
+  } finally {
+    worker.terminate();
+  }
 }
 
 // Minutes and seconds since a time, for the running clock on the button.
