@@ -123,7 +123,7 @@ test('the sequencer sends notes, clock, start and stop to a MIDI output', async 
   out.tick(0, 30, true);
   assert.deepEqual(sent, [], 'with no output chosen nothing is sent');
 
-  out.setPort(port);
+  out.setOutputs([{ port, flags: { notes: true, clock: false, played: false, thru: false } }]);
   out.note(2, 60, 0.5, 1000, 1250);
   out.note(10, 36, 9, 1000, 1000);
   assert.deepEqual(sent, [
@@ -137,7 +137,7 @@ test('the sequencer sends notes, clock, start and stop to a MIDI output', async 
 
   out.tick(2000, 30, true);
   assert.deepEqual(sent, [], 'clock is off until it is asked for');
-  out.configure({ clock: true });
+  out.setOutputs([{ port, flags: { notes: true, clock: true, played: false, thru: false } }]);
   out.tick(2000, 30, true);
   out.tick(2030, 30, false);
   assert.deepEqual(sent.map(([data]) => data[0]), [0xfa, ...Array(CLOCKS_PER_TICK * 2).fill(0xf8)], 'start, then 24 pulses to a quarter note');
@@ -150,11 +150,10 @@ test('the sequencer sends notes, clock, start and stop to a MIDI output', async 
   out.stop();
   assert.deepEqual(sent, [], 'and is only sent once');
 
-  out.configure({ notes: false });
+  out.setOutputs([{ port, flags: { notes: false, clock: true, played: false, thru: false } }]);
   out.note(1, 60, 1, 0, 10);
   assert.deepEqual(sent, []);
-  out.setPort({ id: 'broken', send: () => { throw new Error('unplugged'); } });
-  out.configure({ notes: true });
+  out.setOutputs([{ port: { id: 'broken', send: () => { throw new Error('unplugged'); } }, flags: { notes: true, clock: true, played: true, thru: true } }]);
   assert.doesNotThrow(() => { out.note(1, 60, 1, 0, 10); out.tick(0, 30, true); out.stop(); });
 });
 

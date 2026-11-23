@@ -137,7 +137,13 @@ directly, with no builder.
     start, stop and tempo, the tempo held outside the project), sending notes
     played by hand, choosing each lane's and the drums' output channel, and
     aftertouch as a route source (Pressure). Each part waits to be tried by
-    the owner on their controller.
+    the owner on their controller. Then (2026-11-23, asked for a Launchkey Mini
+    playing Discobot's lanes and three Volcas and a DrumBrute Impact by
+    switching channel): a channel for each part (the open lane, each synth,
+    the drums), one part a channel; every input listened to; any number of
+    outputs, each with Notes, Clock, Played and Thru; Thru for the channels
+    no part plays; Panic; lamps for the channels heard and each output sent
+    to; all of it kept in this browser. Not tried with real hardware.
 25. **More than four modulation routes**, with the LFO tab's own menus
     folded into them (sound 4). Done: up to eight routes, the list showing
     those in use and one more; each LFO's own target and depth are the first
@@ -164,7 +170,7 @@ Cheap for the agent but blocked until the owner does or says something.
   each needs the owner's say-so and a licence read at its source.
 - **A second sample song and more starting beats** (V6): made, then heard.
 - **The ladder filter's level** (sound 5): an ear decision.
-- **MIDI hardware**: the owner said on 2026-10-22 that their controller "has worked thus far". The clock, the output channels, played notes and aftertouch (item 24) are newer and not tried with it yet.
+- **MIDI hardware**: the owner said on 2026-10-22 that their controller "has worked thus far". The clock, the output channels, played notes and aftertouch (item 24) are newer and not tried with it yet, nor the channel table, several outputs, Thru and Panic (2026-11-23).
 - **A screen reader trial** (improvements 5).
 - **Firefox and guest instruments**: what the owner sees there.
 - **Live collaboration** (features 7): the owner lifted the rule on 2026-10-20 and it is being built in stages (`docs/LIVE_SESSIONS_PLAN.md`): all four stages are built (the relay, edits, the transport, presence), and playing together with a snap to the beat. The owner tried jamming live with someone on 2026-10-22 and it "worked pretty great". On 2026-11-09 someone whose connection was lost can rejoin a session in progress and receive its project (the room closes their old connection; Rejoin Now on the rack). On 2026-11-10 a session no longer leaves a “… (this browser’s version)” project behind for everyone but the person saving: when everything a browser did reached the session, the account’s copy replaces its own afterwards (a version is kept), even after a lost connection or a closed tab. Four people jammed on 2026-11-10 and the timing sounded great by ear. Was: needs the rule against a held-open

@@ -116,7 +116,7 @@ test('with two devices each is sent somewhere of its own: one to a lane, the oth
   const padsTo = page.getByLabel('Where Test pads is sent', { exact: true });
   await expect(keys).toHaveValue('default');
   await expect(padsTo).toHaveValue('default');
-  await expect(keys.locator('option')).toHaveText(['As set above', 'The open lane', 'Synth 1', 'Synth 2', 'Synth 3', 'Synth 4', 'Synth 5', 'Drums', 'Off']);
+  await expect(keys.locator('option')).toHaveText(['By channel', 'The open lane', 'Synth 1', 'Synth 2', 'Synth 3', 'Synth 4', 'Synth 5', 'Drums', 'Off']);
 
   await keys.selectOption('synth:2');
   await padsTo.selectOption('drums');
@@ -162,12 +162,12 @@ test('with two devices each is sent somewhere of its own: one to a lane, the oth
   expect(errors).toEqual([]);
 });
 
-test('one device alone is as it was: no list of devices, its channel for the lane and channel 10 for the drums', async ({ page }) => {
+test('one device alone plays by channel: channel 1 for Synth 1 and channel 10 for the drums, and nothing on the others', async ({ page }) => {
   await start(page, [['only-id', 'Test controller']]);
   await openMidi(page);
   await expect(page.getByRole('list', { name: 'The note each drum\'s pad sends', exact: true })).toBeVisible();
-  await expect(page.getByRole('list', { name: 'Where each MIDI device is sent', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'Devices', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('list', { name: 'Where each MIDI device is sent', exact: true }).getByRole('listitem')).toHaveCount(1);
+  await expect(page.getByLabel('Where Test controller is sent', { exact: true })).toHaveValue('default');
   await page.getByRole('button', { name: 'step', exact: true }).click();
   await emit(page, 'only-id', [0x94, 60, 100]);
   await emit(page, 'only-id', [0x99, 36, 100]);

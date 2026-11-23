@@ -580,15 +580,10 @@ export default function Rack({ studio }: { studio: Studio }) {
             supported={midiState.supported}
             connected={midiState.connected}
             devices={midiState.devices}
-            allDevicesId={midiState.allDevicesId}
-            selectedDeviceId={midiState.selectedDeviceId}
-            onDeviceChange={midiState.setSelectedDeviceId}
             mode={studio.midiMode}
             onModeChange={studio.setMidiMode}
-            channel={studio.midiChannel}
-            onChannelChange={studio.setMidiChannel}
-            drumChannel={studio.midiDrumChannel}
-            onDrumChannelChange={studio.setMidiDrumChannel}
+            inChannels={studio.midiInChannels}
+            onInChannelChange={studio.handleMidiInChannel}
             ties={studio.midiTies}
             learning={studio.midiLearn}
             onLearn={studio.handleMidiLearn}
@@ -600,25 +595,18 @@ export default function Rack({ studio }: { studio: Studio }) {
             onPadsReset={studio.handleMidiPadsReset}
             destinations={studio.midiDestinations}
             onDestinationChange={studio.handleMidiDestinationChange}
-            synthIds={studio.synths.map(synth => synth.id)}
-            targetSynthId={studio.midiTargetSynthId}
-            onTargetSynthChange={studio.setMidiTargetSynthId}
+            synthIds={shownLanes(studio.synths.map(synth => synth.id), studio.laneOrder)}
             lastMessage={midiState.lastMessage}
             error={midiState.error}
             outputs={midiState.outputs}
-            selectedOutputId={midiState.selectedOutputId}
-            onOutputChange={midiState.setSelectedOutputId}
-            sendNotes={studio.midiOutNotes}
-            onSendNotesChange={studio.setMidiOutNotes}
-            sendClock={studio.midiOutClock}
-            onSendClockChange={studio.setMidiOutClock}
-            sendPlayed={studio.midiOutPlayed}
-            onSendPlayedChange={studio.setMidiOutPlayed}
+            outputSettings={midiState.outputSettings}
+            onOutputFlagsChange={midiState.setOutputFlags}
             outChannels={studio.midiOutChannels}
             onOutChannelsChange={studio.setMidiOutChannels}
             followClock={studio.midiFollowClock}
             onFollowClockChange={studio.setMidiFollowClock}
             clockTempo={studio.externalTempo}
+            onPanic={studio.handleMidiPanic}
           />
           <SamplePanel onPlay={sample => playSample(sample.data)} />
         </Dialog>
