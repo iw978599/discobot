@@ -120,7 +120,7 @@ export default function MidiPanel({
   ];
   if (!supported) return (
     <div className="midi-panel" role="status">
-      MIDI is not supported in this browser. Use Chrome or Edge over HTTPS, or import a MIDI file.
+      MIDI input is not supported in this browser. Use Chrome or Edge over HTTPS, or import a MIDI file.
     </div>
   );
 
@@ -142,9 +142,9 @@ export default function MidiPanel({
         </div>
         <Toggle className="midi-check" label="Follow MIDI clock" title="Start and stop with another device's MIDI clock, and play at its tempo. Its tempo is not saved: the project's own comes back when this is off" checked={followClock} onChange={(on) => onFollowClockChange(on)}>Follow clock{followClock && clockTempo !== null ? ` (${clockTempo} BPM)` : ''}</Toggle>
         <button className="rack-btn danger" aria-label="MIDI panic: all notes off" title="Stop every note: here, and on every MIDI output on all 16 channels" onClick={onPanic}>Panic</button>
-        {(lastMessage || error) && (
-          <span className="midi-last-message" title={error || lastMessage}>
-            {error || lastMessage}
+        {lastMessage && (
+          <span className="midi-last-message" title={lastMessage}>
+            {lastMessage}
           </span>
         )}
       </div>
