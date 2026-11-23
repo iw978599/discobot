@@ -29,7 +29,7 @@ test('a knob on a controller is tied to a parameter by Learn, moves it over its 
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await openMidi(page);
-  await page.getByLabel('MIDI input device').selectOption('test-controller');
+  await expect(page.getByRole('list', { name: 'Where each MIDI device is sent', exact: true })).toBeVisible();
   const parameter = page.getByLabel('Parameter to tie to a knob', { exact: true });
   await expect(parameter).toHaveValue('lane:open:cutoff');
   const tied = page.getByRole('list', { name: 'Knobs tied to parameters', exact: true });
@@ -69,7 +69,7 @@ test('a knob on a controller is tied to a parameter by Learn, moves it over its 
   await page.keyboard.press('Escape');
   await page.reload();
   await openMidi(page);
-  await page.getByLabel('MIDI input device').selectOption('test-controller');
+  await expect(page.getByRole('list', { name: 'Where each MIDI device is sent', exact: true })).toBeVisible();
   await expect(page.getByRole('list', { name: 'Knobs tied to parameters', exact: true }).getByRole('listitem')).toHaveCount(2);
 
   // Untied, the knob does nothing again.

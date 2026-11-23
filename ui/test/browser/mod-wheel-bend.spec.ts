@@ -35,7 +35,7 @@ test('the mod wheel is a route source, and bend and wheel messages are live only
   await expect.poll(async () => (await stored(page)).synths[0].synthParams.modMatrix?.[0]?.source).toBe('modWheel');
 
   await openMidi(page);
-  await page.getByLabel('MIDI input device').selectOption('test-controller');
+  await expect(page.getByRole('list', { name: 'Where each MIDI device is sent', exact: true })).toBeVisible();
   await expect(page.locator('.midi-panel').first()).toBeVisible();
   const before = JSON.stringify(await stored(page));
 

@@ -50,16 +50,15 @@ test('the sequencer plays a MIDI output: notes on a channel per lane, drums on t
   await page.getByRole('button', { name: 'C4 step 1', exact: true }).click();
   await page.getByRole('button', { name: 'Kick step 1', exact: true }).click();
 
-  // Nothing is sent until an output is chosen.
+  // Nothing is sent until an output is given something to send.
   await page.getByRole('button', { name: /Play All/ }).click();
   await page.waitForTimeout(700);
   await page.getByRole('button', { name: /Stop All/ }).click();
   expect(await sent(page)).toEqual([]);
 
   await openMidi(page);
-  await expect(page.getByLabel('Send notes to MIDI output', { exact: true })).toBeDisabled();
-  await page.getByLabel('MIDI output device', { exact: true }).selectOption('test-synth');
-  await expect(page.getByLabel('Send notes to MIDI output', { exact: true })).toBeChecked();
+  await expect(page.getByLabel('Send notes to Test synth', { exact: true })).not.toBeChecked();
+  await page.getByLabel('Send notes to Test synth', { exact: true }).check();
   await closeMidi(page);
   await page.getByRole('button', { name: /Play All/ }).click();
   await page.waitForTimeout(900);
@@ -76,8 +75,8 @@ test('the sequencer plays a MIDI output: notes on a channel per lane, drums on t
   // With clock on: a start, 24 pulses to a quarter note, and a stop.
   await page.evaluate(() => { (window as unknown as { midiSent: unknown[] }).midiSent.length = 0; });
   await openMidi(page);
-  await page.getByLabel('Send clock to MIDI output', { exact: true }).check();
-  await page.getByLabel('Send notes to MIDI output', { exact: true }).uncheck();
+  await page.getByLabel('Send clock to Test synth', { exact: true }).check();
+  await page.getByLabel('Send notes to Test synth', { exact: true }).uncheck();
   await closeMidi(page);
   await page.getByRole('button', { name: /Play All/ }).click();
   await page.waitForTimeout(1100);
@@ -148,11 +147,10 @@ test('notes played by hand go out on the channel chosen for their lane, and anot
   const emit = (data: number[], at?: number) => page.evaluate(([bytes, time]) => (window as unknown as { emitMidi: (data: number[], at?: number) => void }).emitMidi(bytes as number[], time as number | undefined), [data, at] as const);
 
   await openMidi(page);
-  await page.getByLabel('MIDI output device', { exact: true }).selectOption('test-synth');
   await expect(page.getByLabel('Synth 1 MIDI output channel', { exact: true })).toHaveValue('1');
   await expect(page.getByLabel('Drums MIDI output channel', { exact: true })).toHaveValue('10');
   await page.getByLabel('Synth 1 MIDI output channel', { exact: true }).selectOption('7');
-  await page.getByLabel('Send played notes to MIDI output', { exact: true }).check();
+  await page.getByLabel('Send played notes to Test synth', { exact: true }).check();
   await closeMidi(page);
 
   // A key on the controller, sent to Synth 1, goes out on channel 7 at once.
@@ -183,5 +181,65 @@ test('notes played by hand go out on the channel chosen for their lane, and anot
   expect((await stored(page)).tempo, 'the clock\'s tempo is not put in the project').toBe(120);
   await emit([0xfc]);
   await expect(page.getByRole('button', { name: /Play All/ })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('a controller switched between channels plays one part each, the channels no part plays pass through to hardware, and Panic silences every output', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.addInitScript(() => {
+    localStorage.setItem('discobot_walkthrough_v1', 'seen');
+    const log: Array<{ data: number[]; at?: number }> = [];
+    (window as unknown as { midiSent: typeof log }).midiSent = log;
+    // A multi-port interface for the Volcas, and the controller's own output, which must hear nothing back.
+    const interfacePort = { id: 'u6-1', name: 'U6MIDI Pro Port 1', state: 'connected', send: (data: number[], at?: number) => { log.push({ data: Array.from(data), at }); } };
+    const echo: number[][] = [];
+    (window as unknown as { echoed: number[][] }).echoed = echo;
+    const controllerOut = { id: 'lk-out', name: 'Launchkey Mini', state: 'connected', send: (data: number[]) => { echo.push(Array.from(data)); } };
+    const input = { id: 'lk-in', name: 'Launchkey Mini', state: 'connected', onmidimessage: null as null | ((event: { data: Uint8Array; timeStamp: number }) => void) };
+    (window as unknown as { emitMidi: (data: number[]) => void }).emitMidi = data => input.onmidimessage?.({ data: new Uint8Array(data), timeStamp: performance.now() });
+    const access = { inputs: new Map([[input.id, input]]), outputs: new Map([[interfacePort.id, interfacePort], [controllerOut.id, controllerOut]]), onstatechange: null };
+    Object.defineProperty(navigator, 'requestMIDIAccess', { configurable: true, value: async () => access });
+  });
+  await page.goto('./');
+  await expect(page.getByRole('heading', { name: 'Discobot', exact: true })).toBeVisible();
+  const emit = (data: number[]) => page.evaluate(bytes => (window as unknown as { emitMidi: (data: number[]) => void }).emitMidi(bytes), data);
+  const steps = async (lane: number) => ((await stored(page)).synths[lane].pattern.steps as Array<{ active: boolean; note?: string }>).filter(step => step.active).map(step => step.note);
+
+  await openMidi(page);
+  await expect(page.getByLabel('Synth 1 MIDI input channel', { exact: true })).toHaveValue('1');
+  await expect(page.getByLabel('Drums MIDI input channel', { exact: true })).toHaveValue('10');
+  await page.getByLabel('Synth 2 MIDI input channel', { exact: true }).selectOption('4');
+  await page.getByLabel('Synth 3 MIDI input channel', { exact: true }).selectOption('1');
+  await expect(page.getByLabel('Synth 1 MIDI input channel', { exact: true }), 'channel 1 moved to Synth 3').toHaveValue('0');
+  await page.getByLabel('Pass controller through to U6MIDI Pro Port 1', { exact: true }).check();
+  await page.getByLabel('Pass controller through to Launchkey Mini', { exact: true }).check();
+  await page.getByRole('button', { name: 'step', exact: true }).click();
+  await closeMidi(page);
+
+  // Channel 4 plays Synth 2 and nothing else; channel 2 belongs to a Volca and goes straight through.
+  await emit([0x93, 60, 100]);
+  await emit([0x83, 60, 0]);
+  await expect.poll(() => steps(1)).toEqual(['C4']);
+  await emit([0x91, 62, 90]);
+  await emit([0xb1, 74, 33]);
+  await emit([0x81, 62, 0]);
+  await emit([0xf8]);
+  await expect.poll(async () => (await sent(page)).map(entry => entry.data)).toEqual([[0x91, 62, 90], [0xb1, 74, 33], [0x81, 62, 0]]);
+  await page.waitForTimeout(300);
+  expect(await steps(0), 'Synth 1 hears nothing').toEqual([]);
+  expect(await steps(1), 'Synth 2 took only its own channel').toEqual(['C4']);
+  expect(await steps(2)).toEqual([]);
+  expect(await page.evaluate(() => (window as unknown as { echoed: number[][] }).echoed), 'nothing goes back to the controller').toEqual([]);
+
+  // Kept for the next visit, and Panic sends every output all notes off on all 16 channels.
+  await page.reload();
+  await openMidi(page);
+  await expect(page.getByLabel('Synth 2 MIDI input channel', { exact: true })).toHaveValue('4');
+  await expect(page.getByLabel('Pass controller through to U6MIDI Pro Port 1', { exact: true })).toBeChecked();
+  await page.evaluate(() => { (window as unknown as { midiSent: unknown[] }).midiSent.length = 0; });
+  await page.getByRole('button', { name: 'MIDI panic: all notes off', exact: true }).click();
+  const panic = (await sent(page)).map(entry => entry.data);
+  for (let channel = 0; channel < 16; channel++) expect(panic.some(data => data[0] === (0xb0 | channel) && data[1] === 123), `all notes off on ${channel + 1}`).toBe(true);
   expect(errors).toEqual([]);
 });

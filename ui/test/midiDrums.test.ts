@@ -125,7 +125,7 @@ test('a MIDI export writes the General MIDI drum notes whatever the pads have le
 
 test('a device is sent as before until it is given a place, and a stored list is made safe', () => {
   assert.deepEqual(MIDI_DESTINATIONS.map(place => place.id), ['default', 'open', 'synth:1', 'synth:2', 'synth:3', 'synth:4', 'synth:5', 'drums', 'off']);
-  assert.equal(MIDI_DESTINATIONS[0].label, 'As set above');
+  assert.equal(MIDI_DESTINATIONS[0].label, 'By channel');
   const none = asMidiDestinations(null);
   assert.equal(destinationFor(none, 'Launchkey'), 'default');
   for (const inherited of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) assert.equal(destinationFor(none, inherited), 'default', inherited);

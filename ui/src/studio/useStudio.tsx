@@ -18,7 +18,9 @@ import { defaultPads, storePads } from '../services/midiDrums';
 import { asQuantize } from '../services/recordTiming';
 import { LANE_PARAMS, fromUnit, lanePatch, parseTarget } from '../services/paramTargets';
 import { sentAutomation } from '../services/automation';
-import { storeMidiTies, withoutTie } from '../services/midiTies';
+import { storeMidiTies, tieFor, withoutTie } from '../services/midiTies';
+import { destinationFor } from '../services/midiDevices';
+import { partOfChannel, storeMidiChannels, withInChannel, type MidiPart } from '../services/midiChannels';
 import { storeMetronome, type MetronomeSettings } from '../services/metronome';
 import { LiveArp, type LiveArpLane } from '../services/liveArp';
 import { auxBuses } from '../services/auxSettings';
@@ -135,15 +137,9 @@ export function useStudio(engine?: AudioEngine) {
     autoRecordingRef,
     autoPassRef,
     endAutoPassesRef,
-    midiChannel,
-    setMidiChannel,
-    midiDrumChannel,
-    setMidiDrumChannel,
-    midiDrumChannelRef,
-    midiOutNotes,
-    setMidiOutNotes,
-    midiOutPlayed,
-    setMidiOutPlayed,
+    midiInChannels,
+    setMidiInChannels,
+    midiInChannelsRef,
     midiOutChannels,
     setMidiOutChannels,
     midiFollowClock,
@@ -152,10 +148,6 @@ export function useStudio(engine?: AudioEngine) {
     setExternalTempo,
     midiFollowClockRef,
     externalTempoRef,
-    midiOutClock,
-    setMidiOutClock,
-    midiTargetSynthId,
-    setMidiTargetSynthId,
     projectId,
     setProjectId,
     setProjectOpens,
@@ -169,8 +161,6 @@ export function useStudio(engine?: AudioEngine) {
     browserMutedRef,
     synthsRef,
     midiModeRef,
-    midiChannelRef,
-    midiTargetSynthIdRef,
     drumStateRef,
     selectedDrumKitIdRef,
     drumFxRef,
@@ -194,6 +184,7 @@ export function useStudio(engine?: AudioEngine) {
     setMidiImportData,
     presetsLoadedRef,
     liveArpRef,
+    midiHeldRef,
     projectImportFileRef,
     midiImportFileRef,
     midiImportAssignments,
@@ -231,8 +222,29 @@ export function useStudio(engine?: AudioEngine) {
     if (!on) endAutoPassesRef.current(true);
     setAutoRecordingValue(on);
   }, []);
-  midiDrumChannelRef.current = midiDrumChannel;
-  useEffect(() => { midiOut.configure({ notes: midiOutNotes, clock: midiOutClock, played: midiOutPlayed, channels: midiOutChannels }); }, [midiOutNotes, midiOutClock, midiOutPlayed, midiOutChannels]);
+  // Kept in this browser. A controller's message goes straight on to the outputs with Thru on only
+  // when nothing here plays it: its device is sent by channel, no part hears its channel, and it is
+  // not a knob tied to a parameter. So a channel is heard here or passed on, never both.
+  useEffect(() => {
+    storeMidiChannels({ in: midiInChannels, out: midiOutChannels });
+    midiOut.configure({
+      channels: midiOutChannels,
+      thruWhen: (source, channel, data) => {
+        if (destinationFor(midiDestinationsRef.current, source) !== 'default') return false;
+        if (partOfChannel(midiInChannelsRef.current, channel) !== null) return false;
+        return (data[0] & 0xf0) !== 0xb0 || !tieFor(midiTiesRef.current, channel, data[1]);
+      },
+    });
+  }, [midiInChannels, midiOutChannels]);
+  const handleMidiInChannel = useCallback((part: MidiPart, channel: number) => setMidiInChannels(current => withInChannel(current, part, channel)), []);
+  // Everything off at once: every output on every channel, and every note sounding here.
+  const handleMidiPanic = useCallback(() => {
+    midiOut.panic();
+    midiHeldRef.current.clear();
+    liveArpRef.current?.stop();
+    synthAudio.stopAllNotes();
+    drumAudio.stopAllNotes();
+  }, [synthAudio, drumAudio]);
   // Following a clock ends with its tempo: the project's own is heard again.
   midiFollowClockRef.current = midiFollowClock;
   useEffect(() => {
@@ -244,8 +256,6 @@ export function useStudio(engine?: AudioEngine) {
   browserMutedRef.current = browserMuted;
   synthsRef.current = synths;
   midiModeRef.current = midiMode;
-  midiChannelRef.current = midiChannel;
-  midiTargetSynthIdRef.current = midiTargetSynthId;
   drumStateRef.current = drumState;
   selectedDrumKitIdRef.current = selectedDrumKitId;
   drumFxRef.current = drumFx;
@@ -261,11 +271,6 @@ export function useStudio(engine?: AudioEngine) {
   playModeRef.current = playMode;
   songStartEntryRef.current = songStartEntry;
 
-  useEffect(() => {
-    if (synths.length === 0) return;
-    if (midiTargetSynthId !== null && synths.some((s) => s.id === midiTargetSynthId)) return;
-    setMidiTargetSynthId(synths[0].id);
-  }, [synths, midiTargetSynthId]);
 
   useEffect(() => {
     audio.setMasterVolume(browserVolume);
@@ -1036,7 +1041,7 @@ export function useStudio(engine?: AudioEngine) {
     synths, selectedSynthId, setSelectedSynthId, drumState: memoizedDrumState, drumKits,
     selectedDrumKitId, drumMasterVolume, drumSwing, drumSwingGrid, drumFx, effectsLoop, browserMuted, setBrowserMuted,
     browserVolume, setBrowserVolume, globalTempo, storageError, setStorageError, changedElsewhere, loadOtherTabVersion, keepThisTabVersion, helpOpen, setHelpOpen, midiMode, setMidiMode,
-    recording, setRecording, autoRecording, setAutoRecording, handleAutomationDraw, handleAutomationClear, quantize, setQuantize, midiChannel, setMidiChannel, midiDrumChannel, setMidiDrumChannel, midiOutNotes, setMidiOutNotes, midiOutClock, setMidiOutClock, midiOutPlayed, setMidiOutPlayed, midiOutChannels, setMidiOutChannels, midiFollowClock, setMidiFollowClock, externalTempo, midiTargetSynthId, setMidiTargetSynthId, projectId, projectName, projects, synthPresets, drumAudio,
+    recording, setRecording, autoRecording, setAutoRecording, handleAutomationDraw, handleAutomationClear, quantize, setQuantize, midiInChannels, handleMidiInChannel, handleMidiPanic, midiOutChannels, setMidiOutChannels, midiFollowClock, setMidiFollowClock, externalTempo, projectId, projectName, projects, synthPresets, drumAudio,
     handleUndo, handleRedo, midiImportData, setMidiImportData, midiImportAssignments, setMidiImportAssignments,
     handleMidiImportClick, handleMidiImportFile, handleMidiImportApplyAll, midiImportFileRef, handleRemoveSynth,
     ensureSynthExists, handleOctaveShift, handleTempoChange, handleGlobalPlayStop, handleStepChange, handleStepSelect, handleKeyboardModeChange,

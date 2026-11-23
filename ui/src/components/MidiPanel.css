@@ -65,3 +65,48 @@
   color: var(--text-label);
   max-width: 60ch;
 }
+
+/* The router: inputs, the channel table and the outputs, one under another. `display: contents`
+   keeps the dialog's own spacing between the boxes; the wrapper is only there to find the lamps. */
+.midi-router { display: contents; }
+
+/* Sixteen lamps, lit while a message comes in on that channel (`lit`, switched outside React). */
+.midi-heard { gap: 4px; }
+.midi-heard-label { color: var(--text-label); margin-right: 4px; }
+.midi-channel-lamp {
+  min-width: 2.2em;
+  padding: 2px 0;
+  text-align: center;
+  font-family: var(--led-font);
+  font-size: var(--type-caption);
+  color: var(--text-faint);
+  background: var(--surface-well);
+  border: 1px solid var(--edge-deep);
+  border-radius: var(--corner-control);
+}
+.midi-channel-lamp.lit { background: var(--on); color: var(--text-on); box-shadow: var(--shadow-lamp); }
+.midi-status-dot.lit { background: var(--on); box-shadow: var(--shadow-lamp); }
+
+.midi-channel-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 4px;
+  color: var(--text-plain);
+  font-size: var(--type-label);
+}
+.midi-channel-table thead th { color: var(--text-label); font-weight: normal; text-align: left; padding: 0 8px; }
+.midi-channel-table tbody th, .midi-channel-table td {
+  background: var(--surface-inset);
+  border-top: 1px solid var(--edge-faint);
+  border-bottom: 1px solid var(--edge-faint);
+  padding: 4px 8px;
+  text-align: left;
+}
+.midi-channel-table tbody th { color: var(--text); border-left: 1px solid var(--edge-faint); border-radius: var(--corner-control) 0 0 var(--corner-control); }
+.midi-channel-table td:last-child { border-right: 1px solid var(--edge-faint); border-radius: 0 var(--corner-control) var(--corner-control) 0; }
+.midi-none { color: var(--text-faint); }
+
+.midi-output-flags { display: flex; gap: 4px; flex-wrap: wrap; }
+@media (max-width: 600px) {
+  .midi-output-list li { flex-direction: column; align-items: flex-start; }
+}

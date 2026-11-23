@@ -622,10 +622,9 @@ test('simulated MIDI device routes step notes by channel and target; permission 
   });
   await page.reload();
   await openMidi(page);
-  await page.getByLabel('MIDI input device').selectOption('test-controller');
+  await expect(page.getByRole('list', { name: 'Where each MIDI device is sent', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'step', exact: true }).click();
-  await page.getByLabel('MIDI channel').selectOption('2');
-  await page.getByLabel('MIDI target synth').selectOption('1');
+  await page.getByLabel('Synth 1 MIDI input channel', { exact: true }).selectOption('2');
   await page.evaluate(() => (window as unknown as { emitMidi: (data: number[]) => void }).emitMidi([0x90, 60, 100]));
   expect((await project(page)).synths[0].pattern.steps[0].note).toBeUndefined();
   await page.evaluate(() => (window as unknown as { emitMidi: (data: number[]) => void }).emitMidi([0x91, 60, 100]));
@@ -635,7 +634,7 @@ test('simulated MIDI device routes step notes by channel and target; permission 
 
   // Pads on channel 10 are the drums, beside the keyboard on its own channel. Played while the
   // song records, a pad is written on the step being played; a note that is no drum does nothing.
-  await expect(page.getByLabel('MIDI drum channel')).toHaveValue('10');
+  await expect(page.getByLabel('Drums MIDI input channel', { exact: true })).toHaveValue('10');
   await page.getByRole('button', { name: 'record', exact: true }).click();
   await page.keyboard.press('Escape');
   await page.locator('.tempo-led').click();
@@ -653,7 +652,7 @@ test('simulated MIDI device routes step notes by channel and target; permission 
   for (const other of ['clap', 'closedHH', 'openHH', 'snare2', 'ride', 'crash']) expect(drums[other].steps.some(Boolean), other).toBe(false);
   expect((await project(page)).synths[0].pattern.steps.filter((step: { active: boolean }) => step.active), 'the lane took none of them').toHaveLength(1);
   await openMidi(page);
-  await page.getByLabel('MIDI drum channel').selectOption('0');
+  await page.getByLabel('Drums MIDI input channel', { exact: true }).selectOption('0');
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'requestMIDIAccess', { configurable: true, value: async () => { throw new Error('Denied'); } });
   });

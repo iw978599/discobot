@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { midiOut, type MidiOutPort } from '../services/midiOutput';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { midiOut, type MidiOutFlags, type MidiOutPort } from '../services/midiOutput';
+import { outputFlagsFor, storeMidiOutputSettings, storedMidiOutputSettings, withOutputFlags, type MidiOutputSettings } from '../services/midiDevices';
+import { midiHeardAt } from '../services/midiChannels';
 import { SUSTAIN_PEDAL } from '../services/midiSustain';
 
 export type MidiMode = 'live' | 'record' | 'step';
@@ -33,8 +35,6 @@ export interface MidiSource {
 interface UseMidiInputOptions {
   onMessage: (message: MidiMessage, source: MidiSource) => void;
 }
-
-const ALL_DEVICES_ID = '__all__';
 
 const REAL_TIME: Record<number, 'clock' | 'start' | 'continue' | 'stop'> = { 0xf8: 'clock', 0xfa: 'start', 0xfb: 'continue', 0xfc: 'stop' };
 
@@ -70,18 +70,19 @@ export function parseMessage(event: any): MidiMessage | null {
   return null;
 }
 
+// Every MIDI input is listened to (a device's place in the panel can set one Off), and every
+// output is handed to `midiOut` with what it is sent, both following devices plugged in and out.
 export function useMidiInput({ onMessage }: UseMidiInputOptions) {
   const [supported, setSupported] = useState(false);
   const [connected, setConnected] = useState(false);
   const [devices, setDevices] = useState<MidiDeviceInfo[]>([]);
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string>(ALL_DEVICES_ID);
   const [lastMessage, setLastMessage] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [outputs, setOutputs] = useState<MidiDeviceInfo[]>([]);
-  // Empty means nothing is sent.
-  const [selectedOutputId, setSelectedOutputId] = useState<string>('');
-  const selectedOutputRef = useRef(selectedOutputId);
-  selectedOutputRef.current = selectedOutputId;
+  // What each output is sent, by its name; kept in this browser.
+  const [outputSettings, setOutputSettings] = useState<MidiOutputSettings>(storedMidiOutputSettings);
+  const outputSettingsRef = useRef(outputSettings);
+  outputSettingsRef.current = outputSettings;
   const bindOutputRef = useRef<() => void>(() => {});
 
   const accessRef = useRef<any>(null);
@@ -105,6 +106,12 @@ export function useMidiInput({ onMessage }: UseMidiInputOptions) {
     };
 
     const onMidiInput = (inputId: string, event: any) => {
+      // Passed on before anything here is done with it, so Thru adds as little delay as it can.
+      const data = event?.data;
+      if (data && data.length > 0 && data[0] >= 0x80 && data[0] < 0xf0) {
+        midiHeardAt.set((data[0] & 0x0f) + 1, performance.now());
+        midiOut.thru(data, names.get(inputId) ?? inputId);
+      }
       const parsed = parseMessage(event);
       if (!parsed) return;
       if (parsed.type === 'noteOn') {
@@ -131,15 +138,15 @@ export function useMidiInput({ onMessage }: UseMidiInputOptions) {
       onMessageRef.current(parsed, sourceOf(inputId));
     };
 
-    // Points the sequencer's MIDI output at the chosen device, or at nothing if it has gone.
+    // Hands every connected output to the sender with what it is sent; one that has gone is let go of.
     const bindOutput = () => {
       const access = accessRef.current;
-      const ports: MidiOutPort[] = access?.outputs ? Array.from(access.outputs.values()) : [];
-      const connected = ports.filter((port: any) => String(port.state || 'connected') === 'connected');
-      if (mounted) setOutputs(connected.map((port: any) => ({ id: String(port.id), name: port.name || `MIDI ${String(port.id).slice(0, 6)}`, state: 'connected' })));
-      const chosen = connected.find(port => String(port.id) === selectedOutputRef.current) ?? null;
-      midiOut.setPort(chosen);
-      if (!chosen && selectedOutputRef.current && mounted && access) setSelectedOutputId('');
+      const ports: any[] = access?.outputs ? Array.from(access.outputs.values()) : [];
+      const named = ports
+        .filter(port => String(port.state || 'connected') === 'connected')
+        .map(port => ({ port: port as MidiOutPort, name: String(port.name || `MIDI ${String(port.id).slice(0, 6)}`) }));
+      if (mounted) setOutputs(named.map(({ port, name }) => ({ id: String(port.id), name, state: 'connected' })));
+      midiOut.setOutputs(named.map(({ port, name }) => ({ port, flags: outputFlagsFor(outputSettingsRef.current, name) })));
     };
     bindOutputRef.current = bindOutput;
 
@@ -156,20 +163,14 @@ export function useMidiInput({ onMessage }: UseMidiInputOptions) {
         const name = input.name || `MIDI ${id.slice(0, 6)}`;
         names.set(id, name);
         nextDevices.push({ id, name, state });
-
-        const shouldAttach = selectedDeviceId === ALL_DEVICES_ID || selectedDeviceId === id;
-        input.onmidimessage = shouldAttach ? (event: any) => onMidiInput(id, event) : null;
-        if (shouldAttach && state === 'connected') listening.add(id);
+        input.onmidimessage = (event: any) => onMidiInput(id, event);
+        if (state === 'connected') listening.add(id);
       });
       new Set([...held.keys(), ...gestured]).forEach((id) => { if (!listening.has(id)) releaseInput(id); });
 
       if (!mounted) return;
       setDevices(nextDevices);
       setConnected(listening.size > 0);
-
-      if (selectedDeviceId !== ALL_DEVICES_ID && !nextDevices.some((d) => d.id === selectedDeviceId)) {
-        setSelectedDeviceId(ALL_DEVICES_ID);
-      }
     };
 
     const init = async () => {
@@ -205,10 +206,11 @@ export function useMidiInput({ onMessage }: UseMidiInputOptions) {
       });
       access.onstatechange = null;
     };
-  }, [selectedDeviceId]);
+  }, []);
 
-  useEffect(() => { bindOutputRef.current(); }, [selectedOutputId]);
-  useEffect(() => () => { midiOut.setPort(null); }, []);
+  useEffect(() => { storeMidiOutputSettings(outputSettings); bindOutputRef.current(); }, [outputSettings]);
+  useEffect(() => () => { midiOut.setOutputs([]); }, []);
+  const setOutputFlags = useCallback((name: string, patch: Partial<MidiOutFlags>) => setOutputSettings(current => withOutputFlags(current, name, patch)), []);
 
   // The same object until one of these changes: a unit that reads it (the transport bar, which is
   // tracked) then renders only for a change in MIDI, not for every edit to the project.
@@ -216,13 +218,10 @@ export function useMidiInput({ onMessage }: UseMidiInputOptions) {
     supported,
     connected,
     devices,
-    selectedDeviceId,
-    setSelectedDeviceId,
-    allDevicesId: ALL_DEVICES_ID,
     lastMessage,
     error,
     outputs,
-    selectedOutputId,
-    setSelectedOutputId,
-  }), [supported, connected, devices, selectedDeviceId, lastMessage, error, outputs, selectedOutputId]);
+    outputSettings,
+    setOutputFlags,
+  }), [supported, connected, devices, lastMessage, error, outputs, outputSettings, setOutputFlags]);
 }

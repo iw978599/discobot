@@ -11,6 +11,7 @@ import { playhead } from '../services/playhead';
 import { stepNotes, withStepLength, withStepNotes } from '../services/noteScheduling';
 import { drumForNote, storePads, withPad } from '../services/midiDrums';
 import { destinationFor, destinationLane, storeMidiDestinations, withDestination, type MidiDestination } from '../services/midiDevices';
+import { partOfChannel, type MidiPart } from '../services/midiChannels';
 import { recordPosition } from '../services/recordTiming';
 import { storeMidiTies, tieFor, withTie } from '../services/midiTies';
 import { type LiveArpLane } from '../services/liveArp';
@@ -36,7 +37,7 @@ export interface StudioNotesNeeds {
 }
 
 export function useStudioNotes(core: StudioCore, needs: StudioNotesNeeds) {
-  const { engine, synthsRef, setSynths, quantizeRef, transportRef, signatureOfRef, currentSceneIdRef, recordHeldRef, midiChordRef, recordingRef, synthAudio, liveArpRef, browserMutedRef, effectsLoopRef, globalTempo, synths, selectedSynthId, liveLanesRef, midiHeldRef, midiDestinationsRef, setMidiDestinations, midiChannelRef, midiTargetSynthIdRef, selectedSynthIdRef, midiLearnRef, setMidiTies, setMidiLearn, midiTiesRef, applyParamTargetRef, midiPadLearnRef, midiPadsRef, setMidiPads, setMidiPadLearn, midiDrumChannelRef, drumStateRef, drumAudio, midiModeRef, globalTempoRef, midiFollowClockRef, externalTempoRef, setExternalTempo, handleGlobalPlayStopRef } = core;
+  const { engine, synthsRef, setSynths, quantizeRef, transportRef, signatureOfRef, currentSceneIdRef, recordHeldRef, midiChordRef, recordingRef, synthAudio, liveArpRef, browserMutedRef, effectsLoopRef, globalTempo, synths, selectedSynthId, liveLanesRef, midiHeldRef, midiDestinationsRef, setMidiDestinations, midiInChannelsRef, selectedSynthIdRef, midiLearnRef, setMidiTies, setMidiLearn, midiTiesRef, applyParamTargetRef, midiPadLearnRef, midiPadsRef, setMidiPads, setMidiPadLearn, drumStateRef, drumAudio, midiModeRef, globalTempoRef, midiFollowClockRef, externalTempoRef, setExternalTempo, handleGlobalPlayStopRef } = core;
   const clockFollowerRef = useRef(createClockFollower());
   // Each controller's sustain pedal, and the keys it is keeping sounding (midiHeldRef's keys).
   const sustainRef = useRef(new MidiSustain());
@@ -245,14 +246,19 @@ ${note}`, { synthId, note, step: at.step, ticks });
       if (message.type === 'stop' ? playing : !playing) void handleGlobalPlayStopRef.current();
       return;
     }
+    // For a device sent by channel, the part the message's channel plays: a channel no part hears
+    // plays nothing here (with Thru on it has gone straight on to the outputs).
+    const part: MidiPart | null = place === 'default' ? partOfChannel(midiInChannelsRef.current, message.channel) : null;
+    // The lane id a part or a place names, or null for the drums and nothing.
+    const laneOf = (): number | null => {
+      if (place === 'drums') return null;
+      if (place === 'default') return part === null || part === 'drums' ? null : part === 'open' ? selectedSynthIdRef.current : part;
+      return place === 'open' ? selectedSynthIdRef.current : destinationLane(place);
+    };
     // The lane a device's notes would go to, for its pitch bend and mod wheel; the drums and a lane the project lacks have none.
     const liveLane = (): number | null => {
-      if (place === 'drums') return null;
-      if (place === 'default') {
-        if (message.channel !== midiChannelRef.current) return null;
-        return (synthsRef.current.find(s => s.id === midiTargetSynthIdRef.current) ?? synthsRef.current[0])?.id ?? null;
-      }
-      return synthsRef.current.find(s => s.id === (place === 'open' ? selectedSynthIdRef.current : destinationLane(place)))?.id ?? null;
+      const id = laneOf();
+      return id === null ? null : synthsRef.current.find(s => s.id === id)?.id ?? null;
     };
     const gesture = (live: { bend?: number; wheel?: number; pressure?: number }) => {
       const synthId = liveLane();
@@ -277,7 +283,7 @@ ${note}`, { synthId, note, step: at.step, ticks });
       if (tie) applyParamTargetRef.current(tie.target, message.value / 127);
       else if (message.controller === 1) gesture({ wheel: message.value / 127 });
       // The sustain pedal, on whatever lane each kept note was played into.
-      else if (message.controller === SUSTAIN_PEDAL) sustainRef.current.pedal(source.id, pedalDown(message.value)).forEach(letGo);
+      else if (message.controller === SUSTAIN_PEDAL && (place !== 'default' || part !== null)) sustainRef.current.pedal(source.id, pedalDown(message.value)).forEach(letGo);
       return;
     }
     // While a drum is waiting to be learned, the first note played is its pad's from then on.
@@ -291,11 +297,10 @@ ${note}`, { synthId, note, step: at.step, ticks });
       setMidiPadLearn(null);
       return;
     }
-    // A pad is a note on the drum channel, or any note from a device sent to the drums: it plays
+    // A pad is a note on the drums' channel, or any note from a device sent to the drums: it plays
     // its drum, and while recording it is written on the step being played. A note that is no drum
-    // here does nothing. If the keyboard's channel is the drum channel too, the lane keeps it, as
-    // it always had it.
-    if (place === 'drums' || (place === 'default' && message.channel === midiDrumChannelRef.current && message.channel !== midiChannelRef.current)) {
+    // here does nothing.
+    if (place === 'drums' || part === 'drums') {
       const instrument = drumForNote(message.note, midiPadsRef.current);
       const drums = drumStateRef.current;
       if (!instrument || !drums[instrument]) return;
@@ -321,14 +326,11 @@ ${note}`, { synthId, note, step: at.step, ticks });
     // With the scale lock on a key is moved into the scale here, so playing, recording and the note's
     // release (midiHeldRef keeps this name) all have the note that sounded.
     const noteName = toLock(midiNoteToName(message.note));
-    // A device with a lane of its own plays it on every channel. A lane the project does not have
-    // plays nothing.
-    if (place === 'default' && message.channel !== midiChannelRef.current) return;
-
+    // A device with a lane of its own plays it on every channel; one sent by channel plays the lane
+    // its channel's part names. A lane the project does not have plays nothing.
     const synthSnapshot = synthsRef.current;
-    const targetSynth = place === 'default'
-      ? synthSnapshot.find(s => s.id === midiTargetSynthIdRef.current) ?? synthSnapshot[0]
-      : synthSnapshot.find(s => s.id === (place === 'open' ? selectedSynthIdRef.current : destinationLane(place)));
+    const laneId = laneOf();
+    const targetSynth = laneId === null ? undefined : synthSnapshot.find(s => s.id === laneId);
     if (!targetSynth) return;
     if (targetSynth.muted || (synthSnapshot.some(s => s.solo) && !targetSynth.solo)) return;
 

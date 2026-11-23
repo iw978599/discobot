@@ -13,7 +13,8 @@ import type { DrumSample } from '../../../engine/src/drums/DrumCore';
 import { type Guest } from '../services/guests';
 import type { ProjectInfo } from '../services/projectLibrary';
 import { createBuiltInPresets } from '../services/builtInPresets';
-import { DEFAULT_DRUM_CHANNEL, storedPads, type PadMap } from '../services/midiDrums';
+import { storedPads, type PadMap } from '../services/midiDrums';
+import { storedMidiChannels, type MidiInChannels } from '../services/midiChannels';
 import { storedMidiDestinations, type MidiDestinations } from '../services/midiDevices';
 import { DEFAULT_QUANTIZE } from '../services/recordTiming';
 import { storedMidiTies, type MidiTie } from '../services/midiTies';
@@ -126,24 +127,17 @@ export function useStudioCore(engine: AudioEngine = audioEngine) {
   const endAutoPassesRef = useRef<(write: boolean) => void>(() => {});
   // The same for the drums' passes, which are in `autoPassRef` under `drumPassKey`.
   const endDrumPassesRef = useRef<(write: boolean) => void>(() => {});
-  const [midiChannel, setMidiChannel] = useState(1);
-  // The channel pads are listened to on, for the drums. A keyboard on one channel and pads on
-  // another play a lane and the drums at once. 0 is none.
-  const [midiDrumChannel, setMidiDrumChannel] = useState(DEFAULT_DRUM_CHANNEL);
-  const midiDrumChannelRef = useRef(midiDrumChannel);
-  // What the sequencer sends to the chosen MIDI output. Kept for the session only.
-  const [midiOutNotes, setMidiOutNotes] = useState(true);
-  const [midiOutClock, setMidiOutClock] = useState(false);
-  // Sending notes played by hand to the MIDI output, and the channel each part goes out on (session settings).
-  const [midiOutPlayed, setMidiOutPlayed] = useState(false);
-  const [midiOutChannels, setMidiOutChannels] = useState<MidiOutChannels>({});
+  // The channel each part hears and the channel each part sends on (`services/midiChannels.ts`),
+  // kept in this browser. A channel plays one part at most.
+  const [midiInChannels, setMidiInChannels] = useState<MidiInChannels>(() => storedMidiChannels().in);
+  const midiInChannelsRef = useRef(midiInChannels);
+  const [midiOutChannels, setMidiOutChannels] = useState<MidiOutChannels>(() => storedMidiChannels().out);
   // Following another device's MIDI clock: its start and stop, and its tempo, which is held here
   // and never put in the project.
   const [midiFollowClock, setMidiFollowClock] = useState(false);
   const [externalTempo, setExternalTempo] = useState<number | null>(null);
   const midiFollowClockRef = useRef(false);
   const externalTempoRef = useRef<number | null>(null);
-  const [midiTargetSynthId, setMidiTargetSynthId] = useState<number | null>(1);
   const [projectId, setProjectId] = useState('');
   // Goes up each time a project is put on the rack: the page loading, a project opened or restored.
   const [projectOpens, setProjectOpens] = useState(0);
@@ -159,8 +153,7 @@ export function useStudioCore(engine: AudioEngine = audioEngine) {
   // React has rendered see the first.
   const synthsRef = useRef(synths);
   const midiModeRef = useRef(midiMode);
-  const midiChannelRef = useRef(midiChannel);
-  const midiTargetSynthIdRef = useRef(midiTargetSynthId);
+  midiInChannelsRef.current = midiInChannels;
   // Assigned here, and again by the handlers of the store's drum events, so that the scheduler
   // and a handler making a second edit before React has rendered see the first.
   const drumStateRef = useRef(drumState);
@@ -328,15 +321,9 @@ export function useStudioCore(engine: AudioEngine = audioEngine) {
     autoPassRef,
     endAutoPassesRef,
     endDrumPassesRef,
-    midiChannel,
-    setMidiChannel,
-    midiDrumChannel,
-    setMidiDrumChannel,
-    midiDrumChannelRef,
-    midiOutNotes,
-    setMidiOutNotes,
-    midiOutPlayed,
-    setMidiOutPlayed,
+    midiInChannels,
+    setMidiInChannels,
+    midiInChannelsRef,
     midiOutChannels,
     setMidiOutChannels,
     midiFollowClock,
@@ -345,10 +332,6 @@ export function useStudioCore(engine: AudioEngine = audioEngine) {
     setExternalTempo,
     midiFollowClockRef,
     externalTempoRef,
-    midiOutClock,
-    setMidiOutClock,
-    midiTargetSynthId,
-    setMidiTargetSynthId,
     projectId,
     setProjectId,
     projectOpens,
@@ -363,8 +346,6 @@ export function useStudioCore(engine: AudioEngine = audioEngine) {
     browserMutedRef,
     synthsRef,
     midiModeRef,
-    midiChannelRef,
-    midiTargetSynthIdRef,
     drumStateRef,
     selectedDrumKitIdRef,
     drumFxRef,

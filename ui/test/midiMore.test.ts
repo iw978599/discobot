@@ -39,17 +39,19 @@ test('each part goes out on its own channel, or the one chosen for it', () => {
 test('notes played by hand are sent at once on their lane\'s channel, only while sending them is on, and let go when it is turned off', () => {
   const sent: number[][] = [];
   const out = createMidiOut();
-  out.setPort({ id: 'synth', send: data => sent.push([...data]) });
+  const port = { id: 'synth', send: (data: number[]) => { sent.push([...data]); } };
+  out.setOutputs([{ port, flags: { notes: true, clock: false, played: false, thru: false } }]);
   out.played({ kind: 'note', lane: 2, note: 'C4', velocity: 1, on: true });
   assert.deepEqual(sent, [], 'off to begin with');
-  out.configure({ played: true, channels: { 2: 5, drums: 11 } });
+  out.setOutputs([{ port, flags: { notes: true, clock: false, played: true, thru: false } }]);
+  out.configure({ channels: { 2: 5, drums: 11 } });
   out.played({ kind: 'note', lane: 2, note: 'C4', velocity: 1, on: true });
   out.played({ kind: 'note', lane: 2, note: 'C4', velocity: 0, on: false });
   out.played({ kind: 'hit', drum: 'kick', velocity: 0.5 });
   assert.deepEqual(sent, [[0x94, 60, 127], [0x84, 60, 0], [0x9a, 36, 64], [0x8a, 36, 0]]);
   sent.length = 0;
   out.played({ kind: 'note', lane: 1, note: 'A4', velocity: 0.5, on: true });
-  out.configure({ played: false });
+  out.setOutputs([{ port, flags: { notes: true, clock: false, played: false, thru: false } }]);
   assert.deepEqual(sent, [[0x90, 69, 64], [0x80, 69, 0]], 'a key still down is let go');
   assert.equal(out.channelOf(2), 5);
 });
